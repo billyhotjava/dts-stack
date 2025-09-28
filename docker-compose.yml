@@ -260,68 +260,68 @@ services:
   #   networks:
   #     - dts-core
 
-  dts-dtadmin:
-    image: ghcr.io/graalvm/graalvm-community:21
-    container_name: dts-dtadmin
-    working_dir: /app
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-      SERVER_PORT: ${DTADMIN_API_PORT}
-      # JHipster 常见端点
-      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,env,loggers,threaddump,configprops
-      # 数据库（举例：指向你全局 PG）
-      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${DTADMIN_DB_NAME}
-      SPRING_DATASOURCE_USERNAME: ${DTADMIN_DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DTADMIN_DB_PASSWORD}
-      # 允许被反代：如有需要可放宽 CORS
-      # JHIPSTER_CORS_ALLOWED_ORIGINS: https://${HOST_PORTAL}
+  # dts-dtadmin:
+  #   image: ghcr.io/graalvm/graalvm-community:21
+  #   container_name: dts-dtadmin
+  #   working_dir: /app
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: dev
+  #     SERVER_PORT: ${DTADMIN_API_PORT}
+  #     # JHipster 常见端点
+  #     MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,env,loggers,threaddump,configprops
+  #     # 数据库（举例：指向你全局 PG）
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${DTADMIN_DB_NAME}
+  #     SPRING_DATASOURCE_USERNAME: ${DTADMIN_DB_USER}
+  #     SPRING_DATASOURCE_PASSWORD: ${DTADMIN_DB_PASSWORD}
+  #     # 允许被反代：如有需要可放宽 CORS
+  #     # JHIPSTER_CORS_ALLOWED_ORIGINS: https://${HOST_PORTAL}
 
-      # 添加 OAuth2 配置
-      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_ISSUER_URI: https://${HOST_SSO}/realms/${KC_REALM}
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_ID: ${OAUTH2_CLIENT_ID}
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_SCOPE: openid,profile,email
+  #     # 添加 OAuth2 配置
+  #     SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_ISSUER_URI: https://${HOST_SSO}/realms/${KC_REALM}
+  #     SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_ID: ${OAUTH2_CLIENT_ID}
+  #     SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
+  #     SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_SCOPE: openid,profile,email
       
-      # 跨域配置（如果需要）
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_REDIRECT_URI: https://${HOST_PORTAL}/login/oauth2/code/keycloak
-      CORS_ALLOWED_ORIGINS: https://${HOST_PORTAL}
-    volumes:
-      - /opt/prod/trendsense/source/dtadmin:/app
-      # Gradle/Maven 缓存（可选，加快编译）
-      #- gradle-cache:/root/.gradle
-      #- maven-cache:/root/.m2
-      - /home/billy/.m2:/root/.m2
-    command: >
-      sh -lc "
-        if [ -f gradlew ]; then chmod +x gradlew; ./gradlew -x test bootRun --args='--server.port=${DTADMIN_API_PORT}';
-        elif [ -f mvnw ]; then chmod +x mvnw; ./mvnw -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments='-Dserver.port=${DTADMIN_API_PORT}';
-        else echo 'No Gradle/Maven wrapper found'; exit 1; fi"
-    healthcheck:
-      test: ["CMD","wget","-qO-","http://localhost:${DTADMIN_API_PORT}/management/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
-    labels:
-      - traefik.enable=true
-      # 同域：Host(${HOST_PORTAL}) + /api 前缀
-      - traefik.http.routers.dts-dtadmin-api.rule=Host(`${HOST_PORTAL}`) && PathPrefix(`/api`)
-      - traefik.http.routers.dts-dtadmin-api.entrypoints=websecure
-      - traefik.http.routers.dts-dtadmin-api.tls=true
-      # /api 转发到后端根路径：去掉 /api 前缀
-      - traefik.http.middlewares.dts-dtadmin-api-strip.stripprefixregex.regex=/api
-      - traefik.http.routers.dts-dtadmin-api.middlewares=dts-dtadmin-api-strip@docker
-      # 指定后端端口
-      - traefik.http.services.dts-dtadmin-api.loadbalancer.server.port=${DTADMIN_API_PORT}
-      # 如你之前的前端容器与 Traefik 不在同一网络，请显式指定：
-      # - traefik.docker.network=yst-stack_dts-core
-    restart: unless-stopped
-    depends_on:
-      dts-pg:
-        condition: service_healthy
-      dts-keycloak:
-        condition: service_started
-    networks: [dts-core]
+  #     # 跨域配置（如果需要）
+  #     SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_REDIRECT_URI: https://${HOST_PORTAL}/login/oauth2/code/keycloak
+  #     CORS_ALLOWED_ORIGINS: https://${HOST_PORTAL}
+  #   volumes:
+  #     - /opt/prod/trendsense/source/dtadmin:/app
+  #     # Gradle/Maven 缓存（可选，加快编译）
+  #     #- gradle-cache:/root/.gradle
+  #     #- maven-cache:/root/.m2
+  #     - /home/billy/.m2:/root/.m2
+  #   command: >
+  #     sh -lc "
+  #       if [ -f gradlew ]; then chmod +x gradlew; ./gradlew -x test bootRun --args='--server.port=${DTADMIN_API_PORT}';
+  #       elif [ -f mvnw ]; then chmod +x mvnw; ./mvnw -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments='-Dserver.port=${DTADMIN_API_PORT}';
+  #       else echo 'No Gradle/Maven wrapper found'; exit 1; fi"
+  #   healthcheck:
+  #     test: ["CMD","wget","-qO-","http://localhost:${DTADMIN_API_PORT}/management/health"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 30
+  #     start_period: 30s
+  #   labels:
+  #     - traefik.enable=true
+  #     # 同域：Host(${HOST_PORTAL}) + /api 前缀
+  #     - traefik.http.routers.dts-dtadmin-api.rule=Host(`${HOST_PORTAL}`) && PathPrefix(`/api`)
+  #     - traefik.http.routers.dts-dtadmin-api.entrypoints=websecure
+  #     - traefik.http.routers.dts-dtadmin-api.tls=true
+  #     # /api 转发到后端根路径：去掉 /api 前缀
+  #     - traefik.http.middlewares.dts-dtadmin-api-strip.stripprefixregex.regex=/api
+  #     - traefik.http.routers.dts-dtadmin-api.middlewares=dts-dtadmin-api-strip@docker
+  #     # 指定后端端口
+  #     - traefik.http.services.dts-dtadmin-api.loadbalancer.server.port=${DTADMIN_API_PORT}
+  #     # 如你之前的前端容器与 Traefik 不在同一网络，请显式指定：
+  #     # - traefik.docker.network=yst-stack_dts-core
+  #   restart: unless-stopped
+  #   depends_on:
+  #     dts-pg:
+  #       condition: service_healthy
+  #     dts-keycloak:
+  #       condition: service_started
+  #   networks: [dts-core]
 
  
 
