@@ -18,6 +18,8 @@
 
 ```bash
 cd dts-stack
+# 先完成主栈初始化（生成 .env 等依赖变量）
+# ./init.sh single 'Strong@2025!'
 # 生成开发用 env（含镜像标签与 PG 三元组）
 ./init.dts-source.sh   # 或直接使用 ./dev-up.sh
 

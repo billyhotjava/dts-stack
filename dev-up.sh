@@ -40,21 +40,31 @@ set +a
 
 core_compose=(-f docker-compose.yml -f docker-compose.dts-source.yml)
 
-# Bring up Postgres first and ensure dev triplets exist, then start dev services
-echo "[dev-up] Bringing up Postgres (for dev triplets) ..."
-"${compose_cmd[@]}" "${core_compose[@]}" up -d dts-pg
+# Ensure Postgres from core stack is running and healthy
+echo "[dev-up] Ensuring Postgres (dts-pg) is running ..."
+pg_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-pg || true)
+if [[ -z "${pg_cid}" ]]; then
+  "${compose_cmd[@]}" -f docker-compose.yml up -d dts-pg
+  pg_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-pg || true)
+fi
 
-echo "[dev-up] Waiting for Postgres to be ready ..."
-for i in {1..60}; do
-  if "${compose_cmd[@]}" exec -T dts-pg bash -lc "pg_isready -h 127.0.0.1 -p \"${PG_PORT:-5432}\" -U \"${PG_SUPER_USER:-postgres}\" -d postgres" >/dev/null 2>&1; then
-    break
-  fi
-  echo "[dev-up]   ... (${i}/60)" >&2
-  sleep 2
-done
-
-echo "[dev-up] Ensuring dev roles/databases (idempotent) ..."
-"${compose_cmd[@]}" exec -T dts-pg bash -lc "/docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" || true
+echo "[dev-up] Waiting for dts-pg to become healthy ..."
+if [[ -n "${pg_cid}" ]]; then
+  for i in {1..60}; do
+    status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${pg_cid}" 2>/dev/null || echo none)
+    if [[ "${status}" == "healthy" ]]; then
+      echo "[dev-up] dts-pg is healthy."
+      break
+    fi
+    if [[ "${status}" == "none" ]]; then
+      # No healthcheck configured (unlikely). Short grace period then continue.
+      sleep 3
+      break
+    fi
+    sleep 2
+    [[ $i -eq 60 ]] && echo "[dev-up] WARNING: dts-pg not healthy yet, continuing..." >&2
+  done
+fi
 
 services=(
   dts-admin
