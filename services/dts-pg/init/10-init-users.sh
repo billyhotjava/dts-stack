@@ -9,6 +9,7 @@ source "${SCRIPT_DIR}/lib/ensure-users.sh"
 
 psql=(psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}")
 
+# Enforce SCRAM-SHA-256 for password encryption
 "${psql[@]}" <<'SQL'
 ALTER SYSTEM SET password_encryption = 'scram-sha-256';
 SELECT pg_reload_conf();

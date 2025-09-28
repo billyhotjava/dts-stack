@@ -1,4 +1,4 @@
-# YTS Big Data Stack (Traefik + Keycloak + MinIO + Trino + Doris OLAP + Airbyte 1.8 + dbt RPC + OpenMetadata + Temporal)
+# RTS Big Data Stack (Traefik + Keycloak + MinIO + Trino + Doris OLAP + Airbyte 1.8 + dbt RPC + OpenMetadata + Temporal)
 
 ## 快速开始
 ```bash
