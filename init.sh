@@ -95,6 +95,25 @@ prepare_data_dirs(){
   chmod -R 777 services/dts-airflow/plugins || true
 }
 
+# Ensure embedded Postgres has all required roles/databases
+ensure_pg_triplets(){
+  if [[ "${PG_MODE}" != "embedded" ]]; then
+    return
+  fi
+  echo "[init.sh] Ensuring Postgres roles/databases (idempotent)..."
+  local i
+  for i in {1..30}; do
+    if "${compose_cmd[@]}" exec -T dts-pg bash -lc \
+      "/docker-entrypoint-initdb.d/99-ensure-users-runtime.sh"; then
+      echo "[init.sh] Postgres roles/databases ensured."
+      return
+    fi
+    echo "[init.sh] Waiting for dts-pg to accept ensure script... (${i}/30)" >&2
+    sleep 2
+  done
+  echo "[init.sh] WARNING: Could not ensure PG roles/DBs automatically. You can run: docker compose exec dts-pg bash -lc '/docker-entrypoint-initdb.d/99-ensure-users-runtime.sh'" >&2
+}
+
 generate_fernet(){
   if command -v python >/dev/null 2>&1; then
     python - <<'PY' || true
@@ -458,10 +477,29 @@ else
   echo "docker compose not found"; exit 1
 fi
 
-"${compose_cmd[@]}" -f "${COMPOSE_FILE}" up -d
-
-sleep 2
-fix_pg_permissions
+if [[ "${PG_MODE}" == "embedded" ]]; then
+  # 先启动 Postgres，确保用户/库就绪，再启动其余服务，避免依赖服务初始化竞态
+  echo "[init.sh] Bringing up Postgres first to prepare roles/databases ..."
+  "${compose_cmd[@]}" -f "${COMPOSE_FILE}" up -d dts-pg
+  # 等待容器起来后放宽一点时间
+  sleep 2
+  fix_pg_permissions
+  # 等待 ready
+  for i in {1..60}; do
+    if "${compose_cmd[@]}" exec -T dts-pg bash -lc "pg_isready -h 127.0.0.1 -p ${PG_PORT} -U ${PG_SUPER_USER} -d postgres" >/dev/null 2>&1; then
+      break
+    fi
+    echo "[init.sh] Waiting for Postgres to be ready ... (${i}/60)" >&2
+    sleep 2
+  done
+  # 收敛角色/数据库（幂等）
+  ensure_pg_triplets
+  echo "[init.sh] Bringing up the remaining services ..."
+  "${compose_cmd[@]}" -f "${COMPOSE_FILE}" up -d
+else
+  # 外部 PG：直接启动全部服务
+  "${compose_cmd[@]}" -f "${COMPOSE_FILE}" up -d
+fi
 
 # 输出可访问地址
 for host_var in HOST_SSO HOST_MINIO HOST_TRINO HOST_NESSIE HOST_AIRFLOW HOST_RANGER; do

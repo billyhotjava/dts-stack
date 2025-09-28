@@ -12,9 +12,11 @@ PG_AUTH_METHOD="${PG_AUTH_METHOD:-scram}"
 
 log(){ echo "[$(date +'%F %T')] [init] $*"; }
 
-# 等待 PG
+# 等待 PG，若未就绪则仅做离线文件调整，在线 SQL 留待后续 ensure 脚本
+PG_READY=0
 for i in {1..30}; do
   if pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+    PG_READY=1
     break
   fi
   log "waiting postgres... (${i}/30)"
@@ -30,28 +32,40 @@ if [[ -f "${PGDATA_DIR}/pg_hba.conf" ]]; then
       if grep -qE '\bmd5\b' "${PGDATA_DIR}/pg_hba.conf"; then
         log "switch pg_hba -> scram-sha-256"
         sed -i 's/\bmd5\b/scram-sha-256/g' "${PGDATA_DIR}/pg_hba.conf"
-        "${psqlb[@]}" -c "SELECT pg_reload_conf();"
+        if [[ $PG_READY -eq 1 ]]; then
+          "${psqlb[@]}" -c "SELECT pg_reload_conf();" || true
+        else
+          log "pg not ready; pg_hba change will take effect on server start"
+        fi
       fi
       ;;
     md5)
       if grep -qE 'scram-sha-256' "${PGDATA_DIR}/pg_hba.conf"; then
         log "switch pg_hba -> md5"
         sed -i 's/scram-sha-256/md5/g' "${PGDATA_DIR}/pg_hba.conf"
-        "${psqlb[@]}" -c "SELECT pg_reload_conf();"
+        if [[ $PG_READY -eq 1 ]]; then
+          "${psqlb[@]}" -c "SELECT pg_reload_conf();" || true
+        else
+          log "pg not ready; pg_hba change will take effect on server start"
+        fi
       fi
       ;;
   esac
 fi
 
-# password_encryption
-target_enc=$([[ "$PG_AUTH_METHOD" == "md5" ]] && echo "md5" || echo "scram-sha-256")
-cur_enc="$("${psqlb[@]}" -Atc "SHOW password_encryption;")"
-if [[ "${cur_enc,,}" != "$target_enc" ]]; then
-  log "ALTER SYSTEM password_encryption='${target_enc}'"
-  "${psqlb[@]}" <<SQL
+if [[ $PG_READY -eq 1 ]]; then
+  # password_encryption
+  target_enc=$([[ "$PG_AUTH_METHOD" == "md5" ]] && echo "md5" || echo "scram-sha-256")
+  cur_enc="$("${psqlb[@]}" -Atc "SHOW password_encryption;" || echo "")"
+  if [[ -n "$cur_enc" && "${cur_enc,,}" != "$target_enc" ]]; then
+    log "ALTER SYSTEM password_encryption='${target_enc}'"
+    "${psqlb[@]}" <<SQL
 ALTER SYSTEM SET password_encryption = '${target_enc}';
 SELECT pg_reload_conf();
 SQL
+  fi
+else
+  log "pg not ready; skip online password_encryption setup (handled later)"
 fi
 
 # 工具函数：若无则建角色（可在事务中执行）
@@ -109,9 +123,16 @@ while IFS='=' read -r k v; do
   pass="${!pvar:-}"
   [[ -n "$db" && -n "$user" && -n "$pass" ]] || continue
 
-  log "ensure user/db for suffix=${suf} -> ${user}/${db}"
-  ensure_role "$user" "$pass"
-  ensure_db "$db" "$user"
+  if [[ $PG_READY -eq 1 ]]; then
+    log "ensure user/db for suffix=${suf} -> ${user}/${db}"
+    ensure_role "$user" "$pass"
+    ensure_db "$db" "$user"
+  else
+    log "pg not ready; defer ensuring ${user}/${db} to runtime ensure script"
+  fi
 done < <(env)
-
-log "all users/databases ensured (auth=${target_enc})"
+if [[ $PG_READY -eq 1 ]]; then
+  log "all users/databases ensured"
+else
+  log "init script finished with deferred actions; runtime ensure will finalize when PG is up"
+fi

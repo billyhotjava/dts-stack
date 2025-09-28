@@ -95,10 +95,10 @@ services:
       - ./services/dts-pg/init:/docker-entrypoint-initdb.d
     healthcheck:
       # Keep healthcheck lightweight and deterministic; do not rely on container env expansion
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null"]
-      interval: 10s
-      timeout: 10s
-      retries: 30
+      test: ["CMD-SHELL", "pg_isready -h 0.0.0.0 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null"]
+      interval: 15s
+      timeout: 15s
+      retries: 10
       start_period: 30s   
     restart: unless-stopped
     ports:
