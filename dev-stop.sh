@@ -12,6 +12,26 @@ else
   exit 1
 fi
 
+# Load envs if present to avoid compose warnings on missing variables
+if [[ -f ./.env ]]; then set -a; source ./.env; set +a; fi
+if [[ -f ./.env.dts-source ]]; then set -a; source ./.env.dts-source; set +a; fi
+
+# Fill missing optional PG triplets to avoid compose interpolation warnings on stop
+set -a
+: "${PG_DB_DTADMIN:=dts_admin}"
+: "${PG_USER_DTADMIN:=dts_admin}"
+: "${PG_PWD_DTADMIN:=dts_admin}"
+: "${PG_DB_AIRBYTE:=airbyte}"
+: "${PG_USER_AIRBYTE:=airbyte}"
+: "${PG_PWD_AIRBYTE:=airbyte}"
+: "${PG_DB_OM:=openmetadata}"
+: "${PG_USER_OM:=openmetadata}"
+: "${PG_PWD_OM:=openmetadata}"
+: "${PG_DB_TEMPORAL:=temporal}"
+: "${PG_USER_TEMPORAL:=temporal}"
+: "${PG_PWD_TEMPORAL:=temporal}"
+set +a
+
 services=(
   dts-admin
   dts-platform
@@ -25,4 +45,3 @@ echo "[dev-stop] Stopping dts-source dev services (core stack stays running) ...
   stop "${services[@]}"
 
 echo "[dev-stop] Done. Restart with: ./dev-up.sh"
-
