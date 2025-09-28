@@ -21,15 +21,6 @@ set -a
 : "${PG_DB_DTADMIN:=dts_admin}"
 : "${PG_USER_DTADMIN:=dts_admin}"
 : "${PG_PWD_DTADMIN:=dts_admin}"
-: "${PG_DB_AIRBYTE:=airbyte}"
-: "${PG_USER_AIRBYTE:=airbyte}"
-: "${PG_PWD_AIRBYTE:=airbyte}"
-: "${PG_DB_OM:=openmetadata}"
-: "${PG_USER_OM:=openmetadata}"
-: "${PG_PWD_OM:=openmetadata}"
-: "${PG_DB_TEMPORAL:=temporal}"
-: "${PG_USER_TEMPORAL:=temporal}"
-: "${PG_PWD_TEMPORAL:=temporal}"
 set +a
 
 services=(

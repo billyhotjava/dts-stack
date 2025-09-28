@@ -81,15 +81,6 @@ services:
       PG_DB_RANGER: ${PG_DB_RANGER}
       PG_USER_RANGER: ${PG_USER_RANGER}
       PG_PWD_RANGER: ${PG_PWD_RANGER}
-      PG_DB_AIRBYTE: ${PG_DB_AIRBYTE}
-      PG_USER_AIRBYTE: ${PG_USER_AIRBYTE}
-      PG_PWD_AIRBYTE: ${PG_PWD_AIRBYTE}
-      PG_DB_OM: ${PG_DB_OM}
-      PG_USER_OM: ${PG_USER_OM}
-      PG_PWD_OM: ${PG_PWD_OM}
-      PG_DB_TEMPORAL: ${PG_DB_TEMPORAL}
-      PG_USER_TEMPORAL: ${PG_USER_TEMPORAL}
-      PG_PWD_TEMPORAL: ${PG_PWD_TEMPORAL}
     volumes:
       - ./services/dts-pg/data:/var/lib/postgresql/data
       - ./services/dts-pg/init:/docker-entrypoint-initdb.d
