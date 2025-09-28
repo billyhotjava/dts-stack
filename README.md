@@ -13,11 +13,48 @@
 - `init.sh` 会生成 `.env`、在单机模式下自签 TLS 证书，并启动对应 `docker-compose*.yml`。
 - `start.sh` / `stop.sh`：常规启动与停止（默认读取 `init.sh` 记录的部署模式）。
 
+### 快速开始（dts-source 开发镜像）
+用于本仓库上游 `dts-source` 的 5 个服务（dts-admin、dts-platform、dts-admin-webapp、dts-platform-webapp、dts-public-api），相对路径本地构建镜像：
+
+```bash
+cd dts-stack
+# 生成开发用 env（含镜像标签与 PG 三元组）
+./init.dts-source.sh   # 或直接使用 ./dev-up.sh
+
+# 构建并启动（推荐）
+./dev-up.sh
+
+# 仅停止开发服务（保留其它栈服务运行）
+./dev-stop.sh
+```
+
+服务与端口：
+- dts-admin 18081→8081（dev profile，禁用 Eureka/Config）
+- dts-platform 18082→8081（dev profile，禁用 Eureka/Config）
+- dts-admin-webapp 18011→80（Nginx 静态托管）
+- dts-platform-webapp 18012→80（Nginx 静态托管）
+- dts-public-api 18090→8090（上游文档指向容器内 http://dts-admin:8081 与 http://dts-platform:8081）
+
+切换 dev/prod：通过 Compose 环境变量控制（无需改 start.sh/stop.sh）。
+- 默认在 `.env.dts-source` 中写入：`DTS_PROFILE=dev`、`EUREKA_CLIENT_ENABLED=false`、`SPRING_CLOUD_CONFIG_ENABLED=false`。
+- 切换为 prod 示例：
+  ```bash
+  # 方法一：编辑 .env.dts-source
+  DTS_PROFILE=prod
+  EUREKA_CLIENT_ENABLED=true
+  SPRING_CLOUD_CONFIG_ENABLED=true
+  # 方法二：临时覆盖
+  DTS_PROFILE=prod EUREKA_CLIENT_ENABLED=true SPRING_CLOUD_CONFIG_ENABLED=true \
+    docker compose --env-file .env.dts-source -f docker-compose.dts-source.yml up -d --build
+  ```
+
 ## 目录
 - `docker-compose.yml`：single（内置 Postgres）
 - `docker-compose.ha2.yml`：外部 Postgres
 - `docker-compose.cluster.yml`：外部 Postgres（可按需扩展）
+- `docker-compose.dts-source.yml`：dts-source 5 服务（相对路径本地构建；依赖从 `docker-compose.yml` 获取）
 - `imgversion.conf`：镜像版本集中管理
+- `imgversion.dts-source.conf`：dts-source 5 服务的镜像标签（dev）
 - `services/<service>/init`：每个镜像的初始化脚本（如 `services/dts-pg/init/10-init-users.sh`、`services/dts-minio-init/init/init.sh`）
 - `services/<service>/data`：对应镜像的数据目录（如 `services/certs`、`services/dts-minio/data`）
 - `services/dts-trino/init/catalog/doris.properties`：Trino 通过 MySQL 协议接入 Doris 的 Catalog
@@ -26,6 +63,7 @@
 - `services/dts-dbt/`：dbt RPC 服务配置与示例项目
 - `services/dts-doris/`：Doris FE / BE / Broker 的持久化目录与说明
 - `init.sh`：一键初始化脚本
+- `init.dts-source.sh`：dts-source 开发栈初始化（生成 `.env.dts-source`，可选直接启动）
 - `start.sh` / `stop.sh`：启动、停止 docker compose 服务
 
 ## 重要变量

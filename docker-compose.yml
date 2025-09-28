@@ -59,9 +59,28 @@ services:
       POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD}
       POSTGRES_USER: ${PG_SUPER_USER}
       PGDATA: /var/lib/postgresql/data/pgdata
+      # dts-admin (dev/optional)
+      PG_DB_DTADMIN: ${PG_DB_DTADMIN}
+      PG_USER_DTADMIN: ${PG_USER_DTADMIN}
+      PG_PWD_DTADMIN: ${PG_PWD_DTADMIN}
       PG_DB_KEYCLOAK: ${PG_DB_KEYCLOAK}
       PG_USER_KEYCLOAK: ${PG_USER_KEYCLOAK}
       PG_PWD_KEYCLOAK: ${PG_PWD_KEYCLOAK}
+      # Airflow
+      PG_DB_AIRFLOW: ${PG_DB_AIRFLOW}
+      PG_USER_AIRFLOW: ${PG_USER_AIRFLOW}
+      PG_PWD_AIRFLOW: ${PG_PWD_AIRFLOW}
+      # DTS Platform/Common
+      PG_DB_DTPS: ${PG_DB_DTPS}
+      PG_USER_DTPS: ${PG_USER_DTPS}
+      PG_PWD_DTPS: ${PG_PWD_DTPS}
+      PG_DB_DTCOMMON: ${PG_DB_DTCOMMON}
+      PG_USER_DTCOMMON: ${PG_USER_DTCOMMON}
+      PG_PWD_DTCOMMON: ${PG_PWD_DTCOMMON}
+      # Ranger
+      PG_DB_RANGER: ${PG_DB_RANGER}
+      PG_USER_RANGER: ${PG_USER_RANGER}
+      PG_PWD_RANGER: ${PG_PWD_RANGER}
       PG_DB_AIRBYTE: ${PG_DB_AIRBYTE}
       PG_USER_AIRBYTE: ${PG_USER_AIRBYTE}
       PG_PWD_AIRBYTE: ${PG_PWD_AIRBYTE}
@@ -75,11 +94,12 @@ services:
       - ./services/dts-pg/data:/var/lib/postgresql/data
       - ./services/dts-pg/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "/docker-entrypoint-initdb.d/99-ensure-users-runtime.sh"]
+      # Keep healthcheck lightweight and deterministic; do not rely on container env expansion
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 30
-      start_period: 10s   
+      start_period: 30s   
     restart: unless-stopped
     ports:
       - 5432:5432
@@ -130,6 +150,39 @@ services:
       - "traefik.http.middlewares.kc-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
       - "traefik.http.middlewares.kc-headers.headers.customrequestheaders.X-Forwarded-Host=${HOST_SSO}"
       - "traefik.http.routers.kc.middlewares=kc-headers"
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-ranger:
+    image: ${IMAGE_RANGER_ADMIN}
+    container_name: dts-ranger
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+    environment:
+      DB_FLAVOR: postgres
+      DB_HOST: ${PG_HOST}
+      DB_PORT: ${PG_PORT}
+      DB_NAME: ${PG_DB_RANGER}
+      DB_USER: ${PG_USER_RANGER}
+      DB_PASSWORD: ${PG_PWD_RANGER}
+      RANGER_ADMIN_PASSWORD: ${RANGER_ADMIN_PASSWORD}
+      RANGER_TAGSYNC_PASSWORD: ${RANGER_TAGSYNC_PASSWORD}
+      RANGER_USERSYNC_PASSWORD: ${RANGER_USERSYNC_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:6080 || wget -qO- http://127.0.0.1:6080 >/dev/null"]
+      <<: *hc
+    volumes:
+      # Mount a separate data directory to avoid shadowing image's /opt/ranger
+      - ./services/dts-ranger:/ranger-data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-ranger.rule=Host(`${HOST_RANGER}`)"
+      - "traefik.http.routers.dts-ranger.entrypoints=websecure"
+      - "traefik.http.routers.dts-ranger.tls=true"
+      - "traefik.http.services.dts-ranger.loadbalancer.server.port=6080"
     restart: unless-stopped
     networks:
       - dts-core
@@ -223,110 +276,176 @@ services:
     networks:
       - dts-core
 
+  # ---------------------------------------------------------------------------
+  # Airflow 初始化：等待 PG 就绪后初始化 DB、创建管理员账户
+  # ---------------------------------------------------------------------------
+  dts-airflow-init:
+    image: ${IMAGE_AIRFLOW}
+    container_name: dts-airflow-init
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+      AIRFLOW_UID: ${AIRFLOW_UID}
+      AIRFLOW_GID: ${AIRFLOW_GID}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
+      AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
+      AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
+      AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
+      AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
+      AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_DEFAULT_REGION: ${S3_REGION}
+      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+      AIRFLOW_ADMIN_EMAIL: ${AIRFLOW_ADMIN_EMAIL}
+    user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+    entrypoint: ["/bin/bash","-lc","bash /init.sh"]
+    volumes:
+      - ./services/dts-airflow/dags:/opt/airflow/dags
+      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow-init/init/init.sh:/init.sh:ro
+    restart: "no"
+    networks:
+      - dts-core
 
-  # dts-dtadminui:
-  #   image: node:20-alpine
-  #   container_name: dts-dtadminui
-  #   working_dir: /app
-  #   environment:
-  #     # 你的前端需要的公开变量
-  #     PUBLIC_BASE_URL: https://${HOST_PORTAL}
-  #     # 热更新在挂载卷/WSL上更稳定
-  #     CHOKIDAR_USEPOLLING: "1"
-  #     WATCHPACK_POLLING: "true"
-  #     BROWSER: "none"
-  #   volumes:
-  #     # 把源码目录换成你的实际路径
-  #     #- ./services/dtadmin-ui:/app
-  #     - /opt/prod/trendsense/source/dtadmin-ui:/app
-  #   command: >
-  #     sh -lc "
-  #       corepack enable || true;
-  #       if [ -f pnpm-lock.yaml ]; then corepack prepare pnpm@latest --activate; pnpm i;
-  #         pnpm dev --host 0.0.0.0 --port 3001;
-  #       elif [ -f yarn.lock ]; then yarn install --frozen-lockfile;
-  #         yarn dev --host 0.0.0.0 --port 3001;
-  #       else npm ci || npm i;
-  #         npm run dev -- --host 0.0.0.0 --port 3001;
-  #       fi"
-  #   labels:
-  #     - traefik.enable=true
-  #     - traefik.http.routers.dts-adminui.rule=Host(`${HOST_PORTAL}`)
-  #     - traefik.http.routers.dts-adminui.entrypoints=websecure
-  #     - traefik.http.routers.dts-adminui.tls=true
-  #     - traefik.http.services.dts-adminui.loadbalancer.server.port=3001
-  #     - traefik.http.services.dts-adminui.loadbalancer.passhostheader=false
-  #   restart: unless-stopped
-  #   networks:
-  #     - dts-core
+  # ---------------------------------------------------------------------------
+  # Airflow Webserver（走 Traefik 暴露）
+  # ---------------------------------------------------------------------------
+  dts-airflow-web:
+    image: ${IMAGE_AIRFLOW}
+    container_name: dts-airflow-web
+    depends_on:
+      dts-airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+      AIRFLOW_UID: ${AIRFLOW_UID}
+      AIRFLOW_GID: ${AIRFLOW_GID}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+      AIRFLOW__WEBSERVER__BASE_URL: https://${HOST_AIRFLOW}
+      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
+      AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
+      AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
+      AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
+      AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
+      AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_DEFAULT_REGION: ${S3_REGION}
+    user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+    command: ["airflow","webserver","--port","8080"]
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8080/health || wget -qO- http://127.0.0.1:8080/health"]
+      <<: *hc
+    volumes:
+      - ./services/dts-airflow/dags:/opt/airflow/dags
+      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./services/dts-airflow/plugins:/opt/airflow/plugins
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-airflow.rule=Host(`${HOST_AIRFLOW}`)"
+      - "traefik.http.routers.dts-airflow.entrypoints=websecure"
+      - "traefik.http.routers.dts-airflow.tls=true"
+      - "traefik.http.services.dts-airflow.loadbalancer.server.port=8080"
+      - "traefik.http.services.dts-airflow.loadbalancer.passhostheader=true"
+      # 如需强制 HSTS 或额外 Header，可打开下面中间件
+      # - "traefik.http.middlewares.af-headers.headers.stsSeconds=31536000"
+      # - "traefik.http.routers.dts-airflow.middlewares=af-headers@docker"
+    restart: unless-stopped
+    networks:
+      - dts-core
 
-  # dts-dtadmin:
-  #   image: ghcr.io/graalvm/graalvm-community:21
-  #   container_name: dts-dtadmin
-  #   working_dir: /app
-  #   environment:
-  #     SPRING_PROFILES_ACTIVE: dev
-  #     SERVER_PORT: ${DTADMIN_API_PORT}
-  #     # JHipster 常见端点
-  #     MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,env,loggers,threaddump,configprops
-  #     # 数据库（举例：指向你全局 PG）
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${DTADMIN_DB_NAME}
-  #     SPRING_DATASOURCE_USERNAME: ${DTADMIN_DB_USER}
-  #     SPRING_DATASOURCE_PASSWORD: ${DTADMIN_DB_PASSWORD}
-  #     # 允许被反代：如有需要可放宽 CORS
-  #     # JHIPSTER_CORS_ALLOWED_ORIGINS: https://${HOST_PORTAL}
+  # ---------------------------------------------------------------------------
+  # Airflow Scheduler
+  # ---------------------------------------------------------------------------
+  dts-airflow-scheduler:
+    image: ${IMAGE_AIRFLOW}
+    container_name: dts-airflow-scheduler
+    depends_on:
+      dts-airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+      AIRFLOW_UID: ${AIRFLOW_UID}
+      AIRFLOW_GID: ${AIRFLOW_GID}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
+      AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
+      AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
+      AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
+      AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
+      AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_DEFAULT_REGION: ${S3_REGION}
+    user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+    command: ["airflow","scheduler"]
+    healthcheck:
+      test: ["CMD-SHELL","airflow jobs check --job-type SchedulerJob --hostname $(hostname) || echo 'not ok' && echo ok"]
+      <<: *hc
+    volumes:
+      - ./services/dts-airflow/dags:/opt/airflow/dags
+      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./services/dts-airflow/plugins:/opt/airflow/plugins
+    restart: unless-stopped
+    networks:
+      - dts-core
 
-  #     # 添加 OAuth2 配置
-  #     SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_ISSUER_URI: https://${HOST_SSO}/realms/${KC_REALM}
-  #     SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_ID: ${OAUTH2_CLIENT_ID}
-  #     SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
-  #     SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_SCOPE: openid,profile,email
-      
-  #     # 跨域配置（如果需要）
-  #     SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_REDIRECT_URI: https://${HOST_PORTAL}/login/oauth2/code/keycloak
-  #     CORS_ALLOWED_ORIGINS: https://${HOST_PORTAL}
-  #   volumes:
-  #     - /opt/prod/trendsense/source/dtadmin:/app
-  #     # Gradle/Maven 缓存（可选，加快编译）
-  #     #- gradle-cache:/root/.gradle
-  #     #- maven-cache:/root/.m2
-  #     - /home/billy/.m2:/root/.m2
-  #   command: >
-  #     sh -lc "
-  #       if [ -f gradlew ]; then chmod +x gradlew; ./gradlew -x test bootRun --args='--server.port=${DTADMIN_API_PORT}';
-  #       elif [ -f mvnw ]; then chmod +x mvnw; ./mvnw -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments='-Dserver.port=${DTADMIN_API_PORT}';
-  #       else echo 'No Gradle/Maven wrapper found'; exit 1; fi"
-  #   healthcheck:
-  #     test: ["CMD","wget","-qO-","http://localhost:${DTADMIN_API_PORT}/management/health"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 30
-  #     start_period: 30s
-  #   labels:
-  #     - traefik.enable=true
-  #     # 同域：Host(${HOST_PORTAL}) + /api 前缀
-  #     - traefik.http.routers.dts-dtadmin-api.rule=Host(`${HOST_PORTAL}`) && PathPrefix(`/api`)
-  #     - traefik.http.routers.dts-dtadmin-api.entrypoints=websecure
-  #     - traefik.http.routers.dts-dtadmin-api.tls=true
-  #     # /api 转发到后端根路径：去掉 /api 前缀
-  #     - traefik.http.middlewares.dts-dtadmin-api-strip.stripprefixregex.regex=/api
-  #     - traefik.http.routers.dts-dtadmin-api.middlewares=dts-dtadmin-api-strip@docker
-  #     # 指定后端端口
-  #     - traefik.http.services.dts-dtadmin-api.loadbalancer.server.port=${DTADMIN_API_PORT}
-  #     # 如你之前的前端容器与 Traefik 不在同一网络，请显式指定：
-  #     # - traefik.docker.network=yst-stack_dts-core
-  #   restart: unless-stopped
-  #   depends_on:
-  #     dts-pg:
-  #       condition: service_healthy
-  #     dts-keycloak:
-  #       condition: service_started
-  #   networks: [dts-core]
-
- 
+  # ---------------------------------------------------------------------------
+  # Airflow Triggerer（支持可延迟算子；如确实不需要可注释掉）
+  # ---------------------------------------------------------------------------
+  dts-airflow-triggerer:
+    image: ${IMAGE_AIRFLOW}
+    container_name: dts-airflow-triggerer
+    depends_on:
+      dts-airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+      AIRFLOW_UID: ${AIRFLOW_UID}
+      AIRFLOW_GID: ${AIRFLOW_GID}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
+      AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
+      AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
+      AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
+      AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
+      AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_DEFAULT_REGION: ${S3_REGION}
+    user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+    command: ["airflow","triggerer"]
+    healthcheck:
+      test: ["CMD-SHELL","airflow jobs check --job-type TriggererJob --hostname $(hostname) || echo 'not ok' && echo ok"]
+      <<: *hc
+    volumes:
+      - ./services/dts-airflow/dags:/opt/airflow/dags
+      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./services/dts-airflow/plugins:/opt/airflow/plugins
+    restart: unless-stopped
+    networks:
+      - dts-core
 
 volumes:
-  gradle-cache:
+  maven-cache:
 
 networks:
   dts-core:

@@ -1,0 +1,83 @@
+version: "3.8"
+
+services:
+
+  dts-admin:
+    image: ${IMAGE_DTS_ADMIN}
+    build:
+      context: ../dts-source/dts-admin
+      dockerfile: Dockerfile
+    depends_on:
+      - dts-pg
+    environment:
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTADMIN:-dts_admin}
+      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
+      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
+    ports:
+      - "18081:8081"
+    networks:
+      - dts-core
+
+  dts-platform:
+    image: ${IMAGE_DTS_PLATFORM}
+    build:
+      context: ../dts-source/dts-platform
+      dockerfile: Dockerfile
+    depends_on:
+      - dts-pg
+    environment:
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
+      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
+      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
+    ports:
+      - "18082:8081"
+    networks:
+      - dts-core
+
+  dts-admin-webapp:
+    image: ${IMAGE_DTS_ADMIN_WEBAPP}
+    build:
+      context: ../dts-source/dts-admin-webapp
+      dockerfile: Dockerfile
+    depends_on:
+      - dts-admin
+    ports:
+      - "18011:80"
+    networks:
+      - dts-core
+
+  dts-platform-webapp:
+    image: ${IMAGE_DTS_PLATFORM_WEBAPP}
+    build:
+      context: ../dts-source/dts-platform-webapp
+      dockerfile: Dockerfile
+    depends_on:
+      - dts-platform
+    ports:
+      - "18012:80"
+    networks:
+      - dts-core
+
+  dts-public-api:
+    image: ${IMAGE_DTS_PUBLICAPI}
+    build:
+      context: ../dts-source/dts-public-api
+      dockerfile: Dockerfile
+    depends_on:
+      - dts-admin
+      - dts-platform
+    environment:
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      # point to internal service addresses for upstream docs
+      PLATFORM_PUBLIC_DOCS_URL: ${PLATFORM_PUBLIC_DOCS_URL:-http://dts-platform:8081/v3/api-docs}
+      ADMIN_PUBLIC_DOCS_URL: ${ADMIN_PUBLIC_DOCS_URL:-http://dts-admin:8081/v3/api-docs}
+    ports:
+      - "18090:8090"
+    networks:
+      - dts-core

@@ -83,12 +83,16 @@ prepare_data_dirs(){
     "services/dts-airflow/dags"
     "services/dts-airflow/logs"
     "services/dts-airflow/plugins"
+    "services/dts-ranger"
   )
   local dir
   for dir in "${data_dirs[@]}"; do
     mkdir -p "${dir}"
   done
   chmod -R 777 services/dts-minio/data || true
+  chmod -R 777 services/dts-airflow/logs || true
+  chmod -R 777 services/dts-airflow/dags || true
+  chmod -R 777 services/dts-airflow/plugins || true
 }
 
 generate_fernet(){
@@ -103,6 +107,22 @@ PY
     # 最后兜底：弱一些，但可用
     head -c 32 /dev/urandom | base64 || true
   fi
+}
+
+# URL-encode a single component for safe embedding in URIs
+urlencode_component(){
+  local s="${1:-}"
+  local i c out="" hex
+  # Treat bytes, not locale-specific multibyte; acceptable for ASCII passwords
+  LC_ALL=C
+  for ((i=0; i<${#s}; i++)); do
+    c="${s:i:1}"
+    case "$c" in
+      [a-zA-Z0-9._~-]) out+="$c" ;;
+      *) printf -v hex '%02X' "'$c"; out+="%${hex}" ;;
+    esac
+  done
+  printf '%s' "$out"
 }
 
 generate_env_base(){
@@ -133,6 +153,21 @@ generate_env_base(){
   : "${KC_HOSTNAME_URL:=https://${KC_HOSTNAME}}"
   : "${KC_DB_URL_PROPERTIES:=sslmode=disable}"
   : "${KC_REALM:=dts-platform}"
+
+  # ---------- 域名（Traefik 路由） ----------
+  HOST_SSO="sso.${BASE_DOMAIN}"
+  HOST_MINIO="minio.${BASE_DOMAIN}"
+  HOST_TRINO="trino.${BASE_DOMAIN}"
+  HOST_NESSIE="nessie.${BASE_DOMAIN}"
+  HOST_AIRFLOW="airflow.${BASE_DOMAIN}"
+  HOST_PORTAL="portal.${BASE_DOMAIN}"
+  HOST_RANGER="ranger.${BASE_DOMAIN}"
+
+  # ---------- MinIO/S3 (placed before Airflow uses it) ----------
+  : "${MINIO_ROOT_USER:=minio}"
+  : "${MINIO_ROOT_PASSWORD:=${SECRET}}"
+  : "${S3_BUCKET:=dts-lake}"
+  : "${S3_REGION:=cn-local-1}"
 
   # ---------- Postgres & 多服务三元组 ----------
   : "${PG_AUTH_METHOD:=scram}"     # scram | md5
@@ -170,27 +205,46 @@ generate_env_base(){
   : "${AIRFLOW_ADMIN_EMAIL:=admin@example.com}"
   : "${AIRFLOW_SECRET_KEY:=${SECRET}}"
   : "${AIRFLOW_FERNET_KEY:=${AIRFLOW_FERNET_KEY:-}}"
+  : "${AIRFLOW_UID:=50000}"
+  : "${AIRFLOW_GID:=0}"
+  : "${AIRFLOW__CORE__EXECUTOR:=LocalExecutor}"
+  : "${AIRFLOW__CORE__LOAD_EXAMPLES:=false}"
+  : "${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION:=false}"
+  : "${AIRFLOW__LOGGING__REMOTE_LOGGING:=true}"
+  : "${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID:=s3_minio}"
   if [[ -z "${AIRFLOW_FERNET_KEY}" ]]; then
     AIRFLOW_FERNET_KEY="$(generate_fernet || true)"
   fi
+  local AF_USER_ENC AF_PWD_ENC
+  AF_USER_ENC="$(urlencode_component "${PG_USER_AIRFLOW}")"
+  AF_PWD_ENC="$(urlencode_component "${PG_PWD_AIRFLOW}")"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="postgresql+psycopg2://${AF_USER_ENC}:${AF_PWD_ENC}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+  AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER="s3://${S3_BUCKET}/airflow/logs"
+  AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE="s3"
+  AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA="{\"host\":\"https://${HOST_MINIO}\",\"aws_access_key_id\":\"${MINIO_ROOT_USER}\",\"aws_secret_access_key\":\"${MINIO_ROOT_PASSWORD}\",\"region_name\":\"${S3_REGION}\",\"verify\":false,\"client_kwargs\":{\"endpoint_url\":\"https://${HOST_MINIO}\",\"aws_access_key_id\":\"${MINIO_ROOT_USER}\",\"aws_secret_access_key\":\"${MINIO_ROOT_PASSWORD}\",\"region_name\":\"${S3_REGION}\"}}"
 
-  # ---------- MinIO/S3 ----------
-  : "${MINIO_ROOT_USER:=minio}"
-  : "${MINIO_ROOT_PASSWORD:=${SECRET}}"
-  : "${S3_BUCKET:=dts-lake}"
-  : "${S3_REGION:=cn-local-1}"
+  # ---------- Ranger（Admin） ----------
+  : "${PG_DB_RANGER:=dts_ranger}"
+  : "${PG_USER_RANGER:=dts_ranger}"
+  : "${PG_PWD_RANGER:=${SECRET}}"
+  : "${RANGER_ADMIN_PASSWORD:=${SECRET}}"
+  : "${RANGER_TAGSYNC_PASSWORD:=${SECRET}}"
+  : "${RANGER_USERSYNC_PASSWORD:=${SECRET}}"
+
+  # --- YTS 服务数据库 ---
+  : "${IAM_DB_NAME:=iam}"
+  : "${IAM_DB_USER:=iam}"
+  : "${IAM_DB_PASSWORD:=${SECRET}}"
+  : "${GOVERNANCE_DB_NAME:=governance}"
+  : "${GOVERNANCE_DB_USER:=governance}"
+  : "${GOVERNANCE_DB_PASSWORD:=${SECRET}}"
+  : "${EXPLORE_DB_NAME:=explore}"
+  : "${EXPLORE_DB_USER:=explore}"
+  : "${EXPLORE_DB_PASSWORD:=${SECRET}}"
 
   # ---------- OIDC 客户端（供 dts-admin 使用） ----------
   : "${OAUTH2_CLIENT_ID:=dts-admin}"
   : "${OAUTH2_CLIENT_SECRET:=${SECRET}}"
-
-  # ---------- 域名（Traefik 路由） ----------
-  HOST_SSO="sso.${BASE_DOMAIN}"
-  HOST_MINIO="minio.${BASE_DOMAIN}"
-  HOST_TRINO="trino.${BASE_DOMAIN}"
-  HOST_NESSIE="nessie.${BASE_DOMAIN}"
-  HOST_AIRFLOW="airflow.${BASE_DOMAIN}"
-  HOST_PORTAL="portal.${BASE_DOMAIN}"
 
   cat > .env <<EOF
 # ====== Base & Traefik ======
@@ -208,6 +262,7 @@ HOST_TRINO=${HOST_TRINO}
 HOST_NESSIE=${HOST_NESSIE}
 HOST_AIRFLOW=${HOST_AIRFLOW}
 HOST_PORTAL=${HOST_PORTAL}
+HOST_RANGER=${HOST_RANGER}
 
 # ====== Keycloak ======
 KC_ADMIN=${KC_ADMIN}
@@ -259,6 +314,17 @@ AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}
 AIRFLOW_ADMIN_EMAIL=${AIRFLOW_ADMIN_EMAIL}
 AIRFLOW_SECRET_KEY=${AIRFLOW_SECRET_KEY}
 AIRFLOW_FERNET_KEY=${AIRFLOW_FERNET_KEY}
+AIRFLOW_UID=${AIRFLOW_UID}
+AIRFLOW_GID=${AIRFLOW_GID}
+AIRFLOW__CORE__EXECUTOR=${AIRFLOW__CORE__EXECUTOR}
+AIRFLOW__CORE__LOAD_EXAMPLES=${AIRFLOW__CORE__LOAD_EXAMPLES}
+AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
+AIRFLOW__LOGGING__REMOTE_LOGGING=${AIRFLOW__LOGGING__REMOTE_LOGGING}
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER=${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
+AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID=${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
+AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE=${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
+AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA=${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
 
 # ====== MinIO / S3 ======
 MINIO_ROOT_USER=${MINIO_ROOT_USER}
@@ -269,6 +335,25 @@ S3_REGION=${S3_REGION}
 # ====== OIDC Client for dts-admin ======
 OAUTH2_CLIENT_ID=${OAUTH2_CLIENT_ID}
 OAUTH2_CLIENT_SECRET=${OAUTH2_CLIENT_SECRET}
+
+# ====== Ranger (Admin) ======
+PG_DB_RANGER=${PG_DB_RANGER}
+PG_USER_RANGER=${PG_USER_RANGER}
+PG_PWD_RANGER=${PG_PWD_RANGER}
+RANGER_ADMIN_PASSWORD=${RANGER_ADMIN_PASSWORD}
+RANGER_TAGSYNC_PASSWORD=${RANGER_TAGSYNC_PASSWORD}
+RANGER_USERSYNC_PASSWORD=${RANGER_USERSYNC_PASSWORD}
+
+# ====== YTS 服务数据库 ======
+IAM_DB_NAME=${IAM_DB_NAME}
+IAM_DB_USER=${IAM_DB_USER}
+IAM_DB_PASSWORD=${IAM_DB_PASSWORD}
+GOVERNANCE_DB_NAME=${GOVERNANCE_DB_NAME}
+GOVERNANCE_DB_USER=${GOVERNANCE_DB_USER}
+GOVERNANCE_DB_PASSWORD=${GOVERNANCE_DB_PASSWORD}
+EXPLORE_DB_NAME=${EXPLORE_DB_NAME}
+EXPLORE_DB_USER=${EXPLORE_DB_USER}
+EXPLORE_DB_PASSWORD=${EXPLORE_DB_PASSWORD}
 EOF
 }
 
@@ -379,7 +464,7 @@ sleep 2
 fix_pg_permissions
 
 # 输出可访问地址
-for host_var in HOST_SSO HOST_MINIO HOST_TRINO HOST_NESSIE HOST_AIRFLOW; do
+for host_var in HOST_SSO HOST_MINIO HOST_TRINO HOST_NESSIE HOST_AIRFLOW HOST_RANGER; do
   host_value="$(grep "^${host_var}=" .env | cut -d= -f2-)"
   if [[ -n "${host_value}" ]]; then echo "https://${host_value}"; fi
 done

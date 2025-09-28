@@ -13,11 +13,11 @@ PG_AUTH_METHOD="${PG_AUTH_METHOD:-scram}"
 log(){ echo "[$(date +'%F %T')] [init] $*"; }
 
 # 等待 PG
-for i in {1..90}; do
+for i in {1..30}; do
   if pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
     break
   fi
-  log "waiting postgres... (${i}/90)"
+  log "waiting postgres... (${i}/30)"
   sleep 1
 done
 
