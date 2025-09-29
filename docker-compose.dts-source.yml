@@ -7,6 +7,9 @@ services:
     build:
       context: ../dts-source/dts-admin
       dockerfile: Dockerfile
+      args:
+        MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}
+      network: host
     depends_on:
       - dts-pg
     environment:
@@ -26,10 +29,14 @@ services:
     build:
       context: ../dts-source/dts-platform
       dockerfile: Dockerfile
+      args:
+        MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}
+      network: host
     depends_on:
-      - dts-pg
-      - dts-trino:
-          condition: service_healthy
+      dts-pg:
+        condition: service_healthy
+      dts-trino:
+        condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
@@ -47,6 +54,7 @@ services:
     build:
       context: ../dts-source/dts-admin-webapp
       dockerfile: Dockerfile
+      network: host
     depends_on:
       - dts-admin
     ports:
@@ -59,6 +67,7 @@ services:
     build:
       context: ../dts-source/dts-platform-webapp
       dockerfile: Dockerfile
+      network: host
     depends_on:
       - dts-platform
     ports:
@@ -71,6 +80,9 @@ services:
     build:
       context: ../dts-source/dts-public-api
       dockerfile: Dockerfile
+      args:
+        MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}
+      network: host
     depends_on:
       - dts-admin
       - dts-platform

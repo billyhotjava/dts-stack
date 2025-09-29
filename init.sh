@@ -187,6 +187,9 @@ generate_env_base(){
   : "${MINIO_ROOT_PASSWORD:=${SECRET}}"
   : "${S3_BUCKET:=dts-lake}"
   : "${S3_REGION:=cn-local-1}"
+  # Derived MinIO URLs for reverse-proxy deployments
+  MINIO_SERVER_URL="https://${HOST_MINIO}"
+  MINIO_BROWSER_REDIRECT_URL="https://${HOST_MINIO}"
 
   # ---------- Postgres & 多服务三元组 ----------
   : "${PG_AUTH_METHOD:=scram}"     # scram | md5
@@ -361,6 +364,9 @@ MINIO_ROOT_USER=${MINIO_ROOT_USER}
 MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
 S3_BUCKET=${S3_BUCKET}
 S3_REGION=${S3_REGION}
+MINIO_REGION_NAME=${S3_REGION}
+MINIO_SERVER_URL=${MINIO_SERVER_URL}
+MINIO_BROWSER_REDIRECT_URL=${MINIO_BROWSER_REDIRECT_URL}
 
 # ====== OIDC Client for dts-admin ======
 OAUTH2_CLIENT_ID=${OAUTH2_CLIENT_ID}

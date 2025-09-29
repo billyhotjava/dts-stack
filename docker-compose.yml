@@ -154,8 +154,9 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_REGION_NAME: ${S3_REGION}
-      MINIO_SERVER_URL: https://${HOST_MINIO}
+      MINIO_REGION_NAME: ${MINIO_REGION_NAME}
+      MINIO_SERVER_URL: ${MINIO_SERVER_URL}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL}
     volumes:
       - ./services/dts-minio/data:/data
     healthcheck:
