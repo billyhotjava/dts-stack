@@ -13,8 +13,15 @@ http:
         frameDeny: false
 
 tls:
+  certificates:
+    - certFile: /certs/server.crt
+      keyFile: /certs/server.key
   options:
     default:
       minVersion: VersionTLS12
-      sniStrict: false
-
+      sniStrict: true
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/server.crt
+        keyFile: /certs/server.key

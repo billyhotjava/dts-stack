@@ -50,6 +50,8 @@ services:
       # - "traefik.http.routers.default-secure.rule=HostRegexp(`{any:.*}`)"
       - "traefik.tls.certificates[0].certFile=/certs/server.crt"
       - "traefik.tls.certificates[0].keyFile=/certs/server.key"
+      - "traefik.tls.stores.default.defaultCertificate.certFile=/certs/server.crt"
+      - "traefik.tls.stores.default.defaultCertificate.keyFile=/certs/server.key"
     restart: unless-stopped
     networks:
       - dts-core
