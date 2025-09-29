@@ -14,12 +14,12 @@ log(){ echo "[$(date +'%F %T')] [init] $*"; }
 
 # 等待 PG，若未就绪则仅做离线文件调整，在线 SQL 留待后续 ensure 脚本
 PG_READY=0
-for i in {1..30}; do
+for i in {1..15}; do
   if pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
     PG_READY=1
     break
   fi
-  log "waiting postgres... (${i}/30)"
+  log "waiting postgres... (${i}/15)"
   sleep 1
 done
 
