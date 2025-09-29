@@ -145,38 +145,7 @@ services:
     networks:
       - dts-core
 
-  dts-ranger:
-    image: ${IMAGE_RANGER_ADMIN}
-    container_name: dts-ranger
-    depends_on:
-      dts-pg:
-        condition: service_healthy
-    environment:
-      DB_FLAVOR: postgres
-      DB_HOST: ${PG_HOST}
-      DB_PORT: ${PG_PORT}
-      DB_NAME: ${PG_DB_RANGER}
-      DB_USER: ${PG_USER_RANGER}
-      DB_PASSWORD: ${PG_PWD_RANGER}
-      RANGER_ADMIN_PASSWORD: ${RANGER_ADMIN_PASSWORD}
-      RANGER_TAGSYNC_PASSWORD: ${RANGER_TAGSYNC_PASSWORD}
-      RANGER_USERSYNC_PASSWORD: ${RANGER_USERSYNC_PASSWORD}
-    healthcheck:
-      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:6080 || wget -qO- http://127.0.0.1:6080 >/dev/null"]
-      <<: *hc
-    volumes:
-      # Mount a separate data directory to avoid shadowing image's /opt/ranger
-      - ./services/dts-ranger:/ranger-data
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.dts-ranger.rule=Host(`${HOST_RANGER}`)"
-      - "traefik.http.routers.dts-ranger.entrypoints=websecure"
-      - "traefik.http.routers.dts-ranger.tls=true"
-      - "traefik.http.services.dts-ranger.loadbalancer.server.port=6080"
-    restart: unless-stopped
-    networks:
-      - dts-core
+
 
   dts-minio:
     image: ${IMAGE_MINIO}
@@ -267,173 +236,205 @@ services:
     networks:
       - dts-core
 
-  # ---------------------------------------------------------------------------
-  # Airflow 初始化：等待 PG 就绪后初始化 DB、创建管理员账户
-  # ---------------------------------------------------------------------------
-  dts-airflow-init:
-    image: ${IMAGE_AIRFLOW}
-    container_name: dts-airflow-init
-    depends_on:
-      dts-pg:
-        condition: service_healthy
-    environment:
-      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
-      AIRFLOW_UID: ${AIRFLOW_UID}
-      AIRFLOW_GID: ${AIRFLOW_GID}
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
-      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
-      AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
-      AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
-      AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
-      AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
-      AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
-      AWS_DEFAULT_REGION: ${S3_REGION}
-      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER}
-      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
-      AIRFLOW_ADMIN_EMAIL: ${AIRFLOW_ADMIN_EMAIL}
-    user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
-    entrypoint: ["/bin/bash","-lc","bash /init.sh"]
-    volumes:
-      - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
-      - ./services/dts-airflow/plugins:/opt/airflow/plugins
-      - ./services/dts-airflow-init/init/init.sh:/init.sh:ro
-    restart: "no"
-    networks:
-      - dts-core
+  # dts-ranger:
+  #   image: ${IMAGE_RANGER_ADMIN}
+  #   container_name: dts-ranger
+  #   depends_on:
+  #     dts-pg:
+  #       condition: service_healthy
+  #   environment:
+  #     DB_FLAVOR: postgres
+  #     DB_HOST: ${PG_HOST}
+  #     DB_PORT: ${PG_PORT}
+  #     DB_NAME: ${PG_DB_RANGER}
+  #     DB_USER: ${PG_USER_RANGER}
+  #     DB_PASSWORD: ${PG_PWD_RANGER}
+  #     RANGER_ADMIN_PASSWORD: ${RANGER_ADMIN_PASSWORD}
+  #     RANGER_TAGSYNC_PASSWORD: ${RANGER_TAGSYNC_PASSWORD}
+  #     RANGER_USERSYNC_PASSWORD: ${RANGER_USERSYNC_PASSWORD}
+  #   healthcheck:
+  #     test: ["CMD-SHELL","curl -fsS http://127.0.0.1:6080 || wget -qO- http://127.0.0.1:6080 >/dev/null"]
+  #     <<: *hc
+  #   volumes:
+  #     # Mount a separate data directory to avoid shadowing image's /opt/ranger
+  #     - ./services/dts-ranger:/ranger-data
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=dts-core"
+  #     - "traefik.http.routers.dts-ranger.rule=Host(`${HOST_RANGER}`)"
+  #     - "traefik.http.routers.dts-ranger.entrypoints=websecure"
+  #     - "traefik.http.routers.dts-ranger.tls=true"
+  #     - "traefik.http.services.dts-ranger.loadbalancer.server.port=6080"
+  #   restart: unless-stopped
+  #   networks:
+  #     - dts-core
+  # # ---------------------------------------------------------------------------
+  # # Airflow 初始化：等待 PG 就绪后初始化 DB、创建管理员账户
+  # # ---------------------------------------------------------------------------
+  # dts-airflow-init:
+  #   image: ${IMAGE_AIRFLOW}
+  #   container_name: dts-airflow-init
+  #   depends_on:
+  #     dts-pg:
+  #       condition: service_healthy
+  #   environment:
+  #     AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+  #     AIRFLOW_UID: ${AIRFLOW_UID}
+  #     AIRFLOW_GID: ${AIRFLOW_GID}
+  #     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+  #     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+  #     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+  #     AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+  #     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
+  #     AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
+  #     AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
+  #     AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
+  #     AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
+  #     AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
+  #     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+  #     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+  #     AWS_DEFAULT_REGION: ${S3_REGION}
+  #     AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER}
+  #     AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+  #     AIRFLOW_ADMIN_EMAIL: ${AIRFLOW_ADMIN_EMAIL}
+  #   user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+  #   entrypoint: ["/bin/bash","-lc","bash /init.sh"]
+  #   volumes:
+  #     - ./services/dts-airflow/dags:/opt/airflow/dags
+  #     - ./services/dts-airflow/logs:/opt/airflow/logs
+  #     - ./services/dts-airflow/plugins:/opt/airflow/plugins
+  #     - ./services/dts-airflow-init/init/init.sh:/init.sh:ro
+  #   restart: "no"
+  #   networks:
+  #     - dts-core
 
-  # ---------------------------------------------------------------------------
-  # Airflow Webserver（走 Traefik 暴露）
-  # ---------------------------------------------------------------------------
-  dts-airflow-web:
-    image: ${IMAGE_AIRFLOW}
-    container_name: dts-airflow-web
-    depends_on:
-      dts-airflow-init:
-        condition: service_completed_successfully
-    environment:
-      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
-      AIRFLOW_UID: ${AIRFLOW_UID}
-      AIRFLOW_GID: ${AIRFLOW_GID}
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
-      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
-      AIRFLOW__WEBSERVER__BASE_URL: https://${HOST_AIRFLOW}
-      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
-      AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
-      AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
-      AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
-      AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
-      AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
-      AWS_DEFAULT_REGION: ${S3_REGION}
-    user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
-    command: ["airflow","webserver","--port","8080"]
-    healthcheck:
-      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8080/health || wget -qO- http://127.0.0.1:8080/health"]
-      <<: *hc
-    volumes:
-      - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
-      - ./services/dts-airflow/plugins:/opt/airflow/plugins
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.dts-airflow.rule=Host(`${HOST_AIRFLOW}`)"
-      - "traefik.http.routers.dts-airflow.entrypoints=websecure"
-      - "traefik.http.routers.dts-airflow.tls=true"
-      - "traefik.http.services.dts-airflow.loadbalancer.server.port=8080"
-      - "traefik.http.services.dts-airflow.loadbalancer.passhostheader=true"
-      # 如需强制 HSTS 或额外 Header，可打开下面中间件
-      # - "traefik.http.middlewares.af-headers.headers.stsSeconds=31536000"
-      # - "traefik.http.routers.dts-airflow.middlewares=af-headers@docker"
-    restart: unless-stopped
-    networks:
-      - dts-core
+  # # ---------------------------------------------------------------------------
+  # # Airflow Webserver（走 Traefik 暴露）
+  # # ---------------------------------------------------------------------------
+  # dts-airflow-web:
+  #   image: ${IMAGE_AIRFLOW}
+  #   container_name: dts-airflow-web
+  #   depends_on:
+  #     dts-airflow-init:
+  #       condition: service_completed_successfully
+  #   environment:
+  #     AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+  #     AIRFLOW_UID: ${AIRFLOW_UID}
+  #     AIRFLOW_GID: ${AIRFLOW_GID}
+  #     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+  #     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+  #     AIRFLOW__WEBSERVER__BASE_URL: https://${HOST_AIRFLOW}
+  #     AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
+  #     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+  #     AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+  #     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
+  #     AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
+  #     AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
+  #     AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
+  #     AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
+  #     AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
+  #     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+  #     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+  #     AWS_DEFAULT_REGION: ${S3_REGION}
+  #   user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+  #   command: ["airflow","webserver","--port","8080"]
+  #   healthcheck:
+  #     test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8080/health || wget -qO- http://127.0.0.1:8080/health"]
+  #     <<: *hc
+  #   volumes:
+  #     - ./services/dts-airflow/dags:/opt/airflow/dags
+  #     - ./services/dts-airflow/logs:/opt/airflow/logs
+  #     - ./services/dts-airflow/plugins:/opt/airflow/plugins
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=dts-core"
+  #     - "traefik.http.routers.dts-airflow.rule=Host(`${HOST_AIRFLOW}`)"
+  #     - "traefik.http.routers.dts-airflow.entrypoints=websecure"
+  #     - "traefik.http.routers.dts-airflow.tls=true"
+  #     - "traefik.http.services.dts-airflow.loadbalancer.server.port=8080"
+  #     - "traefik.http.services.dts-airflow.loadbalancer.passhostheader=true"
+  #     # 如需强制 HSTS 或额外 Header，可打开下面中间件
+  #     # - "traefik.http.middlewares.af-headers.headers.stsSeconds=31536000"
+  #     # - "traefik.http.routers.dts-airflow.middlewares=af-headers@docker"
+  #   restart: unless-stopped
+  #   networks:
+  #     - dts-core
 
-  # ---------------------------------------------------------------------------
-  # Airflow Scheduler
-  # ---------------------------------------------------------------------------
-  dts-airflow-scheduler:
-    image: ${IMAGE_AIRFLOW}
-    container_name: dts-airflow-scheduler
-    depends_on:
-      dts-airflow-init:
-        condition: service_completed_successfully
-    environment:
-      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
-      AIRFLOW_UID: ${AIRFLOW_UID}
-      AIRFLOW_GID: ${AIRFLOW_GID}
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
-      AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
-      AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
-      AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
-      AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
-      AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
-      AWS_DEFAULT_REGION: ${S3_REGION}
-    user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
-    command: ["airflow","scheduler"]
-    healthcheck:
-      test: ["CMD-SHELL","airflow jobs check --job-type SchedulerJob --hostname $(hostname) || echo 'not ok' && echo ok"]
-      <<: *hc
-    volumes:
-      - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
-      - ./services/dts-airflow/plugins:/opt/airflow/plugins
-    restart: unless-stopped
-    networks:
-      - dts-core
+  # # ---------------------------------------------------------------------------
+  # # Airflow Scheduler
+  # # ---------------------------------------------------------------------------
+  # dts-airflow-scheduler:
+  #   image: ${IMAGE_AIRFLOW}
+  #   container_name: dts-airflow-scheduler
+  #   depends_on:
+  #     dts-airflow-init:
+  #       condition: service_completed_successfully
+  #   environment:
+  #     AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+  #     AIRFLOW_UID: ${AIRFLOW_UID}
+  #     AIRFLOW_GID: ${AIRFLOW_GID}
+  #     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+  #     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+  #     AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+  #     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
+  #     AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
+  #     AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
+  #     AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
+  #     AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
+  #     AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
+  #     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+  #     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+  #     AWS_DEFAULT_REGION: ${S3_REGION}
+  #   user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+  #   command: ["airflow","scheduler"]
+  #   healthcheck:
+  #     test: ["CMD-SHELL","airflow jobs check --job-type SchedulerJob --hostname $(hostname) || echo 'not ok' && echo ok"]
+  #     <<: *hc
+  #   volumes:
+  #     - ./services/dts-airflow/dags:/opt/airflow/dags
+  #     - ./services/dts-airflow/logs:/opt/airflow/logs
+  #     - ./services/dts-airflow/plugins:/opt/airflow/plugins
+  #   restart: unless-stopped
+  #   networks:
+  #     - dts-core
 
-  # ---------------------------------------------------------------------------
-  # Airflow Triggerer（支持可延迟算子；如确实不需要可注释掉）
-  # ---------------------------------------------------------------------------
-  dts-airflow-triggerer:
-    image: ${IMAGE_AIRFLOW}
-    container_name: dts-airflow-triggerer
-    depends_on:
-      dts-airflow-init:
-        condition: service_completed_successfully
-    environment:
-      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
-      AIRFLOW_UID: ${AIRFLOW_UID}
-      AIRFLOW_GID: ${AIRFLOW_GID}
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
-      AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
-      AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
-      AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
-      AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
-      AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
-      AWS_DEFAULT_REGION: ${S3_REGION}
-    user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
-    command: ["airflow","triggerer"]
-    healthcheck:
-      test: ["CMD-SHELL","airflow jobs check --job-type TriggererJob --hostname $(hostname) || echo 'not ok' && echo ok"]
-      <<: *hc
-    volumes:
-      - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
-      - ./services/dts-airflow/plugins:/opt/airflow/plugins
-    restart: unless-stopped
-    networks:
-      - dts-core
+  # # ---------------------------------------------------------------------------
+  # # Airflow Triggerer（支持可延迟算子；如确实不需要可注释掉）
+  # # ---------------------------------------------------------------------------
+  # dts-airflow-triggerer:
+  #   image: ${IMAGE_AIRFLOW}
+  #   container_name: dts-airflow-triggerer
+  #   depends_on:
+  #     dts-airflow-init:
+  #       condition: service_completed_successfully
+  #   environment:
+  #     AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+  #     AIRFLOW_UID: ${AIRFLOW_UID}
+  #     AIRFLOW_GID: ${AIRFLOW_GID}
+  #     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+  #     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+  #     AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+  #     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: ${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
+  #     AIRFLOW__LOGGING__REMOTE_LOGGING: ${AIRFLOW__LOGGING__REMOTE_LOGGING}
+  #     AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: ${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
+  #     AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
+  #     AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE: ${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
+  #     AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA: ${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
+  #     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+  #     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+  #     AWS_DEFAULT_REGION: ${S3_REGION}
+  #   user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
+  #   command: ["airflow","triggerer"]
+  #   healthcheck:
+  #     test: ["CMD-SHELL","airflow jobs check --job-type TriggererJob --hostname $(hostname) || echo 'not ok' && echo ok"]
+  #     <<: *hc
+  #   volumes:
+  #     - ./services/dts-airflow/dags:/opt/airflow/dags
+  #     - ./services/dts-airflow/logs:/opt/airflow/logs
+  #     - ./services/dts-airflow/plugins:/opt/airflow/plugins
+  #   restart: unless-stopped
+  #   networks:
+  #     - dts-core
 
 volumes:
   maven-cache:

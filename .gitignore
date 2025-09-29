@@ -1,3 +1,4 @@
 # Ignore persistent service data directories
 services/dts-minio/data/
 services/dts-pg/data/
+services/dts-minio/data

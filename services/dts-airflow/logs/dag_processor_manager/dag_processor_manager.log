@@ -53,3 +53,22 @@
 [2025-09-28T12:41:05.514+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
 [2025-09-28T12:46:06.463+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
 [2025-09-28T12:46:06.463+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2025-09-28T12:51:07.307+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-09-28T12:51:07.308+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2025-09-28T12:56:08.167+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-09-28T12:56:08.168+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2025-09-28T13:01:09.058+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-09-28T13:01:09.059+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2025-09-28T13:06:09.920+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-09-28T13:06:09.921+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2025-09-28T13:11:10.795+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-09-28T13:11:10.796+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2025-09-28T13:16:11.615+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-09-28T13:16:11.616+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2025-09-28T13:21:12.475+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-09-28T13:21:12.476+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2025-09-28T13:26:13.352+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-09-28T13:26:13.353+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2025-09-28T13:31:14.182+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-09-28T13:31:14.183+0000] {manager.py:824} INFO - There are 0 files in /opt/airflow/dags
+[2025-09-28T13:34:14.835+0000] {manager.py:465} INFO - Exiting gracefully upon receiving signal 15
