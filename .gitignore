@@ -2,3 +2,6 @@
 services/dts-minio/data/
 services/dts-pg/data/
 services/dts-minio/data
+services/certs/server.crt
+services/certs/server.key
+

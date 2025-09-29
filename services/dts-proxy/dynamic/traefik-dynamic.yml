@@ -1,0 +1,20 @@
+# Minimal dynamic config to satisfy --providers.file.filename
+# Keep lightweight; service-specific routers/middlewares are defined via labels.
+
+http:
+  middlewares:
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        frameDeny: false
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: false
+

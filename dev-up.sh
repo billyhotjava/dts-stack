@@ -50,7 +50,7 @@ fi
 
 echo "[dev-up] Waiting for dts-pg to become healthy ..."
 if [[ -n "${pg_cid}" ]]; then
-  for i in {1..60}; do
+  for i in {1..5}; do
     status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${pg_cid}" 2>/dev/null || echo none)
     if [[ "${status}" == "healthy" ]]; then
       echo "[dev-up] dts-pg is healthy."
@@ -62,7 +62,7 @@ if [[ -n "${pg_cid}" ]]; then
       break
     fi
     sleep 2
-    [[ $i -eq 60 ]] && echo "[dev-up] WARNING: dts-pg not healthy yet, continuing..." >&2
+    [[ $i -eq 5 ]] && echo "[dev-up] WARNING: dts-pg not healthy yet, continuing..." >&2
   done
 fi
 

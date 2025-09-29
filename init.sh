@@ -102,13 +102,13 @@ ensure_pg_triplets(){
   fi
   echo "[init.sh] Ensuring Postgres roles/databases (idempotent)..."
   local i
-  for i in {1..30}; do
+  for i in {1..5}; do
     if "${compose_cmd[@]}" exec -T dts-pg bash -lc \
       "/docker-entrypoint-initdb.d/99-ensure-users-runtime.sh"; then
       echo "[init.sh] Postgres roles/databases ensured."
       return
     fi
-    echo "[init.sh] Waiting for dts-pg to accept ensure script... (${i}/30)" >&2
+    echo "[init.sh] Waiting for dts-pg to accept ensure script... (${i}/5)" >&2
     sleep 2
   done
   echo "[init.sh] WARNING: Could not ensure PG roles/DBs automatically. You can run: docker compose exec dts-pg bash -lc '/docker-entrypoint-initdb.d/99-ensure-users-runtime.sh'" >&2
@@ -496,11 +496,11 @@ if [[ "${PG_MODE}" == "embedded" ]]; then
   sleep 2
   fix_pg_permissions
   # 等待 ready
-  for i in {1..60}; do
+  for i in {1..5}; do
     if "${compose_cmd[@]}" exec -T dts-pg bash -lc "pg_isready -h 127.0.0.1 -p ${PG_PORT} -U ${PG_SUPER_USER} -d postgres" >/dev/null 2>&1; then
       break
     fi
-    echo "[init.sh] Waiting for Postgres to be ready ... (${i}/60)" >&2
+    echo "[init.sh] Waiting for Postgres to be ready ... (${i}/5)" >&2
     sleep 2
   done
   # 收敛角色/数据库（幂等）
