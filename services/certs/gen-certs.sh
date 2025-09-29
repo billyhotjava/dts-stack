@@ -13,6 +13,7 @@ CERT_DIR="${SCRIPT_DIR}"
 BASE_DOMAIN="${BASE_DOMAIN:-dts.local}"
 SUBJECT_O="${SUBJECT_O:-DTS}"
 P12_PASSWORD="${P12_PASSWORD:-changeit}"
+TRUSTSTORE_PASSWORD="${TRUSTSTORE_PASSWORD:-changeit}"
 
 mkdir -p "${CERT_DIR}"
 
@@ -75,7 +76,23 @@ EOF
   openssl pkcs12 -export -inkey "${CERT_DIR}/server.key" -in "${CERT_DIR}/server.only.crt" -certfile "${CERT_DIR}/ca.crt" \
     -name "dts-server" -out "${CERT_DIR}/server.p12" -passout pass:"${P12_PASSWORD}" >/dev/null 2>&1 || true
 
+  # Also provide a conventional name for Java app servers
+  cp -f "${CERT_DIR}/server.p12" "${CERT_DIR}/keystore.p12" 2>/dev/null || true
+
   rm -f "${CERT_DIR}/server.csr" "${CERT_DIR}/server.srl" "${extf}" 2>/dev/null || true
+}
+
+generate_truststores() {
+  # Generate JKS and PKCS12 truststores containing only the CA (for clients)
+  if command -v keytool >/dev/null 2>&1; then
+    keytool -importcert -noprompt -alias dts-ca -file "${CERT_DIR}/ca.crt" \
+      -keystore "${CERT_DIR}/truststore.jks" -storepass "${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1 || true
+    keytool -importcert -noprompt -alias dts-ca -file "${CERT_DIR}/ca.crt" \
+      -keystore "${CERT_DIR}/truststore.p12" -storetype PKCS12 -storepass "${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1 || true
+    log "generated truststore.jks and truststore.p12 (CA only). Password: ${TRUSTSTORE_PASSWORD}"
+  else
+    log "keytool not found; skipped truststore generation. Use ca.crt directly or install JDK."
+  fi
 }
 
 main() {
@@ -87,10 +104,10 @@ main() {
   log "Generating local CA (if missing) and server certificate for *.${BASE_DOMAIN} ..."
   gen_ca_if_missing
   gen_server_cert
+  generate_truststores
   log "generated server.key, server.crt (full chain), ca.crt, server.p12"
   # Show quick summary for debugging
   openssl x509 -in "${CERT_DIR}/server.crt" -noout -subject -issuer -ext subjectAltName | sed 's/^/[certs] /'
 }
 
 main "$@"
-

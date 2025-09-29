@@ -92,3 +92,17 @@ cd dts-stack
 - FE、BE、Broker 分别使用镜像 `apache/doris:2.1.7-fe-x86_64` / `apache/doris:2.1.7-be-x86_64` / `apache/doris:2.1.7-broker-x86_64`。
 - FE 通过 Traefik 暴露 Web UI：`https://${HOST_DORIS}`（80**30** → 443），MySQL 协议在 `dts-doris-fe:${DORIS_MYSQL_PORT}`，供 Trino/Airbyte/外部工具接入。
 - FE 元数据与日志持久化在 `services/dts-doris/fe/*`，BE 存储位于 `services/dts-doris/be/storage`。
+## Java/Spring Boot 对接 Keycloak（TLS 简化）
+- 证书生成后，目录 `services/certs/` 包含：
+  - `server.crt`（完整链：服务器 + CA）与 `server.key`（Traefik 使用）
+  - `ca.crt`（客户端信任使用）
+  - `truststore.jks` 与 `truststore.p12`（仅含 CA，用于客户端信任）
+  - `server.p12` / `keystore.p12`（服务端密钥库，含私钥+证书链）
+- Spring Boot 作为客户端，仅需信任 CA：
+  - `-Djavax.net.ssl.trustStore=services/certs/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=changeit`
+  - 或使用 JKS：把 `truststore.jks` 路径与密码传给 `-Djavax.net.ssl.trustStore*`。
+- 若你的 Spring Boot 自身需要对外提供 HTTPS（一般不需要，本栈由 Traefik 终止 TLS）：
+  - `server.ssl.key-store=services/certs/keystore.p12`
+  - `server.ssl.key-store-type=PKCS12`
+  - `server.ssl.key-store-password=changeit`
+  - `server.ssl.enabled=true`

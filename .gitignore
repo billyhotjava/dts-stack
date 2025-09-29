@@ -8,6 +8,8 @@ services/certs/ca.crt
 services/certs/ca.key
 services/certs/server.only.crt
 services/certs/server.p12
+services/certs/keystore.p12
 services/certs/truststore.jks
+services/certs/truststore.p12
 services/certs/*.srl
 services/certs/*.jks
