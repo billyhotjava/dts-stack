@@ -16,6 +16,7 @@ services:
       - "--api.insecure=${TRAEFIK_DASHBOARD}"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=dts-core"
       - "--providers.file.filename=/etc/traefik/dynamic/traefik-dynamic.yml"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
@@ -44,9 +45,9 @@ services:
       - ./services/certs/server.key:/certs/server.key:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.default-secure.tls=true"
-      - "traefik.http.routers.default-secure.entrypoints=websecure"
-      - "traefik.http.routers.default-secure.rule=HostRegexp(`{any:.*}`)"
+      # - "traefik.http.routers.default-secure.tls=true"
+      # - "traefik.http.routers.default-secure.entrypoints=websecure"
+      # - "traefik.http.routers.default-secure.rule=HostRegexp(`{any:.*}`)"
       - "traefik.tls.certificates[0].certFile=/certs/server.crt"
       - "traefik.tls.certificates[0].keyFile=/certs/server.key"
     restart: unless-stopped
@@ -145,8 +146,6 @@ services:
     networks:
       - dts-core
 
-
-
   dts-minio:
     image: ${IMAGE_MINIO}
     command: server /data --console-address ":9001"
@@ -213,6 +212,7 @@ services:
 
   dts-trino:
     image: ${IMAGE_TRINO}
+    container_name: dts-trino 
     depends_on:
       dts-nessie:
         condition: service_started
@@ -228,10 +228,14 @@ services:
       <<: *hc
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
       - "traefik.http.routers.dts-trino.rule=Host(`${HOST_TRINO}`)"
       - "traefik.http.routers.dts-trino.entrypoints=websecure"
       - "traefik.http.routers.dts-trino.tls=true"
       - "traefik.http.services.dts-trino.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.dts-trino-redirect.redirectregex.regex=^/$"
+      - "traefik.http.middlewares.dts-trino-redirect.redirectregex.replacement=/ui"
+      - "traefik.http.routers.dts-trino.middlewares=dts-trino-redirect@docker"
     restart: unless-stopped
     networks:
       - dts-core
@@ -441,4 +445,5 @@ volumes:
 
 networks:
   dts-core:
+    name: dts-core        # ← 真实 Docker 网络名就叫 dts-core
     driver: bridge

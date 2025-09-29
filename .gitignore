@@ -4,4 +4,10 @@ services/dts-pg/data/
 services/dts-minio/data
 services/certs/server.crt
 services/certs/server.key
-
+services/certs/ca.crt
+services/certs/ca.key
+services/certs/server.only.crt
+services/certs/server.p12
+services/certs/truststore.jks
+services/certs/*.srl
+services/certs/*.jks
