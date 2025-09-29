@@ -28,6 +28,8 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - dts-pg
+      - dts-trino:
+          condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}

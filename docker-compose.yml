@@ -222,21 +222,36 @@ services:
         condition: service_started
     volumes:
       - ./services/dts-trino/init/catalog:/etc/trino/catalog
+      - ./services/dts-trino/config.properties:/etc/trino/config.properties
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     healthcheck:
-      test: ["CMD","wget","-qO-","http://localhost:8080/v1/info"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/v1/info >/dev/null || exit 1"]
       <<: *hc
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.dts-trino.rule=Host(`${HOST_TRINO}`)"
+   # Router（HTTPS）
+      - "traefik.http.routers.dts-trino.rule=Host(`${HOST_TRINO}`) && PathPrefix(`/`)"
       - "traefik.http.routers.dts-trino.entrypoints=websecure"
       - "traefik.http.routers.dts-trino.tls=true"
+
+      # Service 后端端口
       - "traefik.http.services.dts-trino.loadbalancer.server.port=8080"
+
+      # 根路径 -> /ui/ 
       - "traefik.http.middlewares.dts-trino-redirect.redirectregex.regex=^/$"
-      - "traefik.http.middlewares.dts-trino-redirect.redirectregex.replacement=/ui"
+      - "traefik.http.middlewares.dts-trino-redirect.redirectregex.replacement=/ui/"
+
+      # HTTP -> HTTPS（只给 trino 这个主机名做 80->443 跳转）
+      - "traefik.http.middlewares.dts-trino-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.dts-trino-https.redirectscheme.permanent=true"
+      - "traefik.http.routers.dts-trino-http.rule=Host(`${HOST_TRINO}`)"
+      - "traefik.http.routers.dts-trino-http.entrypoints=web"
+      - "traefik.http.routers.dts-trino-http.middlewares=dts-trino-https@docker"
+
+      # 关键：把中间件“串起来”，不要重复写 middlewares 键
       - "traefik.http.routers.dts-trino.middlewares=dts-trino-redirect@docker"
     restart: unless-stopped
     networks:
