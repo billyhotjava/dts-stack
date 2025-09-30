@@ -4,7 +4,7 @@ import { dashboardRoutes } from "./dashboard";
 import { adminRoutes } from "../admin-routes";
 import { mainRoutes } from "./main";
 
-export const routesSection: RouteObject[] = [
+export const getRoutesSection = (): RouteObject[] => [
 	// Auth
 	...authRoutes,
 	// Dashboard

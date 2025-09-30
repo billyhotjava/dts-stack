@@ -13,9 +13,7 @@ import { adminApi } from "@/admin/api/adminApi";
 import type { PortalMenuItem } from "@/admin/types";
 // Synced from dts-platform-webapp zh_CN i18n by scripts/sync-portal-menus.mjs
 // Map: { "sys.nav.portal.xxx": "中文名" }
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore - JSON import
-import portalI18nZh from "@/_mock/data/portal-i18n-zh.json";
+// Removed mock i18n import; use fallback labels only
 
 // Fallback Chinese names when external portal i18n is not provided
 const FALLBACK_PORTAL_ZH: Record<string, string> = {
@@ -95,7 +93,7 @@ function mapPortalMenusToPermissions(items: PortalMenuItem[]): Permission_Old[] 
 			const hasChildren = Array.isArray(node.children) && node.children.length > 0;
 			const id = String(node.id ?? `${parentId}/${node.path}`);
 			const titleKey = meta?.titleKey;
-			const i18nMap = portalI18nZh as Record<string, string>;
+        const i18nMap: Record<string, string> = {};
 			const displayName =
 				titleKey && (i18nMap[titleKey] || FALLBACK_PORTAL_ZH[titleKey])
 					? i18nMap[titleKey] || FALLBACK_PORTAL_ZH[titleKey]

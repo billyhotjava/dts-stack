@@ -1,5 +1,7 @@
 import { Link } from "react-router";
-import { DB_USER } from "@/_mock/assets_backup";
+// Remove mock users; rely on real auth info
+type MockUser = { username: string; password: string };
+const DB_USER: MockUser[] = [];
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { useAuthCheck } from "@/components/auth/use-auth";
 import { CodeBlock } from "@/components/code/code-bock";
@@ -94,18 +96,22 @@ export default function PermissionPage() {
 	};
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="w-full flex  items-center justify-center">
-				<Text variant="subTitle1">当前用户：</Text>
-				<Tabs defaultValue={username} onValueChange={handleSwitch}>
-					<TabsList>
-						{DB_USER.map((user) => (
-							<TabsTrigger key={user.username} value={user.username}>
-								{user.username}
-							</TabsTrigger>
-						))}
-					</TabsList>
-				</Tabs>
-			</div>
+            <div className="w-full flex  items-center justify-center">
+                <Text variant="subTitle1">当前用户：</Text>
+                {DB_USER.length > 0 ? (
+                  <Tabs defaultValue={username} onValueChange={handleSwitch}>
+                      <TabsList>
+                          {DB_USER.map((user) => (
+                              <TabsTrigger key={user.username} value={user.username}>
+                                  {user.username}
+                              </TabsTrigger>
+                          ))}
+                      </TabsList>
+                  </Tabs>
+                ) : (
+                  <Text variant="body1">{username}</Text>
+                )}
+            </div>
 			<Card>
 				<CardContent>
 					<div className="flex items-center gap-2">

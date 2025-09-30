@@ -8,7 +8,7 @@ import Page403 from "@/pages/sys/error/Page403";
 import { useSettings } from "@/store/settingStore";
 import { cn } from "@/utils";
 import { flattenTrees } from "@/utils/tree";
-import { backendNavData } from "./nav/nav-data/nav-data-backend";
+import { getBackendNavData } from "./nav/nav-data/nav-data-backend";
 import { frontendNavData } from "./nav/nav-data/nav-data-frontend";
 
 /**
@@ -16,22 +16,21 @@ import { frontendNavData } from "./nav/nav-data/nav-data-frontend";
  * @param path
  * @returns
  */
-function findAuthByPath(path: string): string[] {
-	const foundItem = allItems.find((item) => item.path === path);
+function findAuthByPath(path: string, items: any[]): string[] {
+	const foundItem = items.find((item) => item.path === path);
 	return foundItem?.auth || [];
 }
-
-const navData = GLOBAL_CONFIG.routerMode === "frontend" ? clone(frontendNavData) : backendNavData;
-const allItems = navData.reduce((acc: any[], group) => {
-	const flattenedItems = flattenTrees(group.items);
-	return concat(acc, flattenedItems);
-}, []);
 
 const Main = () => {
 	const { themeStretch } = useSettings();
 
 	const { pathname } = useLocation();
-	const currentNavAuth = findAuthByPath(pathname);
+	const navData = GLOBAL_CONFIG.routerMode === "frontend" ? clone(frontendNavData) : getBackendNavData();
+	const allItems = navData.reduce((acc: any[], group) => {
+		const flattenedItems = flattenTrees(group.items);
+		return concat(acc, flattenedItems);
+	}, []);
+	const currentNavAuth = findAuthByPath(pathname, allItems);
 
 	return (
 		<AuthGuard checkAny={currentNavAuth} fallback={<Page403 />}>

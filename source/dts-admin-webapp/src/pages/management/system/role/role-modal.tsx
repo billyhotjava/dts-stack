@@ -8,9 +8,7 @@ import type { MenuTree } from "#/entity";
 import { PermissionType } from "#/enum";
 import { adminApi } from "@/admin/api/adminApi";
 import type { PortalMenuItem } from "@/admin/types";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore - JSON import for mock i18n fallback
-import portalI18nZh from "@/_mock/data/portal-i18n-zh.json";
+// Removed mock i18n import; use fallback labels only
 import { Alert, AlertDescription } from "@/ui/alert";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
@@ -108,7 +106,7 @@ export default function RoleModal({ open, mode, role, onCancel, onSuccess }: Rol
 	}
 
     const mapPortalMenusToMenuTree = (items: PortalMenuItem[]): MenuTree[] => {
-        const i18nMap = portalI18nZh as Record<string, string>;
+        const i18nMap: Record<string, string> = {};
         const walk = (list: PortalMenuItem[]): MenuTree[] => {
             return list.map((item) => {
                 const meta = safeParseMetadata(item.metadata);

@@ -150,6 +150,7 @@ services:
       PNPM_STORE_DIR: /pnpm-store
       BROWSER: none
       VITE_OPEN: "false"
+      VITE_ENABLE_MOCK: "false"
       CHOKIDAR_USEPOLLING: "false"
       HOST: 0.0.0.0
       PORT: "3001"
@@ -183,6 +184,7 @@ services:
       PNPM_STORE_DIR: /pnpm-store
       BROWSER: none
       VITE_OPEN: "false"
+      VITE_ENABLE_MOCK: "false"
       CHOKIDAR_USEPOLLING: "false"
       HOST: 0.0.0.0
       PORT: "3001"
