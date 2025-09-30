@@ -142,7 +142,7 @@ services:
   # Frontend: dts-admin-webapp (optional dev server)
   # If your project uses Vite/React/Angular dev server, adjust command/port below.
   dts-admin-webapp:
-    image: node:20-alpine
+    image: node:22-bookworm
     working_dir: /workspace
     depends_on:
       - dts-admin
@@ -150,7 +150,7 @@ services:
       PNPM_STORE_DIR: /pnpm-store
       BROWSER: none
       VITE_OPEN: "false"
-      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_USEPOLLING: "false"
       HOST: 0.0.0.0
       PORT: "3001"
       # Vite dev proxy target for admin webapp: call dts-admin directly
@@ -162,7 +162,7 @@ services:
       - ./source/dts-admin-webapp:/workspace
       - ./source/dts-platform-webapp:/workspace/dts-platform-webapp:ro
       - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
-      - ./.pnpm-store:/pnpm-store
+      - pnpm-store:/pnpm-store
       - /workspace/node_modules
     networks:
       - dts-core
@@ -175,7 +175,7 @@ services:
 
   # Frontend: dts-platform-webapp (optional dev server)
   dts-platform-webapp:
-    image: node:20-alpine
+    image: node:22-bookworm
     working_dir: /workspace
     depends_on:
       - dts-platform
@@ -183,7 +183,7 @@ services:
       PNPM_STORE_DIR: /pnpm-store
       BROWSER: none
       VITE_OPEN: "false"
-      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_USEPOLLING: "false"
       HOST: 0.0.0.0
       PORT: "3001"
       # Vite dev proxy target for platform webapp: call dts-platform directly
@@ -194,7 +194,7 @@ services:
     volumes:
       - ./source/dts-platform-webapp:/workspace
       - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
-      - ./.pnpm-store:/pnpm-store
+      - pnpm-store:/pnpm-store
       - /workspace/node_modules
     networks:
       - dts-core
@@ -205,4 +205,7 @@ services:
       retries: 30
       start_period: 60s
 
-## Note: top-level 'networks' and 'volumes' come from docker-compose.yml
+volumes:
+  pnpm-store:
+
+## Note: top-level networks may also be defined in docker-compose.yml
