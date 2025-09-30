@@ -91,11 +91,17 @@ services:
     working_dir: /workspace
     depends_on:
       - dts-admin
-    command: ["sh","-lc","[ -f package.json ] && (npm install --silent || npm install) && (npm run dev || npm start)"]
+    environment:
+      PNPM_STORE_DIR: /pnpm-store
+      BROWSER: none
+      VITE_OPEN: "false"
+      CHOKIDAR_USEPOLLING: "true"
+    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; if [ ! -f pnpm-lock.yaml ] && [ -f package-lock.json ]; then pnpm import; fi; pnpm install --no-frozen-lockfile --prefer-offline --ignore-scripts; pnpm run dev -- --port 5173 --open=false || PORT=5173 pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18011:5173"
     volumes:
       - ../dts-source/dts-admin-webapp:/workspace
+      - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules
     networks:
       - dts-core
@@ -106,11 +112,17 @@ services:
     working_dir: /workspace
     depends_on:
       - dts-platform
-    command: ["sh","-lc","[ -f package.json ] && (npm install --silent || npm install) && (npm run dev -- --port 5174 || PORT=5174 npm start)"]
+    environment:
+      PNPM_STORE_DIR: /pnpm-store
+      BROWSER: none
+      VITE_OPEN: "false"
+      CHOKIDAR_USEPOLLING: "true"
+    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; if [ ! -f pnpm-lock.yaml ] && [ -f package-lock.json ]; then pnpm import; fi; pnpm install --no-frozen-lockfile --prefer-offline --ignore-scripts; pnpm run dev -- --port 5174 --open=false || PORT=5174 pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
-      - "18012:5174"
+      - "18012:3001"
     volumes:
       - ../dts-source/dts-platform-webapp:/workspace
+      - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules
     networks:
       - dts-core

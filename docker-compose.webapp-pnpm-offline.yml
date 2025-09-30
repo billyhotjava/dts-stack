@@ -1,0 +1,19 @@
+## Offline variant: build webapps with pnpm using pre-seeded store at ./offline/pnpm-store
+
+services:
+  dts-admin-webapp-build:
+    environment:
+      PNPM_STORE_DIR: /pnpm-store
+    volumes:
+      - ./offline/pnpm-store:/pnpm-store
+      - ./builds/dts-admin-webapp:/out
+    command: ["sh","-lc","set -e; corepack enable; if [ ! -f pnpm-lock.yaml ] && [ -f package-lock.json ]; then pnpm import; fi; pnpm install --offline --frozen-lockfile; pnpm run build; rm -rf /out/*; cp -a dist/* /out/ 2>/dev/null || cp -a build/* /out/ 2>/dev/null || (echo 'No dist/build output found' && exit 1)"]
+
+  dts-platform-webapp-build:
+    environment:
+      PNPM_STORE_DIR: /pnpm-store
+    volumes:
+      - ./offline/pnpm-store:/pnpm-store
+      - ./builds/dts-platform-webapp:/out
+    command: ["sh","-lc","set -e; corepack enable; if [ ! -f pnpm-lock.yaml ] && [ -f package-lock.json ]; then pnpm import; fi; pnpm install --offline --frozen-lockfile; pnpm run build; rm -rf /out/*; cp -a dist/* /out/ 2>/dev/null || cp -a build/* /out/ 2>/dev/null || (echo 'No dist/build output found' && exit 1)"]
+

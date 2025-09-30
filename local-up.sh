@@ -69,6 +69,13 @@ if [[ -n "${pg_cid}" ]]; then
   done
 fi
 
+echo "[local-up] Ensuring Traefik (dts-proxy) and Keycloak are running ..."
+proxy_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-proxy || true)
+kc_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-keycloak || true)
+if [[ -z "${proxy_cid}" || -z "${kc_cid}" ]]; then
+  "${compose_cmd[@]}" -f docker-compose.yml up -d dts-proxy dts-keycloak
+fi
+
 services=(
   dts-admin
   dts-platform
