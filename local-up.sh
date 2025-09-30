@@ -96,4 +96,14 @@ fi
 echo "[local-up] Starting local-dev services (bind mounts + live reload) ..."
 "${compose_cmd[@]}" "${compose_files[@]}" up -d "${services[@]}"
 
+# Optionally patch Vite configs inside webapp containers to merge process.env
+if [[ "${WITH_WEBAPP:-1}" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
+  echo "[local-up] Patching Vite env handling (merge process.env) in webapp containers ..."
+  # best-effort; ignore failures if file layout differs
+  "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-admin-webapp sh -lc \
+    "/patches/patch-vite-env.sh || true" || true
+  "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-platform-webapp sh -lc \
+    "/patches/patch-vite-env.sh || true" || true
+fi
+
 echo "[local-up] Done. Stop dev services with: ./local-stop"

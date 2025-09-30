@@ -163,13 +163,15 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
       PORT: "3001"
-      # Vite dev proxy target for admin webapp: call dts-admin backend directly
-      VITE_API_PROXY_TARGET: http://dts-admin:8081
+      # Vite dev proxy target for admin webapp: call unified public API
+      VITE_API_PROXY_TARGET: http://dts-public-api:8090
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18011:3001"
     volumes:
       - ../dts-source/dts-admin-webapp:/workspace
+      - ./builds/webapp.env.development:/workspace/.env.development:ro
+      - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
       - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules
     networks:
@@ -194,13 +196,15 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
       PORT: "3001"
-      # Vite dev proxy target for platform webapp: call dts-platform backend directly
-      VITE_API_PROXY_TARGET: http://dts-platform:8081
+      # Vite dev proxy target for platform webapp: call unified public API
+      VITE_API_PROXY_TARGET: http://dts-public-api:8090
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18012:3001"
     volumes:
       - ../dts-source/dts-platform-webapp:/workspace
+      - ./builds/webapp.env.development:/workspace/.env.development:ro
+      - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
       - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules
     networks:
