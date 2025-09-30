@@ -47,6 +47,8 @@ public class SecurityConfiguration {
                 authz
                     .requestMatchers(mvc.pattern("/api/authenticate")).permitAll()
                     .requestMatchers(mvc.pattern("/api/auth-info")).permitAll()
+                    // Allow platform login/logout/refresh endpoints without prior auth
+                    .requestMatchers(mvc.pattern("/api/keycloak/auth/**")).permitAll()
                     .requestMatchers(mvc.pattern("/api/admin/**")).hasAuthority(AuthoritiesConstants.ADMIN)
                     .requestMatchers(mvc.pattern("/api/**")).authenticated()
                     .requestMatchers(mvc.pattern("/v3/api-docs/**")).hasAuthority(AuthoritiesConstants.ADMIN)
