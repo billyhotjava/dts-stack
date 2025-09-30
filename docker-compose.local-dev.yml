@@ -163,9 +163,9 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
       PORT: "3001"
-      # Point Vite proxy to the backend inside the Docker network
-      # This avoids ECONNREFUSED from using localhost inside container
-      VITE_API_PROXY_TARGET: http://dts-admin:8081
+      # Point Vite proxy to the unified public API inside the Docker network
+      # Many webapp routes (e.g., /api/keycloak/auth/login) are served by dts-public-api
+      VITE_API_PROXY_TARGET: http://dts-public-api:8090
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18011:3001"
@@ -195,8 +195,8 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
       PORT: "3001"
-      # Point Vite proxy to the platform backend inside the Docker network
-      VITE_API_PROXY_TARGET: http://dts-platform:8081
+      # Point Vite proxy to the unified public API inside the Docker network
+      VITE_API_PROXY_TARGET: http://dts-public-api:8090
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18012:3001"
