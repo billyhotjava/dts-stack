@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="202509290001-01" author="platform">
+        <comment>Catalog dataset: add exposed_by (VIEW/RANGER/API)</comment>
+        <addColumn tableName="catalog_dataset">
+            <column name="exposed_by" type="varchar(16)"/>
+        </addColumn>
+        <createIndex indexName="idx_catalog_dataset_exposed_by" tableName="catalog_dataset">
+            <column name="exposed_by"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

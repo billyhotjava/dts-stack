@@ -132,7 +132,7 @@ if [[ "$MODE" == "local" ]]; then
     "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-platform-webapp sh -lc "sh /patches/patch-vite-env.sh || true" || true
   fi
 else
-  echo "[dev-up] Starting dts-source dev services with build ..."
+  echo "[dev-up] Starting source dev services with build ..."
   "${compose_cmd[@]}" "${compose_files[@]}" up -d --build "${services[@]}"
 fi
 

@@ -1,0 +1,280 @@
+application {
+  config {
+    baseName dtsPlatform
+    applicationType microservice
+    packageName com.yuzhi.dts.platform
+    authenticationType oauth2
+    serviceDiscoveryType eureka
+    buildTool maven
+    devDatabaseType postgresql
+    prodDatabaseType postgresql
+    reactive false
+    skipClient true
+  }
+}
+
+enum SecurityLevel { PUBLIC, INTERNAL, SECRET, TOP_SECRET }
+enum DataSourceType { HIVE, TRINO, JDBC, FILE, API }
+enum ServiceType { SQL, AGG_METRIC, REST, GRAPHQL }
+enum RuleType { NOT_NULL, UNIQUE, REF_DICT, RANGE, CUSTOM_SQL }
+enum JobType { HQL, SPARK_SQL, PYTHON, TRINO_SQL }
+enum JobStatus { DRAFT, READY, RUNNING, SUCCESS, FAILED }
+enum ApiAuthType { OIDC, SIGN, NONE }
+enum ExposureMethod { VIEW, RANGER, API, DIRECT }
+enum MaskingStrategy { NONE, PARTIAL, HASH, TOKENIZE, CUSTOM }
+enum RefreshType { NONE, SCHEDULED, ON_DEMAND }
+
+entity Dataset {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  code String required,
+  name String required,
+  bizDomain String,
+  owner String,                         // 数据责任人/部门
+  tenantId String,                      // 多租户（可选）
+
+  description String maxlength(1000),
+  level SecurityLevel required,
+  sourceType DataSourceType required,
+
+  hiveDatabase String,
+  hiveTable String,
+  trinoCatalog String,                  // 便于直连 Trino
+  exposure ExposureMethod required,     // VIEW/RANGER/API/DIRECT
+  exposureSchema String,                // 视图/对外 schema 名
+  retentionDays Integer,                // 消费侧保留策略（展示/导出）
+
+  tags String
+}
+
+entity TableSchema {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  dbName String required,
+  tableName String required,
+  tableType String,
+  remark String
+}
+
+entity ColumnSchema {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  columnName String required,
+  dataType String required,
+  nullable Boolean required,
+  remark String                        // 可写 PII:phone / ID 等标签
+}
+
+entity AccessPolicy {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  allowRoles String required,           // 允许访问的角色集合（逗号分隔）
+  defaultMasking MaskingStrategy,       // 默认列脱敏策略（兜底）
+  notes String                          // 备注
+}
+
+entity RowFilterRule {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  name String required,
+  expression String required,           // 行过滤表达式 (SQL WHERE 片段)
+  applyToRoles String                   // 适用角色集合（逗号分隔）
+}
+
+entity MaskingRule {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  columnName String required,
+  strategy MaskingStrategy required,    // PARTIAL/HASH/TOKENIZE/...
+  params String                         // JSON参数：保留几位等
+}
+
+entity SecureView {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  dbName String,
+  viewName String required,
+  level SecurityLevel required,         // 该视图对应密级
+  rowFilter String,                     // 物化后的行过滤（记录用于追溯）
+  maskColumns String,                   // 列脱敏清单（记录用于追溯）
+  refresh RefreshType required,         // NONE/SCHEDULED/ON_DEMAND
+  cronExp String,                       // 定时刷新表达式（可选）
+  enabled Boolean required
+}
+
+entity DataQualityRule {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  ruleType RuleType required,
+  params String,                        // JSON: {columns:[...],min:...,max:...}
+  expected String,                      // 阈值/期望
+  enabled Boolean required
+}
+
+entity DataQualityRun {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  jobId String,
+  status JobStatus required,
+  result String,                        // JSON 摘要
+  startedAt Instant,
+  finishedAt Instant,
+  sampleUri String                      // 违规样本对象存储地址（可选）
+}
+
+entity DictRef {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  dictCode String required,
+  items String required                  // JSON 数组
+}
+
+entity ETLJob {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  name String required,
+  jobType JobType required,
+  entrypoint String required,            // 调度触发点（可为空壳，仅登记）
+  scheduleExp String,
+  params String,
+  enabled Boolean required
+}
+
+entity ETLTask {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  taskOrder Integer required,
+  taskType JobType required,
+  script String required
+}
+
+entity JobRun {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  airflowDagId String,                   // 或 externalRunId
+  status JobStatus required,
+  startedAt Instant,
+  finishedAt Instant,
+  logsUri String,
+  metrics String
+}
+
+entity ApiSpec {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  name String required,
+  serviceType ServiceType required,
+  sqlText String,                        // 受控 SQL（直连 Trino/Hive）
+  authType ApiAuthType required,
+  rateLimitPerMin Integer,               // 限流
+  requireApproval Boolean,               // 是否需要审批
+  owner String
+}
+
+entity ApiPublish {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  version String required,
+  basePath String required,
+  status String required,                // DRAFT/RELEASED/DEPRECATED
+  docUrl String
+}
+
+entity ApiAudit {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  caller String required,
+  calledAt Instant required,
+  latencyMs Integer,
+  statusCode Integer,
+  requestId String
+}
+
+entity Dashboard {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  name String required,
+  supersetId String,
+  url String required,
+  level SecurityLevel required,
+  tags String
+}
+
+entity ChartRef {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+
+  name String required,
+  supersetChartId String,
+  url String required
+}
+
+relationship OneToMany {
+  Dataset{columns}        to ColumnSchema{dataset},
+  Dataset{policies}       to AccessPolicy{dataset},
+  Dataset{rules}          to DataQualityRule{dataset},
+  Dataset{runs}           to DataQualityRun{dataset},
+  Dataset{views}          to SecureView{dataset},
+  Dataset{apis}           to ApiSpec{dataset},
+  ETLJob{tasks}           to ETLTask{job},
+  Dashboard{charts}       to ChartRef{dashboard},
+  AccessPolicy{maskings}  to MaskingRule{policy},
+  AccessPolicy{rowRules}  to RowFilterRule{policy}
+}
+
+dto * with mapstruct
+service * with serviceClass
+paginate * with pagination

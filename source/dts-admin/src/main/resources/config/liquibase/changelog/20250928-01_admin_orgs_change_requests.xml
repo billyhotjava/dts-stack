@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20250928-01-orgs" author="agent">
+        <createTable tableName="organization_node">
+            <column name="id" type="bigint">
+                <constraints primaryKey="true" primaryKeyName="pk_organization_node" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="data_level" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="contact" type="varchar(255)"/>
+            <column name="phone" type="varchar(255)"/>
+            <column name="description" type="varchar(2000)"/>
+            <column name="parent_id" type="bigint"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="organization_node"
+                                 baseColumnNames="parent_id"
+                                 constraintName="fk_org_parent"
+                                 referencedTableName="organization_node"
+                                 referencedColumnNames="id"/>
+        <createSequence sequenceName="organization_node_seq" startValue="1"/>
+        <addAutoIncrement tableName="organization_node" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="organization_node_seq"/>
+    </changeSet>
+
+    <changeSet id="20250928-02-change-requests" author="agent">
+        <createTable tableName="change_request">
+            <column name="id" type="bigint">
+                <constraints primaryKey="true" primaryKeyName="pk_change_request" nullable="false"/>
+            </column>
+            <column name="resource_type" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resource_id" type="varchar(256)"/>
+            <column name="action" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload_json" type="clob"/>
+            <column name="diff_json" type="clob"/>
+            <column name="status" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="requested_by" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="requested_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decided_by" type="varchar(128)"/>
+            <column name="decided_at" type="timestamp"/>
+            <column name="reason" type="varchar(512)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_change_request_status" tableName="change_request">
+            <column name="status"/>
+        </createIndex>
+        <createSequence sequenceName="change_request_seq" startValue="1"/>
+        <addAutoIncrement tableName="change_request" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="change_request_seq"/>
+    </changeSet>
+
+    <changeSet id="20250928-04-admin-datasets" author="agent">
+        <createTable tableName="admin_dataset">
+            <column name="id" type="bigint">
+                <constraints primaryKey="true" primaryKeyName="pk_admin_dataset" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="business_code" type="varchar(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="description" type="varchar(1000)"/>
+            <column name="data_level" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_org_id" type="bigint"/>
+            <column name="is_institute_shared" type="boolean"/>
+            <column name="row_count" type="bigint"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createSequence sequenceName="admin_dataset_seq" startValue="1"/>
+        <addAutoIncrement tableName="admin_dataset" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="admin_dataset_seq"/>
+    </changeSet>
+
+    <changeSet id="20250928-05-admin-custom-roles" author="agent">
+        <createTable tableName="admin_custom_role">
+            <column name="id" type="bigint">
+                <constraints primaryKey="true" primaryKeyName="pk_admin_custom_role" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="scope" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="operations" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_rows" type="int"/>
+            <column name="allow_desensitize_json" type="boolean"/>
+            <column name="max_data_level" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(1000)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createSequence sequenceName="admin_custom_role_seq" startValue="1"/>
+        <addAutoIncrement tableName="admin_custom_role" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="admin_custom_role_seq"/>
+    </changeSet>
+
+    <changeSet id="20250928-06-admin-role-assignments" author="agent">
+        <createTable tableName="admin_role_assignment">
+            <column name="id" type="bigint">
+                <constraints primaryKey="true" primaryKeyName="pk_admin_role_assignment" nullable="false"/>
+            </column>
+            <column name="role" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="username" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_security_level" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="scope_org_id" type="bigint"/>
+            <column name="dataset_ids" type="clob"/>
+            <column name="operations" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createSequence sequenceName="admin_role_assignment_seq" startValue="1"/>
+        <addAutoIncrement tableName="admin_role_assignment" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="admin_role_assignment_seq"/>
+    </changeSet>
+
+    <changeSet id="20250928-07-system-config" author="agent">
+        <createTable tableName="system_config">
+            <column name="id" type="bigint">
+                <constraints primaryKey="true" primaryKeyName="pk_system_config" nullable="false"/>
+            </column>
+            <column name="cfg_key" type="varchar(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="cfg_value" type="varchar(2000)"/>
+            <column name="description" type="varchar(1000)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createSequence sequenceName="system_config_seq" startValue="1"/>
+        <addAutoIncrement tableName="system_config" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="system_config_seq"/>
+    </changeSet>
+    <changeSet id="20250928-03-portal-menus" author="agent">
+        <createTable tableName="portal_menu">
+            <column name="id" type="bigint">
+                <constraints primaryKey="true" primaryKeyName="pk_portal_menu" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="path" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="component" type="varchar(255)"/>
+            <column name="sort_order" type="int"/>
+            <column name="metadata" type="clob"/>
+            <column name="parent_id" type="bigint"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="portal_menu" baseColumnNames="parent_id"
+                                 constraintName="fk_portal_menu_parent"
+                                 referencedTableName="portal_menu" referencedColumnNames="id"/>
+        <createIndex indexName="idx_portal_menu_parent" tableName="portal_menu">
+            <column name="parent_id"/>
+        </createIndex>
+        <createSequence sequenceName="portal_menu_seq" startValue="1"/>
+        <addAutoIncrement tableName="portal_menu" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="portal_menu_seq"/>
+    </changeSet>
+
+</databaseChangeLog>

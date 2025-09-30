@@ -1,0 +1,100 @@
+application {
+  config {
+    baseName dtsCommon
+    applicationType microservice
+    packageName com.yuzhi.dts.common
+    authenticationType oauth2
+    prodDatabaseType postgresql
+    devDatabaseType h2Disk
+    buildTool maven
+    enableHibernateCache false
+    serviceDiscoveryType no
+    skipUserManagement true
+  }
+}
+
+entity AuditEvent {
+  actor String required
+  action String required
+  entityType String
+  entityId String
+  details String
+  ipAddress String
+  userAgent String
+  createdAt Instant required
+  targetRef String required maxlength(512)
+  targetKind ResourceKind required
+}
+
+entity DictionaryEntry {
+  typeCode String required
+  code String required
+  name String required
+  parentCode String
+  sortOrder Integer
+  status String required
+  createdAt Instant
+  createdBy String
+  updatedAt Instant
+  updatedBy String
+}
+
+entity ConfigParam {
+  cfgKey String required
+  cfgValue String required
+  scope String required
+  remarks String
+  updatedAt Instant
+  updatedBy String
+}
+
+entity FileObject {
+  bucket String required
+  objectKey String required
+  filename String required
+  contentType String
+  size Long
+  checksum String
+  createdAt Instant required
+  createdBy String
+}
+
+entity NotifyTemplate {
+  code String required
+  name String required
+  channel String required
+  subject String
+  body String required
+  enabled Boolean required
+}
+
+entity NotifyTask {
+  channel String required
+  recipients String required
+  payload String
+  status String required
+  scheduledAt Instant
+  sentAt Instant
+  retryCount Integer
+  maxRetries Integer
+  lastError String
+  templateCode String
+}
+
+entity JobSchedule {
+  jobKey String required
+  cronExpr String required
+  status String required
+  enabled Boolean required
+  lastRunAt Instant
+  nextRunAt Instant
+  lastError String
+}
+
+entity IdSegment {
+  bizTag String required
+  maxId Long required
+  step Integer required
+  version Integer required
+}
+

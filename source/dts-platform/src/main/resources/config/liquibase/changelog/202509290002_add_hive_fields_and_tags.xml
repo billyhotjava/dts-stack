@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="202509290002-01" author="platform">
+        <comment>Catalog dataset: add hive_database, hive_table, tags</comment>
+        <addColumn tableName="catalog_dataset">
+            <column name="hive_database" type="varchar(128)"/>
+        </addColumn>
+        <addColumn tableName="catalog_dataset">
+            <column name="hive_table" type="varchar(128)"/>
+        </addColumn>
+        <addColumn tableName="catalog_dataset">
+            <column name="tags" type="varchar(1024)"/>
+        </addColumn>
+        <createIndex indexName="idx_catalog_dataset_hive" tableName="catalog_dataset">
+            <column name="hive_database"/>
+            <column name="hive_table"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

@@ -1,0 +1,12 @@
+{
+	"profile": {
+		"attributes": {
+			"fullname": "姓名",
+			"data_levels": "数据访问等级",
+			"person_security_level": "人员安全等级",
+			"personnel_security_level": "人员密级",
+			"department": "部门",
+			"position": "职位"
+		}
+	}
+}

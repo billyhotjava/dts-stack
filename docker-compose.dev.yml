@@ -35,17 +35,18 @@ services:
         sh /patches/patch-app-dev-yml.sh admin || true
         # Also patch shared module (dts-common) if present
         sh /patches/patch-app-dev-yml.sh common || true
-        # 1) precompile with module graph (includes dts-common)
-        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-admin package || true
-        # 2) run with devtools; restarts on classpath changes
-        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-admin spring-boot:run \
+        # Pre-install shared module so local repo has dts-common
+        mvn -q -f /workspace-src/dts-common/pom.xml -Pdev -DskipTests -Dmodernizer.skip=true install || true
+        # Build current module and run with devtools; restarts on classpath changes
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true package || true
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true spring-boot:run \
           -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}" \
           -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     ports:
       - "18081:8081"
       - "5005:5005"
     volumes:
-      - ../dts-source:/workspace-src
+      - ./source:/workspace-src
       - maven-cache:/root/.m2
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro
@@ -104,15 +105,16 @@ services:
         sh /patches/patch-app-dev-yml.sh platform || true
         # Also patch shared module (dts-common) if present
         sh /patches/patch-app-dev-yml.sh common || true
-        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-platform package || true
-        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-platform spring-boot:run \
+        mvn -q -f /workspace-src/dts-common/pom.xml -Pdev -DskipTests -Dmodernizer.skip=true install || true
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true package || true
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true spring-boot:run \
           -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}" \
           -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     ports:
       - "18082:8081"
       - "5006:5006"
     volumes:
-      - ../dts-source:/workspace-src
+      - ./source:/workspace-src
       - maven-cache:/root/.m2
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro
@@ -157,7 +159,7 @@ services:
     ports:
       - "18011:3001"
     volumes:
-      - ../dts-source/dts-admin-webapp:/workspace
+      - ./source/dts-admin-webapp:/workspace
       - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
       - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules
@@ -189,7 +191,7 @@ services:
     ports:
       - "18012:3001"
     volumes:
-      - ../dts-source/dts-platform-webapp:/workspace
+      - ./source/dts-platform-webapp:/workspace
       - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
       - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules

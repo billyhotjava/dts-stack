@@ -1,0 +1,345 @@
+{
+	"sys": {
+		"api": {
+			"operationSuccess": "操作成功",
+			"operationFailed": "操作失败",
+			"errorTip": "错误提示",
+			"successTip": "成功提示",
+			"errorMessage": "操作失败,系统异常!",
+			"timeoutMessage": "登录超时,请重新登录!",
+			"apiTimeoutMessage": "接口请求超时,请刷新页面重试!",
+			"apiRequestFailed": "请求出错，请稍候重试",
+			"networkException": "网络异常",
+			"networkExceptionMsg": "网络异常，请检查您的网络连接是否正常!",
+			"errMsg401": "用户没有权限（令牌、用户名、密码错误）!",
+			"errMsg403": "用户得到授权，但是访问是被禁止的。!",
+			"errMsg404": "网络请求错误,未找到该资源!",
+			"errMsg405": "网络请求错误,请求方法未允许!",
+			"errMsg408": "网络请求超时!",
+			"errMsg500": "服务器错误,请联系管理员!",
+			"errMsg501": "网络未实现!",
+			"errMsg502": "网络错误!",
+			"errMsg503": "服务不可用，服务器暂时过载或维护!",
+			"errMsg504": "网络超时!",
+			"errMsg505": "http版本不支持该请求!"
+		},
+		"login": {
+			"brandName": "数据管理平台",
+			"brandIllustrationAlt": "科技氛围大数据平台插画",
+			"backSignIn": "返回",
+			"signInFormTitle": "登录到您的账户",
+			"mobileSignInFormTitle": "手机登录",
+			"qrSignInFormTitle": "二维码登录",
+			"signUpFormTitle": "注册",
+			"forgetFormTitle": "重置密码",
+			"signInPrimaryTitle": "欢迎回来",
+			"signInSecondTitle": "开箱即用的中后台管理系统",
+			"signInTitle": "账号登录",
+			"signInDesc": "输入您的个人详细信息开始使用！",
+			"policy": "我同意xxx隐私政策",
+			"scanSign": "扫码后点击'确认'，即可完成登录",
+			"forgetFormSecondTitle": "请输入与您的帐户关联的电子邮件地址，我们将通过电子邮件向您发送重置密码的链接。",
+			"loginButton": "登录",
+			"registerButton": "注册",
+			"rememberMe": "记住我",
+			"forgetPassword": "忘记密码?",
+			"otherSignIn": "其他登录方式",
+			"sendSmsButton": "发送验证码",
+			"sendSmsText": "{{second}}秒后重试",
+			"sendEmailButton": "发送邮件",
+			"loginSuccessTitle": "登录成功",
+			"loginSuccessDesc": "欢迎回来",
+			"accountPlaceholder": "请输入账号",
+			"passwordPlaceholder": "请输入密码",
+			"confirmPasswordPlaceholder": "请输入确认密码",
+			"emaildPlaceholder": "请输入邮箱",
+			"smsPlaceholder": "请输入验证码",
+			"mobilePlaceholder": "请输入手机号码",
+			"policyPlaceholder": "勾选后才能注册",
+			"diffPwd": "两次输入密码不一致",
+			"userName": "账号",
+			"password": "密码",
+			"confirmPassword": "确认密码",
+			"email": "邮箱",
+			"smsCode": "短信验证码",
+			"mobile": "手机号码",
+			"registerAndAgree": "注册即我同意",
+			"termsOfService": " 服务条款 ",
+			"privacyPolicy": " 隐私政策 ",
+			"logout": "退出",
+			"signInFormDescription": "输入您的账号登录到您的账户",
+			"noAccount": "没有账号？"
+		},
+		"brand": {
+			"classified": "机密级"
+		},
+		"tab": {
+			"fullscreen": "内容全屏",
+			"refresh": "刷新",
+			"close": "关闭标签页",
+			"closeOthers": "关闭其它标签页",
+			"closeAll": "关闭所有标签页",
+			"closeLeft": "关闭左侧标签页",
+			"closeRight": "关闭右侧标签页"
+		},
+		"nav": {
+			"dashboard": "仪表板",
+			"others": "其他",
+			"ui": "UI",
+			"custom_ui_components": "自定义UI组件",
+			"workbench": "工作台",
+			"analysis": "分析",
+			"management": "系统管理",
+			"usermgmt": {
+				"index": "用户中心",
+				"organization": "组织",
+				"permission": "权限",
+				"role": "角色",
+				"user": "用户",
+				"user_detail": "用户详情",
+				"system": {
+					"index": "系统管理",
+					"user": "用户管理",
+					"group": "组织机构管理",
+					"role": "角色管理",
+					"permission": "菜单管理",
+					"approval": "审批管理",
+					"my_changes": "我发起的变更",
+					"audit_log": "日志审计"
+				}
+			},
+			"blog": "博客",
+			"components": "组件",
+			"icon": "图标",
+			"animate": "动画",
+			"scroll": "滚动",
+			"markdown": "Markdown",
+			"editor": "富文本",
+			"i18n": "多语言",
+			"upload": "上传",
+			"chart": "图表",
+			"toast": "Toast",
+			"functions": "功能",
+			"clipboard": "剪贴板",
+			"token_expired": "Token失效",
+			"user": {
+				"account": "账户",
+				"index": "用户",
+				"profile": "个人详情"
+			},
+			"dataSecurity": "数据安全",
+			"dataSecurityOverview": "资产概览",
+			"system": {
+				"group": "组织机构",
+				"index": "系统管理",
+				"my_changes": "我发起的变更"
+			},
+			"menulevel": {
+				"index": "多级菜单",
+				"1a": "多级菜单 1a",
+				"1b": {
+					"index": "多级菜单 1b",
+					"2a": "多级菜单 2a",
+					"2b": {
+						"index": "多级菜单 2b",
+						"3a": "多级菜单 3a",
+						"3b": "多级菜单 3b"
+					}
+				}
+			},
+			"disabled": "项目禁用",
+			"label": "项目标签",
+			"link": "链接",
+			"external_link": "外链",
+			"iframe": "内嵌",
+			"blank": "空白",
+			"calendar": "日历",
+			"kanban": "看板",
+			"permission": "权限",
+			"permission.page_test": "页面鉴权测试",
+			"error": {
+				"index": "异常页",
+				"403": "403",
+				"404": "404",
+				"500": "500",
+				"unexpected": "应用发生未预期错误",
+				"unknown": "未知错误"
+			}
+		},
+		"error": {
+			"unexpected": "应用发生未预期错误",
+			"unknown": "未知错误"
+		},
+		"docs": "文档",
+		"workbench": {
+			"title": "集群概览",
+			"uptime": "运行时长",
+			"nodes": "在线节点",
+			"jobs": "运行任务",
+			"statusHealthy": "运行正常",
+			"statusWarning": "性能预警",
+			"cpuLoad": "CPU 负载",
+			"memoryLoad": "内存负载",
+			"storageLoad": "存储负载",
+			"timelineLabel": "最近一小时",
+			"nodeTableTitle": "节点概览",
+			"nodeTableSubtitle": "最新 5 条采样数据",
+			"nodeName": "节点",
+			"nodeRole": "角色",
+			"nodeCpu": "CPU 使用率",
+			"nodeMemory": "内存使用率",
+			"nodeStatus": "状态",
+			"roleMaster": "主节点",
+			"roleWorker": "工作节点"
+		},
+		"admin": {
+			"tab": {
+				"user": "用户变更",
+				"role": "角色变更",
+				"org": "组织机构",
+				"config": "系统配置",
+				"menu": "菜单管理"
+			},
+			"action": {
+				"CREATE": "创建",
+				"UPDATE": "更新",
+				"DELETE": "删除",
+				"BIND_ROLE": "绑定角色",
+				"UNBIND_ROLE": "解绑角色",
+				"CONFIG_SET": "配置变更",
+				"USER_CREATE": "创建用户",
+				"ROLE_ASSIGN": "分配角色",
+				"DATA_EXPORT": "导出数据",
+				"LOGIN": "登录",
+				"UNKNOWN": "未知动作"
+			},
+			"status": {
+				"PENDING": "待审批",
+				"APPROVED": "已通过",
+				"REJECTED": "已驳回",
+				"FAILED": "失败",
+				"DRAFT": "草稿",
+				"UNKNOWN": "未知状态",
+				"ACTIVE": "已启用",
+				"DISABLED": "已禁用"
+			},
+			"resource": {
+				"USER": "用户",
+				"ROLE": "角色",
+				"ORG": "组织",
+				"CONFIG": "系统配置",
+				"MENU": "菜单",
+				"PORTAL_MENU": "门户菜单",
+				"UNKNOWN": "未知资源"
+			},
+			"outcome": {
+				"SUCCESS": "成功",
+				"FAILURE": "失败"
+			},
+			"role": {
+				"SYSADMIN": "系统管理员",
+				"OPADMIN": "业务运维管理员",
+				"AUTHADMIN": "授权管理员",
+				"AUDITADMIN": "审计管理员",
+				"DEPT_OWNER": "部门主管",
+				"DEPT_EDITOR": "部门数据专员",
+				"DEPT_VIEWER": "数据查阅员",
+				"INST_OWNER": "研究所领导",
+				"INST_EDITOR": "研究所数据专员",
+				"INST_VIEWER": "研究所数据查阅员",
+				"DATA_STEWARD": "数据管家",
+				"DATA_ANALYST": "数据分析师"
+			},
+			"sensitivity": {
+				"DATA_PUBLIC": "公开",
+				"DATA_INTERNAL": "内部",
+				"DATA_SECRET": "秘密",
+				"DATA_TOP_SECRET": "机密",
+				"NON_SECRET": "非密",
+				"GENERAL": "普通",
+				"IMPORTANT": "重要",
+				"CORE": "核心",
+				"TOP_SECRET": "绝密",
+				"SECRET": "机密",
+				"NORMAL": "普通",
+				"UNKNOWN": "未知敏感度"
+			}
+		},
+		"dataSecurity": {
+			"title": "数据安全总览",
+			"subtitle": "掌握数据资产敏感级别与访问态势",
+			"distributionTitle": "资产分布",
+			"listTitle": "数据资产列表",
+			"listSubtitle": "按最近同步时间排序",
+			"assetName": "资产名称",
+			"assetOwner": "负责人",
+			"assetCategory": "分类",
+			"assetRecords": "记录数",
+			"assetUpdatedAt": "最近更新",
+			"category": {
+				"public": "公开",
+				"internal": "内部",
+				"confidential": "秘密",
+				"secret": "机密"
+			}
+		},
+		"permission": {
+			"title": "权限列表",
+			"new": "新增权限",
+			"dashboard": "工作台",
+			"dataSecurity": "数据安全",
+			"user": "账户中心",
+			"group": "组织机构",
+			"permission": "权限字典",
+			"columns": {
+				"name": "权限名称",
+				"type": "类型",
+				"icon": "图标",
+				"component": "页面组件",
+				"status": "启用状态",
+				"order": "排序",
+				"action": "操作"
+			},
+			"status": {
+				"enable": "已启用",
+				"disable": "已禁用"
+			},
+			"type": {
+				"catalogue": "目录",
+				"menu": "菜单",
+				"component": "页面组件"
+			},
+			"action": {
+				"addChild": "新增下级",
+				"edit": "编辑",
+				"delete": "删除"
+			},
+			"modal": {
+				"create": "新增权限",
+				"edit": "编辑权限"
+			}
+		},
+		"profile": {
+			"title": "岗位名称",
+			"department": "所属部门"
+		},
+		"settings": {
+			"title": "设置",
+			"mode": "模式",
+			"layout": "布局",
+			"stretch": "拉伸",
+			"stretchTip": "仅在屏幕宽度大于 1280px 时可用(xl)",
+			"presetThemes": "预设",
+			"font": "字体",
+			"family": "字体系列",
+			"size": "字体大小",
+			"page": "页面",
+			"breadcrumb": "面包屑",
+			"multiTab": "多标签",
+			"darkSidebar": "暗色侧边栏",
+			"accordion": "手风琴菜单",
+			"fullscreen": "全屏",
+			"exitFullscreen": "退出全屏"
+		}
+	}
+}

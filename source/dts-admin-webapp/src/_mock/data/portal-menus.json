@@ -1,0 +1,355 @@
+[
+	{
+		"id": 1,
+		"name": "sys.nav.portal.overview",
+		"path": "/overview",
+		"sortOrder": 1,
+		"metadata": "{\"icon\":\"solar:chart-square-bold-duotone\",\"sectionKey\":\"overview\",\"titleKey\":\"sys.nav.portal.overview\"}",
+		"children": [
+			{
+				"id": 2,
+				"name": "sys.nav.portal.overviewPlatform",
+				"path": "/overview/platform",
+				"sortOrder": 1,
+				"parentId": 1,
+				"metadata": "{\"entryKey\":\"platform\",\"titleKey\":\"sys.nav.portal.overviewPlatform\",\"sectionKey\":\"overview\"}"
+			},
+			{
+				"id": 3,
+				"name": "sys.nav.portal.overviewTasks",
+				"path": "/overview/tasks",
+				"sortOrder": 2,
+				"parentId": 1,
+				"metadata": "{\"entryKey\":\"tasks\",\"titleKey\":\"sys.nav.portal.overviewTasks\",\"sectionKey\":\"overview\"}"
+			},
+			{
+				"id": 4,
+				"name": "sys.nav.portal.overviewShortcuts",
+				"path": "/overview/shortcuts",
+				"sortOrder": 3,
+				"parentId": 1,
+				"metadata": "{\"entryKey\":\"shortcuts\",\"titleKey\":\"sys.nav.portal.overviewShortcuts\",\"sectionKey\":\"overview\"}"
+			}
+		]
+	},
+	{
+		"id": 5,
+		"name": "sys.nav.portal.catalog",
+		"path": "/catalog",
+		"sortOrder": 2,
+		"metadata": "{\"icon\":\"solar:book-bold-duotone\",\"sectionKey\":\"catalog\",\"titleKey\":\"sys.nav.portal.catalog\"}",
+		"children": [
+			{
+				"id": 6,
+				"name": "sys.nav.portal.catalogDomains",
+				"path": "/catalog/domains",
+				"sortOrder": 1,
+				"parentId": 5,
+				"metadata": "{\"entryKey\":\"domains\",\"titleKey\":\"sys.nav.portal.catalogDomains\",\"sectionKey\":\"catalog\"}"
+			},
+			{
+				"id": 7,
+				"name": "sys.nav.portal.catalogDatasets",
+				"path": "/catalog/datasets",
+				"sortOrder": 2,
+				"parentId": 5,
+				"metadata": "{\"entryKey\":\"datasets\",\"titleKey\":\"sys.nav.portal.catalogDatasets\",\"sectionKey\":\"catalog\"}"
+			},
+			{
+				"id": 8,
+				"name": "sys.nav.portal.catalogDictionary",
+				"path": "/catalog/dictionary",
+				"sortOrder": 3,
+				"parentId": 5,
+				"metadata": "{\"entryKey\":\"dictionary\",\"titleKey\":\"sys.nav.portal.catalogDictionary\",\"sectionKey\":\"catalog\"}"
+			},
+			{
+				"id": 9,
+				"name": "sys.nav.portal.catalogTags",
+				"path": "/catalog/tags",
+				"sortOrder": 4,
+				"parentId": 5,
+				"metadata": "{\"entryKey\":\"tags\",\"titleKey\":\"sys.nav.portal.catalogTags\",\"sectionKey\":\"catalog\"}"
+			},
+			{
+				"id": 10,
+				"name": "sys.nav.portal.catalogClassification",
+				"path": "/catalog/classification",
+				"sortOrder": 5,
+				"parentId": 5,
+				"metadata": "{\"entryKey\":\"classification\",\"titleKey\":\"sys.nav.portal.catalogClassification\",\"sectionKey\":\"catalog\"}"
+			},
+			{
+				"id": 11,
+				"name": "sys.nav.portal.catalogLineage",
+				"path": "/catalog/lineage",
+				"sortOrder": 6,
+				"parentId": 5,
+				"metadata": "{\"entryKey\":\"lineage\",\"titleKey\":\"sys.nav.portal.catalogLineage\",\"sectionKey\":\"catalog\"}"
+			},
+			{
+				"id": 12,
+				"name": "sys.nav.portal.catalogQuality",
+				"path": "/catalog/quality",
+				"sortOrder": 7,
+				"parentId": 5,
+				"metadata": "{\"entryKey\":\"quality\",\"titleKey\":\"sys.nav.portal.catalogQuality\",\"sectionKey\":\"catalog\"}"
+			}
+		]
+	},
+	{
+		"id": 13,
+		"name": "sys.nav.portal.modeling",
+		"path": "/modeling",
+		"sortOrder": 3,
+		"metadata": "{\"icon\":\"solar:documents-bold-duotone\",\"sectionKey\":\"modeling\",\"titleKey\":\"sys.nav.portal.modeling\"}",
+		"children": [
+			{
+				"id": 14,
+				"name": "sys.nav.portal.modelingStandards",
+				"path": "/modeling/standards",
+				"sortOrder": 1,
+				"parentId": 13,
+				"metadata": "{\"entryKey\":\"standards\",\"titleKey\":\"sys.nav.portal.modelingStandards\",\"sectionKey\":\"modeling\"}"
+			}
+		]
+	},
+	{
+		"id": 15,
+		"name": "sys.nav.portal.governance",
+		"path": "/governance",
+		"sortOrder": 4,
+		"metadata": "{\"icon\":\"solar:shield-check-bold-duotone\",\"sectionKey\":\"governance\",\"titleKey\":\"sys.nav.portal.governance\"}",
+		"children": [
+			{
+				"id": 16,
+				"name": "sys.nav.portal.governanceRules",
+				"path": "/governance/rules",
+				"sortOrder": 1,
+				"parentId": 15,
+				"metadata": "{\"entryKey\":\"rules\",\"titleKey\":\"sys.nav.portal.governanceRules\",\"sectionKey\":\"governance\"}"
+			},
+			{
+				"id": 17,
+				"name": "sys.nav.portal.governanceTasks",
+				"path": "/governance/tasks",
+				"sortOrder": 2,
+				"parentId": 15,
+				"metadata": "{\"entryKey\":\"tasks\",\"titleKey\":\"sys.nav.portal.governanceTasks\",\"sectionKey\":\"governance\"}"
+			},
+			{
+				"id": 18,
+				"name": "sys.nav.portal.governanceMasking",
+				"path": "/governance/masking",
+				"sortOrder": 3,
+				"parentId": 15,
+				"metadata": "{\"entryKey\":\"masking\",\"titleKey\":\"sys.nav.portal.governanceMasking\",\"sectionKey\":\"governance\"}"
+			},
+			{
+				"id": 19,
+				"name": "sys.nav.portal.governanceCompliance",
+				"path": "/governance/compliance",
+				"sortOrder": 4,
+				"parentId": 15,
+				"metadata": "{\"entryKey\":\"compliance\",\"titleKey\":\"sys.nav.portal.governanceCompliance\",\"sectionKey\":\"governance\"}"
+			},
+			{
+				"id": 20,
+				"name": "sys.nav.portal.governanceImpact",
+				"path": "/governance/impact",
+				"sortOrder": 5,
+				"parentId": 15,
+				"metadata": "{\"entryKey\":\"impact\",\"titleKey\":\"sys.nav.portal.governanceImpact\",\"sectionKey\":\"governance\"}"
+			}
+		]
+	},
+	{
+		"id": 21,
+		"name": "sys.nav.portal.explore",
+		"path": "/explore",
+		"sortOrder": 5,
+		"metadata": "{\"icon\":\"solar:compass-bold-duotone\",\"sectionKey\":\"explore\",\"titleKey\":\"sys.nav.portal.explore\"}",
+		"children": [
+			{
+				"id": 22,
+				"name": "sys.nav.portal.exploreWorkbench",
+				"path": "/explore/workbench",
+				"sortOrder": 1,
+				"parentId": 21,
+				"metadata": "{\"entryKey\":\"workbench\",\"titleKey\":\"sys.nav.portal.exploreWorkbench\",\"sectionKey\":\"explore\"}"
+			},
+			{
+				"id": 23,
+				"name": "sys.nav.portal.explorePreview",
+				"path": "/explore/preview",
+				"sortOrder": 2,
+				"parentId": 21,
+				"metadata": "{\"entryKey\":\"preview\",\"titleKey\":\"sys.nav.portal.explorePreview\",\"sectionKey\":\"explore\"}"
+			},
+			{
+				"id": 24,
+				"name": "sys.nav.portal.exploreSavedQueries",
+				"path": "/explore/saved-queries",
+				"sortOrder": 3,
+				"parentId": 21,
+				"metadata": "{\"entryKey\":\"savedQueries\",\"titleKey\":\"sys.nav.portal.exploreSavedQueries\",\"sectionKey\":\"explore\"}"
+			},
+			{
+				"id": 25,
+				"name": "sys.nav.portal.exploreSharing",
+				"path": "/explore/sharing",
+				"sortOrder": 4,
+				"parentId": 21,
+				"metadata": "{\"entryKey\":\"sharing\",\"titleKey\":\"sys.nav.portal.exploreSharing\",\"sectionKey\":\"explore\"}"
+			},
+			{
+				"id": 26,
+				"name": "sys.nav.portal.exploreExport",
+				"path": "/explore/export",
+				"sortOrder": 5,
+				"parentId": 21,
+				"metadata": "{\"entryKey\":\"export\",\"titleKey\":\"sys.nav.portal.exploreExport\",\"sectionKey\":\"explore\"}"
+			}
+		]
+	},
+	{
+		"id": 27,
+		"name": "sys.nav.portal.visualization",
+		"path": "/visualization",
+		"sortOrder": 6,
+		"metadata": "{\"icon\":\"solar:pie-chart-bold-duotone\",\"sectionKey\":\"visualization\",\"titleKey\":\"sys.nav.portal.visualization\"}",
+		"children": [
+			{
+				"id": 28,
+				"name": "sys.nav.portal.visualizationReports",
+				"path": "/visualization/reports",
+				"sortOrder": 1,
+				"parentId": 27,
+				"metadata": "{\"entryKey\":\"reports\",\"titleKey\":\"sys.nav.portal.visualizationReports\",\"sectionKey\":\"visualization\"}"
+			}
+		]
+	},
+	{
+		"id": 29,
+		"name": "sys.nav.portal.services",
+		"path": "/services",
+		"sortOrder": 7,
+		"metadata": "{\"icon\":\"solar:server-bold-duotone\",\"sectionKey\":\"services\",\"titleKey\":\"sys.nav.portal.services\"}",
+		"children": [
+			{
+				"id": 30,
+				"name": "sys.nav.portal.servicesApi",
+				"path": "/services/api",
+				"sortOrder": 1,
+				"parentId": 29,
+				"metadata": "{\"entryKey\":\"api\",\"titleKey\":\"sys.nav.portal.servicesApi\",\"sectionKey\":\"services\"}"
+			},
+			{
+				"id": 31,
+				"name": "sys.nav.portal.servicesProxy",
+				"path": "/services/proxy",
+				"sortOrder": 2,
+				"parentId": 29,
+				"metadata": "{\"entryKey\":\"proxy\",\"titleKey\":\"sys.nav.portal.servicesProxy\",\"sectionKey\":\"services\"}"
+			},
+			{
+				"id": 32,
+				"name": "sys.nav.portal.servicesProducts",
+				"path": "/services/products",
+				"sortOrder": 3,
+				"parentId": 29,
+				"metadata": "{\"entryKey\":\"products\",\"titleKey\":\"sys.nav.portal.servicesProducts\",\"sectionKey\":\"services\"}"
+			},
+			{
+				"id": 33,
+				"name": "sys.nav.portal.servicesTokens",
+				"path": "/services/tokens",
+				"sortOrder": 4,
+				"parentId": 29,
+				"metadata": "{\"entryKey\":\"tokens\",\"titleKey\":\"sys.nav.portal.servicesTokens\",\"sectionKey\":\"services\"}"
+			},
+			{
+				"id": 34,
+				"name": "sys.nav.portal.servicesQuotas",
+				"path": "/services/quotas",
+				"sortOrder": 5,
+				"parentId": 29,
+				"metadata": "{\"entryKey\":\"quotas\",\"titleKey\":\"sys.nav.portal.servicesQuotas\",\"sectionKey\":\"services\"}"
+			}
+		]
+	},
+	{
+		"id": 35,
+		"name": "sys.nav.portal.iam",
+		"path": "/iam",
+		"sortOrder": 8,
+		"metadata": "{\"icon\":\"solar:key-minimalistic-bold-duotone\",\"sectionKey\":\"iam\",\"titleKey\":\"sys.nav.portal.iam\"}",
+		"children": [
+			{
+				"id": 36,
+				"name": "sys.nav.portal.iamClassification",
+				"path": "/iam/classification",
+				"sortOrder": 1,
+				"parentId": 35,
+				"metadata": "{\"entryKey\":\"classification\",\"titleKey\":\"sys.nav.portal.iamClassification\",\"sectionKey\":\"iam\"}"
+			},
+			{
+				"id": 37,
+				"name": "sys.nav.portal.iamAuthorization",
+				"path": "/iam/authorization",
+				"sortOrder": 2,
+				"parentId": 35,
+				"metadata": "{\"entryKey\":\"authorization\",\"titleKey\":\"sys.nav.portal.iamAuthorization\",\"sectionKey\":\"iam\"}"
+			},
+			{
+				"id": 38,
+				"name": "sys.nav.portal.iamSimulation",
+				"path": "/iam/simulation",
+				"sortOrder": 3,
+				"parentId": 35,
+				"metadata": "{\"entryKey\":\"simulation\",\"titleKey\":\"sys.nav.portal.iamSimulation\",\"sectionKey\":\"iam\"}"
+			},
+			{
+				"id": 39,
+				"name": "sys.nav.portal.iamRequests",
+				"path": "/iam/requests",
+				"sortOrder": 4,
+				"parentId": 35,
+				"metadata": "{\"entryKey\":\"requests\",\"titleKey\":\"sys.nav.portal.iamRequests\",\"sectionKey\":\"iam\"}"
+			}
+		]
+	},
+	{
+		"id": 40,
+		"name": "sys.nav.portal.settings",
+		"path": "/settings",
+		"sortOrder": 9,
+		"metadata": "{\"icon\":\"solar:settings-bold-duotone\",\"sectionKey\":\"settings\",\"titleKey\":\"sys.nav.portal.settings\"}",
+		"children": [
+			{
+				"id": 41,
+				"name": "sys.nav.portal.settingsPreferences",
+				"path": "/settings/preferences",
+				"sortOrder": 1,
+				"parentId": 40,
+				"metadata": "{\"entryKey\":\"preferences\",\"titleKey\":\"sys.nav.portal.settingsPreferences\",\"sectionKey\":\"settings\"}"
+			},
+			{
+				"id": 42,
+				"name": "sys.nav.portal.settingsNotifications",
+				"path": "/settings/notifications",
+				"sortOrder": 2,
+				"parentId": 40,
+				"metadata": "{\"entryKey\":\"notifications\",\"titleKey\":\"sys.nav.portal.settingsNotifications\",\"sectionKey\":\"settings\"}"
+			},
+			{
+				"id": 43,
+				"name": "sys.nav.portal.settingsGateway",
+				"path": "/settings/gateway",
+				"sortOrder": 3,
+				"parentId": 40,
+				"metadata": "{\"entryKey\":\"gateway\",\"titleKey\":\"sys.nav.portal.settingsGateway\",\"sectionKey\":\"settings\"}"
+			}
+		]
+	}
+]

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="202509290004-01" author="platform">
+        <comment>Infra: data sources</comment>
+        <createTable tableName="infra_data_source">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="varchar(128)"/>
+            <column name="type" type="varchar(32)"/>
+            <column name="jdbc_url" type="varchar(512)"/>
+            <column name="username" type="varchar(128)"/>
+            <column name="props" type="varchar(2048)"/>
+            <column name="description" type="varchar(512)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_infra_ds_name" tableName="infra_data_source">
+            <column name="name"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="202509290004-02" author="platform">
+        <comment>Infra: data storages</comment>
+        <createTable tableName="infra_data_storage">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="varchar(128)"/>
+            <column name="type" type="varchar(32)"/>
+            <column name="location" type="varchar(512)"/>
+            <column name="props" type="varchar(2048)"/>
+            <column name="description" type="varchar(512)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_infra_storage_name" tableName="infra_data_storage">
+            <column name="name"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="202509290004-03" author="platform">
+        <comment>Infra: task schedules</comment>
+        <createTable tableName="infra_task_schedule">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="varchar(128)"/>
+            <column name="cron" type="varchar(64)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="last_run_at" type="timestamp"/>
+            <column name="description" type="varchar(512)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_infra_schedule_name" tableName="infra_task_schedule">
+            <column name="name"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

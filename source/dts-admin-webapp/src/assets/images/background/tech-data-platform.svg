@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" fill="none">
+  <defs>
+    <linearGradient id="bgGradient" x1="1200" y1="0" x2="0" y2="1200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#041836" />
+      <stop offset="1" stop-color="#240A3C" />
+    </linearGradient>
+    <radialGradient id="centerGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(600 620) scale(520)">
+      <stop offset="0" stop-color="#3ABFF8" stop-opacity="0.8" />
+      <stop offset="1" stop-color="#041836" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="gridStroke" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6B9AFF" stop-opacity="0" />
+      <stop offset="0.5" stop-color="#6B9AFF" stop-opacity="0.35" />
+      <stop offset="1" stop-color="#6B9AFF" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="orbitStroke" x1="600" y1="220" x2="600" y2="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7C3AED" stop-opacity="0.1" />
+      <stop offset="0.5" stop-color="#A855F7" stop-opacity="0.5" />
+      <stop offset="1" stop-color="#60A5FA" stop-opacity="0.1" />
+    </linearGradient>
+    <radialGradient id="nodeGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0) scale(18)">
+      <stop offset="0" stop-color="#E0F2FE" />
+      <stop offset="1" stop-color="#0284C7" stop-opacity="0" />
+    </radialGradient>
+    <filter id="cardShadow" x="-20" y="-20" width="164" height="164" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix" />
+      <feGaussianBlur in="SourceAlpha" stdDeviation="12" result="blur" />
+      <feOffset dy="6" />
+      <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0.35 0 0 0 0 1 0 0 0 0.25 0" />
+      <feBlend in2="BackgroundImageFix" result="effect1_dropShadow" />
+      <feBlend in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
+    </filter>
+  </defs>
+  <rect width="1200" height="1200" rx="32" fill="url(#bgGradient)" />
+  <rect width="1200" height="1200" fill="url(#centerGlow)" />
+  <g stroke="url(#gridStroke)" stroke-width="1.5">
+    <path d="M150 0V1200" />
+    <path d="M350 0V1200" />
+    <path d="M550 0V1200" />
+    <path d="M750 0V1200" />
+    <path d="M950 0V1200" />
+    <path d="M0 220H1200" />
+    <path d="M0 420H1200" />
+    <path d="M0 620H1200" />
+    <path d="M0 820H1200" />
+    <path d="M0 1020H1200" />
+  </g>
+  <circle cx="600" cy="620" r="260" stroke="url(#orbitStroke)" stroke-width="3" />
+  <circle cx="600" cy="620" r="180" stroke="url(#orbitStroke)" stroke-width="2" stroke-dasharray="16 16" />
+  <circle cx="600" cy="620" r="120" stroke="#22D3EE" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="8 12" />
+  <g opacity="0.85">
+    <path d="M360 480C430 420 520 400 600 420C680 440 780 520 840 600" stroke="#38BDF8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M420 820C470 740 540 700 630 700C720 700 820 760 880 840" stroke="#22D3EE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M320 660C370 580 470 540 560 560C650 580 720 640 780 720" stroke="#A855F7" stroke-opacity="0.6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g>
+    <circle cx="360" cy="480" r="6" fill="#38BDF8" />
+    <circle cx="600" cy="420" r="8" fill="#22D3EE" />
+    <circle cx="840" cy="600" r="10" fill="#A855F7" />
+    <circle cx="420" cy="820" r="7" fill="#38BDF8" />
+    <circle cx="630" cy="700" r="9" fill="#22D3EE" />
+    <circle cx="880" cy="840" r="6" fill="#A855F7" />
+    <circle cx="320" cy="660" r="6" fill="#38BDF8" />
+    <circle cx="780" cy="720" r="7" fill="#22D3EE" />
+  </g>
+  <g>
+    <path d="M520 520L600 600L704 516" stroke="#60A5FA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M520 520L520 640L632 752" stroke="#A855F7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M704 516L840 520" stroke="#34D399" stroke-opacity="0.6" stroke-width="2" stroke-linecap="round" />
+    <path d="M632 752L760 880" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" />
+  </g>
+  <g opacity="0.8">
+    <circle cx="520" cy="520" r="18" fill="url(#nodeGlow)" />
+    <circle cx="600" cy="600" r="28" fill="url(#nodeGlow)" />
+    <circle cx="704" cy="516" r="16" fill="url(#nodeGlow)" />
+    <circle cx="632" cy="752" r="18" fill="url(#nodeGlow)" />
+    <circle cx="840" cy="520" r="20" fill="url(#nodeGlow)" />
+    <circle cx="760" cy="880" r="18" fill="url(#nodeGlow)" />
+  </g>
+  <g filter="url(#cardShadow)" transform="translate(240 320)">
+    <rect width="124" height="124" rx="20" fill="rgba(15, 23, 42, 0.75)" stroke="rgba(96, 165, 250, 0.35)" stroke-width="1.5" />
+    <path d="M28 88C48 70 76 70 96 88" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" />
+    <path d="M28 60C44 50 72 52 96 64" stroke="#A855F7" stroke-width="2" stroke-linecap="round" stroke-dasharray="6 8" />
+    <circle cx="40" cy="40" r="8" fill="#22D3EE" />
+    <circle cx="84" cy="38" r="6" fill="#F97316" />
+  </g>
+  <g filter="url(#cardShadow)" transform="translate(836 360)">
+    <rect width="124" height="124" rx="20" fill="rgba(15, 23, 42, 0.78)" stroke="rgba(168, 85, 247, 0.35)" stroke-width="1.5" />
+    <path d="M36 92L52 68L72 84L92 60" stroke="#A855F7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M36 52L52 72L72 46L92 70" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="36" cy="92" r="6" fill="#34D399" />
+    <circle cx="52" cy="68" r="6" fill="#38BDF8" />
+    <circle cx="72" cy="84" r="6" fill="#A855F7" />
+    <circle cx="92" cy="60" r="6" fill="#FACC15" />
+  </g>
+  <g transform="translate(420 860)">
+    <rect x="-24" y="-24" width="240" height="120" rx="28" fill="rgba(15, 23, 42, 0.7)" stroke="rgba(96, 165, 250, 0.35)" stroke-width="1.5" />
+    <path d="M0 40H192" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-dasharray="10 12" />
+    <path d="M16 16H80V64H16V16Z" fill="rgba(59, 130, 246, 0.2)" stroke="#60A5FA" stroke-width="1.5" rx="8" />
+    <path d="M112 16H176V64H112V16Z" fill="rgba(14, 165, 233, 0.2)" stroke="#22D3EE" stroke-width="1.5" rx="8" />
+    <path d="M32 28H64V52H32V28Z" fill="#38BDF8" opacity="0.45" />
+    <path d="M128 28H160V52H128V28Z" fill="#22D3EE" opacity="0.45" />
+  </g>
+</svg>

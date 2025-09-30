@@ -1,0 +1,103 @@
+openapi: 3.0.3
+info:
+  title: Audit Events API
+  version: 1.0.0
+paths:
+  /api/audit-events:
+    post:
+      summary: Create an audit event
+      parameters:
+        - in: header
+          name: X-Idempotency-Key
+          schema: { type: string }
+          required: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditEvent'
+      responses:
+        '201': { description: Created }
+        '200': { description: OK (idempotent replay) }
+    get:
+      summary: Query audit events
+      parameters:
+        - in: query
+          name: actor
+          schema: { type: string }
+        - in: query
+          name: action
+          schema: { type: string }
+        - in: query
+          name: targetKind
+          schema: { type: string }
+        - in: query
+          name: targetRefPrefix
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: page
+          schema: { type: integer }
+        - in: query
+          name: size
+          schema: { type: integer }
+        - in: query
+          name: sort
+          schema: { type: string, example: createdAt,desc }
+      responses:
+        '200':
+          description: Page of audit events
+  /api/audit-events/{id}:
+    get:
+      summary: Get audit event by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200': { description: OK }
+        '404': { description: Not Found }
+  /api/audit-events/_bulk:
+    post:
+      summary: Bulk create audit events (<=100)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditEvent'
+      responses:
+        '207': { description: Multi-Status with success/fail counts }
+components:
+  schemas:
+    AuditEvent:
+      type: object
+      required: [actor, action, targetRef, targetKind, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        actor:
+          type: string
+        action:
+          type: string
+        targetRef:
+          type: string
+          maxLength: 512
+        targetKind:
+          type: string
+          enum: [API, DB, FILE, HDFS, S3, KAFKA, HTTP, HTTPS, OTHER]
+        createdAt:
+          type: string
+          format: date-time
+

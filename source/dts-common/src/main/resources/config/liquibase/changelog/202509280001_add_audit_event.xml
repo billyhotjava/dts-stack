@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="202509280001" author="codex">
+        <createTable tableName="audit_event">
+            <column name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="actor" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_ref" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_kind" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="idempotency_key" type="varchar(128)"/>
+        </createTable>
+
+        <addAutoIncrement tableName="audit_event" columnName="id" columnDataType="BIGINT"/>
+
+        <createIndex tableName="audit_event" indexName="idx_audit_event_target_ref">
+            <column name="target_ref"/>
+        </createIndex>
+        <createIndex tableName="audit_event" indexName="idx_audit_event_target_kind">
+            <column name="target_kind"/>
+        </createIndex>
+        <createIndex tableName="audit_event" indexName="idx_audit_event_created_at">
+            <column name="created_at"/>
+        </createIndex>
+        <createIndex tableName="audit_event" indexName="idx_audit_event_kind_created">
+            <column name="target_kind"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <addUniqueConstraint tableName="audit_event" columnNames="idempotency_key" constraintName="uk_audit_event_idemp_key"/>
+    </changeSet>
+</databaseChangeLog>
+

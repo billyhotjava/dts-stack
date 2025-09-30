@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-SRC_ROOT="${SRC_ROOT:-"$SCRIPT_DIR/../dts-source"}"
+SRC_ROOT="${SRC_ROOT:-"$SCRIPT_DIR/source"}"
 MODULES=(dts-admin dts-platform dts-common)
 
 profile_block_profile_only='    <profile>

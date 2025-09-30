@@ -1,0 +1,62 @@
+application {
+  config {
+    baseName dtsAdmin
+    applicationType microservice
+    packageName com.yuzhi.dts.admin
+    authenticationType oauth2
+    serviceDiscoveryType eureka
+    buildTool maven
+    devDatabaseType postgresql
+    prodDatabaseType postgresql
+    reactive false
+    skipClient true
+  }
+}
+
+enum SecurityLevel { PUBLIC, INTERNAL, SECRET, TOP_SECRET }
+enum DataSourceType { HIVE, TRINO, JDBC, FILE, API }
+enum ServiceType { SQL, AGG_METRIC, REST, GRAPHQL }
+enum RuleType { NOT_NULL, UNIQUE, REF_DICT, RANGE, CUSTOM_SQL }
+enum JobType { HQL, SPARK_SQL, PYTHON, TRINO_SQL }
+enum JobStatus { DRAFT, READY, RUNNING, SUCCESS, FAILED }
+enum ApiAuthType { OIDC, SIGN, NONE }
+
+entity Menu {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+  code String required,
+  name String required,
+  icon String,
+  orderNo Integer
+}
+
+entity MenuItem {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+  name String required,
+  path String required,
+  requireRoles String
+}
+
+entity AccessPolicy {
+  createdBy String required,
+  createdDate Instant required,
+  lastModifiedBy String,
+  lastModifiedDate Instant,
+  datasetCode String required,
+  allowRoles String required,
+  rowFilter String,
+  maskColumns String
+}
+
+relationship OneToMany {
+  Menu{items} to MenuItem{menu}
+}
+
+dto * with mapstruct
+service * with serviceClass
+paginate * with pagination

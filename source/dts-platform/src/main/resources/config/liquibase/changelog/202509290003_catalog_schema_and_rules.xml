@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="202509290003-01" author="platform">
+        <comment>Catalog: table and column schemas</comment>
+        <createTable tableName="catalog_table_schema">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="dataset_id" type="uuid"/>
+            <column name="name" type="varchar(128)"/>
+            <column name="owner" type="varchar(64)"/>
+            <column name="classification" type="varchar(32)"/>
+            <column name="biz_domain" type="varchar(128)"/>
+            <column name="tags" type="varchar(1024)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_table_dataset" tableName="catalog_table_schema">
+            <column name="dataset_id"/>
+        </createIndex>
+        <createIndex indexName="idx_table_name" tableName="catalog_table_schema">
+            <column name="name"/>
+        </createIndex>
+
+        <createTable tableName="catalog_column_schema">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="table_id" type="uuid"/>
+            <column name="name" type="varchar(128)"/>
+            <column name="data_type" type="varchar(64)"/>
+            <column name="nullable" type="boolean"/>
+            <column name="tags" type="varchar(1024)"/>
+            <column name="sensitive_tags" type="varchar(1024)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_column_table" tableName="catalog_column_schema">
+            <column name="table_id"/>
+        </createIndex>
+        <createIndex indexName="idx_column_name" tableName="catalog_column_schema">
+            <column name="name"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="202509290003-02" author="platform">
+        <comment>Catalog: row filter rules and secure views</comment>
+        <createTable tableName="catalog_row_filter_rule">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="dataset_id" type="uuid"/>
+            <column name="roles" type="varchar(512)"/>
+            <column name="expression" type="varchar(2048)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_row_filter_dataset" tableName="catalog_row_filter_rule">
+            <column name="dataset_id"/>
+        </createIndex>
+
+        <createTable tableName="catalog_secure_view">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="dataset_id" type="uuid"/>
+            <column name="view_name" type="varchar(128)"/>
+            <column name="level" type="varchar(32)"/>
+            <column name="row_filter" type="varchar(2048)"/>
+            <column name="mask_columns" type="varchar(2048)"/>
+            <column name="refresh" type="varchar(32)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_secure_view_dataset" tableName="catalog_secure_view">
+            <column name="dataset_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="202509290003-03" author="platform">
+        <comment>Catalog dataset/access policy additions</comment>
+        <addColumn tableName="catalog_dataset">
+            <column name="trino_catalog" type="varchar(64)"/>
+        </addColumn>
+        <createIndex indexName="idx_catalog_dataset_trino_catalog" tableName="catalog_dataset">
+            <column name="trino_catalog"/>
+        </createIndex>
+        <addColumn tableName="catalog_access_policy">
+            <column name="default_masking" type="varchar(64)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="202509290003-04" author="platform">
+        <comment>Seed sample table and column schema for demo dataset</comment>
+        <insert tableName="catalog_table_schema">
+            <column name="id" value="bbbbbbb1-0000-0000-0000-000000000001"/>
+            <column name="dataset_id" value="aaaaaaa1-0000-0000-0000-000000000001"/>
+            <column name="name" value="sales_daily"/>
+            <column name="owner" value="alice"/>
+            <column name="classification" value="INTERNAL"/>
+            <column name="biz_domain" value="SALES"/>
+            <column name="tags" value="kpi,revenue"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="${now}"/>
+        </insert>
+        <insert tableName="catalog_column_schema">
+            <column name="id" value="ccccccc1-0000-0000-0000-000000000001"/>
+            <column name="table_id" value="bbbbbbb1-0000-0000-0000-000000000001"/>
+            <column name="name" value="order_id"/>
+            <column name="data_type" value="varchar"/>
+            <column name="nullable" valueBoolean="false"/>
+            <column name="tags" value="pk"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="${now}"/>
+        </insert>
+        <insert tableName="catalog_column_schema">
+            <column name="id" value="ccccccc1-0000-0000-0000-000000000002"/>
+            <column name="table_id" value="bbbbbbb1-0000-0000-0000-000000000001"/>
+            <column name="name" value="phone"/>
+            <column name="data_type" value="varchar"/>
+            <column name="nullable" valueBoolean="true"/>
+            <column name="sensitive_tags" value="PII:phone"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="${now}"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

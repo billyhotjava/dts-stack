@@ -1,0 +1,144 @@
+[
+  {
+    "id": "group_dashboard",
+    "name": "sys.nav.dashboard",
+    "code": "dashboard",
+    "parentId": "",
+    "type": 0,
+    "children": [
+      {
+        "id": "workbench",
+        "parentId": "group_dashboard",
+        "name": "sys.nav.workbench",
+        "code": "workbench",
+        "icon": "local:ic-workbench",
+        "type": 2,
+        "path": "/workbench",
+        "component": "/pages/dashboard/workbench",
+        "children": []
+      },
+      {
+        "id": "data_security",
+        "parentId": "group_dashboard",
+        "name": "sys.nav.dataSecurity",
+        "code": "security",
+        "icon": "solar:shield-keyhole-bold",
+        "type": 2,
+        "path": "/security/assets",
+        "component": "/pages/security/data-security",
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "management",
+    "parentId": "group_pages",
+    "name": "sys.nav.management",
+    "code": "management",
+    "icon": "local:ic-management",
+    "type": 1,
+    "path": "/management",
+    "children": [
+      {
+        "id": "management_user",
+        "parentId": "management",
+        "name": "sys.nav.user.index",
+        "code": "management:user",
+        "type": 1,
+        "path": "/management/user",
+        "children": [
+          {
+            "id": "management_user_profile",
+            "parentId": "management_user",
+            "name": "sys.nav.user.profile",
+            "code": "management:user:profile",
+            "type": 2,
+            "path": "management/user/profile",
+            "component": "/pages/management/user/profile",
+            "children": []
+          },
+          {
+            "id": "management_user_account",
+            "parentId": "management_user",
+            "name": "sys.nav.user.account",
+            "code": "management:user:account",
+            "type": 2,
+            "path": "management/user/account",
+            "component": "/pages/management/user/account",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "management_system",
+        "parentId": "management",
+        "name": "sys.nav.system.index",
+        "code": "management:system",
+        "type": 1,
+        "path": "management/system",
+        "children": [
+          {
+            "id": "management_system_user",
+            "parentId": "management_system",
+            "name": "sys.nav.system.user",
+            "code": "management:system:user",
+            "type": 2,
+            "path": "/management/system/user",
+            "component": "/pages/management/system/user",
+            "children": []
+          },
+          {
+            "id": "management_system_role",
+            "parentId": "management_system",
+            "name": "sys.nav.system.role",
+            "code": "management:system:role",
+            "type": 2,
+            "path": "/management/system/role",
+            "component": "/pages/management/system/role",
+            "children": []
+          },
+          {
+            "id": "management_system_group",
+            "parentId": "management_system",
+            "name": "sys.nav.system.group",
+            "code": "management:system:group",
+            "type": 2,
+            "path": "/management/system/group",
+            "component": "/pages/management/system/group",
+            "children": []
+          },
+          {
+            "id": "management_system_permission",
+            "parentId": "management_system",
+            "name": "sys.nav.system.permission",
+            "code": "management:system:permission",
+            "type": 2,
+            "path": "/management/system/permission",
+            "component": "/pages/management/system/permission",
+            "children": []
+          },
+          {
+            "id": "management_system_approval",
+            "parentId": "management_system",
+            "name": "sys.nav.system.approval",
+            "code": "management:system:approval",
+            "type": 2,
+            "path": "/management/system/approval",
+            "component": "/pages/management/system/approval",
+            "children": []
+          },
+          {
+            "id": "management_system_audit_log",
+            "parentId": "management_system",
+            "name": "sys.nav.system.audit_log",
+            "code": "management:system:audit_log",
+            "type": 2,
+            "path": "/management/system/audit-log",
+            "component": "/pages/management/system/audit-log/index",
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+]

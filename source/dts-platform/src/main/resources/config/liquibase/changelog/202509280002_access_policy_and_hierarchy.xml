@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="202509280002-01" author="platform">
+        <comment>Catalog domain hierarchy: add parent_id</comment>
+        <addColumn tableName="catalog_domain">
+            <column name="parent_id" type="uuid"/>
+        </addColumn>
+        <createIndex indexName="idx_catalog_domain_parent" tableName="catalog_domain">
+            <column name="parent_id"/>
+        </createIndex>
+        <!-- optional FK (self reference) -->
+        <!--<addForeignKeyConstraint baseTableName="catalog_domain" baseColumnNames="parent_id"
+                                  referencedTableName="catalog_domain" referencedColumnNames="id"
+                                  constraintName="fk_catalog_domain_parent"/>-->
+    </changeSet>
+
+    <changeSet id="202509280002-02" author="platform">
+        <comment>Access policy per dataset</comment>
+        <createTable tableName="catalog_access_policy">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="dataset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="allow_roles" type="varchar(512)"/>
+            <column name="row_filter" type="varchar(2048)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="ux_access_policy_dataset" tableName="catalog_access_policy" unique="true">
+            <column name="dataset_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+
