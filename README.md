@@ -31,6 +31,7 @@
   - 访问：
     - API（Traefik）：`https://api.${BASE_DOMAIN}/admin`、`https://api.${BASE_DOMAIN}/platform`
     - Web 前端（本机端口）：`http://localhost:18011`（admin UI）、`http://localhost:18012`（platform UI）
+  - 说明：默认不构建 Web 前端镜像（避免上游 TS 构建校验失败）。如需强制构建，请去掉 `--no-webapp` 或设置 `WITH_WEBAPP=1`。
 - 本地源码热更新
   - 启动：`./dev-up.sh --mode local`
   - 停止：`./dev-stop.sh --mode local`
@@ -40,7 +41,16 @@
     - Web 前端（本机端口）：`http://localhost:18011`（admin UI）、`http://localhost:18012`（platform UI）
 
 **正式部署（最小暴露端口）**
-- 启动（仅暴露 80/443，由 Traefik 统一转发）
+- 使用预构建镜像（推荐，新的服务器无需源码/构建）
+  1) 编辑 `imgversion.conf` 设置应用镜像标签（示例）：
+     - `IMAGE_DTS_ADMIN=registry.example.com/dts-admin:1.0.0`
+     - `IMAGE_DTS_PLATFORM=registry.example.com/dts-platform:1.0.0`
+     - `IMAGE_DTS_ADMIN_WEBAPP=registry.example.com/dts-admin-webapp:1.0.0`
+     - `IMAGE_DTS_PLATFORM_WEBAPP=registry.example.com/dts-platform-webapp:1.0.0`
+  2) 运行 `./init.sh single 'Strong@2025!' dts.local`（会把镜像变量写入 `.env`）
+  3) 启动（仅暴露 80/443，由 Traefik 统一转发）：
+     - `docker compose -f docker-compose.yml -f docker-compose.apps.yml -f docker-compose.deploy.yml up -d`
+- 如需从源码构建（非推荐，需完整前端/后端源码且可能受 TS 校验影响）
   - `docker compose -f docker-compose.yml -f docker-compose.dts-source.yml -f docker-compose.deploy.yml up -d --build`
 - 访问入口
   - Admin UI：`https://admin.${BASE_DOMAIN}`

@@ -27,6 +27,11 @@ while (($#)); do
   shift
 done
 
+# Default behavior: skip webapp build in images mode (use local mode or --no-webapp)
+if [[ "$MODE" == "images" && -z "${WITH_WEBAPP+x}" ]]; then
+  WITH_WEBAPP_DEFAULT=0
+fi
+
 if [[ ! -f "$ENV_DEV" ]]; then
   echo "[dev-up] ${ENV_DEV} not found. Generating via init.dts-source.sh ..."
   ./init.dts-source.sh
