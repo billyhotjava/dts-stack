@@ -65,9 +65,9 @@ set -a
 set +a
 
 if [[ "$MODE" == "local" ]]; then
-  compose_files=(-f docker-compose.yml -f docker-compose.local-dev.yml)
+  compose_files=(-f docker-compose.yml -f docker-compose.dev.yml)
 else
-  compose_files=(-f docker-compose.yml -f docker-compose.dts-source.yml)
+  compose_files=(-f docker-compose.yml -f docker-compose-app.yml)
 fi
 
 # Fill missing MINIO-derived vars for compose interpolation (avoid warnings)

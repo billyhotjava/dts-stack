@@ -52,10 +52,10 @@ if [[ "${1:-}" == "up" ]]; then
   echo "[init.dts-source] Bringing up dts-source dev services (with stack dependencies)..."
   # Only start the needed services from the core stack to avoid pulling everything
   sel_services=(dts-pg dts-admin dts-platform dts-admin-webapp dts-platform-webapp)
-  "${compose_cmd[@]}" --env-file "${ENV_FILE}" -f docker-compose.yml -f docker-compose.dts-source.yml up -d --build "${sel_services[@]}"
+  "${compose_cmd[@]}" --env-file "${ENV_FILE}" -f docker-compose.yml -f docker-compose-app.yml up -d "${sel_services[@]}"
 fi
 
 echo "[init.dts-source] Done. To start services with dependencies:"
-echo "  docker compose --env-file ${ENV_FILE} -f docker-compose.yml -f docker-compose.dts-source.yml up -d --build dts-pg dts-admin dts-platform dts-admin-webapp dts-platform-webapp"
+echo "  docker compose --env-file ${ENV_FILE} -f docker-compose.yml -f docker-compose-app.yml up -d dts-pg dts-admin dts-platform dts-admin-webapp dts-platform-webapp"
 echo "To stop only dev services (keep others running):"
-echo "  docker compose -f docker-compose.yml -f docker-compose.dts-source.yml stop dts-admin dts-platform dts-admin-webapp dts-platform-webapp"
+echo "  docker compose -f docker-compose.yml -f docker-compose-app.yml stop dts-admin dts-platform dts-admin-webapp dts-platform-webapp"

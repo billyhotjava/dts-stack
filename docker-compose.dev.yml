@@ -1,4 +1,4 @@
-## Local dev overlay: run services from source via bind mounts and live reload
+## Dev overlay: run services from source via bind mounts and live reload
 
 services:
 

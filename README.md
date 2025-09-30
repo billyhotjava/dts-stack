@@ -49,9 +49,9 @@
      - `IMAGE_DTS_PLATFORM_WEBAPP=registry.example.com/dts-platform-webapp:1.0.0`
   2) 运行 `./init.sh single 'Strong@2025!' dts.local`（会把镜像变量写入 `.env`）
   3) 启动（仅暴露 80/443，由 Traefik 统一转发）：
-     - `docker compose -f docker-compose.yml -f docker-compose.apps.yml -f docker-compose.deploy.yml up -d`
+     - `docker compose -f docker-compose.yml -f docker-compose-app.yml up -d`
 - 如需从源码构建（非推荐，需完整前端/后端源码且可能受 TS 校验影响）
-  - `docker compose -f docker-compose.yml -f docker-compose.dts-source.yml -f docker-compose.deploy.yml up -d --build`
+  - `docker compose -f docker-compose.yml -f docker-compose-app.yml up -d --build`
 - 访问入口
   - Admin UI：`https://admin.${BASE_DOMAIN}`
   - Platform UI：`https://platform.${BASE_DOMAIN}`

@@ -1,38 +1,24 @@
-## Compose 'version' key is obsolete in v2; omitted for clarity
+## Production apps overlay: use prebuilt images, no local builds
 
 services:
 
   dts-admin:
     image: ${IMAGE_DTS_ADMIN}
-    build:
-      context: ../dts-source/dts-admin
-      dockerfile: Dockerfile
-      args:
-        MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}
-      network: host
-      additional_contexts:
-        dts_common: ../dts-source/dts-common
+    ports: []
     depends_on:
-      - dts-pg
+      dts-pg:
+        condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTADMIN:-dts_admin}
       SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
-      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
-      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
-      SPRINGDOC_API_DOCS_ENABLED: "true"
-      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
-      # OIDC/Keycloak (override dev defaults)
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_SCOPE: "openid,profile,email"
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=${SPRING_DATASOURCE_URL} -Dspring.datasource.username=${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=${SPRING_DATASOURCE_PASSWORD}"
-    ports:
-      - "18081:8081"
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
     extra_hosts:
@@ -51,37 +37,23 @@ services:
 
   dts-platform:
     image: ${IMAGE_DTS_PLATFORM}
-    build:
-      context: ../dts-source/dts-platform
-      dockerfile: Dockerfile
-      args:
-        MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}
-      network: host
-      additional_contexts:
-        dts_common: ../dts-source/dts-common
+    ports: []
     depends_on:
       dts-pg:
         condition: service_healthy
       dts-trino:
         condition: service_started
     environment:
-      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
       SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED_PLATFORM:-true}
-      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
-      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
-      SPRINGDOC_API_DOCS_ENABLED: "true"
-      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
-      # OIDC/Keycloak (override dev defaults)
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_PLATFORM_CLIENT_SECRET:-}"
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=${SPRING_DATASOURCE_URL} -Dspring.datasource.username=${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=${SPRING_DATASOURCE_PASSWORD}"
-    ports:
-      - "18082:8081"
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
     extra_hosts:
@@ -100,26 +72,26 @@ services:
 
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP}
-    build:
-      context: ../dts-source/dts-admin-webapp
-      dockerfile: Dockerfile
-      network: host
-    depends_on:
-      - dts-admin
-    ports:
-      - "18011:80"
+    ports: []
     networks:
       - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-admin-ui.rule=Host(`${HOST_ADMIN_UI}`)"
+      - "traefik.http.routers.dts-admin-ui.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin-ui.tls=true"
+      - "traefik.http.services.dts-admin-ui.loadbalancer.server.port=80"
 
   dts-platform-webapp:
     image: ${IMAGE_DTS_PLATFORM_WEBAPP}
-    build:
-      context: ../dts-source/dts-platform-webapp
-      dockerfile: Dockerfile
-      network: host
-    depends_on:
-      - dts-platform
-    ports:
-      - "18012:80"
+    ports: []
     networks:
       - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`)"
+      - "traefik.http.routers.dts-platform-ui.entrypoints=websecure"
+      - "traefik.http.routers.dts-platform-ui.tls=true"
+      - "traefik.http.services.dts-platform-ui.loadbalancer.server.port=80"
