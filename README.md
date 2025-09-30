@@ -42,11 +42,11 @@
 
 **正式部署（最小暴露端口）**
 - 使用预构建镜像（推荐，新的服务器无需源码/构建）
-  1) 编辑 `imgversion.conf` 设置应用镜像标签（示例）：
-     - `IMAGE_DTS_ADMIN=registry.example.com/dts-admin:1.0.0`
-     - `IMAGE_DTS_PLATFORM=registry.example.com/dts-platform:1.0.0`
-     - `IMAGE_DTS_ADMIN_WEBAPP=registry.example.com/dts-admin-webapp:1.0.0`
-     - `IMAGE_DTS_PLATFORM_WEBAPP=registry.example.com/dts-platform-webapp:1.0.0`
+  1) 编辑 `imgversion.conf` 设置应用镜像标签（已默认使用 `:1.0.0` 标签，可按需改为你的仓库地址）：
+     - `IMAGE_DTS_ADMIN=dts-admin:1.0.0`
+     - `IMAGE_DTS_PLATFORM=dts-platform:1.0.0`
+     - `IMAGE_DTS_ADMIN_WEBAPP=dts-admin-webapp:1.0.0`
+     - `IMAGE_DTS_PLATFORM_WEBAPP=dts-platform-webapp:1.0.0`
   2) 运行 `./init.sh single 'Strong@2025!' dts.local`（会把镜像变量写入 `.env`）
   3) 启动（仅暴露 80/443，由 Traefik 统一转发）：
      - `docker compose -f docker-compose.yml -f docker-compose-app.yml up -d`
