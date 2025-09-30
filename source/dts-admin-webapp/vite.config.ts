@@ -6,10 +6,21 @@ import { defineConfig, loadEnv } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig(({ mode }) => {
-	const rawEnv = loadEnv(mode, process.cwd(), "");
-	const env = { ...process.env, ...rawEnv };
-	const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
-	const isProduction = mode === "production";
+  const rawEnv = loadEnv(mode, process.cwd(), "");
+  const env = { ...process.env, ...rawEnv };
+  const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
+  const isProduction = mode === "production";
+  // Default to host-mapped admin backend port when running on host
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:18081";
+  const autoPrefix = (() => {
+    if (env.VITE_API_PROXY_PREFIX) return "";
+    try {
+      const u = new URL(apiProxyTarget);
+      if (u.protocol === "https:") return "/admin";
+    } catch {}
+    return "";
+  })();
+  const apiProxyPrefix = env.VITE_API_PROXY_PREFIX || autoPrefix || "";
 
 	return {
 		base,
@@ -31,19 +42,20 @@ export default defineConfig(({ mode }) => {
 				}),
 		].filter(Boolean),
 
-		server: {
-			open: true,
-			host: true,
-			port: 3001,
-			proxy: {
-				"/api": {
-					target: "http://localhost:8080",
-					changeOrigin: true,
-					//	rewrite: (path) => path.replace(/^\/api/, ""),
-					secure: false,
-				},
-			},
-		},
+    server: {
+      open: true,
+      host: true,
+      port: 3001,
+      proxy: {
+        "/api": {
+          target: apiProxyTarget,
+          changeOrigin: true,
+          // If targeting Traefik via HTTPS, auto prefix '/admin'
+          rewrite: apiProxyPrefix ? (p) => p.replace(/^\/api/, `${apiProxyPrefix}/api`) : undefined,
+          secure: false,
+        },
+      },
+    },
 
 		build: {
 			target: "esnext",

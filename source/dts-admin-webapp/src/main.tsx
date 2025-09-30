@@ -15,10 +15,10 @@ import { urlJoin } from "./utils";
 
 await registerLocalIcons();
 
-// Disable MSW by default; only enable if explicitly VITE_ENABLE_MOCK="true"
-const shouldEnableMock = import.meta.env.VITE_ENABLE_MOCK === "true";
+// Force-disable MSW mocks; flip manually if you need them.
+const shouldEnableMock = false;
 
-// In production build, MSW is not bundled unless explicitly enabled via VITE_ENABLE_MOCK.
+// In production builds, MSW stays tree-shaken while disabled.
 // Use dynamic import so that prod bundle tree-shakes mock code by default.
 if (import.meta.env.DEV && shouldEnableMock) {
 	const { worker } = await import("./_mock");

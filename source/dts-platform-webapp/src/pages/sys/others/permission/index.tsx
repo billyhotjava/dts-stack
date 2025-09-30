@@ -86,8 +86,8 @@ export default function PermissionPage() {
     const { permissions, roles, username } = useUserInfo();
     const signIn = useSignIn();
     const { check, checkAny, checkAll } = useAuthCheck();
-    // Disable mock by default; only enable when explicitly set to "true"
-    const enableMock = import.meta.env.VITE_ENABLE_MOCK === "true";
+    // Force-disable the mock account switcher.
+    const enableMock = false;
 
     const handleSwitch = (_username: string) => {
         if (!enableMock) return;

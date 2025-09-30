@@ -4,13 +4,16 @@ import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
+import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.admin.service.inmemory.InMemoryStores;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import java.time.Instant;
 import java.util.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,10 +23,12 @@ public class KeycloakApiResource {
 
     private final InMemoryStores stores;
     private final AdminAuditService auditService;
+    private final KeycloakAuthService keycloakAuthService;
 
-    public KeycloakApiResource(InMemoryStores stores, AdminAuditService auditService) {
+    public KeycloakApiResource(InMemoryStores stores, AdminAuditService auditService, KeycloakAuthService keycloakAuthService) {
         this.stores = stores;
         this.auditService = auditService;
+        this.keycloakAuthService = keycloakAuthService;
     }
 
     // ---- Users ----
@@ -436,18 +441,45 @@ public class KeycloakApiResource {
     // ---- Auth endpoints (minimal, for UI bootstrap; real auth via Keycloak SSO) ----
     @PostMapping("/keycloak/auth/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody Map<String, String> body) {
-        String username = body.getOrDefault("username", "");
-        Map<String, Object> user = new HashMap<>();
-        user.put("id", UUID.randomUUID().toString());
-        user.put("username", username);
-        user.put("firstName", username);
-        user.put("enabled", true);
-        user.put("roles", List.of());
-        Map<String, Object> data = new HashMap<>();
-        data.put("user", user);
-        data.put("accessToken", UUID.randomUUID().toString());
-        data.put("refreshToken", UUID.randomUUID().toString());
-        return ResponseEntity.ok(ApiResponse.ok(data));
+        String username = Optional.ofNullable(body).map(b -> b.getOrDefault("username", "")).map(String::trim).orElse("");
+        String password = Optional.ofNullable(body).map(b -> b.getOrDefault("password", "")).orElse("");
+        if (username.isBlank() || password.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("用户名或密码不能为空"));
+        }
+        try {
+            KeycloakAuthService.LoginResult loginResult = keycloakAuthService.login(username, password);
+            Map<String, Object> data = new HashMap<>();
+            data.put("user", loginResult.user());
+            data.put("accessToken", loginResult.tokens().accessToken());
+            data.put("refreshToken", loginResult.tokens().refreshToken());
+            if (loginResult.tokens().idToken() != null) {
+                data.put("idToken", loginResult.tokens().idToken());
+            }
+            if (loginResult.tokens().tokenType() != null) {
+                data.put("tokenType", loginResult.tokens().tokenType());
+            }
+            if (loginResult.tokens().scope() != null) {
+                data.put("scope", loginResult.tokens().scope());
+            }
+            if (loginResult.tokens().sessionState() != null) {
+                data.put("sessionState", loginResult.tokens().sessionState());
+            }
+            if (loginResult.tokens().expiresIn() != null) {
+                data.put("expiresIn", loginResult.tokens().expiresIn());
+            }
+            if (loginResult.tokens().refreshExpiresIn() != null) {
+                data.put("refreshExpiresIn", loginResult.tokens().refreshExpiresIn());
+            }
+            auditService.record(username, "KC_AUTH_LOGIN", "KC_AUTH", username, "SUCCESS", null);
+            return ResponseEntity.ok(ApiResponse.ok(data));
+        } catch (BadCredentialsException ex) {
+            auditService.record(username, "KC_AUTH_LOGIN", "KC_AUTH", username, "FAILURE", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
+        } catch (Exception ex) {
+            String message = Optional.ofNullable(ex.getMessage()).filter(m -> !m.isBlank()).orElse("登录失败，请稍后重试");
+            auditService.record(username, "KC_AUTH_LOGIN", "KC_AUTH", username, "FAILURE", message);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(message));
+        }
     }
 
     @PostMapping("/keycloak/auth/logout")

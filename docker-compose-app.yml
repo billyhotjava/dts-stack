@@ -18,6 +18,10 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
+      JHIPSTER_CORS_ALLOWED_ORIGINS: "https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API}"
+      JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+      JHIPSTER_CORS_ALLOWED_HEADERS: "*"
+      JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
@@ -34,6 +38,12 @@ services:
       - "traefik.http.services.dts-admin.loadbalancer.server.port=8081"
       - "traefik.http.middlewares.dts-strip-admin.stripprefixregex.regex=/admin"
       - "traefik.http.routers.dts-admin.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file"
+      # Same-origin API under admin domain to avoid CORS: https://admin.${BASE_DOMAIN}/api/* -> dts-admin:8081
+      - "traefik.http.routers.dts-admin-uiapi.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.dts-admin-uiapi.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin-uiapi.tls=true"
+      - "traefik.http.routers.dts-admin-uiapi.service=dts-admin"
+      - "traefik.http.routers.dts-admin-uiapi.middlewares=cors-allow@file,security-headers@file"
 
   dts-platform:
     image: ${IMAGE_DTS_PLATFORM:?Set IMAGE_DTS_PLATFORM in imgversion.conf or .env}
@@ -53,6 +63,10 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_PLATFORM_CLIENT_SECRET:-}"
+      JHIPSTER_CORS_ALLOWED_ORIGINS: "https://${HOST_PLATFORM_UI},https://${HOST_ADMIN_UI},https://${HOST_API}"
+      JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+      JHIPSTER_CORS_ALLOWED_HEADERS: "*"
+      JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
@@ -69,6 +83,12 @@ services:
       - "traefik.http.services.dts-platform.loadbalancer.server.port=8081"
       - "traefik.http.middlewares.dts-strip-platform.stripprefixregex.regex=/platform"
       - "traefik.http.routers.dts-platform.middlewares=dts-strip-platform@docker,cors-allow@file,security-headers@file"
+      # Same-origin API under platform domain: https://platform.${BASE_DOMAIN}/api/* -> dts-platform:8081
+      - "traefik.http.routers.dts-platform-uiapi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.dts-platform-uiapi.entrypoints=websecure"
+      - "traefik.http.routers.dts-platform-uiapi.tls=true"
+      - "traefik.http.routers.dts-platform-uiapi.service=dts-platform"
+      - "traefik.http.routers.dts-platform-uiapi.middlewares=cors-allow@file,security-headers@file"
 
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}

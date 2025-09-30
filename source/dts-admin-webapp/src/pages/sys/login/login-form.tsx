@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
@@ -17,6 +17,7 @@ import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
 	const [loading, setLoading] = useState(false);
 	const [remember, setRemember] = useState(true);
+	const [showPassword, setShowPassword] = useState(false);
 	const navigate = useNavigate();
 
 	const { loginState } = useLoginStateContext();
@@ -81,12 +82,23 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 							<FormItem>
 								<FormLabel>{bilingual("sys.login.password")}</FormLabel>
 								<FormControl>
-									<Input
-										type="password"
-										placeholder={bilingual("sys.login.passwordPlaceholder")}
-										{...field}
-										suppressHydrationWarning
-									/>
+									<div className="relative">
+										<Input
+											type={showPassword ? "text" : "password"}
+											placeholder={bilingual("sys.login.passwordPlaceholder")}
+											{...field}
+											suppressHydrationWarning
+											className="pr-10"
+										/>
+										<button
+											type="button"
+											aria-label={showPassword ? "隐藏密码" : "显示密码"}
+											onClick={() => setShowPassword((v) => !v)}
+											className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+										>
+											{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+										</button>
+									</div>
 								</FormControl>
 								<FormMessage />
 							</FormItem>

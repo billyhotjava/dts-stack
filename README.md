@@ -40,6 +40,30 @@
     - API（Traefik）：`https://api.${BASE_DOMAIN}/admin`、`https://api.${BASE_DOMAIN}/platform`
     - Web 前端（本机端口）：`http://localhost:18011`（admin UI）、`http://localhost:18012`（platform UI）
 
+**后端热更新（最佳实践）**
+- 方案 A（推荐：在主机直接运行后端，性能最佳，自动重载更顺畅）
+  1) 仅启动依赖（不含后端、前端容器）
+     - `docker compose -f docker-compose.yml up -d dts-pg dts-proxy dts-keycloak dts-minio dts-nessie dts-trino`
+  2) 编译共享模块（一次）
+     - `cd source/dts-common && mvn -q -Pdev -DskipTests install`
+  3) 启动 dts-admin（开启 devtools 自动重载）
+     - `cd source/dts-admin`
+     - `mvn -q -Pdev -DskipTests spring-boot:run \
+        -Dspring-boot.run.jvmArguments="-Djavax.net.ssl.trustStore=$(pwd)/../../services/certs/truststore.jks -Djavax.net.ssl.trustStorePassword=changeit"`
+     - 修改代码后，IDE 构建或执行 `mvn -q -Pdev -DskipTests compile` 会触发重启
+  4) 启动 dts-platform（注意：该模块禁用了 devtools 自动重启，变更后需重启进程）
+     - `cd source/dts-platform`
+     - `mvn -q -Pdev -DskipTests spring-boot:run \
+        -Dspring-boot.run.jvmArguments="-Djavax.net.ssl.trustStore=$(pwd)/../../services/certs/truststore.jks -Djavax.net.ssl.trustStorePassword=changeit"`
+     - 修改代码后，按 Ctrl-C 停止，再重复上条命令重启（或用 IDE 运行配置）
+
+- 方案 B（容器内运行后端，简单稳定）
+  - 仅重启受影响服务：
+    - `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --force-recreate dts-admin`
+    - 或：`docker compose -f docker-compose.yml -f docker-compose.dev.yml restart dts-admin`
+  - dts-platform 同理：将服务名替换为 `dts-platform`
+  - 说明：容器方案使用绑定挂载，重建容器会重新编译并加载最新代码，较主机直跑稍慢，但无需本机安装 JDK/Maven。
+
 **正式部署（最小暴露端口）**
 - 使用预构建镜像（推荐，新的服务器无需源码/构建）
   1) 编辑 `imgversion.conf` 设置应用镜像标签（已默认使用 `:1.0.0` 标签，可按需改为你的仓库地址）：

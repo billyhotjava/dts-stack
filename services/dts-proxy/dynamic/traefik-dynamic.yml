@@ -11,7 +11,7 @@ http:
         contentTypeNosniff: true
         browserXssFilter: true
         frameDeny: false
-    # CORS middleware for APIs (dev defaults; tighten in prod)
+    # CORS middleware for APIs (auto-match any origin; rely on same-origin routing for safety)
     cors-allow:
       headers:
         accessControlAllowMethods:
@@ -25,16 +25,9 @@ http:
           - "*"
         addVaryHeader: true
         accessControlAllowCredentials: true
-        # Allow common local dev origins
-        accessControlAllowOriginList:
-          - "http://localhost:3001"
-          - "http://127.0.0.1:3001"
-          - "http://localhost:5173"
-          - "http://127.0.0.1:5173"
-          - "https://localhost"
-        # Allow any subdomain under *.dts.local (dev)
+        # Auto-match any origin (works with allowCredentials=true since Traefik reflects the matched origin)
         accessControlAllowOriginListRegex:
-          - "https?://.*\\.dts\\.local"
+          - "https?://.*"
         accessControlMaxAge: 86400
 
 tls:

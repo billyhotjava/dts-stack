@@ -12,7 +12,8 @@ export default defineConfig(({ mode }) => {
 	const isProduction = mode === "production";
 	// Prefer explicit proxy target via env, fallback to local dev backend
 	// JHipster dev profile runs on 8081 by default (see application-dev.yml)
-	const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:8081";
+  // Default to host-mapped platform backend port when running on host
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:18082";
 	// Optional prefix for reverse proxy (e.g., Traefik exposes platform under /platform)
 	// If not provided, auto-add '/platform' when targeting HTTPS (Traefik) to reduce manual switching
 	const autoPrefix = (() => {

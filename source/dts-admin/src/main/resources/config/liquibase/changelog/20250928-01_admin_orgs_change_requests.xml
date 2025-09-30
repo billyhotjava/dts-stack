@@ -29,7 +29,7 @@
                                  referencedTableName="organization_node"
                                  referencedColumnNames="id"/>
         <createSequence sequenceName="organization_node_seq" startValue="1"/>
-        <addAutoIncrement tableName="organization_node" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="organization_node_seq"/>
+        <addAutoIncrement tableName="organization_node" columnName="id" columnDataType="bigint"/>
     </changeSet>
 
     <changeSet id="20250928-02-change-requests" author="agent">
@@ -67,7 +67,7 @@
             <column name="status"/>
         </createIndex>
         <createSequence sequenceName="change_request_seq" startValue="1"/>
-        <addAutoIncrement tableName="change_request" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="change_request_seq"/>
+        <addAutoIncrement tableName="change_request" columnName="id" columnDataType="bigint"/>
     </changeSet>
 
     <changeSet id="20250928-04-admin-datasets" author="agent">
@@ -94,7 +94,7 @@
             <column name="last_modified_date" type="timestamp"/>
         </createTable>
         <createSequence sequenceName="admin_dataset_seq" startValue="1"/>
-        <addAutoIncrement tableName="admin_dataset" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="admin_dataset_seq"/>
+        <addAutoIncrement tableName="admin_dataset" columnName="id" columnDataType="bigint"/>
     </changeSet>
 
     <changeSet id="20250928-05-admin-custom-roles" author="agent">
@@ -123,7 +123,7 @@
             <column name="last_modified_date" type="timestamp"/>
         </createTable>
         <createSequence sequenceName="admin_custom_role_seq" startValue="1"/>
-        <addAutoIncrement tableName="admin_custom_role" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="admin_custom_role_seq"/>
+        <addAutoIncrement tableName="admin_custom_role" columnName="id" columnDataType="bigint"/>
     </changeSet>
 
     <changeSet id="20250928-06-admin-role-assignments" author="agent">
@@ -154,7 +154,7 @@
             <column name="last_modified_date" type="timestamp"/>
         </createTable>
         <createSequence sequenceName="admin_role_assignment_seq" startValue="1"/>
-        <addAutoIncrement tableName="admin_role_assignment" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="admin_role_assignment_seq"/>
+        <addAutoIncrement tableName="admin_role_assignment" columnName="id" columnDataType="bigint"/>
     </changeSet>
 
     <changeSet id="20250928-07-system-config" author="agent">
@@ -173,7 +173,7 @@
             <column name="last_modified_date" type="timestamp"/>
         </createTable>
         <createSequence sequenceName="system_config_seq" startValue="1"/>
-        <addAutoIncrement tableName="system_config" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="system_config_seq"/>
+        <addAutoIncrement tableName="system_config" columnName="id" columnDataType="bigint"/>
     </changeSet>
     <changeSet id="20250928-03-portal-menus" author="agent">
         <createTable tableName="portal_menu">
@@ -202,7 +202,7 @@
             <column name="parent_id"/>
         </createIndex>
         <createSequence sequenceName="portal_menu_seq" startValue="1"/>
-        <addAutoIncrement tableName="portal_menu" columnName="id" columnDataType="bigint" generationType="SEQUENCE" defaultOnNull="true" incrementBy="1" sequenceName="portal_menu_seq"/>
+        <addAutoIncrement tableName="portal_menu" columnName="id" columnDataType="bigint"/>
     </changeSet>
 
 </databaseChangeLog>
