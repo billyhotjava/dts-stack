@@ -10,6 +10,8 @@ services:
       args:
         MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}
       network: host
+      additional_contexts:
+        dts_common: ../dts-source/dts-common
     depends_on:
       - dts-pg
     environment:
@@ -17,10 +19,22 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTADMIN:-dts_admin}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
       EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
+      # OIDC/Keycloak (override dev defaults)
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_CLIENT_ID:-dts-admin}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_CLIENT_SECRET:-Devops123@}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_SCOPE: "openid,profile,email"
+      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
     ports:
       - "18081:8081"
+    volumes:
+      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+    extra_hosts:
+      - "${HOST_SSO}:host-gateway"
     networks:
       - dts-core
 
@@ -32,6 +46,8 @@ services:
       args:
         MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}
       network: host
+      additional_contexts:
+        dts_common: ../dts-source/dts-common
     depends_on:
       dts-pg:
         condition: service_healthy
@@ -42,10 +58,19 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED_PLATFORM:-true}
       EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
+      # OIDC/Keycloak (override dev defaults)
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
     ports:
       - "18082:8081"
+    volumes:
+      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+    extra_hosts:
+      - "${HOST_SSO}:host-gateway"
     networks:
       - dts-core
 
@@ -91,7 +116,14 @@ services:
       # point to internal service addresses for upstream docs
       PLATFORM_PUBLIC_DOCS_URL: ${PLATFORM_PUBLIC_DOCS_URL:-http://dts-platform:8081/v3/api-docs}
       ADMIN_PUBLIC_DOCS_URL: ${ADMIN_PUBLIC_DOCS_URL:-http://dts-admin:8081/v3/api-docs}
+      # OIDC/Keycloak for resource server JWT validation
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
     ports:
       - "18090:8090"
+    volumes:
+      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+    extra_hosts:
+      - "${HOST_SSO}:host-gateway"
     networks:
       - dts-core

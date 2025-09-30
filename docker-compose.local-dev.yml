@@ -1,0 +1,118 @@
+## Local dev overlay: run services from source via bind mounts and live reload
+
+services:
+
+  # Java backend: dts-admin (Spring Boot)
+  dts-admin:
+    image: ${IMAGE_MAVEN}
+    working_dir: /workspace-src/dts-admin
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTADMIN:-dts_admin}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
+      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
+      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
+    command: ["bash","-lc","mvn -q -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+    ports:
+      - "18081:8081"
+    volumes:
+      - ../dts-source:/workspace-src
+      - maven-cache:/root/.m2
+      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+    extra_hosts:
+      - "${HOST_SSO}:host-gateway"
+    networks:
+      - dts-core
+
+  # Java backend: dts-platform (Spring Boot)
+  dts-platform:
+    image: ${IMAGE_MAVEN}
+    working_dir: /workspace-src/dts-platform
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+      dts-trino:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED_PLATFORM:-true}
+      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
+      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
+    command: ["bash","-lc","mvn -q -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+    ports:
+      - "18082:8081"
+    volumes:
+      - ../dts-source:/workspace-src
+      - maven-cache:/root/.m2
+      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+    extra_hosts:
+      - "${HOST_SSO}:host-gateway"
+    networks:
+      - dts-core
+
+  # Java backend: dts-public-api (Spring Boot)
+  dts-public-api:
+    image: ${IMAGE_MAVEN}
+    working_dir: /workspace-src/dts-public-api
+    depends_on:
+      dts-admin:
+        condition: service_started
+      dts-platform:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      PLATFORM_PUBLIC_DOCS_URL: ${PLATFORM_PUBLIC_DOCS_URL:-http://dts-platform:8081/v3/api-docs}
+      ADMIN_PUBLIC_DOCS_URL: ${ADMIN_PUBLIC_DOCS_URL:-http://dts-admin:8081/v3/api-docs}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+    command: ["bash","-lc","mvn -q -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+    ports:
+      - "18090:8090"
+    volumes:
+      - ../dts-source:/workspace-src
+      - maven-cache:/root/.m2
+      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+    extra_hosts:
+      - "${HOST_SSO}:host-gateway"
+    networks:
+      - dts-core
+
+  # Frontend: dts-admin-webapp (optional dev server)
+  # If your project uses Vite/React/Angular dev server, adjust command/port below.
+  dts-admin-webapp:
+    image: node:20-alpine
+    working_dir: /workspace
+    depends_on:
+      - dts-admin
+    command: ["sh","-lc","[ -f package.json ] && (npm install --silent || npm install) && (npm run dev || npm start)"]
+    ports:
+      - "18011:5173"
+    volumes:
+      - ../dts-source/dts-admin-webapp:/workspace
+      - /workspace/node_modules
+    networks:
+      - dts-core
+
+  # Frontend: dts-platform-webapp (optional dev server)
+  dts-platform-webapp:
+    image: node:20-alpine
+    working_dir: /workspace
+    depends_on:
+      - dts-platform
+    command: ["sh","-lc","[ -f package.json ] && (npm install --silent || npm install) && (npm run dev -- --port 5174 || PORT=5174 npm start)"]
+    ports:
+      - "18012:5174"
+    volumes:
+      - ../dts-source/dts-platform-webapp:/workspace
+      - /workspace/node_modules
+    networks:
+      - dts-core
+
+## Note: top-level 'networks' and 'volumes' come from docker-compose.yml
