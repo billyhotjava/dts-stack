@@ -37,24 +37,33 @@ for f in "${need_src[@]}"; do
   [[ -f "$f" ]] || { echo "[offline-prepare] ERROR: missing $f" >&2; exit 1; }
 done
 
-echo "[offline-prepare] Resolving Java dependencies (dependency:go-offline) ..."
+echo "[offline-prepare] Resolving Java dependencies (dependency:go-offline) with -Pdev ..."
 docker run --rm \
   -v "$SRC_ROOT:/src" \
   -v "$MAVEN_REPO_DIR:/root/.m2/repository" \
   -w /src/dts-admin "$MVN_IMAGE" \
-  mvn -B -U -DskipTests dependency:go-offline
+  mvn -B -U -Pdev -DskipTests dependency:go-offline
 
 docker run --rm \
   -v "$SRC_ROOT:/src" \
   -v "$MAVEN_REPO_DIR:/root/.m2/repository" \
   -w /src/dts-platform "$MVN_IMAGE" \
-  mvn -B -U -DskipTests dependency:go-offline
+  mvn -B -U -Pdev -DskipTests dependency:go-offline
 
 docker run --rm \
   -v "$SRC_ROOT:/src" \
   -v "$MAVEN_REPO_DIR:/root/.m2/repository" \
   -w /src/dts-public-api "$MVN_IMAGE" \
   mvn -B -U -DskipTests dependency:go-offline
+
+# Also prefetch shared module dependencies with dev profile if present
+if [[ -f "$SRC_ROOT/dts-common/pom.xml" ]]; then
+  docker run --rm \
+    -v "$SRC_ROOT:/src" \
+    -v "$MAVEN_REPO_DIR:/root/.m2/repository" \
+    -w /src/dts-common "$MVN_IMAGE" \
+    mvn -B -U -Pdev -DskipTests dependency:go-offline || true
+fi
 
 echo "[offline-prepare] Maven repo populated at: $MAVEN_REPO_DIR"
 
@@ -68,7 +77,6 @@ for web in dts-admin-webapp dts-platform-webapp; do
       -v "$OFFLINE_DIR/node-modules/$web:/out" \
       -w /app node:20-alpine \
       sh -lc 'set -e; corepack enable; \
-        if [ ! -f pnpm-lock.yaml ] && [ -f package-lock.json ]; then pnpm import; fi; \
         export PNPM_STORE_DIR=/pnpm-store; export npm_config_ignore_scripts=true; \
         pnpm fetch --no-optional || true; \
         pnpm install --prefer-offline --no-optional --ignore-scripts; \

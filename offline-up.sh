@@ -41,6 +41,13 @@ set +a
 compose_files=(-f docker-compose.yml -f docker-compose.local-dev.yml -f docker-compose.local-offline.yml)
 
 echo "[offline-up] Starting services in OFFLINE mode ..."
+echo "[offline-up] Ensuring devtools profile is present in dts-source POMs (dev only) ..."
+SRC_ROOT="${SRC_ROOT:-"$(cd .. 2>/dev/null && pwd)/dts-source"}"
+if [[ -d "$SRC_ROOT" ]]; then
+  SRC_ROOT="$SRC_ROOT" bash ./enable-devtools.sh || true
+else
+  echo "[offline-up] WARN: dts-source not found at $SRC_ROOT; skip devtools patch"
+fi
 echo "[offline-up] Ensuring Traefik (dts-proxy) and Keycloak are running ..."
 if docker compose -f docker-compose.yml ps -q dts-proxy >/dev/null 2>&1; then :; else "${compose_cmd[@]}" -f docker-compose.yml up -d dts-proxy; fi
 if docker compose -f docker-compose.yml ps -q dts-keycloak >/dev/null 2>&1; then :; else "${compose_cmd[@]}" -f docker-compose.yml up -d dts-keycloak; fi

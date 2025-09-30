@@ -6,14 +6,14 @@
 services:
 
   dts-admin:
-    command: ["bash","-lc","mvn -o -q -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+    command: ["bash","-lc","mvn -o -q -Pdev -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
     volumes:
       - ../dts-source:/workspace-src
       - ./offline/maven-repo:/root/.m2/repository
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
 
   dts-platform:
-    command: ["bash","-lc","mvn -o -q -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+    command: ["bash","-lc","mvn -o -q -Pdev -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
     volumes:
       - ../dts-source:/workspace-src
       - ./offline/maven-repo:/root/.m2/repository
@@ -29,7 +29,11 @@ services:
   dts-admin-webapp:
     environment:
       PNPM_STORE_DIR: /pnpm-store
-    command: ["sh","-lc","corepack enable; if [ -f package.json ]; then if [ ! -f pnpm-lock.yaml ] && [ -f package-lock.json ]; then pnpm import; fi; pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline:\ pnpm\ store\ missing; tail -f /dev/null; }; pnpm run dev -- --port 5173 --open=false || PORT=5173 pnpm start; else echo offline:\ no\ package.json; tail -f /dev/null; fi"]
+      BROWSER: none
+      VITE_OPEN: "false"
+      CHOKIDAR_USEPOLLING: "true"
+      HOST: 0.0.0.0
+    command: ["sh","-lc","corepack enable; if [ -f package.json ]; then pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline:\ pnpm\ store\ missing; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port 5173 --strictPort --open=false || PORT=5173 pnpm start; else echo offline:\ no\ package.json; tail -f /dev/null; fi"]
     volumes:
       - ../dts-source/dts-admin-webapp:/workspace
       - ./offline/pnpm-store:/pnpm-store
@@ -38,7 +42,11 @@ services:
   dts-platform-webapp:
     environment:
       PNPM_STORE_DIR: /pnpm-store
-    command: ["sh","-lc","corepack enable; if [ -f package.json ]; then if [ ! -f pnpm-lock.yaml ] && [ -f package-lock.json ]; then pnpm import; fi; pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline:\ pnpm\ store\ missing; tail -f /dev/null; }; pnpm run dev -- --port 5174 --open=false || PORT=5174 pnpm start; else echo offline:\ no\ package.json; tail -f /dev/null; fi"]
+      BROWSER: none
+      VITE_OPEN: "false"
+      CHOKIDAR_USEPOLLING: "true"
+      HOST: 0.0.0.0
+    command: ["sh","-lc","corepack enable; if [ -f package.json ]; then pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline:\ pnpm\ store\ missing; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port 5174 --strictPort --open=false || PORT=5174 pnpm start; else echo offline:\ no\ package.json; tail -f /dev/null; fi"]
     volumes:
       - ../dts-source/dts-platform-webapp:/workspace
       - ./offline/pnpm-store:/pnpm-store

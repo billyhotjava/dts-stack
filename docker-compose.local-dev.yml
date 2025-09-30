@@ -17,7 +17,7 @@ services:
       SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
       EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
-    command: ["bash","-lc","mvn -q -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+    command: ["bash","-lc","mvn -q -Pdev -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
     ports:
       - "18081:8081"
     volumes:
@@ -46,7 +46,7 @@ services:
       SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED_PLATFORM:-true}
       EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
-    command: ["bash","-lc","mvn -q -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+    command: ["bash","-lc","mvn -q -Pdev -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
     ports:
       - "18082:8081"
     volumes:
@@ -96,7 +96,8 @@ services:
       BROWSER: none
       VITE_OPEN: "false"
       CHOKIDAR_USEPOLLING: "true"
-    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; if [ ! -f pnpm-lock.yaml ] && [ -f package-lock.json ]; then pnpm import; fi; pnpm install --no-frozen-lockfile --prefer-offline --ignore-scripts; pnpm run dev -- --port 5173 --open=false || PORT=5173 pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
+      HOST: 0.0.0.0
+    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline\ install\ failed; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port 5173 --strictPort --open=false || PORT=5173 pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18011:5173"
     volumes:
@@ -117,9 +118,10 @@ services:
       BROWSER: none
       VITE_OPEN: "false"
       CHOKIDAR_USEPOLLING: "true"
-    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; if [ ! -f pnpm-lock.yaml ] && [ -f package-lock.json ]; then pnpm import; fi; pnpm install --no-frozen-lockfile --prefer-offline --ignore-scripts; pnpm run dev -- --port 5174 --open=false || PORT=5174 pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
+      HOST: 0.0.0.0
+    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline\ install\ failed; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port 5174 --strictPort --open=false || PORT=5174 pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
-      - "18012:3001"
+      - "18012:5174"
     volumes:
       - ../dts-source/dts-platform-webapp:/workspace
       - ./.pnpm-store:/pnpm-store

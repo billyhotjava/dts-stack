@@ -45,6 +45,14 @@ set +a
 
 compose_files=(-f docker-compose.yml -f docker-compose.local-dev.yml)
 
+echo "[local-up] Ensuring devtools profile is present in dts-source POMs (dev only) ..."
+SRC_ROOT="${SRC_ROOT:-"$(cd .. 2>/dev/null && pwd)/dts-source"}"
+if [[ -d "$SRC_ROOT" ]]; then
+  SRC_ROOT="$SRC_ROOT" bash ./enable-devtools.sh || true
+else
+  echo "[local-up] WARN: dts-source not found at $SRC_ROOT; skip devtools patch"
+fi
+
 echo "[local-up] Ensuring Postgres (dts-pg) is running ..."
 pg_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-pg || true)
 if [[ -z "${pg_cid}" ]]; then
