@@ -28,9 +28,10 @@ export async function fetchAuditEvents(filters?: {
 		params.set("detailJson", ipDetails); // 使用 detailJson 查询 IP 地址
 	}
 
-	return apiClient.get<AuditEvent[]>({
-		url: `/api/admin/audit?${params.toString()}`,
-	});
+    // Base URL is '/api', so avoid double '/api' prefix
+    return apiClient.get<AuditEvent[]>({
+        url: `/admin/audit?${params.toString()}`,
+    });
 }
 
 /**
@@ -39,9 +40,9 @@ export async function fetchAuditEvents(filters?: {
  * @returns 导出文件的 Blob 对象
  */
 export async function exportAuditLogs(format: "csv" | "json" = "csv"): Promise<Blob> {
-	const response = await apiClient.get<Blob>({
-		url: `/api/admin/audit/export?format=${format}`,
-		responseType: "blob",
-	});
+    const response = await apiClient.get<Blob>({
+        url: `/admin/audit/export?format=${format}`,
+        responseType: "blob",
+    });
 	return response;
 }
