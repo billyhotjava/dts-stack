@@ -26,3 +26,5 @@ dist-ssr
 
 # vite build stats
 stats.html
+.pnpm-store/
+node_modules/

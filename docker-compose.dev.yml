@@ -160,6 +160,7 @@ services:
       - "18011:3001"
     volumes:
       - ./source/dts-admin-webapp:/workspace
+      - ./source/dts-platform-webapp:/workspace/dts-platform-webapp:ro
       - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
       - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules

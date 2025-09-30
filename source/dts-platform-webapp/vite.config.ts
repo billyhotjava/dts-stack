@@ -7,23 +7,23 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig(({ mode }) => {
 	const rawEnv = loadEnv(mode, process.cwd(), "");
-  const env = { ...process.env, ...rawEnv };
+	const env = { ...process.env, ...rawEnv };
 	const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
 	const isProduction = mode === "production";
-  // Prefer explicit proxy target via env, fallback to local dev backend
-  // JHipster dev profile runs on 8081 by default (see application-dev.yml)
-  const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:8081";
-  // Optional prefix for reverse proxy (e.g., Traefik exposes platform under /platform)
-  // If not provided, auto-add '/platform' when targeting HTTPS (Traefik) to reduce manual switching
-  const autoPrefix = (() => {
-    if (env.VITE_API_PROXY_PREFIX) return ""; // explicit beats auto
-    try {
-      const u = new URL(apiProxyTarget);
-      if (u.protocol === "https:") return "/platform";
-    } catch {}
-    return "";
-  })();
-  const apiProxyPrefix = env.VITE_API_PROXY_PREFIX || autoPrefix || "";
+	// Prefer explicit proxy target via env, fallback to local dev backend
+	// JHipster dev profile runs on 8081 by default (see application-dev.yml)
+	const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:8081";
+	// Optional prefix for reverse proxy (e.g., Traefik exposes platform under /platform)
+	// If not provided, auto-add '/platform' when targeting HTTPS (Traefik) to reduce manual switching
+	const autoPrefix = (() => {
+		if (env.VITE_API_PROXY_PREFIX) return ""; // explicit beats auto
+		try {
+			const u = new URL(apiProxyTarget);
+			if (u.protocol === "https:") return "/platform";
+		} catch { }
+		return "";
+	})();
+	const apiProxyPrefix = env.VITE_API_PROXY_PREFIX || autoPrefix || "";
 
 	return {
 		base,
@@ -36,13 +36,13 @@ export default defineConfig(({ mode }) => {
 			tsconfigPaths(),
 
 			isProduction &&
-				visualizer({
-					// Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
-					open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,
-					gzipSize: true,
-					brotliSize: true,
-					template: "treemap",
-				}),
+			visualizer({
+				// Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
+				open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,
+				gzipSize: true,
+				brotliSize: true,
+				template: "treemap",
+			}),
 		].filter(Boolean),
 
 		server: {
@@ -82,7 +82,7 @@ export default defineConfig(({ mode }) => {
 
 		optimizeDeps: {
 			include: ["react", "react-dom", "react-router", "antd", "axios", "dayjs"],
-			exclude: ["@iconify/react"],
+			exclude: ["@iconify/react", "@vanilla-extract/css"],
 		},
 
 		esbuild: {

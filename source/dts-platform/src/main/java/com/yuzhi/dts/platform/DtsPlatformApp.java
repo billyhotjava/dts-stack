@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform;
 
 import com.yuzhi.dts.platform.config.ApplicationProperties;
+import com.yuzhi.dts.platform.config.DtsCommonAuditProperties;
 import com.yuzhi.dts.platform.config.CRLFLogConverter;
 import jakarta.annotation.PostConstruct;
 import java.net.InetAddress;
@@ -20,7 +21,7 @@ import tech.jhipster.config.DefaultProfileUtil;
 import tech.jhipster.config.JHipsterConstants;
 
 @SpringBootApplication
-@EnableConfigurationProperties({ LiquibaseProperties.class, ApplicationProperties.class })
+@EnableConfigurationProperties({ LiquibaseProperties.class, ApplicationProperties.class, DtsCommonAuditProperties.class })
 public class DtsPlatformApp {
 
     private static final Logger LOG = LoggerFactory.getLogger(DtsPlatformApp.class);

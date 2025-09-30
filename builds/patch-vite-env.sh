@@ -19,20 +19,20 @@ fi
 
 tmp="$CFG.tmp.$$"
 
-# Replace common pattern: const env = loadEnv(mode, process.cwd(), "");
-# with: const rawEnv=loadEnv(...); const env={...process.env, ...rawEnv};
+# Replace pattern safely by printing two lines (no literal \n in source)
 awk '
   BEGIN{done=0}
   {
     if (!done && $0 ~ /const[[:space:]]+env[[:space:]]*=[[:space:]]*loadEnv\(mode,[[:space:]]*process\.cwd\(\),[[:space:]]*["\047][^"\047]*["\047]\)[[:space:]]*;/) {
-      gsub(/const[[:space:]]+env[[:space:]]*=[[:space:]]*loadEnv\(mode,[[:space:]]*process\.cwd\(\),[[:space:]]*["\047][^"\047]*["\047]\)[[:space:]]*;/, "const rawEnv = loadEnv(mode, process.cwd(), \"\");\\n  const env = { ...process.env, ...rawEnv };")
-      print; done=1; next
+      print "const rawEnv = loadEnv(mode, process.cwd(), \"\");"
+      print "  const env = { ...process.env, ...rawEnv };"
+      done=1; next
     }
     print
   }
 ' "$CFG" > "$tmp" && mv "$tmp" "$CFG"
 
-# If still not merged, attempt a safer insert after first loadEnv() assignment
+# If still not merged, attempt insert after first loadEnv() mention
 if ! grep -q '\.\.\.process\.env' "$CFG" 2>/dev/null; then
   awk '
     BEGIN{inserted=0}
@@ -49,4 +49,3 @@ if ! grep -q '\.\.\.process\.env' "$CFG" 2>/dev/null; then
 fi
 
 exit 0
-

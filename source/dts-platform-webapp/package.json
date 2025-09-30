@@ -5,9 +5,9 @@
 	"type": "module",
 	"homepage": "https://github.com/d3george/slash-admin",
 	"scripts": {
-		"dev": "vite",
+    "dev": "VITE_CACHE_DIR=.vite-cache vite",
 		"start": "vite",
-		"build": "tsc && vite build",
+    "build": "VITE_CACHE_DIR=.vite-cache tsc && VITE_CACHE_DIR=.vite-cache vite build",
 		"preview": "vite preview",
 		"preinstall": "lefthook install"
 	},
@@ -91,9 +91,9 @@
 		"vite": "^6.2.0",
 		"vite-tsconfig-paths": "^5.1.2"
 	},
-	"engines": {
-		"node": "20.*"
-	},
+  "engines": {
+    "node": ">=20"
+  },
 	"packageManager": "pnpm@10.8.0",
 	"commitlint": {
 		"extends": [

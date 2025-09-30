@@ -169,10 +169,31 @@ public class PlatformAdminResource {
     private final java.util.Map<Long, java.util.Map<String, Object>> orgs = new java.util.concurrent.ConcurrentHashMap<>();
 
     {
-        // seed orgs
-        orgs.put(1L, new java.util.LinkedHashMap<>(java.util.Map.of("id", 1L, "name", "总公司", "dataLevel", "DATA_INTERNAL", "parentId", null)));
-        orgs.put(2L, new java.util.LinkedHashMap<>(java.util.Map.of("id", 2L, "name", "研发中心", "dataLevel", "DATA_INTERNAL", "parentId", 1L)));
-        orgs.put(3L, new java.util.LinkedHashMap<>(java.util.Map.of("id", 3L, "name", "安全部", "dataLevel", "DATA_SECRET", "parentId", 1L)));
+        // seed orgs (avoid Map.of for entries with null values)
+        {
+            var m = new java.util.LinkedHashMap<String, Object>();
+            m.put("id", 1L);
+            m.put("name", "总公司");
+            m.put("dataLevel", "DATA_INTERNAL");
+            m.put("parentId", null);
+            orgs.put(1L, m);
+        }
+        {
+            var m = new java.util.LinkedHashMap<String, Object>();
+            m.put("id", 2L);
+            m.put("name", "研发中心");
+            m.put("dataLevel", "DATA_INTERNAL");
+            m.put("parentId", 1L);
+            orgs.put(2L, m);
+        }
+        {
+            var m = new java.util.LinkedHashMap<String, Object>();
+            m.put("id", 3L);
+            m.put("name", "安全部");
+            m.put("dataLevel", "DATA_SECRET");
+            m.put("parentId", 1L);
+            orgs.put(3L, m);
+        }
     }
 
     @GetMapping("/orgs")
