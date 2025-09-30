@@ -17,15 +17,36 @@ services:
       SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
       EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
-    command: ["bash","-lc","mvn -q -Pdev -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_CLIENT_ID:-dts-admin}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_CLIENT_SECRET:-Devops123@}"
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+    command:
+      - bash
+      - -lc
+      - |
+        # 1) precompile with module graph (includes dts-common)
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-admin package || true
+        # 2) run with devtools; restarts on classpath changes
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-admin spring-boot:run \
+          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
     ports:
       - "18081:8081"
+      - "5005:5005"
     volumes:
       - ../dts-source:/workspace-src
       - maven-cache:/root/.m2
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
     extra_hosts:
       - "${HOST_SSO}:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8081/v3/api-docs >/dev/null || wget -qO- http://127.0.0.1:8081/v3/api-docs >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 120s
     networks:
       - dts-core
 
@@ -46,15 +67,32 @@ services:
       SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED_PLATFORM:-true}
       EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
-    command: ["bash","-lc","mvn -q -Pdev -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+    command:
+      - bash
+      - -lc
+      - |
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-platform package || true
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-platform spring-boot:run \
+          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
     ports:
       - "18082:8081"
+      - "5006:5006"
     volumes:
       - ../dts-source:/workspace-src
       - maven-cache:/root/.m2
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
     extra_hosts:
       - "${HOST_SSO}:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8081/v3/api-docs >/dev/null || wget -qO- http://127.0.0.1:8081/v3/api-docs >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 120s
     networks:
       - dts-core
 
@@ -72,15 +110,30 @@ services:
       PLATFORM_PUBLIC_DOCS_URL: ${PLATFORM_PUBLIC_DOCS_URL:-http://dts-platform:8081/v3/api-docs}
       ADMIN_PUBLIC_DOCS_URL: ${ADMIN_PUBLIC_DOCS_URL:-http://dts-admin:8081/v3/api-docs}
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
-    command: ["bash","-lc","mvn -q -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+    command:
+      - bash
+      - -lc
+      - |
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-public-api package || true
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-public-api spring-boot:run \
+          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
     ports:
       - "18090:8090"
+      - "5007:5007"
     volumes:
       - ../dts-source:/workspace-src
       - maven-cache:/root/.m2
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
     extra_hosts:
       - "${HOST_SSO}:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8090/v3/api-docs >/dev/null || wget -qO- http://127.0.0.1:8090/v3/api-docs >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 120s
     networks:
       - dts-core
 
@@ -97,15 +150,22 @@ services:
       VITE_OPEN: "false"
       CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
-    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline\ install\ failed; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port 5173 --strictPort --open=false || PORT=5173 pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
+      PORT: "3001"
+    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline\ install\ failed; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
-      - "18011:5173"
+      - "18011:3001"
     volumes:
       - ../dts-source/dts-admin-webapp:/workspace
       - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules
     networks:
       - dts-core
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:$${PORT:-3001} >/dev/null || wget -qO- http://127.0.0.1:$${PORT:-3001} >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
 
   # Frontend: dts-platform-webapp (optional dev server)
   dts-platform-webapp:
@@ -119,14 +179,21 @@ services:
       VITE_OPEN: "false"
       CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
-    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline\ install\ failed; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port 5174 --strictPort --open=false || PORT=5174 pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
+      PORT: "3001"
+    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline\ install\ failed; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
-      - "18012:5174"
+      - "18012:3001"
     volumes:
       - ../dts-source/dts-platform-webapp:/workspace
       - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules
     networks:
       - dts-core
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:$${PORT:-3001} >/dev/null || wget -qO- http://127.0.0.1:$${PORT:-3001} >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
 
 ## Note: top-level 'networks' and 'volumes' come from docker-compose.yml

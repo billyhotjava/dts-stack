@@ -6,25 +6,70 @@
 services:
 
   dts-admin:
-    command: ["bash","-lc","mvn -o -q -Pdev -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+    environment:
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+    command:
+      - bash
+      - -lc
+      - |
+        mvn -o -q -Pdev -DskipTests -am -pl :dts-admin package || true
+        mvn -o -q -Pdev -DskipTests -am -pl :dts-admin spring-boot:run \
+          -Dspring-boot.run.jvmArguments="-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
     volumes:
       - ../dts-source:/workspace-src
       - ./offline/maven-repo:/root/.m2/repository
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8081/v3/api-docs >/dev/null || wget -qO- http://127.0.0.1:8081/v3/api-docs >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 180s
 
   dts-platform:
-    command: ["bash","-lc","mvn -o -q -Pdev -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+    environment:
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+    command:
+      - bash
+      - -lc
+      - |
+        mvn -o -q -Pdev -DskipTests -am -pl :dts-platform package || true
+        mvn -o -q -Pdev -DskipTests -am -pl :dts-platform spring-boot:run \
+          -Dspring-boot.run.jvmArguments="-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
     volumes:
       - ../dts-source:/workspace-src
       - ./offline/maven-repo:/root/.m2/repository
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8081/v3/api-docs >/dev/null || wget -qO- http://127.0.0.1:8081/v3/api-docs >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 180s
 
   dts-public-api:
-    command: ["bash","-lc","mvn -o -q -DskipTests spring-boot:run -Dspring-boot.run.jvmArguments=\"-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}\""]
+    environment:
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+    command:
+      - bash
+      - -lc
+      - |
+        mvn -o -q -Pdev -DskipTests -am -pl :dts-public-api package || true
+        mvn -o -q -Pdev -DskipTests -am -pl :dts-public-api spring-boot:run \
+          -Dspring-boot.run.jvmArguments="-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
     volumes:
       - ../dts-source:/workspace-src
       - ./offline/maven-repo:/root/.m2/repository
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8090/v3/api-docs >/dev/null || wget -qO- http://127.0.0.1:8090/v3/api-docs >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 180s
 
   dts-admin-webapp:
     environment:
@@ -33,11 +78,18 @@ services:
       VITE_OPEN: "false"
       CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
-    command: ["sh","-lc","corepack enable; if [ -f package.json ]; then pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline:\ pnpm\ store\ missing; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port 5173 --strictPort --open=false || PORT=5173 pnpm start; else echo offline:\ no\ package.json; tail -f /dev/null; fi"]
+      PORT: "3001"
+    command: ["sh","-lc","corepack enable; if [ -f package.json ]; then pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline:\ pnpm\ store\ missing; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo offline:\ no\ package.json; tail -f /dev/null; fi"]
     volumes:
       - ../dts-source/dts-admin-webapp:/workspace
       - ./offline/pnpm-store:/pnpm-store
       - /workspace/node_modules
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:$${PORT:-3001} >/dev/null || wget -qO- http://127.0.0.1:$${PORT:-3001} >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
 
   dts-platform-webapp:
     environment:
@@ -46,8 +98,15 @@ services:
       VITE_OPEN: "false"
       CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
-    command: ["sh","-lc","corepack enable; if [ -f package.json ]; then pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline:\ pnpm\ store\ missing; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port 5174 --strictPort --open=false || PORT=5174 pnpm start; else echo offline:\ no\ package.json; tail -f /dev/null; fi"]
+      PORT: "3001"
+    command: ["sh","-lc","corepack enable; if [ -f package.json ]; then pnpm install --offline --frozen-lockfile --ignore-scripts || { echo offline:\ pnpm\ store\ missing; tail -f /dev/null; }; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo offline:\ no\ package.json; tail -f /dev/null; fi"]
     volumes:
       - ../dts-source/dts-platform-webapp:/workspace
       - ./offline/pnpm-store:/pnpm-store
       - /workspace/node_modules
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:$${PORT:-3001} >/dev/null || wget -qO- http://127.0.0.1:$${PORT:-3001} >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s

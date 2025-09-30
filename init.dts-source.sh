@@ -35,6 +35,8 @@ echo "[init.dts-source] Generating ${ENV_FILE} ..."
   echo "DTS_PROFILE=dev"
   echo "EUREKA_CLIENT_ENABLED=false"
   echo "SPRING_CLOUD_CONFIG_ENABLED=false"
+  echo "SPRINGDOC_API_DOCS_ENABLED=true"
+  echo "SPRINGDOC_SWAGGER_UI_ENABLED=true"
 } > "${ENV_FILE}"
 
 echo "[init.dts-source] Wrote ${ENV_FILE}."

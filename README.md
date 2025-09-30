@@ -37,6 +37,23 @@ cd dts-stack
 - dts-platform-webapp 18012→80（Nginx 静态托管）
 - dts-public-api 18090→8090（上游文档指向容器内 http://dts-admin:8081 与 http://dts-platform:8081）
 
+### 本地源码联调（local-dev 模式）
+使用源码挂载 + 前端 dev server 热更新：
+
+```bash
+# 启动 local-dev（依赖已初始化的 .env）
+./local-up.sh
+
+# 停止（仅关掉 dev 容器）
+./local-stop.sh
+```
+
+访问地址：
+- 前端（admin）：http://localhost:18011 → 容器内 dev server 3001
+- 前端（platform）：http://localhost:18012 → 容器内 dev server 3001
+
+说明：web-app 开发时容器内默认监听 3001，已在 docker-compose.local-dev.yml 中将宿主机端口映射为 18011/18012。若控制台中看到 “Local/Network: 3001” 提示，属容器内端口信息，直接使用宿主机 18011/18012 访问即可。
+
 切换 dev/prod：通过 Compose 环境变量控制（无需改 start.sh/stop.sh）。
 - 默认在 `.env.dts-source` 中写入：`DTS_PROFILE=dev`、`EUREKA_CLIENT_ENABLED=false`、`SPRING_CLOUD_CONFIG_ENABLED=false`。
 - 切换为 prod 示例：
