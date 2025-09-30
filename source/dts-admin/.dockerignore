@@ -1,0 +1,21 @@
+# Common ignores for Docker build context (Java/Maven service)
+.git
+.gitignore
+.idea
+.vscode
+.DS_Store
+*.log
+*.iml
+
+# Maven/Java outputs
+target/
+.mvn/
+
+# Node/npm leftovers (if any)
+node_modules/
+dist/
+coverage/
+
+# Local env/config
+.env
+.env.*
