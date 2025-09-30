@@ -19,8 +19,8 @@ services:
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_CLIENT_ID:-dts-admin}"
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_CLIENT_SECRET:-Devops123@}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
       JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173"
       JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
       JHIPSTER_CORS_ALLOWED_HEADERS: "*"
@@ -31,11 +31,16 @@ services:
       - bash
       - -lc
       - |
+        # Patch application-dev.yml to read datasource from env placeholders (admin)
+        sh /patches/patch-app-dev-yml.sh admin || true
+        # Also patch shared module (dts-common) if present
+        sh /patches/patch-app-dev-yml.sh common || true
         # 1) precompile with module graph (includes dts-common)
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-admin package || true
         # 2) run with devtools; restarts on classpath changes
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-admin spring-boot:run \
-          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
+          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}" \
+          -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     ports:
       - "18081:8081"
       - "5005:5005"
@@ -43,6 +48,7 @@ services:
       - ../dts-source:/workspace-src
       - maven-cache:/root/.m2
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+      - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro
     extra_hosts:
       - "${HOST_SSO}:host-gateway"
     healthcheck:
@@ -53,6 +59,15 @@ services:
       start_period: 120s
     networks:
       - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-admin.rule=Host(`${HOST_API}`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.dts-admin.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin.tls=true"
+      - "traefik.http.services.dts-admin.loadbalancer.server.port=8081"
+      - "traefik.http.middlewares.dts-strip-admin.stripprefixregex.regex=/admin"
+      - "traefik.http.routers.dts-admin.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file"
 
   # Java backend: dts-platform (Spring Boot)
   dts-platform:
@@ -73,6 +88,8 @@ services:
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_PLATFORM_CLIENT_SECRET:-}"
       JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173"
       JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
       JHIPSTER_CORS_ALLOWED_HEADERS: "*"
@@ -83,9 +100,14 @@ services:
       - bash
       - -lc
       - |
+        # Patch application-dev.yml to read datasource from env placeholders (platform)
+        sh /patches/patch-app-dev-yml.sh platform || true
+        # Also patch shared module (dts-common) if present
+        sh /patches/patch-app-dev-yml.sh common || true
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-platform package || true
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-platform spring-boot:run \
-          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
+          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}" \
+          -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     ports:
       - "18082:8081"
       - "5006:5006"
@@ -93,6 +115,7 @@ services:
       - ../dts-source:/workspace-src
       - maven-cache:/root/.m2
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+      - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro
     extra_hosts:
       - "${HOST_SSO}:host-gateway"
     healthcheck:
@@ -103,51 +126,16 @@ services:
       start_period: 120s
     networks:
       - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-platform.rule=Host(`${HOST_API}`) && PathPrefix(`/platform`)"
+      - "traefik.http.routers.dts-platform.entrypoints=websecure"
+      - "traefik.http.routers.dts-platform.tls=true"
+      - "traefik.http.services.dts-platform.loadbalancer.server.port=8081"
+      - "traefik.http.middlewares.dts-strip-platform.stripprefixregex.regex=/platform"
+      - "traefik.http.routers.dts-platform.middlewares=dts-strip-platform@docker,cors-allow@file,security-headers@file"
 
-  # Java backend: dts-public-api (Spring Boot)
-  dts-public-api:
-    image: ${IMAGE_MAVEN}
-    working_dir: /workspace-src/dts-public-api
-    depends_on:
-      dts-admin:
-        condition: service_started
-      dts-platform:
-        condition: service_started
-    environment:
-      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
-      PLATFORM_PUBLIC_DOCS_URL: ${PLATFORM_PUBLIC_DOCS_URL:-http://dts-platform:8081/v3/api-docs}
-      ADMIN_PUBLIC_DOCS_URL: ${ADMIN_PUBLIC_DOCS_URL:-http://dts-admin:8081/v3/api-docs}
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
-      JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173"
-      JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-      JHIPSTER_CORS_ALLOWED_HEADERS: "*"
-      JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
-      SPRINGDOC_API_DOCS_ENABLED: "true"
-      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
-    command:
-      - bash
-      - -lc
-      - |
-        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-public-api package || true
-        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true -am -pl :dts-public-api spring-boot:run \
-          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
-    ports:
-      - "18090:8090"
-      - "5007:5007"
-    volumes:
-      - ../dts-source:/workspace-src
-      - maven-cache:/root/.m2
-      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
-    extra_hosts:
-      - "${HOST_SSO}:host-gateway"
-    healthcheck:
-      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8090/v3/api-docs >/dev/null || wget -qO- http://127.0.0.1:8090/v3/api-docs >/dev/null"]
-      interval: 10s
-      timeout: 10s
-      retries: 60
-      start_period: 120s
-    networks:
-      - dts-core
 
   # Frontend: dts-admin-webapp (optional dev server)
   # If your project uses Vite/React/Angular dev server, adjust command/port below.
@@ -163,14 +151,13 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
       PORT: "3001"
-      # Vite dev proxy target for admin webapp: call unified public API
-      VITE_API_PROXY_TARGET: http://dts-public-api:8090
-    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
+      # Vite dev proxy target for admin webapp: call dts-admin directly
+      VITE_API_PROXY_TARGET: http://dts-admin:8081
+    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18011:3001"
     volumes:
       - ../dts-source/dts-admin-webapp:/workspace
-      - ./builds/webapp.env.development:/workspace/.env.development:ro
       - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
       - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules
@@ -196,14 +183,13 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
       PORT: "3001"
-      # Vite dev proxy target for platform webapp: call unified public API
-      VITE_API_PROXY_TARGET: http://dts-public-api:8090
-    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
+      # Vite dev proxy target for platform webapp: call dts-platform directly
+      VITE_API_PROXY_TARGET: http://dts-platform:8081
+    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18012:3001"
     volumes:
       - ../dts-source/dts-platform-webapp:/workspace
-      - ./builds/webapp.env.development:/workspace/.env.development:ro
       - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
       - ./.pnpm-store:/pnpm-store
       - /workspace/node_modules

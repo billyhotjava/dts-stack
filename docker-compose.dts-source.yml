@@ -27,10 +27,10 @@ services:
       # OIDC/Keycloak (override dev defaults)
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_CLIENT_ID:-dts-admin}"
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_CLIENT_SECRET:-Devops123@}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_SCOPE: "openid,profile,email"
-      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
+      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=${SPRING_DATASOURCE_URL} -Dspring.datasource.username=${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=${SPRING_DATASOURCE_PASSWORD}"
     ports:
       - "18081:8081"
     volumes:
@@ -39,6 +39,15 @@ services:
       - "${HOST_SSO}:host-gateway"
     networks:
       - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-admin.rule=Host(`${HOST_API}`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.dts-admin.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin.tls=true"
+      - "traefik.http.services.dts-admin.loadbalancer.server.port=8081"
+      - "traefik.http.middlewares.dts-strip-admin.stripprefixregex.regex=/admin"
+      - "traefik.http.routers.dts-admin.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file"
 
   dts-platform:
     image: ${IMAGE_DTS_PLATFORM}
@@ -68,7 +77,9 @@ services:
       # OIDC/Keycloak (override dev defaults)
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
-      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_PLATFORM_CLIENT_SECRET:-}"
+      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=${SPRING_DATASOURCE_URL} -Dspring.datasource.username=${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=${SPRING_DATASOURCE_PASSWORD}"
     ports:
       - "18082:8081"
     volumes:
@@ -77,6 +88,15 @@ services:
       - "${HOST_SSO}:host-gateway"
     networks:
       - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-platform.rule=Host(`${HOST_API}`) && PathPrefix(`/platform`)"
+      - "traefik.http.routers.dts-platform.entrypoints=websecure"
+      - "traefik.http.routers.dts-platform.tls=true"
+      - "traefik.http.services.dts-platform.loadbalancer.server.port=8081"
+      - "traefik.http.middlewares.dts-strip-platform.stripprefixregex.regex=/platform"
+      - "traefik.http.routers.dts-platform.middlewares=dts-strip-platform@docker,cors-allow@file,security-headers@file"
 
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP}
@@ -101,35 +121,5 @@ services:
       - dts-platform
     ports:
       - "18012:80"
-    networks:
-      - dts-core
-
-  dts-public-api:
-    image: ${IMAGE_DTS_PUBLICAPI}
-    build:
-      context: ../dts-source/dts-public-api
-      dockerfile: Dockerfile
-      args:
-        MAVEN_MIRROR_URL: ${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}
-      network: host
-    depends_on:
-      - dts-admin
-      - dts-platform
-    environment:
-      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
-      # point to internal service addresses for upstream docs
-      PLATFORM_PUBLIC_DOCS_URL: ${PLATFORM_PUBLIC_DOCS_URL:-http://dts-platform:8081/v3/api-docs}
-      ADMIN_PUBLIC_DOCS_URL: ${ADMIN_PUBLIC_DOCS_URL:-http://dts-admin:8081/v3/api-docs}
-      # OIDC/Keycloak for resource server JWT validation
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
-      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}"
-      SPRINGDOC_API_DOCS_ENABLED: "true"
-      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
-    ports:
-      - "18090:8090"
-    volumes:
-      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
-    extra_hosts:
-      - "${HOST_SSO}:host-gateway"
     networks:
       - dts-core

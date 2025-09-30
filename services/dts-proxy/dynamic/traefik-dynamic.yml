@@ -11,6 +11,31 @@ http:
         contentTypeNosniff: true
         browserXssFilter: true
         frameDeny: false
+    # CORS middleware for APIs (dev defaults; tighten in prod)
+    cors-allow:
+      headers:
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "PATCH"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "*"
+        addVaryHeader: true
+        accessControlAllowCredentials: true
+        # Allow common local dev origins
+        accessControlAllowOriginList:
+          - "http://localhost:3001"
+          - "http://127.0.0.1:3001"
+          - "http://localhost:5173"
+          - "http://127.0.0.1:5173"
+          - "https://localhost"
+        # Allow any subdomain under *.dts.local (dev)
+        accessControlAllowOriginListRegex:
+          - "https?://.*\\.dts\\.local"
+        accessControlMaxAge: 86400
 
 tls:
   certificates:

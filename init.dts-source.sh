@@ -20,7 +20,6 @@ echo "[init.dts-source] Generating ${ENV_FILE} ..."
     echo "IMAGE_DTS_ADMIN_WEBAPP=dts-admin-webapp:dev"
     echo "IMAGE_DTS_PLATFORM=dts-platform:dev"
     echo "IMAGE_DTS_PLATFORM_WEBAPP=dts-platform-webapp:dev"
-    echo "IMAGE_DTS_PUBLICAPI=dts-public-api:dev"
   fi
   echo
   # Postgres triplets (used by dts-pg init script)
@@ -52,11 +51,11 @@ if [[ "${1:-}" == "up" ]]; then
   fi
   echo "[init.dts-source] Bringing up dts-source dev services (with stack dependencies)..."
   # Only start the needed services from the core stack to avoid pulling everything
-  sel_services=(dts-pg dts-admin dts-platform dts-admin-webapp dts-platform-webapp dts-public-api)
+  sel_services=(dts-pg dts-admin dts-platform dts-admin-webapp dts-platform-webapp)
   "${compose_cmd[@]}" --env-file "${ENV_FILE}" -f docker-compose.yml -f docker-compose.dts-source.yml up -d --build "${sel_services[@]}"
 fi
 
 echo "[init.dts-source] Done. To start services with dependencies:"
-echo "  docker compose --env-file ${ENV_FILE} -f docker-compose.yml -f docker-compose.dts-source.yml up -d --build dts-pg dts-admin dts-platform dts-admin-webapp dts-platform-webapp dts-public-api"
+echo "  docker compose --env-file ${ENV_FILE} -f docker-compose.yml -f docker-compose.dts-source.yml up -d --build dts-pg dts-admin dts-platform dts-admin-webapp dts-platform-webapp"
 echo "To stop only dev services (keep others running):"
-echo "  docker compose -f docker-compose.yml -f docker-compose.dts-source.yml stop dts-admin dts-platform dts-admin-webapp dts-platform-webapp dts-public-api"
+echo "  docker compose -f docker-compose.yml -f docker-compose.dts-source.yml stop dts-admin dts-platform dts-admin-webapp dts-platform-webapp"

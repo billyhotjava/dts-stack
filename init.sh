@@ -80,9 +80,6 @@ prepare_data_dirs(){
   local -a data_dirs=(
     "services/certs"
     "services/dts-minio/data"
-    "services/dts-airflow/dags"
-    "services/dts-airflow/logs"
-    "services/dts-airflow/plugins"
     "services/dts-ranger"
   )
   local dir
@@ -90,9 +87,6 @@ prepare_data_dirs(){
     mkdir -p "${dir}"
   done
   chmod -R 777 services/dts-minio/data || true
-  chmod -R 777 services/dts-airflow/logs || true
-  chmod -R 777 services/dts-airflow/dags || true
-  chmod -R 777 services/dts-airflow/plugins || true
 }
 
 # Ensure embedded Postgres has all required roles/databases
@@ -171,16 +165,17 @@ generate_env_base(){
   : "${KC_HOSTNAME_STRICT_HTTPS:=true}"
   : "${KC_HOSTNAME_URL:=https://${KC_HOSTNAME}}"
   : "${KC_DB_URL_PROPERTIES:=sslmode=disable}"
-  : "${KC_REALM:=dts-platform}"
+  : "${KC_REALM:=S10}"
 
   # ---------- 域名（Traefik 路由） ----------
   HOST_SSO="sso.${BASE_DOMAIN}"
   HOST_MINIO="minio.${BASE_DOMAIN}"
   HOST_TRINO="trino.${BASE_DOMAIN}"
   HOST_NESSIE="nessie.${BASE_DOMAIN}"
-  HOST_AIRFLOW="airflow.${BASE_DOMAIN}"
-  HOST_PORTAL="portal.${BASE_DOMAIN}"
+  HOST_API="api.${BASE_DOMAIN}"
   HOST_RANGER="ranger.${BASE_DOMAIN}"
+  HOST_ADMIN_UI="admin.${BASE_DOMAIN}"
+  HOST_PLATFORM_UI="platform.${BASE_DOMAIN}"
 
   # ---------- MinIO/S3 (placed before Airflow uses it) ----------
   : "${MINIO_ROOT_USER:=minio}"
@@ -222,34 +217,6 @@ generate_env_base(){
   : "${PG_USER_DTCOMMON:=dts_common}"
   : "${PG_PWD_DTCOMMON:=${SECRET}}"
 
-
-  # Airflow
-  : "${PG_DB_AIRFLOW:=airflow}"
-  : "${PG_USER_AIRFLOW:=airflow}"
-  : "${PG_PWD_AIRFLOW:=${SECRET}}"
-  : "${AIRFLOW_ADMIN_USER:=admin}"
-  : "${AIRFLOW_ADMIN_PASSWORD:=${SECRET}}"
-  : "${AIRFLOW_ADMIN_EMAIL:=admin@example.com}"
-  : "${AIRFLOW_SECRET_KEY:=${SECRET}}"
-  : "${AIRFLOW_FERNET_KEY:=${AIRFLOW_FERNET_KEY:-}}"
-  : "${AIRFLOW_UID:=50000}"
-  : "${AIRFLOW_GID:=0}"
-  : "${AIRFLOW__CORE__EXECUTOR:=LocalExecutor}"
-  : "${AIRFLOW__CORE__LOAD_EXAMPLES:=false}"
-  : "${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION:=false}"
-  : "${AIRFLOW__LOGGING__REMOTE_LOGGING:=true}"
-  : "${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID:=s3_minio}"
-  if [[ -z "${AIRFLOW_FERNET_KEY}" ]]; then
-    AIRFLOW_FERNET_KEY="$(generate_fernet || true)"
-  fi
-  local AF_USER_ENC AF_PWD_ENC
-  AF_USER_ENC="$(urlencode_component "${PG_USER_AIRFLOW}")"
-  AF_PWD_ENC="$(urlencode_component "${PG_PWD_AIRFLOW}")"
-  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="postgresql+psycopg2://${AF_USER_ENC}:${AF_PWD_ENC}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-  AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER="s3://${S3_BUCKET}/airflow/logs"
-  AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE="s3"
-  AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA="{\"host\":\"https://${HOST_MINIO}\",\"aws_access_key_id\":\"${MINIO_ROOT_USER}\",\"aws_secret_access_key\":\"${MINIO_ROOT_PASSWORD}\",\"region_name\":\"${S3_REGION}\",\"verify\":false,\"client_kwargs\":{\"endpoint_url\":\"https://${HOST_MINIO}\",\"aws_access_key_id\":\"${MINIO_ROOT_USER}\",\"aws_secret_access_key\":\"${MINIO_ROOT_PASSWORD}\",\"region_name\":\"${S3_REGION}\"}}"
-
   # ---------- Ranger（Admin） ----------
   : "${PG_DB_RANGER:=dts_ranger}"
   : "${PG_USER_RANGER:=dts_ranger}"
@@ -269,9 +236,11 @@ generate_env_base(){
   : "${EXPLORE_DB_USER:=explore}"
   : "${EXPLORE_DB_PASSWORD:=${SECRET}}"
 
-  # ---------- OIDC 客户端（供 dts-admin 使用） ----------
-  : "${OAUTH2_CLIENT_ID:=dts-admin}"
-  : "${OAUTH2_CLIENT_SECRET:=${SECRET}}"
+  # ---------- OIDC 客户端（admin 与 platform 各自一个） ----------
+  : "${OAUTH2_ADMIN_CLIENT_ID:=dts-admin}"
+  : "${OAUTH2_ADMIN_CLIENT_SECRET:=${SECRET}}"
+  : "${OAUTH2_PLATFORM_CLIENT_ID:=dts-platform}"
+  : "${OAUTH2_PLATFORM_CLIENT_SECRET:=${SECRET}}"
 
   cat > .env <<EOF
 # ====== Base & Traefik ======
@@ -287,9 +256,10 @@ HOST_SSO=${HOST_SSO}
 HOST_MINIO=${HOST_MINIO}
 HOST_TRINO=${HOST_TRINO}
 HOST_NESSIE=${HOST_NESSIE}
-HOST_AIRFLOW=${HOST_AIRFLOW}
-HOST_PORTAL=${HOST_PORTAL}
+HOST_API=${HOST_API}
 HOST_RANGER=${HOST_RANGER}
+HOST_ADMIN_UI=${HOST_ADMIN_UI}
+HOST_PLATFORM_UI=${HOST_PLATFORM_UI}
 
 # ====== Keycloak ======
 KC_ADMIN=${KC_ADMIN}
@@ -337,26 +307,6 @@ PG_DB_DTCOMMON=${PG_DB_DTCOMMON}
 PG_USER_DTCOMMON=${PG_USER_DTCOMMON}
 PG_PWD_DTCOMMON=${PG_PWD_DTCOMMON}
 
-# --- Airflow triplet + admin/secrets ---
-PG_DB_AIRFLOW=${PG_DB_AIRFLOW}
-PG_USER_AIRFLOW=${PG_USER_AIRFLOW}
-PG_PWD_AIRFLOW=${PG_PWD_AIRFLOW}
-AIRFLOW_ADMIN_USER=${AIRFLOW_ADMIN_USER}
-AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}
-AIRFLOW_ADMIN_EMAIL=${AIRFLOW_ADMIN_EMAIL}
-AIRFLOW_SECRET_KEY=${AIRFLOW_SECRET_KEY}
-AIRFLOW_FERNET_KEY=${AIRFLOW_FERNET_KEY}
-AIRFLOW_UID=${AIRFLOW_UID}
-AIRFLOW_GID=${AIRFLOW_GID}
-AIRFLOW__CORE__EXECUTOR=${AIRFLOW__CORE__EXECUTOR}
-AIRFLOW__CORE__LOAD_EXAMPLES=${AIRFLOW__CORE__LOAD_EXAMPLES}
-AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=${AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION}
-AIRFLOW__LOGGING__REMOTE_LOGGING=${AIRFLOW__LOGGING__REMOTE_LOGGING}
-AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
-AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER=${AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER}
-AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID=${AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID}
-AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE=${AIRFLOW__CONNECTIONS__S3_MINIO__CONN_TYPE}
-AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA=${AIRFLOW__CONNECTIONS__S3_MINIO__EXTRA}
 
 
 # ====== MinIO / S3 ======
@@ -368,9 +318,11 @@ MINIO_REGION_NAME=${S3_REGION}
 MINIO_SERVER_URL=${MINIO_SERVER_URL}
 MINIO_BROWSER_REDIRECT_URL=${MINIO_BROWSER_REDIRECT_URL}
 
-# ====== OIDC Client for dts-admin ======
-OAUTH2_CLIENT_ID=${OAUTH2_CLIENT_ID}
-OAUTH2_CLIENT_SECRET=${OAUTH2_CLIENT_SECRET}
+# ====== OIDC Clients ======
+OAUTH2_ADMIN_CLIENT_ID=${OAUTH2_ADMIN_CLIENT_ID}
+OAUTH2_ADMIN_CLIENT_SECRET=${OAUTH2_ADMIN_CLIENT_SECRET}
+OAUTH2_PLATFORM_CLIENT_ID=${OAUTH2_PLATFORM_CLIENT_ID}
+OAUTH2_PLATFORM_CLIENT_SECRET=${OAUTH2_PLATFORM_CLIENT_SECRET}
 
 # ====== Ranger (Admin) ======
 PG_DB_RANGER=${PG_DB_RANGER}
@@ -519,7 +471,7 @@ else
 fi
 
 # 输出可访问地址
-for host_var in HOST_SSO HOST_MINIO HOST_TRINO HOST_NESSIE HOST_AIRFLOW HOST_RANGER; do
+for host_var in HOST_SSO HOST_MINIO HOST_TRINO HOST_NESSIE HOST_RANGER HOST_API HOST_ADMIN_UI HOST_PLATFORM_UI; do
   host_value="$(grep "^${host_var}=" .env | cut -d= -f2-)"
   if [[ -n "${host_value}" ]]; then echo "https://${host_value}"; fi
 done
@@ -529,9 +481,9 @@ if [[ "${TRAEFIK_DASHBOARD_ENABLED}" == "true" ]]; then
   echo "http://localhost:${TRAEFIK_DASHBOARD_PORT_VALUE} (local Traefik dashboard via --api.insecure)"
 fi
 
-# 额外提示：dts-admin OIDC 回调与变量对齐
-echo "[init.sh] dts-admin will use:"
+echo "[init.sh] OIDC settings:"
 echo "  SPRING_DATASOURCE_URL=jdbc:postgresql://dts-pg:\${PG_PORT}/\${DTADMIN_DB_NAME}"
 echo "  SPRING_DATASOURCE_USERNAME=\${DTADMIN_DB_USER}  SPRING_DATASOURCE_PASSWORD=\${DTADMIN_DB_PASSWORD}"
-echo "  OIDC issuer: https://\${HOST_SSO}/realms/\${KC_REALM}"
-echo "  Client: \${OAUTH2_CLIENT_ID}  Secret: \${OAUTH2_CLIENT_SECRET}"
+echo "  Issuer: https://\${HOST_SSO}/realms/\${KC_REALM}"
+echo "  Admin client: \${OAUTH2_ADMIN_CLIENT_ID}  Secret: (use Keycloak value)"
+echo "  Platform client: \${OAUTH2_PLATFORM_CLIENT_ID}  Secret: (use Keycloak value)"

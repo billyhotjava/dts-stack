@@ -6,6 +6,27 @@ cd "$SCRIPT_DIR"
 ENV_DEV=".env.dts-source"
 ENV_BASE=".env"
 
+MODE="images"  # images | local
+WITH_WEBAPP_DEFAULT=1
+
+usage(){
+  echo "Usage: $0 [--mode images|local] [--no-webapp]"
+}
+
+while (($#)); do
+  case "$1" in
+    --mode)
+      shift; MODE="${1:-images}";;
+    --no-webapp)
+      WITH_WEBAPP_DEFAULT=0;;
+    -h|--help)
+      usage; exit 0;;
+    *)
+      echo "[dev-up] Unknown arg: $1" >&2; usage; exit 1;;
+  esac
+  shift
+done
+
 if [[ ! -f "$ENV_DEV" ]]; then
   echo "[dev-up] ${ENV_DEV} not found. Generating via init.dts-source.sh ..."
   ./init.dts-source.sh
@@ -38,7 +59,20 @@ set -a
 : "${PG_PWD_DTADMIN:=dts_admin}"
 set +a
 
-core_compose=(-f docker-compose.yml -f docker-compose.dts-source.yml)
+if [[ "$MODE" == "local" ]]; then
+  compose_files=(-f docker-compose.yml -f docker-compose.local-dev.yml)
+else
+  compose_files=(-f docker-compose.yml -f docker-compose.dts-source.yml)
+fi
+
+# Fill missing MINIO-derived vars for compose interpolation (avoid warnings)
+: "${S3_REGION:=cn-local-1}"
+: "${BASE_DOMAIN:=dts.local}"
+if [[ -z "${HOST_MINIO:-}" ]]; then HOST_MINIO="minio.${BASE_DOMAIN}"; fi
+if [[ -z "${MINIO_REGION_NAME:-}" ]]; then MINIO_REGION_NAME="${S3_REGION}"; fi
+if [[ -z "${MINIO_SERVER_URL:-}" ]]; then MINIO_SERVER_URL="https://${HOST_MINIO}"; fi
+if [[ -z "${MINIO_BROWSER_REDIRECT_URL:-}" ]]; then MINIO_BROWSER_REDIRECT_URL="https://${HOST_MINIO}"; fi
+export MINIO_REGION_NAME MINIO_SERVER_URL MINIO_BROWSER_REDIRECT_URL
 
 # Ensure Postgres from core stack is running and healthy
 echo "[dev-up] Ensuring Postgres (dts-pg) is running ..."
@@ -66,16 +100,35 @@ if [[ -n "${pg_cid}" ]]; then
   done
 fi
 
-services=(dts-admin dts-platform dts-public-api)
+if [[ "$MODE" == "local" ]]; then
+  echo "[dev-up] Ensuring Traefik (dts-proxy) and Keycloak are running ..."
+  proxy_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-proxy || true)
+  kc_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-keycloak || true)
+  if [[ -z "${proxy_cid}" || -z "${kc_cid}" ]]; then
+    "${compose_cmd[@]}" -f docker-compose.yml up -d dts-proxy dts-keycloak
+  fi
+fi
 
-# Optionally include webapp containers unless disabled
-if [[ "${WITH_WEBAPP:-1}" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
+services=(dts-admin dts-platform)
+
+WITH_WEBAPP="${WITH_WEBAPP:-$WITH_WEBAPP_DEFAULT}"
+if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
   services+=(dts-admin-webapp dts-platform-webapp)
 else
   echo "[dev-up] Webapp containers skipped (start frontend via pnpm locally)."
 fi
 
-echo "[dev-up] Starting dts-source dev services with build ..."
-"${compose_cmd[@]}" "${core_compose[@]}" up -d --build "${services[@]}"
+if [[ "$MODE" == "local" ]]; then
+  echo "[dev-up] Starting local-dev services (bind mounts + live reload) ..."
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d "${services[@]}"
+  if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
+    echo "[dev-up] Patching Vite env handling (best-effort) ..."
+    "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-admin-webapp sh -lc "sh /patches/patch-vite-env.sh || true" || true
+    "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-platform-webapp sh -lc "sh /patches/patch-vite-env.sh || true" || true
+  fi
+else
+  echo "[dev-up] Starting dts-source dev services with build ..."
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d --build "${services[@]}"
+fi
 
-echo "[dev-up] Done. Stop dev services with: ./dev-stop.sh"
+echo "[dev-up] Done. Stop dev services with: ./dev-stop.sh [--mode images|local]"
