@@ -66,13 +66,14 @@ if [[ -n "${pg_cid}" ]]; then
   done
 fi
 
-services=(
-  dts-admin
-  dts-platform
-  dts-admin-webapp
-  dts-platform-webapp
-  dts-public-api
-)
+services=(dts-admin dts-platform dts-public-api)
+
+# Optionally include webapp containers unless disabled
+if [[ "${WITH_WEBAPP:-1}" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
+  services+=(dts-admin-webapp dts-platform-webapp)
+else
+  echo "[dev-up] Webapp containers skipped (start frontend via pnpm locally)."
+fi
 
 echo "[dev-up] Starting dts-source dev services with build ..."
 "${compose_cmd[@]}" "${core_compose[@]}" up -d --build "${services[@]}"

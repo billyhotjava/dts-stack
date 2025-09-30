@@ -84,13 +84,14 @@ if [[ -z "${proxy_cid}" || -z "${kc_cid}" ]]; then
   "${compose_cmd[@]}" -f docker-compose.yml up -d dts-proxy dts-keycloak
 fi
 
-services=(
-  dts-admin
-  dts-platform
-  dts-admin-webapp
-  dts-platform-webapp
-  dts-public-api
-)
+services=(dts-admin dts-platform dts-public-api)
+
+# Optionally include webapp dev servers unless disabled
+if [[ "${WITH_WEBAPP:-1}" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
+  services+=(dts-admin-webapp dts-platform-webapp)
+else
+  echo "[local-up] Webapp containers skipped (start frontend via pnpm locally)."
+fi
 
 echo "[local-up] Starting local-dev services (bind mounts + live reload) ..."
 "${compose_cmd[@]}" "${compose_files[@]}" up -d "${services[@]}"

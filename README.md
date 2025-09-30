@@ -54,6 +54,11 @@ cd dts-stack
 
 说明：web-app 开发时容器内默认监听 3001，已在 docker-compose.local-dev.yml 中将宿主机端口映射为 18011/18012。若控制台中看到 “Local/Network: 3001” 提示，属容器内端口信息，直接使用宿主机 18011/18012 访问即可。
 
+前端在宿主机单独用 pnpm 调试（推荐）：
+- 只启后端与 API：`WITH_WEBAPP=0 ./local-up.sh`
+- 在 dts-admin-webapp 源码目录执行：`corepack enable && pnpm install && pnpm run dev -- --host --port 3001`
+- CORS 已在后端允许 `http://localhost:3001` 与 `:5173`，见 `docker-compose.local-dev.yml` 中 JHipster CORS 相关环境变量（dts-admin、dts-platform、dts-public-api）。
+
 切换 dev/prod：通过 Compose 环境变量控制（无需改 start.sh/stop.sh）。
 - 默认在 `.env.dts-source` 中写入：`DTS_PROFILE=dev`、`EUREKA_CLIENT_ENABLED=false`、`SPRING_CLOUD_CONFIG_ENABLED=false`。
 - 切换为 prod 示例：
