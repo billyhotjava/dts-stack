@@ -16,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
 import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import com.yuzhi.dts.admin.service.OrganizationService;
@@ -34,6 +36,9 @@ import com.yuzhi.dts.admin.domain.SystemConfig;
 import com.yuzhi.dts.admin.repository.PortalMenuRepository;
 import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
+import com.yuzhi.dts.admin.service.ChangeRequestService;
+import com.yuzhi.dts.admin.repository.OrganizationRepository;
+import com.yuzhi.dts.admin.service.user.AdminUserService;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -74,6 +79,7 @@ public class AdminApiResource {
     private final AdminAuditService auditService;
     private final OrganizationService orgService;
     private final ChangeRequestRepository crRepo;
+    private final ChangeRequestService changeRequestService;
     private final PortalMenuService portalMenuService;
     private final AdminDatasetRepository datasetRepo;
     private final AdminCustomRoleRepository customRoleRepo;
@@ -81,22 +87,28 @@ public class AdminApiResource {
     private final SystemConfigRepository sysCfgRepo;
     private final PortalMenuRepository portalMenuRepo;
     private final DtsCommonNotifyClient notifyClient;
+    private final OrganizationRepository organizationRepository;
+    private final AdminUserService adminUserService;
 
     public AdminApiResource(
         AdminAuditService auditService,
         OrganizationService orgService,
         ChangeRequestRepository crRepo,
+        ChangeRequestService changeRequestService,
         PortalMenuService portalMenuService,
         AdminDatasetRepository datasetRepo,
         AdminCustomRoleRepository customRoleRepo,
         AdminRoleAssignmentRepository roleAssignRepo,
         SystemConfigRepository sysCfgRepo,
         PortalMenuRepository portalMenuRepo,
-        DtsCommonNotifyClient notifyClient
+        DtsCommonNotifyClient notifyClient,
+        OrganizationRepository organizationRepository,
+        AdminUserService adminUserService
     ) {
         this.auditService = auditService;
         this.orgService = orgService;
         this.crRepo = crRepo;
+        this.changeRequestService = changeRequestService;
         this.portalMenuService = portalMenuService;
         this.datasetRepo = datasetRepo;
         this.customRoleRepo = customRoleRepo;
@@ -104,6 +116,8 @@ public class AdminApiResource {
         this.sysCfgRepo = sysCfgRepo;
         this.portalMenuRepo = portalMenuRepo;
         this.notifyClient = notifyClient;
+        this.organizationRepository = organizationRepository;
+        this.adminUserService = adminUserService;
     }
 
     @GetMapping("/audit")
@@ -158,14 +172,16 @@ public class AdminApiResource {
 
     @PostMapping("/system/config")
     public ResponseEntity<ApiResponse<Map<String, Object>>> draftSystemConfig(@RequestBody Map<String, Object> cfg) {
-        ChangeRequest cr = new ChangeRequest();
-        cr.setResourceType("CONFIG");
-        cr.setAction("CONFIG_SET");
-        cr.setPayloadJson(Jsons.toJson(cfg));
-        cr.setStatus("PENDING");
-        cr.setRequestedBy(SecurityUtils.getCurrentUserLogin().orElse("sysadmin"));
-        cr.setRequestedAt(Instant.now());
-        crRepo.save(cr);
+        String key = Objects.toString(cfg.get("key"), "").trim();
+        if (key.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("配置项 key 不能为空"));
+        }
+        Map<String, Object> before = sysCfgRepo.findByKey(key).map(this::toSystemConfigMap).orElse(null);
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("key", key);
+        after.put("value", cfg.get("value"));
+        after.put("description", cfg.get("description"));
+        ChangeRequest cr = changeRequestService.draft("CONFIG", "CONFIG_SET", key, after, before, Objects.toString(cfg.get("reason"), null));
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "SYSTEM_CONFIG_DRAFT", "CONFIG", (String) cfg.getOrDefault("key", "config"), "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
@@ -180,43 +196,36 @@ public class AdminApiResource {
 
     @PostMapping("/portal/menus")
     public ResponseEntity<ApiResponse<Map<String, Object>>> draftCreateMenu(@RequestBody Map<String, Object> body) {
-        ChangeRequest cr = new ChangeRequest();
-        cr.setResourceType("PORTAL_MENU");
-        cr.setAction("CREATE");
-        cr.setPayloadJson(Jsons.toJson(body));
-        cr.setStatus("PENDING");
-        cr.setRequestedBy(SecurityUtils.getCurrentUserLogin().orElse("sysadmin"));
-        cr.setRequestedAt(Instant.now());
-        crRepo.save(cr);
+        Map<String, Object> after = readPortalMenuPayload(body);
+        ChangeRequest cr = changeRequestService.draft("PORTAL_MENU", "CREATE", null, after, null, Objects.toString(body.get("reason"), null));
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "PORTAL_MENU_CREATE", "PORTAL_MENU", String.valueOf(body.getOrDefault("name", "menu")), "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @PutMapping("/portal/menus/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> draftUpdateMenu(@PathVariable String id, @RequestBody Map<String, Object> body) {
-        ChangeRequest cr = new ChangeRequest();
-        cr.setResourceType("PORTAL_MENU");
-        cr.setAction("UPDATE");
-        cr.setResourceId(id);
-        cr.setPayloadJson(Jsons.toJson(body));
-        cr.setStatus("PENDING");
-        cr.setRequestedBy(SecurityUtils.getCurrentUserLogin().orElse("sysadmin"));
-        cr.setRequestedAt(Instant.now());
-        crRepo.save(cr);
+        Long menuId = Long.valueOf(id);
+        PortalMenu beforeEntity = portalMenuRepo.findById(menuId).orElse(null);
+        if (beforeEntity == null) {
+            return ResponseEntity.status(404).body(ApiResponse.error("菜单不存在"));
+        }
+        Map<String, Object> before = toPortalMenuPayload(beforeEntity);
+        Map<String, Object> after = new LinkedHashMap<>(before);
+        after.putAll(readPortalMenuPayload(body));
+        ChangeRequest cr = changeRequestService.draft("PORTAL_MENU", "UPDATE", id, after, before, Objects.toString(body.get("reason"), null));
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "PORTAL_MENU_UPDATE", "PORTAL_MENU", id, "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @DeleteMapping("/portal/menus/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> draftDeleteMenu(@PathVariable String id) {
-        ChangeRequest cr = new ChangeRequest();
-        cr.setResourceType("PORTAL_MENU");
-        cr.setAction("DELETE");
-        cr.setResourceId(id);
-        cr.setStatus("PENDING");
-        cr.setRequestedBy(SecurityUtils.getCurrentUserLogin().orElse("sysadmin"));
-        cr.setRequestedAt(Instant.now());
-        crRepo.save(cr);
+        Long menuId = Long.valueOf(id);
+        PortalMenu entity = portalMenuRepo.findById(menuId).orElse(null);
+        if (entity == null) {
+            return ResponseEntity.status(404).body(ApiResponse.error("菜单不存在"));
+        }
+        Map<String, Object> before = toPortalMenuPayload(entity);
+        ChangeRequest cr = changeRequestService.draft("PORTAL_MENU", "DELETE", id, Map.of("deleted", true), before, null);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "PORTAL_MENU_DELETE", "PORTAL_MENU", id, "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
@@ -237,33 +246,49 @@ public class AdminApiResource {
         String contact = Objects.toString(payload.get("contact"), null);
         String phone = Objects.toString(payload.get("phone"), null);
         String description = Objects.toString(payload.get("description"), null);
-        if (name == null || dataLevel == null) return ResponseEntity.badRequest().body(ApiResponse.error("部门名称和数据密级不能为空"));
-        OrganizationNode created = orgService.create(name, dataLevel, parentId, contact, phone, description);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ORG_CREATE", "ORG", String.valueOf(created.getId()), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(toOrgVM(created)));
+        if (name == null || name.isBlank() || dataLevel == null || dataLevel.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("部门名称和数据密级不能为空"));
+        }
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("name", name);
+        after.put("dataLevel", dataLevel);
+        after.put("parentId", parentId);
+        after.put("contact", contact);
+        after.put("phone", phone);
+        after.put("description", description);
+        ChangeRequest cr = changeRequestService.draft("ORG", "CREATE", null, after, null, Objects.toString(payload.get("reason"), null));
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ORG_CREATE_REQUEST", "ORG", name, "SUCCESS", null);
+        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @PutMapping("/orgs/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateOrg(@PathVariable int id, @RequestBody Map<String, Object> payload) {
-        String name = Objects.toString(payload.get("name"), null);
-        String dataLevel = Objects.toString(payload.get("dataLevel"), null);
-        String contact = Objects.toString(payload.get("contact"), null);
-        String phone = Objects.toString(payload.get("phone"), null);
-        String description = Objects.toString(payload.get("description"), null);
-        return orgService
-            .update((long) id, name, dataLevel, contact, phone, description)
-            .map(e -> {
-                auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ORG_UPDATE", "ORG", String.valueOf(id), "SUCCESS", null);
-                return ResponseEntity.ok(ApiResponse.ok(toOrgVM(e)));
-            })
-            .orElseGet(() -> ResponseEntity.status(404).body(ApiResponse.error("部门不存在")));
+        OrganizationNode existing = organizationRepository.findById((long) id).orElse(null);
+        if (existing == null) {
+            return ResponseEntity.status(404).body(ApiResponse.error("部门不存在"));
+        }
+        Map<String, Object> before = toOrgPayload(existing);
+        Map<String, Object> after = new LinkedHashMap<>(before);
+        if (payload.containsKey("name")) after.put("name", Objects.toString(payload.get("name"), null));
+        if (payload.containsKey("dataLevel")) after.put("dataLevel", Objects.toString(payload.get("dataLevel"), null));
+        if (payload.containsKey("contact")) after.put("contact", Objects.toString(payload.get("contact"), null));
+        if (payload.containsKey("phone")) after.put("phone", Objects.toString(payload.get("phone"), null));
+        if (payload.containsKey("description")) after.put("description", Objects.toString(payload.get("description"), null));
+        ChangeRequest cr = changeRequestService.draft("ORG", "UPDATE", String.valueOf(id), after, before, Objects.toString(payload.get("reason"), null));
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ORG_UPDATE_REQUEST", "ORG", String.valueOf(id), "SUCCESS", null);
+        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @DeleteMapping("/orgs/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> deleteOrg(@PathVariable int id) {
-        orgService.delete((long) id);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ORG_DELETE", "ORG", String.valueOf(id), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(Map.of("id", id)));
+        OrganizationNode existing = organizationRepository.findById((long) id).orElse(null);
+        if (existing == null) {
+            return ResponseEntity.status(404).body(ApiResponse.error("部门不存在"));
+        }
+        Map<String, Object> before = toOrgPayload(existing);
+        ChangeRequest cr = changeRequestService.draft("ORG", "DELETE", String.valueOf(id), Map.of("deleted", true), before, null);
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ORG_DELETE_REQUEST", "ORG", String.valueOf(id), "SUCCESS", null);
+        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @GetMapping("/datasets")
@@ -296,18 +321,17 @@ public class AdminApiResource {
         if (!Set.of("DEPARTMENT", "INSTITUTE").contains(scope)) return ResponseEntity.badRequest().body(ApiResponse.error("作用域无效"));
         String maxDataLevel = Objects.toString(payload.get("maxDataLevel"), "");
         if (maxDataLevel.isEmpty()) return ResponseEntity.badRequest().body(ApiResponse.error("请选择最大数据密级"));
-
-        AdminCustomRole r = new AdminCustomRole();
-        r.setName(name);
-        r.setScope(scope);
-        r.setOperationsCsv(String.join(",", new LinkedHashSet<>(ops)));
-        r.setMaxRows(payload.get("maxRows") == null ? null : Integer.valueOf(payload.get("maxRows").toString()));
-        r.setAllowDesensitizeJson(Boolean.TRUE.equals(payload.get("allowDesensitizeJson")));
-        r.setMaxDataLevel(maxDataLevel);
-        r.setDescription(Objects.toString(payload.get("description"), null));
-        r = customRoleRepo.save(r);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ROLE_CUSTOM_CREATE", "ROLE", r.getName(), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(toCustomRoleVM(r)));
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("name", name);
+        after.put("scope", scope);
+        after.put("operations", new LinkedHashSet<>(ops));
+        after.put("maxRows", payload.get("maxRows"));
+        after.put("allowDesensitizeJson", Boolean.TRUE.equals(payload.get("allowDesensitizeJson")));
+        after.put("maxDataLevel", maxDataLevel);
+        after.put("description", Objects.toString(payload.get("description"), null));
+        ChangeRequest cr = changeRequestService.draft("CUSTOM_ROLE", "CREATE", name, after, null, Objects.toString(payload.get("reason"), null));
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ROLE_CUSTOM_CREATE_REQUEST", "ROLE", name, "SUCCESS", null);
+        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @GetMapping("/role-assignments")
@@ -328,18 +352,24 @@ public class AdminApiResource {
         List<Long> datasetIds = readLongList(payload.get("datasetIds"));
         String error = validateAssignment(role, username, displayName, userSecurityLevel, scopeOrgId, ops, datasetIds);
         if (error != null) return ResponseEntity.badRequest().body(ApiResponse.error(error));
-        AdminRoleAssignment a = new AdminRoleAssignment();
-        a.setRole(role);
-        a.setUsername(username);
-        a.setDisplayName(displayName);
-        a.setUserSecurityLevel(userSecurityLevel);
-        a.setScopeOrgId(scopeOrgId);
-        a.setDatasetIdsCsv(joinCsv(datasetIds));
-        a.setOperationsCsv(String.join(",", new LinkedHashSet<>(ops)));
-        a = roleAssignRepo.save(a);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ROLE_ASSIGNMENT_CREATE", "ROLE_ASSIGNMENT", String.valueOf(a.getId()), "SUCCESS", null);
-        try { notifyClient.trySend("role_assignment_created", Map.of("id", a.getId(), "username", a.getUsername(), "role", a.getRole())); } catch (Exception ignored) {}
-        return ResponseEntity.ok(ApiResponse.ok(toRoleAssignmentVM(a)));
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("role", role);
+        after.put("username", username);
+        after.put("displayName", displayName);
+        after.put("userSecurityLevel", userSecurityLevel);
+        after.put("scopeOrgId", scopeOrgId);
+        after.put("datasetIds", datasetIds);
+        after.put("operations", new LinkedHashSet<>(ops));
+        ChangeRequest cr = changeRequestService.draft(
+            "ROLE_ASSIGNMENT",
+            "CREATE",
+            null,
+            after,
+            null,
+            Objects.toString(payload.get("reason"), null)
+        );
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ROLE_ASSIGNMENT_CREATE_REQUEST", "ROLE_ASSIGNMENT", username, "SUCCESS", null);
+        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @GetMapping("/change-requests")
@@ -481,12 +511,76 @@ public class AdminApiResource {
         return m;
     }
 
+    private Map<String, Object> toOrgPayload(OrganizationNode node) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", node.getId());
+        m.put("name", node.getName());
+        m.put("dataLevel", node.getDataLevel());
+        m.put("parentId", node.getParent() != null ? node.getParent().getId() : null);
+        m.put("contact", node.getContact());
+        m.put("phone", node.getPhone());
+        m.put("description", node.getDescription());
+        return m;
+    }
+
+    private Map<String, Object> toSystemConfigMap(SystemConfig cfg) {
+        if (cfg == null) {
+            return null;
+        }
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", cfg.getId());
+        m.put("key", cfg.getKey());
+        m.put("value", cfg.getValue());
+        m.put("description", cfg.getDescription());
+        return m;
+    }
+
+    private Map<String, Object> toPortalMenuPayload(PortalMenu menu) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", menu.getId());
+        m.put("name", menu.getName());
+        m.put("path", menu.getPath());
+        m.put("component", menu.getComponent());
+        m.put("icon", menu.getIcon());
+        m.put("sortOrder", menu.getSortOrder());
+        m.put("metadata", menu.getMetadata());
+        m.put("parentId", menu.getParent() != null ? menu.getParent().getId() : null);
+        return m;
+    }
+
+    private Map<String, Object> readPortalMenuPayload(Map<String, Object> body) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        if (body == null) {
+            return m;
+        }
+        if (body.containsKey("name")) m.put("name", Objects.toString(body.get("name"), null));
+        if (body.containsKey("path")) m.put("path", Objects.toString(body.get("path"), null));
+        if (body.containsKey("component")) m.put("component", Objects.toString(body.get("component"), null));
+        if (body.containsKey("icon")) m.put("icon", Objects.toString(body.get("icon"), null));
+        if (body.containsKey("metadata")) m.put("metadata", body.get("metadata"));
+        if (body.containsKey("sortOrder")) {
+            Object v = body.get("sortOrder");
+            m.put("sortOrder", v == null ? null : Integer.valueOf(v.toString()));
+        }
+        if (body.containsKey("parentId")) {
+            Object v = body.get("parentId");
+            m.put("parentId", v == null ? null : Long.valueOf(v.toString()));
+        }
+        return m;
+    }
+
     private void applyChangeRequest(ChangeRequest cr) {
         try {
             if ("PORTAL_MENU".equalsIgnoreCase(cr.getResourceType())) {
                 applyPortalMenuChange(cr);
             } else if ("CONFIG".equalsIgnoreCase(cr.getResourceType())) {
                 applySystemConfigChange(cr);
+            } else if ("ORG".equalsIgnoreCase(cr.getResourceType())) {
+                applyOrganizationChange(cr);
+            } else if ("CUSTOM_ROLE".equalsIgnoreCase(cr.getResourceType())) {
+                applyCustomRoleChange(cr);
+            } else if ("ROLE_ASSIGNMENT".equalsIgnoreCase(cr.getResourceType())) {
+                applyRoleAssignmentChange(cr);
             }
         } catch (Exception e) {
             // swallow apply failures to keep approval result; could store error
@@ -539,6 +633,84 @@ public class AdminApiResource {
         c.setValue(Objects.toString(cfg.get("value"), null));
         c.setDescription(Objects.toString(cfg.get("description"), null));
         sysCfgRepo.save(c);
+        cr.setStatus("APPLIED");
+    }
+
+    private void applyOrganizationChange(ChangeRequest cr) throws Exception {
+        Map<String, Object> payload = fromJson(cr.getPayloadJson());
+        String action = cr.getAction();
+        if ("CREATE".equalsIgnoreCase(action)) {
+            String name = Objects.toString(payload.get("name"), null);
+            String dataLevel = Objects.toString(payload.get("dataLevel"), null);
+            Long parentId = payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString());
+            String contact = Objects.toString(payload.get("contact"), null);
+            String phone = Objects.toString(payload.get("phone"), null);
+            String description = Objects.toString(payload.get("description"), null);
+            OrganizationNode created = orgService.create(name, dataLevel, parentId, contact, phone, description);
+            cr.setResourceId(String.valueOf(created.getId()));
+        } else if ("UPDATE".equalsIgnoreCase(action)) {
+            Long id = Long.valueOf(cr.getResourceId());
+            organizationRepository
+                .findById(id)
+                .ifPresent(entity -> {
+                    if (payload.containsKey("name")) entity.setName(Objects.toString(payload.get("name"), entity.getName()));
+                    if (payload.containsKey("dataLevel")) entity.setDataLevel(Objects.toString(payload.get("dataLevel"), entity.getDataLevel()));
+                    if (payload.containsKey("contact")) entity.setContact(Objects.toString(payload.get("contact"), entity.getContact()));
+                    if (payload.containsKey("phone")) entity.setPhone(Objects.toString(payload.get("phone"), entity.getPhone()));
+                    if (payload.containsKey("description")) entity.setDescription(Objects.toString(payload.get("description"), entity.getDescription()));
+                    organizationRepository.save(entity);
+                });
+        } else if ("DELETE".equalsIgnoreCase(action)) {
+            Long id = Long.valueOf(cr.getResourceId());
+            orgService.delete(id);
+        }
+        cr.setStatus("APPLIED");
+    }
+
+    private void applyCustomRoleChange(ChangeRequest cr) throws Exception {
+        Map<String, Object> payload = fromJson(cr.getPayloadJson());
+        String action = cr.getAction();
+        if ("CREATE".equalsIgnoreCase(action)) {
+            AdminCustomRole role = new AdminCustomRole();
+            role.setName(Objects.toString(payload.get("name"), null));
+            role.setScope(Objects.toString(payload.get("scope"), null));
+            var ops = new LinkedHashSet<>(readStringList(payload.get("operations")));
+            role.setOperationsCsv(String.join(",", ops));
+            Object maxRows = payload.get("maxRows");
+            role.setMaxRows(maxRows == null ? null : Integer.valueOf(maxRows.toString()));
+            role.setAllowDesensitizeJson(Boolean.TRUE.equals(payload.get("allowDesensitizeJson")));
+            role.setMaxDataLevel(Objects.toString(payload.get("maxDataLevel"), null));
+            role.setDescription(Objects.toString(payload.get("description"), null));
+            role = customRoleRepo.save(role);
+            cr.setResourceId(String.valueOf(role.getId()));
+        }
+        cr.setStatus("APPLIED");
+    }
+
+    private void applyRoleAssignmentChange(ChangeRequest cr) throws Exception {
+        Map<String, Object> payload = fromJson(cr.getPayloadJson());
+        String action = cr.getAction();
+        if ("CREATE".equalsIgnoreCase(action)) {
+            AdminRoleAssignment assignment = new AdminRoleAssignment();
+            assignment.setRole(Objects.toString(payload.get("role"), null));
+            assignment.setUsername(Objects.toString(payload.get("username"), null));
+            assignment.setDisplayName(Objects.toString(payload.get("displayName"), null));
+            assignment.setUserSecurityLevel(Objects.toString(payload.get("userSecurityLevel"), null));
+            Object scope = payload.get("scopeOrgId");
+            assignment.setScopeOrgId(scope == null ? null : Long.valueOf(scope.toString()));
+            List<Long> datasetIds = readLongList(payload.get("datasetIds"));
+            assignment.setDatasetIdsCsv(joinCsv(datasetIds));
+            var ops = new LinkedHashSet<>(readStringList(payload.get("operations")));
+            assignment.setOperationsCsv(String.join(",", ops));
+            assignment = roleAssignRepo.save(assignment);
+            cr.setResourceId(String.valueOf(assignment.getId()));
+            try {
+                notifyClient.trySend(
+                    "role_assignment_created",
+                    Map.of("id", assignment.getId(), "username", assignment.getUsername(), "role", assignment.getRole())
+                );
+            } catch (Exception ignored) {}
+        }
         cr.setStatus("APPLIED");
     }
 
