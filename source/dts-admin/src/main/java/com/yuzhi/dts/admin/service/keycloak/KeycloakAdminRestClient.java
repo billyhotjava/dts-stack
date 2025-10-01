@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Collection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -196,8 +197,12 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         Map<String, Object> rep = new LinkedHashMap<>();
         if (dto.getUsername() != null) rep.put("username", dto.getUsername());
         if (dto.getEmail() != null) rep.put("email", dto.getEmail());
-        if (dto.getFirstName() != null) rep.put("firstName", dto.getFirstName());
-        if (dto.getLastName() != null) rep.put("lastName", dto.getLastName());
+        if (dto.getFullName() != null && !dto.getFullName().isBlank()) {
+            rep.put("firstName", dto.getFullName());
+        } else {
+            if (dto.getFirstName() != null) rep.put("firstName", dto.getFirstName());
+            if (dto.getLastName() != null) rep.put("lastName", dto.getLastName());
+        }
         if (dto.getEnabled() != null) rep.put("enabled", dto.getEnabled());
         if (dto.getEmailVerified() != null) rep.put("emailVerified", dto.getEmailVerified());
         if (dto.getAttributes() != null && !dto.getAttributes().isEmpty()) rep.put("attributes", dto.getAttributes());
@@ -213,8 +218,20 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         dto.setId(stringValue(map.get("id")));
         dto.setUsername(stringValue(map.get("username")));
         dto.setEmail(stringValue(map.get("email")));
-        dto.setFirstName(stringValue(map.get("firstName")));
-        dto.setLastName(stringValue(map.get("lastName")));
+        String first = stringValue(map.get("firstName"));
+        String last = stringValue(map.get("lastName"));
+        dto.setFirstName(first);
+        dto.setLastName(last);
+        dto.setFullName(stringValue(map.get("fullName")));
+        if ((dto.getFullName() == null || dto.getFullName().isBlank()) && (first != null || last != null)) {
+            StringBuilder sb = new StringBuilder();
+            if (first != null) sb.append(first);
+            if (last != null) {
+                if (sb.length() > 0) sb.append(' ');
+                sb.append(last);
+            }
+            dto.setFullName(sb.length() > 0 ? sb.toString() : first);
+        }
         dto.setEnabled(booleanValue(map.get("enabled")));
         dto.setEmailVerified(booleanValue(map.get("emailVerified")));
         dto.setCreatedTimestamp(longValue(map.get("createdTimestamp")));

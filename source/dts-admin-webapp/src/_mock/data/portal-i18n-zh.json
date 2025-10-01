@@ -88,5 +88,6 @@
 	"sys.nav.portal.foundation": "基础数据维护",
 	"sys.nav.portal.foundationDataSources": "数据源",
 	"sys.nav.portal.foundationDataStorage": "数据存储",
-	"sys.nav.portal.foundationTaskScheduling": "任务调度"
+	"sys.nav.portal.foundationTaskScheduling": "任务调度",
+	"sys.nav.portal.visualizationDashboards": "可视化仪表盘"
 }

@@ -8,6 +8,7 @@ public class KeycloakUserDTO {
     private String email;
     private String firstName;
     private String lastName;
+    private String fullName;
     private Boolean enabled;
     private Boolean emailVerified;
     private Map<String, List<String>> attributes = new HashMap<>();
@@ -54,6 +55,14 @@ public class KeycloakUserDTO {
 
     public void setLastName(String lastName) {
         this.lastName = lastName;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
     }
 
     public Boolean getEnabled() {
@@ -112,4 +121,3 @@ public class KeycloakUserDTO {
         this.createdTimestamp = createdTimestamp;
     }
 }
-
