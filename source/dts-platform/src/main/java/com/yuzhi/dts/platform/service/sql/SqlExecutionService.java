@@ -30,7 +30,7 @@ public class SqlExecutionService {
         execution.setDatasource(request.datasource() != null ? request.datasource() : "trino");
         execution.setConnection(request.catalog());
         execution.setSqlText(request.sqlText());
-        execution.setStatus(ExecEnums.ExecStatus.QUEUED);
+        execution.setStatus(ExecEnums.ExecStatus.PENDING);
         execution.setLimitApplied(Boolean.FALSE);
         execution.setQueuePosition(0);
         QueryExecution saved = queryExecutionRepository.save(execution);

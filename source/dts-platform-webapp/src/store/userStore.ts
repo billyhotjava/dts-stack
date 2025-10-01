@@ -65,15 +65,29 @@ export const useSignIn = () => {
 		try {
 			const res = await signInMutation.mutateAsync(data);
 			const rawUser = (res as any)?.user ?? (res as any)?.userInfo ?? {};
+
+			const pickToken = (value: unknown): string => {
+				if (!value) return "";
+				if (typeof value === "string") return value;
+				if (typeof value === "object") {
+					const obj = value as Record<string, unknown>;
+					for (const key of ["token", "accessToken", "value"]) {
+						const candidate = obj[key];
+						if (typeof candidate === "string" && candidate) {
+							return candidate;
+						}
+					}
+				}
+				return "";
+			};
+
 			const accessToken =
-				(res as any)?.accessToken ??
-				(res as any)?.access_token ??
-				(res as any)?.token ??
-				"";
+				pickToken((res as any)?.accessToken) ||
+				pickToken((res as any)?.access_token) ||
+				pickToken((res as any)?.token);
 			const refreshToken =
-				(res as any)?.refreshToken ??
-				(res as any)?.refresh_token ??
-				"";
+				pickToken((res as any)?.refreshToken) ||
+				pickToken((res as any)?.refresh_token);
 			if (!accessToken) {
 				throw new Error("登录响应缺少访问令牌");
 			}

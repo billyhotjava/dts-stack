@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -117,6 +118,42 @@ public final class SecurityUtils {
     }
 
     private static List<GrantedAuthority> mapRolesToGrantedAuthorities(Collection<String> roles) {
-        return roles.stream().filter(role -> role.startsWith("ROLE_")).map(SimpleGrantedAuthority::new).collect(Collectors.toList());
+        return roles
+            .stream()
+            .map(SecurityUtils::normalizeRole)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .map(SimpleGrantedAuthority::new)
+            .collect(Collectors.toList());
+    }
+
+    private static final Map<String, String> ROLE_ALIASES = Map.of(
+        "SYSADMIN",
+        AuthoritiesConstants.SYS_ADMIN,
+        "AUTHADMIN",
+        AuthoritiesConstants.AUTH_ADMIN,
+        "AUDITADMIN",
+        AuthoritiesConstants.AUDITOR_ADMIN,
+        "OPADMIN",
+        AuthoritiesConstants.OP_ADMIN
+    );
+
+    private static String normalizeRole(String role) {
+        if (role == null) {
+            return null;
+        }
+        String trimmed = role.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.startsWith("ROLE_")) {
+            return trimmed;
+        }
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        String alias = ROLE_ALIASES.get(upper);
+        if (alias != null) {
+            return alias;
+        }
+        return "ROLE_" + upper;
     }
 }

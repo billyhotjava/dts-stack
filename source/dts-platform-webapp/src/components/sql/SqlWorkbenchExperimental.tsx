@@ -101,7 +101,7 @@ export const SqlWorkbenchExperimental = () => {
 			setExecutionId(response.executionId);
 			toast.success("已提交查询");
 			const status = await refreshStatus(response.executionId);
-			if (status && status.status === "QUEUED") {
+			if (status && status.status === "PENDING") {
 				toast.info("查询在队列中");
 			}
 		} catch (error) {

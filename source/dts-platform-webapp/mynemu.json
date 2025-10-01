@@ -1,0 +1,220 @@
+{
+  "portalNavSections": [
+    {
+      "key": "catalog",
+      "path": "catalog",
+      "icon": "solar:book-bold-duotone",
+      "titleKey": "sys.nav.portal.catalog",
+      "children": [
+        {
+          "key": "assets",
+          "path": "assets",
+          "titleKey": "sys.nav.portal.catalogAssetsDirectory",
+          "title": "数据资产目录"
+        },
+        {
+          "key": "accessPolicy",
+          "path": "access-policy",
+          "titleKey": "sys.nav.portal.catalogAccessPolicy",
+          "title": "分级保护与访问策略"
+        },
+        {
+          "key": "secureViews",
+          "path": "secure-views",
+          "titleKey": "sys.nav.portal.catalogSecureViews",
+          "title": "安全视图编排"
+        }
+      ],
+      "title": "数据资产"
+    },
+    {
+      "key": "modeling",
+      "path": "modeling",
+      "icon": "solar:documents-bold-duotone",
+      "titleKey": "sys.nav.portal.modeling",
+      "children": [
+        {
+          "key": "standards",
+          "path": "standards",
+          "titleKey": "sys.nav.portal.modelingStandards",
+          "title": "数据标准"
+        }
+      ],
+      "title": "模型与标准"
+    },
+    {
+      "key": "governance",
+      "path": "governance",
+      "icon": "solar:shield-check-bold-duotone",
+      "titleKey": "sys.nav.portal.governance",
+      "children": [
+        {
+          "key": "rules",
+          "path": "rules",
+          "titleKey": "sys.nav.portal.governanceRules",
+          "title": "质量规则"
+        },
+        {
+          "key": "compliance",
+          "path": "compliance",
+          "titleKey": "sys.nav.portal.governanceCompliance",
+          "title": "合规检查"
+        }
+      ],
+      "title": "治理与质量"
+    },
+    {
+      "key": "explore",
+      "path": "explore",
+      "icon": "solar:compass-bold-duotone",
+      "titleKey": "sys.nav.portal.explore",
+      "children": [
+        {
+          "key": "workbench",
+          "path": "workbench",
+          "titleKey": "sys.nav.portal.exploreWorkbench",
+          "title": "数据查询和预览"
+        },
+        {
+          "key": "savedQueries",
+          "path": "saved-queries",
+          "titleKey": "sys.nav.portal.exploreSavedQueries",
+          "title": "结果集管理"
+        }
+      ],
+      "title": "数据开发"
+    },
+    {
+      "key": "visualization",
+      "path": "visualization",
+      "icon": "solar:pie-chart-bold-duotone",
+      "titleKey": "sys.nav.portal.visualization",
+      "children": [
+        {
+          "key": "dashboards",
+          "path": "dashboards",
+          "titleKey": "sys.nav.portal.visualizationDashboards",
+          "title": "可视化仪表盘"
+        },
+        {
+          "key": "cockpit",
+          "path": "cockpit",
+          "titleKey": "sys.nav.portal.visualizationCockpit",
+          "title": "经营驾驶舱"
+        },
+        {
+          "key": "projects",
+          "path": "projects",
+          "titleKey": "sys.nav.portal.visualizationProjects",
+          "title": "项目管理看板"
+        },
+        {
+          "key": "finance",
+          "path": "finance",
+          "titleKey": "sys.nav.portal.visualizationFinance",
+          "title": "财务看板"
+        },
+        {
+          "key": "supplyChain",
+          "path": "supply-chain",
+          "titleKey": "sys.nav.portal.visualizationSupplyChain",
+          "title": "供应链看板"
+        },
+        {
+          "key": "hr",
+          "path": "hr",
+          "titleKey": "sys.nav.portal.visualizationHR",
+          "title": "人力看板"
+        }
+      ],
+      "title": "数据可视化"
+    },
+    {
+      "key": "services",
+      "path": "services",
+      "icon": "solar:server-bold-duotone",
+      "titleKey": "sys.nav.portal.services",
+      "children": [
+        {
+          "key": "api",
+          "path": "api",
+          "titleKey": "sys.nav.portal.servicesApi",
+          "title": "API 服务"
+        },
+        {
+          "key": "products",
+          "path": "products",
+          "titleKey": "sys.nav.portal.servicesProducts",
+          "title": "数据产品"
+        },
+        {
+          "key": "tokens",
+          "path": "tokens",
+          "titleKey": "sys.nav.portal.servicesTokens",
+          "title": "令牌与密钥"
+        }
+      ],
+      "title": "数据服务"
+    },
+    {
+      "key": "iam",
+      "path": "iam",
+      "icon": "solar:key-minimalistic-bold-duotone",
+      "titleKey": "sys.nav.portal.iam",
+      "children": [
+        {
+          "key": "classification",
+          "path": "classification",
+          "titleKey": "sys.nav.portal.iamClassification",
+          "title": "密级模型映射"
+        },
+        {
+          "key": "authorization",
+          "path": "authorization",
+          "titleKey": "sys.nav.portal.iamAuthorization",
+          "title": "资源授权"
+        },
+        {
+          "key": "simulation",
+          "path": "simulation",
+          "titleKey": "sys.nav.portal.iamSimulation",
+          "title": "策略模拟与评估"
+        },
+        {
+          "key": "requests",
+          "path": "requests",
+          "titleKey": "sys.nav.portal.iamRequests",
+          "title": "权限申请入口"
+        }
+      ],
+      "title": "权限与策略"
+    },
+    {
+      "key": "foundation",
+      "path": "foundation",
+      "icon": "solar:database-bold-duotone",
+      "titleKey": "sys.nav.portal.foundation",
+      "children": [
+        {
+          "key": "dataSources",
+          "path": "data-sources",
+          "titleKey": "sys.nav.portal.foundationDataSources",
+          "title": "数据源"
+        },
+        {
+          "key": "dataStorage",
+          "path": "data-storage",
+          "titleKey": "sys.nav.portal.foundationDataStorage",
+          "title": "数据存储"
+        },
+        {
+          "key": "taskScheduling",
+          "path": "task-scheduling",
+          "titleKey": "sys.nav.portal.foundationTaskScheduling",
+          "title": "任务调度"
+        }
+      ],
+      "title": "基础数据维护"
+    }
+  ]
+}
