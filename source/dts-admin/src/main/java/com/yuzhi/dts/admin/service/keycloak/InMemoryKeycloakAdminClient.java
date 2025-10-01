@@ -59,6 +59,14 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
         }
     }
 
+    @Override
+    public void resetPassword(String userId, String newPassword, boolean temporary, String accessToken) {
+        if (!stores.users.containsKey(userId)) {
+            throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        }
+        // In-memory stub does not store password; nothing to do.
+    }
+
     private void ensureUniqueUsername(String username) {
         if (username == null) {
             return;

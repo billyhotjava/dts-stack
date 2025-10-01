@@ -113,6 +113,7 @@ public class AdminUserResource {
         command.setGroupPaths(request.getGroupPaths());
         command.setEnabled(request.getEnabled() == null ? Boolean.TRUE : request.getEnabled());
         command.setReason(request.getReason());
+        command.setAttributes(request.getAttributes());
         return command;
     }
 

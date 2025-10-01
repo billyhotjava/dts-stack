@@ -218,7 +218,7 @@ public class PlatformAdminResource {
         Map<Long, Map<String, Object>> copy = new LinkedHashMap<>();
         for (var e : orgs.entrySet()) copy.put(e.getKey(), new LinkedHashMap<>(e.getValue()));
         for (var n : copy.values()) n.put("children", new java.util.ArrayList<>());
-        List<Map<String, Object>> roots = new ArrayList<>();
+        List<Map<String, Object>> roots = new java.util.ArrayList<>();
         for (var n : copy.values()) {
             Long pid = (Long) n.get("parentId");
             if (pid != null && copy.containsKey(pid)) {

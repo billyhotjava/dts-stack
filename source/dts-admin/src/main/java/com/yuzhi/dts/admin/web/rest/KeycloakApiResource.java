@@ -7,11 +7,22 @@ import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.admin.service.inmemory.InMemoryStores;
+import com.yuzhi.dts.admin.service.user.AdminUserService;
+import com.yuzhi.dts.admin.service.user.UserOperationRequest;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -30,17 +41,22 @@ public class KeycloakApiResource {
     private final AdminAuditService auditService;
     private final KeycloakAuthService keycloakAuthService;
     private final KeycloakAdminClient keycloakAdminClient;
+    private final AdminUserService adminUserService;
+
+    private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
 
     public KeycloakApiResource(
         InMemoryStores stores,
         AdminAuditService auditService,
         KeycloakAuthService keycloakAuthService,
-        KeycloakAdminClient keycloakAdminClient
+        KeycloakAdminClient keycloakAdminClient,
+        AdminUserService adminUserService
     ) {
         this.stores = stores;
         this.auditService = auditService;
         this.keycloakAuthService = keycloakAuthService;
         this.keycloakAdminClient = keycloakAdminClient;
+        this.adminUserService = adminUserService;
     }
 
     // ---- Users ----
@@ -93,100 +109,163 @@ public class KeycloakApiResource {
     }
 
     @PostMapping("/keycloak/users")
-    public ResponseEntity<ApiResponse<KeycloakUserDTO>> createUser(@RequestBody KeycloakUserDTO payload) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createUser(@RequestBody KeycloakUserDTO payload, HttpServletRequest request) {
         if (payload.getUsername() == null || payload.getUsername().isBlank()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("用户名不能为空"));
         }
-        normalizeNames(payload);
-        KeycloakUserDTO created = keycloakAdminClient.createUser(payload, currentAccessToken());
-        cacheUser(created);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_CREATE", "USER", created.getUsername(), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(created));
+        UserOperationRequest command = toOperationRequest(payload);
+        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitCreate(
+            command,
+            currentUser(),
+            clientIp(request)
+        );
+        auditService.record(currentUser(), "USER_CREATE_REQUEST", command.getUsername(), "SUCCESS", null);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+            "requestId",
+            approval.id,
+            "status",
+            approval.status,
+            "message",
+            "操作已提交，等待审批"
+        )));
     }
 
     @PutMapping("/keycloak/users/{id}")
-    public ResponseEntity<ApiResponse<KeycloakUserDTO>> updateUser(@PathVariable String id, @RequestBody KeycloakUserDTO patch) {
-        KeycloakUserDTO current = keycloakAdminClient.findById(id, currentAccessToken()).orElse(stores.findUserById(id));
-        if (current == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
-        KeycloakUserDTO merged = mergeForUpdate(current, patch);
-        normalizeNames(merged);
-        KeycloakUserDTO updated = keycloakAdminClient.updateUser(id, merged, currentAccessToken());
-        cacheUser(updated);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_UPDATE", "USER", updated.getUsername(), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(updated));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateUser(
+        @PathVariable String id,
+        @RequestBody KeycloakUserDTO patch,
+        HttpServletRequest request
+    ) {
+        String username = resolveUsername(id, patch.getUsername(), currentAccessToken());
+        if (username == null) {
+            return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
+        }
+        UserOperationRequest command = toOperationRequest(patch);
+        command.setUsername(username);
+        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitUpdate(
+            username,
+            command,
+            currentUser(),
+            clientIp(request)
+        );
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+            "requestId",
+            approval.id,
+            "status",
+            approval.status,
+            "message",
+            "用户信息更新请求已提交，等待审批"
+        )));
     }
 
     @DeleteMapping("/keycloak/users/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String id) {
-        KeycloakUserDTO removed = stores.findUserById(id);
-        keycloakAdminClient.deleteUser(id, currentAccessToken());
-        stores.users.remove(id);
-        if (removed == null) {
-            removed = keycloakAdminClient.findById(id, currentAccessToken()).orElse(null);
-        }
-        auditService.record(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-            "USER_DELETE",
-            "USER",
-            removed != null ? removed.getUsername() : id,
-            "SUCCESS",
-            null
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteUser(@PathVariable String id, HttpServletRequest request) {
+        String username = resolveUsername(id, null, currentAccessToken());
+        if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
+        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitDelete(
+            username,
+            null,
+            currentUser(),
+            clientIp(request)
         );
-        return ResponseEntity.ok(ApiResponse.ok(null));
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+            "requestId",
+            approval.id,
+            "status",
+            approval.status,
+            "message",
+            "删除用户请求已提交，等待审批"
+        )));
     }
 
     @PostMapping("/keycloak/users/{id}/reset-password")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(@PathVariable String id) {
-        if (!stores.users.containsKey(id)) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_RESET_PASSWORD", "USER", id, "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(null));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> resetPassword(
+        @PathVariable String id,
+        @RequestBody Map<String, Object> body,
+        HttpServletRequest request
+    ) {
+        String username = resolveUsername(id, null, currentAccessToken());
+        if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
+        String password = Objects.toString(body.get("password"), null);
+        boolean temporary = Boolean.TRUE.equals(body.get("temporary"));
+        if (password == null || password.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("密码不能为空"));
+        }
+        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitResetPassword(
+            username,
+            password,
+            temporary,
+            currentUser(),
+            clientIp(request)
+        );
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+            "requestId",
+            approval.id,
+            "status",
+            approval.status,
+            "message",
+            "重置密码请求已提交，等待审批"
+        )));
     }
 
     @PutMapping("/keycloak/users/{id}/enabled")
-    public ResponseEntity<ApiResponse<KeycloakUserDTO>> setEnabled(@PathVariable String id, @RequestBody Map<String, Object> body) {
-        KeycloakUserDTO u = keycloakAdminClient.findById(id, currentAccessToken()).orElse(stores.findUserById(id));
-        if (u == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> setEnabled(
+        @PathVariable String id,
+        @RequestBody Map<String, Object> body,
+        HttpServletRequest request
+    ) {
+        String username = resolveUsername(id, null, currentAccessToken());
+        if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         Object val = body.get("enabled");
         boolean enabled = Boolean.TRUE.equals(val) || (val instanceof Boolean b && b);
-        u.setEnabled(enabled);
-        normalizeNames(u);
-        KeycloakUserDTO updated = keycloakAdminClient.updateUser(id, u, currentAccessToken());
-        cacheUser(updated);
-        auditService.record(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-            enabled ? "USER_ENABLE" : "USER_DISABLE",
-            "USER",
-            updated.getUsername(),
-            "SUCCESS",
-            null
+        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitSetEnabled(
+            username,
+            enabled,
+            currentUser(),
+            clientIp(request)
         );
-        return ResponseEntity.ok(ApiResponse.ok(updated));
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+            "requestId",
+            approval.id,
+            "status",
+            approval.status,
+            "message",
+            "启用/禁用请求已提交，等待审批"
+        )));
     }
 
     // ---- ABAC person_level + data_levels management (dev helper) ----
     @PutMapping("/keycloak/users/{id}/person-level")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> setPersonLevel(@PathVariable String id, @RequestBody Map<String, String> body) {
-        KeycloakUserDTO u = keycloakAdminClient.findById(id, currentAccessToken()).orElse(stores.findUserById(id));
-        if (u == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> setPersonLevel(
+        @PathVariable String id,
+        @RequestBody Map<String, String> body,
+        HttpServletRequest request
+    ) {
+        String username = resolveUsername(id, null, currentAccessToken());
+        if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         String level = String.valueOf(body.getOrDefault("person_level", "")).toUpperCase();
         if (!List.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE").contains(level)) {
             return ResponseEntity.badRequest().body(ApiResponse.error("无效的人员密级"));
         }
-        u.getAttributes().put("person_level", List.of(level));
-        u.getAttributes().put("data_levels", computeDataLevels(level));
-        normalizeNames(u);
-        KeycloakUserDTO updated = keycloakAdminClient.updateUser(id, u, currentAccessToken());
-        cacheUser(updated);
-        auditService.record(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-            "USER_SET_PERSON_LEVEL",
-            "USER",
-            updated.getUsername(),
-            "SUCCESS",
+        List<String> levels = body.containsKey("data_levels")
+            ? List.of(body.get("data_levels").split(","))
+            : computeDataLevels(level);
+        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitSetPersonLevel(
+            username,
+            level,
+            levels,
+            currentUser(),
+            clientIp(request),
             null
         );
-        Map<String, Object> resp = Map.of("person_level", level, "data_levels", updated.getAttributes().get("data_levels"));
-        return ResponseEntity.ok(ApiResponse.ok(resp));
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+            "requestId",
+            approval.id,
+            "status",
+            approval.status,
+            "message",
+            "密级调整请求已提交，等待审批"
+        )));
     }
 
     @GetMapping("/keycloak/users/{id}/abac-claims")
@@ -209,6 +288,194 @@ public class KeycloakApiResource {
         };
     }
 
+    private UserOperationRequest toOperationRequest(KeycloakUserDTO payload) {
+        Map<String, List<String>> attributes = sanitizeAttributes(payload.getAttributes());
+
+        UserOperationRequest command = new UserOperationRequest();
+        command.setUsername(trim(payload.getUsername()));
+        command.setFullName(resolveFullName(payload, attributes));
+        command.setEmail(trim(payload.getEmail()));
+        command.setPhone(resolvePhone(attributes));
+        Boolean enabled = payload.getEnabled();
+        if (enabled == null && trim(payload.getId()) == null) {
+            enabled = Boolean.TRUE;
+        }
+        command.setEnabled(enabled);
+        command.setRealmRoles(normalizeList(payload.getRealmRoles()));
+        command.setGroupPaths(normalizeList(payload.getGroups()));
+        command.setAttributes(attributes);
+
+        String personLevel = resolvePersonLevel(attributes);
+        command.setPersonSecurityLevel(personLevel);
+        List<String> dataLevels = resolveDataLevels(attributes, personLevel);
+        command.setDataLevels(dataLevels);
+        command.setReason(extractFirst(attributes, "reason", "approval_reason"));
+
+        if (!attributes.containsKey("person_level") && personLevel != null) {
+            attributes.put("person_level", List.of(personLevel));
+        }
+        if (!attributes.containsKey("data_levels") && !dataLevels.isEmpty()) {
+            attributes.put("data_levels", new ArrayList<>(dataLevels));
+        }
+        return command;
+    }
+
+    private String resolveUsername(String id, String suppliedUsername, String accessToken) {
+        String candidate = trim(suppliedUsername);
+        if (candidate != null) {
+            return candidate;
+        }
+        if (id != null && !id.isBlank()) {
+            KeycloakUserDTO cached = stores.findUserById(id);
+            if (cached != null && cached.getUsername() != null) {
+                return cached.getUsername();
+            }
+            Optional<KeycloakUserDTO> remote = keycloakAdminClient.findById(id, accessToken);
+            if (remote.isPresent()) {
+                KeycloakUserDTO user = remote.get();
+                cacheUser(user);
+                return user.getUsername();
+            }
+        }
+        return null;
+    }
+
+    private Map<String, List<String>> sanitizeAttributes(Map<String, List<String>> raw) {
+        Map<String, List<String>> sanitized = new LinkedHashMap<>();
+        if (raw != null) {
+            for (Map.Entry<String, List<String>> entry : raw.entrySet()) {
+                if (entry.getKey() == null) {
+                    continue;
+                }
+                List<String> values = normalizeList(entry.getValue());
+                if (!values.isEmpty()) {
+                    sanitized.put(entry.getKey(), values);
+                }
+            }
+        }
+        return sanitized;
+    }
+
+    private String resolveFullName(KeycloakUserDTO payload, Map<String, List<String>> attributes) {
+        String fullName = trim(payload.getFullName());
+        if (fullName != null) {
+            return fullName;
+        }
+        String attrName = extractFirst(attributes, "fullName", "fullname", "display_name", "displayName");
+        if (attrName != null) {
+            return attrName;
+        }
+        String firstName = trim(payload.getFirstName());
+        String lastName = trim(payload.getLastName());
+        if (firstName != null || lastName != null) {
+            StringBuilder builder = new StringBuilder();
+            if (lastName != null) {
+                builder.append(lastName);
+            }
+            if (firstName != null) {
+                if (builder.length() > 0) builder.append(' ');
+                builder.append(firstName);
+            }
+            return builder.toString();
+        }
+        return trim(payload.getUsername());
+    }
+
+    private String resolvePhone(Map<String, List<String>> attributes) {
+        String direct = extractFirst(
+            attributes,
+            "phone",
+            "phone_number",
+            "phoneNumber",
+            "mobile",
+            "mobile_number",
+            "mobileNumber",
+            "telephone"
+        );
+        if (direct != null) {
+            return direct;
+        }
+        return null;
+    }
+
+    private String resolvePersonLevel(Map<String, List<String>> attributes) {
+        String value = extractFirst(attributes, "person_level", "personLevel", "person_security_level", "personSecurityLevel");
+        if (value == null) {
+            return DEFAULT_PERSON_LEVEL;
+        }
+        return value.trim().toUpperCase().replace('-', '_');
+    }
+
+    private List<String> resolveDataLevels(Map<String, List<String>> attributes, String personLevel) {
+        List<String> values = attributeList(attributes, "data_levels", "dataLevels", "data_levels[]");
+        if (!values.isEmpty()) {
+            List<String> normalized = new ArrayList<>();
+            for (String value : values) {
+                String cleaned = value == null ? null : value.trim().toUpperCase().replace('-', '_');
+                if (cleaned != null && !cleaned.isBlank()) {
+                    normalized.add(cleaned);
+                }
+            }
+            if (!normalized.isEmpty()) {
+                return normalized;
+            }
+        }
+        return new ArrayList<>(computeDataLevels(personLevel == null ? DEFAULT_PERSON_LEVEL : personLevel));
+    }
+
+    private List<String> attributeList(Map<String, List<String>> attributes, String... keys) {
+        for (String key : keys) {
+            List<String> values = attributes.get(key);
+            if (values != null && !values.isEmpty()) {
+                return new ArrayList<>(values);
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    private List<String> normalizeList(Collection<?> values) {
+        List<String> result = new ArrayList<>();
+        if (values == null) {
+            return result;
+        }
+        for (Object value : values) {
+            if (value == null) {
+                continue;
+            }
+            String text = value.toString().trim();
+            if (!text.isEmpty()) {
+                result.add(text);
+            }
+        }
+        return result;
+    }
+
+    private String extractFirst(Map<String, List<String>> attributes, String... keys) {
+        for (String key : keys) {
+            List<String> values = attributes.get(key);
+            if (values == null) {
+                continue;
+            }
+            for (String value : values) {
+                if (value != null) {
+                    String text = value.trim();
+                    if (!text.isEmpty()) {
+                        return text;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private String trim(String value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.trim();
+        return text.isEmpty() ? null : text;
+    }
+
     private void cacheUser(KeycloakUserDTO dto) {
         if (dto == null || dto.getId() == null) {
             return;
@@ -227,56 +494,19 @@ public class KeycloakApiResource {
         return null;
     }
 
-    private KeycloakUserDTO mergeForUpdate(KeycloakUserDTO current, KeycloakUserDTO patch) {
-        KeycloakUserDTO merged = new KeycloakUserDTO();
-        merged.setId(current.getId());
-        merged.setUsername(patch.getUsername() != null ? patch.getUsername() : current.getUsername());
-        merged.setEmail(patch.getEmail() != null ? patch.getEmail() : current.getEmail());
-        merged.setFirstName(patch.getFirstName() != null ? patch.getFirstName() : current.getFirstName());
-        merged.setLastName(patch.getLastName() != null ? patch.getLastName() : current.getLastName());
-        merged.setFullName(patch.getFullName() != null ? patch.getFullName() : current.getFullName());
-        merged.setEnabled(patch.getEnabled() != null ? patch.getEnabled() : current.getEnabled());
-        merged.setEmailVerified(patch.getEmailVerified() != null ? patch.getEmailVerified() : current.getEmailVerified());
-        merged.setAttributes(
-            patch.getAttributes() != null && !patch.getAttributes().isEmpty() ? patch.getAttributes() : current.getAttributes()
-        );
-        merged.setGroups(patch.getGroups() != null && !patch.getGroups().isEmpty() ? patch.getGroups() : current.getGroups());
-        merged.setRealmRoles(
-            patch.getRealmRoles() != null && !patch.getRealmRoles().isEmpty() ? patch.getRealmRoles() : current.getRealmRoles()
-        );
-        merged.setClientRoles(
-            patch.getClientRoles() != null && !patch.getClientRoles().isEmpty() ? patch.getClientRoles() : current.getClientRoles()
-        );
-        merged.setCreatedTimestamp(current.getCreatedTimestamp());
-        return merged;
+    private String currentUser() {
+        return SecurityUtils.getCurrentUserLogin().orElse("unknown");
     }
 
-    private void normalizeNames(KeycloakUserDTO dto) {
-        if (dto == null) return;
-        String fullName = dto.getFullName();
-        String first = dto.getFirstName();
-        String last = dto.getLastName();
-
-        if (fullName == null || fullName.isBlank()) {
-            StringBuilder sb = new StringBuilder();
-            if (first != null && !first.isBlank()) sb.append(first.trim());
-            if (last != null && !last.isBlank()) {
-                if (sb.length() > 0) sb.append(' ');
-                sb.append(last.trim());
-            }
-            fullName = sb.length() > 0 ? sb.toString() : (first != null && !first.isBlank() ? first.trim() : last);
+    private String clientIp(HttpServletRequest request) {
+        if (request == null) {
+            return "unknown";
         }
-
-        if (fullName != null && !fullName.isBlank()) {
-            dto.setFullName(fullName.trim());
-            if (dto.getFirstName() == null || dto.getFirstName().isBlank()) dto.setFirstName(fullName.trim());
-            Map<String, List<String>> attrs = dto.getAttributes();
-            if (attrs == null) {
-                attrs = new LinkedHashMap<>();
-                dto.setAttributes(attrs);
-            }
-            attrs.put("fullname", List.of(dto.getFullName()));
+        String header = request.getHeader("X-Forwarded-For");
+        if (header != null && !header.isBlank()) {
+            return header.split(",")[0].trim();
         }
+        return request.getRemoteAddr();
     }
 
     @GetMapping("/keycloak/users/{id}/roles")
@@ -294,25 +524,53 @@ public class KeycloakApiResource {
     }
 
     @PostMapping("/keycloak/users/{id}/roles")
-    public ResponseEntity<ApiResponse<Void>> assignRoles(@PathVariable String id, @RequestBody List<KeycloakRoleDTO> roles) {
-        KeycloakUserDTO u = stores.findUserById(id);
-        if (u == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
-        Set<String> names = new HashSet<>(u.getRealmRoles());
-        for (KeycloakRoleDTO r : roles) names.add(r.getName());
-        u.setRealmRoles(new ArrayList<>(names));
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_ASSIGN_ROLES", "USER", u.getUsername(), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(null));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> assignRoles(
+        @PathVariable String id,
+        @RequestBody List<KeycloakRoleDTO> roles,
+        HttpServletRequest request
+    ) {
+        String username = resolveUsername(id, null, currentAccessToken());
+        if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
+        List<String> roleNames = roles.stream().map(KeycloakRoleDTO::getName).filter(Objects::nonNull).toList();
+        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitGrantRoles(
+            username,
+            roleNames,
+            currentUser(),
+            clientIp(request)
+        );
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+            "requestId",
+            approval.id,
+            "status",
+            approval.status,
+            "message",
+            "角色分配请求已提交，等待审批"
+        )));
     }
 
     @DeleteMapping("/keycloak/users/{id}/roles")
-    public ResponseEntity<ApiResponse<Void>> removeRoles(@PathVariable String id, @RequestBody List<KeycloakRoleDTO> roles) {
-        KeycloakUserDTO u = stores.findUserById(id);
-        if (u == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
-        Set<String> toRemove = new HashSet<>();
-        for (KeycloakRoleDTO r : roles) toRemove.add(r.getName());
-        u.setRealmRoles(u.getRealmRoles().stream().filter(name -> !toRemove.contains(name)).toList());
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_REMOVE_ROLES", "USER", u.getUsername(), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(null));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> removeRoles(
+        @PathVariable String id,
+        @RequestBody List<KeycloakRoleDTO> roles,
+        HttpServletRequest request
+    ) {
+        String username = resolveUsername(id, null, currentAccessToken());
+        if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
+        List<String> roleNames = roles.stream().map(KeycloakRoleDTO::getName).filter(Objects::nonNull).toList();
+        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitRevokeRoles(
+            username,
+            roleNames,
+            currentUser(),
+            clientIp(request)
+        );
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+            "requestId",
+            approval.id,
+            "status",
+            approval.status,
+            "message",
+            "角色移除请求已提交，等待审批"
+        )));
     }
 
     // ---- Roles ----

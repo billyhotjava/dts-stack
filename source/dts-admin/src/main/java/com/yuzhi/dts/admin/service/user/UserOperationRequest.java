@@ -1,7 +1,9 @@
 package com.yuzhi.dts.admin.service.user;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class UserOperationRequest {
 
@@ -15,6 +17,7 @@ public class UserOperationRequest {
     private List<String> groupPaths = new ArrayList<>();
     private Boolean enabled;
     private String reason;
+    private Map<String, List<String>> attributes = new HashMap<>();
 
     public String getUsername() {
         return username;
@@ -94,5 +97,13 @@ public class UserOperationRequest {
 
     public void setReason(String reason) {
         this.reason = reason;
+    }
+
+    public Map<String, List<String>> getAttributes() {
+        return attributes;
+    }
+
+    public void setAttributes(Map<String, List<String>> attributes) {
+        this.attributes = attributes == null ? new HashMap<>() : attributes;
     }
 }

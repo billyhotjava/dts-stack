@@ -129,6 +129,23 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     }
 
     @Override
+    public void resetPassword(String userId, String newPassword, boolean temporary, String accessToken) {
+        URI uri = usersEndpoint.resolve("./" + userId + "/reset-password");
+        Map<String, Object> payload = Map.of(
+            "type",
+            "password",
+            "value",
+            newPassword,
+            "temporary",
+            temporary
+        );
+        ResponseEntity<String> response = exchange(uri, HttpMethod.PUT, accessToken, payload);
+        if (!response.getStatusCode().is2xxSuccessful() && response.getStatusCode().value() != 204) {
+            throw toRuntime("重置密码失败", response);
+        }
+    }
+
+    @Override
     public Optional<KeycloakUserDTO> findById(String userId, String accessToken) {
         return fetchById(userId, accessToken);
     }

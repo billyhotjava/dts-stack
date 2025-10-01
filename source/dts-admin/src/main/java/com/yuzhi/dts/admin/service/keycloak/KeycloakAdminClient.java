@@ -17,4 +17,6 @@ public interface KeycloakAdminClient {
     KeycloakUserDTO updateUser(String userId, KeycloakUserDTO payload, String accessToken);
 
     void deleteUser(String userId, String accessToken);
+
+    void resetPassword(String userId, String newPassword, boolean temporary, String accessToken);
 }
