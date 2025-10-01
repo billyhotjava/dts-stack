@@ -18,23 +18,28 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
     }
 
     @Override
-    public List<KeycloakUserDTO> listUsers(int first, int max) {
+    public List<KeycloakUserDTO> listUsers(int first, int max, String accessToken) {
         return stores.listUsers(first, max);
     }
 
     @Override
-    public Optional<KeycloakUserDTO> findByUsername(String username) {
+    public Optional<KeycloakUserDTO> findByUsername(String username, String accessToken) {
         return stores.findUserByUsername(username);
     }
 
     @Override
-    public KeycloakUserDTO createUser(KeycloakUserDTO payload) {
+    public Optional<KeycloakUserDTO> findById(String userId, String accessToken) {
+        return Optional.ofNullable(stores.findUserById(userId));
+    }
+
+    @Override
+    public KeycloakUserDTO createUser(KeycloakUserDTO payload, String accessToken) {
         ensureUniqueUsername(payload.getUsername());
         return stores.createUser(copyUser(payload));
     }
 
     @Override
-    public KeycloakUserDTO updateUser(String userId, KeycloakUserDTO payload) {
+    public KeycloakUserDTO updateUser(String userId, KeycloakUserDTO payload, String accessToken) {
         KeycloakUserDTO existing = stores.findUserById(userId);
         if (existing == null) {
             throw new IllegalArgumentException("Keycloak user not found: " + userId);
@@ -48,7 +53,7 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
     }
 
     @Override
-    public void deleteUser(String userId) {
+    public void deleteUser(String userId, String accessToken) {
         if (stores.users.remove(userId) == null) {
             throw new IllegalArgumentException("Keycloak user not found: " + userId);
         }

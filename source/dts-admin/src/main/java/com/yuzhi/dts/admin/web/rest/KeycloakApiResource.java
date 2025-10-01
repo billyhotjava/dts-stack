@@ -4,6 +4,7 @@ import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
+import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.admin.service.inmemory.InMemoryStores;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
@@ -14,6 +15,10 @@ import java.util.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -24,17 +29,30 @@ public class KeycloakApiResource {
     private final InMemoryStores stores;
     private final AdminAuditService auditService;
     private final KeycloakAuthService keycloakAuthService;
+    private final KeycloakAdminClient keycloakAdminClient;
 
-    public KeycloakApiResource(InMemoryStores stores, AdminAuditService auditService, KeycloakAuthService keycloakAuthService) {
+    public KeycloakApiResource(
+        InMemoryStores stores,
+        AdminAuditService auditService,
+        KeycloakAuthService keycloakAuthService,
+        KeycloakAdminClient keycloakAdminClient
+    ) {
         this.stores = stores;
         this.auditService = auditService;
         this.keycloakAuthService = keycloakAuthService;
+        this.keycloakAdminClient = keycloakAdminClient;
     }
 
     // ---- Users ----
     @GetMapping("/keycloak/users")
     public ResponseEntity<List<KeycloakUserDTO>> listUsers(@RequestParam(defaultValue = "0") int first, @RequestParam(defaultValue = "100") int max) {
-        var list = stores.listUsers(first, max);
+        String token = currentAccessToken();
+        List<KeycloakUserDTO> list = keycloakAdminClient.listUsers(first, max, token);
+        if (list.isEmpty()) {
+            list = stores.listUsers(first, max);
+        } else {
+            list.forEach(this::cacheUser);
+        }
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "KC_USERS_LIST", "KC_USER", "list", "SUCCESS", null);
         return ResponseEntity.ok(list);
     }
@@ -42,12 +60,20 @@ public class KeycloakApiResource {
     @GetMapping("/keycloak/users/search")
     public ResponseEntity<List<KeycloakUserDTO>> searchUsers(@RequestParam String username) {
         String q = username == null ? "" : username.toLowerCase();
-        List<KeycloakUserDTO> list = stores
-            .users
-            .values()
-            .stream()
-            .filter(u -> u.getUsername() != null && u.getUsername().toLowerCase().contains(q))
-            .toList();
+        List<KeycloakUserDTO> list = keycloakAdminClient
+            .findByUsername(username, currentAccessToken())
+            .map(List::of)
+            .orElseGet(List::of);
+        if (list.isEmpty()) {
+            list = stores
+                .users
+                .values()
+                .stream()
+                .filter(u -> u.getUsername() != null && u.getUsername().toLowerCase().contains(q))
+                .toList();
+        } else {
+            list.forEach(this::cacheUser);
+        }
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "KC_USERS_SEARCH", "KC_USER", q, "SUCCESS", null);
         return ResponseEntity.ok(list);
     }
@@ -55,6 +81,12 @@ public class KeycloakApiResource {
     @GetMapping("/keycloak/users/{id}")
     public ResponseEntity<?> getUser(@PathVariable String id) {
         KeycloakUserDTO u = stores.findUserById(id);
+        if (u == null) {
+            u = keycloakAdminClient.findById(id, currentAccessToken()).orElse(null);
+            if (u != null) {
+                cacheUser(u);
+            }
+        }
         if (u == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "KC_USER_DETAIL", "KC_USER", id, "SUCCESS", null);
         return ResponseEntity.ok(u);
@@ -65,30 +97,38 @@ public class KeycloakApiResource {
         if (payload.getUsername() == null || payload.getUsername().isBlank()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("用户名不能为空"));
         }
-        KeycloakUserDTO created = stores.createUser(payload);
+        KeycloakUserDTO created = keycloakAdminClient.createUser(payload, currentAccessToken());
+        cacheUser(created);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_CREATE", "USER", created.getUsername(), "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(created));
     }
 
     @PutMapping("/keycloak/users/{id}")
     public ResponseEntity<ApiResponse<KeycloakUserDTO>> updateUser(@PathVariable String id, @RequestBody KeycloakUserDTO patch) {
-        KeycloakUserDTO current = stores.findUserById(id);
+        KeycloakUserDTO current = keycloakAdminClient.findById(id, currentAccessToken()).orElse(stores.findUserById(id));
         if (current == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
-        if (patch.getUsername() != null) current.setUsername(patch.getUsername());
-        if (patch.getEmail() != null) current.setEmail(patch.getEmail());
-        if (patch.getFirstName() != null) current.setFirstName(patch.getFirstName());
-        if (patch.getLastName() != null) current.setLastName(patch.getLastName());
-        if (patch.getEnabled() != null) current.setEnabled(patch.getEnabled());
-        if (patch.getAttributes() != null && !patch.getAttributes().isEmpty()) current.setAttributes(patch.getAttributes());
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_UPDATE", "USER", current.getUsername(), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(current));
+        KeycloakUserDTO updated = keycloakAdminClient.updateUser(id, mergeForUpdate(current, patch), currentAccessToken());
+        cacheUser(updated);
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_UPDATE", "USER", updated.getUsername(), "SUCCESS", null);
+        return ResponseEntity.ok(ApiResponse.ok(updated));
     }
 
     @DeleteMapping("/keycloak/users/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String id) {
-        KeycloakUserDTO removed = stores.users.remove(id);
-        if (removed == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_DELETE", "USER", removed.getUsername(), "SUCCESS", null);
+        KeycloakUserDTO removed = stores.findUserById(id);
+        keycloakAdminClient.deleteUser(id, currentAccessToken());
+        stores.users.remove(id);
+        if (removed == null) {
+            removed = keycloakAdminClient.findById(id, currentAccessToken()).orElse(null);
+        }
+        auditService.record(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "USER_DELETE",
+            "USER",
+            removed != null ? removed.getUsername() : id,
+            "SUCCESS",
+            null
+        );
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
@@ -101,25 +141,28 @@ public class KeycloakApiResource {
 
     @PutMapping("/keycloak/users/{id}/enabled")
     public ResponseEntity<ApiResponse<KeycloakUserDTO>> setEnabled(@PathVariable String id, @RequestBody Map<String, Object> body) {
-        KeycloakUserDTO u = stores.findUserById(id);
+        KeycloakUserDTO u = keycloakAdminClient.findById(id, currentAccessToken()).orElse(stores.findUserById(id));
         if (u == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         Object val = body.get("enabled");
-        u.setEnabled(Boolean.TRUE.equals(val) || (val instanceof Boolean b && b));
+        boolean enabled = Boolean.TRUE.equals(val) || (val instanceof Boolean b && b);
+        u.setEnabled(enabled);
+        KeycloakUserDTO updated = keycloakAdminClient.updateUser(id, u, currentAccessToken());
+        cacheUser(updated);
         auditService.record(
             SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-            u.getEnabled() ? "USER_ENABLE" : "USER_DISABLE",
+            enabled ? "USER_ENABLE" : "USER_DISABLE",
             "USER",
-            u.getUsername(),
+            updated.getUsername(),
             "SUCCESS",
             null
         );
-        return ResponseEntity.ok(ApiResponse.ok(u));
+        return ResponseEntity.ok(ApiResponse.ok(updated));
     }
 
     // ---- ABAC person_level + data_levels management (dev helper) ----
     @PutMapping("/keycloak/users/{id}/person-level")
     public ResponseEntity<ApiResponse<Map<String, Object>>> setPersonLevel(@PathVariable String id, @RequestBody Map<String, String> body) {
-        KeycloakUserDTO u = stores.findUserById(id);
+        KeycloakUserDTO u = keycloakAdminClient.findById(id, currentAccessToken()).orElse(stores.findUserById(id));
         if (u == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         String level = String.valueOf(body.getOrDefault("person_level", "")).toUpperCase();
         if (!List.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE").contains(level)) {
@@ -127,8 +170,17 @@ public class KeycloakApiResource {
         }
         u.getAttributes().put("person_level", List.of(level));
         u.getAttributes().put("data_levels", computeDataLevels(level));
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_SET_PERSON_LEVEL", "USER", u.getUsername(), "SUCCESS", null);
-        Map<String, Object> resp = Map.of("person_level", level, "data_levels", u.getAttributes().get("data_levels"));
+        KeycloakUserDTO updated = keycloakAdminClient.updateUser(id, u, currentAccessToken());
+        cacheUser(updated);
+        auditService.record(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "USER_SET_PERSON_LEVEL",
+            "USER",
+            updated.getUsername(),
+            "SUCCESS",
+            null
+        );
+        Map<String, Object> resp = Map.of("person_level", level, "data_levels", updated.getAttributes().get("data_levels"));
         return ResponseEntity.ok(ApiResponse.ok(resp));
     }
 
@@ -150,6 +202,47 @@ public class KeycloakApiResource {
             case "CORE" -> List.of("DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_TOP_SECRET");
             default -> List.of("DATA_PUBLIC");
         };
+    }
+
+    private void cacheUser(KeycloakUserDTO dto) {
+        if (dto == null || dto.getId() == null) {
+            return;
+        }
+        stores.users.put(dto.getId(), dto);
+    }
+
+    private String currentAccessToken() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication instanceof JwtAuthenticationToken jwt) {
+            return jwt.getToken().getTokenValue();
+        }
+        if (authentication instanceof BearerTokenAuthentication bearer) {
+            return bearer.getToken().getTokenValue();
+        }
+        return null;
+    }
+
+    private KeycloakUserDTO mergeForUpdate(KeycloakUserDTO current, KeycloakUserDTO patch) {
+        KeycloakUserDTO merged = new KeycloakUserDTO();
+        merged.setId(current.getId());
+        merged.setUsername(patch.getUsername() != null ? patch.getUsername() : current.getUsername());
+        merged.setEmail(patch.getEmail() != null ? patch.getEmail() : current.getEmail());
+        merged.setFirstName(patch.getFirstName() != null ? patch.getFirstName() : current.getFirstName());
+        merged.setLastName(patch.getLastName() != null ? patch.getLastName() : current.getLastName());
+        merged.setEnabled(patch.getEnabled() != null ? patch.getEnabled() : current.getEnabled());
+        merged.setEmailVerified(patch.getEmailVerified() != null ? patch.getEmailVerified() : current.getEmailVerified());
+        merged.setAttributes(
+            patch.getAttributes() != null && !patch.getAttributes().isEmpty() ? patch.getAttributes() : current.getAttributes()
+        );
+        merged.setGroups(patch.getGroups() != null && !patch.getGroups().isEmpty() ? patch.getGroups() : current.getGroups());
+        merged.setRealmRoles(
+            patch.getRealmRoles() != null && !patch.getRealmRoles().isEmpty() ? patch.getRealmRoles() : current.getRealmRoles()
+        );
+        merged.setClientRoles(
+            patch.getClientRoles() != null && !patch.getClientRoles().isEmpty() ? patch.getClientRoles() : current.getClientRoles()
+        );
+        merged.setCreatedTimestamp(current.getCreatedTimestamp());
+        return merged;
     }
 
     @GetMapping("/keycloak/users/{id}/roles")

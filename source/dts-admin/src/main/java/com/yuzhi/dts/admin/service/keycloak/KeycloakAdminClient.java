@@ -6,13 +6,15 @@ import java.util.Optional;
 
 public interface KeycloakAdminClient {
 
-    List<KeycloakUserDTO> listUsers(int first, int max);
+    List<KeycloakUserDTO> listUsers(int first, int max, String accessToken);
 
-    Optional<KeycloakUserDTO> findByUsername(String username);
+    Optional<KeycloakUserDTO> findByUsername(String username, String accessToken);
 
-    KeycloakUserDTO createUser(KeycloakUserDTO payload);
+    Optional<KeycloakUserDTO> findById(String userId, String accessToken);
 
-    KeycloakUserDTO updateUser(String userId, KeycloakUserDTO payload);
+    KeycloakUserDTO createUser(KeycloakUserDTO payload, String accessToken);
 
-    void deleteUser(String userId);
+    KeycloakUserDTO updateUser(String userId, KeycloakUserDTO payload, String accessToken);
+
+    void deleteUser(String userId, String accessToken);
 }

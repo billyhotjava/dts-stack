@@ -225,7 +225,7 @@ public class AdminUserService {
     private AdminKeycloakUser ensureSnapshot(String username) {
         return userRepository
             .findByUsernameIgnoreCase(username)
-            .or(() -> keycloakAdminClient.findByUsername(username).map(this::syncSnapshot))
+            .or(() -> keycloakAdminClient.findByUsername(username, null).map(this::syncSnapshot))
             .orElseThrow(() -> new IllegalArgumentException("用户不存在: " + username));
     }
 

@@ -111,10 +111,42 @@ public final class SecurityUtils {
 
     @SuppressWarnings("unchecked")
     private static Collection<String> getRolesFromClaims(Map<String, Object> claims) {
-        return (Collection<String>) claims.getOrDefault(
-            "groups",
-            claims.getOrDefault("roles", claims.getOrDefault(CLAIMS_NAMESPACE + "roles", new ArrayList<>()))
-        );
+        List<String> roles = new ArrayList<>();
+
+        collectRoles(claims.get("groups"), roles);
+        collectRoles(claims.get("roles"), roles);
+        collectRoles(claims.get(CLAIMS_NAMESPACE + "roles"), roles);
+
+        Object realmAccess = claims.get("realm_access");
+        if (realmAccess instanceof Map<?, ?> realmMap) {
+            collectRoles(realmMap.get("roles"), roles);
+        }
+
+        Object resourceAccess = claims.get("resource_access");
+        if (resourceAccess instanceof Map<?, ?> resourceMap) {
+            for (Object resource : resourceMap.values()) {
+                if (resource instanceof Map<?, ?> resourceEntry) {
+                    collectRoles(resourceEntry.get("roles"), roles);
+                }
+            }
+        }
+
+        return roles;
+    }
+
+    private static void collectRoles(Object source, Collection<String> target) {
+        if (source == null) {
+            return;
+        }
+        if (source instanceof Collection<?> collection) {
+            for (Object value : collection) {
+                if (value instanceof String s && !s.isBlank()) {
+                    target.add(s);
+                }
+            }
+        } else if (source instanceof String s && !s.isBlank()) {
+            target.add(s);
+        }
     }
 
     private static List<GrantedAuthority> mapRolesToGrantedAuthorities(Collection<String> roles) {

@@ -20,7 +20,11 @@ axiosInstance.interceptors.request.use(
         const url = config.url || "";
         const isAuthPath = url.includes("/keycloak/auth/");
         if (userToken.accessToken && !isAuthPath) {
-            config.headers.Authorization = `Bearer ${userToken.accessToken}`;
+            const raw = String(userToken.accessToken).trim();
+            const token = raw.startsWith("Bearer ") ? raw.slice(7).trim() : raw;
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
         }
 
 		// 添加请求日志
