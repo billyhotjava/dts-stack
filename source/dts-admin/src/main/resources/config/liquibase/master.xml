@@ -16,6 +16,7 @@
     <include file="config/liquibase/changelog/20250930-01_user_approvals_and_snapshots.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251005-01_portal_menu_seed.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251020-01_portal_menu_security_level.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251108-01_portal_menu_deleted_fix.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->
