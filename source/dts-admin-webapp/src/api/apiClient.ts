@@ -6,6 +6,21 @@ import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
 import userStore from "@/store/userStore";
 
+const isBusinessSuccess = (status: unknown): boolean => {
+	if (typeof status === "number") {
+		return status === 200;
+	}
+	if (typeof status === "string") {
+		const normalized = status.trim().toUpperCase();
+		if (!normalized) return false;
+		if (normalized === ResultStatus.SUCCESS) {
+			return true;
+		}
+		return normalized === "OK" || normalized === "200";
+	}
+	return false;
+};
+
 const axiosInstance = axios.create({
 	baseURL: GLOBAL_CONFIG.apiBaseUrl,
 	timeout: 50000,
@@ -42,7 +57,7 @@ axiosInstance.interceptors.response.use(
 			if (res.data && typeof res.data === "object" && "status" in res.data) {
 				// 对于标准响应格式，返回data字段
 				const { status, data, message } = res.data;
-				if (status === ResultStatus.SUCCESS) {
+				if (isBusinessSuccess(status)) {
 					return data;
 				}
 				throw new Error(message || t("sys.api.apiRequestFailed"));
@@ -54,7 +69,7 @@ axiosInstance.interceptors.response.use(
 
 		// 处理标准API响应格式
 		const { status, data, message } = res.data;
-		if (status === ResultStatus.SUCCESS) {
+		if (isBusinessSuccess(status)) {
 			return data;
 		}
 		throw new Error(message || t("sys.api.apiRequestFailed"));

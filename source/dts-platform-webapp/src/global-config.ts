@@ -21,6 +21,8 @@ export type GlobalConfig = {
 	routerHistory: "browser" | "hash";
 	/** Enable admin UI for managing portal (client) menus */
 	enablePortalMenuMgmt: boolean;
+	/** Enable experimental SQL workbench experience */
+	enableSqlWorkbench: boolean;
 };
 
 /**
@@ -105,4 +107,5 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
 	routerHistory: (import.meta.env.VITE_APP_ROUTER_HISTORY || "browser") as "browser" | "hash",
 	enablePortalMenuMgmt: String(import.meta.env.VITE_ENABLE_PORTAL_MENU_MGMT || "false").toLowerCase() === "true",
+	enableSqlWorkbench: String(import.meta.env.VITE_ENABLE_SQL_WORKBENCH || "false").toLowerCase() === "true",
 };

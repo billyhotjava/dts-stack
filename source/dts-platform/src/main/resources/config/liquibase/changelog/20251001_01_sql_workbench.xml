@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251001-01-add-sql-workbench" author="codex">
+        <addColumn tableName="query_execution">
+            <column name="datasource" type="varchar(64)"/>
+            <column name="query_hash" type="char(64)"/>
+            <column name="trino_query_id" type="varchar(128)"/>
+            <column name="limit_applied" type="boolean" defaultValueBoolean="false"/>
+            <column name="plan_digest" type="text"/>
+            <column name="warnings" type="text"/>
+            <column name="queue_position" type="integer"/>
+            <column name="elapsed_ms" type="bigint"/>
+        </addColumn>
+
+        <addColumn tableName="result_set">
+            <column name="storage_format" type="varchar(16)"/>
+            <column name="chunk_count" type="integer"/>
+            <column name="preview_columns" type="text"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="query_execution" columnName="datasource"/>
+            <dropColumn tableName="query_execution" columnName="query_hash"/>
+            <dropColumn tableName="query_execution" columnName="trino_query_id"/>
+            <dropColumn tableName="query_execution" columnName="limit_applied"/>
+            <dropColumn tableName="query_execution" columnName="plan_digest"/>
+            <dropColumn tableName="query_execution" columnName="warnings"/>
+            <dropColumn tableName="query_execution" columnName="queue_position"/>
+            <dropColumn tableName="query_execution" columnName="elapsed_ms"/>
+            <dropColumn tableName="result_set" columnName="storage_format"/>
+            <dropColumn tableName="result_set" columnName="chunk_count"/>
+            <dropColumn tableName="result_set" columnName="preview_columns"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

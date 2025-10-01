@@ -4,9 +4,9 @@ export enum BasicStatus {
 }
 
 export enum ResultStatus {
-	SUCCESS = 200, // 适配后端HTTP状态码
-	ERROR = -1,
-	TIMEOUT = 401,
+	SUCCESS = "SUCCESS",
+	ERROR = "ERROR",
+	TIMEOUT = "TIMEOUT",
 }
 
 export enum StorageEnum {

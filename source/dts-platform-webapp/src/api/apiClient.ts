@@ -66,18 +66,22 @@ axiosInstance.interceptors.response.use(
 		console.error("API Response Error:", error.response?.status, error.response?.data, error.message);
 
 		const { response, message } = error || {};
+		const requestUrl = response?.config?.url ?? "";
+		const shouldSuppressAuthHandling = typeof requestUrl === "string" && requestUrl.includes("/keycloak/localization/");
 		const errMsg = response?.data?.message || message || t("sys.api.errorMessage");
-		toast.error(errMsg, { position: "top-center" });
-        if (response?.status === 401) {
-            userStore.getState().actions.clearUserInfoAndToken();
-            try {
-                localStorage.setItem("dts.session.logoutTs", String(Date.now()));
-            } catch {}
-            const loginUrl = urlJoin((GLOBAL_CONFIG as any).publicPath || "/", "/auth/login");
-            if (!location.pathname.endsWith("/auth/login")) {
-                location.replace(loginUrl);
-            }
-        }
+		if (!shouldSuppressAuthHandling) {
+			toast.error(errMsg, { position: "top-center" });
+		}
+		if (response?.status === 401 && !shouldSuppressAuthHandling) {
+			userStore.getState().actions.clearUserInfoAndToken();
+			try {
+				localStorage.setItem("dts.session.logoutTs", String(Date.now()));
+			} catch {}
+			const loginUrl = urlJoin((GLOBAL_CONFIG as any).publicPath || "/", "/auth/login");
+			if (!location.pathname.endsWith("/auth/login")) {
+				location.replace(loginUrl);
+			}
+		}
         return Promise.reject(error);
     },
 );

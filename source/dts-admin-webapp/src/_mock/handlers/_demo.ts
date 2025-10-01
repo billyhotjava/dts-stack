@@ -1,9 +1,8 @@
 import { HttpResponse, http } from "msw";
 import { DemoApi } from "@/api/services/demoService";
-import { ResultStatus } from "@/types/enum";
 
 const mockTokenExpired = http.post(`/api${DemoApi.TOKEN_EXPIRED}`, () => {
-	return new HttpResponse(null, { status: ResultStatus.TIMEOUT });
+	return new HttpResponse(null, { status: 401 });
 });
 
 export { mockTokenExpired };

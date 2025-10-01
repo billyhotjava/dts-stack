@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { useRouter } from "@/routes/hooks";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import userService from "@/api/services/userService";
 
@@ -102,4 +101,3 @@ export function SessionManager() {
 }
 
 export default SessionManager;
-

@@ -34,4 +34,4 @@
 ## Security & Configuration Tips
 - Keep secrets and API endpoints in environment files; access via `import.meta.env`.
 - Update shared defaults exclusively in `src/global-config.ts` to align environments.
-
+- Toggle the experimental SQL workbench UI via `VITE_ENABLE_SQL_WORKBENCH=true`; the flag gates the Monaco editor experience and new `/api/sql/*` endpoints.

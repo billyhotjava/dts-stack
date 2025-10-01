@@ -64,22 +64,35 @@ export const useSignIn = () => {
 	const signIn = async (data: SignInReq) => {
 		try {
 			const res = await signInMutation.mutateAsync(data);
-			const { user, accessToken, refreshToken } = res;
+			const rawUser = (res as any)?.user ?? (res as any)?.userInfo ?? {};
+			const accessToken =
+				(res as any)?.accessToken ??
+				(res as any)?.access_token ??
+				(res as any)?.token ??
+				"";
+			const refreshToken =
+				(res as any)?.refreshToken ??
+				(res as any)?.refresh_token ??
+				"";
+			if (!accessToken) {
+				throw new Error("登录响应缺少访问令牌");
+			}
 
 			// 适配后端数据格式：处理角色和权限信息
 			const adaptedUser = {
-				...user,
+				...rawUser,
 				// 处理角色信息 - 保持字符串数组格式
-				roles: Array.isArray(user.roles) ? user.roles : [],
+				roles: Array.isArray(rawUser.roles) ? rawUser.roles : [],
 				// 处理权限信息 - 保持字符串数组格式
-				permissions: Array.isArray(user.permissions) ? user.permissions : [],
+				permissions: Array.isArray(rawUser.permissions) ? rawUser.permissions : [],
 				// 为用户设置默认头像
-				avatar: user.avatar || "/src/assets/icons/ic-user.svg",
+				avatar: rawUser.avatar || "/src/assets/icons/ic-user.svg",
 				// 确保必要的字段存在
-				firstName: user.firstName || "",
-				lastName: user.lastName || "",
-				email: user.email || "",
-				enabled: user.enabled !== undefined ? user.enabled : true,
+				username: rawUser.username || data.username || "",
+				firstName: rawUser.firstName || "",
+				lastName: rawUser.lastName || "",
+				email: rawUser.email || "",
+				enabled: rawUser.enabled !== undefined ? rawUser.enabled : true,
 			};
 
 			setUserToken({ accessToken, refreshToken });

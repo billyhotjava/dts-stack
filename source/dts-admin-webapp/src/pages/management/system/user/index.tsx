@@ -3,7 +3,7 @@ import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { KeycloakUser, PaginationParams, UserProfileConfig, UserTableRow } from "#/keycloak";
-import { KeycloakUserProfileService, KeycloakUserService, KeycloakAbacService } from "@/api/services/keycloakService";
+import { KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
 import type { CustomUserAttributeKey } from "@/constants/user";
 import { Icon } from "@/components/icon";
 import zhCN from "@/locales/lang/zh_CN";
@@ -11,7 +11,6 @@ import { PERSON_SECURITY_LEVELS } from "@/constants/governance";
 import { usePathname, useRouter } from "@/routes/hooks";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Input } from "@/ui/input";
 import UserModal from "./user-modal";
@@ -158,57 +157,6 @@ export default function UserPage() {
 	// 表格列定义
 	const columns: ColumnsType<UserTableRow> = [
 		{
-			title: "ABAC",
-			key: "abac",
-			width: 320,
-			render: (_, record) => {
-				const userId = record.id as string | undefined;
-				if (!userId) return null;
-				return (
-					<div className="flex items-center gap-2">
-						<Select
-							onValueChange={async (val) => {
-								try {
-									await KeycloakAbacService.setPersonLevel(userId, val as any);
-									toast.success("人员密级已更新");
-									// refresh row data
-									loadUsers({ current: pagination.current, pageSize: pagination.pageSize });
-								} catch (e: any) {
-									toast.error(e?.message || "更新失败");
-								}
-							}}
-						>
-							<SelectTrigger className="w-40 justify-between">
-								<SelectValue placeholder="设置人员密级" />
-							</SelectTrigger>
-							<SelectContent>
-								{PERSON_SECURITY_LEVELS.map((opt) => (
-									<SelectItem key={opt.value} value={opt.value}>
-										{opt.label}（{opt.value}）
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={async () => {
-								try {
-									const data = await KeycloakAbacService.getAbacClaims(userId);
-									const levels = (data?.data_levels || []).join(", ");
-									toast.success(`person_level=${data.person_level}; data_levels=[${levels}]`);
-								} catch (e: any) {
-									toast.error(e?.message || "获取失败");
-								}
-							}}
-						>
-							查看 ABAC
-						</Button>
-					</div>
-				);
-			},
-		},
-		{
 			title: "用户名",
 			dataIndex: "username",
 			width: 180,
@@ -346,7 +294,6 @@ export default function UserPage() {
 					<div className="flex items-center justify-between">
 						<div>
 							<h2 className="text-2xl font-bold">用户管理</h2>
-							<p className="text-muted-foreground">管理Keycloak用户账户</p>
 						</div>
 						<Button onClick={() => setUserModal({ open: true, mode: "create" })}>
 							<Icon icon="mdi:plus" size={16} className="mr-2" />

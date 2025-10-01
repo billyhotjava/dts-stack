@@ -22,6 +22,8 @@ services:
       JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
       JHIPSTER_CORS_ALLOWED_HEADERS: "*"
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      EUREKA_CLIENT_ENABLED: "false"
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
@@ -67,6 +69,8 @@ services:
       JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
       JHIPSTER_CORS_ALLOWED_HEADERS: "*"
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      EUREKA_CLIENT_ENABLED: "false"
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
@@ -106,6 +110,8 @@ services:
   dts-platform-webapp:
     image: ${IMAGE_DTS_PLATFORM_WEBAPP:?Set IMAGE_DTS_PLATFORM_WEBAPP in imgversion.conf or .env}
     ports: []
+    environment:
+      API_PROXY_TARGET: http://dts-platform:8081
     networks:
       - dts-core
     labels:

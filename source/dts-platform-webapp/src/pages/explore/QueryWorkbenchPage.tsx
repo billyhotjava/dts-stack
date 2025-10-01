@@ -20,6 +20,8 @@ import {
 	listTablesByDataset,
 	listColumnsByTable,
 } from "@/api/platformApi";
+import { GLOBAL_CONFIG } from "@/global-config";
+import { SqlWorkbenchExperimental } from "@/components/sql/SqlWorkbenchExperimental";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/ui/tooltip";
@@ -461,6 +463,10 @@ function VisualQueryBuilder({
 }
 
 export default function QueryWorkbenchPage() {
+	if (GLOBAL_CONFIG.enableSqlWorkbench) {
+		return <SqlWorkbenchExperimental />;
+	}
+
 	const [remoteDatasets, setRemoteDatasets] = useState<Dataset[]>([]);
 	const [selectedSource, setSelectedSource] = useState<string>("");
 	const datasets = useMemo(() => (remoteDatasets.length ? remoteDatasets : DATASETS), [remoteDatasets]);

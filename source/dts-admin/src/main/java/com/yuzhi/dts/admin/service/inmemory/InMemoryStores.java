@@ -62,9 +62,16 @@ public class InMemoryStores {
         u.setId(uid());
         u.setUsername(username);
         u.setEmail(email);
+        u.setFirstName(username);
         u.setEnabled(true);
         u.setCreatedTimestamp(System.currentTimeMillis());
         u.setRealmRoles(new ArrayList<>(realmRoles));
+        Map<String, List<String>> attrs = new HashMap<>();
+        attrs.put("person_security_level", List.of("CORE"));
+        attrs.put("data_levels", List.of("DATA_TOP_SECRET", "DATA_SECRET"));
+        attrs.put("phone", List.of("13800000000"));
+        u.setAttributes(attrs);
+        u.setGroups(List.of("/数据与智能中心/平台组"));
         users.put(u.getId(), u);
     }
 
@@ -98,4 +105,3 @@ public class InMemoryStores {
 
     public long nextApprovalId() { return Math.abs(ThreadLocalRandom.current().nextLong(1000, 999999)); }
 }
-

@@ -29,6 +29,13 @@ To start your application in the dev profile, run:
 ./mvnw
 ```
 
+### SQL Workbench (preview)
+
+- New REST endpoints under `/api/sql/**` expose catalog lookup, validation, submission, status, and cancel operations for the Trino-powered workbench.
+- Validation is currently lightweight (read-only guardrails + default LIMIT injection); future iterations will swap in Calcite/Trino explain plans.
+- Submit requests persist a `QueryExecution` row immediately (status `QUEUED`) so the UI can poll while the execution layer evolves.
+- Enable the experimental UI in the webapp by setting `VITE_ENABLE_SQL_WORKBENCH=true` and consuming the stubbed endpoints above.
+
 For further instructions on how to develop with JHipster, have a look at [Using JHipster in development][].
 
 ### OAuth 2.0 / OpenID Connect

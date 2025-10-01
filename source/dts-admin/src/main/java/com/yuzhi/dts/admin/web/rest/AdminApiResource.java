@@ -415,43 +415,6 @@ public class AdminApiResource {
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
-    @GetMapping("/users")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> adminUsers() {
-        List<Map<String, Object>> list = new ArrayList<>();
-        list.add(
-            new LinkedHashMap<>() {
-                {
-                    put("id", 1);
-                    put("username", "sysadmin");
-                    put("displayName", "系统管理员");
-                    put("email", "sysadmin@example.com");
-                    put("orgPath", List.of("数据与智能中心", "平台组"));
-                    put("roles", List.of("SYSADMIN"));
-                    put("securityLevel", "CORE");
-                    put("status", "ACTIVE");
-                    put("lastLoginAt", new Date().toInstant().toString());
-                }
-            }
-        );
-        list.add(
-            new LinkedHashMap<>() {
-                {
-                    put("id", 2);
-                    put("username", "authadmin");
-                    put("displayName", "授权管理员");
-                    put("email", "authadmin@example.com");
-                    put("orgPath", List.of("数据与智能中心", "治理组"));
-                    put("roles", List.of("AUTHADMIN"));
-                    put("securityLevel", "IMPORTANT");
-                    put("status", "ACTIVE");
-                    put("lastLoginAt", new Date().toInstant().toString());
-                }
-            }
-        );
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ADMIN_USERS_LIST", "ADMIN", "users", "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(list));
-    }
-
     @GetMapping("/roles")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> adminRoles() {
         List<Map<String, Object>> list = new ArrayList<>();
