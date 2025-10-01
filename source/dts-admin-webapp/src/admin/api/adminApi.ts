@@ -108,19 +108,19 @@ export const adminApi = {
 		}),
 
 	createOrganization: (payload: OrganizationPayload) =>
-		apiClient.post<OrganizationNode>({
+		apiClient.post<ChangeRequest>({
 			url: "/admin/orgs",
 			data: payload,
 		}),
 
 	updateOrganization: (id: number, payload: OrganizationPayload) =>
-		apiClient.put<OrganizationNode>({
+		apiClient.put<ChangeRequest>({
 			url: `/admin/orgs/${id}`,
 			data: payload,
 		}),
 
 	deleteOrganization: (id: number) =>
-		apiClient.delete<void>({
+		apiClient.delete<ChangeRequest>({
 			url: `/admin/orgs/${id}`,
 		}),
 
@@ -150,7 +150,7 @@ export const adminApi = {
 		}),
 
 	createCustomRole: (payload: CreateCustomRolePayload) =>
-		apiClient.post<AdminCustomRole>({
+		apiClient.post<ChangeRequest>({
 			url: "/admin/custom-roles",
 			data: payload,
 		}),
@@ -161,7 +161,7 @@ export const adminApi = {
 		}),
 
 	createRoleAssignment: (payload: CreateRoleAssignmentPayload) =>
-		apiClient.post<AdminRoleAssignment>({
+		apiClient.post<ChangeRequest>({
 			url: "/admin/role-assignments",
 			data: payload,
 		}),

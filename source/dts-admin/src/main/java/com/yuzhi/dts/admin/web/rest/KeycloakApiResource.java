@@ -1,5 +1,6 @@
 package com.yuzhi.dts.admin.web.rest;
 
+import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
@@ -114,20 +115,13 @@ public class KeycloakApiResource {
             return ResponseEntity.badRequest().body(ApiResponse.error("用户名不能为空"));
         }
         UserOperationRequest command = toOperationRequest(payload);
-        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitCreate(
+        ChangeRequest changeRequest = adminUserService.submitCreate(
             command,
             currentUser(),
             clientIp(request)
         );
         auditService.record(currentUser(), "USER_CREATE_REQUEST", "KC_USER", command.getUsername(), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "requestId",
-            approval.id,
-            "status",
-            approval.status,
-            "message",
-            "操作已提交，等待审批"
-        )));
+        return ResponseEntity.ok(ApiResponse.ok(buildSubmissionResponse(changeRequest, "操作已提交，等待审批")));
     }
 
     @PutMapping("/keycloak/users/{id}")
@@ -142,20 +136,13 @@ public class KeycloakApiResource {
         }
         UserOperationRequest command = toOperationRequest(patch);
         command.setUsername(username);
-        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitUpdate(
+        ChangeRequest changeRequest = adminUserService.submitUpdate(
             username,
             command,
             currentUser(),
             clientIp(request)
         );
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "requestId",
-            approval.id,
-            "status",
-            approval.status,
-            "message",
-            "用户信息更新请求已提交，等待审批"
-        )));
+        return ResponseEntity.ok(ApiResponse.ok(buildSubmissionResponse(changeRequest, "用户信息更新请求已提交，等待审批")));
     }
 
     @DeleteMapping("/keycloak/users/{id}")
@@ -178,21 +165,14 @@ public class KeycloakApiResource {
         if (password == null || password.isBlank()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("密码不能为空"));
         }
-        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitResetPassword(
+        ChangeRequest changeRequest = adminUserService.submitResetPassword(
             username,
             password,
             temporary,
             currentUser(),
             clientIp(request)
         );
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "requestId",
-            approval.id,
-            "status",
-            approval.status,
-            "message",
-            "重置密码请求已提交，等待审批"
-        )));
+        return ResponseEntity.ok(ApiResponse.ok(buildSubmissionResponse(changeRequest, "重置密码请求已提交，等待审批")));
     }
 
     @PutMapping("/keycloak/users/{id}/enabled")
@@ -205,20 +185,13 @@ public class KeycloakApiResource {
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         Object val = body.get("enabled");
         boolean enabled = Boolean.TRUE.equals(val) || (val instanceof Boolean b && b);
-        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitSetEnabled(
+        ChangeRequest changeRequest = adminUserService.submitSetEnabled(
             username,
             enabled,
             currentUser(),
             clientIp(request)
         );
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "requestId",
-            approval.id,
-            "status",
-            approval.status,
-            "message",
-            "启用/禁用请求已提交，等待审批"
-        )));
+        return ResponseEntity.ok(ApiResponse.ok(buildSubmissionResponse(changeRequest, "启用/禁用请求已提交，等待审批")));
     }
 
     // ---- ABAC person_level + data_levels management (dev helper) ----
@@ -237,7 +210,7 @@ public class KeycloakApiResource {
         List<String> levels = body.containsKey("data_levels")
             ? List.of(body.get("data_levels").split(","))
             : computeDataLevels(level);
-        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitSetPersonLevel(
+        ChangeRequest changeRequest = adminUserService.submitSetPersonLevel(
             username,
             level,
             levels,
@@ -245,14 +218,7 @@ public class KeycloakApiResource {
             clientIp(request),
             null
         );
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "requestId",
-            approval.id,
-            "status",
-            approval.status,
-            "message",
-            "密级调整请求已提交，等待审批"
-        )));
+        return ResponseEntity.ok(ApiResponse.ok(buildSubmissionResponse(changeRequest, "密级调整请求已提交，等待审批")));
     }
 
     @GetMapping("/keycloak/users/{id}/abac-claims")
@@ -496,6 +462,32 @@ public class KeycloakApiResource {
         return request.getRemoteAddr();
     }
 
+    private Map<String, Object> buildSubmissionResponse(ChangeRequest changeRequest, String message) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("requestId", changeRequest.getId());
+        payload.put("status", changeRequest.getStatus());
+        payload.put("message", message);
+        payload.put("changeRequest", toChangeResponse(changeRequest));
+        return payload;
+    }
+
+    private Map<String, Object> toChangeResponse(ChangeRequest changeRequest) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", changeRequest.getId());
+        map.put("resourceType", changeRequest.getResourceType());
+        map.put("resourceId", changeRequest.getResourceId());
+        map.put("action", changeRequest.getAction());
+        map.put("payloadJson", changeRequest.getPayloadJson());
+        map.put("diffJson", changeRequest.getDiffJson());
+        map.put("status", changeRequest.getStatus());
+        map.put("requestedBy", changeRequest.getRequestedBy());
+        map.put("requestedAt", changeRequest.getRequestedAt() != null ? changeRequest.getRequestedAt().toString() : null);
+        map.put("decidedBy", changeRequest.getDecidedBy());
+        map.put("decidedAt", changeRequest.getDecidedAt() != null ? changeRequest.getDecidedAt().toString() : null);
+        map.put("reason", changeRequest.getReason());
+        return map;
+    }
+
     @GetMapping("/keycloak/users/{id}/roles")
     public ResponseEntity<List<KeycloakRoleDTO>> getUserRoles(@PathVariable String id) {
         KeycloakUserDTO u = stores.findUserById(id);
@@ -519,20 +511,13 @@ public class KeycloakApiResource {
         String username = resolveUsername(id, null, currentAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         List<String> roleNames = roles.stream().map(KeycloakRoleDTO::getName).filter(Objects::nonNull).toList();
-        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitGrantRoles(
+        ChangeRequest changeRequest = adminUserService.submitGrantRoles(
             username,
             roleNames,
             currentUser(),
             clientIp(request)
         );
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "requestId",
-            approval.id,
-            "status",
-            approval.status,
-            "message",
-            "角色分配请求已提交，等待审批"
-        )));
+        return ResponseEntity.ok(ApiResponse.ok(buildSubmissionResponse(changeRequest, "角色分配请求已提交，等待审批")));
     }
 
     @DeleteMapping("/keycloak/users/{id}/roles")
@@ -544,20 +529,13 @@ public class KeycloakApiResource {
         String username = resolveUsername(id, null, currentAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         List<String> roleNames = roles.stream().map(KeycloakRoleDTO::getName).filter(Objects::nonNull).toList();
-        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitRevokeRoles(
+        ChangeRequest changeRequest = adminUserService.submitRevokeRoles(
             username,
             roleNames,
             currentUser(),
             clientIp(request)
         );
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "requestId",
-            approval.id,
-            "status",
-            approval.status,
-            "message",
-            "角色移除请求已提交，等待审批"
-        )));
+        return ResponseEntity.ok(ApiResponse.ok(buildSubmissionResponse(changeRequest, "角色移除请求已提交，等待审批")));
     }
 
     // ---- Roles ----

@@ -3,16 +3,18 @@ package com.yuzhi.dts.admin.web.rest;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
-import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.admin.service.user.UserOperationRequest;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.web.rest.vm.AdminUserVM;
 import com.yuzhi.dts.admin.web.rest.vm.PagedResultVM;
 import com.yuzhi.dts.admin.web.rest.vm.UserRequestVM;
+import com.yuzhi.dts.admin.domain.ChangeRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -55,39 +57,39 @@ public class AdminUserResource {
 
     @PostMapping
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.SYS_ADMIN + "')")
-    public ResponseEntity<ApiResponse<ApprovalDTOs.ApprovalRequestDetail>> createUser(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createUser(
         @Valid @RequestBody UserRequestVM request,
         HttpServletRequest servletRequest
     ) {
         UserOperationRequest command = toCommand(request);
-        ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.submitCreate(
+        ChangeRequest changeRequest = adminUserService.submitCreate(
             command,
             SecurityUtils.getCurrentUserLogin().orElse("sysadmin"),
             clientIp(servletRequest)
         );
-        return ResponseEntity.ok(ApiResponse.ok(detail));
+        return ResponseEntity.ok(ApiResponse.ok(toChangeResponse(changeRequest)));
     }
 
     @PutMapping("/{username}")
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.SYS_ADMIN + "')")
-    public ResponseEntity<ApiResponse<ApprovalDTOs.ApprovalRequestDetail>> updateUser(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateUser(
         @PathVariable String username,
         @Valid @RequestBody UserRequestVM request,
         HttpServletRequest servletRequest
     ) {
         UserOperationRequest command = toCommand(request);
-        ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.submitUpdate(
+        ChangeRequest changeRequest = adminUserService.submitUpdate(
             username,
             command,
             SecurityUtils.getCurrentUserLogin().orElse("sysadmin"),
             clientIp(servletRequest)
         );
-        return ResponseEntity.ok(ApiResponse.ok(detail));
+        return ResponseEntity.ok(ApiResponse.ok(toChangeResponse(changeRequest)));
     }
 
     @DeleteMapping("/{username}")
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.SYS_ADMIN + "')")
-    public ResponseEntity<ApiResponse<ApprovalDTOs.ApprovalRequestDetail>> deleteUser(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteUser(
         @PathVariable String username,
         @RequestBody(required = false) DeleteUserRequestVM request
     ) {
@@ -134,6 +136,23 @@ public class AdminUserResource {
             return header.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    private Map<String, Object> toChangeResponse(ChangeRequest changeRequest) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", changeRequest.getId());
+        body.put("resourceType", changeRequest.getResourceType());
+        body.put("resourceId", changeRequest.getResourceId());
+        body.put("action", changeRequest.getAction());
+        body.put("payloadJson", changeRequest.getPayloadJson());
+        body.put("diffJson", changeRequest.getDiffJson());
+        body.put("status", changeRequest.getStatus());
+        body.put("requestedBy", changeRequest.getRequestedBy());
+        body.put("requestedAt", changeRequest.getRequestedAt() != null ? changeRequest.getRequestedAt().toString() : null);
+        body.put("decidedBy", changeRequest.getDecidedBy());
+        body.put("decidedAt", changeRequest.getDecidedAt() != null ? changeRequest.getDecidedAt().toString() : null);
+        body.put("reason", changeRequest.getReason());
+        return body;
     }
 
     public static class DeleteUserRequestVM {

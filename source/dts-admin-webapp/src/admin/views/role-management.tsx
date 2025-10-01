@@ -357,7 +357,7 @@ export default function RoleManagementView() {
 			return;
 		}
 		try {
-			await adminApi.createCustomRole({
+			const changeRequest = await adminApi.createCustomRole({
 				name: customRoleForm.name.trim(),
 				scope: customRoleForm.scope,
 				operations: Array.from(customRoleForm.operations),
@@ -366,7 +366,9 @@ export default function RoleManagementView() {
 				maxDataLevel: customRoleForm.maxDataLevel,
 				description: customRoleForm.description.trim() || undefined,
 			});
-			toast.success("自定义角色创建成功");
+			toast.success("自定义角色创建请求已提交", {
+				description: `审批单号 #${changeRequest.id}`,
+			});
 			setCustomRoleForm({
 				name: "",
 				scope: "DEPARTMENT",
@@ -407,7 +409,7 @@ export default function RoleManagementView() {
 			return;
 		}
 		try {
-			await adminApi.createRoleAssignment({
+			const changeRequest = await adminApi.createRoleAssignment({
 				role: assignmentForm.role,
 				username: assignmentForm.username.trim(),
 				displayName: assignmentForm.displayName.trim(),
@@ -416,7 +418,9 @@ export default function RoleManagementView() {
 				datasetIds: Array.from(assignmentForm.datasetIds),
 				operations: Array.from(assignmentForm.operations),
 			});
-			toast.success("角色授权成功");
+			toast.success("角色授权请求已提交", {
+				description: `审批单号 #${changeRequest.id}`,
+			});
 			setAssignmentForm({
 				role: assignmentForm.role,
 				username: "",
