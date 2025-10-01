@@ -28,7 +28,7 @@ public class BasicApiResource {
     @Operation(summary = "List portal menu tree")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successful operation")
     public ResponseEntity<ApiResponse<List<MenuTreeDTO>>> getMenuTree() {
-        List<PortalMenu> roots = menuRepo.findByParentIsNullOrderBySortOrderAscIdAsc();
+        List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
         List<MenuTreeDTO> out = new ArrayList<>();
         for (PortalMenu r : roots) out.add(toDto(r));
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "MENU_LIST", "MENU", "portal", "SUCCESS", null);
@@ -62,12 +62,14 @@ public class BasicApiResource {
         d.setId(String.valueOf(p.getId()));
         d.setParentId(p.getParent() != null ? String.valueOf(p.getParent().getId()) : "");
         d.setName(p.getName());
+        d.setDisplayName(resolveMenuDisplayName(p));
         d.setCode(slug(Optional.ofNullable(p.getPath()).orElse(p.getName())));
         d.setOrder(p.getSortOrder());
         d.setPath(p.getPath());
         d.setComponent(p.getComponent());
         d.setIcon(p.getIcon());
         d.setMetadata(p.getMetadata());
+        d.setSecurityLevel(p.getSecurityLevel());
         d.setType((p.getChildren() != null && !p.getChildren().isEmpty()) ? 1 : 2);
         if (p.getChildren() != null) {
             List<MenuTreeDTO> cs = new ArrayList<>();
@@ -75,5 +77,25 @@ public class BasicApiResource {
             d.setChildren(cs);
         }
         return d;
+    }
+
+    private String resolveMenuDisplayName(PortalMenu menu) {
+        String metadata = menu.getMetadata();
+        if (metadata != null && !metadata.isBlank()) {
+            try {
+                Map<String, Object> meta = new com.fasterxml.jackson.databind.ObjectMapper().readValue(metadata, Map.class);
+                Object title = meta.get("title");
+                if (title instanceof String s && !s.isBlank()) {
+                    return s;
+                }
+                Object label = meta.get("label");
+                if (label instanceof String s && !s.isBlank()) {
+                    return s;
+                }
+            } catch (Exception ignored) {
+                // ignore parsing errors and fall back to raw name
+            }
+        }
+        return menu.getName();
     }
 }

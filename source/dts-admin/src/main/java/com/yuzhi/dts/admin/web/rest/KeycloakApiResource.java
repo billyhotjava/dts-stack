@@ -119,7 +119,7 @@ public class KeycloakApiResource {
             currentUser(),
             clientIp(request)
         );
-        auditService.record(currentUser(), "USER_CREATE_REQUEST", command.getUsername(), "SUCCESS", null);
+        auditService.record(currentUser(), "USER_CREATE_REQUEST", "KC_USER", command.getUsername(), "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
             approval.id,
@@ -162,20 +162,7 @@ public class KeycloakApiResource {
     public ResponseEntity<ApiResponse<Map<String, Object>>> deleteUser(@PathVariable String id, HttpServletRequest request) {
         String username = resolveUsername(id, null, currentAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
-        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitDelete(
-            username,
-            null,
-            currentUser(),
-            clientIp(request)
-        );
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "requestId",
-            approval.id,
-            "status",
-            approval.status,
-            "message",
-            "删除用户请求已提交，等待审批"
-        )));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("用户删除功能已禁用，请改用停用操作"));
     }
 
     @PostMapping("/keycloak/users/{id}/reset-password")

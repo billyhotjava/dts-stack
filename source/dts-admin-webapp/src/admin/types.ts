@@ -73,7 +73,15 @@ export interface PortalMenuItem {
 	metadata?: string;
 	parentId?: number | null;
 	icon?: string;
+	displayName?: string;
+	securityLevel?: SecurityLevel;
+	deleted?: boolean;
 	children?: PortalMenuItem[];
+}
+
+export interface PortalMenuCollection {
+	active: PortalMenuItem[];
+	deleted: PortalMenuItem[];
 }
 
 export type OrgDataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";

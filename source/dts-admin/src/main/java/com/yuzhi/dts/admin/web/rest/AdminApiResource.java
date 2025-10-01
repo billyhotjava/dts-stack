@@ -90,6 +90,8 @@ public class AdminApiResource {
     private final OrganizationRepository organizationRepository;
     private final AdminUserService adminUserService;
 
+    private static final Set<String> MENU_SECURITY_LEVELS = Set.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
+
     public AdminApiResource(
         AdminAuditService auditService,
         OrganizationService orgService,
@@ -187,11 +189,20 @@ public class AdminApiResource {
     }
 
     @GetMapping("/portal/menus")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> portalMenus() {
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (PortalMenu m : portalMenuService.findTree()) out.add(toMenuVM(m));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> portalMenus() {
+        List<Map<String, Object>> active = new ArrayList<>();
+        for (PortalMenu menu : portalMenuService.findTree()) {
+            active.add(toMenuVM(menu));
+        }
+        List<Map<String, Object>> deleted = new ArrayList<>();
+        for (PortalMenu menu : portalMenuService.findDeletedMenus()) {
+            deleted.add(toDeletedMenuVM(menu));
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("active", active);
+        payload.put("deleted", deleted);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "PORTAL_MENU_LIST", "MENU", "admin", "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(out));
+        return ResponseEntity.ok(ApiResponse.ok(payload));
     }
 
     @PostMapping("/portal/menus")
@@ -599,6 +610,8 @@ public class AdminApiResource {
             entity.setIcon(Objects.toString(payload.get("icon"), null));
             entity.setSortOrder(payload.get("sortOrder") == null ? null : Integer.valueOf(payload.get("sortOrder").toString()));
             entity.setMetadata(Objects.toString(payload.get("metadata"), null));
+            entity.setSecurityLevel(normalizeMenuSecurityLevel(payload.get("securityLevel")));
+            entity.setDeleted(false);
             if (parentId != null) {
                 // simple parent attach via find; if not found, leave as root
                 portalMenuRepo.findById(parentId).ifPresent(entity::setParent);
@@ -615,11 +628,19 @@ public class AdminApiResource {
                     if (payload.containsKey("icon")) target.setIcon(Objects.toString(payload.get("icon"), target.getIcon()));
                     if (payload.containsKey("sortOrder")) target.setSortOrder(payload.get("sortOrder") == null ? null : Integer.valueOf(payload.get("sortOrder").toString()));
                     if (payload.containsKey("metadata")) target.setMetadata(Objects.toString(payload.get("metadata"), target.getMetadata()));
+                    if (payload.containsKey("securityLevel")) {
+                        target.setSecurityLevel(normalizeMenuSecurityLevel(payload.get("securityLevel")));
+                    }
                     portalMenuRepo.save(target);
                 });
         } else if ("DELETE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());
-            if (portalMenuRepo.existsById(id)) portalMenuRepo.deleteById(id);
+            portalMenuRepo
+                .findById(id)
+                .ifPresent(target -> {
+                    markMenuDeleted(target);
+                    portalMenuRepo.save(target);
+                });
         }
         cr.setStatus("APPLIED");
     }
@@ -714,6 +735,50 @@ public class AdminApiResource {
         cr.setStatus("APPLIED");
     }
 
+    private String normalizeMenuSecurityLevel(Object rawLevel) {
+        if (rawLevel == null) {
+            return "GENERAL";
+        }
+        String text = rawLevel.toString().trim();
+        if (text.isEmpty()) {
+            return "GENERAL";
+        }
+        String normalized = text.toUpperCase(Locale.ROOT).replace('-', '_');
+        if (!MENU_SECURITY_LEVELS.contains(normalized)) {
+            throw new IllegalArgumentException("不支持的菜单密级: " + rawLevel);
+        }
+        return normalized;
+    }
+
+    private void markMenuDeleted(PortalMenu menu) {
+        menu.setDeleted(true);
+        if (menu.getChildren() != null) {
+            for (PortalMenu child : menu.getChildren()) {
+                markMenuDeleted(child);
+            }
+        }
+    }
+
+    private String resolveMenuDisplayName(PortalMenu menu) {
+        String metadata = menu.getMetadata();
+        if (metadata != null && !metadata.isBlank()) {
+            try {
+                Map<String, Object> meta = fromJson(metadata);
+                Object title = meta.get("title");
+                if (title instanceof String s && !s.isBlank()) {
+                    return s;
+                }
+                Object label = meta.get("label");
+                if (label instanceof String s && !s.isBlank()) {
+                    return s;
+                }
+            } catch (Exception ignored) {
+                // fallback to raw name when metadata is not valid JSON
+            }
+        }
+        return menu.getName();
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> fromJson(String json) throws Exception {
         if (json == null || json.isBlank()) return Map.of();
@@ -743,21 +808,40 @@ public class AdminApiResource {
         return m;
     }
 
-    private static Map<String, Object> toMenuVM(PortalMenu p) {
+    private Map<String, Object> toMenuVM(PortalMenu p) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", p.getId());
         m.put("name", p.getName());
+        m.put("displayName", resolveMenuDisplayName(p));
         m.put("path", p.getPath());
         m.put("component", p.getComponent());
         m.put("icon", p.getIcon());
         m.put("sortOrder", p.getSortOrder());
         m.put("metadata", p.getMetadata());
+        m.put("securityLevel", p.getSecurityLevel());
+        m.put("deleted", p.isDeleted());
         m.put("parentId", p.getParent() != null ? p.getParent().getId() : null);
         if (p.getChildren() != null && !p.getChildren().isEmpty()) {
             List<Map<String, Object>> children = new ArrayList<>();
             for (PortalMenu c : p.getChildren()) children.add(toMenuVM(c));
             m.put("children", children);
         }
+        return m;
+    }
+
+    private Map<String, Object> toDeletedMenuVM(PortalMenu p) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", p.getId());
+        m.put("name", p.getName());
+        m.put("displayName", resolveMenuDisplayName(p));
+        m.put("path", p.getPath());
+        m.put("component", p.getComponent());
+        m.put("icon", p.getIcon());
+        m.put("sortOrder", p.getSortOrder());
+        m.put("metadata", p.getMetadata());
+        m.put("securityLevel", p.getSecurityLevel());
+        m.put("deleted", p.isDeleted());
+        m.put("parentId", p.getParent() != null ? p.getParent().getId() : null);
         return m;
     }
 

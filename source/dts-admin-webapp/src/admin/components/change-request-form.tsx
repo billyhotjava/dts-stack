@@ -6,9 +6,11 @@ import { Input } from "@/ui/input";
 import { Textarea } from "@/ui/textarea";
 import { Label } from "@/ui/label";
 import { Button } from "@/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { adminApi } from "@/admin/api/adminApi";
 import type { ChangeRequest } from "@/admin/types";
 import { useAdminLocale } from "@/admin/lib/locale";
+import { PERSON_SECURITY_LEVELS } from "@/constants/governance";
 
 const ACTIONS: Record<string, string[]> = {
     // 用户删除功能禁用：移除 DELETE 选项，仅保留停用/启用类与绑定操作
@@ -42,6 +44,7 @@ type FormValues = {
 	component?: string;
 	sortOrder?: string;
 	metadata?: string;
+	securityLevel?: string;
 	__tab?: string;
 };
 
@@ -60,6 +63,7 @@ export function ChangeRequestForm({ onCreated, initialTab = "user" }: Props) {
 
 	useEffect(() => {
 		form.register("__tab");
+		form.register("securityLevel");
 	}, [form]);
 	const { handleSubmit, register, setValue, reset, watch } = form;
 	const currentTab = watch("__tab") || initialTab;
@@ -86,6 +90,7 @@ export function ChangeRequestForm({ onCreated, initialTab = "user" }: Props) {
 			component: watch("component"),
 			sortOrder: watch("sortOrder"),
 			metadata: watch("metadata"),
+			securityLevel: watch("securityLevel"),
 		}),
 		[watch],
 	);
@@ -223,6 +228,24 @@ export function ChangeRequestForm({ onCreated, initialTab = "user" }: Props) {
 							<Input id="path" placeholder="/portal/approval" {...register("code")} />
 						</div>
 						<div className="space-y-2">
+							<Label htmlFor="securityLevel">菜单密级</Label>
+							<Select
+								value={fields.securityLevel || "GENERAL"}
+								onValueChange={(value) => setValue("securityLevel", value, { shouldDirty: true })}
+							>
+								<SelectTrigger id="securityLevel">
+									<SelectValue placeholder="请选择菜单密级" />
+								</SelectTrigger>
+								<SelectContent>
+									{PERSON_SECURITY_LEVELS.map((option) => (
+										<SelectItem key={option.value} value={option.value}>
+											{option.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="space-y-2">
 							<Label htmlFor="component">前端组件</Label>
 							<Input id="component" placeholder="/pages/portal/approval" {...register("component")} />
 						</div>
@@ -292,6 +315,7 @@ function buildPayload(tab: string, values: FormValues): Partial<ChangeRequest> |
 				sortOrder: values.sortOrder ? Number(values.sortOrder) : undefined,
 				parentId: values.parentId,
 				metadata: values.metadata,
+				securityLevel: values.securityLevel,
 			};
 			return { ...base, payloadJson: JSON.stringify(payload) };
 		}

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface PortalMenuRepository extends JpaRepository<PortalMenu, Long> {
-    List<PortalMenu> findByParentIsNullOrderBySortOrderAscIdAsc();
-}
+    List<PortalMenu> findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
 
+    List<PortalMenu> findByDeletedTrueOrderBySortOrderAscIdAsc();
+}

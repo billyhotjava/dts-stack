@@ -15,6 +15,7 @@ import type {
 	UserProfileTestResponse,
 	UserQueryParams,
 } from "#/keycloak";
+import type { SecurityLevel } from "@/admin/types";
 import apiClient from "../apiClient";
 
 /**
@@ -345,7 +346,7 @@ export default {
  * ABAC 辅助接口
  */
 export class KeycloakAbacService {
-	static setPersonLevel(userId: string, personLevel: "NON_SECRET" | "GENERAL" | "IMPORTANT" | "CORE") {
+	static setPersonLevel(userId: string, personLevel: Exclude<SecurityLevel, "NON_SECRET">) {
 		return apiClient.put<{ person_level: string; data_levels: string[] }>({
 			url: `/keycloak/users/${userId}/person-level`,
 			data: { person_level: personLevel },

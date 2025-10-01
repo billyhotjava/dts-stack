@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import org.hibernate.annotations.Where;
 
 @Entity
 @Table(name = "portal_menu")
@@ -33,11 +34,18 @@ public class PortalMenu extends AbstractAuditingEntity<Long> implements Serializ
     @Column(name = "metadata")
     private String metadata;
 
+    @Column(name = "security_level", length = 32, nullable = false)
+    private String securityLevel = "GENERAL";
+
+    @Column(name = "deleted", nullable = false)
+    private boolean deleted = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private PortalMenu parent;
 
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Where(clause = "deleted = false")
     @OrderBy("sortOrder ASC, id ASC")
     private List<PortalMenu> children = new ArrayList<>();
 
@@ -56,6 +64,10 @@ public class PortalMenu extends AbstractAuditingEntity<Long> implements Serializ
     public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
     public String getMetadata() { return metadata; }
     public void setMetadata(String metadata) { this.metadata = metadata; }
+    public String getSecurityLevel() { return securityLevel; }
+    public void setSecurityLevel(String securityLevel) { this.securityLevel = securityLevel; }
+    public boolean isDeleted() { return deleted; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
     public PortalMenu getParent() { return parent; }
     public void setParent(PortalMenu parent) { this.parent = parent; }
     public List<PortalMenu> getChildren() { return children; }

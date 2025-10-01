@@ -95,9 +95,11 @@ function mapPortalMenusToPermissions(items: PortalMenuItem[]): Permission_Old[] 
 			const titleKey = meta?.titleKey;
         const i18nMap: Record<string, string> = {};
 			const displayName =
-				titleKey && (i18nMap[titleKey] || FALLBACK_PORTAL_ZH[titleKey])
-					? i18nMap[titleKey] || FALLBACK_PORTAL_ZH[titleKey]
-					: node.name;
+				node.displayName && node.displayName.trim().length > 0
+					? node.displayName
+					: titleKey && (i18nMap[titleKey] || FALLBACK_PORTAL_ZH[titleKey])
+						? i18nMap[titleKey] || FALLBACK_PORTAL_ZH[titleKey]
+						: node.name;
 
 			const current: Permission_Old = {
 				id,
@@ -237,12 +239,15 @@ export default function PermissionPage() {
 	};
 
 	// Fetch portal menus from admin API (MSW serves dts-platform-webapp export)
-	const { data: portalMenus = [], isLoading } = useQuery({
+	const { data: portalMenusData, isLoading } = useQuery({
 		queryKey: ["admin", "portal-menus", "as-permissions"],
 		queryFn: adminApi.getPortalMenus,
 	});
 
-	const dataSource = useMemo(() => mapPortalMenusToPermissions(portalMenus), [portalMenus]);
+	const dataSource = useMemo(
+		() => mapPortalMenusToPermissions(portalMenusData?.active ?? []),
+		[portalMenusData],
+	);
 
 	return (
 		<Card>

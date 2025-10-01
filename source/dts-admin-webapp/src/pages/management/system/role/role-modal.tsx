@@ -112,16 +112,12 @@ export default function RoleModal({ open, mode, role, onCancel, onSuccess }: Rol
                 const meta = safeParseMetadata(item.metadata);
                 const titleKey = meta?.titleKey;
                 const displayName =
-                    titleKey && (i18nMap[titleKey] || FALLBACK_PORTAL_ZH[titleKey])
-                        ? i18nMap[titleKey] || FALLBACK_PORTAL_ZH[titleKey]
-                        : item.name;
+                    item.displayName && item.displayName.trim().length > 0
+                        ? item.displayName
+                        : titleKey && (i18nMap[titleKey] || FALLBACK_PORTAL_ZH[titleKey])
+                            ? i18nMap[titleKey] || FALLBACK_PORTAL_ZH[titleKey]
+                            : item.name;
                 const id = String(item.id ?? item.path ?? item.name);
-                const secured = (meta as any)?.securityLevel as string | undefined; // 期望值：DATA_PUBLIC/INTERNAL/SECRET/TOP_SECRET
-                if (secured) {
-                    // 记录菜单密级
-                    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                    undefined;
-                }
                 return {
                     id,
                     parentId: item.parentId ? String(item.parentId) : "",
@@ -142,7 +138,7 @@ export default function RoleModal({ open, mode, role, onCancel, onSuccess }: Rol
             list.forEach((item) => {
                 const id = String(item.id ?? item.path ?? item.name);
                 const meta = safeParseMetadata(item.metadata);
-                const secured = (meta as any)?.securityLevel as string | undefined;
+                const secured = item.securityLevel ?? ((meta as any)?.securityLevel as string | undefined);
                 if (secured) {
                     map.set(id, secured);
                 }
@@ -194,7 +190,7 @@ export default function RoleModal({ open, mode, role, onCancel, onSuccess }: Rol
         adminApi
             .getPortalMenus()
             .then((menus) => {
-                const list = menus ?? [];
+                const list = menus?.active ?? [];
                 setMenuTree(mapPortalMenusToMenuTree(list));
                 setMenuSecurityMap(collectMenuSecurityMap(list));
             })

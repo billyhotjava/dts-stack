@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -88,17 +89,10 @@ public class AdminUserResource {
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.SYS_ADMIN + "')")
     public ResponseEntity<ApiResponse<ApprovalDTOs.ApprovalRequestDetail>> deleteUser(
         @PathVariable String username,
-        @RequestBody(required = false) DeleteUserRequestVM request,
-        HttpServletRequest servletRequest
+        @RequestBody(required = false) DeleteUserRequestVM request
     ) {
-        String reason = request != null ? request.getReason() : null;
-        ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.submitDelete(
-            username,
-            reason,
-            SecurityUtils.getCurrentUserLogin().orElse("sysadmin"),
-            clientIp(servletRequest)
-        );
-        return ResponseEntity.ok(ApiResponse.ok(detail));
+        String message = "用户删除功能已禁用，请改用停用操作";
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(message));
     }
 
     private UserOperationRequest toCommand(UserRequestVM request) {

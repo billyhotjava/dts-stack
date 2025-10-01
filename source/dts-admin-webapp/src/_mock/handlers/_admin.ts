@@ -874,7 +874,7 @@ export const adminHandlers = [
 		return json(draft);
 	}),
 
-	http.get(`${ADMIN_API}/portal/menus`, () => json(portalMenus)),
+	http.get(`${ADMIN_API}/portal/menus`, () => json({ active: portalMenus, deleted: [] })),
 
 	http.post(`${ADMIN_API}/portal/menus`, async ({ request }) => {
 		const body = (await request.json()) as PortalMenuItem;

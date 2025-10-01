@@ -16,12 +16,21 @@ public class PortalMenuService {
         this.repo = repo;
     }
 
+    @Transactional(readOnly = true)
     public List<PortalMenu> findTree() {
-        List<PortalMenu> roots = repo.findByParentIsNullOrderBySortOrderAscIdAsc();
+        List<PortalMenu> roots = repo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
         roots.forEach(this::touch);
         return roots;
     }
 
-    private void touch(PortalMenu p) { if (p.getChildren() != null) p.getChildren().forEach(this::touch); }
-}
+    @Transactional(readOnly = true)
+    public List<PortalMenu> findDeletedMenus() {
+        return repo.findByDeletedTrueOrderBySortOrderAscIdAsc();
+    }
 
+    private void touch(PortalMenu p) {
+        if (p.getChildren() != null) {
+            p.getChildren().forEach(this::touch);
+        }
+    }
+}

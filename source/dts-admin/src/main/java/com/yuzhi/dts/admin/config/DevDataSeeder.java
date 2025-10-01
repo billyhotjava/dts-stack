@@ -87,7 +87,7 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     private void seedMenus() {
-        if (!menuRepo.findByParentIsNullOrderBySortOrderAscIdAsc().isEmpty()) return;
+        if (!menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc().isEmpty()) return;
         PortalMenu home = new PortalMenu();
         home.setName("首页");
         home.setPath("/home");

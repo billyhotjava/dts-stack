@@ -42,7 +42,7 @@ function mapPortalMenusToMenuTree(items: PortalMenuItem[]): MenuTree[] {
       const n: MenuTree = {
         id: String(node.id ?? `${parent?.path || ""}/${node.path}`),
         parentId: parent ? String(parent.id ?? parent.path ?? parent.name) : "",
-        name: node.name,
+        name: node.displayName ?? node.name,
         path: node.path || "",
         component: node.component || "",
         icon: node.icon ?? meta?.icon,

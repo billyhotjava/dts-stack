@@ -12,6 +12,7 @@ import type {
 	OrganizationNode,
 	OrganizationPayload,
 	PermissionCatalogSection,
+	PortalMenuCollection,
 	PortalMenuItem,
 	SystemConfigItem,
 } from "@/admin/types";
@@ -80,7 +81,7 @@ export const adminApi = {
 		}),
 
 	getPortalMenus: () =>
-		apiClient.get<PortalMenuItem[]>({
+		apiClient.get<PortalMenuCollection>({
 			url: "/admin/portal/menus",
 		}),
 

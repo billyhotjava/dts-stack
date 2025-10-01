@@ -89,7 +89,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [roles, setRoles] = useState<KeycloakRole[]>([]);
 	const [userRoles, setUserRoles] = useState<KeycloakRole[]>([]);
 	const [roleError, setRoleError] = useState<string>("");
-	const [personLevel, setPersonLevel] = useState<string>("NON_SECRET");
+	const [personLevel, setPersonLevel] = useState<string>("GENERAL");
 	const [userProfileConfig, setUserProfileConfig] = useState<UserProfileConfig | null>(null);
 	const [profileLoading, setProfileLoading] = useState(false);
 
@@ -351,8 +351,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
         const attributesPayload = buildAttributesPayload();
 
         // 创建用户时人员密级不得为“非密”
-        if (mode === "create" && (personLevel?.toUpperCase?.() === "NON_SECRET")) {
-            setError("人员新增不允许选择‘非密’级别，请选择更高密级。");
+        if (personLevel?.toUpperCase?.() === "NON_SECRET") {
+            setError("人员密级不允许为‘非密’，请选取更高密级。");
             return;
         }
 
@@ -638,16 +638,17 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									<SelectTrigger className="w-full justify-between">
 										<SelectValue placeholder="请选择人员密级" />
 									</SelectTrigger>
-									<SelectContent>
-                            {(PERSON_SECURITY_LEVELS.filter((option) =>
-                                // 新增用户时不展示“非密”选项；编辑时展示原值
-                                mode === "create" ? option.value !== "NON_SECRET" : true,
-                            )).map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                    {option.label}（{option.value}）
-                                </SelectItem>
-                            ))}
-									</SelectContent>
+								<SelectContent>
+									{PERSON_SECURITY_LEVELS.map((option) => (
+										<SelectItem
+											key={option.value}
+											value={option.value}
+											disabled={option.value === "NON_SECRET"}
+										>
+											{option.label}（{option.value}）
+										</SelectItem>
+									))}
+								</SelectContent>
 								</Select>
 								<p className="text-xs text-muted-foreground">
 									人员密级决定自动分配的数据访问范围和可授予的数据密级角色。

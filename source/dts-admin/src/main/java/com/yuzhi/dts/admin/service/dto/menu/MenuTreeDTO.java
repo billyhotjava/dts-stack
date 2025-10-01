@@ -17,6 +17,8 @@ public class MenuTreeDTO {
     private String component;
     private String icon;
     private String metadata;
+    private String displayName;
+    private String securityLevel;
     private List<MenuTreeDTO> children = new ArrayList<>();
 
     public String getId() {
@@ -97,6 +99,22 @@ public class MenuTreeDTO {
 
     public void setMetadata(String metadata) {
         this.metadata = metadata;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public String getSecurityLevel() {
+        return securityLevel;
+    }
+
+    public void setSecurityLevel(String securityLevel) {
+        this.securityLevel = securityLevel;
     }
 
     public List<MenuTreeDTO> getChildren() {
