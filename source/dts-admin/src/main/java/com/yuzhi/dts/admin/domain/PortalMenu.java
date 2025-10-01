@@ -30,8 +30,7 @@ public class PortalMenu extends AbstractAuditingEntity<Long> implements Serializ
     @Column(name = "sort_order")
     private Integer sortOrder;
 
-    @Lob
-    @Column(name = "metadata")
+    @Column(name = "metadata", columnDefinition = "text")
     private String metadata;
 
     @Column(name = "security_level", length = 32, nullable = false)

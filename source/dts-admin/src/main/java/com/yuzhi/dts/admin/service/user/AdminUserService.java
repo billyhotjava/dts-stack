@@ -210,12 +210,15 @@ public class AdminUserService {
             throw new IllegalArgumentException("不支持的用户密级: " + request.getPersonSecurityLevel());
         }
         ensureAllowedSecurityLevel(normalizedSecurity, "人员密级不允许为非密");
-        if (request.getDataLevels() == null || request.getDataLevels().isEmpty()) {
-            throw new IllegalArgumentException("数据密级范围不能为空");
-        }
-        for (String level : request.getDataLevels()) {
-            if (!SUPPORTED_DATA_LEVELS.contains(level)) {
-                throw new IllegalArgumentException("不支持的数据密级: " + level);
+        if (request.getDataLevels() != null) {
+            for (String level : request.getDataLevels()) {
+                if (StringUtils.isBlank(level)) {
+                    continue;
+                }
+                String normalized = level.trim().toUpperCase().replace('-', '_');
+                if (!SUPPORTED_DATA_LEVELS.contains(normalized)) {
+                    throw new IllegalArgumentException("不支持的数据密级: " + level);
+                }
             }
         }
     }

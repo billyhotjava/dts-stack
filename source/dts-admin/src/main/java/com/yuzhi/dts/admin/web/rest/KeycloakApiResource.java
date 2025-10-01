@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,6 +45,16 @@ public class KeycloakApiResource {
     private final AdminUserService adminUserService;
 
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
+    private static final Map<String, String> DATA_LEVEL_ALIASES = Map.ofEntries(
+        Map.entry("PUBLIC", "DATA_PUBLIC"),
+        Map.entry("DATA_PUBLIC", "DATA_PUBLIC"),
+        Map.entry("INTERNAL", "DATA_INTERNAL"),
+        Map.entry("DATA_INTERNAL", "DATA_INTERNAL"),
+        Map.entry("SECRET", "DATA_SECRET"),
+        Map.entry("DATA_SECRET", "DATA_SECRET"),
+        Map.entry("TOP_SECRET", "DATA_TOP_SECRET"),
+        Map.entry("DATA_TOP_SECRET", "DATA_TOP_SECRET")
+    );
 
     public KeycloakApiResource(
         InMemoryStores stores,
@@ -396,18 +407,33 @@ public class KeycloakApiResource {
     private List<String> resolveDataLevels(Map<String, List<String>> attributes, String personLevel) {
         List<String> values = attributeList(attributes, "data_levels", "dataLevels", "data_levels[]");
         if (!values.isEmpty()) {
-            List<String> normalized = new ArrayList<>();
+            LinkedHashSet<String> normalized = new LinkedHashSet<>();
             for (String value : values) {
-                String cleaned = value == null ? null : value.trim().toUpperCase().replace('-', '_');
-                if (cleaned != null && !cleaned.isBlank()) {
+                String cleaned = normalizeDataLevelValue(value);
+                if (cleaned != null) {
                     normalized.add(cleaned);
                 }
             }
             if (!normalized.isEmpty()) {
-                return normalized;
+                return new ArrayList<>(normalized);
             }
         }
         return new ArrayList<>(computeDataLevels(personLevel == null ? DEFAULT_PERSON_LEVEL : personLevel));
+    }
+
+    private String normalizeDataLevelValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String cleaned = value.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+        if (cleaned.isEmpty()) {
+            return null;
+        }
+        String mapped = DATA_LEVEL_ALIASES.get(cleaned);
+        if (mapped != null) {
+            return mapped;
+        }
+        return cleaned.startsWith("DATA_") ? cleaned : null;
     }
 
     private List<String> attributeList(Map<String, List<String>> attributes, String... keys) {

@@ -39,8 +39,8 @@ public class PortalOpaqueTokenIntrospector implements OpaqueTokenIntrospector {
         attributes.put("roles", session.roles());
         attributes.put("permissions", session.permissions());
         attributes.put("token_type", "demo");
-        attributes.put("exp", session.expiresAt().getEpochSecond());
-        attributes.put("iat", Instant.now().getEpochSecond());
+        attributes.put(OAuth2TokenIntrospectionClaimNames.EXP, session.expiresAt());
+        attributes.put(OAuth2TokenIntrospectionClaimNames.IAT, Instant.now());
 
         List<GrantedAuthority> authorities = session
             .roles()
@@ -55,4 +55,3 @@ public class PortalOpaqueTokenIntrospector implements OpaqueTokenIntrospector {
         return new OAuth2AuthenticationException(new OAuth2Error(OAuth2ErrorCodes.INVALID_TOKEN));
     }
 }
-
