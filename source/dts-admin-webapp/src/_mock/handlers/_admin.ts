@@ -25,6 +25,43 @@ import portalMenus from "../data/portal-menus.json";
 
 const ADMIN_API = "/api/admin";
 
+const ADMIN_AUDIT_OPERATORS = new Set(["sysadmin", "authadmin", "auditadmin", "opadmin"]);
+
+function isBusinessActor(actor?: string | null) {
+	if (!actor) {
+		return false;
+	}
+	return !ADMIN_AUDIT_OPERATORS.has(actor.toLowerCase());
+}
+
+function scopeAuditEvents(events: AuditEvent[]) {
+	const active = getActiveAdmin();
+	const role = active.role?.toUpperCase();
+	switch (role) {
+		case "AUTHADMIN":
+			return events.filter((event) => {
+				const actor = event.actor?.toLowerCase();
+				return actor === "sysadmin" || actor === "auditadmin";
+			});
+		case "AUDITADMIN":
+			return events.filter((event) => {
+				const actor = event.actor?.toLowerCase();
+				if (!actor) {
+					return false;
+				}
+				if (actor === "auditadmin") {
+					return false;
+				}
+				if (actor === "sysadmin" || actor === "authadmin") {
+					return true;
+				}
+				return isBusinessActor(actor);
+			});
+		default:
+			return events;
+	}
+}
+
 let changeRequestId = 3;
 const changeRequests: ChangeRequest[] = [
 	{
@@ -51,7 +88,15 @@ const changeRequests: ChangeRequest[] = [
 const auditEvents: AuditEvent[] = Array.from({ length: 40 }).map((_, index) => ({
 	id: index + 1,
 	timestamp: faker.date.recent({ days: 15 }).toISOString(),
-	actor: faker.helpers.arrayElement(["sysadmin", "authadmin", "auditadmin", "dba"]),
+	actor: faker.helpers.arrayElement([
+		"sysadmin",
+		"authadmin",
+		"auditadmin",
+		"dba",
+		"dataops",
+		"analytics.user",
+		"bi.viewer",
+	]),
 	action: faker.helpers.arrayElement(["USER_CREATE", "ROLE_ASSIGN", "DATA_EXPORT", "LOGIN"]),
 	resource: faker.helpers.arrayElement(["user:alice", "role:DATA_CURATOR", "dataset:ods_orders", "system"]),
 	outcome: faker.helpers.arrayElement(["SUCCESS", "FAILURE"]),
@@ -836,13 +881,14 @@ export const adminHandlers = [
 				(outcome ? event.outcome === outcome : true)
 			);
 		});
-		return json(filtered);
+		return json(scopeAuditEvents(filtered));
 	}),
 
 	http.get(`/admin/audit/export`, ({ request }) => {
 		const url = new URL(request.url, "http://localhost");
 		const format = url.searchParams.get("format") ?? "csv";
-		const content = format === "json" ? JSON.stringify(auditEvents, null, 2) : buildCsv(auditEvents);
+		const scoped = scopeAuditEvents(auditEvents);
+		const content = format === "json" ? JSON.stringify(scoped, null, 2) : buildCsv(scoped);
 		return new HttpResponse(content, {
 			headers: {
 				"Content-Type": format === "json" ? "application/json" : "text/csv",
@@ -851,7 +897,8 @@ export const adminHandlers = [
 	}),
 
 	http.get(`${ADMIN_API}/audit/export`, () => {
-		const content = buildCsv(auditEvents);
+		const scoped = scopeAuditEvents(auditEvents);
+		const content = buildCsv(scoped);
 		return new HttpResponse(content, {
 			headers: { "Content-Type": "text/csv" },
 		});

@@ -154,11 +154,10 @@ export default function OrgManagementView() {
 				parentId: formState.parentId ?? null,
 			};
 			try {
-				const changeRequest = await createMutation.mutateAsync(payload);
-				toast.success("部门新增请求已提交", {
-					description: `审批单号 #${changeRequest.id}`,
-				});
+				const created = await createMutation.mutateAsync(payload);
+				toast.success("部门新增成功");
 				closeForm();
+				setSelectedId(created.id);
 				await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
 			} catch (error) {
 				console.error(error);
@@ -169,10 +168,8 @@ export default function OrgManagementView() {
 		if (formState.mode === "edit" && formState.target) {
 			const payload: OrganizationPayload = { ...values };
 			try {
-				const changeRequest = await updateMutation.mutateAsync({ id: formState.target.id, payload });
-				toast.success("部门信息更新请求已提交", {
-					description: `审批单号 #${changeRequest.id}`,
-				});
+				await updateMutation.mutateAsync({ id: formState.target.id, payload });
+				toast.success("部门信息已更新");
 				closeForm();
 				await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
 			} catch (error) {
@@ -185,10 +182,8 @@ export default function OrgManagementView() {
 		const target = deleteState.target;
 		if (!target) return;
 		try {
-			const changeRequest = await deleteMutation.mutateAsync(target.id);
-			toast.success("部门删除请求已提交", {
-				description: `审批单号 #${changeRequest.id}`,
-			});
+			await deleteMutation.mutateAsync(target.id);
+			toast.success("部门已删除");
 			closeDelete();
 			await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
 			setSelectedId((current) => {

@@ -35,7 +35,19 @@ const OPERATOR_LABEL_MAP: Record<string, string> = {
 	sysadmin: "系统管理员",
 	authadmin: "授权管理员",
 	auditadmin: "安全审计员",
+	dba: "数据库管理员",
+	dataops: "数据运维",
+	"analytics.user": "业务分析员",
 };
+
+const ADMIN_OPERATOR_SET = new Set(["sysadmin", "authadmin", "auditadmin", "opadmin"]);
+
+function isBusinessOperator(operator: string | undefined) {
+	if (!operator) {
+		return false;
+	}
+	return !ADMIN_OPERATOR_SET.has(operator.toLowerCase());
+}
 
 const auditLogSamples: AuditLogEntry[] = [
 	{
@@ -268,6 +280,78 @@ const auditLogSamples: AuditLogEntry[] = [
 		result: "失败",
 		detail: "口令输入错误连续三次触发告警",
 	},
+	{
+		id: "L-202405-024",
+		timestamp: "2024-05-13T15:22:00+08:00",
+		module: "数据资产",
+		action: "订阅数据集 ods_orders",
+		operator: "analytics.user",
+		ip: "10.10.18.15",
+		result: "成功",
+		detail: "业务分析员订阅月度订单指标数据集",
+		resource: "/portal/datasets/ods_orders",
+		type: "订阅",
+	},
+	{
+		id: "L-202405-025",
+		timestamp: "2024-05-13T16:05:00+08:00",
+		module: "数据资产",
+		action: "导出数据集 ods_orders",
+		operator: "analytics.user",
+		ip: "10.10.18.15",
+		result: "成功",
+		detail: "导出订单数据供业务会议分析",
+		resource: "/portal/datasets/ods_orders/export",
+		type: "导出",
+	},
+	{
+		id: "L-202405-026",
+		timestamp: "2024-05-13T17:45:00+08:00",
+		module: "审批中心",
+		action: "提交审批 数据资产导出",
+		operator: "dataops",
+		ip: "10.10.18.22",
+		result: "成功",
+		detail: "提交业务数据导出审批请求",
+		resource: "/portal/approval/requests/823",
+		type: "提交",
+	},
+	{
+		id: "L-202405-027",
+		timestamp: "2024-05-14T09:45:00+08:00",
+		module: "审批中心",
+		action: "审批通过 数据资产导出",
+		operator: "authadmin",
+		ip: "10.10.9.11",
+		result: "成功",
+		detail: "授权管理员批准数据导出申请",
+		resource: "/admin/approval/detail/823",
+		type: "审批",
+	},
+	{
+		id: "L-202405-028",
+		timestamp: "2024-05-14T11:12:00+08:00",
+		module: "登录管理",
+		action: "业务用户登录成功",
+		operator: "dataops",
+		ip: "10.10.18.22",
+		result: "成功",
+		detail: "业务运维人员登录业务门户",
+		resource: "/portal/login",
+		type: "登录",
+	},
+	{
+		id: "L-202405-029",
+		timestamp: "2024-05-14T11:18:00+08:00",
+		module: "登录管理",
+		action: "数据库管理员登录失败",
+		operator: "dba",
+		ip: "10.10.30.12",
+		result: "失败",
+		detail: "数据库管理员口令过期导致登录失败",
+		resource: "/portal/login",
+		type: "登录",
+	},
 ];
 
 export default function AuditCenterView() {
@@ -282,13 +366,25 @@ export default function AuditCenterView() {
 
 	const scopedLogs = useMemo(() => {
 		const role = sessionContext?.role?.toUpperCase();
-		if (role === "AUTHADMIN") {
-			return auditLogSamples.filter((item) => ["sysadmin", "auditadmin"].includes(item.operator));
+		switch (role) {
+			case "AUTHADMIN":
+				return auditLogSamples.filter((item) =>
+					["sysadmin", "auditadmin"].includes((item.operator || "").toLowerCase()),
+				);
+			case "AUDITADMIN":
+				return auditLogSamples.filter((item) => {
+					const operator = (item.operator || "").toLowerCase();
+					if (operator === "auditadmin") {
+						return false;
+					}
+					if (["sysadmin", "authadmin"].includes(operator)) {
+						return true;
+					}
+					return isBusinessOperator(operator);
+				});
+			default:
+				return auditLogSamples;
 		}
-		if (role === "AUDITADMIN") {
-			return auditLogSamples.filter((item) => item.operator !== "auditadmin");
-		}
-		return auditLogSamples;
 	}, [sessionContext?.role]);
 
 	const filteredLogs = useMemo(() => {
@@ -481,7 +577,7 @@ export default function AuditCenterView() {
 							} else if (role === "AUDITADMIN") {
 								items.push({ value: "sysadmin", label: "系统管理员" });
 								items.push({ value: "authadmin", label: "授权管理员" });
-								items.push({ value: "business", label: "业务系统" });
+								items.push({ value: "business", label: "业务用户" });
 							} else {
 								// 其他默认提供常见两类
 								items.push({ value: "sysadmin", label: "系统管理员" });
@@ -569,9 +665,15 @@ function formatDateTime(value: string) {
 }
 
 function formatOperatorName(value: string) {
-	const label = OPERATOR_LABEL_MAP[value as keyof typeof OPERATOR_LABEL_MAP];
+	const normalized = value?.toLowerCase?.();
+	const label = normalized
+		? OPERATOR_LABEL_MAP[normalized as keyof typeof OPERATOR_LABEL_MAP]
+		: undefined;
 	if (label) {
 		return `${label}（${value}）`;
+	}
+	if (isBusinessOperator(normalized)) {
+		return `业务用户（${value}）`;
 	}
 	return value;
 }

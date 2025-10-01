@@ -16,8 +16,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
 import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import com.yuzhi.dts.admin.service.OrganizationService;
@@ -592,8 +590,6 @@ public class AdminApiResource {
                 applyCustomRoleChange(cr);
             } else if ("ROLE_ASSIGNMENT".equalsIgnoreCase(cr.getResourceType())) {
                 applyRoleAssignmentChange(cr);
-            } else if ("USER".equalsIgnoreCase(cr.getResourceType())) {
-                applyUserChange(cr);
             }
         } catch (Exception e) {
             // swallow apply failures to keep approval result; could store error
@@ -919,26 +915,6 @@ public class AdminApiResource {
     }
 
     private static String joinCsv(List<Long> ids) { return ids.stream().map(String::valueOf).reduce((a,b)->a+","+b).orElse(""); }
-
-    private void applyUserChange(ChangeRequest cr) throws Exception {
-        String token = currentAccessToken();
-        if (token == null || token.isBlank()) {
-            throw new IllegalStateException("审批需要有效访问令牌");
-        }
-        adminUserService.applyChange(cr, token);
-        cr.setStatus("APPLIED");
-    }
-
-    private String currentAccessToken() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication instanceof JwtAuthenticationToken jwt) {
-            return jwt.getToken().getTokenValue();
-        }
-        if (authentication instanceof BearerTokenAuthentication bearer) {
-            return bearer.getToken().getTokenValue();
-        }
-        return null;
-    }
 
     private String validateAssignment(String role, String username, String displayName, String userSecLevel, Long scopeOrgId, List<String> ops, List<Long> datasetIds) {
         if (role.isEmpty()) return "请选择角色";
