@@ -205,7 +205,20 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         }
         if (dto.getEnabled() != null) rep.put("enabled", dto.getEnabled());
         if (dto.getEmailVerified() != null) rep.put("emailVerified", dto.getEmailVerified());
-        if (dto.getAttributes() != null && !dto.getAttributes().isEmpty()) rep.put("attributes", dto.getAttributes());
+        Map<String, List<String>> attributes = new LinkedHashMap<>();
+        if (dto.getAttributes() != null && !dto.getAttributes().isEmpty()) {
+            dto
+                .getAttributes()
+                .forEach((key, value) -> {
+                    if (key != null) {
+                        attributes.put(key, value == null ? List.of() : new ArrayList<>(value));
+                    }
+                });
+        }
+        if (dto.getFullName() != null && !dto.getFullName().isBlank()) {
+            attributes.put("fullname", List.of(dto.getFullName()));
+        }
+        if (!attributes.isEmpty()) rep.put("attributes", attributes);
         if (dto.getRealmRoles() != null && !dto.getRealmRoles().isEmpty()) rep.put("realmRoles", dto.getRealmRoles());
         if (dto.getGroups() != null && !dto.getGroups().isEmpty()) rep.put("groups", dto.getGroups());
         if (dto.getClientRoles() != null && !dto.getClientRoles().isEmpty()) rep.put("clientRoles", dto.getClientRoles());

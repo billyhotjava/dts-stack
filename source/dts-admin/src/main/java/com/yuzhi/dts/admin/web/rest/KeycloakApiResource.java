@@ -97,6 +97,7 @@ public class KeycloakApiResource {
         if (payload.getUsername() == null || payload.getUsername().isBlank()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("用户名不能为空"));
         }
+        normalizeNames(payload);
         KeycloakUserDTO created = keycloakAdminClient.createUser(payload, currentAccessToken());
         cacheUser(created);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_CREATE", "USER", created.getUsername(), "SUCCESS", null);
@@ -107,7 +108,9 @@ public class KeycloakApiResource {
     public ResponseEntity<ApiResponse<KeycloakUserDTO>> updateUser(@PathVariable String id, @RequestBody KeycloakUserDTO patch) {
         KeycloakUserDTO current = keycloakAdminClient.findById(id, currentAccessToken()).orElse(stores.findUserById(id));
         if (current == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
-        KeycloakUserDTO updated = keycloakAdminClient.updateUser(id, mergeForUpdate(current, patch), currentAccessToken());
+        KeycloakUserDTO merged = mergeForUpdate(current, patch);
+        normalizeNames(merged);
+        KeycloakUserDTO updated = keycloakAdminClient.updateUser(id, merged, currentAccessToken());
         cacheUser(updated);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "USER_UPDATE", "USER", updated.getUsername(), "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(updated));
@@ -146,6 +149,7 @@ public class KeycloakApiResource {
         Object val = body.get("enabled");
         boolean enabled = Boolean.TRUE.equals(val) || (val instanceof Boolean b && b);
         u.setEnabled(enabled);
+        normalizeNames(u);
         KeycloakUserDTO updated = keycloakAdminClient.updateUser(id, u, currentAccessToken());
         cacheUser(updated);
         auditService.record(
@@ -170,6 +174,7 @@ public class KeycloakApiResource {
         }
         u.getAttributes().put("person_level", List.of(level));
         u.getAttributes().put("data_levels", computeDataLevels(level));
+        normalizeNames(u);
         KeycloakUserDTO updated = keycloakAdminClient.updateUser(id, u, currentAccessToken());
         cacheUser(updated);
         auditService.record(
@@ -229,6 +234,7 @@ public class KeycloakApiResource {
         merged.setEmail(patch.getEmail() != null ? patch.getEmail() : current.getEmail());
         merged.setFirstName(patch.getFirstName() != null ? patch.getFirstName() : current.getFirstName());
         merged.setLastName(patch.getLastName() != null ? patch.getLastName() : current.getLastName());
+        merged.setFullName(patch.getFullName() != null ? patch.getFullName() : current.getFullName());
         merged.setEnabled(patch.getEnabled() != null ? patch.getEnabled() : current.getEnabled());
         merged.setEmailVerified(patch.getEmailVerified() != null ? patch.getEmailVerified() : current.getEmailVerified());
         merged.setAttributes(
@@ -243,6 +249,34 @@ public class KeycloakApiResource {
         );
         merged.setCreatedTimestamp(current.getCreatedTimestamp());
         return merged;
+    }
+
+    private void normalizeNames(KeycloakUserDTO dto) {
+        if (dto == null) return;
+        String fullName = dto.getFullName();
+        String first = dto.getFirstName();
+        String last = dto.getLastName();
+
+        if (fullName == null || fullName.isBlank()) {
+            StringBuilder sb = new StringBuilder();
+            if (first != null && !first.isBlank()) sb.append(first.trim());
+            if (last != null && !last.isBlank()) {
+                if (sb.length() > 0) sb.append(' ');
+                sb.append(last.trim());
+            }
+            fullName = sb.length() > 0 ? sb.toString() : (first != null && !first.isBlank() ? first.trim() : last);
+        }
+
+        if (fullName != null && !fullName.isBlank()) {
+            dto.setFullName(fullName.trim());
+            if (dto.getFirstName() == null || dto.getFirstName().isBlank()) dto.setFirstName(fullName.trim());
+            Map<String, List<String>> attrs = dto.getAttributes();
+            if (attrs == null) {
+                attrs = new LinkedHashMap<>();
+                dto.setAttributes(attrs);
+            }
+            attrs.put("fullname", List.of(dto.getFullName()));
+        }
     }
 
     @GetMapping("/keycloak/users/{id}/roles")
