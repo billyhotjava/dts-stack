@@ -6,10 +6,10 @@ export const PERSON_SECURITY_LEVELS = [
 ];
 
 export const DATA_LEVELS_BY_PERSON_LEVEL: Record<string, string[]> = {
-	NON_SECRET: ["PUBLIC"],
-	GENERAL: ["PUBLIC", "INTERNAL"],
-	IMPORTANT: ["PUBLIC", "INTERNAL", "SECRET"],
-	CORE: ["PUBLIC", "INTERNAL", "SECRET", "TOP_SECRET"],
+	NON_SECRET: ["DATA_PUBLIC"],
+	GENERAL: ["DATA_PUBLIC", "DATA_INTERNAL"],
+	IMPORTANT: ["DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET"],
+	CORE: ["DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_TOP_SECRET"],
 };
 
 export const GOVERNANCE_ROLE_NAMES = ["ROLE_SYS_ADMIN", "ROLE_AUTH_ADMIN", "ROLE_AUDITOR_ADMIN"] as const;
@@ -30,7 +30,8 @@ export const DATA_SECURITY_LEVEL_OPTIONS = (DATA_ROLE_NAMES as readonly string[]
 
 export function deriveDataLevels(level?: string | null): string[] {
 	if (!level) return [];
-	return DATA_LEVELS_BY_PERSON_LEVEL[level] ?? [];
+	const normalized = level.trim().toUpperCase().replace(/[-\s]/g, "_");
+	return DATA_LEVELS_BY_PERSON_LEVEL[normalized] ?? [];
 }
 
 export function isGovernanceRole(roleName: string): boolean {

@@ -16,6 +16,7 @@ import { Switch } from "@/ui/switch";
 import { UserProfileField } from "./user-profile-field";
 import { t } from "@/locales/i18n";
 import {
+	DATA_SECURITY_LEVEL_LABELS,
 	PERSON_SECURITY_LEVELS,
 	deriveDataLevels,
 	isApplicationAdminRole,
@@ -37,6 +38,8 @@ const RESERVED_PROFILE_ATTRIBUTE_NAMES = [
 	"person_level",
 	"data_levels",
 ];
+
+const DATA_LEVEL_LABEL_MAP = DATA_SECURITY_LEVEL_LABELS as Record<string, string>;
 
 interface UserModalProps {
 	open: boolean;
@@ -114,17 +117,16 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				: undefined;
 
 			if (resolvedLevel) {
-				const derived = deriveDataLevels(resolvedLevel);
 				cloned.personnel_security_level = [resolvedLevel];
 				cloned.person_security_level = [resolvedLevel];
 				cloned.person_level = [resolvedLevel];
-				cloned.data_levels = [...derived];
 			} else {
 				delete cloned.personnel_security_level;
 				delete cloned.person_security_level;
 				delete cloned.person_level;
-				delete cloned.data_levels;
 			}
+			delete cloned.data_levels;
+			delete (cloned as Record<string, unknown>)["dataLevels"];
 
 			Object.keys(cloned).forEach((key) => {
 				const value = cloned[key];
@@ -151,6 +153,10 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	}, [formData.attributes, normalizeAttributesForState, personLevel]);
 
 	const derivedDataLevels = useMemo(() => deriveDataLevels(personLevel), [personLevel]);
+	const resolveDataLevelLabel = useCallback(
+		(level: string) => DATA_LEVEL_LABEL_MAP[level] ?? level.replace(/^DATA_/, "").replace(/_/g, " "),
+		[],
+	);
 
 	const updateSingleValueAttribute = (key: string, value: string) => {
 		setFormData((prev) => {
@@ -644,6 +650,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 											key={option.value}
 											value={option.value}
 											disabled={option.value === "NON_SECRET"}
+											className={option.value === "NON_SECRET" ? "hidden" : undefined}
 										>
 											{option.label}（{option.value}）
 										</SelectItem>
@@ -661,7 +668,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									{derivedDataLevels.length > 0 ? (
 										derivedDataLevels.map((level) => (
 											<Badge key={level} variant="secondary">
-												{level.replace("_", " ")}
+												{resolveDataLevelLabel(level)}
 											</Badge>
 										))
 									) : (
