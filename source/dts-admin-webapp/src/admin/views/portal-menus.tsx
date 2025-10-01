@@ -93,6 +93,11 @@ export default function PortalMenusView() {
 						onChange={(event) => setDraft((prev) => ({ ...prev, path: event.target.value }))}
 					/>
 					<Input
+						placeholder="图标 (如 solar:book-bold-duotone)"
+						value={draft.icon || ""}
+						onChange={(event) => setDraft((prev) => ({ ...prev, icon: event.target.value || undefined }))}
+					/>
+					<Input
 						placeholder="前端组件"
 						value={draft.component || ""}
 						onChange={(event) => setDraft((prev) => ({ ...prev, component: event.target.value }))}
@@ -146,7 +151,7 @@ function MenuTree({ items }: { items: PortalMenuItem[] }) {
 						<span className="text-muted-foreground">ID: {item.id}</span>
 					</div>
 					<Text variant="body3" className="text-muted-foreground">
-						路径：{item.path} · 组件：{item.component || "--"}
+						路径：{item.path} · 图标：{item.icon || "--"} · 组件：{item.component || "--"}
 					</Text>
 					{item.children && item.children.length > 0 ? (
 						<div className="mt-2 border-l pl-4">

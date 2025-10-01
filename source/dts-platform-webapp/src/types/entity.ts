@@ -83,6 +83,7 @@ export interface Menu extends CommonOptions, MenuMetaInfo {
 	code: string;
 	order?: number;
 	type: PermissionType;
+	metadata?: string;
 }
 
 export type MenuMetaInfo = Partial<

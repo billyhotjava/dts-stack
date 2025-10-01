@@ -15,6 +15,8 @@ public class MenuTreeDTO {
     private Integer type; // 1 = CATALOGUE, 2 = MENU
     private String path;
     private String component;
+    private String icon;
+    private String metadata;
     private List<MenuTreeDTO> children = new ArrayList<>();
 
     public String getId() {
@@ -81,6 +83,22 @@ public class MenuTreeDTO {
         this.component = component;
     }
 
+    public String getIcon() {
+        return icon;
+    }
+
+    public void setIcon(String icon) {
+        this.icon = icon;
+    }
+
+    public String getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(String metadata) {
+        this.metadata = metadata;
+    }
+
     public List<MenuTreeDTO> getChildren() {
         return children;
     }
@@ -89,4 +107,3 @@ public class MenuTreeDTO {
         this.children = children;
     }
 }
-

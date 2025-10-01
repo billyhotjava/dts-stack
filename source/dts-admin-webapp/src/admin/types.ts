@@ -72,6 +72,7 @@ export interface PortalMenuItem {
 	sortOrder?: number;
 	metadata?: string;
 	parentId?: number | null;
+	icon?: string;
 	children?: PortalMenuItem[];
 }
 

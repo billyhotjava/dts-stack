@@ -66,6 +66,8 @@ public class BasicApiResource {
         d.setOrder(p.getSortOrder());
         d.setPath(p.getPath());
         d.setComponent(p.getComponent());
+        d.setIcon(p.getIcon());
+        d.setMetadata(p.getMetadata());
         d.setType((p.getChildren() != null && !p.getChildren().isEmpty()) ? 1 : 2);
         if (p.getChildren() != null) {
             List<MenuTreeDTO> cs = new ArrayList<>();

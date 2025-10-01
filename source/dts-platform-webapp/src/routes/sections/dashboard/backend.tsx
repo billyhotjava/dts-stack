@@ -93,6 +93,9 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 
 export function getBackendDashboardRoutes() {
 	const menus = getMenus();
-	const backendDashboardRoutes = convertToRoute(convertFlatToTree(menus));
+	const tree = hasChildren(menus) ? menus : convertFlatToTree(menus);
+	const backendDashboardRoutes = convertToRoute(tree);
 	return backendDashboardRoutes;
 }
+
+const hasChildren = (items: MenuTree[]): boolean => items.some((item) => Array.isArray(item.children) && item.children.length > 0);

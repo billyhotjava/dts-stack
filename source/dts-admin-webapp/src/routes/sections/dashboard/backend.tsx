@@ -113,7 +113,7 @@ function mapPortalMenusToMenuTree(items: PortalMenuItem[]): MenuTree[] {
                 name: node.name,
                 path: node.path || "",
                 component: node.component || "",
-                icon: meta?.icon,
+                icon: node.icon ?? meta?.icon,
                 type: hasChildren ? 1 : 2,
                 children: [],
             } as unknown as MenuTree;

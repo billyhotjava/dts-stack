@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251005-01-portal-menu-icon" author="codex">
+        <addColumn tableName="portal_menu">
+            <column name="icon" type="varchar(128)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20251005-02-portal-menu-seed" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableIsEmpty tableName="portal_menu"/>
+        </preConditions>
+
+        <!-- Root sections -->
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="1"/>
+            <column name="name" value="sys.nav.portal.catalog"/>
+            <column name="path" value="catalog"/>
+            <column name="icon" value="solar:book-bold-duotone"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"catalog","titleKey":"sys.nav.portal.catalog","title":"数据资产"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="2"/>
+            <column name="name" value="sys.nav.portal.modeling"/>
+            <column name="path" value="modeling"/>
+            <column name="icon" value="solar:documents-bold-duotone"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"modeling","titleKey":"sys.nav.portal.modeling","title":"模型与标准"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="3"/>
+            <column name="name" value="sys.nav.portal.governance"/>
+            <column name="path" value="governance"/>
+            <column name="icon" value="solar:shield-check-bold-duotone"/>
+            <column name="sort_order" valueNumeric="30"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"governance","titleKey":"sys.nav.portal.governance","title":"治理与质量"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="4"/>
+            <column name="name" value="sys.nav.portal.explore"/>
+            <column name="path" value="explore"/>
+            <column name="icon" value="solar:compass-bold-duotone"/>
+            <column name="sort_order" valueNumeric="40"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"explore","titleKey":"sys.nav.portal.explore","title":"数据开发"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="5"/>
+            <column name="name" value="sys.nav.portal.visualization"/>
+            <column name="path" value="visualization"/>
+            <column name="icon" value="solar:pie-chart-bold-duotone"/>
+            <column name="sort_order" valueNumeric="50"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"visualization","titleKey":"sys.nav.portal.visualization","title":"数据可视化"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="6"/>
+            <column name="name" value="sys.nav.portal.services"/>
+            <column name="path" value="services"/>
+            <column name="icon" value="solar:server-bold-duotone"/>
+            <column name="sort_order" valueNumeric="60"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"services","titleKey":"sys.nav.portal.services","title":"数据服务"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="7"/>
+            <column name="name" value="sys.nav.portal.iam"/>
+            <column name="path" value="iam"/>
+            <column name="icon" value="solar:key-minimalistic-bold-duotone"/>
+            <column name="sort_order" valueNumeric="70"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"iam","titleKey":"sys.nav.portal.iam","title":"权限与策略"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="8"/>
+            <column name="name" value="sys.nav.portal.foundation"/>
+            <column name="path" value="foundation"/>
+            <column name="icon" value="solar:database-bold-duotone"/>
+            <column name="sort_order" valueNumeric="80"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"foundation","titleKey":"sys.nav.portal.foundation","title":"基础数据维护"}]]></column>
+        </insert>
+
+        <!-- Children for catalog -->
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="101"/>
+            <column name="name" value="sys.nav.portal.catalogAssetsDirectory"/>
+            <column name="path" value="assets"/>
+            <column name="parent_id" valueNumeric="1"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"catalog","entryKey":"assets","titleKey":"sys.nav.portal.catalogAssetsDirectory","title":"数据资产目录"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="102"/>
+            <column name="name" value="sys.nav.portal.catalogAccessPolicy"/>
+            <column name="path" value="access-policy"/>
+            <column name="parent_id" valueNumeric="1"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"catalog","entryKey":"accessPolicy","titleKey":"sys.nav.portal.catalogAccessPolicy","title":"分级保护与访问策略"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="103"/>
+            <column name="name" value="sys.nav.portal.catalogSecureViews"/>
+            <column name="path" value="secure-views"/>
+            <column name="parent_id" valueNumeric="1"/>
+            <column name="sort_order" valueNumeric="30"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"catalog","entryKey":"secureViews","titleKey":"sys.nav.portal.catalogSecureViews","title":"安全视图编排"}]]></column>
+        </insert>
+
+        <!-- Children for modeling -->
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="201"/>
+            <column name="name" value="sys.nav.portal.modelingStandards"/>
+            <column name="path" value="standards"/>
+            <column name="parent_id" valueNumeric="2"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"modeling","entryKey":"standards","titleKey":"sys.nav.portal.modelingStandards","title":"数据标准"}]]></column>
+        </insert>
+
+        <!-- Children for governance -->
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="301"/>
+            <column name="name" value="sys.nav.portal.governanceRules"/>
+            <column name="path" value="rules"/>
+            <column name="parent_id" valueNumeric="3"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"governance","entryKey":"rules","titleKey":"sys.nav.portal.governanceRules","title":"质量规则"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="302"/>
+            <column name="name" value="sys.nav.portal.governanceCompliance"/>
+            <column name="path" value="compliance"/>
+            <column name="parent_id" valueNumeric="3"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"governance","entryKey":"compliance","titleKey":"sys.nav.portal.governanceCompliance","title":"合规检查"}]]></column>
+        </insert>
+
+        <!-- Children for explore -->
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="401"/>
+            <column name="name" value="sys.nav.portal.exploreWorkbench"/>
+            <column name="path" value="workbench"/>
+            <column name="parent_id" valueNumeric="4"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"explore","entryKey":"workbench","titleKey":"sys.nav.portal.exploreWorkbench","title":"数据查询和预览"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="402"/>
+            <column name="name" value="sys.nav.portal.exploreSavedQueries"/>
+            <column name="path" value="saved-queries"/>
+            <column name="parent_id" valueNumeric="4"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"explore","entryKey":"savedQueries","titleKey":"sys.nav.portal.exploreSavedQueries","title":"结果集管理"}]]></column>
+        </insert>
+
+        <!-- Children for visualization -->
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="501"/>
+            <column name="name" value="sys.nav.portal.visualizationDashboards"/>
+            <column name="path" value="dashboards"/>
+            <column name="parent_id" valueNumeric="5"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"visualization","entryKey":"dashboards","titleKey":"sys.nav.portal.visualizationDashboards","title":"可视化仪表盘"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="502"/>
+            <column name="name" value="sys.nav.portal.visualizationCockpit"/>
+            <column name="path" value="cockpit"/>
+            <column name="parent_id" valueNumeric="5"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"visualization","entryKey":"cockpit","titleKey":"sys.nav.portal.visualizationCockpit","title":"经营驾驶舱"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="503"/>
+            <column name="name" value="sys.nav.portal.visualizationProjects"/>
+            <column name="path" value="projects"/>
+            <column name="parent_id" valueNumeric="5"/>
+            <column name="sort_order" valueNumeric="30"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"visualization","entryKey":"projects","titleKey":"sys.nav.portal.visualizationProjects","title":"项目管理看板"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="504"/>
+            <column name="name" value="sys.nav.portal.visualizationFinance"/>
+            <column name="path" value="finance"/>
+            <column name="parent_id" valueNumeric="5"/>
+            <column name="sort_order" valueNumeric="40"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"visualization","entryKey":"finance","titleKey":"sys.nav.portal.visualizationFinance","title":"财务看板"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="505"/>
+            <column name="name" value="sys.nav.portal.visualizationSupplyChain"/>
+            <column name="path" value="supply-chain"/>
+            <column name="parent_id" valueNumeric="5"/>
+            <column name="sort_order" valueNumeric="50"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"visualization","entryKey":"supplyChain","titleKey":"sys.nav.portal.visualizationSupplyChain","title":"供应链看板"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="506"/>
+            <column name="name" value="sys.nav.portal.visualizationHR"/>
+            <column name="path" value="hr"/>
+            <column name="parent_id" valueNumeric="5"/>
+            <column name="sort_order" valueNumeric="60"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"visualization","entryKey":"hr","titleKey":"sys.nav.portal.visualizationHR","title":"人力看板"}]]></column>
+        </insert>
+
+        <!-- Children for services -->
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="601"/>
+            <column name="name" value="sys.nav.portal.servicesApi"/>
+            <column name="path" value="api"/>
+            <column name="parent_id" valueNumeric="6"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"services","entryKey":"api","titleKey":"sys.nav.portal.servicesApi","title":"API 服务"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="602"/>
+            <column name="name" value="sys.nav.portal.servicesProducts"/>
+            <column name="path" value="products"/>
+            <column name="parent_id" valueNumeric="6"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"services","entryKey":"products","titleKey":"sys.nav.portal.servicesProducts","title":"数据产品"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="603"/>
+            <column name="name" value="sys.nav.portal.servicesTokens"/>
+            <column name="path" value="tokens"/>
+            <column name="parent_id" valueNumeric="6"/>
+            <column name="sort_order" valueNumeric="30"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"services","entryKey":"tokens","titleKey":"sys.nav.portal.servicesTokens","title":"令牌与密钥"}]]></column>
+        </insert>
+
+        <!-- Children for iam -->
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="701"/>
+            <column name="name" value="sys.nav.portal.iamClassification"/>
+            <column name="path" value="classification"/>
+            <column name="parent_id" valueNumeric="7"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"iam","entryKey":"classification","titleKey":"sys.nav.portal.iamClassification","title":"密级模型映射"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="702"/>
+            <column name="name" value="sys.nav.portal.iamAuthorization"/>
+            <column name="path" value="authorization"/>
+            <column name="parent_id" valueNumeric="7"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"iam","entryKey":"authorization","titleKey":"sys.nav.portal.iamAuthorization","title":"资源授权"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="703"/>
+            <column name="name" value="sys.nav.portal.iamSimulation"/>
+            <column name="path" value="simulation"/>
+            <column name="parent_id" valueNumeric="7"/>
+            <column name="sort_order" valueNumeric="30"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"iam","entryKey":"simulation","titleKey":"sys.nav.portal.iamSimulation","title":"策略模拟与评估"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="704"/>
+            <column name="name" value="sys.nav.portal.iamRequests"/>
+            <column name="path" value="requests"/>
+            <column name="parent_id" valueNumeric="7"/>
+            <column name="sort_order" valueNumeric="40"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"iam","entryKey":"requests","titleKey":"sys.nav.portal.iamRequests","title":"权限申请入口"}]]></column>
+        </insert>
+
+        <!-- Children for foundation -->
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="801"/>
+            <column name="name" value="sys.nav.portal.foundationDataSources"/>
+            <column name="path" value="data-sources"/>
+            <column name="parent_id" valueNumeric="8"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"foundation","entryKey":"dataSources","titleKey":"sys.nav.portal.foundationDataSources","title":"数据源"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="802"/>
+            <column name="name" value="sys.nav.portal.foundationDataStorage"/>
+            <column name="path" value="data-storage"/>
+            <column name="parent_id" valueNumeric="8"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"foundation","entryKey":"dataStorage","titleKey":"sys.nav.portal.foundationDataStorage","title":"数据存储"}]]></column>
+        </insert>
+        <insert tableName="portal_menu">
+            <column name="id" valueNumeric="803"/>
+            <column name="name" value="sys.nav.portal.foundationTaskScheduling"/>
+            <column name="path" value="task-scheduling"/>
+            <column name="parent_id" valueNumeric="8"/>
+            <column name="sort_order" valueNumeric="30"/>
+            <column name="metadata"><![CDATA[{"sectionKey":"foundation","entryKey":"taskScheduling","titleKey":"sys.nav.portal.foundationTaskScheduling","title":"任务调度"}]]></column>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

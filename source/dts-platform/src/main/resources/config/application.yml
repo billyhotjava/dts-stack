@@ -222,6 +222,13 @@ info:
   # Comma separated list of profiles that will trigger the ribbon to show
   display-ribbon-on-profiles: 'dev'
 
+dts:
+  admin:
+    enabled: true
+    base-url: http://dts-admin:8081
+    api-path: /api
+    admin-api-path: /api/admin
+
 # ===================================================================
 # JHipster specific properties
 #

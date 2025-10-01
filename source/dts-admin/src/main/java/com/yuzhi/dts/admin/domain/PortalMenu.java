@@ -23,6 +23,9 @@ public class PortalMenu extends AbstractAuditingEntity<Long> implements Serializ
     @Column(name = "component")
     private String component;
 
+    @Column(name = "icon")
+    private String icon;
+
     @Column(name = "sort_order")
     private Integer sortOrder;
 
@@ -47,6 +50,8 @@ public class PortalMenu extends AbstractAuditingEntity<Long> implements Serializ
     public void setPath(String path) { this.path = path; }
     public String getComponent() { return component; }
     public void setComponent(String component) { this.component = component; }
+    public String getIcon() { return icon; }
+    public void setIcon(String icon) { this.icon = icon; }
     public Integer getSortOrder() { return sortOrder; }
     public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
     public String getMetadata() { return metadata; }
@@ -56,4 +61,3 @@ public class PortalMenu extends AbstractAuditingEntity<Long> implements Serializ
     public List<PortalMenu> getChildren() { return children; }
     public void setChildren(List<PortalMenu> children) { this.children = children; }
 }
-

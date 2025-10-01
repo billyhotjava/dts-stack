@@ -30,7 +30,9 @@ const convert = (menuTree: MenuTree[]): NavProps["data"] => {
 };
 
 export const getBackendNavData = (): NavProps["data"] => {
-	const flat = getMenus();
-	const tree = convertFlatToTree(flat);
+	const source = getMenus();
+	const tree = hasChildren(source) ? source : convertFlatToTree(source);
 	return convert(tree);
 };
+
+const hasChildren = (items: MenuTree[]): boolean => items.some((item) => Array.isArray(item.children) && item.children.length > 0);

@@ -1,9 +1,11 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import java.util.ArrayList;
+import com.yuzhi.dts.platform.service.menu.PortalMenuService;
+import com.yuzhi.dts.platform.service.menu.PortalMenuService.PortalMenuTreeNode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -14,12 +16,18 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/admin")
 public class PlatformAdminResource {
 
+    private final PortalMenuService portalMenuService;
+
+    public PlatformAdminResource(PortalMenuService portalMenuService) {
+        this.portalMenuService = portalMenuService;
+    }
+
     /**
      * Return portal menu tree for admin view. Nested structure with children[] matching PortalMenuItem.
      */
     @GetMapping("/portal/menus")
-    public ApiResponse<List<Map<String, Object>>> portalMenus() {
-        return ApiResponses.ok(buildTree());
+    public ApiResponse<List<PortalMenuTreeNode>> portalMenus() {
+        return ApiResponses.ok(portalMenuService.getMenuTreeView());
     }
 
     // ---- Admin whoami ----
@@ -141,27 +149,35 @@ public class PlatformAdminResource {
 
     // ---- Portal menus CR endpoints ----
     @PostMapping("/portal/menus")
-    public ApiResponse<Map<String, Object>> draftCreateMenu(@RequestBody Map<String, Object> menu) { return ApiResponses.ok(createMenuCr("CREATE", menu, null)); }
+    public ApiResponse<Map<String, Object>> draftCreateMenu(@RequestBody Map<String, Object> menu) { return ApiResponses.ok(proxyMenuChange("CREATE", null, menu)); }
 
     @PutMapping("/portal/menus/{id}")
-    public ApiResponse<Map<String, Object>> draftUpdateMenu(@PathVariable long id, @RequestBody Map<String, Object> menu) { return ApiResponses.ok(createMenuCr("UPDATE", menu, id)); }
+    public ApiResponse<Map<String, Object>> draftUpdateMenu(@PathVariable long id, @RequestBody Map<String, Object> menu) {
+        return ApiResponses.ok(proxyMenuChange("UPDATE", id, menu));
+    }
 
     @DeleteMapping("/portal/menus/{id}")
-    public ApiResponse<Map<String, Object>> draftDeleteMenu(@PathVariable long id) { return ApiResponses.ok(createMenuCr("DELETE", Map.of("id", id), id)); }
+    public ApiResponse<Map<String, Object>> draftDeleteMenu(@PathVariable long id) {
+        return ApiResponses.ok(proxyMenuChange("DELETE", id, Map.of("id", id)));
+    }
 
-    private Map<String, Object> createMenuCr(String action, Map<String, Object> payload, Long id) {
-        long crId = crSeq.getAndIncrement();
-        Map<String, Object> cr = new LinkedHashMap<>();
-        cr.put("id", crId);
-        cr.put("resourceType", "PORTAL_MENU");
-        cr.put("resourceId", id);
-        cr.put("action", action);
-        cr.put("payloadJson", new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(payload).toString());
-        cr.put("status", "DRAFT");
-        cr.put("requestedBy", "oadmin");
-        cr.put("requestedAt", java.time.Instant.now().toString());
-        changeRequests.add(cr);
-        return cr;
+    private Map<String, Object> proxyMenuChange(String action, Long id, Map<String, Object> payload) {
+        Map<String, Object> result = switch (action) {
+            case "CREATE" -> portalMenuService.createMenu(payload);
+            case "UPDATE" -> {
+                Objects.requireNonNull(id, "Menu id required for update");
+                yield portalMenuService.updateMenu(id, payload);
+            }
+            case "DELETE" -> {
+                Objects.requireNonNull(id, "Menu id required for delete");
+                yield portalMenuService.deleteMenu(id);
+            }
+            default -> Map.of("status", "UNSUPPORTED", "action", action);
+        };
+        if (result != null) {
+            changeRequests.add(new LinkedHashMap<>(result));
+        }
+        return result;
     }
 
     // ---- Organizations ----
@@ -282,41 +298,4 @@ public class PlatformAdminResource {
         );
     }
 
-    private List<Map<String, Object>> buildTree() {
-        // Build from BasicApiResource.MenuData.flat() to avoid divergence
-        List<Map<String, Object>> flat = BasicApiResource.MenuData.flat();
-        Map<String, Map<String, Object>> nodeMap = new LinkedHashMap<>();
-        for (Map<String, Object> f : flat) {
-            Map<String, Object> n = new LinkedHashMap<>();
-            String key = (String) f.get("id");
-            String parentKey = (String) f.get("parentId");
-            // expose numeric id to UI; keep source keys for linking
-            n.put("id", idFor(key));
-            n.put("name", f.get("name"));
-            n.put("path", f.get("path"));
-            n.put("component", f.get("component"));
-            n.put("sortOrder", f.get("order"));
-            n.put("metadata", null);
-            n.put("parentId", parentIdFor(parentKey));
-            n.put("__key", key);
-            n.put("__parentKey", parentKey);
-            n.put("children", new ArrayList<>());
-            nodeMap.put(key, n);
-        }
-        List<Map<String, Object>> roots = new ArrayList<>();
-        for (Map<String, Object> n : nodeMap.values()) {
-            String pKey = (String) n.get("__parentKey");
-            if (pKey != null && !pKey.isBlank() && nodeMap.containsKey(pKey)) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> cs = (List<Map<String, Object>>) nodeMap.get(pKey).get("children");
-                cs.add(n);
-            } else {
-                roots.add(n);
-            }
-        }
-        return roots;
-    }
-
-    private Long idFor(String key) { return (long) Math.abs(key.hashCode()); }
-    private Long parentIdFor(String key) { return (key == null || key.isBlank()) ? null : idFor(key); }
 }

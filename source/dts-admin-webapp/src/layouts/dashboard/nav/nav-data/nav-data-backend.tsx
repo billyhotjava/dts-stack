@@ -45,7 +45,7 @@ function mapPortalMenusToMenuTree(items: PortalMenuItem[]): MenuTree[] {
         name: node.name,
         path: node.path || "",
         component: node.component || "",
-        icon: meta?.icon,
+        icon: node.icon ?? meta?.icon,
         type: hasChildren ? 1 : 2, // CATALOGUE:1, MENU:2 (match enum values in app)
         children: [],
       } as unknown as MenuTree;

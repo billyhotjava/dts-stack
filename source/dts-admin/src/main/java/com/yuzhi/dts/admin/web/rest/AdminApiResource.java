@@ -502,6 +502,7 @@ public class AdminApiResource {
             entity.setName(Objects.toString(payload.get("name"), ""));
             entity.setPath(Objects.toString(payload.get("path"), ""));
             entity.setComponent(Objects.toString(payload.get("component"), null));
+            entity.setIcon(Objects.toString(payload.get("icon"), null));
             entity.setSortOrder(payload.get("sortOrder") == null ? null : Integer.valueOf(payload.get("sortOrder").toString()));
             entity.setMetadata(Objects.toString(payload.get("metadata"), null));
             if (parentId != null) {
@@ -517,6 +518,7 @@ public class AdminApiResource {
                     if (payload.containsKey("name")) target.setName(Objects.toString(payload.get("name"), target.getName()));
                     if (payload.containsKey("path")) target.setPath(Objects.toString(payload.get("path"), target.getPath()));
                     if (payload.containsKey("component")) target.setComponent(Objects.toString(payload.get("component"), target.getComponent()));
+                    if (payload.containsKey("icon")) target.setIcon(Objects.toString(payload.get("icon"), target.getIcon()));
                     if (payload.containsKey("sortOrder")) target.setSortOrder(payload.get("sortOrder") == null ? null : Integer.valueOf(payload.get("sortOrder").toString()));
                     if (payload.containsKey("metadata")) target.setMetadata(Objects.toString(payload.get("metadata"), target.getMetadata()));
                     portalMenuRepo.save(target);
@@ -575,6 +577,7 @@ public class AdminApiResource {
         m.put("name", p.getName());
         m.put("path", p.getPath());
         m.put("component", p.getComponent());
+        m.put("icon", p.getIcon());
         m.put("sortOrder", p.getSortOrder());
         m.put("metadata", p.getMetadata());
         m.put("parentId", p.getParent() != null ? p.getParent().getId() : null);
