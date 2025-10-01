@@ -30,7 +30,7 @@
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <start-class>com.yuzhi.dts.common.DtsCommonApp</start-class>
-        <argLine>-Djava.security.egd=file:/dev/./urandom -Xmx1G</argLine>
+        <argLine>-Djava.security.egd=file:/dev/./urandom -Xmx1G -Djdk.attach.allowAttachSelf=true -XX:+EnableDynamicAgentLoading</argLine>
         <m2e.apt.activation>jdt_apt</m2e.apt.activation>
         <run.addResources>false</run.addResources>
         <spring-boot.version>${project.parent.version}</spring-boot.version>
