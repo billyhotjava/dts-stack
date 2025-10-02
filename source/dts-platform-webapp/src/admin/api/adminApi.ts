@@ -1,11 +1,17 @@
 import type {
+	AdminCustomRole,
+	AdminDataset,
+	AdminRoleAssignment,
 	AdminRoleDetail,
 	AdminUser,
 	AdminWhoami,
 	ChangeRequest,
+	CreateCustomRolePayload,
+	CreateRoleAssignmentPayload,
 	OrganizationNode,
 	OrganizationPayload,
 	PermissionCatalogSection,
+	PortalMenuCollection,
 	PortalMenuItem,
 	SystemConfigItem,
 } from "@/admin/types";
@@ -68,7 +74,7 @@ export const adminApi = {
 		}),
 
 	getPortalMenus: () =>
-		apiClient.get<PortalMenuItem[]>({
+		apiClient.get<PortalMenuCollection>({
 			url: "/admin/portal/menus",
 		}),
 
@@ -95,20 +101,21 @@ export const adminApi = {
 		}),
 
 	createOrganization: (payload: OrganizationPayload) =>
-		apiClient.post<OrganizationNode>({
+		apiClient.post<ChangeRequest>({
 			url: "/admin/orgs",
 			data: payload,
 		}),
 
 	updateOrganization: (id: number, payload: OrganizationPayload) =>
-		apiClient.put<OrganizationNode>({
+		apiClient.put<ChangeRequest>({
 			url: `/admin/orgs/${id}`,
 			data: payload,
 		}),
 
-	deleteOrganization: (id: number) =>
-		apiClient.delete<void>({
+	deleteOrganization: (id: number, reason: string) =>
+		apiClient.delete<ChangeRequest>({
 			url: `/admin/orgs/${id}`,
+			data: { reason },
 		}),
 
 	getAdminUsers: () =>
@@ -124,5 +131,32 @@ export const adminApi = {
 	getPermissionCatalog: () =>
 		apiClient.get<PermissionCatalogSection[]>({
 			url: "/admin/permissions/catalog",
+		}),
+
+	getDatasets: () =>
+		apiClient.get<AdminDataset[]>({
+			url: "/admin/datasets",
+		}),
+
+	getCustomRoles: () =>
+		apiClient.get<AdminCustomRole[]>({
+			url: "/admin/custom-roles",
+		}),
+
+	createCustomRole: (payload: CreateCustomRolePayload) =>
+		apiClient.post<AdminCustomRole>({
+			url: "/admin/custom-roles",
+			data: payload,
+		}),
+
+	getRoleAssignments: () =>
+		apiClient.get<AdminRoleAssignment[]>({
+			url: "/admin/role-assignments",
+		}),
+
+	createRoleAssignment: (payload: CreateRoleAssignmentPayload) =>
+		apiClient.post<AdminRoleAssignment>({
+			url: "/admin/role-assignments",
+			data: payload,
 		}),
 };

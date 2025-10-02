@@ -53,10 +53,23 @@ export const rebuildSecureView = (id: string) => api.post({ url: `/secure-views/
 export const listSecurityViews = (datasetId: string) => api.get({ url: `/catalog/security-views/${datasetId}` });
 
 // Modeling
-export const listStandards = () => api.get({ url: "/modeling/standards" });
+export const listStandards = (params: any = {}) => api.get({ url: "/modeling/standards", params });
+export const getStandard = (id: string) => api.get({ url: `/modeling/standards/${id}` });
 export const createStandard = (data: any) => api.post({ url: "/modeling/standards", data });
 export const updateStandard = (id: string, data: any) => api.put({ url: `/modeling/standards/${id}`, data });
 export const deleteStandard = (id: string) => api.delete({ url: `/modeling/standards/${id}` });
+export const listStandardVersions = (id: string) => api.get({ url: `/modeling/standards/${id}/versions` });
+export const listStandardAttachments = (id: string) => api.get({ url: `/modeling/standards/${id}/attachments` });
+export const uploadStandardAttachment = (id: string, formData: FormData) =>
+	api.post({
+		url: `/modeling/standards/${id}/attachments`,
+		data: formData,
+		headers: { "Content-Type": "multipart/form-data" },
+	});
+export const deleteStandardAttachment = (standardId: string, attachmentId: string) =>
+	api.delete({ url: `/modeling/standards/${standardId}/attachments/${attachmentId}` });
+export const getStandardSettings = () => api.get({ url: "/modeling/standards/settings" });
+export const updateStandardSettings = (data: any) => api.put({ url: "/modeling/standards/settings", data });
 
 // Governance
 export const listRules = () => api.get({ url: "/governance/rules" });

@@ -1,9 +1,12 @@
 package com.yuzhi.dts.platform;
 
 import com.yuzhi.dts.platform.config.ApplicationProperties;
+import com.yuzhi.dts.platform.config.AuditProperties;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.DataStandardProperties;
 import com.yuzhi.dts.platform.config.DtsCommonAuditProperties;
+import com.yuzhi.dts.platform.config.GovernanceProperties;
 import com.yuzhi.dts.platform.config.HiveExecutionProperties;
 import com.yuzhi.dts.platform.config.CRLFLogConverter;
 import jakarta.annotation.PostConstruct;
@@ -24,7 +27,17 @@ import tech.jhipster.config.DefaultProfileUtil;
 import tech.jhipster.config.JHipsterConstants;
 
 @SpringBootApplication
-@EnableConfigurationProperties({ LiquibaseProperties.class, ApplicationProperties.class, DtsCommonAuditProperties.class, DtsAdminProperties.class, HiveExecutionProperties.class, CatalogFeatureProperties.class })
+@EnableConfigurationProperties({
+    LiquibaseProperties.class,
+    ApplicationProperties.class,
+    DtsCommonAuditProperties.class,
+    DtsAdminProperties.class,
+    HiveExecutionProperties.class,
+    CatalogFeatureProperties.class,
+    AuditProperties.class,
+    DataStandardProperties.class,
+    GovernanceProperties.class,
+})
 public class DtsPlatformApp {
 
     private static final Logger LOG = LoggerFactory.getLogger(DtsPlatformApp.class);

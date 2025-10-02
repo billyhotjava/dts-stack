@@ -171,6 +171,7 @@
     "foundationDataSources": "数据源",
     "foundationDataStorage": "数据存储",
     "foundationTaskScheduling": "任务调度",
+    "foundationDataSettings": "基础数据设置",
     "visualizationDashboards": "可视化仪表盘"
    },
    "dashboard": "仪表板",

@@ -1,0 +1,14 @@
+2025-10-03 00:37 审计执行日志补齐（用户+角色）：
+- 审批通过后调用 Keycloak 的所有 `apply*` 流程都会落库审计，覆盖账号创建/修改/删除、启停、密级与数据级、角色授予/回收、密码重置等场景，并附带执行详情与失败原因。
+- 角色与角色指派的变更在审批执行环节追加 SUCCESS/FAILURE 记录，记录生成的角色 ID、指派对象、操作集及通知结果，保证审批→落地全链路可追踪。
+- `applyChangeRequest` 现向子流程传递执行人身份，便于执行审计记录标记真实操作者。
+2025-10-03 00:46 审计查询稳定性修复：
+- 去掉审计查询中的 `cast(:param as text)` 写法，避免 PostgreSQL 在参数为 NULL 时拒绝执行并导致日志列表查询报错。
+- 与此同时改用 `:from`/`:to` 判空条件，确保时间范围筛选可选且不会触发 SQLGrammarException。
+- 复查用户/角色相关 `record` 调用未变，检索接口恢复后即可看到新增的 SUCCESS/FAILURE 审计记录。
+2025-10-03 01:02 审计查询 IP 过滤修复：
+- 将 `client_ip` 字段在搜索语句中显式转换为 text，再执行 `ilike` 模糊匹配，避免 PostgreSQL inet 类型与 text 比较导致的 `operator does not exist: inet ~~* text` 错误。
+2025-10-03 01:15 审计查询空参兼容：
+- 改用 `coalesce(:param, '') = ''` 判空，并对 module/result/resourceType 的模糊匹配统一走 `concat('%', :param, '%')`，让 PostgreSQL 在参数为 NULL 时也能明确按 text 处理，彻底消除 `could not determine data type of parameter` 报错。
+2025-10-03 01:26 审计查询时间区间修复：
+- 将 `(:from is null or e.occurred_at >= :from)`、`(:to is null or e.occurred_at <= :to)` 改写成 `e.occurred_at >= coalesce(:from, e.occurred_at)` 等形式，避免 PostgreSQL 在判空语句中无法推断参数类型，再次触发 `could not determine data type`。

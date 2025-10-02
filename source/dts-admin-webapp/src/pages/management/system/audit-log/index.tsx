@@ -1,16 +1,18 @@
-import { Button, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, Tooltip, message } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import { Button, Collapse, DatePicker, Form, Input, Modal, Select, Space, Spin, Table, Tag, Tooltip, message } from "antd";
+import type { ColumnsType, TablePaginationConfig, TableProps } from "antd/es/table";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import { Eye } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AuditLog } from "#/entity";
+import type { AuditLog, AuditLogDetail } from "#/entity";
+import AuditLogService from "@/api/services/auditLogService";
+import { useUserRoles } from "@/store/userStore";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Text } from "@/ui/typography";
-import { SAMPLE_AUDIT_LOGS } from "./mock-data";
-import { useUserRoles } from "@/store/userStore";
+import { DetailItem, DetailSection } from "@/components/detail/DetailSection";
 
 const { RangePicker } = DatePicker;
+const DEFAULT_PAGE_SIZE = 20;
 
 type DateRangeValue = [Dayjs | null, Dayjs | null] | null;
 
@@ -18,10 +20,12 @@ type AuditLogFilters = {
 	dateRange?: DateRangeValue;
 	module?: string;
 	ip?: string;
-	actor?: string; // sysadmin | auditadmin
-	person?: string; // free-text operator search
+	actor?: string;
+	person?: string;
 	targetType?: string;
 	targetUri?: string;
+	targetId?: string;
+	result?: string;
 };
 
 const ACTION_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -37,278 +41,281 @@ const ACTION_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
 	DISABLE: { label: "停用", color: "magenta" },
 };
 
-const resolveActionMeta = (action: string) => {
-	const meta = ACTION_TYPE_CONFIG[action.toUpperCase()];
-	if (meta) {
-		return meta;
-	}
-	return { label: action, color: "default" };
+const RESULT_LABELS: Record<string, { label: string; color: string }> = {
+	SUCCESS: { label: "成功", color: "green" },
+	FAILURE: { label: "失败", color: "red" },
+	ERROR: { label: "错误", color: "red" },
 };
 
 export default function AuditLogPage() {
 	const [form] = Form.useForm<AuditLogFilters>();
-	const [auditLogs] = useState<AuditLog[]>(() => SAMPLE_AUDIT_LOGS);
-	const [filteredLogs, setFilteredLogs] = useState<AuditLog[]>(() => SAMPLE_AUDIT_LOGS);
-	const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
-	const [detailModalVisible, setDetailModalVisible] = useState(false);
+	const [logs, setLogs] = useState<AuditLog[]>([]);
+	const [pagination, setPagination] = useState<{ current: number; pageSize: number; total: number }>({
+		current: 1,
+		pageSize: DEFAULT_PAGE_SIZE,
+		total: 0,
+	});
+	const [filtersState, setFiltersState] = useState<AuditLogFilters>({});
+	const [loading, setLoading] = useState(false);
 	const [exporting, setExporting] = useState(false);
+	const [detailModalVisible, setDetailModalVisible] = useState(false);
+	const [detailLoading, setDetailLoading] = useState(false);
+	const [selectedLog, setSelectedLog] = useState<AuditLogDetail | null>(null);
 	const roles = useUserRoles();
-
-	const isAuthAdmin = useMemo(() => {
-		return roles.some((r: any) => (typeof r === "string" ? r : r?.name || r?.code)?.toUpperCase?.() === "AUTHADMIN");
-	}, [roles]);
-	const isAuditAdmin = useMemo(() => {
-		return roles.some((r: any) => (typeof r === "string" ? r : r?.name || r?.code)?.toUpperCase?.() === "AUDITADMIN");
-	}, [roles]);
 
 	const actorOptions = useMemo(() => {
 		const opts: { label: string; value: string }[] = [];
-		if (isAuthAdmin) {
+		const normalizeRole = (value: string) => value.toUpperCase();
+		if (roles.some((role: any) => normalizeRole(typeof role === "string" ? role : role?.name || role?.code || "") === "AUTHADMIN")) {
 			opts.push({ label: "系统管理员", value: "sysadmin" }, { label: "安全审计员", value: "auditadmin" });
 		}
-		if (isAuditAdmin) {
+		if (roles.some((role: any) => normalizeRole(typeof role === "string" ? role : role?.name || role?.code || "") === "AUDITADMIN")) {
 			opts.push(
 				{ label: "系统管理员", value: "sysadmin" },
 				{ label: "授权管理员", value: "authadmin" },
 				{ label: "业务系统", value: "business" },
 			);
 		}
-		if (!isAuthAdmin && !isAuditAdmin) {
-			// 默认提供常见两类
+		if (opts.length === 0) {
 			opts.push({ label: "系统管理员", value: "sysadmin" }, { label: "安全审计员", value: "auditadmin" });
 		}
-		// 去重
-		const map = new Map<string, string>();
-		for (const o of opts) map.set(o.value, o.label);
-		return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
-	}, [isAuthAdmin, isAuditAdmin]);
+		const dedup = new Map<string, string>();
+		opts.forEach((item) => dedup.set(item.value, item.label));
+		return Array.from(dedup.entries()).map(([value, label]) => ({ value, label }));
+	}, [roles]);
 
-	const moduleOptions = useMemo(
-		() =>
-			Array.from(new Set(auditLogs.map((log) => log.module))).map((module) => ({
-				label: module,
-				value: module,
-			})),
-		[auditLogs],
+	const moduleOptions = useMemo(() => {
+		return Array.from(new Set(logs.map((log) => log.module).filter(Boolean))).map((module) => ({
+			value: module,
+			label: formatLabel(module!),
+		}));
+	}, [logs]);
+
+	const targetTypeOptions = useMemo(() => {
+		return Array.from(new Set(logs.map((log) => log.resourceType).filter(Boolean))).map((type) => ({
+			value: type as string,
+			label: formatLabel(type as string),
+		}));
+	}, [logs]);
+
+	const resultOptions = useMemo(
+		() => [
+			{ value: "SUCCESS", label: "成功" },
+			{ value: "FAILURE", label: "失败" },
+			{ value: "ERROR", label: "错误" },
+		],
+		[],
 	);
 
-	const targetTypeOptions = useMemo(
-		() =>
-			Array.from(new Set(auditLogs.map((log) => log.targetType).filter(Boolean))).map((type) => ({
-				label: (type || "").replace(/_/g, " "),
-				value: type as string,
-			})),
-		[auditLogs],
-	);
-
-	const applyFilters = useCallback(
-		(values: AuditLogFilters) => {
-			const { dateRange, module, ip, actor, person, targetType, targetUri } = values;
-			let nextLogs = auditLogs;
-
-			if (dateRange && Array.isArray(dateRange)) {
-				const [start, end] = dateRange;
-				if (start || end) {
-					nextLogs = nextLogs.filter((log) => {
-						const timestamp = dayjs(log.at);
-						const afterStart = start ? timestamp.isSame(start, "second") || timestamp.isAfter(start) : true;
-						const beforeEnd = end ? timestamp.isSame(end, "second") || timestamp.isBefore(end) : true;
-						return afterStart && beforeEnd;
-					});
-				}
-			}
-
-			if (module) {
-				nextLogs = nextLogs.filter((log) => log.module === module);
-			}
-
-			if (ip && ip.trim()) {
-				const keyword = ip.trim();
-				nextLogs = nextLogs.filter((log) => log.ip.includes(keyword));
-			}
-
-			if (actor && actor.trim()) {
-				if (actor === "business") {
-					nextLogs = nextLogs.filter(
-						(log) => !["sysadmin", "authadmin", "auditadmin"].includes((log.actor || "").toLowerCase()),
-					);
-				} else {
-					nextLogs = nextLogs.filter((log) => (log.actor || "").toLowerCase() === actor.toLowerCase());
-				}
-			}
-
-			if (person && person.trim()) {
-				const keyword = person.trim().toLowerCase();
-				nextLogs = nextLogs.filter((log) => (log.actor || "").toLowerCase().includes(keyword));
-			}
-
-			if (targetType && targetType.trim()) {
-				const normalized = targetType.trim().toLowerCase();
-				nextLogs = nextLogs.filter((log) => (log.targetType || "").toLowerCase() === normalized);
-			}
-
-			if (targetUri && targetUri.trim()) {
-				const keyword = targetUri.trim().toLowerCase();
-				nextLogs = nextLogs.filter((log) => (log.targetUri || "").toLowerCase().includes(keyword));
-			}
-
-			setFilteredLogs(nextLogs);
-		},
-		[auditLogs],
-	);
+	const fetchLogs = useCallback(async (page: number, pageSize: number, formValues: AuditLogFilters) => {
+		setLoading(true);
+		try {
+			const params = buildQueryParams(formValues);
+			const response = await AuditLogService.getAuditLogs(page - 1, pageSize, "occurredAt,desc", params);
+			setLogs(response.content ?? []);
+			setPagination({
+				current: response.page + 1,
+				pageSize: response.size,
+				total: response.totalElements,
+			});
+			setFiltersState(formValues);
+		} catch (err: any) {
+			message.error(err?.message || "加载审计日志失败，请稍后重试");
+		} finally {
+			setLoading(false);
+		}
+	}, []);
 
 	useEffect(() => {
-		applyFilters(form.getFieldsValue());
-	}, [applyFilters, form]);
-
-	const handleValuesChange = useCallback(
-		(_: unknown, allValues: AuditLogFilters) => {
-			applyFilters(allValues);
-		},
-		[applyFilters],
-	);
+		fetchLogs(1, DEFAULT_PAGE_SIZE, {});
+	}, [fetchLogs]);
 
 	const handleSearch = useCallback(
 		(values: AuditLogFilters) => {
-			applyFilters(values);
+			fetchLogs(1, pagination.pageSize, values);
 		},
-		[applyFilters],
+		[fetchLogs, pagination.pageSize],
 	);
 
 	const handleReset = useCallback(() => {
 		form.resetFields();
-		applyFilters({});
-	}, [applyFilters, form]);
+		fetchLogs(1, pagination.pageSize, {});
+	}, [fetchLogs, form, pagination.pageSize]);
 
-	const handleExport = useCallback(() => {
-		if (filteredLogs.length === 0) {
-			message.warning("当前筛选条件下没有可导出的日志");
-			return;
-		}
+	const handleExport = useCallback(async () => {
 		setExporting(true);
-		const filters = form.getFieldsValue();
-		window.setTimeout(() => {
-			const csv = buildCsvContent(filteredLogs, filters);
-			const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-			const url = URL.createObjectURL(blob);
+		try {
+			const blob = await AuditLogService.exportAuditLogs(buildQueryParams(filtersState));
+			const url = window.URL.createObjectURL(blob);
 			const anchor = document.createElement("a");
 			anchor.href = url;
-			anchor.download = `audit-logs-${Date.now()}.csv`;
+			anchor.download = `audit-logs-${dayjs().format("YYYYMMDD-HHmmss")}.csv`;
 			document.body.appendChild(anchor);
 			anchor.click();
 			document.body.removeChild(anchor);
-			URL.revokeObjectURL(url);
-			message.success("已导出审计日志 CSV 文件");
+			window.URL.revokeObjectURL(url);
+			message.success("已导出审计日志");
+		} catch (err: any) {
+			message.error(err?.message || "导出审计日志失败");
+		} finally {
 			setExporting(false);
-		}, 400);
-	}, [filteredLogs, form]);
+		}
+	}, [filtersState]);
 
-	const handleViewDetail = useCallback((record: AuditLog) => {
-		setSelectedLog(record);
+	const handleViewDetail = useCallback(async (record: AuditLog) => {
 		setDetailModalVisible(true);
+		setDetailLoading(true);
+		setSelectedLog(record as AuditLogDetail);
+		try {
+			const detail = await AuditLogService.getAuditLogById(record.id);
+			setSelectedLog(detail);
+		} catch (err: any) {
+			message.error(err?.message || "加载审计日志详情失败");
+		} finally {
+			setDetailLoading(false);
+		}
 	}, []);
 
-	const columns: ColumnsType<AuditLog> = [
-		{
-			title: "记录编号",
-			dataIndex: "id",
-			width: 80,
-			render: (id: number) => (
-				<Text variant="body2" className="font-mono">
-					#{id}
-				</Text>
-			),
+	const handleTableChange = useCallback(
+		(nextPagination: TablePaginationConfig) => {
+			const current = nextPagination.current ?? 1;
+			const pageSize = nextPagination.pageSize ?? pagination.pageSize;
+			fetchLogs(current, pageSize, filtersState);
 		},
-		{
-			title: "功能模块",
-			dataIndex: "module",
-			width: 160,
-		},
-		{
-			title: "操作类型",
-			dataIndex: "action",
-			width: 120,
-			render: (action: string) => {
-				const meta = resolveActionMeta(action);
-				return <Tag color={meta.color}>{meta.label}</Tag>;
-			},
-		},
-		{
-			title: "目标类型",
-			dataIndex: "targetType",
-			width: 140,
-			render: (type: string | undefined) =>
-				type ? <Tag color="blue">{type.replace(/_/g, " ")}</Tag> : <span>-</span>,
-		},
-		{
-			title: "目标 URI",
-			dataIndex: "targetUri",
-			width: 220,
-			ellipsis: true,
-			render: (uri: string | undefined) => (
-				<Tooltip title={uri || "-"}>
+		[fetchLogs, filtersState, pagination.pageSize],
+	);
+
+	const tableOnChange: TableProps<AuditLog>["onChange"] = (nextPagination) => {
+		handleTableChange(nextPagination as TablePaginationConfig);
+	};
+
+	const columns: ColumnsType<AuditLog> = useMemo(
+		() => [
+			{
+				title: "记录编号",
+				dataIndex: "id",
+				width: 80,
+				render: (id: number) => (
 					<Text variant="body2" className="font-mono">
-						{uri || "-"}
+						#{id}
 					</Text>
-				</Tooltip>
-			),
-		},
-		{
-			title: "目标标识",
-			dataIndex: "target",
-			width: 200,
-			ellipsis: true,
-			render: (target: string | undefined) => (
-				<Tooltip title={target || "-"}>
-					<span>{target || "-"}</span>
-				</Tooltip>
-			),
-		},
-		{
-			title: "操作人",
-			dataIndex: "actor",
-			width: 120,
-		},
-		{
-			title: "IP地址",
-			dataIndex: "ip",
-			width: 140,
-			render: (ip: string) => (
-				<Text variant="body2" className="font-mono">
-					{ip}
-				</Text>
-			),
-		},
-		{
-			title: "内容",
-			dataIndex: "details",
-			ellipsis: true,
-			render: (details: string) => (
-				<Tooltip title={details}>
-					<span>{details}</span>
-				</Tooltip>
-			),
-		},
-		{
-			title: "创建时间",
-			dataIndex: "at",
-			width: 200,
-			render: (date: string) => dayjs(date).format("YYYY-MM-DD HH:mm:ss"),
-			sorter: (a, b) => dayjs(a.at).valueOf() - dayjs(b.at).valueOf(),
-			defaultSortOrder: "descend",
-			sortDirections: ["descend", "ascend"],
-		},
-		{
-			title: "操作",
-			key: "action",
-			width: 100,
-			render: (_, record) => (
-				<Button type="link" icon={<Eye className="h-4 w-4" />} onClick={() => handleViewDetail(record)}>
-					查看详情
-				</Button>
-			),
-		},
-	];
+				),
+			},
+			{
+				title: "功能模块",
+				dataIndex: "module",
+				width: 160,
+				render: (module?: string) => formatLabel(module),
+			},
+			{
+				title: "操作类型",
+				dataIndex: "action",
+				width: 150,
+				render: (action: string) => {
+					const meta = resolveActionMeta(action);
+					return <Tag color={meta.color}>{meta.label}</Tag>;
+				},
+			},
+			{
+				title: "目标类型",
+				dataIndex: "resourceType",
+				width: 150,
+				render: (type?: string) => (type ? <Tag color="blue">{formatLabel(type)}</Tag> : <span>-</span>),
+			},
+			{
+				title: "目标标识",
+				dataIndex: "resourceId",
+				width: 220,
+				ellipsis: true,
+				render: (resourceId?: string) => (
+					<Tooltip title={resourceId || "-"}>
+						<Text variant="body2" className="font-mono">
+							{resourceId || "-"}
+						</Text>
+					</Tooltip>
+				),
+			},
+			{
+				title: "请求 URI",
+				dataIndex: "requestUri",
+				width: 240,
+				ellipsis: true,
+				render: (uri?: string) => (
+					<Tooltip title={uri || "-"}>
+						<Text variant="body2" className="font-mono">
+							{uri || "-"}
+						</Text>
+					</Tooltip>
+				),
+			},
+			{
+				title: "操作者",
+				dataIndex: "actor",
+				width: 140,
+			},
+			{
+				title: "操作者角色",
+				dataIndex: "actorRole",
+				width: 160,
+				render: (role?: string) => role ? formatLabel(role) : "-",
+			},
+			{
+				title: "IP 地址",
+				dataIndex: "clientIp",
+				width: 160,
+				render: (ip?: string) => (
+					<Text variant="body2" className="font-mono">
+						{ip || "-"}
+					</Text>
+				),
+			},
+			{
+				title: "结果",
+				dataIndex: "result",
+				width: 120,
+				render: (result: string) => {
+					const meta = RESULT_LABELS[result?.toUpperCase?.() || ""];
+					if (!meta) {
+						return result || "-";
+					}
+					return <Tag color={meta.color}>{meta.label}</Tag>;
+				},
+			},
+			{
+				title: "耗时(ms)",
+				dataIndex: "latencyMs",
+				width: 110,
+				render: (latency?: number) => (latency != null ? `${latency}` : "-"),
+			},
+			{
+				title: "内容摘要",
+				dataIndex: "payloadPreview",
+				width: 240,
+				render: (preview?: string) => (
+					<Tooltip title={preview || "-"}>
+						<span>{preview || "-"}</span>
+					</Tooltip>
+				),
+			},
+			{
+				title: "发生时间",
+				dataIndex: "occurredAt",
+				width: 200,
+				render: (date: string) => dayjs(date).format("YYYY-MM-DD HH:mm:ss"),
+			},
+			{
+				title: "操作",
+				key: "action",
+				width: 120,
+				render: (_, record) => (
+					<Button type="link" icon={<Eye className="h-4 w-4" />} onClick={() => handleViewDetail(record)}>
+						查看详情
+					</Button>
+				),
+			},
+		],
+		[handleViewDetail],
+	);
 
 	return (
 		<div className="p-4">
@@ -317,7 +324,7 @@ export default function AuditLogPage() {
 					<div className="flex items-center justify-between">
 						<div>
 							<h2 className="text-2xl font-bold">日志审计</h2>
-							<p className="text-muted-foreground">查看系统操作日志</p>
+							<p className="text-muted-foreground">查看与检索系统操作日志</p>
 						</div>
 					</div>
 				</CardHeader>
@@ -326,39 +333,61 @@ export default function AuditLogPage() {
 						form={form}
 						layout="inline"
 						className="mb-4 flex flex-wrap gap-4"
-						onValuesChange={handleValuesChange}
 						onFinish={handleSearch}
 					>
-						<Form.Item label="起止时间" name="dateRange">
-							<RangePicker
-								allowClear
-								showTime={{ format: "HH:mm" }}
-								style={{ minWidth: 320 }}
-								format="YYYY-MM-DD HH:mm"
-								placeholder={["开始时间", "结束时间"]}
-							/>
-						</Form.Item>
-						<Form.Item label="功能模块" name="module">
-							<Select allowClear placeholder="请选择模块" options={moduleOptions} className="min-w-[160px]" />
-						</Form.Item>
-						<Form.Item label="IP地址" name="ip">
-							<Input allowClear placeholder="请输入IP地址" style={{ width: 200 }} />
-						</Form.Item>
-						<Form.Item label="人员" name="person">
-							<Input allowClear placeholder="支持模糊搜索操作者" style={{ width: 200 }} />
-						</Form.Item>
-						<Form.Item label="角色" name="actor">
-							<Select allowClear placeholder="请选择角色" options={actorOptions} className="min-w-[160px]" />
-						</Form.Item>
-						<Form.Item label="目标类型" name="targetType">
-							<Select allowClear placeholder="请选择目标类型" options={targetTypeOptions} className="min-w-[160px]" />
-						</Form.Item>
-						<Form.Item label="目标URI" name="targetUri">
-							<Input allowClear placeholder="支持模糊查询如 /api/user" style={{ width: 220 }} />
-						</Form.Item>
+						<div className="flex flex-wrap gap-4">
+							<Form.Item label="起止时间" name="dateRange">
+								<RangePicker
+									allowClear
+									showTime={{ format: "HH:mm" }}
+									style={{ minWidth: 320 }}
+									format="YYYY-MM-DD HH:mm"
+									placeholder={["开始时间", "结束时间"]}
+								/>
+							</Form.Item>
+							<Form.Item label="功能模块" name="module">
+								<Select allowClear placeholder="请选择模块" options={moduleOptions} className="min-w-[180px]" />
+							</Form.Item>
+							<Form.Item label="IP 地址" name="ip">
+								<Input allowClear placeholder="请输入 IP 地址" style={{ width: 200 }} />
+							</Form.Item>
+							<Form.Item label="角色" name="actor">
+								<Select allowClear placeholder="请选择角色" options={actorOptions} className="min-w-[160px]" />
+							</Form.Item>
+							<Form.Item label="目标类型" name="targetType">
+								<Select allowClear placeholder="请选择目标类型" options={targetTypeOptions} className="min-w-[160px]" />
+							</Form.Item>
+						</div>
+						<Collapse
+							bordered={false}
+							expandIconPosition="end"
+							className="w-full rounded-md bg-muted/20 px-3 py-2"
+							items={[
+								{
+									key: "more-filters",
+									label: <span className="font-medium text-sm">更多筛选</span>,
+									children: (
+										<div className="flex flex-wrap gap-4 pt-2">
+											<Form.Item label="操作结果" name="result">
+												<Select allowClear placeholder="请选择结果" options={resultOptions} className="min-w-[160px]" />
+											</Form.Item>
+											<Form.Item label="操作者" name="person">
+												<Input allowClear placeholder="支持模糊搜索操作者" style={{ width: 200 }} />
+											</Form.Item>
+											<Form.Item label="目标标识" name="targetId">
+												<Input allowClear placeholder="支持模糊查询，例如 user:alice" style={{ width: 220 }} />
+											</Form.Item>
+											<Form.Item label="目标 URI" name="targetUri">
+												<Input allowClear placeholder="支持模糊查询，如 /api/user" style={{ width: 220 }} />
+											</Form.Item>
+										</div>
+								),
+							},
+						]}
+					/>
 						<Form.Item>
 							<Space>
-								<Button type="primary" htmlType="submit">
+								<Button type="primary" htmlType="submit" loading={loading}>
 									查询
 								</Button>
 								<Button onClick={handleReset}>重置</Button>
@@ -370,15 +399,22 @@ export default function AuditLogPage() {
 					</Form>
 					<Table
 						columns={columns}
-						dataSource={filteredLogs}
+						dataSource={logs}
+						loading={loading}
+						rowClassName={() => "text-sm"}
+						scroll={{ x: 1500 }}
 						pagination={{
-							defaultPageSize: 10,
-							pageSizeOptions: ["10", "20", "50"],
+							current: pagination.current,
+							pageSize: pagination.pageSize,
+							total: pagination.total,
+							defaultPageSize: DEFAULT_PAGE_SIZE,
+							pageSizeOptions: ["10", "20", "50", "100"],
 							showSizeChanger: true,
 							showQuickJumper: true,
 							showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
 						}}
 						rowKey="id"
+						onChange={tableOnChange}
 					/>
 				</CardContent>
 			</Card>
@@ -391,132 +427,146 @@ export default function AuditLogPage() {
 					setSelectedLog(null);
 				}}
 				footer={null}
-				width={800}
+				width={860}
 			>
-				{selectedLog && (
-					<div className="space-y-4">
-						<div className="grid grid-cols-2 gap-4">
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									记录编号
-								</Text>
-								<Text variant="body1">#{selectedLog.id}</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									操作类型
-								</Text>
-								{(() => {
-									const meta = resolveActionMeta(selectedLog.action);
-									return <Tag color={meta.color}>{meta.label}</Tag>;
-								})()}
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									功能模块
-								</Text>
-								<Text variant="body1">{selectedLog.module}</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									操作人
-								</Text>
-								<Text variant="body1">{selectedLog.actor}</Text>
-							</div>
-						<div>
-							<Text variant="body2" className="text-muted-foreground">
-								目标
-							</Text>
-							<Text variant="body1">{selectedLog.target || "-"}</Text>
+				{selectedLog ? (
+					<Spin spinning={detailLoading}>
+						<div className="space-y-4">
+							{(() => {
+								const actionMeta = resolveActionMeta(selectedLog.action);
+								return (
+									<DetailSection title="基础信息">
+										<DetailItem label="记录编号" value={`#${selectedLog.id}`} monospace />
+										<DetailItem label="功能模块" value={formatLabel(selectedLog.module)} />
+										<DetailItem label="操作类型" value={<Tag color={actionMeta.color}>{actionMeta.label}</Tag>} />
+										<DetailItem label="操作者" value={selectedLog.actor} />
+										<DetailItem label="操作者角色" value={formatLabel(selectedLog.actorRole)} />
+										<DetailItem label="结果" value={renderResult(selectedLog.result)} />
+										<DetailItem label="发生时间" value={dayjs(selectedLog.occurredAt).format("YYYY-MM-DD HH:mm:ss")} />
+									</DetailSection>
+								);
+							})()}
+
+							<DetailSection title="资源信息">
+								<DetailItem label="目标类型" value={formatLabel(selectedLog.resourceType)} />
+								<DetailItem label="目标标识" value={selectedLog.resourceId || "-"} monospace />
+							</DetailSection>
+
+							<DetailSection title="请求上下文">
+								<DetailItem label="HTTP 方法" value={selectedLog.httpMethod || "-"} />
+								<DetailItem label="耗时 (ms)" value={selectedLog.latencyMs != null ? `${selectedLog.latencyMs}` : "-"} />
+								<DetailItem label="请求 URI" value={selectedLog.requestUri || "-"} monospace full />
+								<DetailItem label="IP 地址" value={selectedLog.clientIp || "-"} monospace />
+								<DetailItem label="User-Agent" value={selectedLog.clientAgent || "-"} full />
+								<DetailItem label="标签" value={selectedLog.extraTags || "-"} full />
+							</DetailSection>
+
+							<DetailSection title="请求内容" columns={1}>
+								<DetailItem
+									label="Payload"
+									value={
+										<pre className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed">
+											{formatPayload(selectedLog.payload) || selectedLog.payloadPreview || "-"}
+										</pre>
+									}
+									full
+								/>
+							</DetailSection>
 						</div>
-						<div>
-							<Text variant="body2" className="text-muted-foreground">
-								目标类型
-							</Text>
-							<Text variant="body1">{selectedLog.targetType || "-"}</Text>
-						</div>
-						<div>
-							<Text variant="body2" className="text-muted-foreground">
-								目标 URI
-							</Text>
-							<Text variant="body1" className="font-mono break-all">{selectedLog.targetUri || "-"}</Text>
-						</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									IP地址
-								</Text>
-								<Text variant="body1" className="font-mono">
-									{selectedLog.ip}
-								</Text>
-							</div>
-							<div className="col-span-2">
-								<Text variant="body2" className="text-muted-foreground">
-									创建时间
-								</Text>
-								<Text variant="body1">{dayjs(selectedLog.at).format("YYYY-MM-DD HH:mm:ss")}</Text>
-							</div>
-							{selectedLog.result && (
-								<div className="col-span-2">
-									<Text variant="body2" className="text-muted-foreground">
-										结果
-									</Text>
-									<Text variant="body1">{selectedLog.result}</Text>
-								</div>
-							)}
-						</div>
-						<div>
-							<Text variant="body2" className="text-muted-foreground">
-								内容详情
-							</Text>
-							<div className="mt-2 rounded-md bg-muted p-3">
-								<Text variant="body1">{selectedLog.details}</Text>
-							</div>
-						</div>
-					</div>
+					</Spin>
+				) : (
+					<Spin spinning />
 				)}
 			</Modal>
 		</div>
 	);
 }
 
-function buildCsvContent(logs: AuditLog[], filters: AuditLogFilters) {
-	const lines: string[] = [];
-	const now = dayjs().format("YYYY-MM-DD HH:mm:ss");
-	const [start, end] = filters.dateRange ?? [];
-	const module = filters.module ?? "全部";
-	const ip = filters.ip ?? "全部";
-	const actor = filters.actor ?? "全部";
-	lines.push(`# 导出时间：${now}`);
-	lines.push(
-		`# 筛选条件：起始=${start ? start.format("YYYY-MM-DD HH:mm") : "全部"} → ${
-			end ? end.format("YYYY-MM-DD HH:mm") : "全部"
-		}, 模块=${module}, IP=${ip}, 角色=${actor}`,
-	);
-	lines.push("");
-	lines.push("记录编号,功能模块,操作类型,目标类型,目标URI,目标标识,操作者,IP地址,创建时间,结果,内容");
-	for (const log of logs) {
-		lines.push(
-			[
-				csvEscape(`#${log.id}`),
-				csvEscape(log.module),
-				csvEscape(resolveActionMeta(log.action).label),
-				csvEscape(log.targetType || "-"),
-				csvEscape(log.targetUri || "-"),
-				csvEscape(log.target || "-"),
-				csvEscape(log.actor),
-				csvEscape(log.ip),
-				csvEscape(dayjs(log.at).format("YYYY-MM-DD HH:mm:ss")),
-				csvEscape(log.result ?? "-"),
-				csvEscape(log.details ?? ""),
-			].join(","),
-		);
+function resolveActionMeta(action: string) {
+	if (!action) {
+		return { label: "-", color: "default" };
 	}
-	return lines.join("\n");
+	const upper = action.toUpperCase();
+	const direct = ACTION_TYPE_CONFIG[upper];
+	if (direct) {
+		return direct;
+	}
+	const label = upper
+		.split(/[_\s]+/)
+		.filter(Boolean)
+		.map((segment) => segment.charAt(0) + segment.slice(1).toLowerCase())
+		.join(" ");
+	return { label: label || action, color: "default" };
 }
 
-function csvEscape(value: string) {
-	if (value.includes('"') || value.includes(",") || value.includes("\n")) {
-		return `"${value.replace(/"/g, '""')}"`;
+function formatLabel(value?: string | null) {
+	if (!value) {
+		return "-";
 	}
-	return value;
+	return value
+		.split(/[_\s]+/)
+		.filter(Boolean)
+		.map((segment) => segment.charAt(0) + segment.slice(1).toLowerCase())
+		.join(" ");
+}
+
+function buildQueryParams(filters: AuditLogFilters): Record<string, string> {
+	const params: Record<string, string> = {};
+	const [start, end] = filters.dateRange ?? [];
+	if (start) {
+		params.from = start.toISOString();
+	}
+	if (end) {
+		params.to = end.toISOString();
+	}
+	if (filters.module) {
+		params.module = filters.module;
+	}
+	const actorKeyword = filters.person?.trim();
+	const actorSelect = filters.actor?.trim();
+	const actorFilter = actorKeyword || actorSelect;
+	if (actorFilter) {
+		params.actor = actorFilter;
+	}
+	if (filters.ip?.trim()) {
+		params.clientIp = filters.ip.trim();
+	}
+	if (filters.targetType) {
+		params.resourceType = filters.targetType;
+	}
+	if (filters.targetUri?.trim()) {
+		params.requestUri = filters.targetUri.trim();
+	}
+	if (filters.targetId?.trim()) {
+		params.resource = filters.targetId.trim();
+	}
+	if (filters.result) {
+		params.result = filters.result;
+	}
+	return params;
+}
+
+function renderResult(result?: string) {
+	if (!result) {
+		return "-";
+	}
+	const meta = RESULT_LABELS[result.toUpperCase?.() || ""];
+	if (!meta) {
+		return result;
+	}
+	return <Tag color={meta.color}>{meta.label}</Tag>;
+}
+
+function formatPayload(payload: unknown): string {
+	if (payload == null) {
+		return "";
+	}
+	if (typeof payload === "string") {
+		return payload;
+	}
+	try {
+		return JSON.stringify(payload, null, 2);
+	} catch (err) {
+		return String(payload);
+	}
 }

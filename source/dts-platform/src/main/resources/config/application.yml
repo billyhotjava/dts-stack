@@ -286,3 +286,49 @@ jhipster:
 # ===================================================================
 
 # application:
+
+auditing:
+  enabled: true
+  queue-capacity: 5000
+  retention-days: 180
+  encryption-key: ${AUDITING_ENCRYPTION_KEY:}
+  hmac-key: ${AUDITING_HMAC_KEY:}
+  forward-enabled: ${AUDITING_FORWARD_ENABLED:false}
+  forward-retry-interval: 60000
+
+dts:
+  common:
+    audit:
+      enabled: ${DTS_COMMON_AUDIT_ENABLED:false}
+      base-url: ${DTS_COMMON_AUDIT_BASE_URL:}
+      service-token: ${DTS_COMMON_AUDIT_TOKEN:}
+  platform:
+    data-standard:
+      encryption-key: ${DATA_STANDARD_ENCRYPTION_KEY:}
+      key-version: ${DATA_STANDARD_KEY_VERSION:v1}
+      attachment:
+        max-file-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
+        allowed-extensions: docx,wps,pdf,xlsx,xls,md,txt
+        storage-strategy: database
+    governance:
+      quality:
+        enabled: ${DTS_GOVERNANCE_QUALITY_ENABLED:true}
+        default-executor: ${DTS_GOVERNANCE_QUALITY_EXECUTOR:hive}
+        max-concurrent: ${DTS_GOVERNANCE_QUALITY_MAX_CONCURRENT:5}
+        retry-count: ${DTS_GOVERNANCE_QUALITY_RETRY:1}
+        timeout: ${DTS_GOVERNANCE_QUALITY_TIMEOUT:PT10M}
+        auto-generate-ticket: ${DTS_GOVERNANCE_QUALITY_AUTOTICKET:true}
+      compliance:
+        enabled: ${DTS_GOVERNANCE_COMPLIANCE_ENABLED:true}
+        evidence-required-default: ${DTS_GOVERNANCE_COMPLIANCE_EVIDENCE:true}
+        auto-ticket: ${DTS_GOVERNANCE_COMPLIANCE_AUTOTICKET:true}
+        sla: ${DTS_GOVERNANCE_COMPLIANCE_SLA:P7D}
+      issue:
+        default-assignee: ${DTS_GOVERNANCE_ISSUE_ASSIGNEE:}
+        default-priority: ${DTS_GOVERNANCE_ISSUE_PRIORITY:MEDIUM}
+        reminder-interval: ${DTS_GOVERNANCE_ISSUE_REMINDER:P3D}
+        auto-close-after: ${DTS_GOVERNANCE_ISSUE_AUTOCLOSE:P30D}
+      datasource:
+        primary: ${DTS_GOVERNANCE_PRIMARY_SOURCE:foundation-hive}
+        allow-multiple: ${DTS_GOVERNANCE_ALLOW_MULTIPLE:false}
+        optional-sources: ${DTS_GOVERNANCE_OPTIONAL_SOURCES:}

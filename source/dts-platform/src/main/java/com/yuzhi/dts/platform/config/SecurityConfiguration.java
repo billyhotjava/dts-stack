@@ -3,12 +3,14 @@ package com.yuzhi.dts.platform.config;
 import static org.springframework.security.config.Customizer.withDefaults;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.session.PortalOpaqueTokenIntrospector;
+import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
 import tech.jhipster.config.JHipsterProperties;
@@ -24,7 +26,12 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, MvcRequestMatcher.Builder mvc, PortalOpaqueTokenIntrospector opaqueTokenIntrospector)
+    public SecurityFilterChain filterChain(
+        HttpSecurity http,
+        MvcRequestMatcher.Builder mvc,
+        PortalOpaqueTokenIntrospector opaqueTokenIntrospector,
+        AuditLoggingFilter auditLoggingFilter
+    )
         throws Exception {
         http
             .csrf(csrf -> csrf.disable())
@@ -47,6 +54,7 @@ public class SecurityConfiguration {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(opaque -> opaque.introspector(opaqueTokenIntrospector)))
             .oauth2Client(withDefaults());
+        http.addFilterAfter(auditLoggingFilter, AnonymousAuthenticationFilter.class);
         return http.build();
     }
 

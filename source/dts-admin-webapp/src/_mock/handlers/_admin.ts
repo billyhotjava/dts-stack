@@ -1060,32 +1060,44 @@ export const adminHandlers = [
 		if (!payload.dataLevel) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请选择部门数据密级" }, { status: 400 });
 		}
+		const reason = payload.reason?.trim();
+		if (!reason) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请填写审批原因" }, { status: 400 });
+		}
 		const parentId = payload.parentId ?? null;
 		if (parentId !== null && !findOrganization(organizations, parentId)) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "父级部门不存在" }, { status: 400 });
 		}
-		const newOrg: OrganizationNode = {
-			id: ++organizationId,
+		const normalized: OrganizationPayload = {
 			name,
 			dataLevel: payload.dataLevel,
-			sensitivity: payload.dataLevel,
 			parentId,
 			contact: payload.contact?.trim() || undefined,
 			phone: payload.phone?.trim() || undefined,
 			description: payload.description?.trim() || undefined,
-			children: [],
+			reason,
 		};
-		if (!insertOrganization(organizations, parentId, newOrg)) {
-			organizationId -= 1;
-			return HttpResponse.json({ status: ResultStatus.ERROR, message: "无法创建部门，请重试" }, { status: 400 });
-		}
-		return json(newOrg);
+		const draft: ChangeRequest = {
+			id: ++changeRequestId,
+			resourceType: "ORG",
+			action: "CREATE",
+			payloadJson: JSON.stringify(normalized),
+			status: "PENDING",
+			requestedBy: getActiveAdmin().username || "sysadmin",
+			requestedAt: new Date().toISOString(),
+			reason,
+		};
+		changeRequests.unshift(draft);
+		return json(draft);
 	}),
 
 	http.put(`${ADMIN_API}/orgs/:id`, async ({ params, request }) => {
 		const id = Number(params.id);
 		if (Number.isNaN(id)) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门编号不合法" }, { status: 400 });
+		}
+		if (!findOrganization(organizations, id)) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门不存在" }, { status: 404 });
 		}
 		const payload = (await request.json()) as OrganizationPayload;
 		const name = payload.name?.trim();
@@ -1095,30 +1107,59 @@ export const adminHandlers = [
 		if (!payload.dataLevel) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请选择部门数据密级" }, { status: 400 });
 		}
-		const updated = updateOrganizationNode(organizations, id, {
+		const reason = payload.reason?.trim();
+		if (!reason) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请填写审批原因" }, { status: 400 });
+		}
+		const normalized: OrganizationPayload = {
 			name,
 			dataLevel: payload.dataLevel,
-			sensitivity: payload.dataLevel,
 			contact: payload.contact?.trim() || undefined,
 			phone: payload.phone?.trim() || undefined,
 			description: payload.description?.trim() || undefined,
-		});
-		if (!updated) {
-			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门不存在" }, { status: 404 });
-		}
-		return json(updated);
+			reason,
+		};
+		const draft: ChangeRequest = {
+			id: ++changeRequestId,
+			resourceType: "ORG",
+			action: "UPDATE",
+			resourceId: String(id),
+			payloadJson: JSON.stringify(normalized),
+			status: "PENDING",
+			requestedBy: getActiveAdmin().username || "sysadmin",
+			requestedAt: new Date().toISOString(),
+			reason,
+		};
+		changeRequests.unshift(draft);
+		return json(draft);
 	}),
 
-	http.delete(`${ADMIN_API}/orgs/:id`, ({ params }) => {
+	http.delete(`${ADMIN_API}/orgs/:id`, async ({ params, request }) => {
 		const id = Number(params.id);
 		if (Number.isNaN(id)) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门编号不合法" }, { status: 400 });
 		}
-		const removed = deleteOrganizationNode(organizations, id);
-		if (!removed) {
+		if (!findOrganization(organizations, id)) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门不存在" }, { status: 404 });
 		}
-		return json({ id });
+		const body = (await request.json().catch(() => ({}))) as { reason?: string };
+		const reason = body.reason?.trim();
+		if (!reason) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请填写审批原因" }, { status: 400 });
+		}
+		const draft: ChangeRequest = {
+			id: ++changeRequestId,
+			resourceType: "ORG",
+			action: "DELETE",
+			resourceId: String(id),
+			payloadJson: JSON.stringify({ reason }),
+			status: "PENDING",
+			requestedBy: getActiveAdmin().username || "sysadmin",
+			requestedAt: new Date().toISOString(),
+			reason,
+		};
+		changeRequests.unshift(draft);
+		return json(draft);
 	}),
 
 	http.get(`${ADMIN_API}/orgs`, () => json(organizations)),

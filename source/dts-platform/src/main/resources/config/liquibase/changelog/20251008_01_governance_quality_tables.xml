@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.16.xsd"
+>
+    <changeSet id="20251008-01-governance-rule-extensions" author="platform">
+        <comment>Governance: extend rule metadata for versioning and execution</comment>
+        <addColumn tableName="gov_rule">
+            <column name="code" type="varchar(64)"/>
+            <column name="category" type="varchar(64)"/>
+            <column name="description" type="varchar(2048)"/>
+            <column name="owner" type="varchar(64)"/>
+            <column name="severity" type="varchar(32)"/>
+            <column name="data_level" type="varchar(32)"/>
+            <column name="frequency_cron" type="varchar(128)"/>
+            <column name="template" type="boolean" defaultValueBoolean="false"/>
+            <column name="latest_version_id" type="uuid"/>
+            <column name="executor" type="varchar(64)"/>
+        </addColumn>
+        <addNotNullConstraint tableName="gov_rule" columnName="enabled" defaultNullValue="true"/>
+        <addUniqueConstraint tableName="gov_rule" columnNames="code" constraintName="uk_gov_rule_code"/>
+        <createIndex indexName="idx_gov_rule_owner" tableName="gov_rule">
+            <column name="owner"/>
+        </createIndex>
+        <createIndex indexName="idx_gov_rule_category" tableName="gov_rule">
+            <column name="category"/>
+        </createIndex>
+        <createIndex indexName="idx_gov_rule_severity" tableName="gov_rule">
+            <column name="severity"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-02-governance-rule-version" author="platform">
+        <comment>Governance: introduce rule versioning</comment>
+        <createTable tableName="gov_rule_version">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="rule_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)"/>
+            <column name="definition" type="jsonb"/>
+            <column name="checksum" type="varchar(128)"/>
+            <column name="notes" type="varchar(1024)"/>
+            <column name="approved_by" type="varchar(64)"/>
+            <column name="approved_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="gov_rule_version"
+            baseColumnNames="rule_id"
+            referencedTableName="gov_rule"
+            referencedColumnNames="id"
+            constraintName="fk_gov_rule_version_rule"
+            onDelete="CASCADE"
+        />
+        <addUniqueConstraint
+            tableName="gov_rule_version"
+            columnNames="rule_id,version"
+            constraintName="uk_gov_rule_version"
+        />
+        <createIndex indexName="idx_gov_rule_version_rule" tableName="gov_rule_version">
+            <column name="rule_id"/>
+        </createIndex>
+        <createIndex indexName="idx_gov_rule_version_status" tableName="gov_rule_version">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-03-governance-rule-binding" author="platform">
+        <comment>Governance: bind rule versions to datasets</comment>
+        <createTable tableName="gov_rule_binding">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="rule_version_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dataset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dataset_alias" type="varchar(128)"/>
+            <column name="scope_type" type="varchar(32)"/>
+            <column name="field_refs" type="varchar(1024)"/>
+            <column name="filter_expression" type="varchar(2048)"/>
+            <column name="schedule_override" type="varchar(128)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="gov_rule_binding"
+            baseColumnNames="rule_version_id"
+            referencedTableName="gov_rule_version"
+            referencedColumnNames="id"
+            constraintName="fk_gov_rule_binding_version"
+            onDelete="CASCADE"
+        />
+        <createIndex indexName="idx_gov_rule_binding_version" tableName="gov_rule_binding">
+            <column name="rule_version_id"/>
+        </createIndex>
+        <createIndex indexName="idx_gov_rule_binding_dataset" tableName="gov_rule_binding">
+            <column name="dataset_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-04-quality-run" author="platform">
+        <comment>Governance: capture quality rule executions</comment>
+        <createTable tableName="gov_quality_run">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="rule_id" type="uuid"/>
+            <column name="rule_version_id" type="uuid"/>
+            <column name="binding_id" type="uuid"/>
+            <column name="dataset_id" type="uuid"/>
+            <column name="job_id" type="uuid"/>
+            <column name="trigger_type" type="varchar(32)"/>
+            <column name="trigger_ref" type="varchar(128)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="severity" type="varchar(32)"/>
+            <column name="data_level" type="varchar(32)"/>
+            <column name="scheduled_at" type="timestamp"/>
+            <column name="started_at" type="timestamp"/>
+            <column name="finished_at" type="timestamp"/>
+            <column name="duration_ms" type="bigint"/>
+            <column name="message" type="varchar(4096)"/>
+            <column name="metrics_json" type="jsonb"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_gov_quality_run_rule" tableName="gov_quality_run">
+            <column name="rule_id"/>
+        </createIndex>
+        <createIndex indexName="idx_gov_quality_run_dataset" tableName="gov_quality_run">
+            <column name="dataset_id"/>
+        </createIndex>
+        <createIndex indexName="idx_gov_quality_run_status" tableName="gov_quality_run">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-05-quality-metric" author="platform">
+        <comment>Governance: quality run metrics</comment>
+        <createTable tableName="gov_quality_metric">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="run_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="metric_key" type="varchar(128)"/>
+            <column name="metric_value" type="numeric(20,6)"/>
+            <column name="threshold_value" type="numeric(20,6)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="detail" type="varchar(2048)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="gov_quality_metric"
+            baseColumnNames="run_id"
+            referencedTableName="gov_quality_run"
+            referencedColumnNames="id"
+            constraintName="fk_gov_quality_metric_run"
+            onDelete="CASCADE"
+        />
+        <createIndex indexName="idx_gov_quality_metric_run" tableName="gov_quality_metric">
+            <column name="run_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-06-compliance-batch" author="platform">
+        <comment>Governance: compliance batch summary</comment>
+        <createTable tableName="gov_compliance_batch">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="varchar(128)"/>
+            <column name="template_code" type="varchar(64)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="progress_pct" type="int"/>
+            <column name="evidence_required" type="boolean" defaultValueBoolean="false"/>
+            <column name="data_level" type="varchar(32)"/>
+            <column name="scheduled_at" type="timestamp"/>
+            <column name="started_at" type="timestamp"/>
+            <column name="finished_at" type="timestamp"/>
+            <column name="triggered_by" type="varchar(64)"/>
+            <column name="triggered_type" type="varchar(32)"/>
+            <column name="summary" type="varchar(4096)"/>
+            <column name="metadata_json" type="jsonb"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_gov_compliance_template" tableName="gov_compliance_batch">
+            <column name="template_code"/>
+        </createIndex>
+        <createIndex indexName="idx_gov_compliance_status" tableName="gov_compliance_batch">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-07-compliance-item" author="platform">
+        <comment>Governance: compliance batch items</comment>
+        <createTable tableName="gov_compliance_batch_item">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="batch_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rule_id" type="uuid"/>
+            <column name="rule_version_id" type="uuid"/>
+            <column name="dataset_id" type="uuid"/>
+            <column name="quality_run_id" type="uuid"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="severity" type="varchar(32)"/>
+            <column name="conclusion" type="varchar(2048)"/>
+            <column name="evidence_ref" type="varchar(256)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="gov_compliance_batch_item"
+            baseColumnNames="batch_id"
+            referencedTableName="gov_compliance_batch"
+            referencedColumnNames="id"
+            constraintName="fk_gov_compliance_item_batch"
+            onDelete="CASCADE"
+        />
+        <createIndex indexName="idx_gov_compliance_item_batch" tableName="gov_compliance_batch_item">
+            <column name="batch_id"/>
+        </createIndex>
+        <createIndex indexName="idx_gov_compliance_item_status" tableName="gov_compliance_batch_item">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-08-issue-ticket" author="platform">
+        <comment>Governance: issue ticket ledger</comment>
+        <createTable tableName="gov_issue_ticket">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="source_type" type="varchar(32)"/>
+            <column name="source_id" type="uuid"/>
+            <column name="title" type="varchar(256)"/>
+            <column name="summary" type="varchar(4096)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="severity" type="varchar(32)"/>
+            <column name="priority" type="varchar(32)"/>
+            <column name="data_level" type="varchar(32)"/>
+            <column name="assigned_to" type="varchar(64)"/>
+            <column name="assigned_at" type="timestamp"/>
+            <column name="due_at" type="timestamp"/>
+            <column name="resolved_at" type="timestamp"/>
+            <column name="resolution" type="varchar(4096)"/>
+            <column name="owner" type="varchar(64)"/>
+            <column name="tags" type="varchar(512)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_gov_issue_ticket_status" tableName="gov_issue_ticket">
+            <column name="status"/>
+        </createIndex>
+        <createIndex indexName="idx_gov_issue_ticket_assignee" tableName="gov_issue_ticket">
+            <column name="assigned_to"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-09-issue-action" author="platform">
+        <comment>Governance: issue ticket actions</comment>
+        <createTable tableName="gov_issue_action">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="ticket_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action_type" type="varchar(32)"/>
+            <column name="actor" type="varchar(64)"/>
+            <column name="notes" type="varchar(2048)"/>
+            <column name="attachments_json" type="jsonb"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="gov_issue_action"
+            baseColumnNames="ticket_id"
+            referencedTableName="gov_issue_ticket"
+            referencedColumnNames="id"
+            constraintName="fk_gov_issue_action_ticket"
+            onDelete="CASCADE"
+        />
+        <createIndex indexName="idx_gov_issue_action_ticket" tableName="gov_issue_action">
+            <column name="ticket_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-10-governance-foreign-keys" author="platform">
+        <comment>Governance: finalize foreign keys</comment>
+        <addForeignKeyConstraint
+            baseTableName="gov_rule"
+            baseColumnNames="latest_version_id"
+            referencedTableName="gov_rule_version"
+            referencedColumnNames="id"
+            constraintName="fk_gov_rule_latest_version"
+            onDelete="SET NULL"
+        />
+        <addForeignKeyConstraint
+            baseTableName="gov_quality_run"
+            baseColumnNames="rule_id"
+            referencedTableName="gov_rule"
+            referencedColumnNames="id"
+            constraintName="fk_gov_quality_run_rule"
+            onDelete="SET NULL"
+        />
+        <addForeignKeyConstraint
+            baseTableName="gov_quality_run"
+            baseColumnNames="rule_version_id"
+            referencedTableName="gov_rule_version"
+            referencedColumnNames="id"
+            constraintName="fk_gov_quality_run_version"
+            onDelete="SET NULL"
+        />
+        <addForeignKeyConstraint
+            baseTableName="gov_quality_run"
+            baseColumnNames="binding_id"
+            referencedTableName="gov_rule_binding"
+            referencedColumnNames="id"
+            constraintName="fk_gov_quality_run_binding"
+            onDelete="SET NULL"
+        />
+        <addForeignKeyConstraint
+            baseTableName="gov_quality_run"
+            baseColumnNames="dataset_id"
+            referencedTableName="catalog_dataset"
+            referencedColumnNames="id"
+            constraintName="fk_gov_quality_run_dataset"
+            onDelete="SET NULL"
+        />
+        <addForeignKeyConstraint
+            baseTableName="gov_compliance_batch_item"
+            baseColumnNames="rule_id"
+            referencedTableName="gov_rule"
+            referencedColumnNames="id"
+            constraintName="fk_gov_compliance_item_rule"
+            onDelete="SET NULL"
+        />
+        <addForeignKeyConstraint
+            baseTableName="gov_compliance_batch_item"
+            baseColumnNames="rule_version_id"
+            referencedTableName="gov_rule_version"
+            referencedColumnNames="id"
+            constraintName="fk_gov_compliance_item_version"
+            onDelete="SET NULL"
+        />
+        <addForeignKeyConstraint
+            baseTableName="gov_compliance_batch_item"
+            baseColumnNames="quality_run_id"
+            referencedTableName="gov_quality_run"
+            referencedColumnNames="id"
+            constraintName="fk_gov_compliance_item_run"
+            onDelete="SET NULL"
+        />
+        <addForeignKeyConstraint
+            baseTableName="gov_issue_ticket"
+            baseColumnNames="source_id"
+            referencedTableName="gov_compliance_batch"
+            referencedColumnNames="id"
+            constraintName="fk_gov_issue_ticket_compliance"
+            onDelete="SET NULL"
+            deferrable="true"
+            initiallyDeferred="true"
+        />
+    </changeSet>
+</databaseChangeLog>

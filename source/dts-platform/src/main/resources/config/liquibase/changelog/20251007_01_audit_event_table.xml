@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251007-01-audit-event-table" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="audit_event"/>
+            </not>
+        </preConditions>
+        <createTable tableName="audit_event">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="occurred_at" type="TIMESTAMPTZ" defaultValueDate="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actor" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actor_role" type="VARCHAR(64)"/>
+            <column name="module" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resource_type" type="VARCHAR(64)"/>
+            <column name="resource_id" type="VARCHAR(256)"/>
+            <column name="client_ip" type="INET"/>
+            <column name="client_agent" type="VARCHAR(256)"/>
+            <column name="request_uri" type="TEXT"/>
+            <column name="http_method" type="VARCHAR(16)"/>
+            <column name="result" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="latency_ms" type="INTEGER"/>
+            <column name="payload_iv" type="BYTEA"/>
+            <column name="payload_cipher" type="BYTEA"/>
+            <column name="payload_hmac" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="chain_signature" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="extra_tags" type="JSONB"/>
+            <column name="created_by" type="VARCHAR(128)"/>
+            <column name="created_date" type="TIMESTAMPTZ" defaultValueDate="CURRENT_TIMESTAMP"/>
+            <column name="last_modified_by" type="VARCHAR(128)"/>
+            <column name="last_modified_date" type="TIMESTAMPTZ" defaultValueDate="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <createIndex indexName="idx_audit_event_module_time" tableName="audit_event">
+            <column name="module"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex indexName="idx_audit_event_actor_time" tableName="audit_event">
+            <column name="actor"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex indexName="idx_audit_event_result_time" tableName="audit_event">
+            <column name="result"/>
+            <column name="occurred_at"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

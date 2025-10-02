@@ -14,9 +14,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
+import { Label } from "@/ui/label";
 import { ScrollArea } from "@/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Text } from "@/ui/typography";
+import { Textarea } from "@/ui/textarea";
 
 const DATA_LEVEL_VALUES = ["DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_TOP_SECRET"] as const;
 const DATA_LEVEL_OPTIONS: { value: OrgDataLevel; label: string }[] = [
@@ -34,28 +36,40 @@ const LEGACY_LEVEL_MAP: Record<string, OrgDataLevel> = {
 };
 
 const orgFormSchema = z.object({
-	name: z.string().trim().min(1, "请输入部门名称"),
-	dataLevel: z.enum(DATA_LEVEL_VALUES, { required_error: "请选择数据密级" }),
-	contact: z.preprocess((value) => {
-		if (typeof value === "string") {
-			const trimmed = value.trim();
-			return trimmed.length === 0 ? undefined : trimmed;
-		}
-		return value;
-	}, z.string().max(32, "联系人姓名过长").optional()),
-	phone: z.preprocess(
-		(value) => {
-			if (typeof value === "string") {
-				const trimmed = value.trim();
-				return trimmed.length === 0 ? undefined : trimmed;
-			}
-			return value;
-		},
-		z
-			.string()
-			.regex(/^[0-9+\-()\s]{5,20}$/, "请输入有效的联系电话")
-			.optional(),
-	),
+    name: z.string().trim().min(1, "请输入部门名称"),
+    dataLevel: z.enum(DATA_LEVEL_VALUES, { required_error: "请选择数据密级" }),
+    contact: z.preprocess((value) => {
+        if (typeof value === "string") {
+            const trimmed = value.trim();
+            return trimmed.length === 0 ? undefined : trimmed;
+        }
+        return value;
+    }, z.string().max(32, "联系人姓名过长").optional()),
+    phone: z.preprocess(
+        (value) => {
+            if (typeof value === "string") {
+                const trimmed = value.trim();
+                return trimmed.length === 0 ? undefined : trimmed;
+            }
+            return value;
+        },
+        z
+            .string()
+            .regex(/^[0-9+\-()\s]{5,20}$/, "请输入有效的联系电话")
+            .optional(),
+    ),
+    description: z.preprocess((value) => {
+        if (typeof value === "string") {
+            const trimmed = value.trim();
+            return trimmed.length === 0 ? undefined : trimmed;
+        }
+        return value;
+    }, z.string().max(2000, "部门说明过长").optional()),
+    reason: z
+        .string()
+        .trim()
+        .min(1, "请填写审批原因")
+        .max(500, "审批原因不宜超过500字"),
 });
 
 type OrgFormValues = z.infer<typeof orgFormSchema>;
@@ -112,16 +126,16 @@ export default function OrgManagementView() {
 		return { totalOrg, sensitiveOrgs, topSecret };
 	}, [flattened]);
 
-	const createMutation = useMutation({
-		mutationFn: (payload: OrganizationPayload) => adminApi.createOrganization(payload),
-	});
-	const updateMutation = useMutation({
-		mutationFn: ({ id, payload }: { id: number; payload: OrganizationPayload }) =>
-			adminApi.updateOrganization(id, payload),
-	});
-	const deleteMutation = useMutation({
-		mutationFn: (id: number) => adminApi.deleteOrganization(id),
-	});
+    const createMutation = useMutation({
+        mutationFn: (payload: OrganizationPayload) => adminApi.createOrganization(payload),
+    });
+    const updateMutation = useMutation({
+        mutationFn: ({ id, payload }: { id: number; payload: OrganizationPayload }) =>
+            adminApi.updateOrganization(id, payload),
+    });
+    const deleteMutation = useMutation({
+        mutationFn: ({ id, reason }: { id: number; reason: string }) => adminApi.deleteOrganization(id, reason),
+    });
 
 	const formLoading = createMutation.isPending || updateMutation.isPending;
 
@@ -147,55 +161,55 @@ export default function OrgManagementView() {
 	const closeForm = () => setFormState({ open: false, mode: "create", parentId: null, target: null });
 	const closeDelete = () => setDeleteState({ open: false, target: null });
 
-	const handleSubmitForm = async (values: OrgFormValues) => {
-		if (formState.mode === "create") {
-			const payload: OrganizationPayload = {
-				...values,
-				parentId: formState.parentId ?? null,
-			};
-			try {
-				const created = await createMutation.mutateAsync(payload);
-				toast.success("部门新增成功");
-				closeForm();
-				setSelectedId(created.id);
-				await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
-			} catch (error) {
-				console.error(error);
-			}
-			return;
-		}
+    const handleSubmitForm = async (values: OrgFormValues) => {
+        if (formState.mode === "create") {
+            const payload: OrganizationPayload = {
+                ...values,
+                parentId: formState.parentId ?? null,
+            };
+            try {
+                const changeRequest = await createMutation.mutateAsync(payload);
+                toast.success(`新增请求已提交审批 (单号 #${changeRequest.id})`);
+                closeForm();
+                setSelectedId(formState.parentId ?? null);
+                await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
+            } catch (error) {
+                console.error(error);
+            }
+            return;
+        }
 
-		if (formState.mode === "edit" && formState.target) {
-			const payload: OrganizationPayload = { ...values };
-			try {
-				await updateMutation.mutateAsync({ id: formState.target.id, payload });
-				toast.success("部门信息已更新");
-				closeForm();
-				await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
-			} catch (error) {
-				console.error(error);
-			}
-		}
-	};
+        if (formState.mode === "edit" && formState.target) {
+            const payload: OrganizationPayload = { ...values };
+            try {
+                const changeRequest = await updateMutation.mutateAsync({ id: formState.target.id, payload });
+                toast.success(`更新请求已提交审批 (单号 #${changeRequest.id})`);
+                closeForm();
+                await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
+            } catch (error) {
+                console.error(error);
+            }
+        }
+    };
 
-	const handleConfirmDelete = async () => {
-		const target = deleteState.target;
-		if (!target) return;
-		try {
-			await deleteMutation.mutateAsync(target.id);
-			toast.success("部门已删除");
-			closeDelete();
-			await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
-			setSelectedId((current) => {
-				if (current === target.id) {
-					return target.parentId ?? null;
-				}
-				return current;
-			});
-		} catch (error) {
-			console.error(error);
-		}
-	};
+    const handleConfirmDelete = async (reason: string) => {
+        const target = deleteState.target;
+        if (!target) return;
+        try {
+            const changeRequest = await deleteMutation.mutateAsync({ id: target.id, reason });
+            toast.success(`删除请求已提交审批 (单号 #${changeRequest.id})`);
+            closeDelete();
+            await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
+            setSelectedId((current) => {
+                if (current === target.id) {
+                    return target.parentId ?? null;
+                }
+                return current;
+            });
+        } catch (error) {
+            console.error(error);
+        }
+    };
 
 	const editingNode = formState.mode === "edit" ? formState.target : null;
 	const parentLabel =
@@ -206,19 +220,23 @@ export default function OrgManagementView() {
 			: editingNode
 				? editingNode.path.slice(0, -1).join(" / ") || "无（一级部门）"
 				: undefined;
-	const initialValues: OrgFormValues = editingNode
-		? {
-				name: editingNode.name,
-				dataLevel: normalizeDataLevel(editingNode.dataLevel ?? editingNode.sensitivity),
-				contact: editingNode.contact ?? "",
-				phone: editingNode.phone ?? "",
-			}
-		: {
-				name: "",
-				dataLevel: normalizeDataLevel(formState.target?.dataLevel ?? formState.target?.sensitivity),
-				contact: "",
-				phone: "",
-			};
+    const initialValues: OrgFormValues = editingNode
+        ? {
+                name: editingNode.name,
+                dataLevel: normalizeDataLevel(editingNode.dataLevel ?? editingNode.sensitivity),
+                contact: editingNode.contact ?? "",
+                phone: editingNode.phone ?? "",
+                description: editingNode.description ?? "",
+                reason: "",
+            }
+        : {
+                name: "",
+                dataLevel: normalizeDataLevel(formState.target?.dataLevel ?? formState.target?.sensitivity),
+                contact: "",
+                phone: "",
+                description: "",
+                reason: "",
+            };
 
 	return (
 		<div className="grid gap-6 xl:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
@@ -230,6 +248,9 @@ export default function OrgManagementView() {
 							新增部门
 						</Button>
 					</div>
+					<Text variant="body3" className="text-xs text-muted-foreground">
+						所有新增、编辑、删除都会生成审批单，审批通过后系统才会同步至 Keycloak。
+					</Text>
 					<Input
 						placeholder="搜索部门 / 联系人 / 数据密级"
 						value={search}
@@ -349,13 +370,14 @@ export default function OrgManagementView() {
 				onClose={closeForm}
 			/>
 
-			<ConfirmDeleteDialog
-				open={deleteState.open}
-				name={deleteState.target?.name}
-				loading={deleteMutation.isPending}
-				onCancel={closeDelete}
-				onConfirm={handleConfirmDelete}
-			/>
+				<ConfirmDeleteDialog
+					open={deleteState.open}
+					name={deleteState.target?.name}
+					childCount={deleteState.target?.children?.length ?? 0}
+					loading={deleteMutation.isPending}
+					onCancel={closeDelete}
+					onConfirm={handleConfirmDelete}
+				/>
 		</div>
 	);
 }
@@ -532,10 +554,10 @@ function OrganizationFormDialog({
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="min-w-[420px] max-w-[520px]">
-				<DialogHeader>
-					<DialogTitle>{title}</DialogTitle>
-					<DialogDescription>请填写部门基础信息并确认数据密级。</DialogDescription>
-				</DialogHeader>
+					<DialogHeader>
+						<DialogTitle>{title}</DialogTitle>
+						<DialogDescription>提交后将生成审批单，审批通过后才会生效。</DialogDescription>
+					</DialogHeader>
 				{parentLabel ? (
 					<div className="rounded-md border border-dashed border-muted/60 bg-muted/30 p-3 text-xs text-muted-foreground">
 						<span className="font-medium text-foreground">上级部门：</span>
@@ -608,12 +630,46 @@ function OrganizationFormDialog({
 									</FormItem>
 								)}
 							/>
-						</div>
-						<DialogFooter>
-							<Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-								取消
-							</Button>
-							<Button type="submit" disabled={loading}>
+							</div>
+							<FormField
+								control={form.control}
+								name="description"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>部门说明</FormLabel>
+										<FormControl>
+											<Textarea
+												placeholder="可选，描述部门职责、范围等信息"
+												rows={3}
+												{...field}
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={form.control}
+								name="reason"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>审批原因</FormLabel>
+										<FormControl>
+											<Textarea
+												placeholder="请填写拟新增/调整的原因，审批通过后方可生效"
+												rows={4}
+												{...field}
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<DialogFooter>
+								<Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+									取消
+								</Button>
+								<Button type="submit" disabled={loading}>
 								{loading ? `${submitText}中...` : submitText}
 							</Button>
 						</DialogFooter>
@@ -625,40 +681,99 @@ function OrganizationFormDialog({
 }
 
 interface ConfirmDeleteDialogProps {
-	open: boolean;
-	name?: string;
-	loading?: boolean;
-	onCancel: () => void;
-	onConfirm: () => void;
+    open: boolean;
+    name?: string;
+    childCount?: number;
+    loading?: boolean;
+    onCancel: () => void;
+    onConfirm: (reason: string) => void;
 }
 
-function ConfirmDeleteDialog({ open, name, loading, onCancel, onConfirm }: ConfirmDeleteDialogProps) {
-	const handleOpenChange = (value: boolean) => {
-		if (!value && !loading) {
-			onCancel();
-		}
-	};
-	return (
-		<Dialog open={open} onOpenChange={handleOpenChange}>
-			<DialogContent className="min-w-[420px] max-w-[480px]">
-				<DialogHeader>
-					<DialogTitle>确认删除部门</DialogTitle>
-					<DialogDescription>删除后该部门及其子部门将无法恢复，请谨慎操作。</DialogDescription>
-				</DialogHeader>
-				<div className="space-y-2 py-2 text-sm">
-					<p>
-						即将删除：<span className="font-medium text-foreground">{name ?? "未命名部门"}</span>
-					</p>
-				</div>
-				<DialogFooter>
-					<Button variant="outline" onClick={onCancel} disabled={loading}>
-						取消
-					</Button>
-					<Button variant="destructive" onClick={onConfirm} disabled={loading}>
-						{loading ? "删除中..." : "确认删除"}
-					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
-	);
+function ConfirmDeleteDialog({ open, name, childCount = 0, loading, onCancel, onConfirm }: ConfirmDeleteDialogProps) {
+    const [reason, setReason] = useState("");
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (open) {
+            setReason("");
+            setError(null);
+        }
+    }, [open]);
+
+    const handleOpenChange = (value: boolean) => {
+        if (!value && !loading) {
+            onCancel();
+        }
+    };
+
+    const handleSubmit = () => {
+        const trimmed = reason.trim();
+        if (!trimmed) {
+            setError("请填写审批原因");
+            return;
+        }
+        onConfirm(trimmed);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={handleOpenChange}>
+            <DialogContent className="min-w-[420px] max-w-[500px]">
+                <DialogHeader>
+                    <DialogTitle>提交删除审批</DialogTitle>
+                    <DialogDescription>审批通过前不会实际删除，提交前请确认审批说明。</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2 text-sm">
+                    <div>
+                        <p>
+                            即将删除：<span className="font-medium text-foreground">{name ?? "未命名部门"}</span>
+                        </p>
+                        {childCount > 0 ? (
+                            <p className="mt-1 text-xs text-destructive/80">
+                                该部门包含 {childCount} 个下级部门，审批通过后将一并删除。
+                            </p>
+                        ) : null}
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="org-delete-reason" className="text-xs font-medium text-muted-foreground">
+                            审批原因
+                        </Label>
+                        <Textarea
+                            id="org-delete-reason"
+                            value={reason}
+                            onChange={(event) => {
+                                setReason(event.target.value);
+                                if (error) {
+                                    setError(null);
+                                }
+                            }}
+                            onBlur={() => {
+                                if (!reason.trim()) {
+                                    setError("请填写审批原因");
+                                }
+                            }}
+                            placeholder="请描述删除原因，审批通过后才会执行删除"
+                            rows={4}
+                        />
+                        {error ? (
+                            <p className="text-xs text-destructive">{error}</p>
+                        ) : (
+                            <p className="text-xs text-muted-foreground">审批通过后系统才会同步删除该部门。</p>
+                        )}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onCancel} disabled={loading}>
+                        取消
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        onClick={handleSubmit}
+                        disabled={loading || reason.trim().length === 0}
+                    >
+                        {loading ? "提交中..." : "提交审批"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 }

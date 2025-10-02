@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.16.xsd"
+>
+    <changeSet id="20251007-02-data-standard" author="platform">
+        <comment>Replace modeling_standard with data standard ledger tables</comment>
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="modeling_standard"/>
+        </preConditions>
+        <dropTable tableName="modeling_standard" cascadeConstraints="true"/>
+    </changeSet>
+
+    <changeSet id="20251007-03-data-standard" author="platform">
+        <createTable tableName="data_standard">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="code" type="varchar(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="domain" type="varchar(64)"/>
+            <column name="scope" type="varchar(256)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="security_level" type="varchar(32)"/>
+            <column name="owner" type="varchar(64)"/>
+            <column name="tags" type="varchar(512)"/>
+            <column name="current_version" type="varchar(32)"/>
+            <column name="version_notes" type="varchar(1024)"/>
+            <column name="description" type="varchar(2048)"/>
+            <column name="review_cycle" type="varchar(32)"/>
+            <column name="last_review_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_data_standard_owner" tableName="data_standard">
+            <column name="owner"/>
+        </createIndex>
+        <createIndex indexName="idx_data_standard_status" tableName="data_standard">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251007-04-data-standard-version" author="platform">
+        <createTable tableName="data_standard_version">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="standard_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)"/>
+            <column name="change_summary" type="varchar(1024)"/>
+            <column name="snapshot_json" type="text"/>
+            <column name="released_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="data_standard_version"
+            baseColumnNames="standard_id"
+            referencedTableName="data_standard"
+            referencedColumnNames="id"
+            constraintName="fk_data_standard_version_standard"
+            onDelete="CASCADE"
+        />
+        <addUniqueConstraint
+            tableName="data_standard_version"
+            columnNames="standard_id,version"
+            constraintName="uk_data_standard_version"
+        />
+        <createIndex indexName="idx_data_standard_version_standard" tableName="data_standard_version">
+            <column name="standard_id"/>
+        </createIndex>
+        <createIndex indexName="idx_data_standard_version_status" tableName="data_standard_version">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251007-05-data-standard-attachment" author="platform">
+        <createTable tableName="data_standard_attachment">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="standard_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="varchar(32)"/>
+            <column name="file_name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_type" type="varchar(128)"/>
+            <column name="file_size" type="bigint"/>
+            <column name="sha256" type="varchar(64)"/>
+            <column name="key_version" type="varchar(32)"/>
+            <column name="iv" type="bytea"/>
+            <column name="cipher_blob" type="bytea"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="data_standard_attachment"
+            baseColumnNames="standard_id"
+            referencedTableName="data_standard"
+            referencedColumnNames="id"
+            constraintName="fk_data_standard_attachment_standard"
+            onDelete="CASCADE"
+        />
+        <createIndex indexName="idx_data_standard_attachment_standard" tableName="data_standard_attachment">
+            <column name="standard_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

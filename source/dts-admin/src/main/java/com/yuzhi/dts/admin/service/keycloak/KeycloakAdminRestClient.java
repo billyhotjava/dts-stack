@@ -117,7 +117,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
 
     @Override
     public KeycloakUserDTO updateUser(String userId, KeycloakUserDTO payload, String accessToken) {
-        URI uri = usersEndpoint.resolve("./" + userId);
+        URI uri = userUri(userId);
         Map<String, Object> representation = toRepresentation(payload);
         ResponseEntity<String> response = exchange(uri, HttpMethod.PUT, accessToken, representation);
         if (response.getStatusCode().is2xxSuccessful() || response.getStatusCode().is2xxSuccessful()) {
@@ -128,7 +128,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
 
     @Override
     public void deleteUser(String userId, String accessToken) {
-        URI uri = usersEndpoint.resolve("./" + userId);
+        URI uri = userUri(userId);
         ResponseEntity<String> response = exchange(uri, HttpMethod.DELETE, accessToken, null);
         if (!response.getStatusCode().is2xxSuccessful() && response.getStatusCode().value() != 204 && response.getStatusCode().value() != 202) {
             throw toRuntime("删除 Keycloak 用户失败", response);
@@ -155,7 +155,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         if (groupId == null || groupId.isBlank()) {
             return Optional.empty();
         }
-        URI uri = groupsEndpoint.resolve("./" + groupId);
+        URI uri = groupUri(groupId);
         try {
             ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
@@ -177,9 +177,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
 
     @Override
     public KeycloakGroupDTO createGroup(KeycloakGroupDTO payload, String parentGroupId, String accessToken) {
-        URI target = parentGroupId == null || parentGroupId.isBlank()
-            ? groupsEndpoint
-            : groupsEndpoint.resolve("./" + parentGroupId + "/children");
+        URI target = parentGroupId == null || parentGroupId.isBlank() ? groupsEndpoint : groupUri(parentGroupId, "children");
         Map<String, Object> representation = toGroupRepresentation(payload);
         ResponseEntity<String> response = exchange(target, HttpMethod.POST, accessToken, representation);
         if (!response.getStatusCode().is2xxSuccessful()) {
@@ -192,7 +190,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
 
     @Override
     public KeycloakGroupDTO updateGroup(String groupId, KeycloakGroupDTO payload, String accessToken) {
-        URI uri = groupsEndpoint.resolve("./" + groupId);
+        URI uri = groupUri(groupId);
         Map<String, Object> representation = toGroupRepresentation(payload);
         ResponseEntity<String> response = exchange(uri, HttpMethod.PUT, accessToken, representation);
         if (!response.getStatusCode().is2xxSuccessful()) {
@@ -203,7 +201,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
 
     @Override
     public void deleteGroup(String groupId, String accessToken) {
-        URI uri = groupsEndpoint.resolve("./" + groupId);
+        URI uri = groupUri(groupId);
         ResponseEntity<String> response = exchange(uri, HttpMethod.DELETE, accessToken, null);
         if (!response.getStatusCode().is2xxSuccessful() && response.getStatusCode().value() != 204) {
             throw toRuntime("删除 Keycloak 组失败", response);
@@ -212,7 +210,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
 
     @Override
     public void resetPassword(String userId, String newPassword, boolean temporary, String accessToken) {
-        URI uri = usersEndpoint.resolve("./" + userId + "/reset-password");
+        URI uri = userUri(userId, "reset-password");
         Map<String, Object> payload = Map.of(
             "type",
             "password",
@@ -233,7 +231,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     }
 
     private Optional<KeycloakUserDTO> fetchById(String userId, String accessToken) {
-        URI uri = usersEndpoint.resolve("./" + userId);
+        URI uri = userUri(userId);
         try {
             ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
@@ -360,6 +358,30 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             LOG.warn("Failed to resolve created Keycloak user from location {}: {}", location, ex.getMessage());
             return Optional.empty();
         }
+    }
+
+    private URI userUri(String... segments) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUri(usersEndpoint);
+        if (segments != null) {
+            for (String segment : segments) {
+                if (segment != null && !segment.isBlank()) {
+                    builder.pathSegment(segment);
+                }
+            }
+        }
+        return builder.build(true).toUri();
+    }
+
+    private URI groupUri(String... segments) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUri(groupsEndpoint);
+        if (segments != null) {
+            for (String segment : segments) {
+                if (segment != null && !segment.isBlank()) {
+                    builder.pathSegment(segment);
+                }
+            }
+        }
+        return builder.build(true).toUri();
     }
 
     private ResponseEntity<String> exchange(URI uri, HttpMethod method, String accessToken, Object payload) {

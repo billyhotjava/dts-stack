@@ -1,5 +1,7 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Table } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
 import type { ChangeRequest } from "@/admin/types";
 import { AdminSessionContext } from "@/admin/lib/session-context";
@@ -282,6 +284,131 @@ export default function ApprovalCenterView() {
 		[augmentedRequests, activeTaskId],
 	);
 
+	const pendingColumns = useMemo<ColumnsType<AugmentedChangeRequest>>(
+		() => [
+			{
+				title: "操作编号",
+				dataIndex: "id",
+				width: 120,
+				render: (id: number) => <span className="font-medium">CR-{id}</span>,
+			},
+			{
+				title: "操作类型",
+				dataIndex: "action",
+				width: 160,
+				render: (_: unknown, record) => getActionText(record),
+			},
+			{
+				title: "操作内容",
+				dataIndex: "diffJson",
+				ellipsis: true,
+				render: (_: unknown, record) => (
+					<div className="text-xs text-muted-foreground">{summarizeDiffPairs(record)}</div>
+				),
+			},
+			{
+				title: "影响对象",
+				dataIndex: "resourceId",
+				width: 160,
+				render: (_: unknown, record) => resolveTarget(record),
+			},
+			{
+				title: "操作人",
+				dataIndex: "requestedBy",
+				width: 140,
+				render: (_: unknown, record) => <span className="text-xs">{record.requestedBy}</span>,
+			},
+			{
+				title: "操作时间",
+				dataIndex: "requestedAt",
+				width: 180,
+				render: (_: unknown, record) => <span className="text-xs">{formatDateTime(record.requestedAt)}</span>,
+			},
+			{
+				title: "当前状态",
+				dataIndex: "effectiveStatus",
+				width: 140,
+				render: (_: unknown, record) => (
+					<Badge variant={getStatusBadgeVariant(record.effectiveStatus)}>
+						{getStatusLabel(record.effectiveStatus)}
+					</Badge>
+				),
+			},
+			{
+				title: "操作",
+				key: "actions",
+				width: 120,
+				align: "right" as const,
+				render: (_: unknown, record) => (
+					<Button
+						size="sm"
+						variant="outline"
+						onClick={() => setActiveTaskId(record.id)}
+						disabled={decisionLoading && activeTaskId === record.id}
+					>
+						操作
+					</Button>
+				),
+			},
+		],
+		[activeTaskId, decisionLoading],
+	);
+
+	const completedColumns = useMemo<ColumnsType<AugmentedChangeRequest>>(
+		() => [
+			{
+				title: "操作编号",
+				dataIndex: "id",
+				width: 120,
+				render: (id: number) => <span className="font-medium">CR-{id}</span>,
+			},
+			{
+				title: "操作类型",
+				dataIndex: "action",
+				width: 160,
+				render: (_: unknown, record) => getActionText(record),
+			},
+			{
+				title: "操作内容",
+				dataIndex: "diffJson",
+				ellipsis: true,
+				render: (_: unknown, record) => (
+					<div className="text-xs text-muted-foreground">{summarizeDiffPairs(record)}</div>
+				),
+			},
+			{
+				title: "影响对象",
+				dataIndex: "resourceId",
+				width: 160,
+				render: (_: unknown, record) => resolveTarget(record),
+			},
+			{
+				title: "操作人",
+				dataIndex: "effectiveDecidedBy",
+				width: 140,
+				render: (_: unknown, record) => <span className="text-xs">{record.effectiveDecidedBy ?? "-"}</span>,
+			},
+			{
+				title: "操作时间",
+				dataIndex: "effectiveDecidedAt",
+				width: 180,
+				render: (_: unknown, record) => <span className="text-xs">{formatDateTime(record.effectiveDecidedAt)}</span>,
+			},
+			{
+				title: "处理结果",
+				dataIndex: "effectiveStatus",
+				width: 140,
+				render: (_: unknown, record) => (
+					<Badge variant={getStatusBadgeVariant(record.effectiveStatus)}>
+						{getStatusLabel(record.effectiveStatus)}
+					</Badge>
+				),
+			},
+		],
+		[],
+	);
+
+
 	const handleDecision = (status: DecisionStatus) => {
 		if (!activeTask) return;
 		setDecisionLoading(true);
@@ -365,51 +492,16 @@ export default function ApprovalCenterView() {
 										暂无待审批条目。
 									</Text>
 								) : (
-									<div className="overflow-x-auto">
-										<table className="min-w-full table-fixed text-sm">
-											<thead className="bg-muted/60">
-												<tr className="text-left">
-													<th className="px-4 py-3 font-medium">操作编号</th>
-													<th className="px-4 py-3 font-medium">操作类型</th>
-													<th className="px-4 py-3 font-medium">操作内容</th>
-													<th className="px-4 py-3 font-medium">影响对象</th>
-													<th className="px-4 py-3 font-medium">操作人</th>
-													<th className="px-4 py-3 font-medium">操作时间</th>
-													<th className="px-4 py-3 font-medium">当前状态</th>
-													<th className="px-4 py-3 font-medium text-right">操作</th>
-												</tr>
-											</thead>
-											<tbody>
-												{selectedPending.map((task) => (
-													<tr key={task.id} className="border-b last:border-b-0">
-														<td className="px-4 py-3 font-medium">CR-{task.id}</td>
-														<td className="px-4 py-3">{getActionText(task)}</td>
-														<td className="px-4 py-3 text-xs">
-															<div className="text-muted-foreground">{summarizeDiffPairs(task)}</div>
-														</td>
-														<td className="px-4 py-3">{resolveTarget(task)}</td>
-														<td className="px-4 py-3 text-xs">{task.requestedBy}</td>
-														<td className="px-4 py-3 text-xs">{formatDateTime(task.requestedAt)}</td>
-														<td className="px-4 py-3">
-															<Badge variant={getStatusBadgeVariant(task.effectiveStatus)}>
-																{getStatusLabel(task.effectiveStatus)}
-															</Badge>
-														</td>
-														<td className="px-4 py-3 text-right">
-															<Button
-																size="sm"
-																variant="outline"
-																onClick={() => setActiveTaskId(task.id)}
-																disabled={decisionLoading && activeTaskId === task.id}
-															>
-																操作
-															</Button>
-														</td>
-													</tr>
-												))}
-											</tbody>
-										</table>
-									</div>
+									<Table
+										rowKey="id"
+										columns={pendingColumns}
+										dataSource={selectedPending}
+										pagination={false}
+										size="small"
+										className="text-sm"
+										rowClassName={() => "text-sm"}
+										scroll={{ x: 1100 }}
+									/>
 								)}
 							</>
 						)}
@@ -445,40 +537,16 @@ export default function ApprovalCenterView() {
 										暂无历史审批记录。
 									</Text>
 								) : (
-									<div className="overflow-x-auto">
-										<table className="min-w-full table-fixed text-sm">
-											<thead className="bg-muted/60">
-												<tr className="text-left">
-													<th className="px-4 py-3 font-medium">操作编号</th>
-													<th className="px-4 py-3 font-medium">操作类型</th>
-													<th className="px-4 py-3 font-medium">操作内容</th>
-													<th className="px-4 py-3 font-medium">影响对象</th>
-													<th className="px-4 py-3 font-medium">操作人</th>
-													<th className="px-4 py-3 font-medium">操作时间</th>
-													<th className="px-4 py-3 font-medium">处理结果</th>
-												</tr>
-											</thead>
-											<tbody>
-												{selectedCompleted.map((task) => (
-													<tr key={task.id} className="border-b last:border-b-0">
-														<td className="px-4 py-3 font-medium">CR-{task.id}</td>
-														<td className="px-4 py-3">{getActionText(task)}</td>
-														<td className="px-4 py-3 text-xs">
-															<div className="text-muted-foreground">{summarizeDiffPairs(task)}</div>
-														</td>
-														<td className="px-4 py-3">{resolveTarget(task)}</td>
-														<td className="px-4 py-3 text-xs">{task.effectiveDecidedBy ?? "-"}</td>
-														<td className="px-4 py-3 text-xs">{formatDateTime(task.effectiveDecidedAt)}</td>
-														<td className="px-4 py-3">
-															<Badge variant={getStatusBadgeVariant(task.effectiveStatus)}>
-																{getStatusLabel(task.effectiveStatus)}
-															</Badge>
-														</td>
-													</tr>
-												))}
-											</tbody>
-										</table>
-									</div>
+									<Table
+										rowKey="id"
+										columns={completedColumns}
+										dataSource={selectedCompleted}
+										pagination={false}
+										size="small"
+										className="text-sm"
+										rowClassName={() => "text-sm"}
+										scroll={{ x: 1100 }}
+									/>
 								)}
 							</>
 						)}

@@ -165,6 +165,14 @@ public class KeycloakApiResource {
             currentUser(),
             clientIp(request)
         );
+        auditService.record(
+            currentUser(),
+            "USER_UPDATE_REQUEST",
+            "KC_USER",
+            username,
+            "SUCCESS",
+            Map.of("requestId", approval.id, "username", username)
+        );
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
             approval.id,
@@ -202,6 +210,14 @@ public class KeycloakApiResource {
             currentUser(),
             clientIp(request)
         );
+        auditService.record(
+            currentUser(),
+            "USER_RESET_PASSWORD_REQUEST",
+            "KC_USER",
+            username,
+            "SUCCESS",
+            Map.of("requestId", approval.id, "temporary", temporary)
+        );
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
             approval.id,
@@ -227,6 +243,14 @@ public class KeycloakApiResource {
             enabled,
             currentUser(),
             clientIp(request)
+        );
+        auditService.record(
+            currentUser(),
+            enabled ? "USER_ENABLE_REQUEST" : "USER_DISABLE_REQUEST",
+            "KC_USER",
+            username,
+            "SUCCESS",
+            Map.of("requestId", approval.id, "enabled", enabled)
         );
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
@@ -261,6 +285,14 @@ public class KeycloakApiResource {
             currentUser(),
             clientIp(request),
             null
+        );
+        auditService.record(
+            currentUser(),
+            "USER_LEVEL_UPDATE_REQUEST",
+            "KC_USER",
+            username,
+            "SUCCESS",
+            Map.of("requestId", approval.id, "level", level, "dataLevels", levels)
         );
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
@@ -567,6 +599,14 @@ public class KeycloakApiResource {
             currentUser(),
             clientIp(request)
         );
+        auditService.record(
+            currentUser(),
+            "USER_ROLES_GRANT_REQUEST",
+            "KC_USER",
+            username,
+            "SUCCESS",
+            Map.of("requestId", approval.id, "roles", roleNames)
+        );
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
             approval.id,
@@ -591,6 +631,14 @@ public class KeycloakApiResource {
             roleNames,
             currentUser(),
             clientIp(request)
+        );
+        auditService.record(
+            currentUser(),
+            "USER_ROLES_REVOKE_REQUEST",
+            "KC_USER",
+            username,
+            "SUCCESS",
+            Map.of("requestId", approval.id, "roles", roleNames)
         );
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",

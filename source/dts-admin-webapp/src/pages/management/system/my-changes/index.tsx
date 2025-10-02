@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Table, Tag } from "antd";
+import { Select, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
 import type { ChangeRequest } from "@/admin/types";
@@ -57,11 +57,17 @@ const actionMap: Record<string, string> = {
 	RESET_PASSWORD: "重置密码",
 };
 
+const CATEGORY_FILTER_OPTIONS = [
+	{ label: "用户管理", value: "USER_MANAGEMENT" },
+	{ label: "角色管理", value: "ROLE_MANAGEMENT" },
+];
+
 export default function MyChangeRequestsPage() {
 	const { data, isLoading, refetch } = useQuery({
 		queryKey: ["admin", "change-requests", "mine", "dashboard"],
 		queryFn: adminApi.getMyChangeRequests,
 	});
+	const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
 	const summary = useMemo(() => {
 		const counts = new Map<string, number>();
@@ -82,6 +88,16 @@ export default function MyChangeRequestsPage() {
 			}))
 			.sort((a, b) => b.count - a.count);
 	}, [data]);
+
+	const filteredChangeRequests = useMemo(() => {
+		const source = (data ?? []) as ChangeRequest[];
+		const filtered = categoryFilter ? source.filter((item) => item.category === categoryFilter) : source;
+		return [...filtered].sort((a, b) => {
+			const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+			const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+			return timeB - timeA;
+		});
+	}, [categoryFilter, data]);
 
 	const columns: ColumnsType<ChangeRequest> = [
 		{
@@ -165,9 +181,19 @@ export default function MyChangeRequestsPage() {
 						<h2 className="text-2xl font-bold">我发起的变更</h2>
 						<p className="text-muted-foreground">追踪我提交的配置、权限等变更进度</p>
 					</div>
-					<Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
+					<div className="flex flex-wrap items-center gap-2">
+						<Select
+						allowClear
+						placeholder="操作分类"
+						options={CATEGORY_FILTER_OPTIONS}
+						value={categoryFilter ?? undefined}
+						onChange={(value) => setCategoryFilter(value ? String(value) : null)}
+						style={{ width: 160 }}
+					/>
+						<Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
 						刷新
 					</Button>
+				</div>
 				</CardHeader>
 				<CardContent className="space-y-4">
 					<div className="flex flex-wrap gap-3">
@@ -188,13 +214,16 @@ export default function MyChangeRequestsPage() {
 						rowKey="id"
 						loading={isLoading}
 						columns={columns}
-						dataSource={(data ?? []) as ChangeRequest[]}
+						dataSource={filteredChangeRequests}
+						size="small"
+						className="text-sm"
+						rowClassName={() => "text-sm"}
 						pagination={{
 							showSizeChanger: true,
 							showQuickJumper: true,
 							showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
 						}}
-						scroll={{ x: 1080 }}
+						scroll={{ x: "max-content" }}
 					/>
 				</CardContent>
 			</Card>

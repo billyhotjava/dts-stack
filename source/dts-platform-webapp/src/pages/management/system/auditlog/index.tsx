@@ -7,6 +7,7 @@ import type { AuditLog } from "#/entity";
 import { AuditLogService } from "@/api/services/auditLogService";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Text } from "@/ui/typography";
+import { DetailItem, DetailSection } from "@/components/detail/DetailSection";
 import { useUserRoles } from "@/store/userStore";
 
 export default function AuditLogPage() {
@@ -255,108 +256,78 @@ export default function AuditLogPage() {
 				width={800}
 			>
 				{selectedLog && (
-					<div className="space-y-6">
-						<div className="grid grid-cols-2 gap-4">
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									记录编号
-								</Text>
-								<Text variant="body1">#{selectedLog.id}</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									模块
-								</Text>
-								<Text variant="body1">{selectedLog.module || "-"}</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									操作
-								</Text>
-								<Tag color={getActionTagColor(selectedLog.action)}>{selectedLog.action}</Tag>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									结果
-								</Text>
-								<Tag color={selectedLog.result?.toLowerCase() === "failure" ? "red" : "green"}>{selectedLog.result}</Tag>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									操作者
-								</Text>
-								<Text variant="body1">{selectedLog.actor || "-"}</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									操作者角色
-								</Text>
-								<Text variant="body1">{selectedLog.actorRole || "-"}</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									客户端 IP
-								</Text>
-								<Text variant="body1">{selectedLog.clientIp || "-"}</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									User-Agent
-								</Text>
-								<Text variant="body1" className="break-all">{selectedLog.clientAgent || "-"}</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									请求信息
-								</Text>
-								<Text variant="body1" className="break-all">
-									{selectedLog.httpMethod || "GET"} {selectedLog.requestUri || "-"}
-								</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									目标资源
-								</Text>
-								<Text variant="body1">
-									{[selectedLog.resourceType, selectedLog.resourceId].filter(Boolean).join(" · ") || "-"}
-								</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									发生时间
-								</Text>
-								<Text variant="body1">
-									{new Date(selectedLog.occurredAt).toLocaleString("zh-CN", { hour12: false })}
-								</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									耗时 (ms)
-								</Text>
-								<Text variant="body1">{selectedLog.latencyMs ?? "-"}</Text>
-							</div>
-						</div>
-						<div>
-							<Text variant="body2" className="text-muted-foreground">
-								摘要
-							</Text>
-							<div className="mt-2 rounded-md bg-muted p-3">
-								<Text variant="body1">{selectedLog.payloadPreview || "暂无摘要信息"}</Text>
-							</div>
-						</div>
+					<div className="space-y-4">
+						<DetailSection title="基础信息">
+							<DetailItem label="记录编号" value={`#${selectedLog.id}`} monospace />
+							<DetailItem label="模块" value={selectedLog.module || "-"} />
+							<DetailItem
+								label="操作"
+								value={<Tag color={getActionTagColor(selectedLog.action)}>{selectedLog.action || "-"}</Tag>}
+							/>
+							<DetailItem
+								label="结果"
+								value={
+									<Tag color={(selectedLog.result || "").toLowerCase() === "failure" ? "red" : "green"}>
+										{selectedLog.result || "-"}
+									</Tag>
+								}
+							/>
+							<DetailItem label="发生时间" value={formatDateTime(selectedLog.occurredAt)} />
+							<DetailItem label="耗时 (ms)" value={selectedLog.latencyMs ?? "-"} />
+						</DetailSection>
+
+						<DetailSection title="操作者信息">
+							<DetailItem label="操作者" value={selectedLog.actor || "-"} />
+							<DetailItem label="操作者角色" value={selectedLog.actorRole || "-"} />
+						</DetailSection>
+
+						<DetailSection title="资源信息">
+							<DetailItem label="目标类型" value={selectedLog.resourceType || "-"} />
+							<DetailItem label="目标标识" value={selectedLog.resourceId || "-"} monospace />
+						</DetailSection>
+
+						<DetailSection title="请求上下文" columns={1}>
+							<DetailItem
+								label="请求"
+								value={`${selectedLog.httpMethod || "GET"} ${selectedLog.requestUri || "-"}`}
+								monospace
+								full
+							/>
+							<DetailItem label="客户端 IP" value={selectedLog.clientIp || "-"} monospace />
+							<DetailItem label="User-Agent" value={selectedLog.clientAgent || "-"} full />
+						</DetailSection>
+
+						{selectedLog.payloadPreview && (
+							<DetailSection title="摘要" columns={1}>
+								<DetailItem
+									label="摘要"
+									value={<div className="rounded-md bg-muted px-3 py-2 text-sm leading-relaxed">{selectedLog.payloadPreview}</div>}
+								/>
+							</DetailSection>
+						)}
+
 						{selectedLog.extraTags && (
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									附加标签
-								</Text>
-								<div className="mt-2 rounded-md bg-muted p-3 text-xs break-all">
-									{selectedLog.extraTags}
-								</div>
-							</div>
+							<DetailSection title="附加标签" columns={1}>
+								<DetailItem
+									label="标签"
+									value={<div className="rounded-md bg-muted px-3 py-2 text-xs break-all">{selectedLog.extraTags}</div>}
+								/>
+							</DetailSection>
 						)}
 					</div>
 				)}
 			</Modal>
 		</div>
 	);
+}
+
+function formatDateTime(value?: string | null): string {
+	if (!value) {
+		return "-";
+	}
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) {
+		return value;
+	}
+	return date.toLocaleString("zh-CN", { hour12: false });
 }

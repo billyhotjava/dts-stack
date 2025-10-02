@@ -31,6 +31,7 @@ import FeaturePlaceholder from "@/pages/common/FeaturePlaceholder";
 import DataSourcesPage from "@/pages/foundation/DataSourcesPage";
 import DataStoragePage from "@/pages/foundation/DataStoragePage";
 import TaskSchedulingPage from "@/pages/foundation/TaskSchedulingPage";
+import DataSettingsPage from "@/pages/foundation/DataSettingsPage";
 import PersonalProfilePage from "@/pages/settings/profile";
 
 export function getFrontendDashboardRoutes(): RouteObject[] {
@@ -78,6 +79,7 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 					dataSources: () => <DataSourcesPage />,
 					dataStorage: () => <DataStoragePage />,
 					taskScheduling: () => <TaskSchedulingPage />,
+					dataSettings: () => <DataSettingsPage />,
 				},
 			};
 

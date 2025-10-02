@@ -170,7 +170,8 @@
     "foundation": "Foundation data maintenance",
     "foundationDataSources": "Data sources",
     "foundationDataStorage": "Data storage",
-    "foundationTaskScheduling": "Task scheduling"
+    "foundationTaskScheduling": "Task scheduling",
+    "foundationDataSettings": "Data settings"
    },
    "dashboard": "Dashboard",
    "others": "Others",

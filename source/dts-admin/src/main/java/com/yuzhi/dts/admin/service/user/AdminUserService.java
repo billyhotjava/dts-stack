@@ -438,7 +438,12 @@ public class AdminUserService {
         detail.put("payload", detailSource);
         detail.put("ip", ip);
         detail.put("timestamp", Instant.now().toString());
-        auditService.record(actor, action, "USER", target, "SUCCESS", writeJson(detail));
+        auditService.record(actor, action, "USER", target, "SUCCESS", detail);
+    }
+
+    private void auditUserChange(String actor, String action, String target, String result, Object detail) {
+        String normalizedTarget = target == null ? "UNKNOWN" : target;
+        auditService.record(actor, action, "USER", normalizedTarget, result, detail);
     }
 
     private String normalizeSecurityLevel(String level) {
@@ -636,7 +641,7 @@ public class AdminUserService {
         Instant now = Instant.now();
         try {
             String managementToken = resolveManagementToken();
-            applyApproval(approval, managementToken);
+            applyApproval(approval, managementToken, approver);
             approval.setStatus(ApprovalStatus.APPLIED.name());
             approval.setDecidedAt(now);
             approval.setApprover(approver);
@@ -726,7 +731,7 @@ public class AdminUserService {
         }
     }
 
-    private void applyApproval(AdminApprovalRequest approval, String accessToken) throws Exception {
+    private void applyApproval(AdminApprovalRequest approval, String accessToken, String actor) throws Exception {
         if (accessToken == null || accessToken.isBlank()) {
             throw new IllegalStateException("缺少授权令牌，无法执行审批操作");
         }
@@ -737,14 +742,14 @@ public class AdminUserService {
                 throw new IllegalStateException("审批项缺少 action 字段");
             }
             switch (action) {
-                case "create" -> applyCreate(payload, accessToken);
-                case "update" -> applyUpdate(payload, accessToken);
-                case "delete" -> applyDelete(payload, accessToken);
-                case "grantRoles" -> applyGrantRoles(payload, accessToken);
-                case "revokeRoles" -> applyRevokeRoles(payload, accessToken);
-                case "setEnabled" -> applySetEnabled(payload, accessToken);
-                case "setPersonLevel" -> applySetPersonLevel(payload, accessToken);
-                case "resetPassword" -> applyResetPassword(payload, accessToken);
+                case "create" -> applyCreate(payload, accessToken, actor);
+                case "update" -> applyUpdate(payload, accessToken, actor);
+                case "delete" -> applyDelete(payload, accessToken, actor);
+                case "grantRoles" -> applyGrantRoles(payload, accessToken, actor);
+                case "revokeRoles" -> applyRevokeRoles(payload, accessToken, actor);
+                case "setEnabled" -> applySetEnabled(payload, accessToken, actor);
+                case "setPersonLevel" -> applySetPersonLevel(payload, accessToken, actor);
+                case "resetPassword" -> applyResetPassword(payload, accessToken, actor);
                 default -> throw new IllegalStateException("未支持的审批操作: " + action);
             }
         }
@@ -964,124 +969,232 @@ public class AdminUserService {
         return objectMapper.readValue(json, MAP_TYPE);
     }
 
-    private void applyCreate(Map<String, Object> payload, String accessToken) {
-        KeycloakUserDTO dto = toUserDto(payload);
-        ensureAllowedSecurityLevel(extractPersonLevel(dto), "人员密级不允许为非密");
-        Optional<KeycloakUserDTO> existing = keycloakAdminClient.findByUsername(dto.getUsername(), accessToken);
-        KeycloakUserDTO target;
-        if (existing.isPresent()) {
-            KeycloakUserDTO current = existing.get();
-            String keycloakId = current.getId();
-            if (keycloakId != null && !keycloakId.isBlank()) {
-                dto.setId(keycloakId);
-                try {
-                    target = keycloakAdminClient.updateUser(keycloakId, dto, accessToken);
-                    LOG.info("Keycloak user {} already existed; attributes updated", dto.getUsername());
-                } catch (RuntimeException ex) {
-                    LOG.warn("Failed to update existing Keycloak user {}, fallback to create: {}", dto.getUsername(), ex.getMessage());
+    private void applyCreate(Map<String, Object> payload, String accessToken, String actor) {
+        String username = stringValue(payload.get("username"));
+        String auditAction = "USER_CREATE_EXECUTE";
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("payload", payload);
+        try {
+            KeycloakUserDTO dto = toUserDto(payload);
+            ensureAllowedSecurityLevel(extractPersonLevel(dto), "人员密级不允许为非密");
+            Optional<KeycloakUserDTO> existing = keycloakAdminClient.findByUsername(dto.getUsername(), accessToken);
+            KeycloakUserDTO target;
+            if (existing.isPresent()) {
+                KeycloakUserDTO current = existing.get();
+                String keycloakId = current.getId();
+                if (keycloakId != null && !keycloakId.isBlank()) {
+                    dto.setId(keycloakId);
+                    try {
+                        target = keycloakAdminClient.updateUser(keycloakId, dto, accessToken);
+                        LOG.info("Keycloak user {} already existed; attributes updated", dto.getUsername());
+                    } catch (RuntimeException ex) {
+                        LOG.warn("Failed to update existing Keycloak user {}, fallback to create: {}", dto.getUsername(), ex.getMessage());
+                        dto.setId(null);
+                        target = keycloakAdminClient.createUser(dto, accessToken);
+                    }
+                } else {
                     dto.setId(null);
                     target = keycloakAdminClient.createUser(dto, accessToken);
                 }
             } else {
-                dto.setId(null);
                 target = keycloakAdminClient.createUser(dto, accessToken);
             }
-        } else {
-            target = keycloakAdminClient.createUser(dto, accessToken);
+            syncSnapshot(target);
+            detail.put("keycloakId", target.getId());
+            detail.put("realmRoles", target.getRealmRoles());
+            String resolvedTarget = target.getUsername() != null ? target.getUsername() : username;
+            auditUserChange(actor, auditAction, resolvedTarget, "SUCCESS", detail);
+        } catch (Exception ex) {
+            detail.put("error", ex.getMessage());
+            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            throw ex;
         }
-        syncSnapshot(target);
     }
 
-    private void applyUpdate(Map<String, Object> payload, String accessToken) {
+    private void applyUpdate(Map<String, Object> payload, String accessToken, String actor) {
         String username = stringValue(payload.get("username"));
-        String keycloakId = stringValue(payload.get("keycloakId"));
-        KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
-        KeycloakUserDTO update = toUserDto(payload);
-        ensureAllowedSecurityLevel(extractPersonLevel(update), "人员密级不允许为非密");
-        update.setId(existing.getId());
-        KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), update, accessToken);
-        syncSnapshot(updated);
+        String auditAction = "USER_UPDATE_EXECUTE";
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("payload", payload);
+        try {
+            String keycloakId = stringValue(payload.get("keycloakId"));
+            KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
+            KeycloakUserDTO update = toUserDto(payload);
+            ensureAllowedSecurityLevel(extractPersonLevel(update), "人员密级不允许为非密");
+            update.setId(existing.getId());
+            KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), update, accessToken);
+            syncSnapshot(updated);
+            detail.put("keycloakId", existing.getId());
+            detail.put("realmRoles", updated.getRealmRoles());
+            auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
+        } catch (Exception ex) {
+            detail.put("error", ex.getMessage());
+            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            throw ex;
+        }
     }
 
-    private void applyDelete(Map<String, Object> payload, String accessToken) {
+    private void applyDelete(Map<String, Object> payload, String accessToken, String actor) {
         String username = stringValue(payload.get("username"));
-        String keycloakId = stringValue(payload.get("keycloakId"));
-        KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
-        keycloakAdminClient.deleteUser(existing.getId(), accessToken);
-        userRepository.findByUsernameIgnoreCase(existing.getUsername()).ifPresent(userRepository::delete);
+        String auditAction = "USER_DELETE_EXECUTE";
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("payload", payload);
+        try {
+            String keycloakId = stringValue(payload.get("keycloakId"));
+            KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
+            keycloakAdminClient.deleteUser(existing.getId(), accessToken);
+            boolean removedSnapshot = userRepository.findByUsernameIgnoreCase(existing.getUsername()).map(entity -> {
+                userRepository.delete(entity);
+                return true;
+            }).orElse(false);
+            detail.put("keycloakId", existing.getId());
+            detail.put("snapshotRemoved", removedSnapshot);
+            auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
+        } catch (Exception ex) {
+            detail.put("error", ex.getMessage());
+            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            throw ex;
+        }
     }
 
-    private void applyGrantRoles(Map<String, Object> payload, String accessToken) {
+    private void applyGrantRoles(Map<String, Object> payload, String accessToken, String actor) {
         String username = stringValue(payload.get("username"));
-        String keycloakId = stringValue(payload.get("keycloakId"));
-        KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
-        LinkedHashSet<String> roles = new LinkedHashSet<>(existing.getRealmRoles() == null ? List.of() : existing.getRealmRoles());
-        roles.addAll(stringList(payload.get("roles")));
-        existing.setRealmRoles(new ArrayList<>(roles));
-        KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
-        syncSnapshot(updated);
-    }
-
-    private void applyRevokeRoles(Map<String, Object> payload, String accessToken) {
-        String username = stringValue(payload.get("username"));
-        String keycloakId = stringValue(payload.get("keycloakId"));
-        KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
-        List<String> remove = stringList(payload.get("roles"));
-        if (existing.getRealmRoles() != null) {
-            existing.setRealmRoles(
-                existing
-                    .getRealmRoles()
-                    .stream()
-                    .filter(role -> !remove.contains(role))
-                    .toList()
+        String auditAction = "USER_GRANT_ROLE_EXECUTE";
+        List<String> rolesToAdd = stringList(payload.get("roles"));
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("payload", payload);
+        detail.put("roles", rolesToAdd);
+        try {
+            String keycloakId = stringValue(payload.get("keycloakId"));
+            KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
+            LinkedHashSet<String> roles = new LinkedHashSet<>(
+                existing.getRealmRoles() == null ? List.of() : existing.getRealmRoles()
             );
+            roles.addAll(rolesToAdd);
+            existing.setRealmRoles(new ArrayList<>(roles));
+            KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
+            syncSnapshot(updated);
+            detail.put("keycloakId", existing.getId());
+            detail.put("resultRoles", updated.getRealmRoles());
+            auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
+        } catch (Exception ex) {
+            detail.put("error", ex.getMessage());
+            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            throw ex;
         }
-        KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
-        syncSnapshot(updated);
     }
 
-    private void applySetEnabled(Map<String, Object> payload, String accessToken) {
+    private void applyRevokeRoles(Map<String, Object> payload, String accessToken, String actor) {
         String username = stringValue(payload.get("username"));
-        String keycloakId = stringValue(payload.get("keycloakId"));
-        KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
+        String auditAction = "USER_REVOKE_ROLE_EXECUTE";
+        List<String> remove = stringList(payload.get("roles"));
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("payload", payload);
+        detail.put("removedRoles", remove);
+        try {
+            String keycloakId = stringValue(payload.get("keycloakId"));
+            KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
+            if (existing.getRealmRoles() != null) {
+                existing.setRealmRoles(
+                    existing
+                        .getRealmRoles()
+                        .stream()
+                        .filter(role -> !remove.contains(role))
+                        .toList()
+                );
+            }
+            KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
+            syncSnapshot(updated);
+            detail.put("keycloakId", existing.getId());
+            detail.put("resultRoles", updated.getRealmRoles());
+            auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
+        } catch (Exception ex) {
+            detail.put("error", ex.getMessage());
+            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            throw ex;
+        }
+    }
+
+    private void applySetEnabled(Map<String, Object> payload, String accessToken, String actor) {
+        String username = stringValue(payload.get("username"));
         boolean enabled = Boolean.TRUE.equals(payload.get("enabled"));
-        existing.setEnabled(enabled);
-        KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
-        syncSnapshot(updated);
+        String auditAction = enabled ? "USER_ENABLE_EXECUTE" : "USER_DISABLE_EXECUTE";
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("payload", payload);
+        detail.put("enabled", enabled);
+        try {
+            String keycloakId = stringValue(payload.get("keycloakId"));
+            KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
+            existing.setEnabled(enabled);
+            KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
+            syncSnapshot(updated);
+            detail.put("keycloakId", existing.getId());
+            auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
+        } catch (Exception ex) {
+            detail.put("error", ex.getMessage());
+            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            throw ex;
+        }
     }
 
-    private void applySetPersonLevel(Map<String, Object> payload, String accessToken) {
+    private void applySetPersonLevel(Map<String, Object> payload, String accessToken, String actor) {
         String username = stringValue(payload.get("username"));
-        String keycloakId = stringValue(payload.get("keycloakId"));
-        KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
-        Map<String, List<String>> attributes = existing.getAttributes() == null
-            ? new LinkedHashMap<>()
-            : new LinkedHashMap<>(existing.getAttributes());
+        String auditAction = "USER_SET_PERSON_LEVEL_EXECUTE";
         String level = stringValue(payload.get("personSecurityLevel"));
-        if (level != null) {
-            attributes.put("person_level", List.of(level));
+        List<String> requestedDataLevels = stringList(payload.get("dataLevels"));
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("payload", payload);
+        detail.put("personLevel", level);
+        detail.put("dataLevels", requestedDataLevels);
+        try {
+            String keycloakId = stringValue(payload.get("keycloakId"));
+            KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
+            Map<String, List<String>> attributes = existing.getAttributes() == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(existing.getAttributes());
+            if (level != null) {
+                attributes.put("person_level", List.of(level));
+            }
+            List<String> dataLevels = toKeycloakDataLevels(requestedDataLevels);
+            if (!dataLevels.isEmpty()) {
+                attributes.put("data_levels", dataLevels);
+            } else {
+                attributes.remove("data_levels");
+            }
+            existing.setAttributes(attributes);
+            KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
+            syncSnapshot(updated);
+            detail.put("keycloakId", existing.getId());
+            auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
+        } catch (Exception ex) {
+            detail.put("error", ex.getMessage());
+            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            throw ex;
         }
-        List<String> dataLevels = toKeycloakDataLevels(stringList(payload.get("dataLevels")));
-        if (!dataLevels.isEmpty()) {
-            attributes.put("data_levels", dataLevels);
-        } else {
-            attributes.remove("data_levels");
-        }
-        existing.setAttributes(attributes);
-        KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
-        syncSnapshot(updated);
     }
 
-    private void applyResetPassword(Map<String, Object> payload, String accessToken) {
+    private void applyResetPassword(Map<String, Object> payload, String accessToken, String actor) {
         String username = stringValue(payload.get("username"));
-        String keycloakId = stringValue(payload.get("keycloakId"));
-        KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
-        String password = stringValue(payload.get("password"));
         boolean temporary = Boolean.TRUE.equals(payload.get("temporary"));
-        if (password == null || password.isBlank()) {
-            throw new IllegalStateException("审批载荷缺少密码信息");
+        String auditAction = "USER_RESET_PASSWORD_EXECUTE";
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("payload", payload);
+        detail.put("temporary", temporary);
+        try {
+            String keycloakId = stringValue(payload.get("keycloakId"));
+            KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
+            String password = stringValue(payload.get("password"));
+            if (password == null || password.isBlank()) {
+                throw new IllegalStateException("审批载荷缺少密码信息");
+            }
+            keycloakAdminClient.resetPassword(existing.getId(), password, temporary, accessToken);
+            detail.put("keycloakId", existing.getId());
+            auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
+        } catch (Exception ex) {
+            detail.put("error", ex.getMessage());
+            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            throw ex;
         }
-        keycloakAdminClient.resetPassword(existing.getId(), password, temporary, accessToken);
     }
 
     private KeycloakUserDTO locateUser(String username, String keycloakId, String accessToken) {

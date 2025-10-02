@@ -87,3 +87,41 @@
 - `InfraDataSourceRepository` 增加 `countByTypeIgnoreCase`，用于快速判断默认数据源是否存在，避免硬编码 HQL；`CatalogResource` 导入、更新路径同样复用校验逻辑，保证批量导入不会绕过约束。
 - 前端 `DatasetsPage` 拉取 `/catalog/config` 与 `/infra/data-sources`，在列表顶部展示“默认来源：星环 Hive(Inceptor)”标签并在缺省数据源时弹出红色提醒；新建按钮、导入逻辑在未配置默认源时阻塞并提示。
 - 数据集新建表单默认隐藏多源选择，仅保留星环 Hive 输入项；通过 Alt+Shift+M 或双击“来源类型”标签触发隐藏开关进入试用模式，但未真正授权时仍提示“提交需管理员确认”。创建/导入请求补齐 `type/hiveDatabase/hiveTable` 字段以匹配后端新校验。
+
+[20251007 平台审计改造任务]
+- 对齐 dts-admin 的审计模型：引入基于队列的 `AuditService`、链式签名与可选外部转发能力，复用/抽取 dts-common 组件，确保字段命名一致。
+- HTTP 层统一记录：复制并适配 `AuditLoggingFilter` 与 `AuditResponseWrapper`，拦截除健康检查外的所有 REST 请求，采集 actor、角色、URI、耗时、结果等信息。
+- 业务事件补充：扩展平台内部 `AuditService`，在异步任务、Hive 推送、策略应用等关键流程显式写入成功/失败事件及业务 payload。
+- 数据持久化：新增/复用审计表结构（Liquibase 变更），保证审计日志落地 Postgres，并按配置异步上报 `dts-common` 审计中心。
+- 配置管理与测试：暴露 `dts.audit.*` 参数，提供启动校验与告警；编写 MVC/集成测试覆盖成功/失败请求与队列溢出兜底路径。
+
+[2025-10-07 15:30] 数据标准模块规划
+- 梳理现有 data standard 相关代码/页面，确认入口与数据模型
+- 设计简化的台账管理流程与前端表格展示需求
+- 规划文件上传加密存储方案（含密钥管理与读取流程）
+- 明确待开发的后端接口、前端改造点及验证步骤
+[2025-10-07 15:55] 数据标准方案评估
+- 后端：重建 data_standard 表模型（名称/编码/密级/版本等字段）并新增 data_standard_attachment 表存储附件（包含密钥版本、IV、SHA256 等元数据）
+- 服务：实现 EncryptedFileStorageService（默认 DatabaseEncryptedFileStorage，按 AES-GCM 使用 dts.platform.data-standard.encryption-key），所有 API 通过 AuditService 记录成功/失败事件
+- 接口：提供标准 CRUD、分页查询及附件上传/下载/删除 REST，必要时模板下载与批量导入入口
+- 前端：DataStandardsPage 改为消费真实 API，精简表格列与弹窗，新增附件标签和上传弹框提示加密存储
+- 安全：上传类型/大小限制、强制配置密钥、支持密钥版本记录以便后续轮换，下载前校验密级与权限
+- 待确认：附件大小/类型限制、是否引入版本管理子表、密钥来源与轮换流程、首期是否实现审批/批量导入
+
+[2025-10-07 16:05] 数据标准需求补充
+- 附件支持 docx/wps/pdf/xlsx/xls/md/txt，单文件上限 200MB；阈值放在基础数据设置，可通过配置项控制
+- 必须具备版本管理能力，记录标准历史迭代
+- 加密沿用现有 AES-GCM 实现，满足“可加密即可”要求
+- 首期仅实现数据标准台账 CRUD 与附件上传/下载，审批与批量导入暂缓
+
+[2025-10-07 16:15] 数据标准数据迁移策略
+- 废弃旧表 modeling_standard 及其中演示数据，新方案将直接使用 data_standard / data_standard_version / data_standard_attachment 三表
+- Liquibase 变更将负责删除旧表和插入新结构，确保无历史数据保留
+
+[2025-10-07 17:15] 数据标准功能落地记录
+- 新建 data_standard / data_standard_version / data_standard_attachment 表并移除旧 modeling_standard 表结构
+- 后端实现数据标准 CRUD、版本快照、附件加密存储及配置接口，所有 API 接入审计记录
+- 前端重构数据标准页面为台账表格 + 详情抽屉，支持版本/附件查看及上传，加了基础数据设置页面维护附件大小与后缀
+- 上传限制默认 200MB，可在“基础数据设置”中调整（同步更新到 DataStandardProperties）
+- Maven 编译暂未验证，需先清理 root 权限 target/ 目录再执行
+

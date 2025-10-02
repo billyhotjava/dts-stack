@@ -118,6 +118,10 @@ export interface AuditLog {
 	payloadPreview?: string;
 }
 
+export interface AuditLogDetail extends AuditLog {
+	payload?: unknown;
+}
+
 export interface AuditLogPageResponse {
 	content: AuditLog[];
 	page: number;

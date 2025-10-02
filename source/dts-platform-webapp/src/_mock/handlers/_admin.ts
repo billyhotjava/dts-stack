@@ -1,21 +1,67 @@
 import { faker } from "@faker-js/faker";
 import { HttpResponse, http } from "msw";
 import type {
+	AdminCustomRole,
+	AdminDataset,
+	AdminRoleAssignment,
 	AdminRoleDetail,
 	AdminUser,
 	AuditEvent,
 	ChangeRequest,
+	CreateCustomRolePayload,
+	CreateRoleAssignmentPayload,
+	DataOperation,
 	OrganizationNode,
 	OrganizationPayload,
+	OrgDataLevel,
 	PermissionCatalogSection,
 	PortalMenuItem,
+	SecurityLevel,
 	SystemConfigItem,
 } from "@/admin/types";
 import { ResultStatus } from "@/types/enum";
 import { getActiveAdmin } from "../utils/session";
+import portalMenus from "../data/portal-menus.json";
 
 const ADMIN_API = "/api/admin";
 const AUDIT_API = "/api/audit-logs";
+
+const ADMIN_AUDIT_OPERATORS = new Set(["sysadmin", "authadmin", "auditadmin", "opadmin"]);
+
+function isBusinessActor(actor?: string | null) {
+	if (!actor) {
+		return false;
+	}
+	return !ADMIN_AUDIT_OPERATORS.has(actor.toLowerCase());
+}
+
+function scopeAuditEvents(events: AuditEvent[]) {
+	const active = getActiveAdmin();
+	const role = active.role?.toUpperCase();
+	switch (role) {
+		case "AUTHADMIN":
+			return events.filter((event) => {
+				const actor = event.actor?.toLowerCase();
+				return actor === "sysadmin" || actor === "auditadmin";
+			});
+		case "AUDITADMIN":
+			return events.filter((event) => {
+				const actor = event.actor?.toLowerCase();
+				if (!actor) {
+					return false;
+				}
+				if (actor === "auditadmin") {
+					return false;
+				}
+				if (actor === "sysadmin" || actor === "authadmin") {
+					return true;
+				}
+				return isBusinessActor(actor);
+			});
+		default:
+			return events;
+	}
+}
 
 let changeRequestId = 3;
 const changeRequests: ChangeRequest[] = [
@@ -85,7 +131,7 @@ const auditEvents: AuditEvent[] = Array.from({ length: 60 }).map((_, index) => {
 		requestUri: `/api/${module}/${faker.string.alphanumeric({ length: 8 }).toLowerCase()}`,
 		httpMethod: faker.helpers.arrayElement(["GET", "POST", "PUT", "DELETE"]),
 		result: faker.helpers.arrayElement(["SUCCESS", "FAILURE"]),
-		latencyMs: faker.number.int({ min: 20, max: 1500 }),
+		latencyMs: faker.number.int({ min: 15, max: 1500 }),
 		extraTags: JSON.stringify({ traceId: faker.string.uuid().slice(0, 8) }),
 		payloadPreview: faker.helpers.maybe(
 			() =>
@@ -95,41 +141,14 @@ const auditEvents: AuditEvent[] = Array.from({ length: 60 }).map((_, index) => {
 	};
 });
 
-function scopeAuditEvents(events: AuditEvent[]) {
-	return events;
-}
-
 const systemConfigs: SystemConfigItem[] = [
 	{ id: 1, key: "cluster.mode", value: "production", description: "Iceberg 集群运行模式" },
 	{ id: 2, key: "minio.endpoint", value: "https://minio.internal", description: "对象存储地址" },
 	{ id: 3, key: "airflow.deployment", value: "v2.9.0", description: "调度集群版本" },
 ];
 
-const portalMenus: PortalMenuItem[] = [
-	{
-		id: 1,
-		name: "数据总览",
-		path: "/portal/overview",
-		component: "/pages/portal/overview",
-		sortOrder: 1,
-		children: [
-			{
-				id: 11,
-				name: "看板",
-				path: "/portal/overview/dashboard",
-				component: "/pages/portal/overview/dashboard",
-				sortOrder: 1,
-			},
-		],
-	},
-	{
-		id: 2,
-		name: "数据接入",
-		path: "/portal/ingestion",
-		component: "/pages/portal/ingestion",
-		sortOrder: 2,
-	},
-];
+// portalMenus are generated from dts-platform-webapp portal navigation as demo data
+// See: dts-platform-webapp/public/portal-menus.demo.json
 
 const organizations: OrganizationNode[] = [
 	{
@@ -299,6 +318,95 @@ function deleteOrganizationNode(nodes: OrganizationNode[], id: number): boolean 
 	return false;
 }
 
+function resolveOrgName(orgId: number | null): string {
+	if (orgId == null) {
+		return "全院共享区";
+	}
+	const node = findOrganization(organizations, orgId);
+	return node?.name ?? `组织 ${orgId}`;
+}
+
+function getCustomRoleByName(name: string) {
+	return customRoles.find((role) => role.name === name);
+}
+
+function getRoleOperations(role: string): DataOperation[] {
+	if (BUILT_IN_ROLE_OPERATIONS[role]) {
+		return BUILT_IN_ROLE_OPERATIONS[role];
+	}
+	const custom = getCustomRoleByName(role);
+	if (custom) {
+		return custom.operations;
+	}
+	switch (role) {
+		case "SYSADMIN":
+		case "OPADMIN":
+			return ["read", "write", "export"];
+		case "AUTHADMIN":
+			return ["read"];
+		case "AUDITADMIN":
+			return ["read", "export"];
+		default:
+			return ["read"];
+	}
+}
+
+function getRoleScope(role: string): "DEPARTMENT" | "INSTITUTE" | null {
+	if (BUILT_IN_ROLE_SCOPE[role]) {
+		return BUILT_IN_ROLE_SCOPE[role];
+	}
+	const custom = getCustomRoleByName(role);
+	return custom?.scope ?? null;
+}
+
+function validateAssignment(payload: CreateRoleAssignmentPayload): string | null {
+	if (!payload.role) {
+		return "请选择角色";
+	}
+	if (!payload.username || !payload.displayName) {
+		return "请填写用户信息";
+	}
+	if (!Array.isArray(payload.datasetIds) || payload.datasetIds.length === 0) {
+		return "请至少选择一个数据集";
+	}
+	if (!Array.isArray(payload.operations) || payload.operations.length === 0) {
+		return "请选择需要授权的操作";
+	}
+	const allowed = getRoleOperations(payload.role);
+	const overLimit = payload.operations.filter((op) => !allowed.includes(op));
+	if (overLimit.length > 0) {
+		return `角色不支持以下操作：${overLimit.join(", ")}`;
+	}
+	const securityRank = SECURITY_RANK[payload.userSecurityLevel];
+	if (securityRank === undefined) {
+		return "无效的用户密级";
+	}
+	const scopeType = getRoleScope(payload.role);
+	if (scopeType === "DEPARTMENT" && payload.scopeOrgId == null) {
+		return "部门类角色必须绑定具体机构";
+	}
+	if (scopeType === "INSTITUTE" && payload.scopeOrgId != null) {
+		return "全院类角色需选择全院共享区作用域";
+	}
+	const selectedDatasets = datasets.filter((dataset) => payload.datasetIds.includes(dataset.id));
+	if (selectedDatasets.length !== payload.datasetIds.length) {
+		return "存在无效的数据集编号";
+	}
+	for (const dataset of selectedDatasets) {
+		if (securityRank < DATA_RANK[dataset.dataLevel]) {
+			return `用户密级不足以访问数据集 ${dataset.businessCode}`;
+		}
+		if (payload.scopeOrgId == null) {
+			if (!dataset.isInstituteShared) {
+				return `数据集 ${dataset.businessCode} 未进入全院共享区，无法以全院范围授权`;
+			}
+		} else if (dataset.ownerOrgId !== payload.scopeOrgId) {
+			return `数据集 ${dataset.businessCode} 不属于所选机构`;
+		}
+	}
+	return null;
+}
+
 const adminUsers: AdminUser[] = Array.from({ length: 24 }).map((_, index) => {
 	const status = faker.helpers.arrayElement(["ACTIVE", "PENDING", "DISABLED"]);
 	return {
@@ -307,10 +415,25 @@ const adminUsers: AdminUser[] = Array.from({ length: 24 }).map((_, index) => {
 		displayName: faker.person.fullName(),
 		email: faker.internet.email(),
 		orgPath: faker.helpers.arrayElements(["数据与智能中心", "数据平台组", "业务线A", "业务线B"], { min: 1, max: 3 }),
-		roles: faker.helpers.arrayElements(["SYSADMIN", "AUTHADMIN", "AUDITADMIN", "DATA_STEWARD", "DATA_ANALYST"], {
-			min: 1,
-			max: 2,
-		}),
+		roles: faker.helpers.arrayElements(
+			[
+				"SYSADMIN",
+				"AUTHADMIN",
+				"AUDITADMIN",
+				"DEPT_OWNER",
+				"DEPT_EDITOR",
+				"DEPT_VIEWER",
+				"INST_OWNER",
+				"INST_EDITOR",
+				"INST_VIEWER",
+				"DATA_STEWARD",
+				"DATA_ANALYST",
+			],
+			{
+				min: 1,
+				max: 2,
+			},
+		),
 		securityLevel: faker.helpers.arrayElement(["非密", "普通", "秘密", "机密"]),
 		status,
 		lastLoginAt: status === "DISABLED" ? undefined : faker.date.recent({ days: 6 }).toISOString(),
@@ -330,6 +453,16 @@ const adminRoles: AdminRoleDetail[] = [
 	},
 	{
 		id: 2,
+		name: "OPADMIN",
+		description: "业务运维管理员，负责业务平台整体运维和关联工具组件的运维",
+		securityLevel: "机密",
+		permissions: ["user.update", "dataset.publish", "system.operate"],
+		memberCount: 2,
+		approvalFlow: "授权管理员单人审批",
+		updatedAt: faker.date.recent({ days: 2 }).toISOString(),
+	},
+	{
+		id: 3,
 		name: "AUTHADMIN",
 		description: "授权管理员，处理审批流程",
 		securityLevel: "秘密",
@@ -339,7 +472,7 @@ const adminRoles: AdminRoleDetail[] = [
 		updatedAt: faker.date.recent({ days: 2 }).toISOString(),
 	},
 	{
-		id: 3,
+		id: 4,
 		name: "AUDITADMIN",
 		description: "安全审计员，负责日志巡检与导出",
 		securityLevel: "秘密",
@@ -347,6 +480,66 @@ const adminRoles: AdminRoleDetail[] = [
 		memberCount: 2,
 		approvalFlow: "系统记录",
 		updatedAt: faker.date.recent({ days: 5 }).toISOString(),
+	},
+	{
+		id: 5,
+		name: "DEPT_OWNER",
+		description: "部门主管，负责本部门数据治理与授权",
+		securityLevel: "重要",
+		permissions: ["dataset.read", "dataset.write", "dataset.export", "dataset.authorize"],
+		memberCount: 6,
+		approvalFlow: "部门负责人备案",
+		updatedAt: faker.date.recent({ days: 4 }).toISOString(),
+	},
+	{
+		id: 6,
+		name: "DEPT_EDITOR",
+		description: "部门数据专员，可维护本部门数据集",
+		securityLevel: "普通",
+		permissions: ["dataset.read", "dataset.write", "dataset.export"],
+		memberCount: 9,
+		approvalFlow: "部门主管审批",
+		updatedAt: faker.date.recent({ days: 6 }).toISOString(),
+	},
+	{
+		id: 7,
+		name: "DEPT_VIEWER",
+		description: "数据查阅员，仅在本部门查阅数据",
+		securityLevel: "普通",
+		permissions: ["dataset.read"],
+		memberCount: 14,
+		approvalFlow: "自动备案",
+		updatedAt: faker.date.recent({ days: 7 }).toISOString(),
+	},
+	{
+		id: 8,
+		name: "INST_OWNER",
+		description: "研究所领导，治理全院共享区数据",
+		securityLevel: "核心",
+		permissions: ["dataset.read", "dataset.write", "dataset.export", "dataset.authorize"],
+		memberCount: 3,
+		approvalFlow: "研究所负责人审批",
+		updatedAt: faker.date.recent({ days: 8 }).toISOString(),
+	},
+	{
+		id: 9,
+		name: "INST_EDITOR",
+		description: "研究所数据专员，可编辑全院共享区数据",
+		securityLevel: "重要",
+		permissions: ["dataset.read", "dataset.write", "dataset.export"],
+		memberCount: 5,
+		approvalFlow: "研究所负责人审批",
+		updatedAt: faker.date.recent({ days: 6 }).toISOString(),
+	},
+	{
+		id: 9,
+		name: "INST_VIEWER",
+		description: "研究所数据查阅员，可查看全院共享区数据",
+		securityLevel: "普通",
+		permissions: ["dataset.read"],
+		memberCount: 11,
+		approvalFlow: "自动备案",
+		updatedAt: faker.date.recent({ days: 10 }).toISOString(),
 	},
 ];
 
@@ -379,6 +572,185 @@ const permissionCatalog: PermissionCatalogSection[] = [
 	},
 ];
 
+const SECURITY_RANK: Record<SecurityLevel, number> = {
+	NON_SECRET: 0,
+	GENERAL: 1,
+	IMPORTANT: 2,
+	CORE: 3,
+};
+
+const DATA_RANK: Record<OrgDataLevel, number> = {
+	DATA_PUBLIC: 0,
+	DATA_INTERNAL: 1,
+	DATA_SECRET: 2,
+	DATA_TOP_SECRET: 3,
+};
+
+const BUILT_IN_ROLE_OPERATIONS: Record<string, DataOperation[]> = {
+	DEPT_OWNER: ["read", "write", "export"],
+	DEPT_EDITOR: ["read", "write", "export"],
+	DEPT_VIEWER: ["read"],
+	INST_OWNER: ["read", "write", "export"],
+	INST_EDITOR: ["read", "write", "export"],
+	INST_VIEWER: ["read"],
+};
+
+const BUILT_IN_ROLE_SCOPE: Record<string, "DEPARTMENT" | "INSTITUTE"> = {
+	DEPT_OWNER: "DEPARTMENT",
+	DEPT_EDITOR: "DEPARTMENT",
+	DEPT_VIEWER: "DEPARTMENT",
+	INST_OWNER: "INSTITUTE",
+	INST_EDITOR: "INSTITUTE",
+	INST_VIEWER: "INSTITUTE",
+};
+
+const datasets: AdminDataset[] = [
+	{
+		id: 301,
+		name: "ODS_ORDERS",
+		businessCode: "ODS_ORDERS",
+		description: "销售订单宽表，供部门内分析使用",
+		dataLevel: "DATA_INTERNAL",
+		ownerOrgId: 2,
+		ownerOrgName: "数据平台组",
+		isInstituteShared: false,
+		rowCount: 820_000,
+		updatedAt: faker.date.recent({ days: 1 }).toISOString(),
+	},
+	{
+		id: 302,
+		name: "DIM_CUSTOMER_SECURE",
+		businessCode: "DIM_CUSTOMER_SECURE",
+		description: "含联系方式的客户主数据，仅限本部门",
+		dataLevel: "DATA_SECRET",
+		ownerOrgId: 2,
+		ownerOrgName: "数据平台组",
+		isInstituteShared: false,
+		rowCount: 210_500,
+		updatedAt: faker.date.recent({ days: 3 }).toISOString(),
+	},
+	{
+		id: 303,
+		name: "INST_SHARED_MARKET_INSIGHT",
+		businessCode: "INST_SHARED_MARKET_INSIGHT",
+		description: "全院共享的市场洞察结果集",
+		dataLevel: "DATA_INTERNAL",
+		ownerOrgId: 1,
+		ownerOrgName: "数据与智能中心",
+		isInstituteShared: true,
+		rowCount: 64_000,
+		updatedAt: faker.date.recent({ days: 5 }).toISOString(),
+	},
+	{
+		id: 304,
+		name: "INST_SHARED_RISK_ALERT",
+		businessCode: "INST_SHARED_RISK_ALERT",
+		description: "风险预警指标共享区",
+		dataLevel: "DATA_SECRET",
+		ownerOrgId: 4,
+		ownerOrgName: "数据治理组",
+		isInstituteShared: true,
+		rowCount: 18_200,
+		updatedAt: faker.date.recent({ days: 2 }).toISOString(),
+	},
+	{
+		id: 305,
+		name: "ODS_PLATFORM_AUDIT",
+		businessCode: "ODS_PLATFORM_AUDIT",
+		description: "平台操作审计日志",
+		dataLevel: "DATA_TOP_SECRET",
+		ownerOrgId: 4,
+		ownerOrgName: "数据治理组",
+		isInstituteShared: false,
+		rowCount: 1_280_000,
+		updatedAt: faker.date.recent({ days: 1 }).toISOString(),
+	},
+];
+
+let customRoleId = 400;
+const customRoles: AdminCustomRole[] = [
+	{
+		id: ++customRoleId,
+		name: "DEPT_EXPORT_LIMITED",
+		scope: "DEPARTMENT",
+		operations: ["read", "export"],
+		maxRows: 50_000,
+		allowDesensitizeJson: true,
+		maxDataLevel: "DATA_SECRET",
+		description: "部门内批量导出需脱敏，限制行数",
+		createdBy: "sysadmin",
+		createdAt: faker.date.recent({ days: 6 }).toISOString(),
+	},
+	{
+		id: ++customRoleId,
+		name: "INST_VIEW_INTERNAL",
+		scope: "INSTITUTE",
+		operations: ["read"],
+		maxRows: null,
+		allowDesensitizeJson: false,
+		maxDataLevel: "DATA_INTERNAL",
+		description: "面向全院共享区的内部可查阅角色",
+		createdBy: "authadmin",
+		createdAt: faker.date.recent({ days: 8 }).toISOString(),
+	},
+];
+
+let roleAssignmentId = 9000;
+const roleAssignments: AdminRoleAssignment[] = [
+	{
+		id: ++roleAssignmentId,
+		role: "DEPT_OWNER",
+		username: "luqi",
+		displayName: "卢琦",
+		userSecurityLevel: "IMPORTANT",
+		scopeOrgId: 2,
+		scopeOrgName: "数据平台组",
+		datasetIds: [301, 302],
+		operations: ["read", "write", "export"],
+		grantedBy: "sysadmin",
+		grantedAt: faker.date.recent({ days: 2 }).toISOString(),
+	},
+	{
+		id: ++roleAssignmentId,
+		role: "DEPT_VIEWER",
+		username: "lixiaomei",
+		displayName: "李晓美",
+		userSecurityLevel: "GENERAL",
+		scopeOrgId: 2,
+		scopeOrgName: "数据平台组",
+		datasetIds: [301],
+		operations: ["read"],
+		grantedBy: "luqi",
+		grantedAt: faker.date.recent({ days: 4 }).toISOString(),
+	},
+	{
+		id: ++roleAssignmentId,
+		role: "INST_OWNER",
+		username: "jianghui",
+		displayName: "姜辉",
+		userSecurityLevel: "CORE",
+		scopeOrgId: null,
+		scopeOrgName: "全院共享区",
+		datasetIds: [303, 304],
+		operations: ["read", "write", "export"],
+		grantedBy: "sysadmin",
+		grantedAt: faker.date.recent({ days: 1 }).toISOString(),
+	},
+	{
+		id: ++roleAssignmentId,
+		role: "DEPT_EXPORT_LIMITED",
+		username: "chenyu",
+		displayName: "陈宇",
+		userSecurityLevel: "NON_SECRET",
+		scopeOrgId: 2,
+		scopeOrgName: "数据平台组",
+		datasetIds: [301],
+		operations: ["read", "export"],
+		grantedBy: "luqi",
+		grantedAt: faker.date.recent({ days: 7 }).toISOString(),
+	},
+];
+
 function json(data: unknown) {
 	return HttpResponse.json({
 		status: ResultStatus.SUCCESS,
@@ -389,6 +761,76 @@ function json(data: unknown) {
 
 export const adminHandlers = [
 	http.get(`${ADMIN_API}/whoami`, () => json(getActiveAdmin())),
+
+	http.get(`${ADMIN_API}/datasets`, () => json(datasets)),
+
+	http.get(`${ADMIN_API}/custom-roles`, () => json(customRoles)),
+
+	http.post(`${ADMIN_API}/custom-roles`, async ({ request }) => {
+		const payload = (await request.json()) as CreateCustomRolePayload;
+		if (!payload.name) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "角色名称不能为空" }, { status: 400 });
+		}
+		if (BUILT_IN_ROLE_OPERATIONS[payload.name] || getCustomRoleByName(payload.name)) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "角色名称已存在" }, { status: 409 });
+		}
+		if (!Array.isArray(payload.operations) || payload.operations.length === 0) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请选择角色权限" }, { status: 400 });
+		}
+		const invalidOps = payload.operations.filter((op) => !["read", "write", "export"].includes(op));
+		if (invalidOps.length > 0) {
+			return HttpResponse.json(
+				{ status: ResultStatus.ERROR, message: `不支持的操作：${invalidOps.join(", ")}` },
+				{ status: 400 },
+			);
+		}
+		if (!payload.maxDataLevel || !(payload.maxDataLevel in DATA_RANK)) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请选择最大数据密级" }, { status: 400 });
+		}
+		const scope = payload.scope;
+		if (scope !== "DEPARTMENT" && scope !== "INSTITUTE") {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "作用域无效" }, { status: 400 });
+		}
+		const created: AdminCustomRole = {
+			id: ++customRoleId,
+			name: payload.name,
+			scope,
+			operations: Array.from(new Set(payload.operations)) as DataOperation[],
+			maxRows: payload.maxRows ?? null,
+			allowDesensitizeJson: Boolean(payload.allowDesensitizeJson),
+			maxDataLevel: payload.maxDataLevel,
+			description: payload.description,
+			createdBy: getActiveAdmin().username ?? "sysadmin",
+			createdAt: new Date().toISOString(),
+		};
+		customRoles.unshift(created);
+		return json(created);
+	}),
+
+	http.get(`${ADMIN_API}/role-assignments`, () => json(roleAssignments)),
+
+	http.post(`${ADMIN_API}/role-assignments`, async ({ request }) => {
+		const payload = (await request.json()) as CreateRoleAssignmentPayload;
+		const error = validateAssignment(payload);
+		if (error) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: error }, { status: 400 });
+		}
+		const record: AdminRoleAssignment = {
+			id: ++roleAssignmentId,
+			role: payload.role,
+			username: payload.username,
+			displayName: payload.displayName,
+			userSecurityLevel: payload.userSecurityLevel,
+			scopeOrgId: payload.scopeOrgId,
+			scopeOrgName: resolveOrgName(payload.scopeOrgId),
+			datasetIds: payload.datasetIds,
+			operations: Array.from(new Set(payload.operations)) as DataOperation[],
+			grantedBy: getActiveAdmin().username ?? "sysadmin",
+			grantedAt: new Date().toISOString(),
+		};
+		roleAssignments.unshift(record);
+		return json(record);
+	}),
 
 	http.get(`${ADMIN_API}/change-requests`, ({ request }) => {
 		const url = new URL(request.url);
@@ -477,6 +919,7 @@ export const adminHandlers = [
 		const size = Math.min(Number.parseInt(url.searchParams.get("size") ?? "20", 10) || 20, 200);
 		const fromTs = from ? Date.parse(from) : Number.NaN;
 		const toTs = to ? Date.parse(to) : Number.NaN;
+
 		const scoped = scopeAuditEvents(auditEvents);
 		const filtered = scoped.filter((event) => {
 			const occurred = Date.parse(event.occurredAt);
@@ -493,24 +936,24 @@ export const adminHandlers = [
 				(Number.isNaN(toTs) || occurred <= toTs)
 			);
 		});
+
 		const totalElements = filtered.length;
 		const totalPages = Math.max(1, Math.ceil(totalElements / size));
 		const start = page * size;
 		const content = filtered.slice(start, start + size);
-		return HttpResponse.json({
-			status: ResultStatus.SUCCESS,
-			data: {
-				content,
-				page,
-				size,
-				totalElements,
-				totalPages,
-			},
+
+		return json({
+			content,
+			page,
+			size,
+			totalElements,
+			totalPages,
 		});
 	}),
 
 	http.get(`${AUDIT_API}/export`, ({ request }) => {
 		const url = new URL(request.url, "http://localhost");
+		const scoped = scopeAuditEvents(auditEvents);
 		const actor = url.searchParams.get("actor")?.toLowerCase() ?? "";
 		const moduleFilter = url.searchParams.get("module")?.toLowerCase() ?? "";
 		const action = url.searchParams.get("action")?.toLowerCase() ?? "";
@@ -521,7 +964,7 @@ export const adminHandlers = [
 		const to = url.searchParams.get("to");
 		const fromTs = from ? Date.parse(from) : Number.NaN;
 		const toTs = to ? Date.parse(to) : Number.NaN;
-		const scoped = scopeAuditEvents(auditEvents);
+
 		const filtered = scoped.filter((event) => {
 			const occurred = Date.parse(event.occurredAt);
 			return (
@@ -537,6 +980,7 @@ export const adminHandlers = [
 				(Number.isNaN(toTs) || occurred <= toTs)
 			);
 		});
+
 		const csv = buildCsv(filtered);
 		return new HttpResponse(csv, {
 			headers: { "Content-Type": "text/csv" },
@@ -560,7 +1004,7 @@ export const adminHandlers = [
 		return json(draft);
 	}),
 
-	http.get(`${ADMIN_API}/portal/menus`, () => json(portalMenus)),
+	http.get(`${ADMIN_API}/portal/menus`, () => json({ active: portalMenus, deleted: [] })),
 
 	http.post(`${ADMIN_API}/portal/menus`, async ({ request }) => {
 		const body = (await request.json()) as PortalMenuItem;
@@ -616,32 +1060,44 @@ export const adminHandlers = [
 		if (!payload.dataLevel) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请选择部门数据密级" }, { status: 400 });
 		}
+		const reason = payload.reason?.trim();
+		if (!reason) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请填写审批原因" }, { status: 400 });
+		}
 		const parentId = payload.parentId ?? null;
 		if (parentId !== null && !findOrganization(organizations, parentId)) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "父级部门不存在" }, { status: 400 });
 		}
-		const newOrg: OrganizationNode = {
-			id: ++organizationId,
+		const normalized: OrganizationPayload = {
 			name,
 			dataLevel: payload.dataLevel,
-			sensitivity: payload.dataLevel,
 			parentId,
 			contact: payload.contact?.trim() || undefined,
 			phone: payload.phone?.trim() || undefined,
 			description: payload.description?.trim() || undefined,
-			children: [],
+			reason,
 		};
-		if (!insertOrganization(organizations, parentId, newOrg)) {
-			organizationId -= 1;
-			return HttpResponse.json({ status: ResultStatus.ERROR, message: "无法创建部门，请重试" }, { status: 400 });
-		}
-		return json(newOrg);
+		const draft: ChangeRequest = {
+			id: ++changeRequestId,
+			resourceType: "ORG",
+			action: "CREATE",
+			payloadJson: JSON.stringify(normalized),
+			status: "PENDING",
+			requestedBy: getActiveAdmin().username || "sysadmin",
+			requestedAt: new Date().toISOString(),
+			reason,
+		};
+		changeRequests.unshift(draft);
+		return json(draft);
 	}),
 
 	http.put(`${ADMIN_API}/orgs/:id`, async ({ params, request }) => {
 		const id = Number(params.id);
 		if (Number.isNaN(id)) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门编号不合法" }, { status: 400 });
+		}
+		if (!findOrganization(organizations, id)) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门不存在" }, { status: 404 });
 		}
 		const payload = (await request.json()) as OrganizationPayload;
 		const name = payload.name?.trim();
@@ -651,30 +1107,59 @@ export const adminHandlers = [
 		if (!payload.dataLevel) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请选择部门数据密级" }, { status: 400 });
 		}
-		const updated = updateOrganizationNode(organizations, id, {
+		const reason = payload.reason?.trim();
+		if (!reason) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请填写审批原因" }, { status: 400 });
+		}
+		const normalized: OrganizationPayload = {
 			name,
 			dataLevel: payload.dataLevel,
-			sensitivity: payload.dataLevel,
 			contact: payload.contact?.trim() || undefined,
 			phone: payload.phone?.trim() || undefined,
 			description: payload.description?.trim() || undefined,
-		});
-		if (!updated) {
-			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门不存在" }, { status: 404 });
-		}
-		return json(updated);
+			reason,
+		};
+		const draft: ChangeRequest = {
+			id: ++changeRequestId,
+			resourceType: "ORG",
+			action: "UPDATE",
+			resourceId: String(id),
+			payloadJson: JSON.stringify(normalized),
+			status: "PENDING",
+			requestedBy: getActiveAdmin().username || "sysadmin",
+			requestedAt: new Date().toISOString(),
+			reason,
+		};
+		changeRequests.unshift(draft);
+		return json(draft);
 	}),
 
-	http.delete(`${ADMIN_API}/orgs/:id`, ({ params }) => {
+	http.delete(`${ADMIN_API}/orgs/:id`, async ({ params, request }) => {
 		const id = Number(params.id);
 		if (Number.isNaN(id)) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门编号不合法" }, { status: 400 });
 		}
-		const removed = deleteOrganizationNode(organizations, id);
-		if (!removed) {
+		if (!findOrganization(organizations, id)) {
 			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门不存在" }, { status: 404 });
 		}
-		return json({ id });
+		const body = (await request.json().catch(() => ({}))) as { reason?: string };
+		const reason = body.reason?.trim();
+		if (!reason) {
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "请填写审批原因" }, { status: 400 });
+		}
+		const draft: ChangeRequest = {
+			id: ++changeRequestId,
+			resourceType: "ORG",
+			action: "DELETE",
+			resourceId: String(id),
+			payloadJson: JSON.stringify({ reason }),
+			status: "PENDING",
+			requestedBy: getActiveAdmin().username || "sysadmin",
+			requestedAt: new Date().toISOString(),
+			reason,
+		};
+		changeRequests.unshift(draft);
+		return json(draft);
 	}),
 
 	http.get(`${ADMIN_API}/orgs`, () => json(organizations)),

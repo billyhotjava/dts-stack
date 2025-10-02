@@ -1,5 +1,7 @@
-import type { AuditLog } from "#/entity";
+import type { AuditLog, AuditLogDetail, AuditLogPageResponse } from "#/entity";
 import apiClient from "../apiClient";
+import { GLOBAL_CONFIG } from "@/global-config";
+import userStore from "@/store/userStore";
 
 /**
  * 审计日志API服务
@@ -36,8 +38,8 @@ export class AuditLogService {
 	 * @param id 审计日志ID
 	 * @returns 审计日志详情
 	 */
-	static getAuditLogById(id: number): Promise<AuditLog> {
-		return apiClient.get<AuditLog>({
+	static getAuditLogById(id: number): Promise<AuditLogDetail> {
+		return apiClient.get<AuditLogDetail>({
 			url: `${AuditLogService.BASE_URL}/${id}`,
 		});
 	}
@@ -75,6 +77,35 @@ export class AuditLogService {
 		return apiClient.delete({
 			url: `${AuditLogService.BASE_URL}/${id}`,
 		});
+	}
+
+	static purgeAuditLogs(): Promise<{ removed: number }> {
+		return apiClient.delete<{ removed: number }>({
+			url: AuditLogService.BASE_URL,
+		});
+	}
+
+	static async exportAuditLogs(filters: Record<string, string | number | boolean>): Promise<Blob> {
+		const params = new URLSearchParams();
+		Object.entries(filters).forEach(([key, value]) => {
+			if (value !== undefined && value !== null && `${value}`.trim() !== "") {
+				params.append(key, String(value));
+			}
+		});
+		const base = GLOBAL_CONFIG.apiBaseUrl;
+		const token = userStore.getState().userToken.accessToken;
+		const url = `${base}${AuditLogService.BASE_URL}/export${params.toString() ? `?${params.toString()}` : ""}`;
+		const response = await fetch(url, {
+			headers: {
+				Accept: "text/csv",
+				...(token ? { Authorization: `Bearer ${token}` } : {}),
+			},
+		});
+		if (!response.ok) {
+			const text = await response.text();
+			throw new Error(text || "导出审计日志失败");
+		}
+		return response.blob();
 	}
 }
 

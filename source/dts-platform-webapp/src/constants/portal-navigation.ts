@@ -128,6 +128,7 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 			{ key: "dataSources", path: "data-sources", titleKey: "sys.nav.portal.foundationDataSources" },
 			{ key: "dataStorage", path: "data-storage", titleKey: "sys.nav.portal.foundationDataStorage" },
 			{ key: "taskScheduling", path: "task-scheduling", titleKey: "sys.nav.portal.foundationTaskScheduling" },
+			{ key: "dataSettings", path: "data-settings", titleKey: "sys.nav.portal.foundationDataSettings" },
 		],
 	},
 ];

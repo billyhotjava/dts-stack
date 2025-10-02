@@ -25,6 +25,7 @@ import javax.crypto.SecretKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -37,7 +38,7 @@ public class AdminAuditService {
 
     private static final Logger log = LoggerFactory.getLogger(AdminAuditService.class);
 
-    public static final class AuditEventView {
+    public static class AuditEventView {
         public long id;
         public Instant occurredAt;
         public String actor;
@@ -227,12 +228,51 @@ public class AdminAuditService {
         return entity;
     }
 
-    public Page<AuditEvent> search(String actor, String module, String action, String result, String resource, Instant from, Instant to, String clientIp, Pageable pageable) {
-        return repository.search(normalize(actor), normalize(module), normalize(action), normalize(result), normalize(resource), from, to, clientIp, pageable);
+    public Page<AuditEvent> search(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        Pageable pageable
+    ) {
+        Pageable effectivePageable = pageable;
+        if (pageable != null && pageable.getSort().isSorted()) {
+            effectivePageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        }
+        return repository.search(
+            normalize(actor),
+            normalize(module),
+            normalize(action),
+            normalize(result),
+            normalize(resourceType),
+            normalize(resource),
+            normalize(requestUri),
+            from,
+            to,
+            normalize(clientIp),
+            effectivePageable
+        );
     }
 
-    public List<AuditEventView> list(String actor, String module, String action, String result, String resource, Instant from, Instant to, String clientIp) {
-        return search(actor, module, action, result, resource, from, to, clientIp, Pageable.unpaged())
+    public List<AuditEventView> list(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp
+    ) {
+        return search(actor, module, action, result, resourceType, resource, requestUri, from, to, clientIp, Pageable.unpaged())
             .getContent()
             .stream()
             .map(this::toView)
@@ -243,10 +283,51 @@ public class AdminAuditService {
         return repository.findById(id);
     }
 
-    public List<AuditEvent> findAllForExport(String actor, String module, String action, String result, String resource, Instant from, Instant to, String clientIp) {
+    public List<AuditEvent> findAllForExport(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp
+    ) {
         return repository
-            .search(normalize(actor), normalize(module), normalize(action), normalize(result), normalize(resource), from, to, clientIp, Pageable.unpaged())
+            .search(
+                normalize(actor),
+                normalize(module),
+                normalize(action),
+                normalize(result),
+                normalize(resourceType),
+                normalize(resource),
+                normalize(requestUri),
+                from,
+                to,
+                normalize(clientIp),
+                Pageable.unpaged()
+            )
             .getContent();
+    }
+
+    public long purgeAll() {
+        long removed = repository.count();
+        if (removed == 0) {
+            if (queue != null) {
+                queue.clear();
+            }
+            lastChainSignature.set("");
+            return 0;
+        }
+        repository.deleteAllInBatch();
+        repository.flush();
+        if (queue != null) {
+            queue.clear();
+        }
+        lastChainSignature.set("");
+        return removed;
     }
 
     public byte[] decryptPayload(AuditEvent event) {

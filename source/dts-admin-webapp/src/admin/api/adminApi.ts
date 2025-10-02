@@ -101,20 +101,21 @@ export const adminApi = {
 		}),
 
 	createOrganization: (payload: OrganizationPayload) =>
-		apiClient.post<OrganizationNode>({
+		apiClient.post<ChangeRequest>({
 			url: "/admin/orgs",
 			data: payload,
 		}),
 
 	updateOrganization: (id: number, payload: OrganizationPayload) =>
-		apiClient.put<OrganizationNode>({
+		apiClient.put<ChangeRequest>({
 			url: `/admin/orgs/${id}`,
 			data: payload,
 		}),
 
-	deleteOrganization: (id: number) =>
-		apiClient.delete<void>({
+	deleteOrganization: (id: number, reason: string) =>
+		apiClient.delete<ChangeRequest>({
 			url: `/admin/orgs/${id}`,
+			data: { reason },
 		}),
 
 	getAdminUsers: () =>

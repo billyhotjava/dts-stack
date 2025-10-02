@@ -1,6 +1,7 @@
 import { Button, Input, Modal, Table, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 import type { ApprovalRequest, ApprovalRequestDetail, KeycloakUser } from "#/keycloak";
 import { KeycloakApprovalService } from "@/api/services/approvalService";
@@ -10,6 +11,7 @@ import ApprovalCenterView from "@/admin/views/approval-center";
 import { Badge } from "@/ui/badge";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Text } from "@/ui/typography";
+import { DetailItem, DetailSection } from "@/components/detail/DetailSection";
 
 // 创建一个新的类型，用于处理后端只返回基本审批信息的情况
 interface BasicApprovalRequest extends Omit<ApprovalRequest, "items"> {
@@ -282,58 +284,6 @@ export default function ApprovalPage() {
 		},
 	];
 
-	// 详情模态框列定义
-	const detailColumns: ColumnsType<any> = [
-		{
-			title: "属性",
-			dataIndex: "key",
-			width: 120,
-		},
-		{
-			title: "값",
-			dataIndex: "value",
-			render: (value: any) => {
-				if (typeof value === "object") {
-					return <pre className="text-xs">{JSON.stringify(value, null, 2)}</pre>;
-				}
-				return value;
-			},
-		},
-	];
-
-	// 用户信息变更详情列定义
-	const userChangeColumns: ColumnsType<any> = [
-		{
-			title: "属性",
-			dataIndex: "property",
-			width: 150,
-		},
-		{
-			title: "变更前",
-			dataIndex: "before",
-			width: 200,
-			render: (value: any) => {
-				if (value === undefined || value === null) return "-";
-				if (typeof value === "object") {
-					return <pre className="text-xs">{JSON.stringify(value, null, 2)}</pre>;
-				}
-				return value.toString();
-			},
-		},
-		{
-			title: "变更后",
-			dataIndex: "after",
-			width: 200,
-			render: (value: any) => {
-				if (value === undefined || value === null) return "-";
-				if (typeof value === "object") {
-					return <pre className="text-xs">{JSON.stringify(value, null, 2)}</pre>;
-				}
-				return value.toString();
-			},
-		},
-	];
-
 	// 初始化加载
 	useEffect(() => {
 		if (isAuthAdmin) return;
@@ -361,6 +311,9 @@ export default function ApprovalPage() {
 						columns={columns}
 						dataSource={approvals as any[]}
 						loading={loading}
+						size="small"
+						className="text-sm"
+						rowClassName={() => "text-sm"}
 						scroll={{ x: 1000 }}
 						pagination={{
 							showSizeChanger: true,
@@ -406,231 +359,93 @@ export default function ApprovalPage() {
 				]}
 				width={800}
 			>
-				{selectedRequest && (
-					<div className="space-y-4">
-						<div className="grid grid-cols-2 gap-4">
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									请求编号
-								</Text>
-								<Text variant="body1" className="font-mono">
-									#{selectedRequest.id}
-								</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									类型
-								</Text>
-								<Text variant="body1">
-									{selectedRequest.type === "CREATE_USER"
-										? "创建用户"
-										: selectedRequest.type === "UPDATE_USER"
-											? "更新用户"
-											: selectedRequest.type === "DELETE_USER"
-												? "删除用户"
-												: selectedRequest.type === "GRANT_ROLE"
-													? "分配角色"
-													: selectedRequest.type === "REVOKE_ROLE"
-														? "移除角色"
-														: selectedRequest.type}
-								</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									申请人
-								</Text>
-								<Text variant="body1">{selectedRequest.requester}</Text>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									状态
-								</Text>
-								<Badge
-									variant={
-										selectedRequest.status === "PENDING"
-											? "warning"
-											: selectedRequest.status === "APPROVED"
-												? "success"
-												: selectedRequest.status === "REJECTED"
-													? "destructive"
-													: "default"
-									}
-								>
-									{selectedRequest.status === "PENDING"
-										? "待审批"
-										: selectedRequest.status === "APPROVED"
-											? "已批准"
-											: selectedRequest.status === "REJECTED"
-												? "已拒绝"
-												: selectedRequest.status === "APPLIED"
-													? "已应用"
-													: selectedRequest.status === "FAILED"
-														? "失败"
-														: selectedRequest.status}
-								</Badge>
-							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									创建时间
-								</Text>
-								<Text variant="body1">{new Date(selectedRequest.createdAt).toLocaleString("zh-CN")}</Text>
-							</div>
-							{selectedRequest.decidedAt && (
-								<div>
-									<Text variant="body2" className="text-muted-foreground">
-										审批时间
-									</Text>
-									<Text variant="body1">{new Date(selectedRequest.decidedAt).toLocaleString("zh-CN")}</Text>
-								</div>
+				{selectedRequest && (() => {
+					const statusMeta = getApprovalStatusMeta(selectedRequest.status);
+					const changeRows = userInfoChange ? buildUserChangeRows(userInfoChange) : [];
+					return (
+						<div className="space-y-4">
+							<DetailSection title="基础信息">
+								<DetailItem label="请求编号" value={`#${selectedRequest.id}`} monospace />
+								<DetailItem label="类型" value={getApprovalTypeLabel(selectedRequest.type)} />
+								<DetailItem label="申请人" value={selectedRequest.requester || "-"} />
+								<DetailItem label="状态" value={<Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>} />
+								{selectedRequest.category && <DetailItem label="分类" value={selectedRequest.category} />}
+							</DetailSection>
+
+							<DetailSection title="时间与审批信息">
+								<DetailItem label="创建时间" value={formatDateTime(selectedRequest.createdAt)} />
+								<DetailItem label="审批时间" value={formatDateTime(selectedRequest.decidedAt)} />
+								<DetailItem label="审批人" value={selectedRequest.approver || "-"} />
+								<DetailItem label="重试次数" value={selectedRequest.retryCount != null ? selectedRequest.retryCount : 0} />
+							</DetailSection>
+
+							{selectedRequest.reason && (
+								<DetailSection title="申请说明" columns={1}>
+									<DetailItem
+										label="申请说明"
+										value={<div className="rounded-md bg-muted px-3 py-2 leading-relaxed">{selectedRequest.reason}</div>}
+									/>
+								</DetailSection>
 							)}
-							{selectedRequest.approver && (
-								<div>
-									<Text variant="body2" className="text-muted-foreground">
-										审批人
-									</Text>
-									<Text variant="body1">{selectedRequest.approver}</Text>
-								</div>
+
+							{selectedRequest.decisionNote && (
+								<DetailSection title="审批意见" columns={1}>
+									<DetailItem
+										label="审批意见"
+										value={<div className="rounded-md bg-muted px-3 py-2 leading-relaxed">{selectedRequest.decisionNote}</div>}
+									/>
+								</DetailSection>
+							)}
+
+							{selectedRequest.errorMessage && (
+								<DetailSection title="错误信息" columns={1}>
+									<DetailItem
+										label="错误描述"
+										value={
+											<div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+												{selectedRequest.errorMessage}
+											</div>
+										}
+									/>
+								</DetailSection>
+							)}
+
+							{changeRows.length > 0 && userInfoChange && (
+								<DetailSection
+									title={getUserInfoChangeTitle(userInfoChange.type)}
+									description="对比关键字段的变更前后差异"
+									columns={1}
+								>
+									<div className="space-y-3">
+										{changeRows.map(({ key, label, before, after }) => (
+											<UserChangeField key={key} label={label} before={before} after={after} />
+										))}
+									</div>
+								</DetailSection>
+							)}
+
+							{!userInfoChange && (
+								<DetailSection title="审批项" columns={1} description="审批执行时提交的具体事项">
+									{selectedRequest.items && selectedRequest.items.length > 0 ? (
+										<div className="space-y-3">
+											{selectedRequest.items.map((item, index) => (
+												<ApprovalItemCard
+													key={item.id ?? `${item.targetKind}-${item.targetId}-${index}`}
+													item={item}
+													index={index}
+												/>
+											))}
+										</div>
+									) : (
+										<div className="rounded-md bg-muted/60 px-3 py-6 text-center text-sm text-muted-foreground">
+											暂无审批项
+										</div>
+									)}
+								</DetailSection>
 							)}
 						</div>
-
-						{selectedRequest.reason && (
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									说明
-								</Text>
-								<div className="p-2 bg-muted rounded">
-									<Text variant="body1">{selectedRequest.reason}</Text>
-								</div>
-							</div>
-						)}
-
-						{selectedRequest.decisionNote && (
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									审批意见
-								</Text>
-								<div className="p-2 bg-muted rounded">
-									<Text variant="body1">{selectedRequest.decisionNote}</Text>
-								</div>
-							</div>
-						)}
-
-						{selectedRequest.errorMessage && (
-							<div>
-								<Text variant="body2" className="text-muted-foreground text-destructive">
-									错误信息
-								</Text>
-								<div className="p-2 bg-destructive/10 rounded">
-									<Text variant="body1" className="text-destructive">
-										{selectedRequest.errorMessage}
-									</Text>
-								</div>
-							</div>
-						)}
-
-						{/* 用户信息变更详情 */}
-						{userInfoChange && (
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									{userInfoChange.type === "CREATE_USER"
-										? "创建用户信息"
-										: userInfoChange.type === "UPDATE_USER"
-											? "用户信息变更"
-											: userInfoChange.type === "DELETE_USER"
-												? "删除用户信息"
-												: "用户信息"}
-								</Text>
-								<Table
-									size="small"
-									columns={userChangeColumns}
-									dataSource={[
-										{
-											key: "username",
-											property: "用户名",
-											before: userInfoChange.before?.username,
-											after: userInfoChange.after?.username,
-										},
-										{
-											key: "email",
-											property: "邮箱",
-											before: userInfoChange.before?.email,
-											after: userInfoChange.after?.email,
-										},
-										{
-											key: "firstName",
-											property: "名",
-											before: userInfoChange.before?.firstName,
-											after: userInfoChange.after?.firstName,
-										},
-										{
-											key: "lastName",
-											property: "姓",
-											before: userInfoChange.before?.lastName,
-											after: userInfoChange.after?.lastName,
-										},
-										{
-											key: "enabled",
-											property: "启用状态",
-											before: userInfoChange.before?.enabled?.toString(),
-											after: userInfoChange.after?.enabled?.toString(),
-										},
-										{
-											key: "emailVerified",
-											property: "邮箱验证",
-											before: userInfoChange.before?.emailVerified?.toString(),
-											after: userInfoChange.after?.emailVerified?.toString(),
-										},
-										{
-											key: "attributes",
-											property: "附加属性",
-											before: userInfoChange.before?.attributes,
-											after: userInfoChange.after?.attributes,
-										},
-									]}
-									pagination={false}
-								/>
-							</div>
-						)}
-
-						{/* 原始审批项（对于非用户信息变更的审批） */}
-						{!userInfoChange && selectedRequest.items && selectedRequest.items.length > 0 && (
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									审批项
-								</Text>
-								{selectedRequest.items && selectedRequest.items.length > 0 ? (
-									<Table
-										size="small"
-										columns={detailColumns}
-										dataSource={selectedRequest.items
-											.map((item) => ({
-												key: `target-${item.id}`,
-												属性: "目标类型/标识",
-												값: `${item.targetKind}/${item.targetId}`,
-											}))
-											.concat(
-												selectedRequest.items.flatMap((item) => [
-													{
-														key: `seq-${item.id}`,
-														属性: "序号",
-														값: item.seqNumber.toString(),
-													},
-													{
-														key: `payload-${item.id}`,
-														属性: "数据",
-														값: typeof item.payload === "string" ? item.payload : JSON.stringify(item.payload, null, 2),
-													},
-												]),
-											)}
-										pagination={false}
-									/>
-								) : (
-									<div className="p-2 bg-muted rounded text-center text-muted-foreground">暂无审批项</div>
-								)}
-							</div>
-						)}
-					</div>
-				)}
+					);
+				})()}
 			</Modal>
 
 			{/* 拒绝理由输入模态框 */}
@@ -658,4 +473,196 @@ export default function ApprovalPage() {
 			</Modal>
 		</div>
 	);
+}
+
+type BadgeAppearance = "default" | "secondary" | "destructive" | "info" | "warning" | "success" | "error" | "outline";
+
+function getApprovalTypeLabel(type: string): string {
+	switch (type) {
+		case "CREATE_USER":
+			return "创建用户";
+		case "UPDATE_USER":
+			return "更新用户";
+		case "DELETE_USER":
+			return "删除用户";
+		case "GRANT_ROLE":
+			return "分配角色";
+		case "REVOKE_ROLE":
+			return "移除角色";
+		default:
+			return type;
+	}
+}
+
+function getUserInfoChangeTitle(type: UserInfoChange["type"]): string {
+	switch (type) {
+		case "CREATE_USER":
+			return "创建用户信息";
+		case "UPDATE_USER":
+			return "用户信息变更";
+		case "DELETE_USER":
+			return "删除用户信息";
+		default:
+			return "用户信息";
+	}
+}
+
+function getApprovalStatusMeta(status: string): { label: string; variant: BadgeAppearance } {
+	switch (status) {
+		case "PENDING":
+			return { label: "待审批", variant: "warning" };
+		case "APPROVED":
+			return { label: "已批准", variant: "success" };
+		case "REJECTED":
+			return { label: "已拒绝", variant: "destructive" };
+		case "APPLIED":
+			return { label: "已应用", variant: "success" };
+		case "FAILED":
+			return { label: "失败", variant: "error" };
+		default:
+			return { label: status || "-", variant: "default" };
+	}
+}
+
+function formatDateTime(value?: string | null): string {
+	if (!value) {
+		return "-";
+	}
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) {
+		return value;
+	}
+	return date.toLocaleString("zh-CN");
+}
+
+type ChangeRow = {
+	key: string;
+	label: string;
+	before: unknown;
+	after: unknown;
+};
+
+function buildUserChangeRows(change: UserInfoChange): ChangeRow[] {
+	const rows: ChangeRow[] = [
+		{ key: "username", label: "用户名", before: change.before?.username, after: change.after?.username },
+		{ key: "email", label: "邮箱", before: change.before?.email, after: change.after?.email },
+		{ key: "firstName", label: "名", before: change.before?.firstName, after: change.after?.firstName },
+		{ key: "lastName", label: "姓", before: change.before?.lastName, after: change.after?.lastName },
+		{ key: "enabled", label: "启用状态", before: change.before?.enabled, after: change.after?.enabled },
+		{ key: "emailVerified", label: "邮箱验证", before: change.before?.emailVerified, after: change.after?.emailVerified },
+		{ key: "attributes", label: "附加属性", before: change.before?.attributes, after: change.after?.attributes },
+	];
+
+	return rows.filter((row) => row.before !== undefined || row.after !== undefined);
+}
+
+type ChangeFieldProps = {
+	label: string;
+	before: unknown;
+	after: unknown;
+};
+
+function UserChangeField({ label, before, after }: ChangeFieldProps) {
+	return (
+		<div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3">
+			<Text variant="body2" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+				{label}
+			</Text>
+			<div className="grid gap-3 md:grid-cols-2">
+				<div>
+					<p className="text-[11px] uppercase tracking-wide text-muted-foreground">变更前</p>
+					<div className="mt-1 text-sm">{renderFieldValue(before)}</div>
+				</div>
+				<div>
+					<p className="text-[11px] uppercase tracking-wide text-muted-foreground">变更后</p>
+					<div className="mt-1 text-sm">{renderFieldValue(after)}</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function renderFieldValue(value: unknown): ReactNode {
+	if (value === null || value === undefined) {
+		return <span className="text-muted-foreground">-</span>;
+	}
+	if (typeof value === "boolean") {
+		return value ? "是" : "否";
+	}
+	if (typeof value === "number") {
+		return value.toString();
+	}
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		return trimmed ? trimmed : <span className="text-muted-foreground">-</span>;
+	}
+	if (Array.isArray(value)) {
+		if (value.length === 0) {
+			return <span className="text-muted-foreground">-</span>;
+		}
+		return (
+			<div className="flex flex-wrap gap-1">
+				{value.map((item, index) => (
+					<span key={`${String(item)}-${index}`} className="rounded bg-muted px-2 py-0.5 text-xs text-foreground/80">
+						{String(item)}
+					</span>
+				))}
+			</div>
+		);
+	}
+	if (typeof value === "object") {
+		try {
+			return (
+				<pre className="whitespace-pre-wrap break-all rounded-md bg-muted/60 px-2 py-1 font-mono text-xs leading-relaxed">
+					{JSON.stringify(value, null, 2)}
+				</pre>
+			);
+		} catch (error) {
+			return String(value);
+		}
+	}
+	return String(value);
+}
+
+type ApprovalItemDetail = ApprovalRequestDetail["items"][number];
+
+function ApprovalItemCard({ item, index }: { item: ApprovalItemDetail; index: number }) {
+	return (
+		<div className="space-y-3 rounded-lg border border-dashed border-border/60 bg-background/80 p-4">
+			<div className="flex items-center justify-between text-xs text-muted-foreground">
+				<span>审批项 #{index + 1}</span>
+				<span>序号 {item.seqNumber}</span>
+			</div>
+			<div className="grid gap-4 md:grid-cols-2">
+				<div>
+					<p className="text-[11px] uppercase tracking-wide text-muted-foreground">目标类型</p>
+					<div className="mt-1 font-mono text-sm">{item.targetKind || "-"}</div>
+				</div>
+				<div>
+					<p className="text-[11px] uppercase tracking-wide text-muted-foreground">目标标识</p>
+					<div className="mt-1 break-all font-mono text-sm">{item.targetId || "-"}</div>
+				</div>
+				<div className="md:col-span-2">
+					<p className="text-[11px] uppercase tracking-wide text-muted-foreground">数据</p>
+					<div className="mt-1 rounded-md bg-muted/60 px-3 py-2">
+						<pre className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed">
+							{formatPayloadDisplay(item.payload)}
+						</pre>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function formatPayloadDisplay(payload: string): string {
+	if (!payload) {
+		return "-";
+	}
+	try {
+		const parsed = JSON.parse(payload);
+		return typeof parsed === "object" ? JSON.stringify(parsed, null, 2) : String(parsed);
+	} catch (error) {
+		return payload;
+	}
 }

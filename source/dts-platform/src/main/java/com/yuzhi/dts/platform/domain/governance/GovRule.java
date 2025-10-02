@@ -1,8 +1,20 @@
 package com.yuzhi.dts.platform.domain.governance;
 
 import com.yuzhi.dts.platform.domain.AbstractAuditingEntity;
-import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
 import java.io.Serializable;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -13,6 +25,9 @@ public class GovRule extends AbstractAuditingEntity<UUID> implements Serializabl
     @GeneratedValue
     @Column(name = "id", columnDefinition = "uuid")
     private UUID id;
+
+    @Column(name = "code", length = 64, unique = true)
+    private String code;
 
     @Column(name = "name", length = 128)
     private String name;
@@ -26,8 +41,41 @@ public class GovRule extends AbstractAuditingEntity<UUID> implements Serializabl
     @Column(name = "dataset_id")
     private UUID datasetId;
 
+    @Column(name = "category", length = 64)
+    private String category;
+
+    @Column(name = "description", length = 2048)
+    private String description;
+
+    @Column(name = "owner", length = 64)
+    private String owner;
+
+    @Column(name = "severity", length = 32)
+    private String severity;
+
+    @Column(name = "data_level", length = 32)
+    private String dataLevel;
+
+    @Column(name = "frequency_cron", length = 128)
+    private String frequencyCron;
+
+    @Column(name = "template")
+    private Boolean template = Boolean.FALSE;
+
+    @Column(name = "executor", length = 64)
+    private String executor;
+
     @Column(name = "enabled")
     private Boolean enabled = Boolean.TRUE;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "latest_version_id")
+    @JsonIgnoreProperties(value = { "rule", "bindings" }, allowSetters = true)
+    private GovRuleVersion latestVersion;
+
+    @OneToMany(mappedBy = "rule", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnoreProperties(value = { "rule", "bindings" }, allowSetters = true)
+    private Set<GovRuleVersion> versions = new LinkedHashSet<>();
 
     @Override
     public UUID getId() {
@@ -36,6 +84,14 @@ public class GovRule extends AbstractAuditingEntity<UUID> implements Serializabl
 
     public void setId(UUID id) {
         this.id = id;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
     }
 
     public String getName() {
@@ -70,6 +126,70 @@ public class GovRule extends AbstractAuditingEntity<UUID> implements Serializabl
         this.datasetId = datasetId;
     }
 
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getOwner() {
+        return owner;
+    }
+
+    public void setOwner(String owner) {
+        this.owner = owner;
+    }
+
+    public String getSeverity() {
+        return severity;
+    }
+
+    public void setSeverity(String severity) {
+        this.severity = severity;
+    }
+
+    public String getDataLevel() {
+        return dataLevel;
+    }
+
+    public void setDataLevel(String dataLevel) {
+        this.dataLevel = dataLevel;
+    }
+
+    public String getFrequencyCron() {
+        return frequencyCron;
+    }
+
+    public void setFrequencyCron(String frequencyCron) {
+        this.frequencyCron = frequencyCron;
+    }
+
+    public Boolean getTemplate() {
+        return template;
+    }
+
+    public void setTemplate(Boolean template) {
+        this.template = template;
+    }
+
+    public String getExecutor() {
+        return executor;
+    }
+
+    public void setExecutor(String executor) {
+        this.executor = executor;
+    }
+
     public Boolean getEnabled() {
         return enabled;
     }
@@ -77,5 +197,20 @@ public class GovRule extends AbstractAuditingEntity<UUID> implements Serializabl
     public void setEnabled(Boolean enabled) {
         this.enabled = enabled;
     }
-}
 
+    public GovRuleVersion getLatestVersion() {
+        return latestVersion;
+    }
+
+    public void setLatestVersion(GovRuleVersion latestVersion) {
+        this.latestVersion = latestVersion;
+    }
+
+    public Set<GovRuleVersion> getVersions() {
+        return versions;
+    }
+
+    public void setVersions(Set<GovRuleVersion> versions) {
+        this.versions = versions;
+    }
+}

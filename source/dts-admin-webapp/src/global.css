@@ -169,3 +169,13 @@
 	--layout-header-height: 64px;
 	--layout-multi-tabs-height: 48px;
 }
+
+/* tighten ant table dividers */
+@layer base {
+	:where(.ant-table-thead > tr > th),
+	:where(.ant-table-tbody > tr > td),
+	:where(.ant-table tfoot > tr > th),
+	:where(.ant-table tfoot > tr > td) {
+		border-bottom-width: 1.5px;
+	}
+}
