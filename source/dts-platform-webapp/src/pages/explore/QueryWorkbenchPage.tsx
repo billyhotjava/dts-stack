@@ -27,7 +27,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } f
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/ui/tooltip";
 
 const CLASSIFICATION_META = {
-	TOP_SECRET: { label: "核心", tone: "bg-rose-500/10 text-rose-500" },
+	TOP_SECRET: { label: "机密", tone: "bg-rose-500/10 text-rose-500" },
 	SECRET: { label: "秘密", tone: "bg-amber-500/10 text-amber-500" },
 	INTERNAL: { label: "内部", tone: "bg-sky-500/10 text-sky-500" },
 	PUBLIC: { label: "公开", tone: "bg-emerald-500/10 text-emerald-600" },

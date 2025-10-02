@@ -31,7 +31,7 @@ const SECURITY_LEVELS = [
 	{ value: "PUBLIC", label: "公开" },
 	{ value: "INTERNAL", label: "内部" },
 	{ value: "SECRET", label: "秘密" },
-	{ value: "TOP_SECRET", label: "核心" },
+	{ value: "TOP_SECRET", label: "机密" },
 ] as const;
 
 type SecurityLevel = (typeof SECURITY_LEVELS)[number]["value"];

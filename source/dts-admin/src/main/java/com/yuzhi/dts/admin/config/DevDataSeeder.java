@@ -10,13 +10,15 @@ import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.repository.PortalMenuRepository;
 import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import com.yuzhi.dts.admin.service.OrganizationService;
-import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
 import org.springframework.core.env.Environment;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,16 +50,28 @@ public class DevDataSeeder {
         this.env = env;
     }
 
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
+    public void seedOnStartup() {
+        seedAll();
+    }
+
     @Transactional
-    public void seed() {
+    public void seedAll() {
         if (!isDevProfile()) {
             return;
         }
-        seedOrganizations();
-        seedDatasets();
-        seedMenus();
-        seedConfigs();
+        safeSeed(this::seedOrganizations, "organizations");
+        safeSeed(this::seedDatasets, "datasets");
+        safeSeed(this::seedMenus, "menus");
+        safeSeed(this::seedConfigs, "configs");
+    }
+
+    private void safeSeed(Runnable seeder, String label) {
+        try {
+            seeder.run();
+        } catch (DataAccessException ex) {
+            log.warn("Skip dev {} seeding: {}", label, ex.getMostSpecificCause().getMessage());
+        }
     }
 
     private boolean isDevProfile() {
@@ -78,16 +92,15 @@ public class DevDataSeeder {
         if (!datasetRepo.findAll().isEmpty()) {
             return;
         }
-        addDataset("ds-001", "客户主数据", "MDM", "部门共享客户主数据", "INTERNAL", 1L, true, 1200L);
-        addDataset("ds-002", "销售主题指标", "SalesMart", "销售指标日汇总", "SECRET", 1L, false, 2400L);
-        addDataset("ds-003", "供应链事件", "SupplyChain", "供应链状态实时事件", "INTERNAL", 1L, false, 3600L);
+        addDataset("ds-001", "客户主数据", "部门共享客户主数据", "INTERNAL", 1L, true, 1200L);
+        addDataset("ds-002", "销售主题指标", "销售指标日汇总", "SECRET", 1L, false, 2400L);
+        addDataset("ds-003", "供应链事件", "供应链状态实时事件", "INTERNAL", 1L, false, 3600L);
         log.info("Seeded default datasets");
     }
 
     private void addDataset(
         String code,
         String name,
-        String owner,
         String description,
         String level,
         Long ownerOrgId,
@@ -97,7 +110,6 @@ public class DevDataSeeder {
         AdminDataset d = new AdminDataset();
         d.setBusinessCode(code);
         d.setName(name);
-        d.setOwner(owner);
         d.setDescription(description);
         d.setDataLevel(level);
         d.setOwnerOrgId(ownerOrgId);

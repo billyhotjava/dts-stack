@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251002-02-catalog-dataset-job" author="codex">
+        <createTable tableName="catalog_dataset_job">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="dataset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="job_type" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="submitted_by" type="varchar(64)"/>
+            <column name="message" type="varchar(1024)"/>
+            <column name="started_at" type="timestamp"/>
+            <column name="finished_at" type="timestamp"/>
+            <column name="detail_payload" type="clob"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="catalog_dataset_job" baseColumnNames="dataset_id"
+                                  constraintName="fk_catalog_dataset_job_dataset"
+                                  referencedTableName="catalog_dataset" referencedColumnNames="id"/>
+        <createIndex indexName="idx_dataset_job_dataset" tableName="catalog_dataset_job">
+            <column name="dataset_id"/>
+        </createIndex>
+        <createIndex indexName="idx_dataset_job_created_date" tableName="catalog_dataset_job">
+            <column name="created_date"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

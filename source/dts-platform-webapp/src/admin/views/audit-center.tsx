@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { adminApi } from "@/admin/api/adminApi";
 import type { AuditEvent } from "@/admin/types";
 import { useAdminLocale } from "@/admin/lib/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -11,6 +10,9 @@ import { Text } from "@/ui/typography";
 import { Badge } from "@/ui/badge";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { AuditLogService } from "@/api/services/auditLogService";
+import { GLOBAL_CONFIG } from "@/global-config";
+import userStore from "@/store/userStore";
 
 interface FilterState {
 	from?: string;
@@ -18,7 +20,9 @@ interface FilterState {
 	actor?: string;
 	action?: string;
 	resource?: string;
-	outcome?: string;
+	result?: string;
+	module?: string;
+	clientIp?: string;
 }
 
 export default function AuditCenterView() {
@@ -28,28 +32,33 @@ export default function AuditCenterView() {
 		resource: tab === "login" ? "LOGIN" : undefined,
 	});
 
-	const queryParams = useMemo(() => filters, [filters]);
-	const { data = [], isLoading } = useQuery({
+	const queryParams = useMemo(() => buildQuery(filters), [filters]);
+	const { data = [], isLoading } = useQuery<AuditEvent[]>({
 		queryKey: ["admin", "audit", queryParams],
-		queryFn: () => adminApi.getAuditEvents(queryParams as Record<string, string>),
+		queryFn: async () => {
+			const response = await AuditLogService.getAuditLogs(0, 100, "occurredAt,desc", queryParams);
+			return response.content as AuditEvent[];
+		},
 	});
 
 	const handleExport = async (format: "csv" | "json") => {
-		const search = new URLSearchParams({ ...filters, format }).toString();
+		const params = { ...queryParams, format };
+		const query = new URLSearchParams(params).toString();
+		const url = buildExportUrl(query);
+		const token = resolveAccessToken();
 		try {
-			const response = await fetch(`/admin/audit/export?${search}`, {
-				credentials: "include",
+			const response = await fetch(url, {
+				headers: token ? { Authorization: `Bearer ${token}` } : undefined,
 			});
 			if (!response.ok) throw new Error("导出失败");
 			const blob = await response.blob();
-			const url = window.URL.createObjectURL(blob);
 			const link = document.createElement("a");
-			link.href = url;
+			link.href = window.URL.createObjectURL(blob);
 			link.download = `audit.${format}`;
 			document.body.appendChild(link);
 			link.click();
 			link.remove();
-			window.URL.revokeObjectURL(url);
+			window.URL.revokeObjectURL(link.href);
 		} catch (error) {
 			toast.error("导出失败，请稍后重试");
 		}
@@ -83,14 +92,24 @@ export default function AuditCenterView() {
 						onChange={(event) => setFilters((prev) => ({ ...prev, action: event.target.value }))}
 					/>
 					<Input
-						placeholder="资源"
+						placeholder="模块"
+						value={filters.module || ""}
+						onChange={(event) => setFilters((prev) => ({ ...prev, module: event.target.value }))}
+					/>
+					<Input
+						placeholder="资源关键字"
 						value={filters.resource || ""}
 						onChange={(event) => setFilters((prev) => ({ ...prev, resource: event.target.value }))}
 					/>
 					<Input
 						placeholder="结果 (SUCCESS/FAILURE)"
-						value={filters.outcome || ""}
-						onChange={(event) => setFilters((prev) => ({ ...prev, outcome: event.target.value }))}
+						value={filters.result || ""}
+						onChange={(event) => setFilters((prev) => ({ ...prev, result: event.target.value.toUpperCase() }))}
+					/>
+					<Input
+						placeholder="客户端 IP"
+						value={filters.clientIp || ""}
+						onChange={(event) => setFilters((prev) => ({ ...prev, clientIp: event.target.value }))}
 					/>
 					<div className="flex gap-3">
 						<Button type="button" variant="outline" onClick={() => setFilters({})}>
@@ -124,21 +143,87 @@ export default function AuditCenterView() {
 
 function AuditCard({ event }: { event: AuditEvent }) {
 	const { translateAction, translateOutcome } = useAdminLocale();
+	const occurredAt = useMemo(() => new Date(event.occurredAt).toLocaleString("zh-CN", { hour12: false }), [event.occurredAt]);
+	const resource = useMemo(
+		() => [event.resourceType, event.resourceId].filter(Boolean).join(" · ") || "--",
+		[event.resourceType, event.resourceId],
+	);
+	const requestLine = event.requestUri ? `${event.httpMethod || "GET"} ${event.requestUri}` : "";
 	return (
 		<div className="rounded-lg border bg-muted/40 p-3 text-sm">
 			<div className="flex flex-wrap items-center justify-between gap-2">
-				<span className="font-semibold">{translateAction(event.action, event.action || "--")}</span>
-				<Badge variant={event.outcome === "FAILURE" ? "destructive" : "outline"}>
-					{translateOutcome(event.outcome, event.outcome || "--")}
+				<span className="font-semibold">
+					{translateAction(event.action, event.action || "--")} · {event.module || "--"}
+				</span>
+				<Badge variant={event.result === "FAILURE" ? "destructive" : "outline"}>
+					{translateOutcome(event.result, event.result || "--")}
 				</Badge>
 			</div>
 			<Text variant="body3" className="text-muted-foreground">
-				{event.timestamp}
+				{occurredAt}
 			</Text>
 			<Text variant="body3" className="text-muted-foreground">
-				操作者：{event.actor || "--"} · 资源：{event.resource || "--"}
+				操作者：{event.actor || "--"} · 角色：{event.actorRole || "--"}
 			</Text>
-			{event.detailJson ? <Textarea readOnly value={event.detailJson} rows={3} className="mt-2" /> : null}
+			<Text variant="body3" className="text-muted-foreground">
+				目标：{resource}
+			</Text>
+			{requestLine ? (
+				<Text variant="body3" className="text-muted-foreground break-all">
+					请求：{requestLine}
+				</Text>
+			) : null}
+			{event.payloadPreview ? (
+				<Textarea readOnly value={event.payloadPreview} rows={3} className="mt-2" />
+			) : null}
 		</div>
 	);
+}
+
+function buildQuery(filters: FilterState): Record<string, string> {
+	const params: Record<string, string> = {};
+	if (filters.from) {
+		params.from = new Date(filters.from).toISOString();
+	}
+	if (filters.to) {
+		params.to = new Date(filters.to).toISOString();
+	}
+	if (filters.actor) {
+		params.actor = filters.actor;
+	}
+	if (filters.action) {
+		params.action = filters.action;
+	}
+	if (filters.module) {
+		params.module = filters.module;
+	}
+	if (filters.resource) {
+		params.resource = filters.resource;
+	}
+	if (filters.result) {
+		params.result = filters.result.toUpperCase();
+	}
+	if (filters.clientIp) {
+		params.clientIp = filters.clientIp;
+	}
+	return params;
+}
+
+function resolveAccessToken(): string {
+	const { userToken } = userStore.getState();
+	const raw = userToken?.accessToken;
+	if (!raw) {
+		return "";
+	}
+	const trimmed = String(raw).trim();
+	if (!trimmed) {
+		return "";
+	}
+	return trimmed.startsWith("Bearer ") ? trimmed.slice(7).trim() : trimmed;
+}
+
+function buildExportUrl(query: string): string {
+	const base = GLOBAL_CONFIG.apiBaseUrl?.trim() || "/api";
+	const normalized = base.endsWith("/") ? base.slice(0, -1) : base;
+	return `${normalized}/audit-logs/export${query ? `?${query}` : ""}`;
 }

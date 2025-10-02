@@ -1,12 +1,15 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.domain.catalog.*;
 import com.yuzhi.dts.platform.repository.catalog.*;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import jakarta.validation.Valid;
 import java.util.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +17,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/catalog")
@@ -33,6 +37,8 @@ public class CatalogResource {
     private final com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository columnRepo;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository rowFilterRepo;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository secureViewRepo;
+    private final InfraDataSourceRepository infraDataSourceRepository;
+    private final CatalogFeatureProperties catalogFeatures;
 
     public CatalogResource(
         CatalogDomainRepository domainRepo,
@@ -47,7 +53,9 @@ public class CatalogResource {
         com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository tableRepo,
         com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository columnRepo,
         com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository rowFilterRepo,
-        com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository secureViewRepo
+        com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository secureViewRepo,
+        InfraDataSourceRepository infraDataSourceRepository,
+        CatalogFeatureProperties catalogFeatures
     ) {
         this.domainRepo = domainRepo;
         this.datasetRepo = datasetRepo;
@@ -62,6 +70,19 @@ public class CatalogResource {
         this.columnRepo = columnRepo;
         this.rowFilterRepo = rowFilterRepo;
         this.secureViewRepo = secureViewRepo;
+        this.infraDataSourceRepository = infraDataSourceRepository;
+        this.catalogFeatures = catalogFeatures;
+    }
+
+    @GetMapping("/config")
+    public ApiResponse<Map<String, Object>> config() {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("multiSourceEnabled", catalogFeatures.isMultiSourceEnabled());
+        payload.put("defaultSourceType", defaultSourceType());
+        payload.put("hasPrimarySource", hasPrimarySourceConfigured());
+        payload.put("primarySourceType", defaultSourceType());
+        audit.audit("READ", "catalog.config", "config");
+        return ApiResponses.ok(payload);
     }
 
     @GetMapping("/summary")
@@ -363,6 +384,8 @@ public class CatalogResource {
     @PostMapping("/datasets")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
     public ApiResponse<CatalogDataset> createDataset(@Valid @RequestBody CatalogDataset dataset) {
+        applySourcePolicy(dataset);
+        ensurePrimarySourceIfRequired(dataset);
         CatalogDataset saved = datasetRepo.save(dataset);
         audit.audit("CREATE", "catalog.dataset", saved.getId().toString());
         return ApiResponses.ok(saved);
@@ -371,7 +394,13 @@ public class CatalogResource {
     @PostMapping("/datasets/import")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
     public ApiResponse<Map<String, Object>> importDatasets(@RequestBody List<CatalogDataset> items) {
-        List<CatalogDataset> saved = datasetRepo.saveAll(items);
+        List<CatalogDataset> prepared = new ArrayList<>(items.size());
+        for (CatalogDataset item : items) {
+            applySourcePolicy(item);
+            ensurePrimarySourceIfRequired(item);
+            prepared.add(item);
+        }
+        List<CatalogDataset> saved = datasetRepo.saveAll(prepared);
         audit.audit("CREATE", "catalog.dataset.import", "count=" + saved.size());
         return ApiResponses.ok(Map.of("imported", saved.size()));
     }
@@ -382,6 +411,8 @@ public class CatalogResource {
         CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
         existing.setName(patch.getName());
         existing.setType(patch.getType());
+        applySourcePolicy(existing);
+        ensurePrimarySourceIfRequired(existing);
         existing.setClassification(patch.getClassification());
         existing.setOwner(patch.getOwner());
         existing.setDomain(patch.getDomain());
@@ -401,6 +432,51 @@ public class CatalogResource {
         datasetRepo.deleteById(id);
         audit.audit("DELETE", "catalog.dataset", id.toString());
         return ApiResponses.ok(Boolean.TRUE);
+    }
+
+    private void applySourcePolicy(CatalogDataset dataset) {
+        String requested = Optional.ofNullable(dataset.getType()).map(String::trim).orElse("");
+        String defaultSource = defaultSourceType();
+        boolean multiSourceEnabled = catalogFeatures.isMultiSourceEnabled();
+
+        if (!multiSourceEnabled) {
+            if (!requested.isBlank() && !requested.equalsIgnoreCase(defaultSource)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "多数据源能力尚未解锁，请联系管理员升级");
+            }
+            dataset.setType(defaultSource);
+            return;
+        }
+
+        if (requested.isBlank()) {
+            dataset.setType(defaultSource);
+        } else {
+            dataset.setType(requested.toUpperCase(Locale.ROOT));
+        }
+    }
+
+    private void ensurePrimarySourceIfRequired(CatalogDataset dataset) {
+        if (isDefaultSource(dataset) && !hasPrimarySourceConfigured()) {
+            throw new ResponseStatusException(
+                HttpStatus.PRECONDITION_FAILED,
+                "未检测到星环 Hive 数据源，请先在“基础管理-数据源”中完成配置"
+            );
+        }
+    }
+
+    private boolean hasPrimarySourceConfigured() {
+        return infraDataSourceRepository.countByTypeIgnoreCase(defaultSourceType()) > 0;
+    }
+
+    private boolean isDefaultSource(CatalogDataset dataset) {
+        return Optional.ofNullable(dataset.getType()).map(String::trim).map(s -> s.equalsIgnoreCase(defaultSourceType())).orElse(false);
+    }
+
+    private String defaultSourceType() {
+        String configured = Optional.ofNullable(catalogFeatures.getDefaultSourceType()).map(String::trim).orElse("HIVE");
+        if (configured.isBlank()) {
+            return "HIVE";
+        }
+        return configured.toUpperCase(Locale.ROOT);
     }
 
     // Masking rules CRUD

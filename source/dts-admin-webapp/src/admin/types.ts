@@ -50,14 +50,21 @@ export interface ChangeRequest {
 
 export interface AuditEvent {
 	id: number;
-	timestamp: string;
+	occurredAt: string;
 	actor?: string;
-	actorRoles?: string;
-	ip?: string;
+	actorRole?: string;
+	module?: string;
 	action?: string;
-	resource?: string;
-	outcome?: string;
-	detailJson?: string;
+	resourceType?: string;
+	resourceId?: string;
+	clientIp?: string;
+	clientAgent?: string;
+	requestUri?: string;
+	httpMethod?: string;
+	result?: string;
+	latencyMs?: number;
+	extraTags?: string;
+	payloadPreview?: string;
 }
 
 export interface SystemConfigItem {

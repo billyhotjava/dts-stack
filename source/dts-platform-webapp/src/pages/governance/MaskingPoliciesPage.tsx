@@ -26,8 +26,8 @@ const MASKING_OPERATORS = [
 const CLASSIFICATION_LEVELS = [
 	{ value: "PUBLIC", label: "公开" },
 	{ value: "INTERNAL", label: "内部" },
-	{ value: "SECRET", label: "机密" },
-	{ value: "TOP_SECRET", label: "绝密" },
+	{ value: "SECRET", label: "秘密" },
+	{ value: "TOP_SECRET", label: "机密" },
 ] as const;
 
 type MaskingOperator = (typeof MASKING_OPERATORS)[number]["value"];

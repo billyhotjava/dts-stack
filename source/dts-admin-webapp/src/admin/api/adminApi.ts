@@ -5,7 +5,6 @@ import type {
 	AdminRoleDetail,
 	AdminUser,
 	AdminWhoami,
-	AuditEvent,
 	ChangeRequest,
 	CreateCustomRolePayload,
 	CreateRoleAssignmentPayload,
@@ -61,12 +60,6 @@ export const adminApi = {
 		apiClient.post<ChangeRequest>({
 			url: `/admin/change-requests/${id}/reject`,
 			data: { reason },
-		}),
-
-	getAuditEvents: (params: Record<string, string | undefined>) =>
-		apiClient.get<AuditEvent[]>({
-			url: "/admin/audit",
-			params,
 		}),
 
 	getSystemConfig: () =>

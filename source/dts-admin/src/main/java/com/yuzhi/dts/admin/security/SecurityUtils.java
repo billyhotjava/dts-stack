@@ -98,6 +98,14 @@ public final class SecurityUtils {
         return hasCurrentUserAnyOfAuthorities(authority);
     }
 
+    public static List<String> getCurrentUserAuthorities() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return List.of();
+        }
+        return getAuthorities(authentication).collect(Collectors.toList());
+    }
+
     private static Stream<String> getAuthorities(Authentication authentication) {
         Collection<? extends GrantedAuthority> authorities = authentication instanceof JwtAuthenticationToken
             ? extractAuthorityFromClaims(((JwtAuthenticationToken) authentication).getToken().getClaims())

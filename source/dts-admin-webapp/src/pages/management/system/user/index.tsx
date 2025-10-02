@@ -100,11 +100,11 @@ export default function UserPage() {
 				["DATA_PUBLIC", "公开"],
 				["DATA_INTERNAL", "内部"],
 				["DATA_SECRET", "秘密"],
-				["DATA_TOP_SECRET", "核心"],
+				["DATA_TOP_SECRET", "机密"],
 				["PUBLIC", "公开"],
 				["INTERNAL", "内部"],
 				["SECRET", "秘密"],
-				["TOP_SECRET", "核心"],
+				["TOP_SECRET", "机密"],
 			]),
 		[],
 	);

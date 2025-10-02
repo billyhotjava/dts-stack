@@ -31,8 +31,6 @@
             <column name="last_modified_date" type="timestamp"/>
         </createTable>
 
-        <addPrimaryKey tableName="portal_menu_visibility" columnNames="id" constraintName="pk_portal_menu_visibility"/>
-
         <addForeignKeyConstraint
             baseTableName="portal_menu_visibility"
             baseColumnNames="menu_id"

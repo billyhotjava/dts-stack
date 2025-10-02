@@ -21,9 +21,9 @@ import SensitiveNotice from "@/components/security/SensitiveNotice";
 
 function LevelBadge({ level }: { level: string }) {
 	const color =
-		level === "绝密"
+		level === "机密"
 			? "bg-rose-100 text-rose-700 border-rose-300"
-			: level === "机密"
+			: level === "秘密"
 				? "bg-red-100 text-red-700 border-red-300"
 				: level === "内部"
 					? "bg-amber-100 text-amber-800 border-amber-300"
@@ -302,8 +302,8 @@ export default function ApiServiceDetailPage() {
 											<SelectContent>
 												<SelectItem value="公开">公开</SelectItem>
 												<SelectItem value="内部">内部</SelectItem>
+												<SelectItem value="秘密">秘密</SelectItem>
 												<SelectItem value="机密">机密</SelectItem>
-												<SelectItem value="绝密">绝密</SelectItem>
 											</SelectContent>
 										</Select>
                                 <Button onClick={onTry} disabled={trying || !simIdentity}>

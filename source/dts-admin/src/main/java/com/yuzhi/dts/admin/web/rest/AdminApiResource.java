@@ -5,13 +5,9 @@ import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.web.rest.api.ResultStatus;
-import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.util.*;
 import java.util.stream.Collectors;
-import org.springframework.http.MediaType;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -131,94 +127,6 @@ public class AdminApiResource {
         this.notifyClient = notifyClient;
         this.organizationRepository = organizationRepository;
         this.adminUserService = adminUserService;
-    }
-
-    @GetMapping("/audit")
-    public ResponseEntity<ApiResponse<List<com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditEvent>>> listAudit(
-        @RequestParam(required = false) String actor,
-        @RequestParam(required = false, name = "person") String person,
-        @RequestParam(required = false) String action,
-        @RequestParam(required = false) String resource,
-        @RequestParam(required = false) String outcome,
-        @RequestParam(required = false) String targetType,
-        @RequestParam(required = false) String targetUri
-    ) {
-        String actorFilter = actor != null ? actor : person;
-        List<AdminAuditService.AuditEventView> events = auditService.list(actorFilter, module, action, outcome, resource, null, null, null);
-        if (StringUtils.hasText(targetType)) {
-            String normalized = targetType.toLowerCase(java.util.Locale.ROOT);
-            events = events
-                .stream()
-                .filter(e -> e.resourceType != null && e.resourceType.toLowerCase(java.util.Locale.ROOT).contains(normalized))
-                .toList();
-        }
-        events = filterAuditEventsByRole(events);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "AUDIT_LIST", "AUDIT", "query", "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(events));
-    }
-
-    @GetMapping(value = "/audit/export", produces = MediaType.TEXT_PLAIN_VALUE)
-    public void exportAudit(HttpServletResponse response) throws IOException {
-        String header = "id,timestamp,actor,action,resource,outcome\n";
-        StringBuilder sb = new StringBuilder(header);
-        for (AdminAuditService.AuditEventView e : auditService.list(null, null, null, null, null, null, null, null)) {
-                sb.append(e.id)
-                    .append(',')
-                    .append(Optional.ofNullable(e.occurredAt).orElse(Instant.EPOCH))
-                    .append(',')
-                    .append(Optional.ofNullable(e.actor).orElse(""))
-                    .append(',')
-                    .append(Optional.ofNullable(e.action).orElse(""))
-                    .append(',')
-                    .append(Optional.ofNullable(e.resourceId).orElse(""))
-                    .append(',')
-                    .append(Optional.ofNullable(e.result).orElse(""))
-                    .append('\n');
-        }
-        response.setContentType("text/csv");
-        response.getOutputStream().write(sb.toString().getBytes(StandardCharsets.UTF_8));
-    }
-
-    private List<AdminAuditService.AuditEventView> filterAuditEventsByRole(
-        List<AdminAuditService.AuditEventView> events
-    ) {
-        boolean isSysAdmin = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.SYS_ADMIN);
-        boolean isAuthAdmin = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.AUTH_ADMIN);
-        boolean isAuditAdmin = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.AUDITOR_ADMIN);
-
-        if (isSysAdmin || (!isAuthAdmin && !isAuditAdmin)) {
-            return events;
-        }
-
-        final java.util.Set<String> triad = java.util.Set.of("sysadmin", "authadmin", "auditadmin");
-        java.util.Set<String> allowedTriadActors = new java.util.HashSet<>();
-        boolean allowNonTriadActors = false;
-
-        if (isAuthAdmin) {
-            allowedTriadActors.add("sysadmin");
-            allowedTriadActors.add("auditadmin");
-        }
-        if (isAuditAdmin) {
-            allowedTriadActors.add("sysadmin");
-            allowedTriadActors.add("authadmin");
-            allowNonTriadActors = true;
-        }
-
-        final boolean allowNonTriadActorsFinal = allowNonTriadActors;
-
-        return events
-            .stream()
-            .filter(event -> {
-                String actor = event.actor == null ? "" : event.actor.trim().toLowerCase(java.util.Locale.ROOT);
-                if (actor.isEmpty()) {
-                    return allowNonTriadActorsFinal;
-                }
-                if (allowNonTriadActorsFinal && !triad.contains(actor)) {
-                    return true;
-                }
-                return allowedTriadActors.contains(actor);
-            })
-            .toList();
     }
 
     // --- Placeholders to align with adminApi ---

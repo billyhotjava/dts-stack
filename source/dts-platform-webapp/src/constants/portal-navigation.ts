@@ -130,17 +130,6 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 			{ key: "taskScheduling", path: "task-scheduling", titleKey: "sys.nav.portal.foundationTaskScheduling" },
 		],
 	},
-	{
-		key: "settings",
-		path: "settings",
-		icon: "solar:settings-bold-duotone",
-		titleKey: "sys.nav.portal.settings",
-		children: [
-			{ key: "profile", path: "profile", titleKey: "sys.nav.portal.settingsProfile" },
-			{ key: "notifications", path: "notifications", titleKey: "sys.nav.portal.settingsNotifications" },
-			{ key: "gateway", path: "gateway", titleKey: "sys.nav.portal.settingsGateway" },
-		],
-	},
 ];
 
 const firstSection = PORTAL_NAV_SECTIONS[0];

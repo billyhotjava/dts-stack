@@ -312,6 +312,8 @@
             <groupId>org.apache.hive</groupId>
             <artifactId>hive-jdbc</artifactId>
             <version>${hive-jdbc.version}</version>
+            <!-- Standalone classifier bundles shaded driver without Hadoop's legacy jdk.tools dependency -->
+            <classifier>standalone</classifier>
             <exclusions>
                 <exclusion>
                     <groupId>log4j</groupId>
@@ -320,6 +322,10 @@
                 <exclusion>
                     <groupId>org.slf4j</groupId>
                     <artifactId>slf4j-log4j12</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jdk.tools</groupId>
+                    <artifactId>jdk.tools</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>

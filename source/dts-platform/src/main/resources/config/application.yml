@@ -228,6 +228,14 @@ dts:
     base-url: http://dts-admin:8081
     api-path: /api
     admin-api-path: /api/admin
+  platform:
+    hive:
+      enabled: false
+      jdbc-url: jdbc:hive2://dts-hive:10000/default
+      username: ""
+      password: ""
+      tolerant: true
+      properties: {}
 
 # ===================================================================
 # JHipster specific properties

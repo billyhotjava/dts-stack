@@ -6,6 +6,8 @@ import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Text } from "@/ui/typography";
+import { GLOBAL_CONFIG } from "@/global-config";
+import userStore from "@/store/userStore";
 import { toast } from "sonner";
 
 interface FilterState {
@@ -79,13 +81,11 @@ export default function AuditCenterView() {
 		try {
 			setExporting(true);
 			const params = buildQuery(filters);
-			const query = new URLSearchParams({
-				...params,
-				page: page.toString(),
-				size: size.toString(),
-			}).toString();
-			const response = await fetch(`/api/audit-logs/export?${query}`, {
-				headers: { Authorization: `Bearer ${sessionStorage.getItem("access_token") ?? ""}` },
+			const query = new URLSearchParams(params).toString();
+			const exportUrl = buildExportUrl(query);
+			const token = resolveAccessToken();
+			const response = await fetch(exportUrl, {
+				headers: token ? { Authorization: `Bearer ${token}` } : undefined,
 			});
 			if (!response.ok) {
 				throw new Error(`导出失败: ${response.status}`);
@@ -99,7 +99,7 @@ export default function AuditCenterView() {
 		} finally {
 			setExporting(false);
 		}
-	}, [filters, page, size]);
+	}, [filters]);
 
 	const paginationText = useMemo(() => {
 		const from = page * size + 1;
@@ -184,8 +184,9 @@ export default function AuditCenterView() {
 						</Button>
 					</div>
 				</CardHeader>
-				<CardContent className="overflow-x-auto">
-					<table className="min-w-full table-fixed text-sm">
+				<CardContent className="overflow-hidden p-0">
+					<div className="overflow-x-auto">
+						<table className="w-full min-w-[960px] table-fixed text-sm">
 						<thead className="bg-muted/60">
 							<tr className="text-left">
 								<th className="px-4 py-3 font-medium">ID</th>
@@ -217,16 +218,16 @@ export default function AuditCenterView() {
 										<td className="px-4 py-3 text-sm">{formatDateTime(log.occurredAt)}</td>
 										<td className="px-4 py-3">{log.module}</td>
 										<td className="px-4 py-3 text-sm">
-											<div className="font-medium">{log.action}</div>
+											<div className="font-medium break-words">{log.action}</div>
 											{log.payloadPreview ? (
-												<div className="text-xs text-muted-foreground">{log.payloadPreview}</div>
+												<div className="text-xs text-muted-foreground break-words">{log.payloadPreview}</div>
 											) : null}
 										</td>
-										<td className="px-4 py-3 text-xs text-muted-foreground">
+										<td className="px-4 py-3 text-xs text-muted-foreground break-words">
 											<div>操作者：{formatOperatorName(log.actor)}</div>
 											<div>IP：{log.clientIp || "-"}</div>
 										</td>
-										<td className="px-4 py-3 text-xs text-muted-foreground">
+										<td className="px-4 py-3 text-xs text-muted-foreground break-words">
 											<div>{log.resourceType || "-"}</div>
 											<div>{log.resourceId || "-"}</div>
 										</td>
@@ -237,7 +238,8 @@ export default function AuditCenterView() {
 								))
 							)}
 						</tbody>
-					</table>
+						</table>
+					</div>
 				</CardContent>
 				<CardContent className="flex items-center justify-between pt-0">
 					<div className="text-sm text-muted-foreground">{paginationText}</div>
@@ -289,6 +291,25 @@ function buildQuery(filters: FilterState): Record<string, string> {
 		params.action = filters.action;
 	}
 	return params;
+}
+
+function resolveAccessToken(): string {
+	const { userToken } = userStore.getState();
+	const raw = userToken?.accessToken;
+	if (!raw) {
+		return "";
+	}
+	const trimmed = String(raw).trim();
+	if (!trimmed) {
+		return "";
+	}
+	return trimmed.startsWith("Bearer ") ? trimmed.slice(7).trim() : trimmed;
+}
+
+function buildExportUrl(query: string): string {
+	const base = GLOBAL_CONFIG.apiBaseUrl?.trim() || "/api";
+	const normalizedBase = base.endsWith("/") ? base.slice(0, -1) : base;
+	return `${normalizedBase}/audit-logs/export${query ? `?${query}` : ""}`;
 }
 
 function formatDateTime(value: string) {
@@ -374,22 +395,6 @@ function SelectField({ label, value, onChange, options }: SelectProps) {
 			</select>
 		</div>
 	);
-}
-
-function buildAuthHeader(): string {
-	const store = localStorage.getItem("userStore");
-	if (store) {
-		try {
-			const parsed = JSON.parse(store);
-			const token = parsed?.userToken?.accessToken;
-			if (token) {
-				return `Bearer ${token}`;
-			}
-		} catch (error) {
-			console.warn("Failed to parse userStore for audit export", error);
-		}
-	}
-	return "";
 }
 
 function downloadBlob(blob: Blob, filename: string) {

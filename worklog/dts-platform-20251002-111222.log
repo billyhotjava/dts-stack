@@ -75,3 +75,15 @@
 - 数据持久化在 Postgres，保留至少 6 个月；支持界面导出（按筛选条件），实时刷新、分页排序展示即可，无需全文检索或趋势分析。
 - 安全要求：日志加密存储、防篡改；仅内部界面访问，无对外接口。授权管理员重点审计系统管理员/安全审计员，安全审计员覆盖业务用户及其他管理员。
 - dts-common 审计接口需启用并具备定时重试/批量上报逻辑以应对写入失败；每日约 5 万条日志，可考虑异步缓冲削峰。
+[数据资产模块迭代任务]
+- 资产目录：梳理数据集元数据模型、落库字段展示需求，规划目录导航与筛选交互，并在 `AssetResource` / `DatasetService` 暴露检索接口供前端消费。
+- 分级保护与访问策略：对接 IAM/密级模型，设计策略配置（分级、角色、权限、访问策略）与审批链路，完善 `PolicyResource`、策略实体与前端表单。
+- 安全视图编排：扩展 `SecurityViewService` 生成安全视图 SQL 并自动推送到 Hive，同时与 IAM 策略关联，提供执行状态监控与回滚能力。
+- 共性要求：核心 API 全量审计（成功/失败），数据集 schema 同步改造为异步任务并补充任务状态查询接口，前端详情页补充数据集→IAM 策略跳转链接。
+
+[20251005 数据资产默认数据源管控]
+- 新增 `CatalogFeatureProperties` 配置（`dts.platform.catalog.*`），默认关闭多数据源，仅允许 HIVE/星环 Inceptor；`/api/catalog/config` 暴露多源开关、默认类型及默认源是否已配置。
+- `CatalogResource` 保存数据集前调用 `applySourcePolicy` 与 `ensurePrimarySourceIfRequired`：在多源未解锁时强制类型写死为 HIVE，并在缺少默认数据源时直接抛出 `412 PRECONDITION_FAILED` 引导用户前往“基础管理-数据源”补齐；当请求指定非 HIVE 类型而多源未开时返回 `403` 说明需升级付费。
+- `InfraDataSourceRepository` 增加 `countByTypeIgnoreCase`，用于快速判断默认数据源是否存在，避免硬编码 HQL；`CatalogResource` 导入、更新路径同样复用校验逻辑，保证批量导入不会绕过约束。
+- 前端 `DatasetsPage` 拉取 `/catalog/config` 与 `/infra/data-sources`，在列表顶部展示“默认来源：星环 Hive(Inceptor)”标签并在缺省数据源时弹出红色提醒；新建按钮、导入逻辑在未配置默认源时阻塞并提示。
+- 数据集新建表单默认隐藏多源选择，仅保留星环 Hive 输入项；通过 Alt+Shift+M 或双击“来源类型”标签触发隐藏开关进入试用模式，但未真正授权时仍提示“提交需管理员确认”。创建/导入请求补齐 `type/hiveDatabase/hiveTable` 字段以匹配后端新校验。

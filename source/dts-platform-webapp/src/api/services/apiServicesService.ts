@@ -10,7 +10,7 @@ export interface ApiServiceSummary {
 	dataset: string; // 绑定数据集/视图
 	method: ApiHttpMethod;
 	path: string;
-	classification: string; // 最低密级（公开/内部/机密/绝密 等）
+	classification: string; // 最低密级（公开/内部/秘密/机密）
 	qps: number; // 当前QPS
 	qpsLimit: number; // 上限QPS
 	dailyLimit: number; // 日调用上限
@@ -61,7 +61,7 @@ export interface TryInvokeResponse {
 
 export interface ApiMetricsResponse {
 	series: { timestamp: number; calls: number; qps: number }[];
-	levelDistribution: { label: string; value: number }[]; // 公开/内部/机密/绝密
+	levelDistribution: { label: string; value: number }[]; // 公开/内部/秘密/机密
 	recentCalls: { user: string; level: string; rowCount: number; policy: string }[];
 }
 

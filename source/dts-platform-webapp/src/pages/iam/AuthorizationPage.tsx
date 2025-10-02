@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -162,6 +163,8 @@ function RowConditionsTable({ data }: { data: DatasetPoliciesResponse["rowCondit
 }
 
 export default function AuthorizationPage() {
+	const [searchParams] = useSearchParams();
+	const datasetIdFromQuery = searchParams.get("datasetId");
 	const [tab, setTab] = useState<"object" | "subject">("object");
 	const [tree, setTree] = useState<DomainNode[]>([]);
 	const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
@@ -197,9 +200,18 @@ export default function AuthorizationPage() {
 		void policyApi.getDomainDatasetTree().then((nodes) => {
 			setTree(nodes);
 			const first = nodes[0]?.datasets?.[0];
+			if (datasetIdFromQuery) {
+				const matched = nodes
+					.flatMap((node) => node.datasets || [])
+					.find((ds) => ds.id === datasetIdFromQuery);
+				if (matched) {
+					setSelectedDatasetId(datasetIdFromQuery);
+					return;
+				}
+			}
 			if (first) setSelectedDatasetId(first.id);
 		});
-	}, []);
+	}, [datasetIdFromQuery]);
 
 	useEffect(() => {
 		if (!selectedDatasetId) return;

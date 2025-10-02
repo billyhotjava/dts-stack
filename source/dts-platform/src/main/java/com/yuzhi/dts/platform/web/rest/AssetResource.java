@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetJob;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
@@ -9,12 +10,13 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.DatasetJobService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.validation.Valid;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -34,6 +36,7 @@ public class AssetResource {
     private final CatalogMaskingRuleRepository maskingRepo;
     private final AccessChecker accessChecker;
     private final AuditService audit;
+    private final DatasetJobService datasetJobService;
 
     public AssetResource(
         CatalogDatasetRepository datasetRepo,
@@ -42,7 +45,8 @@ public class AssetResource {
         CatalogRowFilterRuleRepository rowFilterRepo,
         CatalogMaskingRuleRepository maskingRepo,
         AccessChecker accessChecker,
-        AuditService audit
+        AuditService audit,
+        DatasetJobService datasetJobService
     ) {
         this.datasetRepo = datasetRepo;
         this.tableRepo = tableRepo;
@@ -51,6 +55,7 @@ public class AssetResource {
         this.maskingRepo = maskingRepo;
         this.accessChecker = accessChecker;
         this.audit = audit;
+        this.datasetJobService = datasetJobService;
     }
 
     /**
@@ -60,53 +65,34 @@ public class AssetResource {
     @PostMapping("/datasets/{id}/sync-schema")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
     public ApiResponse<Map<String, Object>> syncSchema(@PathVariable UUID id, @RequestBody(required = false) Map<String, Object> body) {
-        CatalogDataset ds = datasetRepo.findById(id).orElseThrow();
-        // If already has tables, do nothing (idempotent MVP)
-        List<CatalogTableSchema> existing = tableRepo.findByDataset(ds);
-        int importedTables = 0;
-        int importedColumns = 0;
-        if (existing.isEmpty()) {
-            CatalogTableSchema table = new CatalogTableSchema();
-            table.setDataset(ds);
-            String name = (ds.getHiveTable() != null && !ds.getHiveTable().isBlank()) ? ds.getHiveTable() : ds.getName();
-            table.setName(name);
-            CatalogTableSchema saved = tableRepo.save(table);
-            importedTables++;
-
-            // create example columns, or from body.columns if provided
-            List<Map<String, Object>> cols;
-            Object colsObj = body != null ? body.get("columns") : null;
-            if (colsObj instanceof List<?>) {
-                cols = ((List<?>) colsObj)
-                    .stream()
-                    .filter(Map.class::isInstance)
-                    .map(m -> (Map<String, Object>) m)
-                    .collect(Collectors.toList());
-            } else {
-                cols = List.of(
-                    Map.of("name", "id", "dataType", "string", "nullable", false),
-                    Map.of("name", "name", "dataType", "string", "nullable", true),
-                    Map.of("name", "email", "dataType", "string", "nullable", true),
-                    Map.of("name", "created_at", "dataType", "timestamp", "nullable", true),
-                    Map.of("name", "level", "dataType", "string", "nullable", true)
-                );
-            }
-            for (Map<String, Object> c : cols) {
-                CatalogColumnSchema col = new CatalogColumnSchema();
-                col.setTable(saved);
-                col.setName(Objects.toString(c.get("name"), null));
-                col.setDataType(Objects.toString(c.get("dataType"), "string"));
-                Object nullable = c.get("nullable");
-                col.setNullable(nullable == null || Boolean.parseBoolean(String.valueOf(nullable)));
-                col.setTags(Objects.toString(c.get("tags"), null));
-                col.setSensitiveTags(Objects.toString(c.get("sensitiveTags"), null));
-                columnRepo.save(col);
-                importedColumns++;
-            }
+        try {
+            CatalogDatasetJob job = datasetJobService.submitSchemaSync(id, body != null ? body : Map.of(), SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
+            audit.audit("SUBMIT", "dataset.schema", id + ":job=" + job.getId());
+            return ApiResponses.ok(Map.of("job", datasetJobService.toDto(job)));
+        } catch (RuntimeException ex) {
+            audit.audit("ERROR", "dataset.schema", id + ":" + sanitize(ex.getMessage()));
+            throw ex;
         }
-        Map<String, Object> resp = Map.of("tables", importedTables, "columns", importedColumns);
-        audit.audit("SYNC", "dataset.schema", id.toString());
-        return ApiResponses.ok(resp);
+    }
+
+    @GetMapping("/dataset-jobs/{jobId}")
+    public ApiResponse<Map<String, Object>> getJob(@PathVariable UUID jobId) {
+        CatalogDatasetJob job = datasetJobService
+            .findJob(jobId)
+            .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "job not found"));
+        audit.audit("READ", "dataset.job", jobId.toString());
+        return ApiResponses.ok(datasetJobService.toDto(job));
+    }
+
+    @GetMapping("/datasets/{id}/jobs")
+    public ApiResponse<List<Map<String, Object>>> recentJobs(@PathVariable UUID id) {
+        List<Map<String, Object>> jobs = datasetJobService
+            .recentJobs(id)
+            .stream()
+            .map(datasetJobService::toDto)
+            .toList();
+        audit.audit("READ", "dataset.job.list", id.toString());
+        return ApiResponses.ok(jobs);
     }
 
     /**
@@ -172,5 +158,13 @@ public class AssetResource {
             case "partial" -> value.length() <= 2 ? "*".repeat(value.length()) : value.charAt(0) + "***" + value.charAt(value.length() - 1);
             default -> value;
         };
+    }
+
+    private String sanitize(String message) {
+        if (message == null) {
+            return "";
+        }
+        String cleaned = message.replaceAll("\n", " ").trim();
+        return cleaned.length() > 160 ? cleaned.substring(0, 160) : cleaned;
     }
 }

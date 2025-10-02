@@ -16,11 +16,12 @@ import { Chart } from "@/components/chart/chart";
 import { useChart } from "@/components/chart/useChart";
 import SensitiveNotice from "@/components/security/SensitiveNotice";
 
+
 function LevelBadge({ level }: { level: string }) {
 	const color =
-		level === "绝密"
+		level === "机密"
 			? "bg-rose-100 text-rose-700 border-rose-300"
-			: level === "机密"
+			: level === "秘密"
 				? "bg-red-100 text-red-700 border-red-300"
 				: level === "内部"
 					? "bg-amber-100 text-amber-800 border-amber-300"

@@ -9,7 +9,9 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.DatasetJobService;
 import com.yuzhi.dts.platform.service.security.SecurityViewService;
 import java.util.*;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,6 +32,7 @@ public class PolicyResource {
     private final CatalogMaskingRuleRepository maskRepo;
     private final CatalogSecureViewRepository viewRepo;
     private final SecurityViewService securityViewService;
+    private final DatasetJobService datasetJobService;
     private final AuditService audit;
 
     public PolicyResource(
@@ -39,6 +42,7 @@ public class PolicyResource {
         CatalogMaskingRuleRepository maskRepo,
         CatalogSecureViewRepository viewRepo,
         SecurityViewService securityViewService,
+        DatasetJobService datasetJobService,
         AuditService audit
     ) {
         this.datasetRepo = datasetRepo;
@@ -47,6 +51,7 @@ public class PolicyResource {
         this.maskRepo = maskRepo;
         this.viewRepo = viewRepo;
         this.securityViewService = securityViewService;
+        this.datasetJobService = datasetJobService;
         this.audit = audit;
     }
 
@@ -84,25 +89,16 @@ public class PolicyResource {
     @PostMapping("/policy/{datasetId}/apply")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
     public ApiResponse<Map<String, Object>> apply(@PathVariable UUID datasetId, @RequestBody(required = false) Map<String, Object> body) {
-        CatalogDataset ds = datasetRepo.findById(datasetId).orElseThrow();
-        CatalogAccessPolicy p = policyRepo.findByDataset(ds).orElse(null);
-        Map<String, String> sqls = securityViewService.previewViews(ds, p);
-        List<CatalogSecureView> toSave = new ArrayList<>();
-        for (String key : sqls.keySet()) {
-            if (!key.startsWith("sv_")) continue; // skip grants
-            CatalogSecureView v = new CatalogSecureView();
-            v.setDataset(ds);
-            v.setViewName(key);
-            v.setLevel(
-                key.endsWith("_public") ? "PUBLIC" : key.endsWith("_internal") ? "INTERNAL" : key.endsWith("_secret") ? "SECRET" : "TOP_SECRET"
-            );
-            v.setRefresh(Objects.toString(body != null ? body.get("refresh") : null, "NONE"));
-            v.setRowFilter(p != null ? p.getRowFilter() : null);
-            toSave.add(v);
+        Map<String, Object> requestBody = body != null ? body : Map.of();
+        String refresh = Objects.toString(requestBody.getOrDefault("refresh", "NONE"));
+        try {
+            var job = datasetJobService.submitPolicyApply(datasetId, refresh, requestBody, SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
+            audit.audit("SUBMIT", "policy.apply", datasetId + ":job=" + job.getId());
+            return ApiResponses.ok(Map.of("job", datasetJobService.toDto(job)));
+        } catch (RuntimeException ex) {
+            audit.audit("ERROR", "policy.apply", datasetId + ":" + sanitize(ex.getMessage()));
+            throw ex;
         }
-        viewRepo.saveAll(toSave);
-        audit.audit("APPLY", "policy.views", String.valueOf(datasetId));
-        return ApiResponses.ok(Map.of("generated", toSave.size(), "statements", sqls));
     }
 
     /**
@@ -115,10 +111,22 @@ public class PolicyResource {
         CatalogSecureView v = viewRepo.findById(id).orElseThrow();
         CatalogDataset ds = v.getDataset();
         CatalogAccessPolicy p = policyRepo.findByDataset(ds).orElse(null);
-        Map<String, String> sqls = securityViewService.previewViews(ds, p);
-        String stmt = sqls.getOrDefault(v.getViewName(), null);
-        audit.audit("REBUILD", "policy.view", id.toString());
-        return ApiResponses.ok(Map.of("view", v.getViewName(), "statement", stmt));
+        try {
+            Map<String, String> sqls = securityViewService.previewViews(ds, p);
+            String stmt = sqls.getOrDefault(v.getViewName(), null);
+            audit.audit("REBUILD", "policy.view", id.toString());
+            return ApiResponses.ok(Map.of("view", v.getViewName(), "statement", stmt));
+        } catch (RuntimeException ex) {
+            audit.audit("ERROR", "policy.view", id + ":" + sanitize(ex.getMessage()));
+            throw ex;
+        }
+    }
+
+    private String sanitize(String message) {
+        if (message == null) {
+            return "";
+        }
+        String cleaned = message.replaceAll("\n", " ").trim();
+        return cleaned.length() > 160 ? cleaned.substring(0, 160) : cleaned;
     }
 }
-

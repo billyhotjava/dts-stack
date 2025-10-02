@@ -6,5 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface InfraDataSourceRepository extends JpaRepository<InfraDataSource, UUID> {}
-
+public interface InfraDataSourceRepository extends JpaRepository<InfraDataSource, UUID> {
+    long countByTypeIgnoreCase(String type);
+}

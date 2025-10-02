@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "@/routes/hooks";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -7,14 +7,16 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Textarea } from "@/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { toast } from "sonner";
-import { createDataset, deleteDataset, listDatasets } from "@/api/platformApi";
+import { createDataset, deleteDataset, getCatalogConfig, listDatasets } from "@/api/platformApi";
+import { listInfraDataSources } from "@/api/services/infraService";
 
 const SECURITY_LEVELS = [
 	{ value: "PUBLIC", label: "公开" },
 	{ value: "INTERNAL", label: "内部" },
 	{ value: "SECRET", label: "秘密" },
-	{ value: "TOP_SECRET", label: "核心" },
+	{ value: "TOP_SECRET", label: "机密" },
 ] as const;
 
 type SecurityLevel = (typeof SECURITY_LEVELS)[number]["value"];
@@ -50,26 +52,95 @@ export default function DatasetsPage() {
 		hiveDatabase: "",
 		hiveTable: "",
 	});
+	const [catalogConfig, setCatalogConfig] = useState({
+		multiSourceEnabled: false,
+		defaultSourceType: "HIVE",
+		hasPrimarySource: true,
+		primarySourceType: "HIVE",
+	});
+	const [dataSources, setDataSources] = useState<any[]>([]);
+	const [multiSourceUnlocked, setMultiSourceUnlocked] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 
 	const levels = SECURITY_LEVELS;
+	const resolvedDefaultSource = useMemo(
+		() => (catalogConfig.defaultSourceType || "HIVE").toUpperCase(),
+		[catalogConfig.defaultSourceType],
+	);
+	const primarySourceLabel = useMemo(
+		() => (catalogConfig.primarySourceType || resolvedDefaultSource).toUpperCase(),
+		[catalogConfig.primarySourceType, resolvedDefaultSource],
+	);
+	const multiSourceAllowed = catalogConfig.multiSourceEnabled || multiSourceUnlocked;
+	const hasPrimarySource = useMemo(() => {
+		if (catalogConfig.hasPrimarySource) return true;
+		return dataSources.some((ds) => String(ds?.type || "").toUpperCase() === resolvedDefaultSource);
+	}, [catalogConfig.hasPrimarySource, dataSources, resolvedDefaultSource]);
 
-	const sources = useMemo(() => Array.from(new Set(items.map((it) => it.type))), [items]);
+	const sources = useMemo(() => {
+		const set = new Set<string>();
+		items.forEach((it) => {
+			const t = String(it.type || "").toUpperCase();
+			if (t) set.add(t);
+		});
+		set.add(resolvedDefaultSource);
+		return Array.from(set);
+	}, [items, resolvedDefaultSource]);
+
+	const renderSourceLabel = (value: string) => {
+		const upper = (value || "").toString().toUpperCase();
+		switch (upper) {
+			case "HIVE":
+				return "星环 Hive (Inceptor)";
+			case "TRINO":
+				return "Trino Catalog";
+			case "API":
+				return "API 服务";
+			case "EXTERNAL":
+				return "外部数据";
+			default:
+				return upper || "-";
+		}
+	};
+
+	const toggleSecretMultiSource = useCallback(() => {
+		setMultiSourceUnlocked((prev) => {
+			const next = !prev;
+			if (next) {
+				toast.info("多数据源选项已解锁（提交仍需正式授权）");
+			} else {
+				toast.success("已恢复单数据源视图");
+			}
+			return next;
+		});
+	}, []);
 
 	const fetchList = async () => {
 		setLoading(true);
 		try {
 			const resp = (await listDatasets({ page, size, keyword })) as any;
 			const content = (resp && resp.content) || [];
-			const mapped: ListItem[] = content.map((it: any) => ({
-				id: String(it.id),
-				name: it.name,
-				owner: it.owner || "",
-				classification: (it.classification || "INTERNAL") as SecurityLevel,
-				domainId: String(it.domainId || ""),
-				type: String(it.type || "") || "EXTERNAL",
-				tags: it.tags || [],
-			}));
+			const mapped: ListItem[] = content.map((it: any) => {
+				const rawType = String(it.type || "").trim().toUpperCase();
+				const rawTags = it.tags;
+				const tags: string[] = Array.isArray(rawTags)
+					? rawTags
+					: typeof rawTags === "string" && rawTags.length > 0
+					? rawTags
+							.split(/[;,\s]+/)
+							.map((s: string) => s.trim())
+							.filter(Boolean)
+					: [];
+				return {
+					id: String(it.id),
+					name: it.name,
+					owner: it.owner || "",
+					classification: (it.classification || "INTERNAL") as SecurityLevel,
+					domainId: String(it.domainId || ""),
+					type: rawType || resolvedDefaultSource,
+					tags,
+				};
+			});
 			setItems(mapped);
 			setTotal(Number(resp?.total || mapped.length));
 		} catch (e) {
@@ -81,13 +152,56 @@ export default function DatasetsPage() {
 	};
 
 	useEffect(() => {
+		const loadBasics = async () => {
+			try {
+				const cfg = (await getCatalogConfig()) as any;
+				if (cfg) {
+					setCatalogConfig({
+						multiSourceEnabled: Boolean(cfg.multiSourceEnabled),
+						defaultSourceType: String(cfg.defaultSourceType || "HIVE"),
+						hasPrimarySource: Boolean(cfg.hasPrimarySource),
+						primarySourceType: String(cfg.primarySourceType || "HIVE"),
+					});
+				}
+			} catch (e) {
+				console.warn("加载数据目录配置失败", e);
+			}
+			try {
+				const ds = (await listInfraDataSources()) as any[];
+				if (Array.isArray(ds)) {
+					setDataSources(ds);
+				}
+			} catch (e) {
+				console.warn("加载数据源信息失败", e);
+			}
+		};
+		void loadBasics();
+	}, []);
+
+	useEffect(() => {
 		void fetchList();
-	}, [page, size]);
+	}, [page, size, resolvedDefaultSource]);
+
+	useEffect(() => {
+		const handler = (event: KeyboardEvent) => {
+			if (event.altKey && event.shiftKey && (event.key === "M" || event.key === "m")) {
+				toggleSecretMultiSource();
+			}
+		};
+		window.addEventListener("keydown", handler);
+		return () => window.removeEventListener("keydown", handler);
+	}, [toggleSecretMultiSource]);
+
+	useEffect(() => {
+		if (!multiSourceAllowed) {
+			setForm((prev) => (prev.sourceType === resolvedDefaultSource ? prev : { ...prev, sourceType: resolvedDefaultSource }));
+		}
+	}, [multiSourceAllowed, resolvedDefaultSource]);
 
 	const filtered = useMemo(() => {
 		return items.filter((it) => {
 			if (levelFilter !== "all" && it.classification !== levelFilter) return false;
-			if (sourceFilter !== "all" && it.type !== sourceFilter) return false;
+			if (sourceFilter !== "all" && it.type.toUpperCase() !== sourceFilter) return false;
 			if (keyword && !it.name.toLowerCase().includes(keyword.toLowerCase())) return false;
 			return true;
 		});
@@ -96,24 +210,35 @@ export default function DatasetsPage() {
 	const totalPages = useMemo(() => Math.max(1, Math.ceil(total / size)), [total, size]);
 
 	const onCreate = async () => {
+		if (!hasPrimarySource) {
+			toast.error("请先在基础管理中完善默认数据源连接");
+			return;
+		}
 		if (!form.name.trim()) {
 			toast.error("请填写数据集名称");
 			return;
 		}
 		try {
+			const selectedSourceType = (multiSourceAllowed ? form.sourceType : resolvedDefaultSource) || resolvedDefaultSource;
+			const tagsList = form.tags
+				.split(",")
+				.map((s) => s.trim())
+				.filter(Boolean);
+			const hiveDatabase = form.hiveDatabase.trim();
+			const hiveTable = form.hiveTable.trim();
 			const payload = {
 				name: form.name.trim(),
 				owner: form.owner.trim(),
 				classification: form.classification,
-				tags: form.tags
-					.split(",")
-					.map((s) => s.trim())
-					.filter(Boolean),
+				tags: tagsList,
 				description: form.description.trim(),
+				type: selectedSourceType,
+				hiveDatabase: selectedSourceType === "HIVE" ? hiveDatabase || undefined : undefined,
+				hiveTable: selectedSourceType === "HIVE" ? hiveTable || undefined : undefined,
 				source: {
-					sourceType: form.sourceType,
-					hiveDatabase: form.hiveDatabase || undefined,
-					hiveTable: form.hiveTable || undefined,
+					sourceType: selectedSourceType,
+					hiveDatabase: selectedSourceType === "HIVE" ? hiveDatabase || undefined : undefined,
+					hiveTable: selectedSourceType === "HIVE" ? hiveTable || undefined : undefined,
 				},
 				exposure: ["VIEW"],
 			};
@@ -141,6 +266,10 @@ export default function DatasetsPage() {
 	};
 
 	const onImport = async (file: File) => {
+		if (!hasPrimarySource) {
+			toast.error("请先配置默认数据源，再尝试导入");
+			return;
+		}
 		const text = await file.text();
 		let rows: any[] = [];
 		try {
@@ -164,6 +293,8 @@ export default function DatasetsPage() {
 		let ok = 0;
 		for (const r of rows) {
 			try {
+				const candidate = String((r.sourceType || "").toString().trim() || "").toUpperCase();
+				const sourceType = multiSourceAllowed && candidate ? candidate : resolvedDefaultSource;
 				await createDataset({
 					name: r.name,
 					owner: r.owner || "",
@@ -175,7 +306,10 @@ export default function DatasetsPage() {
 									.map((s: string) => s.trim())
 									.filter(Boolean)
 							: [],
-					source: { sourceType: (r.sourceType || "EXTERNAL") as any },
+					type: sourceType,
+					hiveDatabase: sourceType === "HIVE" ? r.hiveDatabase || undefined : undefined,
+					hiveTable: sourceType === "HIVE" ? r.hiveTable || undefined : undefined,
+					source: { sourceType },
 					exposure: ["VIEW"],
 				});
 				ok += 1;
@@ -189,7 +323,12 @@ export default function DatasetsPage() {
 		<div className="space-y-4">
 			<Card>
 				<CardHeader className="flex flex-wrap items-center justify-between gap-2">
-					<CardTitle className="text-base">数据资产目录</CardTitle>
+					<CardTitle className="flex items-center gap-2 text-base">
+						数据资产目录
+						<span className="rounded bg-muted px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
+							默认来源：{renderSourceLabel(primarySourceLabel)}
+						</span>
+					</CardTitle>
 					<div className="flex flex-wrap items-center gap-2">
 						<Input
 							placeholder="搜索数据集名"
@@ -211,7 +350,7 @@ export default function DatasetsPage() {
 								))}
 							</SelectContent>
 						</Select>
-						<Select value={sourceFilter} onValueChange={setSourceFilter}>
+						<Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v)}>
 							<SelectTrigger className="w-[140px]">
 								<SelectValue placeholder="来源" />
 							</SelectTrigger>
@@ -219,7 +358,7 @@ export default function DatasetsPage() {
 								<SelectItem value="all">全部来源</SelectItem>
 								{sources.map((s) => (
 									<SelectItem key={s} value={s}>
-										{s}
+										{renderSourceLabel(s)}
 									</SelectItem>
 								))}
 							</SelectContent>
@@ -241,10 +380,28 @@ export default function DatasetsPage() {
 						<Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
 							批量导入
 						</Button>
-						<Button onClick={() => setOpen(true)}>新建</Button>
+						<Button
+							onClick={() => {
+								if (!hasPrimarySource) {
+									toast.error("请先配置默认数据源");
+									return;
+								}
+								setOpen(true);
+							}}
+						>
+							新建
+						</Button>
 					</div>
 				</CardHeader>
 				<CardContent className="space-y-3">
+					{!hasPrimarySource && (
+						<Alert variant="destructive">
+							<AlertTitle>缺少默认数据源</AlertTitle>
+							<AlertDescription>
+								未检测到 {renderSourceLabel(primarySourceLabel)} 连接，请前往「基础管理 - 数据源」完成配置后再新建或导入数据集。
+							</AlertDescription>
+						</Alert>
+					)}
 					<div className="overflow-hidden rounded-md border">
 						<table className="w-full min-w-[920px] table-fixed text-sm">
 							<thead className="bg-muted/50">
@@ -266,7 +423,7 @@ export default function DatasetsPage() {
 										<td className="px-3 py-2 text-xs">
 											{SECURITY_LEVELS.find((l) => l.value === d.classification)?.label}
 										</td>
-										<td className="px-3 py-2 text-xs">{d.type}</td>
+									<td className="px-3 py-2 text-xs">{renderSourceLabel(d.type)}</td>
 										<td className="px-3 py-2 space-x-1">
 											<Button variant="ghost" size="sm" onClick={() => router.push(`/catalog/datasets/${d.id}`)}>
 												编辑
@@ -357,18 +514,47 @@ export default function DatasetsPage() {
 							/>
 						</div>
 						<div className="grid gap-2">
-							<Label>来源类型</Label>
-							<Select value={form.sourceType} onValueChange={(v) => setForm((f) => ({ ...f, sourceType: v }))}>
+							<Label
+								onDoubleClick={toggleSecretMultiSource}
+								className="select-none"
+								title="双击尝试解锁多源能力"
+							>
+								来源类型
+							</Label>
+							{!multiSourceAllowed && (
+								<p className="text-xs text-muted-foreground">
+									当前版本默认接入 {renderSourceLabel(primarySourceLabel)}。如需多数据源，请联系商务升级。
+								</p>
+							)}
+							<Select
+								value={form.sourceType}
+								onValueChange={(v) => setForm((f) => ({ ...f, sourceType: v.toUpperCase() }))}
+								disabled={!multiSourceAllowed}
+							>
 								<SelectTrigger>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="HIVE">HIVE</SelectItem>
-									<SelectItem value="TRINO">TRINO</SelectItem>
-									<SelectItem value="API">API</SelectItem>
-									<SelectItem value="EXTERNAL">EXTERNAL</SelectItem>
+									<SelectItem value={resolvedDefaultSource}>
+										{renderSourceLabel(resolvedDefaultSource)}
+									</SelectItem>
+									{multiSourceAllowed &&
+										["TRINO", "API", "EXTERNAL"]
+											.filter((option) => option !== resolvedDefaultSource)
+											.map((option) => (
+												<SelectItem key={option} value={option}>
+													{renderSourceLabel(option)}
+												</SelectItem>
+											))}
 								</SelectContent>
 							</Select>
+							{multiSourceUnlocked && !catalogConfig.multiSourceEnabled && (
+								<Alert className="mt-2 bg-muted/40 py-2">
+									<AlertDescription className="text-xs">
+										多数据源为高级功能，提交后仍需管理员确认授权。
+									</AlertDescription>
+								</Alert>
+							)}
 						</div>
 						{form.sourceType === "HIVE" && (
 							<div className="grid grid-cols-2 gap-3">

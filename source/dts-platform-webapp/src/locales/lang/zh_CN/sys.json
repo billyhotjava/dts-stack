@@ -340,7 +340,7 @@
     "DATA_INTERNAL": "内部",
     "DATA_SECRET": "秘密",
     "DATA_TOP_SECRET": "机密",
-    "TOP_SECRET": "绝密",
+    "TOP_SECRET": "机密",
     "SECRET": "机密",
     "NORMAL": "普通",
     "UNKNOWN": "未知敏感度"

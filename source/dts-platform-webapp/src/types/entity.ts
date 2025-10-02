@@ -100,18 +100,27 @@ export type MenuTree = Menu & {
 // 审计日志相关类型
 export interface AuditLog {
 	id: number;
+	occurredAt: string;
+	module: string;
 	action: string;
-	target: string;
-	actor: string; // 后端实际字段名（对应前端的 operator 概念）
-	details: string; // 后端实际字段名（对应前端的 content 概念）
-	at: string; // 后端实际字段名（对应前端的 createdAt 概念）
-	result?: string; // 后端实际字段名
+	actor: string;
+	actorRole?: string;
+	resourceType?: string;
+	resourceId?: string;
+	clientIp?: string;
+	clientAgent?: string;
+	requestUri?: string;
+	httpMethod?: string;
+	result: string;
+	latencyMs?: number;
+	extraTags?: string;
+	payloadPreview?: string;
 }
 
 export interface AuditLogPageResponse {
-	data: AuditLog[];
-	totalElements: number;
-	number: number;
+	content: AuditLog[];
+	page: number;
 	size: number;
+	totalElements: number;
 	totalPages: number;
 }

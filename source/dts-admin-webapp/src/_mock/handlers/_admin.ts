@@ -24,6 +24,7 @@ import { getActiveAdmin } from "../utils/session";
 import portalMenus from "../data/portal-menus.json";
 
 const ADMIN_API = "/api/admin";
+const AUDIT_API = "/api/audit-logs";
 
 const ADMIN_AUDIT_OPERATORS = new Set(["sysadmin", "authadmin", "auditadmin", "opadmin"]);
 
@@ -85,23 +86,60 @@ const changeRequests: ChangeRequest[] = [
 	},
 ];
 
-const auditEvents: AuditEvent[] = Array.from({ length: 40 }).map((_, index) => ({
-	id: index + 1,
-	timestamp: faker.date.recent({ days: 15 }).toISOString(),
-	actor: faker.helpers.arrayElement([
-		"sysadmin",
-		"authadmin",
-		"auditadmin",
-		"dba",
-		"dataops",
-		"analytics.user",
-		"bi.viewer",
-	]),
-	action: faker.helpers.arrayElement(["USER_CREATE", "ROLE_ASSIGN", "DATA_EXPORT", "LOGIN"]),
-	resource: faker.helpers.arrayElement(["user:alice", "role:DATA_CURATOR", "dataset:ods_orders", "system"]),
-	outcome: faker.helpers.arrayElement(["SUCCESS", "FAILURE"]),
-	detailJson: faker.helpers.maybe(() => JSON.stringify({ ip: faker.internet.ipv4(), ua: faker.internet.userAgent() })),
-}));
+const auditEvents: AuditEvent[] = Array.from({ length: 60 }).map((_, index) => {
+	const module = faker.helpers.arrayElement([
+		"users",
+		"roles",
+		"datasets",
+		"approvals",
+		"system",
+		"portal-menus",
+	]);
+	const resourceType = module.toUpperCase();
+	return {
+		id: index + 1,
+		occurredAt: faker.date.recent({ days: 20 }).toISOString(),
+		actor: faker.helpers.arrayElement([
+			"sysadmin",
+			"authadmin",
+			"auditadmin",
+			"opadmin",
+			"dataops",
+			"analytics.user",
+			"bi.viewer",
+		]),
+		actorRole: faker.helpers.arrayElement([
+			"ROLE_SYS_ADMIN",
+			"ROLE_AUTH_ADMIN",
+			"ROLE_AUDITOR_ADMIN",
+			"ROLE_OP_ADMIN",
+			"ROLE_USER",
+		]),
+		module,
+		action: faker.helpers.arrayElement([
+			"CREATE",
+			"UPDATE",
+			"DELETE",
+			"APPROVE",
+			"REJECT",
+			"EXPORT",
+		]),
+		resourceType,
+		resourceId: `${resourceType}:${faker.string.alphanumeric({ length: 6 }).toUpperCase()}`,
+		clientIp: faker.internet.ipv4(),
+		clientAgent: faker.internet.userAgent(),
+		requestUri: `/api/${module}/${faker.string.alphanumeric({ length: 8 }).toLowerCase()}`,
+		httpMethod: faker.helpers.arrayElement(["GET", "POST", "PUT", "DELETE"]),
+		result: faker.helpers.arrayElement(["SUCCESS", "FAILURE"]),
+		latencyMs: faker.number.int({ min: 15, max: 1500 }),
+		extraTags: JSON.stringify({ traceId: faker.string.uuid().slice(0, 8) }),
+		payloadPreview: faker.helpers.maybe(
+			() =>
+				`status=${faker.helpers.arrayElement(["OK", "PENDING", "ERROR"])}; actor=${faker.person.fullName()}; ip=${faker.internet.ipv4()}`,
+			{ probability: 0.6 },
+		),
+	};
+});
 
 const systemConfigs: SystemConfigItem[] = [
 	{ id: 1, key: "cluster.mode", value: "production", description: "Iceberg 集群运行模式" },
@@ -867,39 +905,84 @@ export const adminHandlers = [
 		return json(item);
 	}),
 
-	http.get(`${ADMIN_API}/audit`, ({ request }) => {
-		const url = new URL(request.url);
-		const actor = url.searchParams.get("actor");
-		const action = url.searchParams.get("action");
-		const resource = url.searchParams.get("resource");
-		const outcome = url.searchParams.get("outcome");
-		const filtered = auditEvents.filter((event) => {
+	http.get(AUDIT_API, ({ request }) => {
+		const url = new URL(request.url, "http://localhost");
+		const actor = url.searchParams.get("actor")?.toLowerCase() ?? "";
+		const moduleFilter = url.searchParams.get("module")?.toLowerCase() ?? "";
+		const action = url.searchParams.get("action")?.toLowerCase() ?? "";
+		const resource = url.searchParams.get("resource")?.toLowerCase() ?? "";
+		const result = url.searchParams.get("result")?.toLowerCase() ?? "";
+		const clientIp = url.searchParams.get("clientIp")?.toLowerCase() ?? "";
+		const from = url.searchParams.get("from");
+		const to = url.searchParams.get("to");
+		const page = Number.parseInt(url.searchParams.get("page") ?? "0", 10) || 0;
+		const size = Math.min(Number.parseInt(url.searchParams.get("size") ?? "20", 10) || 20, 200);
+		const fromTs = from ? Date.parse(from) : Number.NaN;
+		const toTs = to ? Date.parse(to) : Number.NaN;
+
+		const scoped = scopeAuditEvents(auditEvents);
+		const filtered = scoped.filter((event) => {
+			const occurred = Date.parse(event.occurredAt);
 			return (
-				(actor ? event.actor?.includes(actor) : true) &&
-				(action ? event.action?.includes(action) : true) &&
-				(resource ? event.resource?.includes(resource) : true) &&
-				(outcome ? event.outcome === outcome : true)
+				(!actor || event.actor?.toLowerCase().includes(actor)) &&
+				(!moduleFilter || event.module?.toLowerCase().includes(moduleFilter)) &&
+				(!action || event.action?.toLowerCase().includes(action)) &&
+				(!resource ||
+					(event.resourceId?.toLowerCase().includes(resource) ?? false) ||
+					(event.resourceType?.toLowerCase().includes(resource) ?? false)) &&
+				(!result || event.result?.toLowerCase() === result) &&
+				(!clientIp || event.clientIp?.toLowerCase().includes(clientIp)) &&
+				(Number.isNaN(fromTs) || occurred >= fromTs) &&
+				(Number.isNaN(toTs) || occurred <= toTs)
 			);
 		});
-		return json(scopeAuditEvents(filtered));
-	}),
 
-	http.get(`/admin/audit/export`, ({ request }) => {
-		const url = new URL(request.url, "http://localhost");
-		const format = url.searchParams.get("format") ?? "csv";
-		const scoped = scopeAuditEvents(auditEvents);
-		const content = format === "json" ? JSON.stringify(scoped, null, 2) : buildCsv(scoped);
-		return new HttpResponse(content, {
-			headers: {
-				"Content-Type": format === "json" ? "application/json" : "text/csv",
-			},
+		const totalElements = filtered.length;
+		const totalPages = Math.max(1, Math.ceil(totalElements / size));
+		const start = page * size;
+		const content = filtered.slice(start, start + size);
+
+		return json({
+			content,
+			page,
+			size,
+			totalElements,
+			totalPages,
 		});
 	}),
 
-	http.get(`${ADMIN_API}/audit/export`, () => {
+	http.get(`${AUDIT_API}/export`, ({ request }) => {
+		const url = new URL(request.url, "http://localhost");
 		const scoped = scopeAuditEvents(auditEvents);
-		const content = buildCsv(scoped);
-		return new HttpResponse(content, {
+		const actor = url.searchParams.get("actor")?.toLowerCase() ?? "";
+		const moduleFilter = url.searchParams.get("module")?.toLowerCase() ?? "";
+		const action = url.searchParams.get("action")?.toLowerCase() ?? "";
+		const resource = url.searchParams.get("resource")?.toLowerCase() ?? "";
+		const result = url.searchParams.get("result")?.toLowerCase() ?? "";
+		const clientIp = url.searchParams.get("clientIp")?.toLowerCase() ?? "";
+		const from = url.searchParams.get("from");
+		const to = url.searchParams.get("to");
+		const fromTs = from ? Date.parse(from) : Number.NaN;
+		const toTs = to ? Date.parse(to) : Number.NaN;
+
+		const filtered = scoped.filter((event) => {
+			const occurred = Date.parse(event.occurredAt);
+			return (
+				(!actor || event.actor?.toLowerCase().includes(actor)) &&
+				(!moduleFilter || event.module?.toLowerCase().includes(moduleFilter)) &&
+				(!action || event.action?.toLowerCase().includes(action)) &&
+				(!resource ||
+					(event.resourceId?.toLowerCase().includes(resource) ?? false) ||
+					(event.resourceType?.toLowerCase().includes(resource) ?? false)) &&
+				(!result || event.result?.toLowerCase() === result) &&
+				(!clientIp || event.clientIp?.toLowerCase().includes(clientIp)) &&
+				(Number.isNaN(fromTs) || occurred >= fromTs) &&
+				(Number.isNaN(toTs) || occurred <= toTs)
+			);
+		});
+
+		const csv = buildCsv(filtered);
+		return new HttpResponse(csv, {
 			headers: { "Content-Type": "text/csv" },
 		});
 	}),
@@ -1048,9 +1131,18 @@ export const adminHandlers = [
 ];
 
 function buildCsv(events: AuditEvent[]) {
-	const header = "id,timestamp,actor,action,resource,outcome";
+	const header = "id,occurredAt,module,action,actor,result,resource,clientIp";
 	const rows = events.map((event) =>
-		[event.id, event.timestamp, event.actor ?? "", event.action ?? "", event.resource ?? "", event.outcome ?? ""]
+		[
+			event.id,
+			event.occurredAt,
+			event.module ?? "",
+			event.action ?? "",
+			event.actor ?? "",
+			event.result ?? "",
+			`${event.resourceType ?? ""}:${event.resourceId ?? ""}`.replace(/^:/, ""),
+			event.clientIp ?? "",
+		]
 			.map((value) => `"${String(value).replaceAll('"', '""')}"`)
 			.join(","),
 	);

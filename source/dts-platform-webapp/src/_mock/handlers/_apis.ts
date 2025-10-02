@@ -28,7 +28,7 @@ const summaries: ApiServiceSummary[] = Array.from({ length: 26 }).map((_, i) => 
 		dataset: ds,
 		method,
 		path: `/data/api/${ds}`,
-		classification: faker.helpers.arrayElement(["公开", "内部", "机密", "绝密"]),
+		classification: faker.helpers.arrayElement(["公开", "内部", "秘密", "机密"]),
 		qps: faker.number.int({ min: 10, max: 200 }),
 		qpsLimit: faker.number.int({ min: 100, max: 1000 }),
 		dailyLimit: faker.number.int({ min: 5000, max: 50000 }),
@@ -75,7 +75,7 @@ export const apiHandlers = [
 			input: buildFields(),
 			output: buildFields(),
 			policy: {
-				minLevel: faker.helpers.arrayElement(["内部", "机密", "绝密"]),
+				minLevel: faker.helpers.arrayElement(["内部", "秘密", "机密"]),
 				maskedColumns: ["phone", "id_no"],
 				rowFilter: "org_id IN (:org_scope) AND level <= :user_level",
 			},
@@ -103,7 +103,7 @@ export const apiHandlers = [
 			id_no: "51************" + String(1000 + i).slice(-4),
 			amount: faker.number.float({ min: 10, max: 9999, precision: 0.01 }),
 			org_id: faker.number.int({ min: 10, max: 20 }),
-			level: faker.helpers.arrayElement(["公开", "内部", "机密", "绝密"]),
+			level: faker.helpers.arrayElement(["公开", "内部", "秘密", "机密"]),
 			created_at: faker.date.recent({ days: 30 }).toISOString(),
 		}));
 		const filteredRowCount = faker.number.int({ min: 0, max: 5 });
@@ -130,12 +130,12 @@ export const apiHandlers = [
 		const levelDistribution = [
 			{ label: "公开", value: faker.number.int({ min: 10, max: 50 }) },
 			{ label: "内部", value: faker.number.int({ min: 10, max: 50 }) },
-			{ label: "机密", value: faker.number.int({ min: 10, max: 50 }) },
-			{ label: "绝密", value: faker.number.int({ min: 5, max: 30 }) },
+			{ label: "秘密", value: faker.number.int({ min: 10, max: 50 }) },
+			{ label: "机密", value: faker.number.int({ min: 5, max: 30 }) },
 		];
 		const recentCalls = Array.from({ length: 10 }).map(() => ({
 			user: faker.helpers.arrayElement(["alice", "bob", "charlie", "dba", "curator"]),
-			level: faker.helpers.arrayElement(["公开", "内部", "机密", "绝密"]),
+			level: faker.helpers.arrayElement(["公开", "内部", "秘密", "机密"]),
 			rowCount: faker.number.int({ min: 1, max: 200 }),
 			policy: faker.helpers.arrayElement(["mask:phone", "mask:id_no", "row-filter", "deny"]),
 		}));

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
@@ -112,103 +112,95 @@ export default function AccessPolicyPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Card>
-        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <CardTitle className="text-base">分级保护与访问策略</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={datasetId} onValueChange={setDatasetId}>
-              <SelectTrigger className="w-[240px]">
-                <SelectValue placeholder="选择数据集" />
-              </SelectTrigger>
-              <SelectContent>
-                {datasets.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" onClick={() => void fetchDatasets()}>
-              刷新
-            </Button>
-            <Button onClick={onSave} disabled={!canSave || loading}>
-              保存
-            </Button>
-            <Button
-              variant="outline"
-              onClick={async () => {
-                if (!datasetId) return;
-                try {
-                  const eff = (await getEffectivePolicy(datasetId)) as any;
-                  setEffective(eff || null);
-                } catch (e) {
-                  console.error(e);
-                  toast.error("获取有效策略失败");
-                }
-              }}
-              disabled={!datasetId}
-            >
-              查看有效策略
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!datasetId) return;
-                setApplying(true);
-                try {
-                  await applyPolicy(datasetId);
-                  toast.success("策略已生效");
-                } catch (e) {
-                  console.error(e);
-                  toast.error("生效失败");
-                } finally {
-                  setApplying(false);
-                }
-              }}
-              disabled={!datasetId || applying}
-            >
-              {applying ? "生效中…" : "策略生效"}
-            </Button>
+        <CardHeader>
+          <div className="space-y-1">
+            <CardTitle className="text-lg">分级保护与访问策略</CardTitle>
+            <CardDescription>围绕数据密级配置访问角色、行域过滤及脱敏规则，并验证策略效果。</CardDescription>
           </div>
+          <CardAction>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">数据集</span>
+                <Select value={datasetId} onValueChange={setDatasetId}>
+                  <SelectTrigger className="min-w-[200px] md:w-[260px]">
+                    <SelectValue placeholder="选择数据集" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {datasets.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="outline" onClick={() => void fetchDatasets()}>
+                刷新
+              </Button>
+              <Button onClick={onSave} disabled={!canSave || loading}>
+                保存
+              </Button>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  if (!datasetId) return;
+                  try {
+                    const eff = (await getEffectivePolicy(datasetId)) as any;
+                    setEffective(eff || null);
+                  } catch (e) {
+                    console.error(e);
+                    toast.error("获取有效策略失败");
+                  }
+                }}
+                disabled={!datasetId}
+              >
+                查看有效策略
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!datasetId) return;
+                  setApplying(true);
+                  try {
+                    await applyPolicy(datasetId);
+                    toast.success("策略已生效");
+                  } catch (e) {
+                    console.error(e);
+                    toast.error("生效失败");
+                  } finally {
+                    setApplying(false);
+                  }
+                }}
+                disabled={!datasetId || applying}
+              >
+                {applying ? "生效中…" : "策略生效"}
+              </Button>
+            </div>
+          </CardAction>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="grid gap-3">
-            <div className="grid gap-2">
-              <Label>允许角色（Keycloak 角色，逗号分隔）</Label>
-              <Input value={allowRoles} onChange={(e) => setAllowRoles(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label>行级过滤表达式（RLS）</Label>
-              <Textarea value={rowFilter} onChange={(e) => setRowFilter(e.target.value)} rows={4} />
-            </div>
-            <div className="grid gap-2">
-              <Label>默认兜底策略</Label>
-              <Select value={defaultMasking} onValueChange={(v) => setDefaultMasking(v as MaskingType)}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MASKING.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid gap-3">
-            <Tabs defaultValue="api">
-              <TabsList>
-                <TabsTrigger value="api">接口层校验</TabsTrigger>
-                <TabsTrigger value="view">视图层校验</TabsTrigger>
-              </TabsList>
-              <TabsContent value="api" className="space-y-3 pt-2">
+        <CardContent className="space-y-8">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+            <div className="space-y-6 rounded-xl border bg-muted/10 p-6">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold text-muted-foreground">策略定义</div>
+                <p className="text-sm text-muted-foreground">
+                  管理分级授权需要的角色、行域表达式与兜底脱敏策略。
+                </p>
+              </div>
+              <div className="grid gap-4">
                 <div className="grid gap-2">
-                  <Label>策略</Label>
-                  <Select value={previewStrategy} onValueChange={(v) => setPreviewStrategy(v as MaskingType)}>
-                    <SelectTrigger className="w-[200px]">
+                  <Label>允许访问的角色（逗号分隔）</Label>
+                  <Input value={allowRoles} onChange={(e) => setAllowRoles(e.target.value)} placeholder="ROLE_PUBLIC,ROLE_INTERNAL" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>行级过滤表达式（RLS）</Label>
+                  <Textarea value={rowFilter} onChange={(e) => setRowFilter(e.target.value)} rows={5} placeholder="org_id = :orgId AND data_level &lt;= :level" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>默认兜底策略</Label>
+                  <Select value={defaultMasking} onValueChange={(v) => setDefaultMasking(v as MaskingType)}>
+                    <SelectTrigger className="w-[220px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -220,39 +212,69 @@ export default function AccessPolicyPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2">
-                  <Label>样例值</Label>
-                  <Input value={previewValue} onChange={(e) => setPreviewValue(e.target.value)} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={() => setPreviewMasked("")}>清空</Button>
-                  <Button onClick={() => void onPreviewMask()}>预览脱敏</Button>
-                </div>
-                {previewMasked && (
-                  <div className="rounded border bg-muted/30 p-2 text-sm">
-                    结果：{previewMasked}
-                  </div>
-                )}
-              </TabsContent>
+              </div>
+            </div>
 
-              <TabsContent value="view" className="space-y-3 pt-2">
-                <div className="flex items-center gap-2">
-                  <Button onClick={() => void onPreviewViews()} disabled={!datasetId}>
-                    生成四档视图 SQL
-                  </Button>
-                </div>
-                {viewsPreview && (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {Object.entries(viewsPreview).map(([k, v]) => (
-                      <div key={k} className="rounded border bg-muted/30 p-2">
-                        <div className="mb-1 text-xs font-semibold">{k}</div>
-                        <pre className="whitespace-pre-wrap text-xs">{String(v)}</pre>
-                      </div>
-                    ))}
+            <div className="space-y-6 rounded-xl border bg-background p-6 shadow-sm">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold text-muted-foreground">策略校验</div>
+                <p className="text-sm text-muted-foreground">实时查看接口脱敏效果与四档安全视图的生成结果。</p>
+              </div>
+              <Tabs defaultValue="api" className="space-y-4">
+                <TabsList className="w-full justify-start gap-2 bg-muted/60 p-1">
+                  <TabsTrigger value="api" className="flex-1">接口层校验</TabsTrigger>
+                  <TabsTrigger value="view" className="flex-1">视图层校验</TabsTrigger>
+                </TabsList>
+                <TabsContent value="api" className="space-y-4">
+                  <div className="grid gap-2">
+                    <Label>策略</Label>
+                    <Select value={previewStrategy} onValueChange={(v) => setPreviewStrategy(v as MaskingType)}>
+                      <SelectTrigger className="w-[220px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MASKING.map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {m}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
-              </TabsContent>
-            </Tabs>
+                  <div className="grid gap-2">
+                    <Label>样例值</Label>
+                    <Input value={previewValue} onChange={(e) => setPreviewValue(e.target.value)} placeholder="13812345678" />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => setPreviewMasked("")}>清空</Button>
+                    <Button onClick={() => void onPreviewMask()}>预览脱敏</Button>
+                  </div>
+                  {previewMasked && (
+                    <div className="rounded-lg border bg-muted/20 p-3 text-xs font-mono">
+                      结果：{previewMasked}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="view" className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => void onPreviewViews()} disabled={!datasetId}>
+                      生成四档视图 SQL
+                    </Button>
+                  </div>
+                  {viewsPreview && (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {Object.entries(viewsPreview).map(([k, v]) => (
+                        <div key={k} className="space-y-2 rounded-lg border bg-muted/10 p-3">
+                          <div className="text-xs font-semibold uppercase text-muted-foreground">{k}</div>
+                          <pre className="whitespace-pre-wrap text-xs font-mono leading-relaxed">{String(v)}</pre>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -260,10 +282,15 @@ export default function AccessPolicyPage() {
       {effective && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Effective Policy</CardTitle>
+            <div className="space-y-1">
+              <CardTitle className="text-base">策略生效快照</CardTitle>
+              <CardDescription>展示最近一次查询到的有效策略编排结果。</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
-            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(effective, null, 2)}</pre>
+            <pre className="whitespace-pre-wrap rounded-lg border bg-muted/10 p-3 text-xs font-mono leading-relaxed">
+              {JSON.stringify(effective, null, 2)}
+            </pre>
           </CardContent>
         </Card>
       )}

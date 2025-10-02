@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { TreeSelect } from "antd";
 import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest, UserProfileConfig } from "#/keycloak";
 import { KeycloakRoleService, KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
 import { adminApi } from "@/admin/api/adminApi";
@@ -43,12 +44,13 @@ const RESERVED_PROFILE_ATTRIBUTE_NAMES = [
 
 const DATA_LEVEL_LABEL_MAP = DATA_SECURITY_LEVEL_LABELS as Record<string, string>;
 
-interface OrgTreeOption extends TreeSelectProps['treeData'][number] {
+type OrgTreeOption = {
 	value: string;
 	title: string;
 	key: string;
+	selectable: boolean;
 	children?: OrgTreeOption[];
-}
+};
 
 const normalizeGroupPath = (path: string | undefined): string => {
 	if (!path) return '';
@@ -76,6 +78,7 @@ const buildOrgOptions = (
 			value: groupPath,
 			title: segment || groupPath,
 			key: groupPath,
+			selectable: Boolean(groupPath),
 			children:
 				node.children && node.children.length > 0
 					? buildOrgOptions(node.children, nextPath, index)
@@ -308,13 +311,14 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		[normalizeAttributesForState],
 	);
 
-	const handleOrganizationChange = (value: string | null) => {
-		if (!value) {
+	const handleOrganizationChange = (value: string | string[] | null) => {
+		const nextValue = Array.isArray(value) ? value[0] : value;
+		if (!nextValue) {
 			setSelectedGroupPaths([]);
 			updateSingleValueAttribute("department", "");
 			return;
 		}
-		const normalized = normalizeGroupPath(value);
+		const normalized = normalizeGroupPath(nextValue);
 		setSelectedGroupPaths([normalized]);
 		const node = orgIndex[normalized];
 		updateSingleValueAttribute("department", node?.name ?? "");
@@ -447,19 +451,15 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 
         const attributesPayload = buildAttributesPayload();
-        const groupPathsPayload = selectedGroupPaths
-            .map((item) => normalizeGroupPath(item))
-            .filter((item) => item);
+		const groupPathsPayload = selectedGroupPaths
+			.map((item) => normalizeGroupPath(item))
+			.filter((item) => item);
 
-        // 创建用户时人员密级不得为“非密”
-        if (personLevel?.toUpperCase?.() === "NON_SECRET") {
-            setError("人员密级不允许为‘非密’，请选取更高密级。");
-            return;
-        }
-        if (groupPathsPayload.length === 0) {
-            setError("请选择所属组织");
-            return;
-        }
+		// 创建用户时人员密级不得为“非密”
+		if (personLevel?.toUpperCase?.() === "NON_SECRET") {
+			setError("人员密级不允许为‘非密’，请选取更高密级。");
+			return;
+		}
 
 		if (userProfileConfig?.attributes) {
 			for (const attribute of userProfileConfig.attributes) {
@@ -490,16 +490,16 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		setError("");
 
 		try {
-            if (mode === "create") {
-                const createData: CreateUserRequest = {
-                    username,
-                    email: email || undefined,
-                    firstName: fullName,
-                    enabled: formData.enabled,
-                    emailVerified: formData.emailVerified,
-                    attributes: attributesPayload,
-                    groups: groupPathsPayload,
-                };
+			if (mode === "create") {
+				const createData: CreateUserRequest = {
+					username,
+					email: email || undefined,
+					firstName: fullName,
+					enabled: formData.enabled,
+					emailVerified: formData.emailVerified,
+					attributes: attributesPayload,
+					groups: groupPathsPayload.length > 0 ? groupPathsPayload : undefined,
+				};
 
 				const response = await KeycloakUserService.createUser(createData);
 				if (response.userId) {
@@ -519,7 +519,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 						enabled: formData.enabled,
 						emailVerified: formData.emailVerified,
 						attributes: attributesPayload,
-						groups: groupPathsPayload,
+						groups: groupPathsPayload.length > 0 ? groupPathsPayload : [],
 					};
 
 					const response = await KeycloakUserService.updateUser(user.id, updateData);
@@ -683,21 +683,25 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									<p className="text-xs text-muted-foreground">邮箱用于接收通知，可选填写。</p>
 								</div>
 								<div className="space-y-2">
-				<div className="space-y-2">
-								<Label htmlFor="department">组织机构 *</Label>
-								<TreeSelect
-									id="department"
-									value={selectedGroupPaths[0] ?? undefined}
-									treeData={orgOptions}
-									showSearch
-									placeholder="请选择所属组织"
-									style={{ width: "100%" }}
-									dropdownStyle={{ maxHeight: 320, overflow: "auto" }}
-									loading={orgLoading}
-									treeDefaultExpandAll
-									onChange={(value) => handleOrganizationChange((value as string) || null)}
-								/>
-							</div>
+									<Label htmlFor="department">组织机构（可选）</Label>
+									<TreeSelect
+										id="department"
+										allowClear
+										value={selectedGroupPaths[0] ?? undefined}
+										treeData={orgOptions}
+										showSearch
+										treeNodeFilterProp="title"
+										placeholder="请选择所属组织（可选）"
+										style={{ width: "100%" }}
+										dropdownStyle={{ maxHeight: 320, overflow: "auto" }}
+										loading={orgLoading}
+										treeDefaultExpandAll
+										getPopupContainer={(triggerNode) => triggerNode.parentElement ?? document.body}
+										onChange={(value) => handleOrganizationChange(value as string | string[] | null)}
+										onSelect={(value) => handleOrganizationChange(value as string)}
+									/>
+									<p className="text-xs text-muted-foreground">如不选择，将暂不分配组织，可在审批后再调整。</p>
+								</div>
 								<div className="space-y-2">
 									<Label htmlFor="position">职位</Label>
 									<Input

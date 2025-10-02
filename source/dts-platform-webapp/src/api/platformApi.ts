@@ -2,6 +2,7 @@ import api from "@/api/apiClient";
 
 // Catalog
 export const getCatalogSummary = () => api.get({ url: "/catalog/summary" });
+export const getCatalogConfig = () => api.get({ url: "/catalog/config" });
 export const listDomains = (page = 0, size = 10, keyword = "") =>
 	api.get({ url: "/catalog/domains", params: { page, size, keyword } });
 export const createDomain = (data: any) => api.post({ url: "/catalog/domains", data });
@@ -30,6 +31,8 @@ export const syncDatasetSchema = (datasetId: string, data?: any) =>
     api.post({ url: `/datasets/${datasetId}/sync-schema`, data });
 export const previewDataset = (datasetId: string, rows = 50) =>
     api.get({ url: `/datasets/${datasetId}/preview`, params: { rows } });
+export const getDatasetJob = (jobId: string) => api.get({ url: `/dataset-jobs/${jobId}` });
+export const listDatasetJobs = (datasetId: string) => api.get({ url: `/datasets/${datasetId}/jobs` });
 
 export const listMaskingRules = () => api.get({ url: "/catalog/masking-rules" });
 export const createMaskingRule = (data: any) => api.post({ url: "/catalog/masking-rules", data });

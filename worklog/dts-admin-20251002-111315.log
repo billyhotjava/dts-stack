@@ -143,3 +143,9 @@ dts-admin 审批业务逻辑（用户/角色双轨）：
 - 与 dts-common 共用上报接口，要求具备失败重试与定时批量上传能力；无外部安全平台对接需求。
 - 日志量级约 5 万/日，建议异步缓冲写入；数据需加密存储并具备防篡改设计，审计数据仅供内部展示。
 
+2025-10-02 15:45 菜单管理功能梳理（session 中断后的补充排查）：
+- Liquibase 变更 `20251002-01_portal_menu_visibility` 仅创建表并清空旧数据，未按计划为现有菜单回灌默认可见角色，导致新逻辑下除 `ROLE_OP_ADMIN/ROLE_USER` 外的业务角色会拿到空菜单树。
+- 后端虽然在 `AdminApiResource` / `PortalMenuService` 支持 `allowedRoles`、`allowedPermissions`、`visibilityRules` 等字段，但 `PortalMenuItem` 类型仍是旧结构，前端无法消费/提交可见性配置。
+- 菜单管理页面 `PortalMenusView` 仍然只维护名称、路径、密级等基础字段，没有角色/权限的编辑控件，审批流无法下发完整的可见性规则。
+- `scripts/sync-portal-menus.mjs` 和 mock JSON 继续覆盖为旧版 schema，一旦执行同步就会抹掉可见性字段，需在扩展字段落地后同步调整脚本输出。
+- TODO：补充 Liquibase 回填逻辑、扩展前端类型与页面交互，并在 mock/同步脚本中保留/导入可见性数据，再次验证审批流程。

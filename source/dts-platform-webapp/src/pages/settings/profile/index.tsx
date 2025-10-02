@@ -1,12 +1,10 @@
-import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
-import bannerImage from "@/assets/images/background/banner-1.png";
-import { Icon } from "@/components/icon";
 import { KeycloakUserService } from "@/api/services/keycloakService";
 import type { KeycloakUser } from "#/keycloak";
 import { useUserInfo } from "@/store/userStore";
-import { themeVars } from "@/theme/theme.css";
 import { Avatar, AvatarImage } from "@/ui/avatar";
+import { Badge } from "@/ui/badge";
+import { Card, CardContent } from "@/ui/card";
 import { Text, Title } from "@/ui/typography";
 import ProfileTab, { USERNAME_FALLBACK_NAME, resolveRoleLabels } from "./profile-tab";
 
@@ -64,7 +62,8 @@ function PersonalProfilePage() {
 
 	const attributeFullName =
 		pickAttributeValue(detailAttributes, ["fullName", "fullname"]) || pickAttributeValue(storeAttributes, ["fullName", "fullname"]);
-	const normalizedAttributeFullName = attributeFullName && attributeFullName.toLowerCase() !== username?.toLowerCase() ? attributeFullName : "";
+	const normalizedAttributeFullName =
+		attributeFullName && attributeFullName.toLowerCase() !== username?.toLowerCase() ? attributeFullName : "";
 	const normalizedDetailFullName = detail?.fullName && detail.fullName.toLowerCase() !== username?.toLowerCase() ? detail.fullName : "";
 	const normalizedStoreFullName = fullName && fullName.toLowerCase() !== username?.toLowerCase() ? fullName : "";
 	const normalizedStoreFirstName = firstName && firstName.toLowerCase() !== username?.toLowerCase() ? firstName : "";
@@ -89,47 +88,43 @@ function PersonalProfilePage() {
 		return [];
 	}, [detail?.realmRoles, roles]);
 
-	const bgStyle: CSSProperties = {
-		position: "absolute",
-		inset: 0,
-		background: `url(${bannerImage})`,
-		backgroundSize: "cover",
-		backgroundPosition: "50%",
-		backgroundRepeat: "no-repeat",
-	};
+	const summaryItems = [
+		{ key: "username", label: "登录账号", value: username || "-" },
+		{ key: "email", label: "联系邮箱", value: displayEmail || "-" },
+	];
 
 	return (
 		<div className="space-y-6">
-			<div className="relative flex flex-col items-center gap-4 p-6 text-center">
-				<div style={bgStyle} className="absolute inset-0 rounded-lg" />
-				<div className="absolute inset-0 rounded-lg bg-black/40" />
-				<div className="relative z-10 flex flex-col items-center gap-3">
-					<Avatar className="h-24 w-24 border-4 border-background shadow-lg">
+			<Card>
+				<CardContent className="flex flex-col items-center gap-5 p-6 text-center md:flex-row md:items-center md:gap-8 md:text-left">
+					<Avatar className="h-24 w-24 border border-border shadow-sm">
 						<AvatarImage src={avatar} className="rounded-full" />
 					</Avatar>
-					<div className="flex flex-col items-center gap-1">
-						<div className="flex items-center gap-2">
-							<Title as="h5" className="text-xl text-background">
+					<div className="flex-1 space-y-3">
+						<div className="space-y-2">
+							<Title as="h4" className="text-2xl font-semibold">
 								{resolvedName || username || "-"}
 							</Title>
-							<Icon icon="heroicons:check-badge-solid" size={20} color={themeVars.colors.palette.success.default} />
+							{roleLabels.length ? (
+								<div className="flex flex-wrap justify-center gap-2 md:justify-start">
+									{roleLabels.map((label) => (
+										<Badge key={label} variant="info">
+											{label}
+										</Badge>
+									))}
+								</div>
+							) : null}
 						</div>
-						{username ? (
-							<Text variant="body3" className="text-background/80">{`\u767b\u5f55\u8d26\u53f7\uff1a${username}`}
-							</Text>
-						) : null}
-						{roleLabels.length ? (
-							<Text variant="body2" className="text-background">
-								{roleLabels.join("\u3001")}
-							</Text>
-						) : null}
-						{displayEmail ? (
-							<Text variant="body3" className="text-background/80">{`\u8054\u7cfb\u90ae\u7bb1\uff1a${displayEmail}`}
-							</Text>
-						) : null}
+						<div className="grid w-full gap-2 text-sm text-muted-foreground md:grid-cols-2 md:gap-x-6">
+							{summaryItems.map((item) => (
+								<Text key={item.key} variant="body3" className="text-muted-foreground">
+								{`${item.label}：${item.value}`}
+								</Text>
+							))}
+						</div>
 					</div>
-				</div>
-			</div>
+				</CardContent>
+			</Card>
 
 			<ProfileTab detail={detail} pickAttributeValue={pickAttributeValue} />
 		</div>
@@ -137,8 +132,3 @@ function PersonalProfilePage() {
 }
 
 export default PersonalProfilePage;
-
-
-
-
-

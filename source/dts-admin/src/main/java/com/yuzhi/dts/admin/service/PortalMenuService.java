@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -47,9 +48,15 @@ public class PortalMenuService {
 
     @Transactional(readOnly = true)
     public List<PortalMenu> findTree() {
-        List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
-        roots.forEach(this::touch);
-        return roots;
+        return runSafely(
+            () -> {
+                List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
+                roots.forEach(this::touch);
+                return roots;
+            },
+            List.of(),
+            "menu tree"
+        );
     }
 
     @Transactional(readOnly = true)
@@ -64,9 +71,32 @@ public class PortalMenuService {
 
     @Transactional(readOnly = true)
     public List<PortalMenu> findDeletedMenus() {
-        List<PortalMenu> deleted = menuRepo.findByDeletedTrueOrderBySortOrderAscIdAsc();
-        deleted.forEach(this::touch);
-        return deleted;
+        return runSafely(
+            () -> {
+                List<PortalMenu> deleted = menuRepo.findByDeletedTrueOrderBySortOrderAscIdAsc();
+                deleted.forEach(this::touch);
+                return deleted;
+            },
+            List.of(),
+            "deleted menu list"
+        );
+    }
+
+    private <T> T runSafely(java.util.concurrent.Callable<T> action, T fallback, String label) {
+        try {
+            return action.call();
+        } catch (DataAccessException ex) {
+            log.warn("Skip {} due to schema issue: {}", label, ex.getMostSpecificCause().getMessage());
+        } catch (Exception ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof DataAccessException dae) {
+                log.warn("Skip {} due to schema issue: {}", label, dae.getMostSpecificCause().getMessage());
+            } else {
+                log.warn("Skip {} due to unexpected error: {}", label, ex.getMessage());
+                log.debug("Failed {} stack", label, ex);
+            }
+        }
+        return fallback;
     }
 
     private void touch(PortalMenu menu) {

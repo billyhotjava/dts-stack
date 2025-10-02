@@ -75,3 +75,19 @@ export interface SecureViewDefinition {
 	refresh: SecureViewRefresh;
 	cron?: string;
 }
+
+export type DatasetJobStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+
+export interface DatasetJob {
+	id: string;
+	datasetId: string | null;
+	jobType: string;
+	status: DatasetJobStatus;
+	message?: string;
+	submittedBy?: string;
+	startedAt?: string;
+	finishedAt?: string;
+	createdAt?: string;
+	updatedAt?: string;
+	detail?: any;
+}

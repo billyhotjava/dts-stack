@@ -34,7 +34,7 @@ import TaskSchedulingPage from "@/pages/foundation/TaskSchedulingPage";
 import PersonalProfilePage from "@/pages/settings/profile";
 
 export function getFrontendDashboardRoutes(): RouteObject[] {
-	return PORTAL_NAV_SECTIONS.map((section) => {
+	const sectionRoutes = PORTAL_NAV_SECTIONS.map((section) => {
 		const childRoutes = section.children.map<RouteObject>((child) => {
 			const FEATURE_COMPONENTS: Record<string, Record<string, () => ReactElement>> = {
 				catalog: {
@@ -83,9 +83,7 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 
 			const renderFeature = FEATURE_COMPONENTS[section.key]?.[child.key];
 			let element: ReactElement;
-			if (section.key === "settings" && child.key === "profile") {
-				element = <PersonalProfilePage />;
-			} else if (renderFeature) {
+			if (renderFeature) {
 				element = renderFeature();
 			} else {
 				element = <FeaturePlaceholder titleKey={child.titleKey} descriptionKey={child.descriptionKey} />;
@@ -118,4 +116,13 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 			],
 		};
 	});
+
+	const standaloneRoutes: RouteObject[] = [
+		{
+			path: "settings",
+			children: [{ path: "profile", element: <PersonalProfilePage /> }],
+		},
+	];
+
+	return [...sectionRoutes, ...standaloneRoutes];
 }

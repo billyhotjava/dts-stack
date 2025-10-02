@@ -259,7 +259,7 @@
         "GENERAL": "普通",
         "IMPORTANT": "重要",
         "CORE": "核心",
-        "TOP_SECRET": "绝密",
+        "TOP_SECRET": "机密",
         "SECRET": "机密",
         "NORMAL": "普通",
         "UNKNOWN": "未知敏感度"
