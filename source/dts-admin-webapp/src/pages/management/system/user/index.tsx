@@ -94,6 +94,23 @@ export default function UserPage() {
 		return new Map(PERSON_SECURITY_LEVELS.map((item) => [item.value, item.label]));
 	}, []);
 
+	const dataLevelLabelMap = useMemo(
+		() =>
+			new Map<string, string>([
+				["DATA_PUBLIC", "公开"],
+				["DATA_INTERNAL", "内部"],
+				["DATA_SECRET", "秘密"],
+				["DATA_TOP_SECRET", "核心"],
+				["PUBLIC", "公开"],
+				["INTERNAL", "内部"],
+				["SECRET", "秘密"],
+				["TOP_SECRET", "核心"],
+			]),
+		[],
+	);
+
+	const fallbackLabel = (value: string) => value.replace(/^DATA_/, "").replace(/_/g, "");
+
 	// 加载用户列表
 	const loadUsers = useCallback(async (params?: { current?: number; pageSize?: number; search?: string }) => {
 		setLoading(true);
@@ -164,11 +181,20 @@ export default function UserPage() {
 		},
 		{
 			title: "姓名",
-			dataIndex: "firstName",
+			dataIndex: "fullName",
 			width: 160,
-			render: (_: string, record) => {
-				const name = (record.firstName ?? record.lastName ?? "").trim();
-				return name.length > 0 ? name : "-";
+			render: (_: string | undefined, record) => {
+				const profileFullName = getSingleAttributeValue(record.attributes, "fullName").trim();
+				const legacyProfileFullName = record.attributes?.fullname?.[0]?.trim() ?? "";
+				const candidates = [
+					record.fullName,
+					profileFullName,
+					legacyProfileFullName,
+					record.firstName,
+					record.lastName,
+				];
+				const name = candidates.find((value) => value && value.toString().trim().length > 0)?.toString().trim();
+				return name && name.length > 0 ? name : "-";
 			},
 		},
 		{
@@ -222,8 +248,17 @@ export default function UserPage() {
 				const legacyLevel = record.attributes?.person_security_level?.[0]?.trim();
 				const levelValue = primaryLevel || legacyLevel || "";
 				if (!levelValue) return "-";
-				const label = personLevelLabelMap.get(levelValue) ?? levelValue;
-				return label !== levelValue ? `${label}（${levelValue}）` : label;
+				return personLevelLabelMap.get(levelValue) ?? fallbackLabel(levelValue);
+			},
+		},
+		{
+			title: "数据密级",
+			dataIndex: ["attributes", "data_levels"],
+			width: 150,
+			render: (value: string[] | undefined, record) => {
+				const attrValue = value && value.length > 0 ? value[0] : record.attributes?.dataLevels?.[0];
+				if (!attrValue) return "-";
+				return dataLevelLabelMap.get(attrValue.trim()) ?? fallbackLabel(attrValue.trim());
 			},
 		},
 		{

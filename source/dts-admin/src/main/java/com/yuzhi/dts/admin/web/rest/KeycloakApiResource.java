@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -55,6 +56,7 @@ public class KeycloakApiResource {
         Map.entry("TOP_SECRET", "DATA_TOP_SECRET"),
         Map.entry("DATA_TOP_SECRET", "DATA_TOP_SECRET")
     );
+    private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin", "syadmin", "authadmin", "auditadmin", "opadmin");
 
     public KeycloakApiResource(
         InMemoryStores stores,
@@ -74,9 +76,9 @@ public class KeycloakApiResource {
     @GetMapping("/keycloak/users")
     public ResponseEntity<List<KeycloakUserDTO>> listUsers(@RequestParam(defaultValue = "0") int first, @RequestParam(defaultValue = "100") int max) {
         String token = currentAccessToken();
-        List<KeycloakUserDTO> list = keycloakAdminClient.listUsers(first, max, token);
+        List<KeycloakUserDTO> list = filterProtectedUsers(keycloakAdminClient.listUsers(first, max, token));
         if (list.isEmpty()) {
-            list = stores.listUsers(first, max);
+            list = filterProtectedUsers(stores.listUsers(first, max));
         } else {
             list.forEach(this::cacheUser);
         }
@@ -87,17 +89,17 @@ public class KeycloakApiResource {
     @GetMapping("/keycloak/users/search")
     public ResponseEntity<List<KeycloakUserDTO>> searchUsers(@RequestParam String username) {
         String q = username == null ? "" : username.toLowerCase();
-        List<KeycloakUserDTO> list = keycloakAdminClient
+        List<KeycloakUserDTO> list = filterProtectedUsers(keycloakAdminClient
             .findByUsername(username, currentAccessToken())
             .map(List::of)
-            .orElseGet(List::of);
+            .orElseGet(List::of));
         if (list.isEmpty()) {
-            list = stores
+            list = filterProtectedUsers(stores
                 .users
                 .values()
                 .stream()
                 .filter(u -> u.getUsername() != null && u.getUsername().toLowerCase().contains(q))
-                .toList();
+                .toList());
         } else {
             list.forEach(this::cacheUser);
         }
@@ -448,6 +450,16 @@ public class KeycloakApiResource {
             }
         }
         return new ArrayList<>();
+    }
+
+    private List<KeycloakUserDTO> filterProtectedUsers(List<KeycloakUserDTO> users) {
+        if (users == null || users.isEmpty()) {
+            return users;
+        }
+        return users
+            .stream()
+            .filter(u -> u.getUsername() == null || PROTECTED_USERNAMES.stream().noneMatch(name -> name.equalsIgnoreCase(u.getUsername())))
+            .toList();
     }
 
     private List<String> normalizeList(Collection<?> values) {
