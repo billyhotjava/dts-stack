@@ -124,21 +124,25 @@ public class KeycloakApiResource {
         if (payload.getUsername() == null || payload.getUsername().isBlank()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("用户名不能为空"));
         }
-        UserOperationRequest command = toOperationRequest(payload);
-        ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitCreate(
-            command,
-            currentUser(),
-            clientIp(request)
-        );
-        auditService.record(currentUser(), "USER_CREATE_REQUEST", "KC_USER", command.getUsername(), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "requestId",
-            approval.id,
-            "status",
-            approval.status,
-            "message",
-            "操作已提交，等待审批"
-        )));
+        try {
+            UserOperationRequest command = toOperationRequest(payload);
+            ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitCreate(
+                command,
+                currentUser(),
+                clientIp(request)
+            );
+            auditService.record(currentUser(), "USER_CREATE_REQUEST", "KC_USER", command.getUsername(), "SUCCESS", null);
+            return ResponseEntity.ok(ApiResponse.ok(Map.of(
+                "requestId",
+                approval.id,
+                "status",
+                approval.status,
+                "message",
+                "操作已提交，等待审批"
+            )));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+        }
     }
 
     @PutMapping("/keycloak/users/{id}")

@@ -334,6 +334,9 @@ export default function UserPage() {
 						columns={columns}
 						dataSource={users}
 						loading={loading}
+						size="small"
+						className="text-sm"
+						rowClassName={() => "text-sm"}
 						scroll={{ x: 1400 }}
 						pagination={{
 							current: pagination.current,
