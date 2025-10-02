@@ -1,8 +1,6 @@
 package com.yuzhi.dts.admin.domain;
 
-import com.yuzhi.dts.admin.domain.converter.JsonbStringConverter;
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -13,6 +11,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.io.Serializable;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "admin_approval_item")
@@ -37,7 +37,7 @@ public class AdminApprovalItem implements Serializable {
     private Integer seqNumber;
 
     @Column(name = "payload_json", nullable = false, columnDefinition = "jsonb")
-    @Convert(converter = JsonbStringConverter.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     private String payloadJson;
 
     public Long getId() {

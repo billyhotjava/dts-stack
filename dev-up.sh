@@ -13,6 +13,16 @@ usage(){
   echo "Usage: $0 [--mode images|local] [--no-webapp]"
 }
 
+clean_maven_targets(){
+  for module in dts-admin dts-platform; do
+    local module_target="source/${module}/target"
+    if [[ -d "${module_target}" ]]; then
+      echo "[dev-up] Removing stale build output: ${module_target}"
+      rm -rf "${module_target}"
+    fi
+  done
+}
+
 while (($#)); do
   case "$1" in
     --mode)
@@ -133,6 +143,7 @@ if [[ "$MODE" == "local" ]]; then
   fi
 else
   echo "[dev-up] Starting source dev services with build ..."
+  clean_maven_targets
   "${compose_cmd[@]}" "${compose_files[@]}" up -d --build "${services[@]}"
 fi
 
