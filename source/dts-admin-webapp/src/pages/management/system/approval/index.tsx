@@ -194,7 +194,7 @@ export default function ApprovalPage() {
 	// 表格列定义
 	const columns: ColumnsType<BasicApprovalRequest> = [
 		{
-			title: "ID",
+			title: "请求编号",
 			dataIndex: "id",
 			width: 80,
 			render: (id: number) => (
@@ -411,7 +411,7 @@ export default function ApprovalPage() {
 						<div className="grid grid-cols-2 gap-4">
 							<div>
 								<Text variant="body2" className="text-muted-foreground">
-									ID
+									请求编号
 								</Text>
 								<Text variant="body1" className="font-mono">
 									#{selectedRequest.id}
@@ -605,7 +605,7 @@ export default function ApprovalPage() {
 										dataSource={selectedRequest.items
 											.map((item) => ({
 												key: `target-${item.id}`,
-												属性: "目标类型/ID",
+												属性: "目标类型/标识",
 												값: `${item.targetKind}/${item.targetId}`,
 											}))
 											.concat(

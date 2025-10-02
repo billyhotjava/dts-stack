@@ -54,6 +54,10 @@ public class KeycloakAuthService {
         this.userInfoEndpoint = UriComponentsBuilder.fromUriString(issuerUri).path("/protocol/openid-connect/userinfo").build().toUri();
     }
 
+    public TokenResponse obtainToken(String username, String password) {
+        return exchangeForTokens(username, password);
+    }
+
     public LoginResult login(String username, String password) {
         TokenResponse tokens = exchangeForTokens(username, password);
         Map<String, Object> claims = decodeTokenClaims(tokens.accessToken());
@@ -88,6 +92,34 @@ public class KeycloakAuthService {
             TokenResponse body = response.getBody();
             if (body == null || body.accessToken() == null) {
                 throw new IllegalStateException("Keycloak token response missing access_token");
+            }
+            return body;
+        } catch (HttpStatusCodeException ex) {
+            throw translateAuthError(ex);
+        }
+    }
+
+    public TokenResponse obtainClientCredentialsToken(String clientId, String clientSecretOverride) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "client_credentials");
+        form.add("client_id", clientId);
+        if (clientSecretOverride != null && !clientSecretOverride.isBlank()) {
+            form.add("client_secret", clientSecretOverride);
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        try {
+            ResponseEntity<TokenResponse> response = restTemplate.exchange(
+                tokenEndpoint,
+                HttpMethod.POST,
+                new HttpEntity<>(form, headers),
+                TokenResponse.class
+            );
+            TokenResponse body = response.getBody();
+            if (body == null || body.accessToken() == null) {
+                throw new IllegalStateException("Keycloak client credentials response missing access_token");
             }
             return body;
         } catch (HttpStatusCodeException ex) {

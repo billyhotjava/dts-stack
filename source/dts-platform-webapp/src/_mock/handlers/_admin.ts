@@ -546,7 +546,7 @@ export const adminHandlers = [
 	http.put(`${ADMIN_API}/orgs/:id`, async ({ params, request }) => {
 		const id = Number(params.id);
 		if (Number.isNaN(id)) {
-			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门ID不合法" }, { status: 400 });
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门编号不合法" }, { status: 400 });
 		}
 		const payload = (await request.json()) as OrganizationPayload;
 		const name = payload.name?.trim();
@@ -573,7 +573,7 @@ export const adminHandlers = [
 	http.delete(`${ADMIN_API}/orgs/:id`, ({ params }) => {
 		const id = Number(params.id);
 		if (Number.isNaN(id)) {
-			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门ID不合法" }, { status: 400 });
+			return HttpResponse.json({ status: ResultStatus.ERROR, message: "部门编号不合法" }, { status: 400 });
 		}
 		const removed = deleteOrganizationNode(organizations, id);
 		if (!removed) {

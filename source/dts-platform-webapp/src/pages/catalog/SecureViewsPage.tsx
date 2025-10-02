@@ -136,7 +136,7 @@ export default function SecureViewsPage() {
                 <table className="w-full min-w-[720px] table-fixed border-collapse text-sm">
                   <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
                     <tr>
-                      <th className="px-3 py-2">ID</th>
+                      <th className="px-3 py-2">视图编号</th>
                       <th className="px-3 py-2">视图名</th>
                       <th className="px-3 py-2">级别</th>
                       <th className="px-3 py-2">操作</th>

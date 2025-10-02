@@ -144,7 +144,7 @@ export function ChangeRequestForm({ onCreated, initialTab = "user" }: Props) {
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="resourceId">资源标识（更新/删除时必填）</Label>
-						<Input id="resourceId" placeholder="资源唯一ID" {...register("resourceId")} />
+						<Input id="resourceId" placeholder="资源唯一编号" {...register("resourceId")} />
 					</div>
 				</div>
 
@@ -189,7 +189,7 @@ export function ChangeRequestForm({ onCreated, initialTab = "user" }: Props) {
 							<Input id="code" placeholder="ORG-001" {...register("code")} />
 						</div>
 						<div className="space-y-2 md:col-span-2">
-							<Label htmlFor="parentId">父级ID（可选）</Label>
+							<Label htmlFor="parentId">父级编号（可选）</Label>
 							<Input id="parentId" placeholder="12" {...register("parentId")} />
 						</div>
 					</div>
@@ -231,7 +231,7 @@ export function ChangeRequestForm({ onCreated, initialTab = "user" }: Props) {
 							<Input id="sortOrder" type="number" placeholder="1" {...register("sortOrder")} />
 						</div>
 						<div className="space-y-2">
-							<Label htmlFor="parentId">父级ID</Label>
+							<Label htmlFor="parentId">父级编号</Label>
 							<Input id="parentId" placeholder="0" {...register("parentId")} />
 						</div>
 						<div className="space-y-2">

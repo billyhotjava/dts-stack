@@ -103,7 +103,7 @@ const PRODUCT_DETAILS: ProductDetail[] = [
 	{
 		id: "prd-cust-wide",
 		fields: [
-			{ name: "customer_id", type: "STRING", term: "客户ID", masked: false, description: "主键" },
+			{ name: "customer_id", type: "STRING", term: "客户编号", masked: false, description: "主键" },
 			{ name: "customer_name", type: "STRING", masked: true, term: "客户姓名" },
 			{ name: "career_level", type: "STRING", masked: false, term: "职业等级" },
 			{ name: "lifecycle_stage", type: "STRING", masked: false },

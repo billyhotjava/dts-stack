@@ -84,7 +84,7 @@ const DATASETS: Dataset[] = [
 		rowCount: 820_000,
 		description: "统一的客户档案，含密级字段",
 		fields: [
-			{ name: "customer_id", type: "string", description: "客户ID", lineage: "mdm.customer.id" },
+			{ name: "customer_id", type: "string", description: "客户编号", lineage: "mdm.customer.id" },
 			{ name: "customer_name", type: "string", description: "客户名称" },
 			{ name: "level", type: "string", description: "客户等级" },
 			{ name: "sensitivity", type: "string", description: "密级" },
@@ -105,7 +105,7 @@ const DATASETS: Dataset[] = [
 			{ name: "module", type: "string", description: "服务模块" },
 			{ name: "level", type: "string", description: "日志级别" },
 			{ name: "message", type: "string", description: "日志内容" },
-			{ name: "trace_id", type: "string", description: "链路追踪ID" },
+			{ name: "trace_id", type: "string", description: "链路追踪编号" },
 		],
 	},
 ];

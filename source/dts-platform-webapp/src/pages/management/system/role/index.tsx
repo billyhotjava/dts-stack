@@ -115,7 +115,7 @@ export default function RolePage() {
 			),
 		},
 		{
-			title: "角色ID",
+			title: "角色编号",
 			dataIndex: "id",
 			width: 120,
 			render: (id: string) => (

@@ -14,6 +14,8 @@ public class ApprovalDTOs {
         public String approver;
         public String decisionNote;
         public String errorMessage;
+        public int retryCount;
+        public String category;
     }
 
     public static class ApprovalItem {
@@ -33,4 +35,3 @@ public class ApprovalDTOs {
         public String note;
     }
 }
-

@@ -51,7 +51,52 @@ public class ChangeRequestService {
         cr.setRequestedBy(SecurityUtils.getCurrentUserLogin().orElse("sysadmin"));
         cr.setRequestedAt(Instant.now());
         cr.setReason(reason);
+        cr.setCategory(resolveCategory(cr.getResourceType()));
+        cr.setSummary(buildSummary(cr.getResourceType(), cr.getAction(), resourceId, after));
+        cr.setLastError(null);
         return repository.save(cr);
+    }
+
+    private String resolveCategory(String resourceType) {
+        if (resourceType == null) {
+            return "GENERAL";
+        }
+        return switch (resourceType.toUpperCase()) {
+            case "USER" -> "USER_MANAGEMENT";
+            case "ROLE" -> "ROLE_MANAGEMENT";
+            case "PORTAL_MENU" -> "PORTAL_MENU";
+            case "CONFIG" -> "SYSTEM_CONFIG";
+            case "ORG" -> "ORGANIZATION";
+            case "CUSTOM_ROLE" -> "CUSTOM_ROLE";
+            case "ROLE_ASSIGNMENT" -> "ROLE_ASSIGNMENT";
+            default -> "GENERAL";
+        };
+    }
+
+    private String buildSummary(String resourceType, String action, String resourceId, Map<String, Object> after) {
+        StringBuilder sb = new StringBuilder();
+        if (action != null) {
+            sb.append(action.toUpperCase());
+        }
+        if (resourceType != null) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(resourceType.toUpperCase());
+        }
+        if (resourceId != null && !resourceId.isBlank()) {
+            sb.append(" → ").append(resourceId);
+        } else if (after != null) {
+            Object name = after.get("username");
+            if (name == null) {
+                name = after.get("name");
+            }
+            if (name != null) {
+                sb.append(" → ").append(String.valueOf(name));
+            }
+        }
+        String summary = sb.toString();
+        return summary.isBlank() ? null : summary;
     }
 
     private Map<String, Object> buildDiff(Map<String, Object> before, Map<String, Object> after) {
@@ -88,10 +133,7 @@ public class ChangeRequestService {
 
     private Object normalizeValue(Object value) {
         if (value instanceof Map<?, ?> map) {
-            return map
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), Map.Entry::getValue, (a, b) -> b, LinkedHashMap::new));
+            return normalizeMap(map);
         }
         if (value instanceof List<?> list) {
             return list.stream().map(this::normalizeValue).toList();
@@ -104,15 +146,31 @@ public class ChangeRequestService {
             return null;
         }
         if (payload instanceof Map<?, ?> map) {
-            return map
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), Map.Entry::getValue, (a, b) -> b, LinkedHashMap::new));
+            return normalizeMap(map);
         }
         if (payload instanceof ChangeRequest cr) {
             return Map.of("id", cr.getId());
         }
-        return objectMapper.convertValue(payload, LinkedHashMap.class);
+        Map<String, Object> converted = objectMapper.convertValue(payload, LinkedHashMap.class);
+        return converted == null ? null : normalizeMap(converted);
+    }
+
+    private Map<String, Object> normalizeMap(Map<?, ?> source) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry == null) {
+                continue;
+            }
+            Object key = entry.getKey();
+            if (key == null) {
+                continue;
+            }
+            String normalizedKey = String.valueOf(key);
+            Object value = entry.getValue();
+            Object normalizedValue = normalizeValue(value);
+            result.put(normalizedKey, normalizedValue);
+        }
+        return result;
     }
 
     private String write(Object value) {

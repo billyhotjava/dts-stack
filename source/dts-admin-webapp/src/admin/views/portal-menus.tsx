@@ -62,7 +62,7 @@ export default function PortalMenusView() {
 	const handleUpdate = async () => {
 		const id = Number(targetId);
 		if (!id) {
-			toast.error("请指定要更新的菜单ID");
+			toast.error("请指定要更新的菜单编号");
 			return;
 		}
 	const payload: PortalMenuItem = {
@@ -81,7 +81,7 @@ export default function PortalMenusView() {
 	const handleDelete = async () => {
 		const id = Number(targetId);
 		if (!id) {
-			toast.error("请指定要删除的菜单ID");
+			toast.error("请指定要删除的菜单编号");
 			return;
 		}
 		try {
@@ -196,7 +196,7 @@ export default function PortalMenusView() {
 						/>
 					</div>
 					<div className="space-y-2">
-						<Label htmlFor="menu-parent">父级ID (可选)</Label>
+						<Label htmlFor="menu-parent">父级编号 (可选)</Label>
 						<Input
 							id="menu-parent"
 							placeholder="例如 12"
@@ -220,10 +220,10 @@ export default function PortalMenusView() {
 						/>
 					</div>
 					<div className="space-y-2 md:col-span-2">
-						<Label htmlFor="menu-target">目标菜单ID（用于更新/删除）</Label>
+						<Label htmlFor="menu-target">目标菜单编号（用于更新/删除）</Label>
 						<Input
 							id="menu-target"
-							placeholder="请输入菜单ID"
+							placeholder="请输入菜单编号"
 							value={targetId}
 							onChange={(event) => setTargetId(event.target.value)}
 						/>
@@ -261,7 +261,7 @@ function MenuTree({ items, securityLabelMap }: { items: PortalMenuItem[]; securi
 								</Text>
 							</div>
 							<Text variant="body3" className="text-muted-foreground">
-								ID: {item.id ?? "--"}
+								编号：{item.id ?? "--"}
 							</Text>
 						</div>
 						{item.children && item.children.length > 0 ? (
@@ -298,7 +298,7 @@ function DeletedMenuList({ items, securityLabelMap }: { items: PortalMenuItem[];
 									</Text>
 								</div>
 								<Text variant="body3" className="text-muted-foreground">
-									ID: {item.id ?? "--"} · 父级ID: {item.parentId ?? "--"}
+									编号：{item.id ?? "--"} · 父级编号：{item.parentId ?? "--"}
 								</Text>
 							</div>
 						</li>

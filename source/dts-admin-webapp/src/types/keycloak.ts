@@ -281,6 +281,8 @@ export interface ApprovalRequest {
 	approver?: string;
 	decisionNote?: string;
 	errorMessage?: string;
+	retryCount?: number;
+	category?: string;
 	// 注意：列表接口不返回items字段
 }
 

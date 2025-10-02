@@ -1,0 +1,26 @@
+[PortalMenu 角色/权限模型设计]
+- 数据模型：在现有 `portal_menu` 表基础上，新增中间表 `portal_menu_visibility`（`id`, `menu_id`, `role_code`, `permission_code`, `data_level`, `created_at`, `created_by`）。`role_code` 对应 Keycloak / token 中的 `ROLE_*`，`permission_code` 预留给细粒度 ABAC（可为空），`data_level`（PUBLIC/INTERNAL/SECRET/TOP_SECRET）沿用现有密级枚举用于前置过滤。借助 JPA 建模为 `PortalMenuVisibility`，在 `PortalMenu` 中新增 `@OneToMany(mappedBy="menu", cascade=ALL, orphanRemoval=true)` 集合字段 `visibilities`。
+- 元数据兼容：保留 `metadata` 字段，用于前端个性化展示（icon、caption 等）。如需扩展更复杂的授权策略，可在 metadata 中补充结构化 JSON，但授权执行以 `portal_menu_visibility` 为准。
+- 审批链路：`AdminApiResource` 在 `draftCreateMenu`/`draftUpdateMenu` 时允许提交 `allowedRoles`（数组）、`allowedPermissions`、`maxDataLevel`，写入 `ChangeRequest.payloadJson`。审批通过时 `applyPortalMenuChange` 更新 `portal_menu` 及 `portal_menu_visibility`；删除菜单需级联删除可视化记录。
+- Liquibase：补充变更集创建新表、索引(`menu_id`, `role_code`) 以及迁移脚本把现有菜单默认授予 `ROLE_OP_ADMIN` + `ROLE_USER`，密级默认 `GENERAL` 对应 `INTERNAL`。
+
+[菜单授权过滤流程（dts-admin）]
+- 查询：`PortalMenuService` 新增 `findTreeForRoles(Set<String> roles, Set<String> permissions, String maxDataLevel)`，内部先查出全量根节点，再基于 visibilities 过滤可见节点并保留必需的祖先节点。若某菜单未配置可见范围，则按默认策略（仅 OP_ADMIN 可见）处理。
+- API：`GET /api/menu` 增加可选查询参数 `roles`、`permissions`、`dataLevel`，或从认证上下文自动解析当前用户的角色密级，返回裁剪后的树；`GET /api/admin/portal/menus` 仍返回全量供运维使用。认证失败或角色为空时返回空菜单。
+- 管控：菜单审批 UI（`PortalMenusView`）需新增可选项多选角色、密级、特定权限，提交时写入变更请求；审批通过后自动刷新菜单缓存。`AdminAuditService` 记录角色授权变更。
+
+[业务端菜单消费（dts-platform）]
+- 拉取方式：`PortalMenuClient.fetchMenuTree` 改为调用新接口 `GET /api/menu?roles=ROLE_USER,...&permissions=...&dataLevel=...`，其中角色/权限来自 `PortalSession`（`accessToken` introspection 已返回 `roles`、`permissions` 字段），密级可由用户档案或 token claim `data_level`。失败时按本地缓存/兜底静态菜单处理并记录告警。
+- 本地过滤：即便后端已做裁剪，`PortalMenuService` 仍在映射时根据当前会话的 `roles`、`permissions` 再次校验 `visibilities` 元数据，确保 UI 与后端授权一致，防止缓存因权限变更而滞后。
+- 缓存策略：将菜单结果以 `HashSet<String> roles` 为 key 缓存在 Caffeine/Redis，失效策略 5min；当用户角色变更或审批推送事件触发时，通过消息渠道/手动刷新清除缓存。
+- 前端配合：`usePortalNavigation` 在收到菜单数据后执行 DFS 过滤空子节点，并根据 `metadata` 渲染 icon/标题。若返回空树，提示“未配置可访问菜单”并引导联系管理员。
+
+[查询工作台整合方案]
+- 界面结构：`QueryWorkbenchPage` 统一承载 SQL 编辑、结果预览、执行历史三个部分，顶部 Tabs（编辑 / 结果 / 历史）共享同一上下文状态。结果面板可以在执行后自动跳转；历史面板支持重放查询并写回编辑器。
+- 后端契约：沿用 `SqlResource` 与 `ExploreExecResource`，新增聚合接口 `POST /api/explore/session/execute`（返回 executionId + resultId），以及 `GET /api/explore/session/{id}` 返回最近一次执行状态与预览数据。行级脱敏与权限校验复用 `AccessChecker` 确保与菜单权限一致。
+- 执行记录：`query-executions` 表中记录角色/用户标识，前端历史列表按当前用户、角色、时间过滤。提供“只看我的”和“团队共享”两种视图，以匹配不同权限级别。
+- 数据预览：执行成功后自动调用 `previewResultSet`，渲染在结果 Tab；失败时把错误信息写入历史记录并标记可重试。支持导出 CSV 前置权限校验。
+
+[一致性校验与后续动作]
+- 确认 Keycloak realm 中角色命名统一为 `ROLE_*`，并在 `PortalSessionRegistry.normalizeRoles` 保持一致。
+- 编写单元测试覆盖：菜单可见性过滤、审批链路、平台端二次过滤、查询页整合。优先完成数据模型和接口变更后，再推进 UI 与缓存实现。

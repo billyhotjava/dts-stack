@@ -33,6 +33,12 @@ public class ChangeRequest extends AbstractAuditingEntity<Long> implements Seria
     @Column(name = "status", nullable = false)
     private String status; // DRAFT/PENDING/APPROVED/REJECTED/APPLIED
 
+    @Column(name = "category", length = 64)
+    private String category = "GENERAL";
+
+    @Column(name = "summary", length = 512)
+    private String summary;
+
     @Column(name = "requested_by", nullable = false)
     private String requestedBy;
 
@@ -47,6 +53,10 @@ public class ChangeRequest extends AbstractAuditingEntity<Long> implements Seria
 
     @Column(name = "reason")
     private String reason;
+
+    @Lob
+    @Column(name = "last_error")
+    private String lastError;
 
     @Override
     public Long getId() {
@@ -144,5 +154,28 @@ public class ChangeRequest extends AbstractAuditingEntity<Long> implements Seria
     public void setReason(String reason) {
         this.reason = reason;
     }
-}
 
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getSummary() {
+        return summary;
+    }
+
+    public void setSummary(String summary) {
+        this.summary = summary;
+    }
+
+    public String getLastError() {
+        return lastError;
+    }
+
+    public void setLastError(String lastError) {
+        this.lastError = lastError;
+    }
+}

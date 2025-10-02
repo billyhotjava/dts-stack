@@ -30,7 +30,7 @@
 			"department": "部门",
 			"phoneNumber": "电话号码",
 			"address": "地址",
-			"employeeId": "员工ID"
+			"employeeId": "员工编号"
 		},
 		"roleManagement": {
 			"roles": "角色",
@@ -39,7 +39,7 @@
 			"description": "描述",
 			"composite": "复合角色",
 			"clientRole": "客户端角色",
-			"containerId": "容器ID",
+			"containerId": "容器标识",
 			"createRole": "创建角色",
 			"updateRole": "更新角色",
 			"deleteRole": "删除角色",

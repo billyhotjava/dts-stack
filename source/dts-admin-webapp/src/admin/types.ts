@@ -43,6 +43,9 @@ export interface ChangeRequest {
 	decidedBy?: string;
 	decidedAt?: string;
 	reason?: string;
+	category?: string;
+	summary?: string;
+	lastError?: string;
 }
 
 export interface AuditEvent {

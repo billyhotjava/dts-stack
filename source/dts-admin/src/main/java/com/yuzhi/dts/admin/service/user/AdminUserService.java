@@ -6,13 +6,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.domain.AdminApprovalItem;
 import com.yuzhi.dts.admin.domain.AdminApprovalRequest;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
+import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
+import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
 import com.yuzhi.dts.admin.service.approval.ApprovalStatus;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
+import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
+import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,6 +31,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -38,15 +45,42 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class AdminUserService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(AdminUserService.class);
+
     private static final Set<String> SUPPORTED_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> FORBIDDEN_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET");
-    private static final Set<String> SUPPORTED_DATA_LEVELS = Set.of("DATA_INTERNAL", "DATA_PUBLIC", "DATA_SECRET", "DATA_TOP_SECRET");
+    private static final Set<String> SUPPORTED_DATA_LEVELS = Set.of("DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_TOP_SECRET");
+    private static final Map<String, String> DATA_LEVEL_ALIASES = Map.ofEntries(
+        Map.entry("PUBLIC", "DATA_PUBLIC"),
+        Map.entry("DATA_PUBLIC", "DATA_PUBLIC"),
+        Map.entry("INTERNAL", "DATA_INTERNAL"),
+        Map.entry("DATA_INTERNAL", "DATA_INTERNAL"),
+        Map.entry("SECRET", "DATA_SECRET"),
+        Map.entry("DATA_SECRET", "DATA_SECRET"),
+        Map.entry("TOP_SECRET", "DATA_TOP_SECRET"),
+        Map.entry("DATA_TOP_SECRET", "DATA_TOP_SECRET")
+    );
+    private static final Map<String, String> INTERNAL_TO_KEYCLOAK_DATA_LEVEL = Map.of(
+        "DATA_PUBLIC",
+        "PUBLIC",
+        "DATA_INTERNAL",
+        "INTERNAL",
+        "DATA_SECRET",
+        "SECRET",
+        "DATA_TOP_SECRET",
+        "TOP_SECRET"
+    );
 
     private final AdminKeycloakUserRepository userRepository;
     private final AdminApprovalRequestRepository approvalRepository;
     private final KeycloakAdminClient keycloakAdminClient;
     private final AdminAuditService auditService;
+    private final ChangeRequestService changeRequestService;
+    private final ChangeRequestRepository changeRequestRepository;
     private final ObjectMapper objectMapper;
+    private final KeycloakAuthService keycloakAuthService;
+    private final String managementClientId;
+    private final String managementClientSecret;
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
@@ -56,13 +90,23 @@ public class AdminUserService {
         AdminApprovalRequestRepository approvalRepository,
         KeycloakAdminClient keycloakAdminClient,
         AdminAuditService auditService,
-        ObjectMapper objectMapper
+        ChangeRequestService changeRequestService,
+        ChangeRequestRepository changeRequestRepository,
+        ObjectMapper objectMapper,
+        KeycloakAuthService keycloakAuthService,
+        @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}") String managementClientId,
+        @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}") String managementClientSecret
     ) {
         this.userRepository = userRepository;
         this.approvalRepository = approvalRepository;
         this.keycloakAdminClient = keycloakAdminClient;
         this.auditService = auditService;
+        this.changeRequestService = changeRequestService;
+        this.changeRequestRepository = changeRequestRepository;
         this.objectMapper = objectMapper;
+        this.keycloakAuthService = keycloakAuthService;
+        this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
+        this.managementClientSecret = managementClientSecret == null ? "" : managementClientSecret;
     }
 
     @Transactional(readOnly = true)
@@ -83,10 +127,39 @@ public class AdminUserService {
 
     public ApprovalDTOs.ApprovalRequestDetail submitCreate(UserOperationRequest request, String requester, String ip) {
         validateOperation(request, true);
+        String username = request.getUsername().trim();
+        request.setUsername(username);
+        userRepository
+            .findByUsernameIgnoreCase(username)
+            .ifPresent(existing -> {
+                throw new IllegalArgumentException("用户已存在: " + username);
+            });
+        try {
+            String managementToken = resolveManagementToken();
+            keycloakAdminClient
+                .findByUsername(username, managementToken)
+                .ifPresent(existing -> {
+                    throw new IllegalArgumentException("Keycloak 中已存在同名用户: " + username);
+                });
+        } catch (IllegalArgumentException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            LOG.warn("Failed to check existing Keycloak user {} before submission: {}", username, ex.getMessage());
+        }
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, request.getReason(), "USER_CREATE");
-        approval.addItem(buildPayloadItem(request.getUsername(), buildCreatePayload(request)));
+        Map<String, Object> payload = buildCreatePayload(request);
+        ChangeRequest changeRequest = createChangeRequest(
+            "USER",
+            "CREATE",
+            username,
+            payload,
+            null,
+            request.getReason()
+        );
+        payload.put("changeRequestId", changeRequest.getId());
+        approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
-        recordAudit(requester, "USER_CREATE_REQUEST", request.getUsername(), ip, request);
+        recordAudit(requester, "USER_CREATE_REQUEST", username, ip, request);
         return toDetailDto(approval);
     }
 
@@ -94,7 +167,17 @@ public class AdminUserService {
         validateOperation(request, false);
         AdminKeycloakUser snapshot = ensureSnapshot(username);
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, request.getReason(), "USER_UPDATE");
-        approval.addItem(buildPayloadItem(username, buildUpdatePayload(request, snapshot)));
+        Map<String, Object> payload = buildUpdatePayload(request, snapshot);
+        ChangeRequest changeRequest = createChangeRequest(
+            "USER",
+            "UPDATE",
+            username,
+            payload,
+            snapshotPayload(snapshot),
+            request.getReason()
+        );
+        payload.put("changeRequestId", changeRequest.getId());
+        approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
         recordAudit(requester, "USER_UPDATE_REQUEST", username, ip, request);
         return toDetailDto(approval);
@@ -118,6 +201,17 @@ public class AdminUserService {
         payload.put("username", username);
         payload.put("roles", new ArrayList<>(roles));
         payload.put("currentRoles", snapshot.getRealmRoles());
+        payload.put("addedRoles", new ArrayList<>(roles));
+        payload.put("resultRoles", mergeRoles(snapshot.getRealmRoles(), roles, true));
+        ChangeRequest changeRequest = createChangeRequest(
+            "ROLE",
+            "GRANT_ROLE",
+            username,
+            payload,
+            Map.of("roles", copyList(snapshot.getRealmRoles())),
+            null
+        );
+        payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
         recordAudit(requester, "USER_GRANT_ROLE_REQUEST", username, ip, Map.of("roles", roles));
@@ -138,6 +232,17 @@ public class AdminUserService {
         payload.put("username", username);
         payload.put("roles", new ArrayList<>(roles));
         payload.put("currentRoles", snapshot.getRealmRoles());
+        payload.put("removedRoles", new ArrayList<>(roles));
+        payload.put("resultRoles", mergeRoles(snapshot.getRealmRoles(), roles, false));
+        ChangeRequest changeRequest = createChangeRequest(
+            "ROLE",
+            "REVOKE_ROLE",
+            username,
+            payload,
+            Map.of("roles", copyList(snapshot.getRealmRoles())),
+            null
+        );
+        payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
         recordAudit(requester, "USER_REVOKE_ROLE_REQUEST", username, ip, Map.of("roles", roles));
@@ -155,6 +260,15 @@ public class AdminUserService {
         payload.put("username", username);
         payload.put("enabled", enabled);
         payload.put("currentEnabled", snapshot.isEnabled());
+        ChangeRequest changeRequest = createChangeRequest(
+            "USER",
+            enabled ? "ENABLE" : "DISABLE",
+            username,
+            payload,
+            Map.of("enabled", snapshot.isEnabled()),
+            null
+        );
+        payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
         recordAudit(requester, "USER_ENABLE_REQUEST", username, ip, Map.of("enabled", enabled));
@@ -183,6 +297,13 @@ public class AdminUserService {
         payload.put("dataLevels", dataLevels == null ? Collections.emptyList() : new ArrayList<>(dataLevels));
         payload.put("currentPersonSecurityLevel", snapshot.getPersonSecurityLevel());
         payload.put("currentDataLevels", snapshot.getDataLevels());
+        Map<String, Object> before = new LinkedHashMap<>();
+        if (snapshot.getPersonSecurityLevel() != null) {
+            before.put("personSecurityLevel", snapshot.getPersonSecurityLevel());
+        }
+        before.put("dataLevels", copyList(snapshot.getDataLevels()));
+        ChangeRequest changeRequest = createChangeRequest("USER", "SET_PERSON_LEVEL", username, payload, before, reason);
+        payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
         recordAudit(requester, "USER_SET_PERSON_LEVEL_REQUEST", username, ip, Map.of("personLevel", personLevel, "dataLevels", dataLevels));
@@ -211,15 +332,19 @@ public class AdminUserService {
         }
         ensureAllowedSecurityLevel(normalizedSecurity, "人员密级不允许为非密");
         if (request.getDataLevels() != null) {
+            List<String> normalizedLevels = new ArrayList<>();
             for (String level : request.getDataLevels()) {
                 if (StringUtils.isBlank(level)) {
                     continue;
                 }
-                String normalized = level.trim().toUpperCase().replace('-', '_');
+                String normalized = normalizeDataLevel(level);
                 if (!SUPPORTED_DATA_LEVELS.contains(normalized)) {
                     throw new IllegalArgumentException("不支持的数据密级: " + level);
                 }
+                normalizedLevels.add(normalized);
+                break;
             }
+            request.setDataLevels(normalizedLevels);
         }
     }
 
@@ -229,6 +354,7 @@ public class AdminUserService {
         approval.setType(type);
         approval.setReason(reason);
         approval.setStatus(ApprovalStatus.PENDING.name());
+        approval.setRetryCount(0);
         return approval;
     }
 
@@ -324,6 +450,46 @@ public class AdminUserService {
         return normalized;
     }
 
+    private String normalizeDataLevel(String level) {
+        if (level == null) {
+            return null;
+        }
+        String cleaned = level.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+        return DATA_LEVEL_ALIASES.getOrDefault(cleaned, cleaned);
+    }
+
+    private List<String> toInternalDataLevels(List<String> source) {
+        if (source == null || source.isEmpty()) {
+            return List.of();
+        }
+        List<String> results = new ArrayList<>();
+        for (String level : source) {
+            String normalized = normalizeDataLevel(level);
+            if (normalized != null && SUPPORTED_DATA_LEVELS.contains(normalized)) {
+                results.add(normalized);
+                break;
+            }
+        }
+        return results;
+    }
+
+    private List<String> toKeycloakDataLevels(List<String> source) {
+        if (source == null || source.isEmpty()) {
+            return List.of();
+        }
+        List<String> results = new ArrayList<>();
+        for (String level : source) {
+            String normalized = normalizeDataLevel(level);
+            if (normalized == null) {
+                continue;
+            }
+            String mapped = INTERNAL_TO_KEYCLOAK_DATA_LEVEL.getOrDefault(normalized, normalized);
+            results.add(mapped);
+            break;
+        }
+        return results;
+    }
+
     private AdminKeycloakUser ensureSnapshot(String username) {
         return userRepository
             .findByUsernameIgnoreCase(username)
@@ -344,9 +510,7 @@ public class AdminUserService {
         entity.setEnabled(Boolean.TRUE.equals(dto.getEnabled()));
         String securityLevel = normalizeSecurityLevel(extractSingle(dto, "person_security_level"));
         entity.setPersonSecurityLevel(securityLevel);
-        entity.setDataLevels(
-            extractList(dto, "data_levels").stream().map(s -> s == null ? null : s.toUpperCase()).filter(s -> s != null).collect(Collectors.toList())
-        );
+        entity.setDataLevels(toInternalDataLevels(extractList(dto, "data_levels")));
         entity.setRealmRoles(dto.getRealmRoles());
         entity.setGroupPaths(dto.getGroups());
         entity.setPhone(extractSingle(dto, "phone"));
@@ -416,6 +580,8 @@ public class AdminUserService {
         dto.approver = approval.getApprover();
         dto.decisionNote = approval.getDecisionNote();
         dto.errorMessage = approval.getErrorMessage();
+        dto.retryCount = approval.getRetryCount() == null ? 0 : approval.getRetryCount();
+        dto.category = resolveApprovalCategory(approval.getType());
         dto.items = approval
             .getItems()
             .stream()
@@ -444,7 +610,19 @@ public class AdminUserService {
         dto.approver = approval.getApprover();
         dto.decisionNote = approval.getDecisionNote();
         dto.errorMessage = approval.getErrorMessage();
+        dto.retryCount = approval.getRetryCount() == null ? 0 : approval.getRetryCount();
+        dto.category = resolveApprovalCategory(approval.getType());
         return dto;
+    }
+
+    private String resolveApprovalCategory(String type) {
+        if (type == null) {
+            return "GENERAL";
+        }
+        if (type.startsWith("ROLE_")) {
+            return "ROLE_MANAGEMENT";
+        }
+        return "USER_MANAGEMENT";
     }
 
     public ApprovalDTOs.ApprovalRequestDetail approve(long id, String approver, String note, String accessToken) {
@@ -452,24 +630,26 @@ public class AdminUserService {
             .findWithItemsById(id)
             .orElseThrow(() -> new IllegalArgumentException("审批请求不存在: " + id));
         ensurePending(approval);
+        Set<Long> changeRequestIds = extractChangeRequestIds(approval);
+        Instant now = Instant.now();
         try {
-            applyApproval(approval, accessToken);
+            String managementToken = resolveManagementToken();
+            applyApproval(approval, managementToken);
             approval.setStatus(ApprovalStatus.APPLIED.name());
-            approval.setDecidedAt(Instant.now());
+            approval.setDecidedAt(now);
             approval.setApprover(approver);
             approval.setDecisionNote(note);
             approval.setErrorMessage(null);
             approvalRepository.save(approval);
             auditService.record(approver, "APPROVAL_APPROVE", "APPROVAL", String.valueOf(id), "SUCCESS", note);
+            updateChangeRequestStatus(changeRequestIds, ApprovalStatus.APPLIED.name(), approver, now, null);
             return toDetailDto(approval);
         } catch (Exception ex) {
-            approval.setStatus(ApprovalStatus.FAILED.name());
-            approval.setDecidedAt(Instant.now());
-            approval.setApprover(approver);
-            approval.setDecisionNote(note);
-            approval.setErrorMessage(ex.getMessage());
-            approvalRepository.save(approval);
             auditService.record(approver, "APPROVAL_APPROVE", "APPROVAL", String.valueOf(id), "FAILURE", ex.getMessage());
+            scheduleRetry(approval, note, ex.getMessage());
+            approvalRepository.save(approval);
+            updateChangeRequestStatus(changeRequestIds, ApprovalStatus.PENDING.name(), null, null, ex.getMessage());
+            auditService.record(approver, "APPROVAL_REQUEUE", "APPROVAL", String.valueOf(id), "SUCCESS", ex.getMessage());
             throw new IllegalStateException("审批执行失败: " + ex.getMessage(), ex);
         }
     }
@@ -479,12 +659,15 @@ public class AdminUserService {
             .findWithItemsById(id)
             .orElseThrow(() -> new IllegalArgumentException("审批请求不存在: " + id));
         ensurePending(approval);
+        Set<Long> changeRequestIds = extractChangeRequestIds(approval);
+        Instant now = Instant.now();
         approval.setStatus(ApprovalStatus.REJECTED.name());
-        approval.setDecidedAt(Instant.now());
+        approval.setDecidedAt(now);
         approval.setApprover(approver);
         approval.setDecisionNote(note);
         approvalRepository.save(approval);
         auditService.record(approver, "APPROVAL_REJECT", "APPROVAL", String.valueOf(id), "SUCCESS", note);
+        updateChangeRequestStatus(changeRequestIds, ApprovalStatus.REJECTED.name(), approver, now, null);
         return toDetailDto(approval);
     }
 
@@ -493,11 +676,15 @@ public class AdminUserService {
             .findWithItemsById(id)
             .orElseThrow(() -> new IllegalArgumentException("审批请求不存在: " + id));
         ensurePending(approval);
+        Set<Long> changeRequestIds = extractChangeRequestIds(approval);
+        Instant now = Instant.now();
         approval.setStatus(ApprovalStatus.PROCESSING.name());
+        approval.setDecidedAt(now);
         approval.setApprover(approver);
         approval.setDecisionNote(note);
         approvalRepository.save(approval);
         auditService.record(approver, "APPROVAL_PROCESS", "APPROVAL", String.valueOf(id), "SUCCESS", note);
+        updateChangeRequestStatus(changeRequestIds, ApprovalStatus.PROCESSING.name(), approver, now, null);
         return toDetailDto(approval);
     }
 
@@ -516,6 +703,15 @@ public class AdminUserService {
         payload.put("password", password);
         payload.put("temporary", temporary);
         payload.put("keycloakId", snapshot.getKeycloakId());
+        ChangeRequest changeRequest = createChangeRequest(
+            "USER",
+            "RESET_PASSWORD",
+            username,
+            payload,
+            null,
+            null
+        );
+        payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
         recordAudit(requester, "USER_RESET_PASSWORD_REQUEST", username, ip, Map.of("temporary", temporary));
@@ -552,6 +748,172 @@ public class AdminUserService {
         }
     }
 
+    private ChangeRequest createChangeRequest(
+        String resourceType,
+        String action,
+        String resourceId,
+        Map<String, Object> payload,
+        Map<String, Object> before,
+        String reason
+    ) {
+        Map<String, Object> afterPayload = sanitizeChangePayload(payload);
+        Map<String, Object> beforePayload = before == null ? null : sanitizeChangePayload(before);
+        return changeRequestService.draft(resourceType, action, resourceId, afterPayload, beforePayload, reason);
+    }
+
+    private Map<String, Object> sanitizeChangePayload(Map<String, Object> source) {
+        if (source == null) {
+            return null;
+        }
+        Map<String, Object> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            String key = entry.getKey();
+            if (key == null) {
+                continue;
+            }
+            if ("action".equals(key) || key.startsWith("current") || "changeRequestId".equals(key)) {
+                continue;
+            }
+            copy.put(key, sanitizeValue(key, entry.getValue()));
+        }
+        return copy;
+    }
+
+    private Object sanitizeValue(String key, Object value) {
+        if (value == null) {
+            return null;
+        }
+        if ("password".equalsIgnoreCase(key)) {
+            return "******";
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> nested = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String nestedKey = String.valueOf(entry.getKey());
+                nested.put(nestedKey, sanitizeValue(nestedKey, entry.getValue()));
+            }
+            return nested;
+        }
+        if (value instanceof Collection<?> collection) {
+            return collection.stream().map(item -> sanitizeValue(key, item)).collect(Collectors.toList());
+        }
+        return value;
+    }
+
+    private List<String> copyList(List<String> source) {
+        if (source == null || source.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(source);
+    }
+
+    private List<String> mergeRoles(List<String> current, List<String> delta, boolean adding) {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(copyList(current));
+        if (delta != null) {
+            if (adding) {
+                merged.addAll(delta);
+            } else {
+                for (String role : delta) {
+                    if (role != null) {
+                        merged.remove(role);
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(merged);
+    }
+
+    private Set<Long> extractChangeRequestIds(AdminApprovalRequest approval) {
+        Set<Long> ids = new LinkedHashSet<>();
+        for (AdminApprovalItem item : approval.getItems()) {
+            if (item == null || item.getPayloadJson() == null) {
+                continue;
+            }
+            try {
+                Map<String, Object> payload = readPayload(item.getPayloadJson());
+                Long id = toLong(payload.get("changeRequestId"));
+                if (id != null) {
+                    ids.add(id);
+                }
+            } catch (JsonProcessingException ignored) {
+            }
+        }
+        return ids;
+    }
+
+    private Long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text) {
+            try {
+                return text.isBlank() ? null : Long.parseLong(text.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private void updateChangeRequestStatus(
+        Set<Long> changeRequestIds,
+        String status,
+        String approver,
+        Instant decidedAt,
+        String errorMessage
+    ) {
+        if (changeRequestIds == null || changeRequestIds.isEmpty()) {
+            return;
+        }
+        Instant timestamp = decidedAt == null ? Instant.now() : decidedAt;
+        for (Long id : changeRequestIds) {
+            changeRequestRepository
+                .findById(id)
+                .ifPresent(cr -> {
+                    cr.setStatus(status);
+                    if (ApprovalStatus.PENDING.name().equals(status)) {
+                        cr.setDecidedBy(null);
+                        cr.setDecidedAt(null);
+                    } else {
+                        cr.setDecidedBy(approver);
+                        cr.setDecidedAt(timestamp);
+                    }
+                    cr.setLastError(errorMessage);
+                    changeRequestRepository.save(cr);
+                });
+        }
+    }
+
+    private void scheduleRetry(AdminApprovalRequest approval, String note, String errorMessage) {
+        approval.setStatus(ApprovalStatus.PENDING.name());
+        approval.setDecidedAt(null);
+        approval.setApprover(null);
+        approval.setDecisionNote(note);
+        approval.setErrorMessage(errorMessage);
+        Integer current = approval.getRetryCount() == null ? 0 : approval.getRetryCount();
+        approval.setRetryCount(current + 1);
+    }
+
+    private String resolveManagementToken() {
+        if (StringUtils.isBlank(managementClientId)) {
+            throw new IllegalStateException("缺少 Keycloak 管理客户端 ID 配置，无法通过 Service Account 执行审批操作");
+        }
+        if (StringUtils.isBlank(managementClientSecret)) {
+            throw new IllegalStateException("缺少 Keycloak 管理客户端密钥配置，无法通过 Service Account 执行审批操作");
+        }
+
+        try {
+            var tokenResponse = keycloakAuthService.obtainClientCredentialsToken(managementClientId, managementClientSecret);
+            if (tokenResponse == null || tokenResponse.accessToken() == null || tokenResponse.accessToken().isBlank()) {
+                throw new IllegalStateException("Keycloak 管理客户端未返回 access_token");
+            }
+            LOG.info("Using client credentials token for Keycloak admin operations (clientId={})", managementClientId);
+            return tokenResponse.accessToken();
+        } catch (Exception ex) {
+            throw new IllegalStateException("获取 Keycloak 管理客户端访问令牌失败: " + ex.getMessage(), ex);
+        }
+    }
+
     private Map<String, Object> readPayload(String json) throws JsonProcessingException {
         return objectMapper.readValue(json, MAP_TYPE);
     }
@@ -559,8 +921,29 @@ public class AdminUserService {
     private void applyCreate(Map<String, Object> payload, String accessToken) {
         KeycloakUserDTO dto = toUserDto(payload);
         ensureAllowedSecurityLevel(extractPersonLevel(dto), "人员密级不允许为非密");
-        KeycloakUserDTO created = keycloakAdminClient.createUser(dto, accessToken);
-        syncSnapshot(created);
+        Optional<KeycloakUserDTO> existing = keycloakAdminClient.findByUsername(dto.getUsername(), accessToken);
+        KeycloakUserDTO target;
+        if (existing.isPresent()) {
+            KeycloakUserDTO current = existing.get();
+            String keycloakId = current.getId();
+            if (keycloakId != null && !keycloakId.isBlank()) {
+                dto.setId(keycloakId);
+                try {
+                    target = keycloakAdminClient.updateUser(keycloakId, dto, accessToken);
+                    LOG.info("Keycloak user {} already existed; attributes updated", dto.getUsername());
+                } catch (RuntimeException ex) {
+                    LOG.warn("Failed to update existing Keycloak user {}, fallback to create: {}", dto.getUsername(), ex.getMessage());
+                    dto.setId(null);
+                    target = keycloakAdminClient.createUser(dto, accessToken);
+                }
+            } else {
+                dto.setId(null);
+                target = keycloakAdminClient.createUser(dto, accessToken);
+            }
+        } else {
+            target = keycloakAdminClient.createUser(dto, accessToken);
+        }
+        syncSnapshot(target);
     }
 
     private void applyUpdate(Map<String, Object> payload, String accessToken) {
@@ -632,9 +1015,11 @@ public class AdminUserService {
         if (level != null) {
             attributes.put("person_level", List.of(level));
         }
-        List<String> dataLevels = stringList(payload.get("dataLevels"));
+        List<String> dataLevels = toKeycloakDataLevels(stringList(payload.get("dataLevels")));
         if (!dataLevels.isEmpty()) {
             attributes.put("data_levels", dataLevels);
+        } else {
+            attributes.remove("data_levels");
         }
         existing.setAttributes(attributes);
         KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
@@ -695,7 +1080,7 @@ public class AdminUserService {
         if (personLevel != null && !personLevel.isBlank()) {
             attributes.put("person_level", List.of(personLevel));
         }
-        List<String> dataLevels = stringList(payload.get("dataLevels"));
+        List<String> dataLevels = toKeycloakDataLevels(stringList(payload.get("dataLevels")));
         if (!dataLevels.isEmpty()) {
             attributes.put("data_levels", dataLevels);
         }

@@ -301,7 +301,7 @@ export default function OrgManagementView() {
 										)}
 									</Badge>
 								</div>
-								<p className="text-muted-foreground">部门ID：{selected.id}</p>
+								<p className="text-muted-foreground">部门编号：{selected.id}</p>
 								<p className="text-muted-foreground">
 									上级部门：{selected.path.slice(0, -1).join(" / ") || "无（一级部门）"}
 								</p>

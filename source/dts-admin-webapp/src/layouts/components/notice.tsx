@@ -477,7 +477,7 @@ function NoticeTab() {
 									<div className="mt-2">
 										<Text variant="subTitle2">{artwork.title}</Text>
 										<Text variant="caption" color="secondary">
-											Token ID: {artwork.id}
+											令牌编号: {artwork.id}
 										</Text>
 									</div>
 								</div>

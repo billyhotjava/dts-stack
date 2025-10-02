@@ -21,7 +21,7 @@ export default function TaskSchedulingPage() {
             支持：任务编排、依赖管理、定时/事件触发、告警与重试策略、运行日志、历史版本、DAG 可视化。
           </p>
           <div className="grid gap-2 md:grid-cols-[1fr,auto]">
-            <Input placeholder="输入ETL作业ID (UUID)" value={jobId} onChange={(e) => setJobId(e.target.value)} />
+            <Input placeholder="输入ETL作业编号（UUID）" value={jobId} onChange={(e) => setJobId(e.target.value)} />
             <Button onClick={async () => {
               if (!jobId) return;
               const r = (await submitEtlJob(jobId)) as any;
@@ -30,7 +30,7 @@ export default function TaskSchedulingPage() {
             }}>登记提交</Button>
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-[1fr,auto]">
-            <Input placeholder="输入运行ID 查询状态" value={runId} onChange={(e) => setRunId(e.target.value)} />
+            <Input placeholder="输入运行编号 查询状态" value={runId} onChange={(e) => setRunId(e.target.value)} />
             <Button variant="outline" onClick={async () => {
               if (!runId) return;
               const r = (await getJobRunStatus(runId)) as any;

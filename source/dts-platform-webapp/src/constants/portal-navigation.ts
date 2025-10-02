@@ -52,7 +52,7 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 		titleKey: "sys.nav.portal.governance",
 		children: [
 			{ key: "rules", path: "rules", titleKey: "sys.nav.portal.governanceRules" },
-			{ key: "compliance", path: "compliance", titleKey: "sys.nav.portal.governanceCompliance" },
+			{ key: "masking", path: "masking", titleKey: "sys.nav.portal.governanceMasking", descriptionKey: "sys.nav.portal.governanceMaskingCaption" },
 		],
 	},
 	{

@@ -134,7 +134,7 @@ export default function GroupPage() {
 			okButtonProps: { danger: true },
 			async onOk() {
 				try {
-					if (!group.id) throw new Error("组ID不存在");
+					if (!group.id) throw new Error("组织标识不存在");
 					await KeycloakGroupService.deleteGroup(group.id);
 					toast.success("组删除成功");
 					loadGroups();
@@ -270,7 +270,7 @@ export default function GroupPage() {
 									<p className="font-medium text-foreground">{getAttributeValue(selectedGroup, "orgCode") || "-"}</p>
 								</div>
 								<div className="space-y-1">
-									<p className="text-xs text-muted-foreground">组ID</p>
+									<p className="text-xs text-muted-foreground">组织标识</p>
 									<p className="font-mono text-xs text-muted-foreground">{selectedGroup.id ?? "-"}</p>
 								</div>
 							</div>

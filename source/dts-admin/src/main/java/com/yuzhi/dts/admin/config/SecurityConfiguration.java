@@ -51,8 +51,10 @@ public class SecurityConfiguration {
                     // Admin service is governance-only: restrict all API endpoints to the triad roles
                     .requestMatchers(mvc.pattern("/api/admin/**"))
                         .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN)
-                    .requestMatchers(mvc.pattern("/api/keycloak/**"))
+                    .requestMatchers(mvc.pattern("/api/keycloak/approvals/**"))
                         .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN)
+                    .requestMatchers(mvc.pattern("/api/keycloak/**"))
+                        .hasAuthority(AuthoritiesConstants.SYS_ADMIN)
                     .requestMatchers(mvc.pattern("/admin/**"))
                         .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN)
                     .requestMatchers(mvc.pattern("/api/**"))

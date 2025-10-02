@@ -19,6 +19,8 @@ public class AdminAuditService {
         public String resource;
         public String outcome;
         public String detailJson;
+        public String targetType;
+        public String targetUri;
     }
 
     private final List<AuditEvent> store = Collections.synchronizedList(new ArrayList<>());
@@ -35,6 +37,8 @@ public class AdminAuditService {
         e.timestamp = Instant.now().toString();
         e.actor = actor;
         e.action = action;
+        e.targetType = targetKind;
+        e.targetUri = targetRef;
         e.resource = targetKind + ":" + Objects.toString(targetRef, "");
         e.outcome = outcome;
         e.detailJson = detailJson;
@@ -43,14 +47,15 @@ public class AdminAuditService {
         return e;
     }
 
-    public List<AuditEvent> list(String actor, String action, String resource, String outcome) {
+    public List<AuditEvent> list(String actor, String action, String resource, String outcome, String targetType, String targetUri) {
         return store
             .stream()
             .filter(x -> actor == null || (x.actor != null && x.actor.contains(actor)))
             .filter(x -> action == null || (x.action != null && x.action.contains(action)))
             .filter(x -> resource == null || (x.resource != null && x.resource.contains(resource)))
             .filter(x -> outcome == null || (x.outcome != null && x.outcome.equals(outcome)))
+            .filter(x -> targetType == null || (x.targetType != null && x.targetType.contains(targetType)))
+            .filter(x -> targetUri == null || (x.targetUri != null && x.targetUri.contains(targetUri)))
             .toList();
     }
 }
-

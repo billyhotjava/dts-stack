@@ -143,7 +143,7 @@ export default function RolePage() {
 		},
 		// 按要求移除角色“数据密级”展示列
 		{
-			title: "角色ID",
+			title: "角色编号",
 			dataIndex: "id",
 			width: 120,
 			render: (id: string) => (

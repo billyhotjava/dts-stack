@@ -31,7 +31,7 @@ type FieldDefinition = {
 };
 
 const FIELD_DEFINITIONS: FieldDefinition[] = [
-	{ name: "customer_id", type: "STRING", term: "客户唯一标识", masked: false, description: "全局唯一客户 ID" },
+	{ name: "customer_id", type: "STRING", term: "客户唯一标识", masked: false, description: "全局唯一客户编号" },
 	{ name: "customer_name", type: "STRING", term: "客户姓名", masked: true, description: "脱敏展示客户姓名" },
 	{ name: "credential_type", type: "STRING", term: "证件类型", masked: true },
 	{ name: "credential_no", type: "STRING", term: "证件号码", masked: true },

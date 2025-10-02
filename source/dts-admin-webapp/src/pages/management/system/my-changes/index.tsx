@@ -18,6 +18,7 @@ const statusConfig: Record<
 	}
 > = {
 	PENDING: { label: "待审批", tagColor: "gold", badge: "warning" },
+	PROCESSING: { label: "处理中", tagColor: "blue", badge: "warning" },
 	APPROVED: { label: "已批准", tagColor: "green", badge: "success" },
 	REJECTED: { label: "已拒绝", tagColor: "red", badge: "destructive" },
 	APPLIED: { label: "已应用", tagColor: "blue", badge: "success" },
@@ -32,12 +33,28 @@ const resourceMap: Record<string, string> = {
 	CONFIG: "配置",
 };
 
+const categoryLabels: Record<string, string> = {
+	USER_MANAGEMENT: "用户管理",
+	ROLE_MANAGEMENT: "角色管理",
+	PORTAL_MENU: "门户菜单",
+	SYSTEM_CONFIG: "系统配置",
+	ORGANIZATION: "组织机构",
+	CUSTOM_ROLE: "自定义角色",
+	ROLE_ASSIGNMENT: "角色授权",
+};
+
 const actionMap: Record<string, string> = {
 	CREATE: "创建",
 	UPDATE: "更新",
 	DELETE: "删除",
 	SUBMIT: "提交",
 	APPROVE: "批准",
+	ENABLE: "启用",
+	DISABLE: "停用",
+	GRANT_ROLE: "分配角色",
+	REVOKE_ROLE: "移除角色",
+	SET_PERSON_LEVEL: "调整密级",
+	RESET_PASSWORD: "重置密码",
 };
 
 export default function MyChangeRequestsPage() {
@@ -76,6 +93,12 @@ export default function MyChangeRequestsPage() {
 					#{id}
 				</Text>
 			),
+		},
+		{
+			title: "分类",
+			dataIndex: "category",
+			width: 140,
+			render: (value?: string) => categoryLabels[value ?? ""] ?? value ?? "GENERAL",
 		},
 		{
 			title: "资源类型",
@@ -126,6 +149,12 @@ export default function MyChangeRequestsPage() {
 			ellipsis: true,
 			render: (value?: string) => value || "-",
 		},
+		{
+			title: "摘要",
+			dataIndex: "summary",
+			ellipsis: true,
+			render: (value: string | undefined, record) => value || record.resourceId || "-",
+		},
 	];
 
 	return (
@@ -165,7 +194,7 @@ export default function MyChangeRequestsPage() {
 							showQuickJumper: true,
 							showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
 						}}
-						scroll={{ x: 960 }}
+						scroll={{ x: 1080 }}
 					/>
 				</CardContent>
 			</Card>

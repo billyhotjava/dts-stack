@@ -823,7 +823,7 @@ export default function RoleManagementView() {
 						<CardHeader>
 							<CardTitle>角色分配</CardTitle>
 							<Text variant="body3" className="text-muted-foreground">
-								授权需绑定用户与作用域（Org ID 或留空表示全院共享区）。
+								授权需绑定用户与作用域（填写组织标识或留空表示全院共享区）。
 							</Text>
 						</CardHeader>
 						<CardContent className="space-y-6 text-sm">

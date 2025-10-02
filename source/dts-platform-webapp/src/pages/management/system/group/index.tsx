@@ -102,7 +102,7 @@ export default function GroupPage() {
 			okButtonProps: { danger: true },
 			onOk: async () => {
 				try {
-					if (!group.id) throw new Error("组ID不存在");
+					if (!group.id) throw new Error("组织标识不存在");
 					await KeycloakGroupService.deleteGroup(group.id);
 					toast.success("组删除成功");
 					loadGroups();
@@ -163,7 +163,7 @@ export default function GroupPage() {
 			render: (subGroups?: KeycloakGroup[]) => <Badge variant="outline">{subGroups?.length || 0} 个</Badge>,
 		},
 		{
-			title: "组ID",
+			title: "组织标识",
 			dataIndex: "id",
 			width: 120,
 			render: (id: string) => (

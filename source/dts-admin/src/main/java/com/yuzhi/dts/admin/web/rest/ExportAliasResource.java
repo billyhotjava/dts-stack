@@ -25,7 +25,7 @@ public class ExportAliasResource {
     public ResponseEntity<Void> exportAlias(HttpServletResponse response) throws IOException {
         String header = "id,timestamp,actor,action,resource,outcome\n";
         StringBuilder sb = new StringBuilder(header);
-        for (AdminAuditService.AuditEvent e : auditService.list(null, null, null, null)) {
+        for (AdminAuditService.AuditEvent e : auditService.list(null, null, null, null, null, null)) {
             sb.append(e.id)
                 .append(',')
                 .append(e.timestamp)
@@ -44,4 +44,3 @@ public class ExportAliasResource {
         return ResponseEntity.ok().build();
     }
 }
-

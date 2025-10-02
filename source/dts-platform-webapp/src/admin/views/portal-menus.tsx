@@ -39,7 +39,7 @@ export default function PortalMenusView() {
 	const handleUpdate = async () => {
 		const id = Number(targetId);
 		if (!id) {
-			toast.error("请指定要更新的菜单ID");
+			toast.error("请指定要更新的菜单编号");
 			return;
 		}
 		try {
@@ -54,7 +54,7 @@ export default function PortalMenusView() {
 	const handleDelete = async () => {
 		const id = Number(targetId);
 		if (!id) {
-			toast.error("请指定要删除的菜单ID");
+			toast.error("请指定要删除的菜单编号");
 			return;
 		}
 		try {
@@ -104,7 +104,7 @@ export default function PortalMenusView() {
 						onChange={(event) => setDraft((prev) => ({ ...prev, sortOrder: Number(event.target.value) || undefined }))}
 					/>
 					<Input
-						placeholder="父级ID (可选)"
+						placeholder="父级编号 (可选)"
 						value={draft.parentId?.toString() || ""}
 						onChange={(event) =>
 							setDraft((prev) => ({ ...prev, parentId: event.target.value ? Number(event.target.value) : undefined }))
@@ -117,7 +117,7 @@ export default function PortalMenusView() {
 						rows={3}
 					/>
 					<Input
-						placeholder="目标菜单ID（用于更新/删除）"
+						placeholder="目标菜单编号（用于更新/删除）"
 						value={targetId}
 						onChange={(event) => setTargetId(event.target.value)}
 					/>
@@ -143,7 +143,7 @@ function MenuTree({ items }: { items: PortalMenuItem[] }) {
 				<li key={item.id} className="rounded-md border p-3">
 					<div className="flex items-center justify-between gap-2 text-sm">
 						<span className="font-semibold">{item.name}</span>
-						<span className="text-muted-foreground">ID: {item.id}</span>
+						<span className="text-muted-foreground">编号：{item.id}</span>
 					</div>
 					<Text variant="body3" className="text-muted-foreground">
 						路径：{item.path} · 组件：{item.component || "--"}

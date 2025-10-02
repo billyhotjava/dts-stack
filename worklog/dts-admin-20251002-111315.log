@@ -1,0 +1,119 @@
+Todo:
+背景说明下，我做的是一个大数据管理平台，对接上海星环的大数据平台，侧重于只做数据“消费侧”的治理与服务，但是按照甲方的要求，整个平台需要分为两部分，第一部分是管理端,dts-admin和dt-admin-webapp，第二部分是业务端，源代码是dts-platform,dts-platform-webapp,dts-public-api是swagger模块。
+管理端的现状是：
+1.在管理端，只能由三个用户登录，系统管理员(sysadmin)，授权管理员(authadmin),和安全审计员(auditadmin) , 系统管理员负责用户、角色、组织机构的增删改，但是所有操作都需要经过授权管理员授权才能生效；
+2.授权管理员只做授权，审计系统管理员和安全审计员的日志，不做其他任务。
+3.安全审计员负责所有业务用户的日志审计，包括登录登出，日志导出和整理等。
+4.系统管理员还负责整个系统的运维部分的工作，比如系统管理、集群管理，业务端的菜单管理；
+5.管理端底座用了keycloak作为开发底座，包括用户、用户组(也就是组织机构)等功能管理，然后新开发了web界面。
+
+业务端现状：
+1.在业务端，有一个超级业务管理员oadmin，负责管理整个业务端。刚才提到的三个用户不能登录，也就是sysadmin,authadmin,auditadmin这三个用户。
+2.业务端只能由带角色的普通用户登录，角色有四种，非密，普通，秘密和机密，数据安全有四种(内部、公开、秘密、机密)
+3.因为业务端的复杂性，我使用了星环大数据平台TDS,把星环大数据平台抽取清洗后的Inceptor(hive)数据作为数仓，根据业务优先级完成经典的大数据平台功能，覆盖数据资产、数据治理、数据探索和数据可视化这几个部分。
+
+
+2025-10-01 20:16 完成dts-admin用户与菜单改造：禁止人员密级选用非密、禁用用户删除；门户菜单新增密级与软删除字段并返回活跃/已删除清单，同时前端改造为中文展示及双栏列表。
+
+2025-10-02 11:15 项目运行逻辑梳理（含环境、服务拓扑、角色模型）：
+1. 初始化/基础设施
+   - 首次执行 `./init.sh <mode> '<统一口令>' <base-domain>`：生成 `.env`、拷贝 `imgversion.conf` 中镜像标签、下发 TLS 证书(`services/certs/`)、预创建 MinIO/Postgres 数据目录并修正权限。脚本支持 `single|ha2|cluster`，默认 single 会开启 Traefik Dashboard。
+   - `init.sh` 内部会：
+       * 归一化 BASE_DOMAIN 并写入 `.env`，推导出 `HOST_*`、`IMAGE_*` 等变量。
+       * 依据 `MODE` 选择嵌入式 Postgres（PG_MODE=embedded）时确保 `services/dts-pg/data` 权限可被容器 UID 使用。
+       * 调用 `docker compose up -d dts-pg dts-proxy dts-keycloak dts-minio dts-minio-init dts-nessie dts-trino` 启动基座组件，并可选执行 `99-ensure-users-runtime.sh` 修正 DB 用户。
+   - 证书脚本 (`services/certs/gen-cert.sh`) 可重新生成内部 CA/服务证书，供 Traefik/Keycloak/Java 应用的 truststore 使用。
+
+2. Compose 拓扑
+   - `docker-compose.yml`：定义所有基础服务（Traefik、Postgres、Keycloak、MinIO(+mc init)、Nessie、Trino、预留 Ranger）。各服务通过 `dts-core` 网络互联，Traefik 统一暴露 80/443/metrics，TLS 证书来自 `services/certs`。
+   - `docker-compose-app.yml`：生产态应用层，挂载预构建镜像 `IMAGE_DTS_*`，并把 truststore、OIDC Issuer、CORS/同域路由配置好。Traefik 规则保证 `https://admin.<BASE_DOMAIN>` → admin-webapp、`https://platform.<BASE_DOMAIN>` → platform-webapp，API 通过子路径 `/admin`、`/platform` 进入后端。
+   - `docker-compose.dev.yml`：本地源码挂载。Java 服务使用 Maven 容器镜像运行：
+       * 启动流程：Patch application-dev.yml 使用 env datasource；构建并 `spring-boot:run`，开启 5005 调试端口；自动安装 `dts-common`。
+       * React 前端使用 node:22 容器 + pnpm，`pnpm install` 后以 Vite dev server 暴露 18011/18012。脚本 `builds/patch-vite-env.sh` 写入代理目标。
+   - 常用生命周期脚本：`./dev-up.sh --mode local` 启动三层 compose；`./dev-stop.sh --mode local` 停止；`start.sh/stop.sh` 面向打包模式运行已经构建好的镜像。
+
+3. 应用分层
+   - 后端：三套 Spring Boot (Java 17) 项目
+       * `dts-common`：通用模块（安全、DTO、日志、健康检查、ABAC 工具）供其他服务引入。
+       * `dts-admin`：治理端 API。依赖 Keycloak 管理接口，暴露审批流、角色/用户同步、审计事件等；安全面向三员角色（ROLE_SYS_ADMIN、ROLE_AUTH_ADMIN、ROLE_AUDITOR_ADMIN）。
+       * `dts-platform`：业务端 API（资产、治理、探索、可视化），仅供应用管理员/业务用户使用。门户登录接口会拦截 sysadmin/authadmin/auditadmin。
+       * 每个应用启用 Liquibase、MapStruct、Feign、Eureka (可选)；`SecurityConfiguration` 将 `/api/**` 绑定 Opaque Token（platform）或 JWT（admin）。
+   - 前端：两套 React 19 + Vite + Ant Design 工程
+       * `dts-admin-webapp`：治理端 UI，集成审批中心、系统管理、审计日志（含目标类型筛选）、角色菜单密级管控等。
+       * `dts-platform-webapp`：业务门户 UI，聚合资产浏览、看板、探索、可视化等功能；通过 `VITE_API_PROXY_TARGET` 代理到平台后端。
+       * 两者都支持菜单模板同步脚本、Tailwind、Zustand、React Query，运行节点需 >=20，对应 PNPM 10。
+
+4. 安全/权限模型
+   - Keycloak Realm（如 secure-corp）核心：
+       * Realm Roles：三员（ROLE_SYS_ADMIN / ROLE_AUTH_ADMIN / ROLE_AUDITOR_ADMIN）、应用管理员 ROLE_OP_ADMIN、数据密级角色（DATA_PUBLIC/INTERNAL/SECRET/TOP_SECRET）。
+       * 用户属性：`person_security_level` (NON_SECRET/GENERAL/IMPORTANT/CORE)、`data_levels`（自动派生）、可选 `dept_code`、`title`、`expires_at`。
+       * Protocol Mapper：将人员密级与派生的数据级别写入 access/id token（claims：person_security_level/data_levels）。
+       * 防护：三员默认不赋予平台客户端角色，并开启「仅限具备角色」获取令牌 → 无法登录业务端。
+   - 管理端审批：
+       * 系统管理员提交用户/角色变更；授权管理员审批；安全审计员可查看日志。
+       * 审批通过后 `AdminUserService` 通过 Keycloak Admin API 同步实体。
+       * 审计事件经 `AdminAuditService` 存储+可选推送到 dts-common 审计 API，带上 actor/action/targetType/targetUri。
+   - 业务端 ABAC：平台端根据 token 中 `data_levels` 判断数据访问；资源标注 data_label（PUBLIC/INTERNAL/SECRET/TOP_SECRET）时要求 `data_label ⊆ data_levels`。
+   - 人员密级：创建/调整时禁止 NON_SECRET，并触发审批；自动推算可访问数据密级集合。
+
+5. 运行/运维要点
+   - 本地开发：
+       * 先跑 `./init.sh single 'Strong@2025!' dts.local`，再执行 `./dev-up.sh --mode local`。
+       * 前端访问：`http://localhost:18011`(admin)、`http://localhost:18012`(platform)；中枢服务通过 `https://<host>.<BASE_DOMAIN>`。
+       * Keycloak/数据库/对象存储等容器位于 `services/` 目录，数据和配置会被持久挂载。
+       * `enable-devtools.sh` 可启用 Spring devtools 热更新（针对 Java 服务）。
+   - 打包部署：
+       * 更新 `imgversion.conf`，执行 `./init.sh` 以刷新 `.env`。
+       * `docker compose -f docker-compose.yml -f docker-compose-app.yml up -d` 拉起全部服务；针对单服务可 `up -d <service>`。
+       * Traefik dashboard/metrics 仅在 single 模式（或手动开启）暴露。
+       * 健康检查：`docker compose ps`、`docker compose logs -f <service>`、`docker compose exec dts-trino wget -qO- http://localhost:8080/v1/info`、`curl -k https://sso.${BASE_DOMAIN}`。
+       * 管理端/业务端编译输出在 `target/` 与 `dist/`，可通过 `Dockerfile` 构建镜像并推送供部署。
+   - 数据同步：MinIO 由 `dts-minio-init` 初始化桶；Nessie/Trino 负责计算查询；可选 Ranger 提供数据治理策略（当前 compose 注释）。
+
+6. 关键约束
+   - 三员账号只允许治理端登录；业务端登录通过 `KeycloakAuthResource` 拦截。
+   - 审批流依赖授权管理员审批；安全审计员审计系统管理员/授权管理员日志，授权管理员反向审计系统管理员/安全审计员。
+   - 菜单分配遵循密级控制：低密角色无法分配高密菜单；菜单带有软删除和密级标记。
+   - 所有敏感操作都有审计记录，包含请求来源 IP、目标 URI、详细 diff。
+
+普通业务角色矩阵：
+- `DEPT_OWNER`：本部门负责人。可读取本部门且数据密级不超的资源，具备本部门范围写入/修改能力；可申请提升密级或配置共享；能授予/回收本部门 `DEPT_EDITOR`、`DEPT_VIEWER`；导出高敏需审批。
+- `DEPT_EDITOR`：本部门编辑。可读同级密级数据并在本部门内写入；无密级/共享调整、无授权管理；导出受行列与策略限制。
+- `DEPT_VIEWER`：本部门查看。仅浏览本部门密级不超数据；禁止写入、密级/共享设置、授权；导出默认禁用。
+- `INST_OWNER`：研究所共享区负责人。可读共享区密级不超数据并在共享区写入（不涉及部门私有）；可管理共享策略（需审批）；负责共享区编辑/查看授权；导出高敏需审批。
+- `INST_EDITOR`：研究所共享区编辑。可读共享区符合密级要求的数据并写入同区；无密级/共享及授权能力；导出依策略限制。
+- `INST_VIEWER`：研究所共享区查看。仅读取密级不超数据；无写入与策略/授权权限；导出禁用。
+
+dts-admin 审批业务逻辑（用户/角色双轨）：
+1. 触发端（ROLE_SYS_ADMIN）
+   - 所有写操作通过 `/api/admin/users/**` 或 `/api/keycloak/**` 入口触发，控制器均校验必填项并调用 `AdminUserService`。
+   - `/api/keycloak/**` 入口已限制仅 `ROLE_SYS_ADMIN` 可写，授权管理员仅能读取审批列表。
+   - 提交前执行人员密级校验（禁止 NON_SECRET）、数据密级合法性校验，并补齐属性（人员密级、自动派生的数据密级）。
+
+2. 申请建模
+   - `AdminUserService` 为每次写操作创建 `AdminApprovalRequest`（PENDING），`type` 分为：
+       * 用户类：`USER_CREATE`、`USER_UPDATE`、`SET_ENABLED`、`SET_PERSON_LEVEL`、`RESET_PASSWORD`。
+       * 角色类：`GRANT_ROLE`、`REVOKE_ROLE`。（删除被禁用，改用停用流程）。
+   - 将操作主体封装为 `AdminApprovalItem`（targetKind=USER），`payloadJson` 存储统一结构体并附上 `changeRequestId`。
+   - 同步写入 `ChangeRequest`（resourceType=USER/ROLE），序列化 before/after，屏蔽敏感字段（密码→******），状态初始为 PENDING。
+   - `AdminAuditService` 即时记录“提交申请”事件，详情包含请求 IP、payload 片段、targetType/URI。
+
+3. 审批端（ROLE_AUTH_ADMIN）
+   - 通过 `/api/keycloak/approvals` 列表/详情获取队列；校验身份后可执行 `approve`/`reject`/`process`（挂起）。
+   - `KeycloakAuthResource.actApproval` 读取当前会话的 OIDC Bearer Token，交由 `AdminUserService.approve|reject|delay`。
+   - 审批结果会写回：`AdminApprovalRequest.status`（APPLIED/FAILED/REJECTED/PROCESSING）、`approver`、`decisionNote`，并日志化到审计流。
+   - `AdminUserService` 根据 `changeRequestId` 映射更新 `ChangeRequest.status`（与审批保持一致），补充决策人/时间。
+
+4. 审批执行（Approve 成功路径）
+   - `applyApproval` 逐条读取 `payloadJson`：
+       * `create` → 构造 `KeycloakUserDTO`，调用 `keycloakAdminClient.createUser`，刷新本地快照。
+       * `update` → 拉取最新用户合并补丁后 `updateUser`。
+       * `grantRoles`/`revokeRoles` → 对比当前角色列表生成结果集，再写回 Keycloak。
+       * `setEnabled`、`setPersonLevel`、`resetPassword` 分别走对应 API。
+   - 操作成功后写回 `AdminKeycloakUser` 快照（含人员/数据密级、角色、启用状态），同时把关联 `ChangeRequest` 标记为 APPLIED 并清空 `lastError`。
+   - 若调用 Keycloak 失败，会记录报错、递增 `retryCount`、把审批重新排入 PENDING，关联 `ChangeRequest` 同步回滚为 PENDING 并写入 `lastError`，授权管理员可修复后再次审批。
+
+5. 其他要点
+   - 审批仍处于 PROCESSING 时可由授权管理员补充备注并保留队列。
+   - 审批链同时驱动 `AdminAuditService`（带 targetType/targetUri）与 `ChangeRequest`（category/summary/lastError），用于运维聚合与导出；前端可利用 `category`、`retryCount` 快速分流用户管理与角色管理工单。
+   - `InMemoryStores` 提供演示/离线环境：预置 triad 用户、角色、示例审批，便于前端在无 Keycloak 场景下联调。

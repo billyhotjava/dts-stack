@@ -123,11 +123,16 @@ public class AdminApiResource {
     @GetMapping("/audit")
     public ResponseEntity<ApiResponse<List<com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditEvent>>> listAudit(
         @RequestParam(required = false) String actor,
+        @RequestParam(required = false, name = "person") String person,
         @RequestParam(required = false) String action,
         @RequestParam(required = false) String resource,
-        @RequestParam(required = false) String outcome
+        @RequestParam(required = false) String outcome,
+        @RequestParam(required = false) String targetType,
+        @RequestParam(required = false) String targetUri
     ) {
-        var list = auditService.list(actor, action, resource, outcome);
+        String actorFilter = actor != null ? actor : person;
+        var list = auditService.list(actorFilter, action, resource, outcome, targetType, targetUri);
+        list = filterAuditEventsByRole(list);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "AUDIT_LIST", "AUDIT", "query", "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
@@ -136,7 +141,7 @@ public class AdminApiResource {
     public void exportAudit(HttpServletResponse response) throws IOException {
         String header = "id,timestamp,actor,action,resource,outcome\n";
         StringBuilder sb = new StringBuilder(header);
-        for (com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditEvent e : auditService.list(null, null, null, null)) {
+        for (com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditEvent e : auditService.list(null, null, null, null, null, null)) {
                 sb.append(e.id)
                     .append(',')
                     .append(e.timestamp)
@@ -152,6 +157,48 @@ public class AdminApiResource {
         }
         response.setContentType("text/csv");
         response.getOutputStream().write(sb.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    private List<com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditEvent> filterAuditEventsByRole(
+        List<com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditEvent> events
+    ) {
+        boolean isSysAdmin = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.SYS_ADMIN);
+        boolean isAuthAdmin = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.AUTH_ADMIN);
+        boolean isAuditAdmin = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.AUDITOR_ADMIN);
+
+        if (isSysAdmin || (!isAuthAdmin && !isAuditAdmin)) {
+            return events;
+        }
+
+        final java.util.Set<String> triad = java.util.Set.of("sysadmin", "authadmin", "auditadmin");
+        java.util.Set<String> allowedTriadActors = new java.util.HashSet<>();
+        boolean allowNonTriadActors = false;
+
+        if (isAuthAdmin) {
+            allowedTriadActors.add("sysadmin");
+            allowedTriadActors.add("auditadmin");
+        }
+        if (isAuditAdmin) {
+            allowedTriadActors.add("sysadmin");
+            allowedTriadActors.add("authadmin");
+            allowNonTriadActors = true;
+        }
+
+        final boolean allowNonTriadActorsFinal = allowNonTriadActors;
+
+        return events
+            .stream()
+            .filter(event -> {
+                String actor = event.actor == null ? "" : event.actor.trim().toLowerCase(java.util.Locale.ROOT);
+                if (actor.isEmpty()) {
+                    return allowNonTriadActorsFinal;
+                }
+                if (allowNonTriadActorsFinal && !triad.contains(actor)) {
+                    return true;
+                }
+                return allowedTriadActors.contains(actor);
+            })
+            .toList();
     }
 
     // --- Placeholders to align with adminApi ---
@@ -408,6 +455,9 @@ public class AdminApiResource {
         cr.setStatus("DRAFT");
         cr.setRequestedBy(SecurityUtils.getCurrentUserLogin().orElse("sysadmin"));
         cr.setRequestedAt(Instant.now());
+        cr.setCategory(Objects.toString(payload.get("category"), "GENERAL"));
+        cr.setSummary(Objects.toString(payload.get("summary"), null));
+        cr.setLastError(null);
         crRepo.save(cr);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "CHANGE_REQUEST_CREATE", "CHANGE_REQUEST", String.valueOf(cr.getId()), "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
@@ -449,6 +499,7 @@ public class AdminApiResource {
         cr.setDecidedBy(SecurityUtils.getCurrentUserLogin().orElse("authadmin"));
         cr.setDecidedAt(Instant.now());
         cr.setReason(body != null ? Objects.toString(body.get("reason"), null) : null);
+        cr.setLastError(null);
         crRepo.save(cr);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "CHANGE_REQUEST_REJECT", "CHANGE_REQUEST", id, "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
@@ -580,6 +631,7 @@ public class AdminApiResource {
 
     private void applyChangeRequest(ChangeRequest cr) {
         try {
+            cr.setLastError(null);
             if ("PORTAL_MENU".equalsIgnoreCase(cr.getResourceType())) {
                 applyPortalMenuChange(cr);
             } else if ("CONFIG".equalsIgnoreCase(cr.getResourceType())) {
@@ -592,7 +644,8 @@ public class AdminApiResource {
                 applyRoleAssignmentChange(cr);
             }
         } catch (Exception e) {
-            // swallow apply failures to keep approval result; could store error
+            cr.setStatus("FAILED");
+            cr.setLastError(e.getMessage());
         }
     }
 
@@ -803,6 +856,9 @@ public class AdminApiResource {
         m.put("decidedBy", cr.getDecidedBy());
         m.put("decidedAt", cr.getDecidedAt() != null ? cr.getDecidedAt().toString() : null);
         m.put("reason", cr.getReason());
+        m.put("category", cr.getCategory());
+        m.put("summary", cr.getSummary());
+        m.put("lastError", cr.getLastError());
         return m;
     }
 

@@ -49,6 +49,9 @@ public class AdminApprovalRequest extends AbstractAuditingEntity<Long> implement
     @Column(name = "decided_at")
     private Instant decidedAt;
 
+    @Column(name = "retry_count", nullable = false)
+    private Integer retryCount = 0;
+
     @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("seqNumber ASC")
     private List<AdminApprovalItem> items = new ArrayList<>();
@@ -124,6 +127,14 @@ public class AdminApprovalRequest extends AbstractAuditingEntity<Long> implement
 
     public void setDecidedAt(Instant decidedAt) {
         this.decidedAt = decidedAt;
+    }
+
+    public Integer getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(Integer retryCount) {
+        this.retryCount = retryCount;
     }
 
     public List<AdminApprovalItem> getItems() {

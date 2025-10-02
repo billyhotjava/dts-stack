@@ -19,6 +19,9 @@ type AuditLogFilters = {
 	module?: string;
 	ip?: string;
 	actor?: string; // sysadmin | auditadmin
+	person?: string; // free-text operator search
+	targetType?: string;
+	targetUri?: string;
 };
 
 const ACTION_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -89,9 +92,18 @@ export default function AuditLogPage() {
 		[auditLogs],
 	);
 
+	const targetTypeOptions = useMemo(
+		() =>
+			Array.from(new Set(auditLogs.map((log) => log.targetType).filter(Boolean))).map((type) => ({
+				label: (type || "").replace(/_/g, " "),
+				value: type as string,
+			})),
+		[auditLogs],
+	);
+
 	const applyFilters = useCallback(
 		(values: AuditLogFilters) => {
-			const { dateRange, module, ip, actor } = values;
+			const { dateRange, module, ip, actor, person, targetType, targetUri } = values;
 			let nextLogs = auditLogs;
 
 			if (dateRange && Array.isArray(dateRange)) {
@@ -123,6 +135,21 @@ export default function AuditLogPage() {
 				} else {
 					nextLogs = nextLogs.filter((log) => (log.actor || "").toLowerCase() === actor.toLowerCase());
 				}
+			}
+
+			if (person && person.trim()) {
+				const keyword = person.trim().toLowerCase();
+				nextLogs = nextLogs.filter((log) => (log.actor || "").toLowerCase().includes(keyword));
+			}
+
+			if (targetType && targetType.trim()) {
+				const normalized = targetType.trim().toLowerCase();
+				nextLogs = nextLogs.filter((log) => (log.targetType || "").toLowerCase() === normalized);
+			}
+
+			if (targetUri && targetUri.trim()) {
+				const keyword = targetUri.trim().toLowerCase();
+				nextLogs = nextLogs.filter((log) => (log.targetUri || "").toLowerCase().includes(keyword));
 			}
 
 			setFilteredLogs(nextLogs);
@@ -183,7 +210,7 @@ export default function AuditLogPage() {
 
 	const columns: ColumnsType<AuditLog> = [
 		{
-			title: "ID",
+			title: "记录编号",
 			dataIndex: "id",
 			width: 80,
 			render: (id: number) => (
@@ -207,13 +234,33 @@ export default function AuditLogPage() {
 			},
 		},
 		{
-			title: "目标",
-			dataIndex: "target",
-			width: 180,
+			title: "目标类型",
+			dataIndex: "targetType",
+			width: 140,
+			render: (type: string | undefined) =>
+				type ? <Tag color="blue">{type.replace(/_/g, " ")}</Tag> : <span>-</span>,
+		},
+		{
+			title: "目标 URI",
+			dataIndex: "targetUri",
+			width: 220,
 			ellipsis: true,
-			render: (target: string) => (
-				<Tooltip title={target}>
-					<span>{target}</span>
+			render: (uri: string | undefined) => (
+				<Tooltip title={uri || "-"}>
+					<Text variant="body2" className="font-mono">
+						{uri || "-"}
+					</Text>
+				</Tooltip>
+			),
+		},
+		{
+			title: "目标标识",
+			dataIndex: "target",
+			width: 200,
+			ellipsis: true,
+			render: (target: string | undefined) => (
+				<Tooltip title={target || "-"}>
+					<span>{target || "-"}</span>
 				</Tooltip>
 			),
 		},
@@ -297,8 +344,17 @@ export default function AuditLogPage() {
 						<Form.Item label="IP地址" name="ip">
 							<Input allowClear placeholder="请输入IP地址" style={{ width: 200 }} />
 						</Form.Item>
+						<Form.Item label="人员" name="person">
+							<Input allowClear placeholder="支持模糊搜索操作者" style={{ width: 200 }} />
+						</Form.Item>
 						<Form.Item label="角色" name="actor">
 							<Select allowClear placeholder="请选择角色" options={actorOptions} className="min-w-[160px]" />
+						</Form.Item>
+						<Form.Item label="目标类型" name="targetType">
+							<Select allowClear placeholder="请选择目标类型" options={targetTypeOptions} className="min-w-[160px]" />
+						</Form.Item>
+						<Form.Item label="目标URI" name="targetUri">
+							<Input allowClear placeholder="支持模糊查询如 /api/user" style={{ width: 220 }} />
 						</Form.Item>
 						<Form.Item>
 							<Space>
@@ -342,7 +398,7 @@ export default function AuditLogPage() {
 						<div className="grid grid-cols-2 gap-4">
 							<div>
 								<Text variant="body2" className="text-muted-foreground">
-									ID
+									记录编号
 								</Text>
 								<Text variant="body1">#{selectedLog.id}</Text>
 							</div>
@@ -367,12 +423,24 @@ export default function AuditLogPage() {
 								</Text>
 								<Text variant="body1">{selectedLog.actor}</Text>
 							</div>
-							<div>
-								<Text variant="body2" className="text-muted-foreground">
-									目标
-								</Text>
-								<Text variant="body1">{selectedLog.target || "-"}</Text>
-							</div>
+						<div>
+							<Text variant="body2" className="text-muted-foreground">
+								目标
+							</Text>
+							<Text variant="body1">{selectedLog.target || "-"}</Text>
+						</div>
+						<div>
+							<Text variant="body2" className="text-muted-foreground">
+								目标类型
+							</Text>
+							<Text variant="body1">{selectedLog.targetType || "-"}</Text>
+						</div>
+						<div>
+							<Text variant="body2" className="text-muted-foreground">
+								目标 URI
+							</Text>
+							<Text variant="body1" className="font-mono break-all">{selectedLog.targetUri || "-"}</Text>
+						</div>
 							<div>
 								<Text variant="body2" className="text-muted-foreground">
 									IP地址
@@ -425,13 +493,15 @@ function buildCsvContent(logs: AuditLog[], filters: AuditLogFilters) {
 		}, 模块=${module}, IP=${ip}, 角色=${actor}`,
 	);
 	lines.push("");
-	lines.push("ID,功能模块,操作类型,目标,操作者,IP地址,创建时间,结果,内容");
+	lines.push("记录编号,功能模块,操作类型,目标类型,目标URI,目标标识,操作者,IP地址,创建时间,结果,内容");
 	for (const log of logs) {
 		lines.push(
 			[
 				csvEscape(`#${log.id}`),
 				csvEscape(log.module),
 				csvEscape(resolveActionMeta(log.action).label),
+				csvEscape(log.targetType || "-"),
+				csvEscape(log.targetUri || "-"),
 				csvEscape(log.target || "-"),
 				csvEscape(log.actor),
 				csvEscape(log.ip),

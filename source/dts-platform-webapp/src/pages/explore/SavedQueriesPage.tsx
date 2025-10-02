@@ -169,7 +169,7 @@ export default function SavedQueriesPage() {
               <table className="w-full border-collapse text-sm">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="border-b px-3 py-2 text-left font-medium">ID</th>
+                    <th className="border-b px-3 py-2 text-left font-medium">查询编号</th>
                     <th className="border-b px-3 py-2 text-left font-medium">列</th>
                     <th className="border-b px-3 py-2 text-left font-medium">行数</th>
                     <th className="border-b px-3 py-2 text-left font-medium">过期时间</th>

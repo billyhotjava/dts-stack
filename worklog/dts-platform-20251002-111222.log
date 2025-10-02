@@ -1,0 +1,18 @@
+[背景理解]
+- 业务端(dts-platform)采用 Keycloak 模拟登录流程：`KeycloakAuthResource` 拒绝 sys/auth/audit 三员账号，仅允许 `opadmin` 等业务用户获取 portal session，`PortalSessionRegistry` 提供内存 token。
+- 前端(dts-platform-webapp)默认走前端路由(`VITE_APP_ROUTER_MODE=frontend`)，登录界面再次拦截三员账号，`AdminGuard` 通过 `/api/admin/whoami` 校验 opadmin 权限。
+
+[mynemu.json 功能梳理]
+- catalog：数据资产入口，含“资产目录”“分级保护与访问策略”“安全视图编排”，对应资产编目+授权控制能力。
+- modeling：模型与标准，当前仅保留“数据标准”，暗示后续可扩展建模作业入口。
+- governance：治理与质量，包含“质量规则”“合规检查”，面向数据治理规则配置与合规检测。
+- explore：数据开发侧，含“数据查询和预览”“结果集管理”，与 Trino SQL workbench、历史查询管理相关。
+- visualization：数据可视化集群，包含仪表盘、经营驾驶舱、项目/财务/供应链/人力看板，聚焦多主题可视化消费。
+- services：数据服务化能力，“API 服务”“数据产品”“令牌与密钥”强调对外提供 API/产品与凭据管理。
+- iam：权限与策略，覆盖“密级模型映射”“资源授权”“策略模拟与评估”“权限申请入口”，对应消费端 ABAC/敏感度管理。
+- foundation：基础数据维护，“数据源”“数据存储”“任务调度”对接底层星环/任务编排能力。
+
+[疑问与后续关注]
+- 文件命名写作 `mynemu.json`，需确认是否是临时命名还是正式配置源，以免后续替换菜单时遗漏。
+- 目前各菜单对应的页面/接口是否已完整实现？例如 visualization 下多个看板目录在代码中是否已有占位或需要按需裁剪。
+- Portal 菜单最终是否沿用前端静态配置，还是需要与后端 `PortalMenuService`（对接 dts-admin）联动？需提前确定以免双份维护。

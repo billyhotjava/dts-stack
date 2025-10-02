@@ -186,11 +186,11 @@ spring:
       client:
         provider:
           oidc:
-            issuer-uri: http://localhost:9080/realms/jhipster
+            issuer-uri: http://dts-keycloak:8080/realms/S10
         registration:
           oidc:
-            client-id: internal
-            client-secret: internal
+            client-id: ${OAUTH2_ADMIN_CLIENT_ID:internal}
+            client-secret: ${OAUTH2_ADMIN_CLIENT_SECRET:internal}
             scope: openid, profile, email, offline_access # last one for refresh tokens
   task:
     execution:
@@ -222,6 +222,11 @@ springdoc:
 info:
   # Comma separated list of profiles that will trigger the ribbon to show
   display-ribbon-on-profiles: 'dev'
+
+dts:
+  keycloak:
+    admin-client-id: "${DTS_KEYCLOAK_ADMIN_CLIENT_ID:${OAUTH2_ADMIN_CLIENT_ID:${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID:}}}"
+    admin-client-secret: "${DTS_KEYCLOAK_ADMIN_CLIENT_SECRET:${OAUTH2_ADMIN_CLIENT_SECRET:${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET:}}}"
 
 # ===================================================================
 # JHipster specific properties

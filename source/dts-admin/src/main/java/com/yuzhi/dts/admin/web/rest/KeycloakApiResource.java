@@ -277,12 +277,16 @@ public class KeycloakApiResource {
     }
 
     private static List<String> computeDataLevels(String personLevel) {
-        return switch (personLevel) {
-            case "NON_SECRET" -> List.of("DATA_PUBLIC");
-            case "GENERAL" -> List.of("DATA_PUBLIC", "DATA_INTERNAL");
-            case "IMPORTANT" -> List.of("DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET");
-            case "CORE" -> List.of("DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_TOP_SECRET");
-            default -> List.of("DATA_PUBLIC");
+        return List.of(defaultDataLevel(personLevel));
+    }
+
+    private static String defaultDataLevel(String personLevel) {
+        return switch (personLevel == null ? "" : personLevel) {
+            case "CORE" -> "DATA_TOP_SECRET";
+            case "IMPORTANT" -> "DATA_SECRET";
+            case "GENERAL" -> "DATA_INTERNAL";
+            case "NON_SECRET" -> "DATA_PUBLIC";
+            default -> "DATA_PUBLIC";
         };
     }
 
@@ -407,15 +411,11 @@ public class KeycloakApiResource {
     private List<String> resolveDataLevels(Map<String, List<String>> attributes, String personLevel) {
         List<String> values = attributeList(attributes, "data_levels", "dataLevels", "data_levels[]");
         if (!values.isEmpty()) {
-            LinkedHashSet<String> normalized = new LinkedHashSet<>();
             for (String value : values) {
                 String cleaned = normalizeDataLevelValue(value);
                 if (cleaned != null) {
-                    normalized.add(cleaned);
+                    return new ArrayList<>(List.of(cleaned));
                 }
-            }
-            if (!normalized.isEmpty()) {
-                return new ArrayList<>(normalized);
             }
         }
         return new ArrayList<>(computeDataLevels(personLevel == null ? DEFAULT_PERSON_LEVEL : personLevel));
@@ -749,35 +749,19 @@ public class KeycloakApiResource {
     // ---- Approvals ----
     @GetMapping("/approval-requests")
     public ResponseEntity<ApiResponse<List<ApprovalDTOs.ApprovalRequest>>> listApprovals() {
-        List<ApprovalDTOs.ApprovalRequest> list = stores
-            .approvals
-            .values()
-            .stream()
-            .map(d -> {
-                ApprovalDTOs.ApprovalRequest a = new ApprovalDTOs.ApprovalRequest();
-                a.id = d.id;
-                a.requester = d.requester;
-                a.type = d.type;
-                a.reason = d.reason;
-                a.createdAt = d.createdAt;
-                a.decidedAt = d.decidedAt;
-                a.status = d.status;
-                a.approver = d.approver;
-                a.decisionNote = d.decisionNote;
-                a.errorMessage = d.errorMessage;
-                return a;
-            })
-            .toList();
+        List<ApprovalDTOs.ApprovalRequest> list = adminUserService.listApprovals();
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "APPROVAL_LIST", "APPROVAL", "list", "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
 
     @GetMapping("/approval-requests/{id}")
     public ResponseEntity<ApiResponse<ApprovalDTOs.ApprovalRequestDetail>> getApproval(@PathVariable long id) {
-        ApprovalDTOs.ApprovalRequestDetail d = stores.approvals.get(id);
-        if (d == null) return ResponseEntity.status(404).body(ApiResponse.error("审批请求不存在"));
+        Optional<ApprovalDTOs.ApprovalRequestDetail> detail = adminUserService.findApprovalDetail(id);
+        if (detail.isEmpty()) {
+            return ResponseEntity.status(404).body(ApiResponse.error("审批请求不存在"));
+        }
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "APPROVAL_DETAIL", "APPROVAL", String.valueOf(id), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(d));
+        return ResponseEntity.ok(ApiResponse.ok(detail.get()));
     }
 
     @GetMapping("/keycloak/approvals")
@@ -792,47 +776,57 @@ public class KeycloakApiResource {
         @PathVariable String action,
         @RequestBody(required = false) ApprovalDTOs.ApprovalActionRequest body
     ) {
-        ApprovalDTOs.ApprovalRequestDetail d = stores.approvals.get(id);
-        if (d == null) return ResponseEntity.status(404).body(ApiResponse.error("请求不存在"));
-        String now = Instant.now().toString();
-        String approver = Optional.ofNullable(body).map(b -> b.approver).orElse(d.approver != null ? d.approver : "authadmin");
-        switch (action.toLowerCase()) {
-            case "approve" -> {
-                d.status = "APPROVED";
-                d.decidedAt = now;
-                d.approver = approver;
-                d.decisionNote = body != null ? body.note : d.decisionNote;
-                d.errorMessage = null;
-                auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "APPROVAL_APPROVE", "APPROVAL", String.valueOf(id), "SUCCESS", null);
-            }
-            case "reject" -> {
-                d.status = "REJECTED";
-                d.decidedAt = now;
-                d.approver = approver;
-                d.decisionNote = body != null ? body.note : d.decisionNote;
-                auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "APPROVAL_REJECT", "APPROVAL", String.valueOf(id), "SUCCESS", null);
-            }
-            case "process" -> {
-                d.status = "APPLIED";
-                d.decidedAt = now;
-                d.approver = approver;
-                if (body != null && body.note != null) d.decisionNote = body.note;
-                d.errorMessage = null;
-                auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "APPROVAL_PROCESS", "APPROVAL", String.valueOf(id), "SUCCESS", null);
-            }
-            default -> {
-                return ResponseEntity.badRequest().body(ApiResponse.error("不支持的操作"));
-            }
+        String normalized = action == null ? "" : action.trim().toLowerCase();
+        String approver = Optional
+            .ofNullable(body)
+            .map(b -> b.approver)
+            .filter(val -> val != null && !val.isBlank())
+            .orElse(currentUser());
+        String note = Optional.ofNullable(body).map(b -> b.note).orElse(null);
+        try {
+            return switch (normalized) {
+                case "approve" -> {
+                    String token = currentAccessToken();
+                    if (token == null || token.isBlank()) {
+                        yield ResponseEntity
+                            .status(HttpStatus.UNAUTHORIZED)
+                            .body(ApiResponse.error("缺少授权令牌，无法执行审批操作"));
+                    }
+                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.approve(id, approver, note, token);
+                    yield ResponseEntity.ok(ApiResponse.ok(detail));
+                }
+                case "reject" -> {
+                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.reject(id, approver, note);
+                    yield ResponseEntity.ok(ApiResponse.ok(detail));
+                }
+                case "process" -> {
+                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.delay(id, approver, note);
+                    yield ResponseEntity.ok(ApiResponse.ok(detail));
+                }
+                default -> ResponseEntity.badRequest().body(ApiResponse.error("不支持的操作"));
+            };
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(ex.getMessage()));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
         }
-        return ResponseEntity.ok(ApiResponse.ok(d));
     }
 
     @PostMapping("/keycloak/user-sync/process/{id}")
     public ResponseEntity<ApiResponse<Void>> syncApproved(@PathVariable long id) {
-        ApprovalDTOs.ApprovalRequestDetail d = stores.approvals.get(id);
-        if (d == null) return ResponseEntity.status(404).body(ApiResponse.error("请求不存在"));
-        d.status = "APPLIED";
-        d.decidedAt = Optional.ofNullable(d.decidedAt).orElse(Instant.now().toString());
+        Optional<ApprovalDTOs.ApprovalRequestDetail> detail = adminUserService.findApprovalDetail(id);
+        if (detail.isEmpty()) {
+            return ResponseEntity.status(404).body(ApiResponse.error("审批请求不存在"));
+        }
+        ApprovalDTOs.ApprovalRequestDetail current = detail.get();
+        if (!"PENDING".equalsIgnoreCase(current.status)) {
+            return ResponseEntity.ok(ApiResponse.ok(null));
+        }
+        String token = currentAccessToken();
+        if (token == null || token.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("缺少授权令牌，无法执行审批操作"));
+        }
+        adminUserService.approve(id, currentUser(), "同步触发", token);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 

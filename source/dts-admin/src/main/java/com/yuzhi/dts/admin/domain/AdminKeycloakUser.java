@@ -1,8 +1,6 @@
 package com.yuzhi.dts.admin.domain;
 
-import com.yuzhi.dts.admin.domain.converter.StringListJsonConverter;
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -13,6 +11,8 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "admin_keycloak_user")
@@ -41,15 +41,15 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
     @Column(name = "person_security_level", nullable = false, length = 32)
     private String personSecurityLevel;
 
-    @Convert(converter = StringListJsonConverter.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "data_levels", nullable = false, columnDefinition = "jsonb")
     private List<String> dataLevels = new ArrayList<>();
 
-    @Convert(converter = StringListJsonConverter.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "realm_roles", columnDefinition = "jsonb")
     private List<String> realmRoles = new ArrayList<>();
 
-    @Convert(converter = StringListJsonConverter.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "group_paths", columnDefinition = "jsonb")
     private List<String> groupPaths = new ArrayList<>();
 

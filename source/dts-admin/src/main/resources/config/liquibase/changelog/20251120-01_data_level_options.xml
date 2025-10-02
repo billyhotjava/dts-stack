@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251120-01-data-level-options" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="system_config"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM system_config WHERE cfg_key = 'user.data-level.options'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="user.data-level.options"/>
+            <column name="cfg_value" value="{&quot;options&quot;:[&quot;PUBLIC&quot;,&quot;INTERNAL&quot;,&quot;SECRET&quot;,&quot;TOP_SECRET&quot;]}"/>
+            <column name="description" value="Keycloak 用户数据密级选项"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

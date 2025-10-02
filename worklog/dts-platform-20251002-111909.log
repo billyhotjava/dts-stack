@@ -1,0 +1,9 @@
+[菜单体系更新理解]
+- `mymenu.json` 为前端提供的种子菜单数据，后续由 dts-admin 启动时导入数据库，作为初始门户菜单集合。
+- dts-admin 根据角色模型（sys/auth/audit/opadmin 及业务角色）维护不同的菜单授权，业务端登录后需调用 dts-admin API 拉取分配给当前账号的导航树，而非长期依赖前端静态路由。
+- dts-platform 的角色控制逻辑需与 dts-admin 的菜单授权保持一致，登录成功后根据 token 中的角色信息匹配可见菜单。
+
+[后续协同点]
+- 确认 dts-platform 与 dts-admin 的菜单同步接口（PortalMenuService）是否已串通数据库数据并支持按角色过滤。
+- 校验现有前端路由配置，确保与 dts-admin 下发的菜单 key/path 对齐，减少手工维护差异。
+- 后续新增菜单或调整结构时，应在 dts-admin 端调整并通过种子数据/管理界面落库，再由业务端刷新。
