@@ -23,6 +23,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
+import com.yuzhi.dts.admin.web.filter.AuditLoggingFilter;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import tech.jhipster.config.JHipsterProperties;
 
 @Configuration
@@ -39,7 +41,7 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, MvcRequestMatcher.Builder mvc) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, MvcRequestMatcher.Builder mvc, AuditLoggingFilter auditLoggingFilter) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authz ->
@@ -71,6 +73,7 @@ public class SecurityConfiguration {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter())))
             .oauth2Client(withDefaults());
+        http.addFilterAfter(auditLoggingFilter, AnonymousAuthenticationFilter.class);
         return http.build();
     }
 

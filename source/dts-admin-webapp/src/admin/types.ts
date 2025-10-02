@@ -101,6 +101,8 @@ export interface OrganizationNode {
 	contact?: string;
 	phone?: string;
 	description?: string;
+	keycloakGroupId?: string;
+	groupPath?: string;
 	// legacy fields kept optional for compatibility with draft flows
 	code?: string;
 	leader?: string;

@@ -18,6 +18,7 @@ export interface UserInfo {
 	enabled?: boolean;
 	roles?: Role[] | string[]; // 支持两种格式：对象数组或字符串数组
 	status?: BasicStatus;
+	attributes?: Record<string, string[]>;
 	permissions?: Permission[] | string[]; // 支持两种格式：对象数组或字符串数组
 	menu?: MenuTree[];
 }
@@ -100,23 +101,27 @@ export type MenuTree = Menu & {
 // 审计日志相关类型
 export interface AuditLog {
 	id: number;
-	action: string;
+	occurredAt: string;
 	module: string;
-	target?: string;
-	targetType?: string;
-	targetUri?: string;
-	actor: string; // 后端实际字段名（对应前端的 operator 概念）
-	ip: string;
-	details: string; // 后端实际字段名（对应前端的 content 概念）
-	at: string; // 后端实际字段名（对应前端的 createdAt 概念）
-	result?: string; // 后端实际字段名
-	resource?: string;
+	action: string;
+	actor: string;
+	actorRole?: string;
+	resourceType?: string;
+	resourceId?: string;
+	clientIp?: string;
+	clientAgent?: string;
+	requestUri?: string;
+	httpMethod?: string;
+	result: string;
+	latencyMs?: number;
+	extraTags?: string;
+	payloadPreview?: string;
 }
 
 export interface AuditLogPageResponse {
-	data: AuditLog[];
-	totalElements: number;
-	number: number;
+	content: AuditLog[];
+	page: number;
 	size: number;
+	totalElements: number;
 	totalPages: number;
 }

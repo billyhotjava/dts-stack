@@ -1,5 +1,14 @@
 import { useMemo } from "react";
 import { useUserInfo } from "@/store/userStore";
+import type { KeycloakUser } from "#/keycloak";
+
+const USERNAME_FALLBACK_NAME: Record<string, string> = {
+	sysadmin: "系统管理员",
+	syadmin: "系统管理员",
+	authadmin: "授权管理员",
+	auditadmin: "安全审计员",
+	opadmin: "运维管理员",
+};
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
 
@@ -39,25 +48,63 @@ function resolveRoleLabels(roles: unknown): string[] {
 		.filter((item): item is string => Boolean(item));
 }
 
-export default function ProfileTab() {
-	const { fullName, firstName, username, email, roles, enabled, id } = useUserInfo();
+const pickAttributeValue = (attributes: Record<string, string[]> | undefined, keys: string[]) => {
+	if (!attributes) return "";
+	for (const key of keys) {
+		const values = attributes[key];
+		if (Array.isArray(values) && values.length > 0) {
+			const found = values.find((item) => item && item.trim());
+			if (found) return found.trim();
+			return values[0] ? values[0].trim() : "";
+		}
+	}
+	return "";
+};
 
-	const resolvedName = fullName?.trim() || firstName?.trim() || username || "-";
+interface ProfileTabProps {
+	detail?: KeycloakUser | null;
+	pickAttributeValue: (attributes: Record<string, string[]> | undefined, keys: string[]) => string;
+}
+
+export default function ProfileTab({ detail, pickAttributeValue }: ProfileTabProps) {
+	const { fullName, firstName, username, email, roles, enabled, id, attributes } = useUserInfo();
+	const detailAttributes = detail?.attributes as Record<string, string[]> | undefined;
+	const storeAttributes = attributes as Record<string, string[]> | undefined;
+
+	const attributeFullName = pickAttributeValue(detailAttributes, ["fullName", "fullname"]) || pickAttributeValue(storeAttributes, ["fullName", "fullname"]);
+	const resolvedUsername = detail?.username || username || "-";
+	const resolvedEmail = detail?.email || email || "-";
 	const roleLabels = useMemo(() => {
-		const labels = resolveRoleLabels(roles);
+		const source = detail?.realmRoles && detail.realmRoles.length ? detail.realmRoles : roles;
+		const labels = resolveRoleLabels(source);
 		if (labels.length > 0) {
 			return Array.from(new Set(labels));
 		}
 		return [];
-	}, [roles]);
+	}, [detail?.realmRoles, roles]);
+	const accountStatus = detail?.enabled ?? enabled;
+	const accountId = detail?.id || id || "-";
+	const fallbackName = USERNAME_FALLBACK_NAME[resolvedUsername?.toLowerCase() ?? ""] || "";
+	const normalizedAttributeFullName = attributeFullName && attributeFullName.toLowerCase() !== resolvedUsername.toLowerCase() ? attributeFullName : "";
+	const normalizedDetailFullName = detail?.fullName && detail.fullName.toLowerCase() !== resolvedUsername.toLowerCase() ? detail.fullName : "";
+	const normalizedStoreFullName = fullName && fullName.toLowerCase() !== resolvedUsername.toLowerCase() ? fullName : "";
+	const normalizedStoreFirstName = firstName && firstName.toLowerCase() !== resolvedUsername.toLowerCase() ? firstName : "";
+	const resolvedName = (
+		normalizedAttributeFullName ||
+		normalizedDetailFullName?.trim() ||
+		normalizedStoreFullName?.trim() ||
+		normalizedStoreFirstName?.trim() ||
+		fallbackName ||
+		resolvedUsername
+	);
 
 	const basicInfo = [
 		{ label: "姓名", value: resolvedName },
-		{ label: "用户名", value: username || "-" },
-		{ label: "邮箱", value: email || "-" },
+		{ label: "用户名", value: resolvedUsername },
+		{ label: "邮箱", value: resolvedEmail },
 		{ label: "角色", value: roleLabels.length ? roleLabels.join("、") : "-" },
-		{ label: "账号状态", value: enabled === false ? "已停用" : "正常" },
-		{ label: "账号标识", value: id || "-" },
+		{ label: "账号状态", value: accountStatus === false ? "已停用" : "正常" },
+		{ label: "账号标识", value: accountId },
 	];
 
 	return (

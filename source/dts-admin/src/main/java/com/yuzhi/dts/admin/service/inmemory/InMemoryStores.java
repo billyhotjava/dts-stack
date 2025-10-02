@@ -18,6 +18,7 @@ public class InMemoryStores {
     public final Map<String, KeycloakUserDTO> users = new ConcurrentHashMap<>();
     public final Map<String, KeycloakRoleDTO> roles = new ConcurrentHashMap<>();
     public final Map<String, KeycloakGroupDTO> groups = new ConcurrentHashMap<>();
+    public final Map<String, String> groupParents = new ConcurrentHashMap<>();
 
     public final Map<Long, ApprovalDTOs.ApprovalRequestDetail> approvals = new ConcurrentHashMap<>();
 

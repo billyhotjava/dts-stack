@@ -3,6 +3,8 @@ package com.yuzhi.dts.admin.service.keycloak;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
@@ -30,6 +32,7 @@ import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.util.StringUtils;
 
 @Service
 @Primary
@@ -42,6 +45,8 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final URI usersEndpoint;
+    private final URI rolesEndpoint;
+    private final URI groupsEndpoint;
 
     public KeycloakAdminRestClient(
         @Value("${spring.security.oauth2.client.provider.oidc.issuer-uri}") String issuerUri,
@@ -55,6 +60,8 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             .errorHandler(new NoOpErrorHandler())
             .build();
         this.usersEndpoint = resolveUsersEndpoint(issuerUri);
+        this.rolesEndpoint = resolveRolesEndpoint(issuerUri);
+        this.groupsEndpoint = resolveGroupsEndpoint(issuerUri);
     }
 
     @Override
@@ -129,6 +136,81 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     }
 
     @Override
+    public List<KeycloakGroupDTO> listGroups(String accessToken) {
+        try {
+            ResponseEntity<String> response = exchange(groupsEndpoint, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
+                return List.of();
+            }
+            List<Map<String, Object>> body = objectMapper.readValue(response.getBody(), LIST_OF_MAP);
+            return body.stream().map(this::toGroupDto).toList();
+        } catch (Exception ex) {
+            LOG.warn("Failed to list Keycloak groups: {}", ex.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
+    public Optional<KeycloakGroupDTO> findGroup(String groupId, String accessToken) {
+        if (groupId == null || groupId.isBlank()) {
+            return Optional.empty();
+        }
+        URI uri = groupsEndpoint.resolve("./" + groupId);
+        try {
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
+                return Optional.empty();
+            }
+            Map<String, Object> body = objectMapper.readValue(response.getBody(), MAP_TYPE);
+            return Optional.of(toGroupDto(body));
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                return Optional.empty();
+            }
+            LOG.warn("Failed to fetch Keycloak group {}: {}", groupId, ex.getResponseBodyAsString());
+            return Optional.empty();
+        } catch (Exception ex) {
+            LOG.warn("Failed to fetch Keycloak group {}: {}", groupId, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public KeycloakGroupDTO createGroup(KeycloakGroupDTO payload, String parentGroupId, String accessToken) {
+        URI target = parentGroupId == null || parentGroupId.isBlank()
+            ? groupsEndpoint
+            : groupsEndpoint.resolve("./" + parentGroupId + "/children");
+        Map<String, Object> representation = toGroupRepresentation(payload);
+        ResponseEntity<String> response = exchange(target, HttpMethod.POST, accessToken, representation);
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw toRuntime("创建 Keycloak 组失败", response);
+        }
+        Optional<KeycloakGroupDTO> created = findGroupByLocation(response, accessToken)
+            .or(() -> findGroupByName(payload.getName(), accessToken));
+        return created.orElseGet(() -> copyGroup(payload));
+    }
+
+    @Override
+    public KeycloakGroupDTO updateGroup(String groupId, KeycloakGroupDTO payload, String accessToken) {
+        URI uri = groupsEndpoint.resolve("./" + groupId);
+        Map<String, Object> representation = toGroupRepresentation(payload);
+        ResponseEntity<String> response = exchange(uri, HttpMethod.PUT, accessToken, representation);
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw toRuntime("更新 Keycloak 组失败", response);
+        }
+        return findGroup(groupId, accessToken).orElseGet(() -> copyGroup(payload));
+    }
+
+    @Override
+    public void deleteGroup(String groupId, String accessToken) {
+        URI uri = groupsEndpoint.resolve("./" + groupId);
+        ResponseEntity<String> response = exchange(uri, HttpMethod.DELETE, accessToken, null);
+        if (!response.getStatusCode().is2xxSuccessful() && response.getStatusCode().value() != 204) {
+            throw toRuntime("删除 Keycloak 组失败", response);
+        }
+    }
+
+    @Override
     public void resetPassword(String userId, String newPassword, boolean temporary, String accessToken) {
         URI uri = usersEndpoint.resolve("./" + userId + "/reset-password");
         Map<String, Object> payload = Map.of(
@@ -178,6 +260,93 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         return findByUsername(payload.getUsername(), accessToken);
     }
 
+    private Optional<KeycloakGroupDTO> findGroupByLocation(ResponseEntity<String> response, String accessToken) {
+        List<String> locations = response.getHeaders().get(HttpHeaders.LOCATION);
+        if (locations != null) {
+            for (String location : locations) {
+                Optional<KeycloakGroupDTO> dto = findGroupByLocation(location, accessToken);
+                if (dto.isPresent()) {
+                    return dto;
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<KeycloakGroupDTO> findGroupByLocation(String location, String accessToken) {
+        try {
+            URI uri = new URI(location);
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return Optional.empty();
+            }
+            Map<String, Object> body = objectMapper.readValue(response.getBody(), MAP_TYPE);
+            return Optional.of(toGroupDto(body));
+        } catch (URISyntaxException | RestClientException | java.io.IOException ex) {
+            LOG.warn("Failed to resolve created Keycloak group from location {}: {}", location, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private Optional<KeycloakGroupDTO> findGroupByName(String name, String accessToken) {
+        if (!StringUtils.hasText(name)) {
+            return Optional.empty();
+        }
+        for (KeycloakGroupDTO root : listGroups(accessToken)) {
+            Optional<KeycloakGroupDTO> match = findGroupByName(root, name);
+            if (match.isPresent()) {
+                return match;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<KeycloakGroupDTO> findGroupByName(KeycloakGroupDTO node, String name) {
+        if (node == null) {
+            return Optional.empty();
+        }
+        if (name.equalsIgnoreCase(node.getName())) {
+            return Optional.of(copyGroup(node));
+        }
+        if (node.getSubGroups() != null) {
+            for (KeycloakGroupDTO child : node.getSubGroups()) {
+                Optional<KeycloakGroupDTO> match = findGroupByName(child, name);
+                if (match.isPresent()) {
+                    return match;
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private KeycloakGroupDTO copyGroup(KeycloakGroupDTO source) {
+        KeycloakGroupDTO target = new KeycloakGroupDTO();
+        target.setId(source.getId());
+        target.setName(source.getName());
+        target.setPath(source.getPath());
+        Map<String, List<String>> attrs = new LinkedHashMap<>();
+        if (source.getAttributes() != null) {
+            source.getAttributes().forEach((key, value) -> attrs.put(key, value == null ? List.of() : new ArrayList<>(value)));
+        }
+        target.setAttributes(attrs);
+        if (source.getRealmRoles() != null) {
+            target.setRealmRoles(new ArrayList<>(source.getRealmRoles()));
+        }
+        Map<String, List<String>> clientRoles = new LinkedHashMap<>();
+        if (source.getClientRoles() != null) {
+            source.getClientRoles().forEach((key, value) -> clientRoles.put(key, value == null ? List.of() : new ArrayList<>(value)));
+        }
+        target.setClientRoles(clientRoles);
+        List<KeycloakGroupDTO> children = new ArrayList<>();
+        if (source.getSubGroups() != null) {
+            for (KeycloakGroupDTO child : source.getSubGroups()) {
+                children.add(copyGroup(child));
+            }
+        }
+        target.setSubGroups(children);
+        return target;
+    }
+
     private Optional<KeycloakUserDTO> findByLocation(String location, String accessToken) {
         try {
             URI uri = new URI(location);
@@ -208,6 +377,25 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         } catch (HttpStatusCodeException ex) {
             return ResponseEntity.status(ex.getStatusCode()).headers(ex.getResponseHeaders()).body(ex.getResponseBodyAsString());
         }
+    }
+
+    private Map<String, Object> toGroupRepresentation(KeycloakGroupDTO dto) {
+        Map<String, Object> rep = new LinkedHashMap<>();
+        if (dto.getName() != null) {
+            rep.put("name", dto.getName());
+        }
+        if (dto.getAttributes() != null && !dto.getAttributes().isEmpty()) {
+            Map<String, List<String>> attributes = new LinkedHashMap<>();
+            dto.getAttributes().forEach((key, value) -> {
+                if (key != null) {
+                    attributes.put(key, value == null ? List.of() : new ArrayList<>(value));
+                }
+            });
+            if (!attributes.isEmpty()) {
+                rep.put("attributes", attributes);
+            }
+        }
+        return rep;
     }
 
     private Map<String, Object> toRepresentation(KeycloakUserDTO dto) {
@@ -241,6 +429,28 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         if (dto.getClientRoles() != null && !dto.getClientRoles().isEmpty()) rep.put("clientRoles", dto.getClientRoles());
 
         return rep;
+    }
+
+    @SuppressWarnings("unchecked")
+    private KeycloakGroupDTO toGroupDto(Map<String, Object> map) {
+        KeycloakGroupDTO dto = new KeycloakGroupDTO();
+        dto.setId(stringValue(map.get("id")));
+        dto.setName(stringValue(map.get("name")));
+        dto.setPath(stringValue(map.get("path")));
+        dto.setAttributes(stringListMap(map.get("attributes")));
+        dto.setRealmRoles(stringList(map.get("realmRoles")));
+        dto.setClientRoles(stringListMap(map.get("clientRoles")));
+        Object subGroups = map.get("subGroups");
+        if (subGroups instanceof Collection<?> collection) {
+            List<KeycloakGroupDTO> children = new ArrayList<>();
+            for (Object child : collection) {
+                if (child instanceof Map<?, ?> childMap) {
+                    children.add(toGroupDto((Map<String, Object>) childMap));
+                }
+            }
+            dto.setSubGroups(children);
+        }
+        return dto;
     }
 
     private KeycloakUserDTO toUserDto(Map<String, Object> map) {
@@ -318,6 +528,109 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         return list;
     }
 
+    @Override
+    public Optional<KeycloakRoleDTO> findRealmRole(String roleName, String accessToken) {
+        if (roleName == null || roleName.isBlank()) {
+            return Optional.empty();
+        }
+        URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(roleName).build(true).toUri();
+        try {
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
+                return Optional.empty();
+            }
+            Map<String, Object> body = objectMapper.readValue(response.getBody(), MAP_TYPE);
+            return Optional.of(toRoleDto(body));
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                return Optional.empty();
+            }
+            LOG.warn("Failed to fetch Keycloak role {}: {}", roleName, ex.getResponseBodyAsString());
+            return Optional.empty();
+        } catch (Exception ex) {
+            LOG.warn("Failed to fetch Keycloak role {}: {}", roleName, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public KeycloakRoleDTO upsertRealmRole(KeycloakRoleDTO role, String accessToken) {
+        if (role == null || role.getName() == null || role.getName().isBlank()) {
+            throw new IllegalArgumentException("角色名称不能为空");
+        }
+        Map<String, Object> representation = toRoleRepresentation(role);
+        Optional<KeycloakRoleDTO> existing = findRealmRole(role.getName(), accessToken);
+        ResponseEntity<String> response;
+        if (existing.isPresent()) {
+            URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(role.getName()).build(true).toUri();
+            response = exchange(uri, HttpMethod.PUT, accessToken, representation);
+        } else {
+            response = exchange(rolesEndpoint, HttpMethod.POST, accessToken, representation);
+        }
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw toRuntime("同步 Keycloak 角色失败", response);
+        }
+        return findRealmRole(role.getName(), accessToken).orElse(role);
+    }
+
+    private Map<String, Object> toRoleRepresentation(KeycloakRoleDTO dto) {
+        Map<String, Object> rep = new LinkedHashMap<>();
+        if (dto.getName() != null) {
+            rep.put("name", dto.getName());
+        }
+        if (dto.getDescription() != null) {
+            rep.put("description", dto.getDescription());
+        }
+        if (dto.getComposite() != null) {
+            rep.put("composite", dto.getComposite());
+        }
+        if (dto.getClientRole() != null) {
+            rep.put("clientRole", dto.getClientRole());
+        }
+        if (dto.getAttributes() != null && !dto.getAttributes().isEmpty()) {
+            Map<String, List<String>> attributes = new LinkedHashMap<>();
+            dto.getAttributes().forEach((key, value) -> {
+                if (key != null && value != null) {
+                    attributes.put(key, List.of(value));
+                }
+            });
+            if (!attributes.isEmpty()) {
+                rep.put("attributes", attributes);
+            }
+        }
+        return rep;
+    }
+
+    private KeycloakRoleDTO toRoleDto(Map<String, Object> map) {
+        KeycloakRoleDTO dto = new KeycloakRoleDTO();
+        dto.setId(stringValue(map.get("id")));
+        dto.setName(stringValue(map.get("name")));
+        dto.setDescription(stringValue(map.get("description")));
+        dto.setComposite(booleanValue(map.get("composite")));
+        dto.setClientRole(booleanValue(map.get("clientRole")));
+        dto.setContainerId(stringValue(map.get("containerId")));
+        dto.setAttributes(flattenRoleAttributes(map.get("attributes")));
+        return dto;
+    }
+
+    private Map<String, String> flattenRoleAttributes(Object value) {
+        if (!(value instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        Map<String, String> attributes = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String key = entry.getKey() == null ? null : entry.getKey().toString();
+            if (key == null) {
+                continue;
+            }
+            List<String> list = stringList(entry.getValue());
+            if (!list.isEmpty()) {
+                attributes.put(key, list.get(0));
+            }
+        }
+        return attributes;
+    }
+
     private KeycloakUserDTO copyDto(KeycloakUserDTO source) {
         KeycloakUserDTO dto = new KeycloakUserDTO();
         dto.setId(source.getId());
@@ -341,6 +654,34 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             return new IllegalStateException(message + ": " + body);
         }
         return new IllegalStateException(message + ": HTTP " + response.getStatusCode().value());
+    }
+
+    private static URI resolveRolesEndpoint(String issuerUri) {
+        URI issuer = URI.create(issuerUri);
+        String path = issuer.getPath();
+        if (path == null || !path.toLowerCase(Locale.ROOT).startsWith("/realms/")) {
+            throw new IllegalArgumentException("Unsupported issuer URI for Keycloak: " + issuerUri);
+        }
+        String realm = path.substring("/realms/".length());
+        if (realm.isEmpty()) {
+            throw new IllegalArgumentException("Keycloak realm cannot be resolved from issuer URI " + issuerUri);
+        }
+        String base = issuer.getScheme() + "://" + issuer.getAuthority() + "/admin/realms/" + realm + "/roles";
+        return URI.create(base);
+    }
+
+    private static URI resolveGroupsEndpoint(String issuerUri) {
+        URI issuer = URI.create(issuerUri);
+        String path = issuer.getPath();
+        if (path == null || !path.toLowerCase(Locale.ROOT).startsWith("/realms/")) {
+            throw new IllegalArgumentException("Unsupported issuer URI for Keycloak: " + issuerUri);
+        }
+        String realm = path.substring("/realms/".length());
+        if (realm.isEmpty()) {
+            throw new IllegalArgumentException("Keycloak realm cannot be resolved from issuer URI " + issuerUri);
+        }
+        String base = issuer.getScheme() + "://" + issuer.getAuthority() + "/admin/realms/" + realm + "/groups";
+        return URI.create(base);
     }
 
     private static URI resolveUsersEndpoint(String issuerUri) {

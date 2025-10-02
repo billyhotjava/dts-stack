@@ -21,6 +21,10 @@
     <include file="config/liquibase/changelog/20251112-02_portal_menu_metadata_text.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251115-01_change_request_enhancements.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251120-01_data_level_options.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251120-02_audit_event_table.xml" relativeToChangelogFile="false"/>
+        <include file="config/liquibase/changelog/20251002-01_portal_menu_visibility.xml" relativeToChangelogFile="false"/>
+        <include file="config/liquibase/changelog/20251002-02_admin_custom_role_cleanup.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251201-01_org_keycloak_mapping.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

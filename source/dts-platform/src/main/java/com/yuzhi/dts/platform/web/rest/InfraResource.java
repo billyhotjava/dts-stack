@@ -8,9 +8,11 @@ import com.yuzhi.dts.platform.repository.service.InfraDataStorageRepository;
 import com.yuzhi.dts.platform.repository.service.InfraTaskScheduleRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.infra.HiveConnectionService;
+import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
+import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,12 +27,14 @@ public class InfraResource {
     private final InfraDataStorageRepository storageRepo;
     private final InfraTaskScheduleRepository schedRepo;
     private final AuditService audit;
+    private final HiveConnectionService hiveConnectionService;
 
-    public InfraResource(InfraDataSourceRepository dsRepo, InfraDataStorageRepository storageRepo, InfraTaskScheduleRepository schedRepo, AuditService audit) {
+    public InfraResource(InfraDataSourceRepository dsRepo, InfraDataStorageRepository storageRepo, InfraTaskScheduleRepository schedRepo, AuditService audit, HiveConnectionService hiveConnectionService) {
         this.dsRepo = dsRepo;
         this.storageRepo = storageRepo;
         this.schedRepo = schedRepo;
         this.audit = audit;
+        this.hiveConnectionService = hiveConnectionService;
     }
 
     // Data sources
@@ -39,6 +43,14 @@ public class InfraResource {
         var list = dsRepo.findAll();
         audit.audit("READ", "infra.dataSource", "list");
         return ApiResponses.ok(list);
+    }
+
+    @PostMapping("/data-sources/test-connection")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "')")
+    public ApiResponse<HiveConnectionTestResult> testDataSourceConnection(@Valid @RequestBody HiveConnectionTestRequest request) {
+        var result = hiveConnectionService.testConnection(request);
+        audit.audit("TEST", "infra.dataSource", "test-connection:" + request.getLoginPrincipal());
+        return ApiResponses.ok(result);
     }
 
     @PostMapping("/data-sources")
@@ -148,4 +160,3 @@ public class InfraResource {
         return ApiResponses.ok(Boolean.TRUE);
     }
 }
-

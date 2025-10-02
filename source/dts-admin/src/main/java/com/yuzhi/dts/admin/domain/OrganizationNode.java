@@ -29,6 +29,9 @@ public class OrganizationNode extends AbstractAuditingEntity<Long> implements Se
     @Column(name = "description", length = 2000)
     private String description;
 
+    @Column(name = "keycloak_group_id", unique = true)
+    private String keycloakGroupId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private OrganizationNode parent;
@@ -83,6 +86,14 @@ public class OrganizationNode extends AbstractAuditingEntity<Long> implements Se
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getKeycloakGroupId() {
+        return keycloakGroupId;
+    }
+
+    public void setKeycloakGroupId(String keycloakGroupId) {
+        this.keycloakGroupId = keycloakGroupId;
     }
 
     public OrganizationNode getParent() {

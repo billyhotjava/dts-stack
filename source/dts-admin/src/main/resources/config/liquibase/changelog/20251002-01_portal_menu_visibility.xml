@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="20251002-01-portal-menu-visibility" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="portal_menu_visibility"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="portal_menu_visibility">
+            <column name="id" type="bigint">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="menu_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role_code" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="permission_code" type="varchar(128)"/>
+            <column name="data_level" type="varchar(32)" defaultValue="INTERNAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addPrimaryKey tableName="portal_menu_visibility" columnNames="id" constraintName="pk_portal_menu_visibility"/>
+
+        <addForeignKeyConstraint
+            baseTableName="portal_menu_visibility"
+            baseColumnNames="menu_id"
+            referencedTableName="portal_menu"
+            referencedColumnNames="id"
+            onDelete="CASCADE"
+            constraintName="fk_portal_menu_visibility_menu"/>
+
+        <createSequence sequenceName="portal_menu_visibility_seq" startValue="1"/>
+
+        <addDefaultValue tableName="portal_menu_visibility" columnName="created_date" defaultValueComputed="now()"/>
+        <addDefaultValue tableName="portal_menu_visibility" columnName="last_modified_date" defaultValueComputed="now()"/>
+
+        <createIndex tableName="portal_menu_visibility" indexName="idx_portal_menu_visibility_menu">
+            <column name="menu_id"/>
+        </createIndex>
+        <createIndex tableName="portal_menu_visibility" indexName="idx_portal_menu_visibility_role">
+            <column name="role_code"/>
+        </createIndex>
+
+        <sql>DELETE FROM portal_menu_visibility;</sql>
+        <sql>DELETE FROM portal_menu;</sql>
+    </changeSet>
+
+</databaseChangeLog>

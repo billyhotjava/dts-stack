@@ -14,13 +14,19 @@ export class AuditLogService {
 	 * @param sort 排序字段
 	 * @returns 审计日志分页数据
 	 */
-	static getAuditLogs(page: number = 0, size: number = 10, sort: string = "id,desc"): Promise<AuditLog[]> {
-		return apiClient.get<AuditLog[]>({
+	static getAuditLogs(
+		page: number = 0,
+		size: number = 20,
+		sort: string = "occurredAt,desc",
+		filters: Record<string, unknown> = {},
+	): Promise<AuditLogPageResponse> {
+		return apiClient.get<AuditLogPageResponse>({
 			url: AuditLogService.BASE_URL,
 			params: {
 				page,
 				size,
 				sort,
+				...filters,
 			},
 		});
 	}
@@ -41,7 +47,7 @@ export class AuditLogService {
 	 * @param auditLog 审计日志数据
 	 * @returns 创建的审计日志
 	 */
-	static createAuditLog(auditLog: Omit<AuditLog, "id" | "createdAt" | "updatedAt">): Promise<AuditLog> {
+	static createAuditLog(auditLog: Partial<AuditLog>): Promise<AuditLog> {
 		return apiClient.post<AuditLog>({
 			url: AuditLogService.BASE_URL,
 			data: auditLog,

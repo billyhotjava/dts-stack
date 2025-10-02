@@ -117,3 +117,29 @@ dts-admin 审批业务逻辑（用户/角色双轨）：
    - 审批仍处于 PROCESSING 时可由授权管理员补充备注并保留队列。
    - 审批链同时驱动 `AdminAuditService`（带 targetType/targetUri）与 `ChangeRequest`（category/summary/lastError），用于运维聚合与导出；前端可利用 `category`、`retryCount` 快速分流用户管理与角色管理工单。
    - `InMemoryStores` 提供演示/离线环境：预置 triad 用户、角色、示例审批，便于前端在无 Keycloak 场景下联调。
+
+2025-10-02 14:05 管理端前/后端改造（service-account & 用户展示）：
+1. Keycloak Service Account 改造
+   - dts-admin 后端强制使用 client-credentials，取消密码回退；若缺少 ID/Secret 直接报错，compose 默认下发 DTS_KEYCLOAK_ADMIN_CLIENT_*。
+   - 审批流在 sysadmin 重复提交时提前校验本地快照和 Keycloak，避免重复创建；审批阶段若遇 404 则自动切换为 create。
+   - 清理 sysadmin 历史审批/变更记录，数据库空表重新起步。
+2. 数据密级与用户列表体验
+   - data_levels 仅保留单选值，前端、后端统一输出中文；Liquibase seeding `system_config` 写入 PUBLIC/INTERNAL/SECRET/TOP_SECRET。
+   - JSONB 存储使用 Hibernate Native JSON 解决 bytea/text 报错。
+   - 用户管理列表过滤三员账号，姓名列兼容全名属性；保留个人信息入口。
+3. 个人信息 & Profile 页展示
+   - 前端登录缓存保留 attributes 并优先显示 fullName，内置账号显示中文别名。
+   - profile 页面跳过对受限账号的 Keycloak 查询，姓名/邮箱采用 attributes>fullName>fallback 逻辑；顶部统计同样适配。
+4. UI/资产清理
+   - 删除“账户”菜单与页面，仅保留“个人信息”；修复用户表格 JSX 缺失引号问题。
+   - 添加数据主题 favicon.ico，消除 404。
+
+2025-10-02 14:20 审计模块需求澄清：
+- 采集范围扩展至管理端 dts-admin 与业务端 dts-platform 的全部 API 调用及导入/导出操作，基础组件与 Keycloak 暂不接入。
+- 审计记录持久化到 Postgres，至少保留 6 个月；支持按查询条件导出 CSV，暂不做冷热分层。
+- 查询需按现有字段过滤（时间、模块、操作者、IP、结果等），提供分页与排序即可，无需全文检索或统计报表。
+- 模块字段须按业务功能归类；需支持实时刷新视图。
+- 三员视角：授权管理员审计 sysadmin+auditadmin，安全审计员审计业务用户+sysadmin+authadmin。
+- 与 dts-common 共用上报接口，要求具备失败重试与定时批量上传能力；无外部安全平台对接需求。
+- 日志量级约 5 万/日，建议异步缓冲写入；数据需加密存储并具备防篡改设计，审计数据仅供内部展示。
+

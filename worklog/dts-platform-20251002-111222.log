@@ -16,3 +16,62 @@
 - 文件命名写作 `mynemu.json`，需确认是否是临时命名还是正式配置源，以免后续替换菜单时遗漏。
 - 目前各菜单对应的页面/接口是否已完整实现？例如 visualization 下多个看板目录在代码中是否已有占位或需要按需裁剪。
 - Portal 菜单最终是否沿用前端静态配置，还是需要与后端 `PortalMenuService`（对接 dts-admin）联动？需提前确定以免双份维护。
+
+[菜单体系更新理解]
+- `mymenu.json` 为前端提供的种子菜单数据，后续由 dts-admin 启动时导入数据库，作为初始门户菜单集合。
+- dts-admin 根据角色模型（sys/auth/audit/opadmin 及业务角色）维护不同的菜单授权，业务端登录后需调用 dts-admin API 拉取分配给当前账号的导航树，而非长期依赖前端静态路由。
+- dts-platform 的角色控制逻辑需与 dts-admin 的菜单授权保持一致，登录成功后根据 token 中的角色信息匹配可见菜单。
+
+[后续协同点]
+- 确认 dts-platform 与 dts-admin 的菜单同步接口（PortalMenuService）是否已串通数据库数据并支持按角色过滤。
+- 校验现有前端路由配置，确保与 dts-admin 下发的菜单 key/path 对齐，减少手工维护差异。
+- 后续新增菜单或调整结构时，应在 dts-admin 端调整并通过种子数据/管理界面落库，再由业务端刷新。
+
+[PortalMenu 角色/权限模型设计]
+- 数据模型：在现有 `portal_menu` 表基础上，新增中间表 `portal_menu_visibility`（`id`, `menu_id`, `role_code`, `permission_code`, `data_level`, `created_at`, `created_by`）。`role_code` 对应 Keycloak / token 中的 `ROLE_*`，`permission_code` 预留给细粒度 ABAC（可为空），`data_level`（PUBLIC/INTERNAL/SECRET/TOP_SECRET）沿用现有密级枚举用于前置过滤。借助 JPA 建模为 `PortalMenuVisibility`，在 `PortalMenu` 中新增 `@OneToMany(mappedBy="menu", cascade=ALL, orphanRemoval=true)` 集合字段 `visibilities`。
+- 元数据兼容：保留 `metadata` 字段，用于前端个性化展示（icon、caption 等）。如需扩展更复杂的授权策略，可在 metadata 中补充结构化 JSON，但授权执行以 `portal_menu_visibility` 为准。
+- 审批链路：`AdminApiResource` 在 `draftCreateMenu`/`draftUpdateMenu` 时允许提交 `allowedRoles`（数组）、`allowedPermissions`、`maxDataLevel`，写入 `ChangeRequest.payloadJson`。审批通过时 `applyPortalMenuChange` 更新 `portal_menu` 及 `portal_menu_visibility`；删除菜单需级联删除可视化记录。
+- Liquibase：补充变更集创建新表、索引(`menu_id`, `role_code`) 以及迁移脚本把现有菜单默认授予 `ROLE_OP_ADMIN` + `ROLE_USER`，密级默认 `GENERAL` 对应 `INTERNAL`。
+
+[菜单授权过滤流程（dts-admin）]
+- 查询：`PortalMenuService` 新增 `findTreeForRoles(Set<String> roles, Set<String> permissions, String maxDataLevel)`，内部先查出全量根节点，再基于 visibilities 过滤可见节点并保留必需的祖先节点。若某菜单未配置可见范围，则按默认策略（仅 OP_ADMIN 可见）处理。
+- API：`GET /api/menu` 增加可选查询参数 `roles`、`permissions`、`dataLevel`，或从认证上下文自动解析当前用户的角色密级，返回裁剪后的树；`GET /api/admin/portal/menus` 仍返回全量供运维使用。认证失败或角色为空时返回空菜单。
+- 管控：菜单审批 UI（`PortalMenusView`）需新增可选项多选角色、密级、特定权限，提交时写入变更请求；审批通过后自动刷新菜单缓存。`AdminAuditService` 记录角色授权变更。
+
+[业务端菜单消费（dts-platform）]
+- 拉取方式：`PortalMenuClient.fetchMenuTree` 改为调用新接口 `GET /api/menu?roles=ROLE_USER,...&permissions=...&dataLevel=...`，其中角色/权限来自 `PortalSession`（`accessToken` introspection 已返回 `roles`、`permissions` 字段），密级可由用户档案或 token claim `data_level`。失败时按本地缓存/兜底静态菜单处理并记录告警。
+- 本地过滤：即便后端已做裁剪，`PortalMenuService` 仍在映射时根据当前会话的 `roles`、`permissions` 再次校验 `visibilities` 元数据，确保 UI 与后端授权一致，防止缓存因权限变更而滞后。
+- 缓存策略：将菜单结果以 `HashSet<String> roles` 为 key 缓存在 Caffeine/Redis，失效策略 5min；当用户角色变更或审批推送事件触发时，通过消息渠道/手动刷新清除缓存。
+- 前端配合：`usePortalNavigation` 在收到菜单数据后执行 DFS 过滤空子节点，并根据 `metadata` 渲染 icon/标题。若返回空树，提示“未配置可访问菜单”并引导联系管理员。
+
+[查询工作台整合方案]
+- 界面结构：`QueryWorkbenchPage` 统一承载 SQL 编辑、结果预览、执行历史三个部分，顶部 Tabs（编辑 / 结果 / 历史）共享同一上下文状态。结果面板可以在执行后自动跳转；历史面板支持重放查询并写回编辑器。
+- 后端契约：沿用 `SqlResource` 与 `ExploreExecResource`，新增聚合接口 `POST /api/explore/session/execute`（返回 executionId + resultId），以及 `GET /api/explore/session/{id}` 返回最近一次执行状态与预览数据。行级脱敏与权限校验复用 `AccessChecker` 确保与菜单权限一致。
+- 执行记录：`query-executions` 表中记录角色/用户标识，前端历史列表按当前用户、角色、时间过滤。提供“只看我的”和“团队共享”两种视图，以匹配不同权限级别。
+- 数据预览：执行成功后自动调用 `previewResultSet`，渲染在结果 Tab；失败时把错误信息写入历史记录并标记可重试。支持导出 CSV 前置权限校验。
+
+[一致性校验与后续动作]
+- 确认 Keycloak realm 中角色命名统一为 `ROLE_*`，并在 `PortalSessionRegistry.normalizeRoles` 保持一致。
+- 编写单元测试覆盖：菜单可见性过滤、审批链路、平台端二次过滤、查询页整合。优先完成数据模型和接口变更后，再推进 UI 与缓存实现。
+
+[门户菜单权限改造]
+- 引入 `portal_menu_visibility` 表及实体，包含 `menu_id/role_code/permission_code/data_level`，并在 `PortalMenu` 中维护 `visibilities` 集合；默认授予 `ROLE_OP_ADMIN`、`ROLE_USER`，密级 `INTERNAL`。
+- `PortalMenuService` 新增 `findTreeForAudience`、`replaceVisibilities` 等方法，实现角色/权限/密级多维过滤与默认可见性兜底。
+- `BasicApiResource` 的 `/api/menu` 支持请求参数或依据当前认证上下文自动裁剪菜单树；`AdminApiResource` 在审批流程中读写可见性规则、回显 `visibilityRules/allowedRoles/allowedPermissions/maxDataLevel`，并在变更应用时同步更新可见性。
+- 开发环境种子数据 (`DevDataSeeder`) 为每个菜单写入默认可见性记录，Liquibase 变更集 `20251002-01_portal_menu_visibility.xml` 建表、索引并清空旧数据。
+- 编译受限于沙箱写权限（Spotless/build-info 无法生成），需在本地/CI 环境执行 `./mvnw -DskipTests compile` 验证。
+
+[待续工作]
+- dts-admin Web 管理界面需支持编辑可见性规则；dts-platform 需按 token 角色调用新接口并缓存裁剪结果；审批后需要刷新菜单缓存。
+
+[角色管理需求明确]
+- 内置三员（ROLE_SYS_ADMIN / ROLE_AUTH_ADMIN / ROLE_AUDITOR_ADMIN）与用户一一对应，仅允许登录 dts-admin，必须从角色管理列表中隐藏且禁止编辑。
+- 普通业务角色（DEPT_OWNER/DEPT_EDITOR/DEPT_VIEWER/INST_OWNER/INST_EDITOR/INST_VIEWER）统一落在 AdminCustomRole + ChangeRequest 流程中；所有变更需提交审批后生效。
+- 角色权限模型沿用 scope + operations(read/write/export)，并需与门户菜单可见性联动，确保授权范围反映在菜单展示上；角色不再包含数据密级字段。
+- Keycloak 已预置所有业务角色；dts-admin 维护本地元数据并通过既有同步作业回写 Keycloak，后续需扩展同步逻辑以覆盖新增字段或审批后的状态。
+
+[审计中心需求汇总]
+- 审计范围覆盖 dts-admin、dts-platform 及下游组件调用；记录所有 API、导入导出操作并按功能模块分类事件。
+- 数据持久化在 Postgres，保留至少 6 个月；支持界面导出（按筛选条件），实时刷新、分页排序展示即可，无需全文检索或趋势分析。
+- 安全要求：日志加密存储、防篡改；仅内部界面访问，无对外接口。授权管理员重点审计系统管理员/安全审计员，安全审计员覆盖业务用户及其他管理员。
+- dts-common 审计接口需启用并具备定时重试/批量上报逻辑以应对写入失败；每日约 5 万条日志，可考虑异步缓冲削峰。

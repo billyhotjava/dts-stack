@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <changeSet id="20251002-02-admin-custom-role-drop-max-level" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="admin_custom_role" columnName="max_data_level"/>
+        </preConditions>
+
+        <dropColumn tableName="admin_custom_role" columnName="max_data_level"/>
+            <sql>DELETE FROM admin_custom_role;</sql>
+    </changeSet>
+
+</databaseChangeLog>

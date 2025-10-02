@@ -61,16 +61,38 @@ export const useSignIn = () => {
 		mutationFn: userService.signin,
 	});
 
+	const USERNAME_FALLBACK_NAME: Record<string, string> = {
+		sysadmin: "系统管理员",
+		syadmin: "系统管理员",
+		authadmin: "授权管理员",
+		auditadmin: "安全审计员",
+		opadmin: "运维管理员",
+	};
+
 	const signIn = async (data: SignInReq) => {
 		try {
 			const res = await signInMutation.mutateAsync(data);
 			const { user, accessToken, refreshToken } = res;
 
 			// 适配后端数据格式：处理角色和权限信息
-			const resolvedFullName = user.fullName || user.firstName || user.lastName || user.username || "";
+			const getAttr = (key: string) => {
+				const attr = user.attributes as Record<string, string[]> | undefined;
+				if (!attr) return "";
+				const value = attr[key] || attr[key.toLowerCase()];
+				if (Array.isArray(value) && value.length > 0) {
+					const found = value.find((item) => item && item.trim());
+					return (found || value[0] || "").trim();
+				}
+				return "";
+			};
+			const attributeFullName = getAttr("fullName");
+			const usernameLower = user.username?.toLowerCase() ?? "";
+			const fallbackName = USERNAME_FALLBACK_NAME[usernameLower] || "";
+			const resolvedFullName = attributeFullName || user.fullName || user.firstName || fallbackName || user.lastName || user.username || "";
 
 			const adaptedUser = {
 				...user,
+				attributes: (user.attributes as Record<string, string[]>) || {},
 				// 处理角色信息 - 保持字符串数组格式
 				roles: Array.isArray(user.roles) ? user.roles : [],
 				// 处理权限信息 - 保持字符串数组格式
@@ -78,7 +100,7 @@ export const useSignIn = () => {
 				// 为用户设置默认头像
 				avatar: user.avatar || "/src/assets/icons/ic-user.svg",
 				// 确保必要的字段存在
-				firstName: user.firstName || resolvedFullName,
+				firstName: user.firstName || attributeFullName || resolvedFullName,
 				fullName: resolvedFullName,
 				lastName: user.lastName || "",
 				email: user.email || "",

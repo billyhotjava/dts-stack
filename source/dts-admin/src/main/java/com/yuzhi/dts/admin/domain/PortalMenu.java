@@ -43,32 +43,130 @@ public class PortalMenu extends AbstractAuditingEntity<Long> implements Serializ
     @JoinColumn(name = "parent_id")
     private PortalMenu parent;
 
+    @OneToMany(mappedBy = "menu", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PortalMenuVisibility> visibilities = new ArrayList<>();
+
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
     @Where(clause = "deleted = false")
     @OrderBy("sortOrder ASC, id ASC")
     private List<PortalMenu> children = new ArrayList<>();
 
     @Override
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public String getPath() { return path; }
-    public void setPath(String path) { this.path = path; }
-    public String getComponent() { return component; }
-    public void setComponent(String component) { this.component = component; }
-    public String getIcon() { return icon; }
-    public void setIcon(String icon) { this.icon = icon; }
-    public Integer getSortOrder() { return sortOrder; }
-    public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
-    public String getMetadata() { return metadata; }
-    public void setMetadata(String metadata) { this.metadata = metadata; }
-    public String getSecurityLevel() { return securityLevel; }
-    public void setSecurityLevel(String securityLevel) { this.securityLevel = securityLevel; }
-    public boolean isDeleted() { return deleted; }
-    public void setDeleted(boolean deleted) { this.deleted = deleted; }
-    public PortalMenu getParent() { return parent; }
-    public void setParent(PortalMenu parent) { this.parent = parent; }
-    public List<PortalMenu> getChildren() { return children; }
-    public void setChildren(List<PortalMenu> children) { this.children = children; }
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getPath() {
+        return path;
+    }
+
+    public void setPath(String path) {
+        this.path = path;
+    }
+
+    public String getComponent() {
+        return component;
+    }
+
+    public void setComponent(String component) {
+        this.component = component;
+    }
+
+    public String getIcon() {
+        return icon;
+    }
+
+    public void setIcon(String icon) {
+        this.icon = icon;
+    }
+
+    public Integer getSortOrder() {
+        return sortOrder;
+    }
+
+    public void setSortOrder(Integer sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
+    public String getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(String metadata) {
+        this.metadata = metadata;
+    }
+
+    public String getSecurityLevel() {
+        return securityLevel;
+    }
+
+    public void setSecurityLevel(String securityLevel) {
+        this.securityLevel = securityLevel;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
+    }
+
+    public PortalMenu getParent() {
+        return parent;
+    }
+
+    public void setParent(PortalMenu parent) {
+        this.parent = parent;
+    }
+
+    public List<PortalMenuVisibility> getVisibilities() {
+        return visibilities;
+    }
+
+    public void setVisibilities(List<PortalMenuVisibility> visibilities) {
+        this.visibilities.clear();
+        if (visibilities != null) {
+            for (PortalMenuVisibility visibility : visibilities) {
+                addVisibility(visibility);
+            }
+        }
+    }
+
+    public void addVisibility(PortalMenuVisibility visibility) {
+        if (visibility == null) {
+            return;
+        }
+        if (!visibilities.contains(visibility)) {
+            visibilities.add(visibility);
+        }
+        visibility.setMenu(this);
+    }
+
+    public void clearVisibilities() {
+        for (PortalMenuVisibility visibility : new ArrayList<>(visibilities)) {
+            visibility.setMenu(null);
+        }
+        visibilities.clear();
+    }
+
+    public List<PortalMenu> getChildren() {
+        return children;
+    }
+
+    public void setChildren(List<PortalMenu> children) {
+        this.children = children;
+    }
 }

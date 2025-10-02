@@ -1,61 +1,314 @@
 package com.yuzhi.dts.admin.service.audit;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.admin.config.AuditProperties;
+import com.yuzhi.dts.admin.domain.AuditEvent;
+import com.yuzhi.dts.admin.repository.AuditEventRepository;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.crypto.SecretKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
+@Transactional
 public class AdminAuditService {
 
-    public static final class AuditEvent {
+    private static final Logger log = LoggerFactory.getLogger(AdminAuditService.class);
+
+    public static final class AuditEventView {
         public long id;
-        public String timestamp;
+        public Instant occurredAt;
         public String actor;
+        public String actorRole;
+        public String module;
         public String action;
-        public String resource;
-        public String outcome;
-        public String detailJson;
-        public String targetType;
-        public String targetUri;
+        public String resourceType;
+        public String resourceId;
+        public String clientIp;
+        public String clientAgent;
+        public String requestUri;
+        public String httpMethod;
+        public String result;
+        public Integer latencyMs;
+        public String extraTags;
+        public String payloadPreview;
     }
 
-    private final List<AuditEvent> store = Collections.synchronizedList(new ArrayList<>());
-    private final AtomicLong seq = new AtomicLong(1);
-    private final DtsCommonAuditClient client;
-
-    public AdminAuditService(DtsCommonAuditClient client) {
-        this.client = client;
+    public static final class PendingAuditEvent {
+        public Instant occurredAt;
+        public String actor;
+        public String actorRole;
+        public String module;
+        public String action;
+        public String resourceType;
+        public String resourceId;
+        public String clientIp;
+        public String clientAgent;
+        public String requestUri;
+        public String httpMethod;
+        public String result;
+        public Integer latencyMs;
+        public Object payload;
+        public String extraTags;
     }
 
-    public AuditEvent record(String actor, String action, String targetKind, String targetRef, String outcome, String detailJson) {
-        AuditEvent e = new AuditEvent();
-        e.id = seq.getAndIncrement();
-        e.timestamp = Instant.now().toString();
-        e.actor = actor;
-        e.action = action;
-        e.targetType = targetKind;
-        e.targetUri = targetRef;
-        e.resource = targetKind + ":" + Objects.toString(targetRef, "");
-        e.outcome = outcome;
-        e.detailJson = detailJson;
-        store.add(e);
-        client.trySend(actor, action, targetKind, targetRef, e.timestamp);
-        return e;
+    private final AuditEventRepository repository;
+    private final AuditProperties properties;
+    private final DtsCommonAuditClient auditClient;
+    private final ObjectMapper objectMapper;
+
+    private BlockingQueue<PendingAuditEvent> queue;
+    private ScheduledExecutorService workerPool;
+    private SecretKey encryptionKey;
+    private SecretKey hmacKey;
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicReference<String> lastChainSignature = new AtomicReference<>("");
+
+    public AdminAuditService(
+        AuditEventRepository repository,
+        AuditProperties properties,
+        DtsCommonAuditClient auditClient,
+        ObjectMapper objectMapper
+    ) {
+        this.repository = repository;
+        this.properties = properties;
+        this.auditClient = auditClient;
+        this.objectMapper = objectMapper;
     }
 
-    public List<AuditEvent> list(String actor, String action, String resource, String outcome, String targetType, String targetUri) {
-        return store
+    @PostConstruct
+    public void start() {
+        if (!properties.isEnabled()) {
+            log.warn("Auditing is disabled via configuration");
+            return;
+        }
+        this.queue = new LinkedBlockingQueue<>(properties.getQueueCapacity());
+        ThreadFactory factory = runnable -> {
+            Thread t = new Thread(runnable, "audit-writer");
+            t.setDaemon(true);
+            return t;
+        };
+        this.workerPool = Executors.newScheduledThreadPool(1, factory);
+        this.encryptionKey = AuditCrypto.buildKey(resolveEncryptionKey());
+        this.hmacKey = AuditCrypto.buildMacKey(resolveHmacKey());
+        this.lastChainSignature.set(repository.findTopByOrderByIdDesc().map(AuditEvent::getChainSignature).orElse(""));
+        running.set(true);
+        workerPool.scheduleWithFixedDelay(this::drainQueue, 0, 500, TimeUnit.MILLISECONDS);
+        log.info("Audit writer started with capacity {}", properties.getQueueCapacity());
+    }
+
+    @PreDestroy
+    public void stop() {
+        running.set(false);
+        if (workerPool != null) {
+            workerPool.shutdown();
+        }
+    }
+
+    public void record(String actor, String action, String module, String resourceType, String resourceId, String outcome, Object payload) {
+        PendingAuditEvent event = new PendingAuditEvent();
+        event.occurredAt = Instant.now();
+        event.actor = defaultString(actor, "anonymous");
+        event.action = defaultString(action, "UNKNOWN");
+        event.module = defaultString(module, "GENERAL");
+        event.resourceType = resourceType;
+        event.resourceId = resourceId;
+        event.result = defaultString(outcome, "SUCCESS");
+        event.payload = payload;
+        offer(event);
+    }
+
+    public void record(String actor, String action, String module, String resourceId, String outcome, Object payload) {
+        record(actor, action, module, module, resourceId, outcome, payload);
+    }
+
+    public void record(PendingAuditEvent event) {
+        if (event.occurredAt == null) {
+            event.occurredAt = Instant.now();
+        }
+        offer(event);
+    }
+
+    private void offer(PendingAuditEvent event) {
+        if (!properties.isEnabled()) {
+            return;
+        }
+        if (!queue.offer(event)) {
+            log.warn("Audit queue is full, falling back to synchronous write");
+            persist(List.of(event));
+        }
+    }
+
+    private void drainQueue() {
+        if (!running.get()) {
+            return;
+        }
+        List<PendingAuditEvent> batch = new ArrayList<>();
+        queue.drainTo(batch, 256);
+        if (batch.isEmpty()) {
+            return;
+        }
+        persist(batch);
+    }
+
+    private void persist(List<PendingAuditEvent> batch) {
+        List<AuditEvent> entities = new ArrayList<>(batch.size());
+        String previousChain = lastChainSignature.get();
+        for (PendingAuditEvent pending : batch) {
+            try {
+                AuditEvent entity = buildEntity(pending, previousChain);
+                entities.add(entity);
+                previousChain = entity.getChainSignature();
+            } catch (Exception ex) {
+                log.error("Failed to prepare audit event {}", pending.action, ex);
+            }
+        }
+        if (entities.isEmpty()) {
+            return;
+        }
+        repository.saveAll(entities);
+        lastChainSignature.set(previousChain);
+        if (properties.isForwardEnabled()) {
+            entities.forEach(auditClient::enqueue);
+        }
+    }
+
+    private AuditEvent buildEntity(PendingAuditEvent pending, String previousChain) throws JsonProcessingException {
+        AuditEvent entity = new AuditEvent();
+        entity.setOccurredAt(pending.occurredAt);
+        entity.setActor(defaultString(pending.actor, "anonymous"));
+        entity.setActorRole(pending.actorRole);
+        entity.setModule(defaultString(pending.module, "GENERAL"));
+        entity.setAction(defaultString(pending.action, "UNKNOWN"));
+        entity.setResourceType(pending.resourceType);
+        entity.setResourceId(pending.resourceId);
+        entity.setClientIp(pending.clientIp);
+        entity.setClientAgent(pending.clientAgent);
+        entity.setRequestUri(pending.requestUri);
+        entity.setHttpMethod(pending.httpMethod);
+        entity.setResult(defaultString(pending.result, "SUCCESS"));
+        entity.setLatencyMs(pending.latencyMs);
+        entity.setExtraTags(pending.extraTags);
+
+        byte[] payloadBytes = pending.payload == null ? new byte[0] : objectMapper.writeValueAsBytes(pending.payload);
+        byte[] iv = AuditCrypto.randomIv();
+        byte[] cipher = AuditCrypto.encrypt(payloadBytes, encryptionKey, iv);
+        String payloadHmac = AuditCrypto.hmac(payloadBytes, hmacKey);
+        String chainSignature = AuditCrypto.chain(previousChain, payloadHmac, hmacKey);
+
+        entity.setPayloadIv(iv);
+        entity.setPayloadCipher(cipher);
+        entity.setPayloadHmac(payloadHmac);
+        entity.setChainSignature(chainSignature);
+        entity.setCreatedBy(entity.getActor());
+        entity.setCreatedDate(Instant.now());
+        return entity;
+    }
+
+    public Page<AuditEvent> search(String actor, String module, String action, String result, String resource, Instant from, Instant to, String clientIp, Pageable pageable) {
+        return repository.search(normalize(actor), normalize(module), normalize(action), normalize(result), normalize(resource), from, to, clientIp, pageable);
+    }
+
+    public List<AuditEventView> list(String actor, String module, String action, String result, String resource, Instant from, Instant to, String clientIp) {
+        return search(actor, module, action, result, resource, from, to, clientIp, Pageable.unpaged())
+            .getContent()
             .stream()
-            .filter(x -> actor == null || (x.actor != null && x.actor.contains(actor)))
-            .filter(x -> action == null || (x.action != null && x.action.contains(action)))
-            .filter(x -> resource == null || (x.resource != null && x.resource.contains(resource)))
-            .filter(x -> outcome == null || (x.outcome != null && x.outcome.equals(outcome)))
-            .filter(x -> targetType == null || (x.targetType != null && x.targetType.contains(targetType)))
-            .filter(x -> targetUri == null || (x.targetUri != null && x.targetUri.contains(targetUri)))
+            .map(this::toView)
             .toList();
+    }
+
+    public Optional<AuditEvent> findById(Long id) {
+        return repository.findById(id);
+    }
+
+    public List<AuditEvent> findAllForExport(String actor, String module, String action, String result, String resource, Instant from, Instant to, String clientIp) {
+        return repository
+            .search(normalize(actor), normalize(module), normalize(action), normalize(result), normalize(resource), from, to, clientIp, Pageable.unpaged())
+            .getContent();
+    }
+
+    public byte[] decryptPayload(AuditEvent event) {
+        if (event.getPayloadCipher() == null || event.getPayloadCipher().length == 0) {
+            return new byte[0];
+        }
+        return AuditCrypto.decrypt(event.getPayloadCipher(), encryptionKey, event.getPayloadIv());
+    }
+
+    public AuditEventView toView(AuditEvent event) {
+        AuditEventView view = new AuditEventView();
+        view.id = event.getId();
+        view.occurredAt = event.getOccurredAt();
+        view.actor = event.getActor();
+        view.actorRole = event.getActorRole();
+        view.module = event.getModule();
+        view.action = event.getAction();
+        view.resourceType = event.getResourceType();
+        view.resourceId = event.getResourceId();
+        view.clientIp = event.getClientIp();
+        view.clientAgent = event.getClientAgent();
+        view.requestUri = event.getRequestUri();
+        view.httpMethod = event.getHttpMethod();
+        view.result = event.getResult();
+        view.latencyMs = event.getLatencyMs();
+        view.extraTags = event.getExtraTags();
+        return view;
+    }
+
+    @Scheduled(cron = "0 30 2 * * *")
+    public void purgeOldEvents() {
+        Instant threshold = Instant.now().minus(Duration.ofDays(properties.getRetentionDays()));
+        int purged = repository.deleteAllByOccurredAtBefore(threshold);
+        if (purged > 0) {
+            log.info("Purged {} audit events older than {}", purged, threshold);
+        }
+    }
+
+    private String normalize(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String defaultString(String value, String fallback) {
+        return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    private String resolveEncryptionKey() {
+        if (!StringUtils.hasText(properties.getEncryptionKey())) {
+            byte[] random = new byte[32];
+            java.security.SecureRandom randomSource = new java.security.SecureRandom();
+            randomSource.nextBytes(random);
+            String generated = java.util.Base64.getEncoder().encodeToString(random);
+            log.warn("No auditing.encryption-key configured; generated ephemeral key for this runtime session");
+            properties.setEncryptionKey(generated);
+        }
+        return properties.getEncryptionKey();
+    }
+
+    private String resolveHmacKey() {
+        if (StringUtils.hasText(properties.getHmacKey())) {
+            return properties.getHmacKey();
+        }
+        return properties.getEncryptionKey();
     }
 }

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest, UserProfileConfig } from "#/keycloak";
 import { KeycloakRoleService, KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
-import { DEPARTMENT_SUGGESTIONS, POSITION_SUGGESTIONS } from "@/constants/user";
+import { adminApi } from "@/admin/api/adminApi";
+import { POSITION_SUGGESTIONS } from "@/constants/user";
+import type { OrganizationNode } from "@/admin/types";
 import { Icon } from "@/components/icon";
 import { Alert, AlertDescription } from "@/ui/alert";
 import { Badge } from "@/ui/badge";
@@ -41,6 +43,47 @@ const RESERVED_PROFILE_ATTRIBUTE_NAMES = [
 
 const DATA_LEVEL_LABEL_MAP = DATA_SECURITY_LEVEL_LABELS as Record<string, string>;
 
+interface OrgTreeOption extends TreeSelectProps['treeData'][number] {
+	value: string;
+	title: string;
+	key: string;
+	children?: OrgTreeOption[];
+}
+
+const normalizeGroupPath = (path: string | undefined): string => {
+	if (!path) return '';
+	return path.startsWith('/') ? path : `/${path}`;
+};
+
+const areGroupPathsEqual = (current: string[], original: string[]): boolean => {
+	if (current.length !== original.length) {
+		return false;
+	}
+	return current.every((value, index) => value === original[index]);
+};
+
+const buildOrgOptions = (
+	nodes: OrganizationNode[] = [],
+	ancestors: string[] = [],
+	index: Record<string, OrganizationNode>,
+): OrgTreeOption[] => {
+	return nodes.map((node) => {
+		const segment = node.name ?? '';
+		const nextPath = segment ? [...ancestors, segment] : [...ancestors];
+		const groupPath = normalizeGroupPath(node.groupPath ?? `/${nextPath.join('/')}`);
+		index[groupPath] = node;
+		return {
+			value: groupPath,
+			title: segment || groupPath,
+			key: groupPath,
+			children:
+				node.children && node.children.length > 0
+					? buildOrgOptions(node.children, nextPath, index)
+					: undefined,
+		};
+	});
+};
+
 interface UserModalProps {
 	open: boolean;
 	mode: "create" | "edit";
@@ -67,6 +110,7 @@ interface FormState {
 	originalData: FormData;
 	originalRoles: KeycloakRole[];
 	roleChanges: RoleChange[];
+	groupPaths: string[];
 }
 
 const createEmptyFormData = (): FormData => ({
@@ -82,6 +126,7 @@ const createEmptyFormState = (): FormState => ({
 	originalData: createEmptyFormData(),
 	originalRoles: [],
 	roleChanges: [],
+	groupPaths: [],
 });
 
 export default function UserModal({ open, mode, user, onCancel, onSuccess }: UserModalProps) {
@@ -95,6 +140,27 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [personLevel, setPersonLevel] = useState<string>("GENERAL");
 	const [userProfileConfig, setUserProfileConfig] = useState<UserProfileConfig | null>(null);
 	const [profileLoading, setProfileLoading] = useState(false);
+
+	const [orgOptions, setOrgOptions] = useState<OrgTreeOption[]>([]);
+	const [orgIndex, setOrgIndex] = useState<Record<string, OrganizationNode>>({});
+	const [orgLoading, setOrgLoading] = useState(false);
+	const [selectedGroupPaths, setSelectedGroupPaths] = useState<string[]>([]);
+
+	const loadOrganizations = useCallback(async () => {
+		setOrgLoading(true);
+		try {
+			const index: Record<string, OrganizationNode> = {};
+			const tree = await adminApi.getOrganizations();
+			const options = buildOrgOptions(tree ?? [], [], index);
+			setOrgOptions(options);
+			setOrgIndex(index);
+		} catch (error: any) {
+			console.error('Error loading organizations:', error);
+			toast.error(`加载组织结构失败: ${error?.message || '未知错误'}`);
+		} finally {
+			setOrgLoading(false);
+		}
+	}, []);
 
 	const normalizeAttributesForState = useCallback(
 		(attributes: Record<string, string[]> = {}, level?: string): Record<string, string[]> => {
@@ -242,8 +308,21 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		[normalizeAttributesForState],
 	);
 
+	const handleOrganizationChange = (value: string | null) => {
+		if (!value) {
+			setSelectedGroupPaths([]);
+			updateSingleValueAttribute("department", "");
+			return;
+		}
+		const normalized = normalizeGroupPath(value);
+		setSelectedGroupPaths([normalized]);
+		const node = orgIndex[normalized];
+		updateSingleValueAttribute("department", node?.name ?? "");
+	};
+
 	useEffect(() => {
 		if (!open) {
+			setSelectedGroupPaths([]);
 			return;
 		}
 
@@ -257,6 +336,9 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			const resolvedLevel = PERSON_SECURITY_LEVELS.some((option) => option.value === candidateLevel)
 				? candidateLevel
 				: "NON_SECRET";
+			const existingGroups = Array.isArray(user.groups)
+				? user.groups.map((item) => normalizeGroupPath(item)).filter((item) => item)
+				: [];
 			const normalizedAttributes = normalizeAttributesForState(user.attributes || {}, resolvedLevel);
 			const initialFormData: FormData = {
 				username: user.username || "",
@@ -270,6 +352,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			setPersonLevel(resolvedLevel);
 			setUserRoles([]);
 			setFormData(initialFormData);
+			setSelectedGroupPaths(existingGroups);
 			setFormState({
 				originalData: {
 					...initialFormData,
@@ -277,6 +360,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				},
 				originalRoles: [],
 				roleChanges: [],
+				groupPaths: existingGroups,
 			});
 
 			if (user.id) {
@@ -303,6 +387,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
         setPersonLevel(defaultLevel);
         setUserRoles([]);
         setFormData(emptyData);
+        setSelectedGroupPaths([]);
 			setFormState({
 				originalData: {
 					...emptyData,
@@ -310,6 +395,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				},
 				originalRoles: [],
 				roleChanges: [],
+				groupPaths: [],
 			});
 		}
 
@@ -324,18 +410,24 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 
 		loadRoles();
 		loadUserProfileConfig();
-	}, [open, loadRoles, loadUserProfileConfig]);
+		loadOrganizations();
+	}, [open, loadRoles, loadUserProfileConfig, loadOrganizations]);
 
-	const hasUserInfoChanged = (normalizedAttributes?: Record<string, string[]>): boolean => {
-		const { originalData } = formState;
+	const hasUserInfoChanged = (
+		normalizedAttributes?: Record<string, string[]>,
+		groupPaths?: string[],
+	): boolean => {
+		const { originalData, groupPaths: originalGroupPaths } = formState;
 		const attributesToCompare = normalizedAttributes ?? buildAttributesPayload();
+		const pathsToCompare = groupPaths ?? selectedGroupPaths;
 		return (
 			formData.username !== originalData.username ||
 			formData.email !== originalData.email ||
 			formData.fullName !== originalData.fullName ||
 			formData.enabled !== originalData.enabled ||
 			formData.emailVerified !== originalData.emailVerified ||
-			JSON.stringify(attributesToCompare) !== JSON.stringify(originalData.attributes)
+			JSON.stringify(attributesToCompare) !== JSON.stringify(originalData.attributes) ||
+			!areGroupPathsEqual(pathsToCompare, originalGroupPaths)
 		);
 	};
 
@@ -355,10 +447,17 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 
         const attributesPayload = buildAttributesPayload();
+        const groupPathsPayload = selectedGroupPaths
+            .map((item) => normalizeGroupPath(item))
+            .filter((item) => item);
 
         // 创建用户时人员密级不得为“非密”
         if (personLevel?.toUpperCase?.() === "NON_SECRET") {
             setError("人员密级不允许为‘非密’，请选取更高密级。");
+            return;
+        }
+        if (groupPathsPayload.length === 0) {
+            setError("请选择所属组织");
             return;
         }
 
@@ -379,7 +478,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			}
 		}
 
-		const hasUserInfoChanges = hasUserInfoChanged(attributesPayload);
+		const hasUserInfoChanges = hasUserInfoChanged(attributesPayload, groupPathsPayload);
 		const hasRoleChanges = formState.roleChanges.length > 0;
 
 		if (mode === "edit" && !hasUserInfoChanges && !hasRoleChanges) {
@@ -399,6 +498,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                     enabled: formData.enabled,
                     emailVerified: formData.emailVerified,
                     attributes: attributesPayload,
+                    groups: groupPathsPayload,
                 };
 
 				const response = await KeycloakUserService.createUser(createData);
@@ -419,6 +519,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 						enabled: formData.enabled,
 						emailVerified: formData.emailVerified,
 						attributes: attributesPayload,
+						groups: groupPathsPayload,
 					};
 
 					const response = await KeycloakUserService.updateUser(user.id, updateData);
@@ -513,7 +614,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 	};
 
-	const departmentValue = formData.attributes.department?.[0] ?? "";
 	const positionValue = formData.attributes.position?.[0] ?? "";
 	const title = mode === "create" ? "创建用户" : "编辑用户";
 
@@ -583,14 +683,21 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									<p className="text-xs text-muted-foreground">邮箱用于接收通知，可选填写。</p>
 								</div>
 								<div className="space-y-2">
-									<Label htmlFor="department">部门</Label>
-									<Input
-										id="department"
-										value={departmentValue}
-										onChange={(e) => updateSingleValueAttribute("department", e.target.value)}
-										placeholder={`例如：${DEPARTMENT_SUGGESTIONS.join("、")}`}
-									/>
-								</div>
+				<div className="space-y-2">
+								<Label htmlFor="department">组织机构 *</Label>
+								<TreeSelect
+									id="department"
+									value={selectedGroupPaths[0] ?? undefined}
+									treeData={orgOptions}
+									showSearch
+									placeholder="请选择所属组织"
+									style={{ width: "100%" }}
+									dropdownStyle={{ maxHeight: 320, overflow: "auto" }}
+									loading={orgLoading}
+									treeDefaultExpandAll
+									onChange={(value) => handleOrganizationChange((value as string) || null)}
+								/>
+							</div>
 								<div className="space-y-2">
 									<Label htmlFor="position">职位</Label>
 									<Input

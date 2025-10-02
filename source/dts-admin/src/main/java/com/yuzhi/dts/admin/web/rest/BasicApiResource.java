@@ -1,14 +1,21 @@
 package com.yuzhi.dts.admin.web.rest;
 
 import com.yuzhi.dts.admin.domain.PortalMenu;
-import com.yuzhi.dts.admin.repository.PortalMenuRepository;
 import com.yuzhi.dts.admin.security.SecurityUtils;
+import com.yuzhi.dts.admin.service.PortalMenuService;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.dto.menu.MenuTreeDTO;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import java.util.*;
+import java.util.stream.Collectors;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,21 +23,44 @@ import org.springframework.web.bind.annotation.*;
 @io.swagger.v3.oas.annotations.tags.Tag(name = "basic")
 public class BasicApiResource {
 
-    private final PortalMenuRepository menuRepo;
+    private final PortalMenuService portalMenuService;
     private final AdminAuditService auditService;
 
-    public BasicApiResource(PortalMenuRepository menuRepo, AdminAuditService auditService) {
-        this.menuRepo = menuRepo;
+    public BasicApiResource(PortalMenuService portalMenuService, AdminAuditService auditService) {
+        this.portalMenuService = portalMenuService;
         this.auditService = auditService;
     }
 
     @GetMapping("/menu")
     @Operation(summary = "List portal menu tree")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successful operation")
-    public ResponseEntity<ApiResponse<List<MenuTreeDTO>>> getMenuTree() {
-        List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
+    public ResponseEntity<ApiResponse<List<MenuTreeDTO>>> getMenuTree(
+        @RequestParam(name = "roles", required = false) List<String> roleParams,
+        @RequestParam(name = "permissions", required = false) List<String> permissionParams,
+        @RequestParam(name = "dataLevel", required = false) String dataLevel
+    ) {
+        Set<String> roleCodes = normalizeRoles(roleParams);
+        Set<String> permissionCodes = normalizePermissions(permissionParams);
+        String normalizedLevel = normalizeDataLevel(dataLevel);
+
+        if (CollectionUtils.isEmpty(roleCodes)) {
+            roleCodes = rolesFromSecurityContext();
+        }
+
+        List<PortalMenu> roots;
+        if (!CollectionUtils.isEmpty(roleCodes) || !CollectionUtils.isEmpty(permissionCodes) || StringUtils.hasText(normalizedLevel)) {
+            roots = portalMenuService.findTreeForAudience(roleCodes, permissionCodes, normalizedLevel);
+        } else {
+            roots = portalMenuService.findTree();
+        }
+
         List<MenuTreeDTO> out = new ArrayList<>();
-        for (PortalMenu r : roots) out.add(toDto(r));
+        for (PortalMenu root : roots) {
+            MenuTreeDTO dto = toDto(root);
+            if (dto != null) {
+                out.add(dto);
+            }
+        }
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "MENU_LIST", "MENU", "portal", "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
@@ -44,20 +74,15 @@ public class BasicApiResource {
         return ResponseEntity.ok(ApiResponse.ok(demo));
     }
 
-    @PostMapping("/user/tokenExpired")
-    @Operation(summary = "Demo token expired endpoint")
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Token expired")
-    public ResponseEntity<ApiResponse<Void>> tokenExpired() {
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "TOKEN_EXPIRED_DEMO", "AUTH", "demo", "ERROR", null);
-        return ResponseEntity.status(401).body(ApiResponse.error("token expired"));
-    }
-
     private static String slug(String s) {
         if (s == null) return "menu";
         return s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
     }
 
     private MenuTreeDTO toDto(PortalMenu p) {
+        if (p == null) {
+            return null;
+        }
         MenuTreeDTO d = new MenuTreeDTO();
         d.setId(String.valueOf(p.getId()));
         d.setParentId(p.getParent() != null ? String.valueOf(p.getParent().getId()) : "");
@@ -73,7 +98,12 @@ public class BasicApiResource {
         d.setType((p.getChildren() != null && !p.getChildren().isEmpty()) ? 1 : 2);
         if (p.getChildren() != null) {
             List<MenuTreeDTO> cs = new ArrayList<>();
-            for (PortalMenu c : p.getChildren()) cs.add(toDto(c));
+            for (PortalMenu c : p.getChildren()) {
+                MenuTreeDTO childDto = toDto(c);
+                if (childDto != null) {
+                    cs.add(childDto);
+                }
+            }
             d.setChildren(cs);
         }
         return d;
@@ -97,5 +127,53 @@ public class BasicApiResource {
             }
         }
         return menu.getName();
+    }
+
+    private Set<String> normalizeRoles(List<String> roles) {
+        if (roles == null) {
+            return new LinkedHashSet<>();
+        }
+        return roles
+            .stream()
+            .filter(StringUtils::hasText)
+            .map(role -> role.trim().toUpperCase(Locale.ROOT))
+            .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private Set<String> normalizePermissions(List<String> permissions) {
+        if (permissions == null) {
+            return new LinkedHashSet<>();
+        }
+        return permissions
+            .stream()
+            .filter(StringUtils::hasText)
+            .map(permission -> permission.trim().toLowerCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private String normalizeDataLevel(String dataLevel) {
+        if (!StringUtils.hasText(dataLevel)) {
+            return null;
+        }
+        return dataLevel.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private Set<String> rolesFromSecurityContext() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return new LinkedHashSet<>();
+        }
+        Collection<? extends GrantedAuthority> authorities;
+        if (authentication instanceof JwtAuthenticationToken jwt) {
+            authorities = SecurityUtils.extractAuthorityFromClaims(jwt.getToken().getClaims());
+        } else {
+            authorities = authentication.getAuthorities();
+        }
+        return authorities
+            .stream()
+            .map(GrantedAuthority::getAuthority)
+            .filter(StringUtils::hasText)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 }

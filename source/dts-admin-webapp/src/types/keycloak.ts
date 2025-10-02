@@ -71,6 +71,7 @@ export interface CreateUserRequest {
 	enabled?: boolean;
 	emailVerified?: boolean;
 	attributes?: Record<string, string[]>;
+	groups?: string[];
 }
 
 /**
@@ -85,6 +86,7 @@ export interface UpdateUserRequest {
 	enabled?: boolean;
 	emailVerified?: boolean;
 	attributes?: Record<string, string[]>;
+	groups?: string[];
 }
 
 /**

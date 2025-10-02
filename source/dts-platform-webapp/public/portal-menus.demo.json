@@ -328,11 +328,11 @@
 		"children": [
 			{
 				"id": 41,
-				"name": "sys.nav.portal.settingsPreferences",
-				"path": "/settings/preferences",
+				"name": "sys.nav.portal.settingsProfile",
+				"path": "/settings/profile",
 				"sortOrder": 1,
 				"parentId": 40,
-				"metadata": "{\"entryKey\":\"preferences\",\"titleKey\":\"sys.nav.portal.settingsPreferences\",\"sectionKey\":\"settings\"}"
+				"metadata": "{\\"entryKey\\\":\\\"profile\\\",\"titleKey\":\"sys.nav.portal.settingsProfile\",\"sectionKey\":\"settings\"}"
 			},
 			{
 				"id": 42,
@@ -353,3 +353,4 @@
 		]
 	}
 ]
+

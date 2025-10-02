@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import bannerImage from "@/assets/images/background/banner-1.png";
 import { Icon } from "@/components/icon";
 import { useUserInfo } from "@/store/userStore";
@@ -7,6 +7,8 @@ import { themeVars } from "@/theme/theme.css";
 import { Avatar, AvatarImage } from "@/ui/avatar";
 import { Text, Title } from "@/ui/typography";
 import ProfileTab from "./profile-tab";
+import { KeycloakUserService } from "@/api/services/keycloakService";
+import type { KeycloakUser } from "#/keycloak";
 
 const ROLE_LABEL_MAP: Record<string, string> = {
 	SYSADMIN: "系统管理员",
@@ -44,17 +46,86 @@ function resolveRoleLabels(roles: unknown): string[] {
 		.filter((item): item is string => Boolean(item));
 }
 
-function UserProfile() {
-	const { avatar, fullName, firstName, username, email, roles } = useUserInfo();
+const USERNAME_FALLBACK_NAME: Record<string, string> = {
+	sysadmin: "系统管理员",
+	syadmin: "系统管理员",
+	authadmin: "授权管理员",
+	auditadmin: "安全审计员",
+	opadmin: "运维管理员",
+};
 
-	const resolvedName = fullName || firstName || username || "";
+const PROTECTED_USERNAMES = new Set(Object.keys(USERNAME_FALLBACK_NAME));
+
+const pickAttributeValue = (attributes: Record<string, string[]> | undefined, keys: string[]) => {
+	if (!attributes) return "";
+	for (const key of keys) {
+		const values = attributes[key];
+		if (Array.isArray(values) && values.length > 0) {
+			const found = values.find((item) => item && item.trim());
+			if (found) return found.trim();
+			return values[0] ? values[0].trim() : "";
+		}
+	}
+	return "";
+};
+
+function UserProfile() {
+	const { avatar, fullName, firstName, username, email, roles, attributes, id } = useUserInfo();
+	const [detail, setDetail] = useState<KeycloakUser | null>(null);
+
+	useEffect(() => {
+		let active = true;
+		const fetchDetail = async () => {
+			if (!username || PROTECTED_USERNAMES.has(username.toLowerCase())) {
+				setDetail(null);
+				return;
+			}
+			try {
+				const list = await KeycloakUserService.searchUsers(username);
+				const remote = list.find((user) => user.username?.toLowerCase() === username.toLowerCase()) || list[0] || null;
+				if (active) {
+					setDetail(remote);
+				}
+			} catch (err) {
+				console.warn("Failed to load Keycloak user detail:", err);
+				if (active) {
+					setDetail(null);
+				}
+			}
+		};
+		fetchDetail();
+		return () => {
+			active = false;
+		};
+	}, [username]);
+
+	const detailAttributes = detail?.attributes as Record<string, string[]> | undefined;
+	const storeAttributes = attributes as Record<string, string[]> | undefined;
+
+	const attributeFullName = pickAttributeValue(detailAttributes, ["fullName", "fullname"]) || pickAttributeValue(storeAttributes, ["fullName", "fullname"]);
+	const normalizedAttributeFullName = attributeFullName && attributeFullName.toLowerCase() !== username?.toLowerCase() ? attributeFullName : "";
+	const normalizedDetailFullName = detail?.fullName && detail.fullName.toLowerCase() !== username?.toLowerCase() ? detail.fullName : "";
+	const normalizedStoreFullName = fullName && fullName.toLowerCase() !== username?.toLowerCase() ? fullName : "";
+	const normalizedStoreFirstName = firstName && firstName.toLowerCase() !== username?.toLowerCase() ? firstName : "";
+	const fallbackName = USERNAME_FALLBACK_NAME[username?.toLowerCase() ?? ""] || "";
+	const resolvedName = (
+		normalizedAttributeFullName ||
+		normalizedDetailFullName ||
+		normalizedStoreFullName ||
+		normalizedStoreFirstName ||
+		fallbackName ||
+		username ||
+		""
+	).trim();
+	const displayEmail = detail?.email || email || "";
 	const roleLabels = useMemo(() => {
-		const labels = resolveRoleLabels(roles);
+		const remoteRoles = detail?.realmRoles;
+		const labels = resolveRoleLabels(remoteRoles && remoteRoles.length ? remoteRoles : roles);
 		if (labels.length > 0) {
 			return Array.from(new Set(labels));
 		}
 		return [];
-	}, [roles]);
+	}, [detail?.realmRoles, roles]);
 
 	const bgStyle: CSSProperties = {
 		position: "absolute",
@@ -89,16 +160,16 @@ function UserProfile() {
 						<Text variant="body2" className="text-background">
 							{roleLabels.length ? roleLabels.join("、") : "管理员"}
 						</Text>
-						{email ? (
+						{displayEmail ? (
 							<Text variant="body3" className="text-background/80">
-								联系邮箱：{email}
+								联系邮箱：{displayEmail}
 							</Text>
 						) : null}
 					</div>
 				</div>
 			</div>
 
-			<ProfileTab />
+			<ProfileTab detail={detail} pickAttributeValue={pickAttributeValue} />
 		</div>
 	);
 }

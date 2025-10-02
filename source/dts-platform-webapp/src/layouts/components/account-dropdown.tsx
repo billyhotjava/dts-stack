@@ -49,7 +49,7 @@ export default function AccountDropdown() {
 					</div>
 				</div>
 				<DropdownMenuItem asChild>
-					<NavLink to="/settings/preferences">{t("sys.nav.portal.settingsPreferences")}</NavLink>
+					<NavLink to="/settings/profile">{t("sys.nav.portal.settingsProfile")}</NavLink>
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem className="font-bold text-warning" onClick={logout}>
@@ -59,3 +59,4 @@ export default function AccountDropdown() {
 		</DropdownMenu>
 	);
 }
+

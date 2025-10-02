@@ -27,9 +27,6 @@ public class AdminCustomRole extends AbstractAuditingEntity<Long> implements Ser
     @Column(name = "allow_desensitize_json")
     private Boolean allowDesensitizeJson;
 
-    @Column(name = "max_data_level", nullable = false, length = 64)
-    private String maxDataLevel;
-
     @Column(name = "description", length = 1000)
     private String description;
 
@@ -46,8 +43,6 @@ public class AdminCustomRole extends AbstractAuditingEntity<Long> implements Ser
     public void setMaxRows(Integer maxRows) { this.maxRows = maxRows; }
     public Boolean getAllowDesensitizeJson() { return allowDesensitizeJson; }
     public void setAllowDesensitizeJson(Boolean allowDesensitizeJson) { this.allowDesensitizeJson = allowDesensitizeJson; }
-    public String getMaxDataLevel() { return maxDataLevel; }
-    public void setMaxDataLevel(String maxDataLevel) { this.maxDataLevel = maxDataLevel; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 }

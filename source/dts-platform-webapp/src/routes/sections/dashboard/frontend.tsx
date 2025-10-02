@@ -31,6 +31,7 @@ import FeaturePlaceholder from "@/pages/common/FeaturePlaceholder";
 import DataSourcesPage from "@/pages/foundation/DataSourcesPage";
 import DataStoragePage from "@/pages/foundation/DataStoragePage";
 import TaskSchedulingPage from "@/pages/foundation/TaskSchedulingPage";
+import PersonalProfilePage from "@/pages/settings/profile";
 
 export function getFrontendDashboardRoutes(): RouteObject[] {
 	return PORTAL_NAV_SECTIONS.map((section) => {
@@ -81,11 +82,14 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 			};
 
 			const renderFeature = FEATURE_COMPONENTS[section.key]?.[child.key];
-			const element = renderFeature ? (
-				renderFeature()
-			) : (
-				<FeaturePlaceholder titleKey={child.titleKey} descriptionKey={child.descriptionKey} />
-			);
+			let element: ReactElement;
+			if (section.key === "settings" && child.key === "profile") {
+				element = <PersonalProfilePage />;
+			} else if (renderFeature) {
+				element = renderFeature();
+			} else {
+				element = <FeaturePlaceholder titleKey={child.titleKey} descriptionKey={child.descriptionKey} />;
+			}
 			return {
 				path: child.path,
 				element,

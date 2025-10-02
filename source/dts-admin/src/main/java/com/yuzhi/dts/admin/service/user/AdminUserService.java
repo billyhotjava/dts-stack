@@ -914,6 +914,50 @@ public class AdminUserService {
         }
     }
 
+    public void syncRealmRole(String roleName, String scope, Set<String> operations) {
+        if (StringUtils.isBlank(roleName)) {
+            return;
+        }
+        String normalizedRole = roleName.trim();
+        KeycloakRoleDTO dto = new KeycloakRoleDTO();
+        dto.setName(normalizedRole);
+        dto.setDescription(buildRoleDescription(scope, operations));
+        LinkedHashMap<String, String> attributes = new LinkedHashMap<>();
+        if (StringUtils.isNotBlank(scope)) {
+            attributes.put("scope", scope.trim().toUpperCase(Locale.ROOT));
+        }
+        if (operations != null && !operations.isEmpty()) {
+            attributes.put(
+                "operations",
+                operations.stream().map(op -> op.toLowerCase(Locale.ROOT)).collect(Collectors.joining(","))
+            );
+        }
+        if (!attributes.isEmpty()) {
+            dto.setAttributes(attributes);
+        }
+        try {
+            String token = resolveManagementToken();
+            keycloakAdminClient.upsertRealmRole(dto, token);
+            LOG.info("Synchronized realm role {} to Keycloak", normalizedRole);
+        } catch (Exception ex) {
+            LOG.warn("Failed to synchronize realm role {}: {}", normalizedRole, ex.getMessage());
+        }
+    }
+
+    private String buildRoleDescription(String scope, Set<String> operations) {
+        StringBuilder builder = new StringBuilder();
+        if (StringUtils.isNotBlank(scope)) {
+            builder.append(scope.toUpperCase(Locale.ROOT));
+        }
+        if (operations != null && !operations.isEmpty()) {
+            if (builder.length() > 0) {
+                builder.append(" | ");
+            }
+            builder.append("ops=").append(operations.stream().map(op -> op.toLowerCase(Locale.ROOT)).collect(Collectors.joining("/")));
+        }
+        return builder.length() == 0 ? null : builder.toString();
+    }
+
     private Map<String, Object> readPayload(String json) throws JsonProcessingException {
         return objectMapper.readValue(json, MAP_TYPE);
     }

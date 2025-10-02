@@ -223,6 +223,16 @@ info:
   # Comma separated list of profiles that will trigger the ribbon to show
   display-ribbon-on-profiles: 'dev'
 
+auditing:
+  enabled: true
+  queue-capacity: ${AUDIT_QUEUE_CAPACITY:5000}
+  retention-days: ${AUDIT_RETENTION_DAYS:180}
+  encryption-key: ${AUDIT_ENCRYPTION_KEY:}
+  hmac-key: ${AUDIT_HMAC_KEY:${AUDIT_ENCRYPTION_KEY:}}
+  forward-enabled: ${AUDIT_FORWARD_ENABLED:false}
+  forward-retry-interval: ${AUDIT_FORWARD_RETRY_INTERVAL:60000}
+
+
 dts:
   keycloak:
     admin-client-id: "${DTS_KEYCLOAK_ADMIN_CLIENT_ID:${OAUTH2_ADMIN_CLIENT_ID:${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID:}}}"

@@ -12,12 +12,21 @@ import {
 	DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 
+const USERNAME_FALLBACK_NAME: Record<string, string> = {
+	sysadmin: "系统管理员",
+	syadmin: "系统管理员",
+	authadmin: "授权管理员",
+	auditadmin: "安全审计员",
+	opadmin: "运维管理员",
+};
+
 /**
  * Account Dropdown
  */
 export default function AccountDropdown() {
 	const { replace } = useRouter();
 	const { username, email, avatar, fullName } = useUserInfo();
+	const fallbackName = USERNAME_FALLBACK_NAME[username?.toLowerCase() ?? ""] || "";
 	const signOut = useSignOut();
 	const { backToLogin } = useLoginStateContext();
 	const { t } = useTranslation();
@@ -44,7 +53,7 @@ export default function AccountDropdown() {
 				<div className="flex items-center gap-2 p-2">
 					<img className="h-10 w-10 rounded-full" src={avatar} alt="" />
 					<div className="flex flex-col items-start">
-						<div className="text-text-primary text-sm font-medium">{fullName || username}</div>
+						<div className="text-text-primary text-sm font-medium">{fullName || fallbackName || username}</div>
 						<div className="text-text-secondary text-xs">
 							{email}
 							{username ? `（${username}）` : null}
