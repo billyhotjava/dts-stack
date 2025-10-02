@@ -44,7 +44,8 @@ export interface ChangeRequest {
 	decidedAt?: string;
 	reason?: string;
 	category?: string;
-	summary?: string;
+	originalValue?: unknown;
+	updatedValue?: unknown;
 	lastError?: string;
 }
 

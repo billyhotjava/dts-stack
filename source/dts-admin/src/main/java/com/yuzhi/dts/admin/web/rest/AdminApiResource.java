@@ -1,5 +1,8 @@
 package com.yuzhi.dts.admin.web.rest;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
@@ -43,6 +46,8 @@ import com.yuzhi.dts.admin.service.user.AdminUserService;
 @Transactional
 @io.swagger.v3.oas.annotations.tags.Tag(name = "admin")
 public class AdminApiResource {
+
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     public record WhoAmI(boolean allowed, String role, String username, String email) {}
 
@@ -184,6 +189,13 @@ public class AdminApiResource {
         ChangeRequest cr = changeRequestService.draft("PORTAL_MENU", "CREATE", null, after, null, Objects.toString(body.get("reason"), null));
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "PORTAL_MENU_CREATE", "PORTAL_MENU", String.valueOf(body.getOrDefault("name", "menu")), "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+    }
+
+    @PostMapping("/portal/menus/reset")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> resetMenus() {
+        portalMenuService.resetMenusToSeed();
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "PORTAL_MENU_RESET", "PORTAL_MENU", "seed", "SUCCESS", null);
+        return portalMenus();
     }
 
     @PutMapping("/portal/menus/{id}")
@@ -419,7 +431,6 @@ public class AdminApiResource {
         cr.setRequestedBy(SecurityUtils.getCurrentUserLogin().orElse("sysadmin"));
         cr.setRequestedAt(Instant.now());
         cr.setCategory(Objects.toString(payload.get("category"), "GENERAL"));
-        cr.setSummary(Objects.toString(payload.get("summary"), null));
         cr.setLastError(null);
         crRepo.save(cr);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "CHANGE_REQUEST_CREATE", "CHANGE_REQUEST", String.valueOf(cr.getId()), "SUCCESS", null);
@@ -1088,9 +1099,128 @@ public class AdminApiResource {
         m.put("decidedAt", cr.getDecidedAt() != null ? cr.getDecidedAt().toString() : null);
         m.put("reason", cr.getReason());
         m.put("category", cr.getCategory());
-        m.put("summary", cr.getSummary());
+        m.put("originalValue", extractValue(cr, "before"));
+        m.put("updatedValue", extractValue(cr, "after"));
         m.put("lastError", cr.getLastError());
         return m;
+    }
+
+    private static Object extractValue(ChangeRequest cr, String key) {
+        Object value = extractChangedValues(cr.getDiffJson(), key);
+        if (value == null) {
+            value = extractValueFromDiff(cr.getDiffJson(), key);
+        }
+        if (value == null && "after".equals(key)) {
+            value = parseJsonOrRaw(cr.getPayloadJson());
+        }
+        return value;
+    }
+
+    private static Object extractChangedValues(String diffJson, String key) {
+        if (diffJson == null || diffJson.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode root = JSON_MAPPER.readTree(diffJson);
+            JsonNode changes = root.path("changes");
+            if (changes.isArray() && changes.size() > 0) {
+                Map<String, Object> result = new LinkedHashMap<>();
+                for (JsonNode change : changes) {
+                    JsonNode fieldNode = change.path("field");
+                    if (fieldNode.isMissingNode() || fieldNode.isNull()) {
+                        continue;
+                    }
+                    JsonNode valueNode = change.path(key);
+                    if (valueNode.isMissingNode()) {
+                        continue;
+                    }
+                    try {
+                        Object converted = convertNode(valueNode);
+                        result.put(fieldNode.asText(), converted);
+                    } catch (JsonProcessingException ignored) {
+                    }
+                }
+                if (!result.isEmpty()) {
+                    return result;
+                }
+            }
+            JsonNode beforeNode = root.path("before");
+            JsonNode afterNode = root.path("after");
+            if (beforeNode.isObject() && afterNode.isObject()) {
+                Map<String, Object> result = new LinkedHashMap<>();
+                Set<String> fields = new LinkedHashSet<>();
+                beforeNode.fieldNames().forEachRemaining(fields::add);
+                afterNode.fieldNames().forEachRemaining(fields::add);
+                for (String field : fields) {
+                    JsonNode beforeValue = beforeNode.get(field);
+                    JsonNode afterValue = afterNode.get(field);
+                    if (Objects.equals(beforeValue, afterValue)) {
+                        continue;
+                    }
+                    JsonNode targetNode = "before".equals(key) ? beforeValue : afterValue;
+                    if (targetNode == null) {
+                        continue;
+                    }
+                    try {
+                        result.put(field, convertNode(targetNode));
+                    } catch (JsonProcessingException ignored) {
+                    }
+                }
+                if (!result.isEmpty()) {
+                    return result;
+                }
+            }
+        } catch (JsonProcessingException e) {
+            return null;
+        }
+        return null;
+    }
+
+    private static Object extractValueFromDiff(String diffJson, String key) {
+        if (diffJson == null || diffJson.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode root = JSON_MAPPER.readTree(diffJson);
+            JsonNode node = root.path(key);
+            if (node.isMissingNode() || node.isNull()) {
+                return null;
+            }
+            return convertNode(node);
+        } catch (JsonProcessingException e) {
+            return null;
+        }
+    }
+
+    private static Object parseJsonOrRaw(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode node = JSON_MAPPER.readTree(raw);
+            return convertNode(node);
+        } catch (JsonProcessingException e) {
+            return raw;
+        }
+    }
+
+    private static Object convertNode(JsonNode node) throws JsonProcessingException {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isNumber()) {
+            return node.numberValue();
+        }
+        if (node.isBoolean()) {
+            return node.booleanValue();
+        }
+        if (node.isTextual()) {
+            return node.asText();
+        }
+        if (node.isArray() || node.isObject()) {
+            return JSON_MAPPER.treeToValue(node, Object.class);
+        }
+        return node.toString();
     }
 
     private Map<String, Object> toMenuVM(PortalMenu p) {

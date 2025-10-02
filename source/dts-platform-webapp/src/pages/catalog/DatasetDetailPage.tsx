@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { Button } from "@/ui/button";
+import { Badge } from "@/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
@@ -18,6 +19,8 @@ import {
     previewDataset,
     applyPolicy,
     getDatasetJob,
+    latestQuality,
+    triggerQuality,
 } from "@/api/platformApi";
 import type { DatasetAsset, DatasetJob, DatasetJobStatus, SecurityLevel } from "@/types/catalog";
 
@@ -45,6 +48,9 @@ export default function DatasetDetailPage() {
     const [busy, setBusy] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [lastJob, setLastJob] = useState<DatasetJob | null>(null);
+    const [qualitySummary, setQualitySummary] = useState<any | null>(null);
+    const [qualityLoading, setQualityLoading] = useState(false);
+    const [qualityRunning, setQualityRunning] = useState(false);
 
     const loadDataset = async (withSpinner = false) => {
         if (withSpinner) setLoading(true);
@@ -66,6 +72,37 @@ export default function DatasetDetailPage() {
             toast.error("加载失败");
         } finally {
             if (withSpinner) setLoading(false);
+        }
+    };
+
+    const loadQualitySummary = async () => {
+        if (!id) return;
+        setQualityLoading(true);
+        try {
+            const summary = (await latestQuality(id)) as any;
+            setQualitySummary(summary);
+        } catch (error) {
+            console.warn("Latest quality fetch failed", error);
+            setQualitySummary(null);
+        } finally {
+            setQualityLoading(false);
+        }
+    };
+
+    const handleTriggerQuality = async () => {
+        if (!id) return;
+        setQualityRunning(true);
+        try {
+            await triggerQuality(id);
+            toast.success("已提交质量检测任务");
+            setTimeout(() => {
+                void loadQualitySummary();
+            }, 2000);
+        } catch (error) {
+            console.error(error);
+            toast.error("触发质量检测失败");
+        } finally {
+            setQualityRunning(false);
         }
     };
 
@@ -133,6 +170,7 @@ export default function DatasetDetailPage() {
 
 	useEffect(() => {
 		void loadDataset(true);
+		void loadQualitySummary();
 	}, [id]);
 
 	const onAddColumn = () => {
@@ -363,6 +401,39 @@ export default function DatasetDetailPage() {
 									}
 								/>
 							</div>
+						</>
+					)}
+			</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+					<div>
+						<CardTitle className="text-base">质量监控</CardTitle>
+						<p className="text-xs text-muted-foreground">查看最近一次质量检测状态，快速触发按需检测。</p>
+					</div>
+					<div className="flex items-center gap-2">
+						{qualitySummary?.status && (
+							<Badge variant="outline">{qualitySummary.status}</Badge>
+						)}
+						<Button variant="outline" size="sm" disabled={qualityRunning} onClick={handleTriggerQuality}>
+							{qualityRunning ? "执行中…" : "立即检测"}
+						</Button>
+						<Button variant="ghost" size="sm" asChild>
+							<Link to="/governance">前往治理</Link>
+						</Button>
+					</div>
+				</CardHeader>
+				<CardContent className="space-y-2 text-sm">
+					{qualityLoading ? (
+						<div className="text-muted-foreground">正在加载质量检测信息…</div>
+					) : (
+						<>
+							<div>
+								<span className="text-muted-foreground">最近一次：</span>
+								<span className="text-foreground">{qualitySummary?.time ? new Date(qualitySummary.time).toLocaleString() : "暂无记录"}</span>
+							</div>
+							<div className="text-muted-foreground">结果：{qualitySummary?.message || qualitySummary?.status || "尚未执行"}</div>
 						</>
 					)}
 				</CardContent>

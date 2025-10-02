@@ -42,17 +42,14 @@ public class AdminAuditService {
         public long id;
         public Instant occurredAt;
         public String actor;
-        public String actorRole;
         public String module;
         public String action;
         public String resourceType;
         public String resourceId;
         public String clientIp;
         public String clientAgent;
-        public String requestUri;
         public String httpMethod;
         public String result;
-        public Integer latencyMs;
         public String extraTags;
         public String payloadPreview;
     }
@@ -246,16 +243,16 @@ public class AdminAuditService {
             effectivePageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
         }
         return repository.search(
-            normalize(actor),
-            normalize(module),
-            normalize(action),
-            normalize(result),
-            normalize(resourceType),
-            normalize(resource),
-            normalize(requestUri),
+            likePattern(actor),
+            likePattern(module),
+            likePattern(action),
+            likePattern(result),
+            likePattern(resourceType),
+            likePattern(resource),
+            likePattern(requestUri),
             from,
             to,
-            normalize(clientIp),
+            likePattern(clientIp),
             effectivePageable
         );
     }
@@ -297,16 +294,16 @@ public class AdminAuditService {
     ) {
         return repository
             .search(
-                normalize(actor),
-                normalize(module),
-                normalize(action),
-                normalize(result),
-                normalize(resourceType),
-                normalize(resource),
-                normalize(requestUri),
+                likePattern(actor),
+                likePattern(module),
+                likePattern(action),
+                likePattern(result),
+                likePattern(resourceType),
+                likePattern(resource),
+                likePattern(requestUri),
                 from,
                 to,
-                normalize(clientIp),
+                likePattern(clientIp),
                 Pageable.unpaged()
             )
             .getContent();
@@ -342,17 +339,14 @@ public class AdminAuditService {
         view.id = event.getId();
         view.occurredAt = event.getOccurredAt();
         view.actor = event.getActor();
-        view.actorRole = event.getActorRole();
         view.module = event.getModule();
         view.action = event.getAction();
         view.resourceType = event.getResourceType();
         view.resourceId = event.getResourceId();
         view.clientIp = event.getClientIp();
         view.clientAgent = event.getClientAgent();
-        view.requestUri = event.getRequestUri();
         view.httpMethod = event.getHttpMethod();
         view.result = event.getResult();
-        view.latencyMs = event.getLatencyMs();
         view.extraTags = event.getExtraTags();
         return view;
     }
@@ -368,6 +362,21 @@ public class AdminAuditService {
 
     private String normalize(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String likePattern(String value) {
+        String normalized = normalize(value);
+        if (normalized == null) {
+            return null;
+        }
+        return "%" + escapeLike(normalized) + "%";
+    }
+
+    private String escapeLike(String value) {
+        return value
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_");
     }
 
     private String defaultString(String value, String fallback) {

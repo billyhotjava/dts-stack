@@ -6,8 +6,11 @@ import com.yuzhi.dts.admin.domain.PortalMenu;
 import com.yuzhi.dts.admin.domain.PortalMenuVisibility;
 import com.yuzhi.dts.admin.repository.PortalMenuRepository;
 import com.yuzhi.dts.admin.repository.PortalMenuVisibilityRepository;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -23,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+import org.springframework.core.io.ClassPathResource;
 
 @Service
 @Transactional
@@ -235,6 +239,126 @@ public class PortalMenuService {
         menuRepo.save(menu);
     }
 
+    public void resetMenusToSeed() {
+        MenuSeed seed = loadMenuSeed();
+        visibilityRepo.deleteAllInBatch();
+        menuRepo.deleteAllInBatch();
+
+        if (seed.portalNavSections() == null || seed.portalNavSections().isEmpty()) {
+            log.warn("Menu seed is empty; no menus created");
+            return;
+        }
+
+        int sortOrder = 1;
+        for (MenuNode section : seed.portalNavSections()) {
+            PortalMenu root = buildMenuTree(section, null, sortOrder++, section.key());
+            menuRepo.save(root);
+        }
+    }
+
+    private PortalMenu buildMenuTree(MenuNode node, PortalMenu parent, int sortOrder, String sectionKey) {
+        PortalMenu menu = new PortalMenu();
+        menu.setName(resolveTitle(node));
+        menu.setPath(buildPath(parent, node.path()));
+        menu.setComponent(null);
+        menu.setIcon(node.icon());
+        menu.setSortOrder(sortOrder);
+        menu.setMetadata(writeMetadata(node, parent == null, sectionKey));
+        menu.setSecurityLevel("GENERAL");
+        menu.setDeleted(false);
+        if (parent != null) {
+            menu.setParent(parent);
+        }
+
+        for (PortalMenuVisibility visibility : defaultVisibilities(menu)) {
+            menu.addVisibility(visibility);
+        }
+
+        List<PortalMenu> children = new ArrayList<>();
+        if (node.children() != null) {
+            int childOrder = 1;
+            for (MenuNode child : node.children()) {
+                PortalMenu childMenu = buildMenuTree(child, menu, childOrder++, sectionKey);
+                childMenu.setParent(menu);
+                children.add(childMenu);
+            }
+        }
+        menu.setChildren(children);
+        return menu;
+    }
+
+    private String writeMetadata(MenuNode node, boolean isRoot, String sectionKey) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        if (isRoot) {
+            if (StringUtils.hasText(node.key())) {
+                metadata.put("sectionKey", node.key());
+            }
+        } else {
+            if (StringUtils.hasText(sectionKey)) {
+                metadata.put("sectionKey", sectionKey);
+            }
+            if (StringUtils.hasText(node.key())) {
+                metadata.put("entryKey", node.key());
+            }
+        }
+        if (StringUtils.hasText(node.titleKey())) {
+            metadata.put("titleKey", node.titleKey());
+        }
+        if (StringUtils.hasText(node.title())) {
+            metadata.put("title", node.title());
+        }
+        if (StringUtils.hasText(node.icon())) {
+            metadata.put("icon", node.icon());
+        }
+        if (metadata.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(metadata);
+        } catch (Exception ex) {
+            log.warn("Failed to serialize menu metadata for key {}: {}", node.key(), ex.getMessage());
+            return null;
+        }
+    }
+
+    private String resolveTitle(MenuNode node) {
+        if (StringUtils.hasText(node.title())) {
+            return node.title();
+        }
+        if (StringUtils.hasText(node.titleKey())) {
+            return node.titleKey();
+        }
+        return node.key() != null ? node.key() : "菜单";
+    }
+
+    private String buildPath(PortalMenu parent, String segment) {
+        String normalized = segment == null ? "" : segment.trim();
+        if (normalized.startsWith("/")) {
+            normalized = normalized.substring(1);
+        }
+        if (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        String parentPath = parent == null ? "" : parent.getPath();
+        if (!StringUtils.hasText(parentPath)) {
+            return "/" + normalized;
+        }
+        String base = parentPath.endsWith("/") ? parentPath.substring(0, parentPath.length() - 1) : parentPath;
+        return normalized.isEmpty() ? base : base + "/" + normalized;
+    }
+
+    private MenuSeed loadMenuSeed() {
+        ClassPathResource resource = new ClassPathResource("config/data/portal-menu-seed.json");
+        if (!resource.exists()) {
+            throw new IllegalStateException("Portal menu seed resource not found");
+        }
+        try (InputStream is = resource.getInputStream()) {
+            return objectMapper.readValue(is, MenuSeed.class);
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to read portal menu seed", ex);
+        }
+    }
+
     private List<PortalMenuVisibility> defaultVisibilities(PortalMenu menu) {
         List<PortalMenuVisibility> defaults = new ArrayList<>();
         for (String role : DEFAULT_MENU_ROLES) {
@@ -364,4 +488,8 @@ public class PortalMenuService {
         String upper = trimmed.toUpperCase(Locale.ROOT);
         return upper.startsWith("ROLE_") ? upper : "ROLE_" + upper;
     }
+
+    private record MenuSeed(List<MenuNode> portalNavSections) {}
+
+    private record MenuNode(String key, String path, String icon, String titleKey, String title, List<MenuNode> children) {}
 }

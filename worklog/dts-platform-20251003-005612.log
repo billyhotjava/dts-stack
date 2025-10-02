@@ -74,3 +74,14 @@
 27. 配置项与密钥：文档化 `governance.*`、附件加密 key、调度账号。
 28. Liquibase 应用顺序：更新 master changelog，并在部署手册中加入执行顺序与回滚策略。
 29. 性能与安全复核：质量任务并发、超时、失败重试策略评审。
+[2025-10-03 01:27] 后端治理模块改造进度
+- 新增 Liquibase 变更 20251008_01，覆盖治理规则扩展、版本、绑定、质量执行、合规批次、问题台账等表结构，并更新 master.xml。
+- 引入 `GovernanceProperties` 及默认配置，扩展 `application.yml`；注册在 `DtsPlatformApp` 中。
+- 扩展治理领域实体/仓储：`GovRule` 增强元数据，新增版本、绑定、质量执行、合规批次/条目、问题工单/动作实体与 JPA 仓储。
+- 衍生 DTO/请求模型与 `GovernanceMapper`，服务层实现 `QualityRuleService`、`QualityRunService`、`ComplianceService`、`IssueTicketService` 及审计集成，落地 Hive 执行、异步调度。
+- 重写 `GovernanceResource`、`QualityResource`，提供质量规则/运行、合规批次、问题台账 REST 接口；旧接口兼容返回值更新。
+- Maven 编译通过（存在历史依赖收敛告警），Spotless 自动整理；`target/` 目录归属修复。
+[2025-10-03 01:38] 前端治理页面与数据集联动更新
+- 重写治理>质量规则页面：改为实时加载后端数据、展示密级/严重度/绑定数据集、支持启停与手动触发执行；新增抽屉详情与新增/编辑对话框，使用新接口(`/governance/quality/*`)。
+- 更新全局 API 封装：新增质量规则/运行、合规批次、问题台账方法；保留 `/data-quality-runs/*` 兼容入口并指向新治理管道。
+- 数据集详情页新增“质量监控”卡片：展示最近一次检测状态并可一键触发质量检测（调用 `/data-quality-runs/trigger` 与最新结果查询），引导跳转治理模块。

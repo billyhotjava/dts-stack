@@ -108,13 +108,6 @@ const auditEvents: AuditEvent[] = Array.from({ length: 60 }).map((_, index) => {
 			"analytics.user",
 			"bi.viewer",
 		]),
-		actorRole: faker.helpers.arrayElement([
-			"ROLE_SYS_ADMIN",
-			"ROLE_AUTH_ADMIN",
-			"ROLE_AUDITOR_ADMIN",
-			"ROLE_OP_ADMIN",
-			"ROLE_USER",
-		]),
 		module,
 		action: faker.helpers.arrayElement([
 			"CREATE",
@@ -128,10 +121,8 @@ const auditEvents: AuditEvent[] = Array.from({ length: 60 }).map((_, index) => {
 		resourceId: `${resourceType}:${faker.string.alphanumeric({ length: 6 }).toUpperCase()}`,
 		clientIp: faker.internet.ipv4(),
 		clientAgent: faker.internet.userAgent(),
-		requestUri: `/api/${module}/${faker.string.alphanumeric({ length: 8 }).toLowerCase()}`,
 		httpMethod: faker.helpers.arrayElement(["GET", "POST", "PUT", "DELETE"]),
 		result: faker.helpers.arrayElement(["SUCCESS", "FAILURE"]),
-		latencyMs: faker.number.int({ min: 15, max: 1500 }),
 		extraTags: JSON.stringify({ traceId: faker.string.uuid().slice(0, 8) }),
 		payloadPreview: faker.helpers.maybe(
 			() =>

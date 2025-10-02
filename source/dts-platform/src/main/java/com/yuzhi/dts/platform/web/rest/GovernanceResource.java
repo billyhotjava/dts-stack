@@ -1,111 +1,175 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import com.yuzhi.dts.platform.domain.governance.GovComplianceCheck;
-import com.yuzhi.dts.platform.domain.governance.GovRule;
-import com.yuzhi.dts.platform.repository.governance.GovComplianceCheckRepository;
-import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
-import com.yuzhi.dts.platform.security.AuthoritiesConstants;
-import com.yuzhi.dts.platform.service.audit.AuditService;
-import java.time.Instant;
+import com.yuzhi.dts.platform.service.governance.ComplianceService;
+import com.yuzhi.dts.platform.service.governance.IssueTicketService;
+import com.yuzhi.dts.platform.service.governance.QualityRuleService;
+import com.yuzhi.dts.platform.service.governance.QualityRunService;
+import com.yuzhi.dts.platform.service.governance.dto.ComplianceBatchDto;
+import com.yuzhi.dts.platform.service.governance.dto.IssueActionDto;
+import com.yuzhi.dts.platform.service.governance.dto.IssueTicketDto;
+import com.yuzhi.dts.platform.service.governance.dto.QualityRuleDto;
+import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
+import com.yuzhi.dts.platform.service.governance.request.ComplianceBatchRequest;
+import com.yuzhi.dts.platform.service.governance.request.IssueActionRequest;
+import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
+import com.yuzhi.dts.platform.service.governance.request.QualityRuleUpsertRequest;
+import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/governance")
 @Transactional
 public class GovernanceResource {
 
-    private final GovRuleRepository ruleRepo;
-    private final GovComplianceCheckRepository checkRepo;
-    private final AuditService audit;
+    private final QualityRuleService qualityRuleService;
+    private final QualityRunService qualityRunService;
+    private final ComplianceService complianceService;
+    private final IssueTicketService issueTicketService;
 
-    public GovernanceResource(GovRuleRepository ruleRepo, GovComplianceCheckRepository checkRepo, AuditService audit) {
-        this.ruleRepo = ruleRepo;
-        this.checkRepo = checkRepo;
-        this.audit = audit;
+    public GovernanceResource(
+        QualityRuleService qualityRuleService,
+        QualityRunService qualityRunService,
+        ComplianceService complianceService,
+        IssueTicketService issueTicketService
+    ) {
+        this.qualityRuleService = qualityRuleService;
+        this.qualityRunService = qualityRunService;
+        this.complianceService = complianceService;
+        this.issueTicketService = issueTicketService;
+    }
+
+    // Quality rule APIs ------------------------------------------------------
+
+    @GetMapping("/quality/rules")
+    public ApiResponse<List<QualityRuleDto>> listQualityRules() {
+        return ApiResponses.ok(qualityRuleService.listAll());
     }
 
     @GetMapping("/rules")
-    public ApiResponse<List<GovRule>> listRules() {
-        List<GovRule> list = ruleRepo.findAll();
-        audit.audit("READ", "governance.rule", "list");
-        return ApiResponses.ok(list);
+    public ApiResponse<List<QualityRuleDto>> legacyListRules() {
+        return listQualityRules();
+    }
+
+    @PostMapping("/quality/rules")
+    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    public ApiResponse<QualityRuleDto> createRule(@RequestBody QualityRuleUpsertRequest request) {
+        return ApiResponses.ok(qualityRuleService.createRule(request, currentUser()));
     }
 
     @PostMapping("/rules")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.GOV_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
-    public ApiResponse<GovRule> createRule(@RequestBody GovRule rule) {
-        GovRule saved = ruleRepo.save(rule);
-        audit.audit("CREATE", "governance.rule", saved.getId().toString());
-        return ApiResponses.ok(saved);
+    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    public ApiResponse<QualityRuleDto> legacyCreateRule(@RequestBody QualityRuleUpsertRequest request) {
+        return createRule(request);
     }
 
-    @PutMapping("/rules/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.GOV_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
-    public ApiResponse<GovRule> updateRule(@PathVariable UUID id, @RequestBody GovRule patch) {
-        GovRule existing = ruleRepo.findById(id).orElseThrow();
-        existing.setName(patch.getName());
-        existing.setType(patch.getType());
-        existing.setExpression(patch.getExpression());
-        existing.setDatasetId(patch.getDatasetId());
-        existing.setEnabled(patch.getEnabled());
-        GovRule saved = ruleRepo.save(existing);
-        audit.audit("UPDATE", "governance.rule", id.toString());
-        return ApiResponses.ok(saved);
+    @PutMapping("/quality/rules/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    public ApiResponse<QualityRuleDto> updateRule(@PathVariable UUID id, @RequestBody QualityRuleUpsertRequest request) {
+        return ApiResponses.ok(qualityRuleService.updateRule(id, request, currentUser()));
     }
 
-    @DeleteMapping("/rules/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.GOV_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @DeleteMapping("/quality/rules/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
     public ApiResponse<Boolean> deleteRule(@PathVariable UUID id) {
-        ruleRepo.deleteById(id);
-        audit.audit("DELETE", "governance.rule", id.toString());
+        qualityRuleService.deleteRule(id);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
-    @PostMapping("/rules/{id}/toggle")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.GOV_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
-    public ApiResponse<GovRule> toggle(@PathVariable UUID id) {
-        GovRule rule = ruleRepo.findById(id).orElseThrow();
-        rule.setEnabled(Boolean.FALSE.equals(rule.getEnabled()));
-        GovRule saved = ruleRepo.save(rule);
-        audit.audit("UPDATE", "governance.rule.toggle", id.toString());
-        return ApiResponses.ok(saved);
+    @PostMapping("/quality/rules/{id}/toggle")
+    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    public ApiResponse<QualityRuleDto> toggleRule(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        boolean enabled = Boolean.TRUE.equals(body.getOrDefault("enabled", Boolean.TRUE));
+        return ApiResponses.ok(qualityRuleService.toggleRule(id, enabled));
     }
 
-    @GetMapping("/compliance-checks")
-    public ApiResponse<List<GovComplianceCheck>> listChecks() {
-        List<GovComplianceCheck> list = checkRepo.findAll();
-        audit.audit("READ", "governance.compliance", "list");
-        return ApiResponses.ok(list);
+    @PostMapping("/quality/runs")
+    public ApiResponse<List<QualityRunDto>> triggerQualityRun(@RequestBody QualityRunTriggerRequest request) {
+        return ApiResponses.ok(qualityRunService.trigger(request, currentUser()));
     }
 
-    @GetMapping("/compliance-checks/{id}")
-    public ApiResponse<GovComplianceCheck> getCheck(@PathVariable UUID id) {
-        GovComplianceCheck item = checkRepo.findById(id).orElseThrow();
-        audit.audit("READ", "governance.compliance", id.toString());
-        return ApiResponses.ok(item);
+    @GetMapping("/quality/runs/{id}")
+    public ApiResponse<QualityRunDto> getQualityRun(@PathVariable UUID id) {
+        return ApiResponses.ok(qualityRunService.getRun(id));
     }
 
-    @PostMapping("/compliance-checks/run")
-    public ApiResponse<Map<String, Object>> runCheck(@RequestBody(required = false) Map<String, Object> params) {
-        // simulate: pick first rule and create a check record
-        List<GovRule> rules = ruleRepo.findAll();
-        if (rules.isEmpty()) {
-            return ApiResponses.ok(Map.of("status", "NO_RULE"));
+    @GetMapping("/quality/runs")
+    public ApiResponse<List<QualityRunDto>> listQualityRuns(
+        @RequestParam(value = "ruleId", required = false) UUID ruleId,
+        @RequestParam(value = "datasetId", required = false) UUID datasetId,
+        @RequestParam(value = "limit", defaultValue = "10") int limit
+    ) {
+        if (ruleId != null) {
+            return ApiResponses.ok(qualityRunService.recentByRule(ruleId, limit));
         }
-        GovRule rule = rules.get(0);
-        GovComplianceCheck check = new GovComplianceCheck();
-        check.setRuleId(rule.getId());
-        check.setStatus("SUCCESS");
-        check.setDetail("Simulated compliance check passed.");
-        check.setCheckedAt(Instant.now());
-        checkRepo.save(check);
-        audit.audit("EXECUTE", "governance.compliance.run", rule.getId().toString());
-        return ApiResponses.ok(Map.of("checkId", check.getId(), "status", check.getStatus()));
+        if (datasetId != null) {
+            return ApiResponses.ok(qualityRunService.recentByDataset(datasetId, limit));
+        }
+        return ApiResponses.ok(qualityRunService.recent(limit));
+    }
+
+    // Compliance APIs --------------------------------------------------------
+
+    @PostMapping("/compliance/batches")
+    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    public ApiResponse<ComplianceBatchDto> createComplianceBatch(@RequestBody ComplianceBatchRequest request) {
+        return ApiResponses.ok(complianceService.createBatch(request, currentUser()));
+    }
+
+    @GetMapping("/compliance/batches")
+    public ApiResponse<List<ComplianceBatchDto>> listComplianceBatches(
+        @RequestParam(value = "limit", defaultValue = "10") int limit
+    ) {
+        return ApiResponses.ok(complianceService.recentBatches(limit));
+    }
+
+    @GetMapping("/compliance/batches/{id}")
+    public ApiResponse<ComplianceBatchDto> getComplianceBatch(@PathVariable UUID id) {
+        return ApiResponses.ok(complianceService.getBatch(id));
+    }
+
+    // Issue & remediation APIs ----------------------------------------------
+
+    @GetMapping("/issues")
+    public ApiResponse<List<IssueTicketDto>> listIssues() {
+        return ApiResponses.ok(issueTicketService.listActiveTickets());
+    }
+
+    @PostMapping("/issues")
+    public ApiResponse<IssueTicketDto> createIssue(@RequestBody IssueTicketUpsertRequest request) {
+        return ApiResponses.ok(issueTicketService.create(request, currentUser()));
+    }
+
+    @PutMapping("/issues/{id}")
+    public ApiResponse<IssueTicketDto> updateIssue(@PathVariable UUID id, @RequestBody IssueTicketUpsertRequest request) {
+        return ApiResponses.ok(issueTicketService.update(id, request));
+    }
+
+    @PostMapping("/issues/{id}/close")
+    public ApiResponse<IssueTicketDto> closeIssue(@PathVariable UUID id, @RequestBody Map<String, String> body) {
+        String resolution = body != null ? body.get("resolution") : null;
+        return ApiResponses.ok(issueTicketService.close(id, resolution, currentUser()));
+    }
+
+    @PostMapping("/issues/{id}/actions")
+    public ApiResponse<IssueActionDto> appendIssueAction(@PathVariable UUID id, @RequestBody IssueActionRequest request) {
+        return ApiResponses.ok(issueTicketService.appendAction(id, request, currentUser()));
+    }
+
+    private String currentUser() {
+        return SecurityUtils.getCurrentUserLogin().orElse("system");
     }
 }
-

@@ -12,3 +12,9 @@
 - 改用 `coalesce(:param, '') = ''` 判空，并对 module/result/resourceType 的模糊匹配统一走 `concat('%', :param, '%')`，让 PostgreSQL 在参数为 NULL 时也能明确按 text 处理，彻底消除 `could not determine data type of parameter` 报错。
 2025-10-03 01:26 审计查询时间区间修复：
 - 将 `(:from is null or e.occurred_at >= :from)`、`(:to is null or e.occurred_at <= :to)` 改写成 `e.occurred_at >= coalesce(:from, e.occurred_at)` 等形式，避免 PostgreSQL 在判空语句中无法推断参数类型，再次触发 `could not determine data type`。
+2025-10-03 02:04 审计检索模糊参数修复：
+- 改用统一的 `%keyword%` 模式并在仓库层添加 `escape '\\'`，确保用户/审批操作能够按角色、模块模糊搜索且不会触发 inet/timestamptz 类型推断错误。
+- 在 `AdminAuditService` 中集中处理参数转义，避免 UI 输入 `%`、`_` 时被 PostgreSQL 视作通配符导致漏检。
+2025-10-03 02:21 审批审计字段瘦身：
+- API 返回的审批类日志不再携带 `actorRole`、`latencyMs`、`requestUri` 字段，避免无效信息干扰。
+- 前端审计列表/详情同步移除相关列与筛选项，保持 UI 与后端字段一致，日志阅读更聚焦。

@@ -44,7 +44,8 @@ export interface ChangeRequest {
 	decidedAt?: string;
 	reason?: string;
 	category?: string;
-	summary?: string;
+	originalValue?: unknown;
+	updatedValue?: unknown;
 	lastError?: string;
 }
 
@@ -52,17 +53,14 @@ export interface AuditEvent {
 	id: number;
 	occurredAt: string;
 	actor?: string;
-	actorRole?: string;
 	module?: string;
 	action?: string;
 	resourceType?: string;
 	resourceId?: string;
 	clientIp?: string;
 	clientAgent?: string;
-	requestUri?: string;
 	httpMethod?: string;
 	result?: string;
-	latencyMs?: number;
 	extraTags?: string;
 	payloadPreview?: string;
 }

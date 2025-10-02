@@ -1,19 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
-import { Checkbox } from "@/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import {
-	Drawer,
-	DrawerClose,
-	DrawerContent,
-	DrawerDescription,
-	DrawerFooter,
-	DrawerHeader,
-	DrawerTitle,
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
 } from "@/ui/drawer";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
@@ -21,752 +20,865 @@ import { ScrollArea } from "@/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
 import { Textarea } from "@/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
 import {
-    createRule as apiCreateRule,
-    listRules as apiListRules,
-    updateRule as apiUpdateRule,
-    toggleRule as apiToggleRule,
-    runCompliance as apiRunCompliance,
-    triggerQuality,
-    latestQuality,
+  createQualityRule,
+  deleteQualityRule,
+  listDatasets,
+  listQualityRules,
+  listQualityRuns,
+  toggleQualityRule,
+  triggerQualityRun,
+  updateQualityRule,
 } from "@/api/platformApi";
-import { useEffect } from "react";
 
-const SAMPLE_SQL_PREVIEW = `[
-  { "score_bucket": "A", "cnt": 123 },
-  { "score_bucket": "B", "cnt": 87 }
-]`;
 
-type RuleType = "空值" | "唯一性" | "参考值" | "阈值" | "自定义SQL";
+type DataSecurityLevel = "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET";
+type SeverityLevel = "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
-type QualityRule = {
-	id: string;
-	name: string;
-	type: RuleType;
-	object: string;
-	recentResult: "通过" | "告警" | "失败";
-	owner: string;
-	status: "启用" | "停用";
-	referenceCount: number;
-	frequency: string;
-	config: Record<string, unknown>;
+interface DatasetOption {
+  id: string;
+  name: string;
+  hiveDatabase?: string;
+  hiveTable?: string;
+  classification?: string;
+}
+
+interface RuleBindingView {
+  id: string;
+  datasetId?: string;
+  datasetAlias?: string;
+  scopeType?: string;
+  filterExpression?: string | null;
+}
+
+interface RuleRow {
+  id: string;
+  code?: string;
+  name: string;
+  type?: string;
+  owner?: string;
+  severity?: SeverityLevel;
+  dataLevel?: DataSecurityLevel;
+  frequencyCron?: string;
+  frequencyLabel?: string;
+  enabled: boolean;
+  datasetNames: string[];
+  datasetIds: string[];
+  bindings: RuleBindingView[];
+  description?: string | null;
+  sqlPreview?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  raw: any;
+}
+
+interface QualityRunView {
+  id: string;
+  status: string;
+  severity?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  durationMs?: number;
+  message?: string;
+}
+
+interface RuleForm {
+  id?: string;
+  code?: string;
+  name: string;
+  datasetId: string;
+  owner: string;
+  severity: SeverityLevel;
+  dataLevel: DataSecurityLevel;
+  frequencyPreset: "HOURLY" | "DAILY" | "CUSTOM";
+  customCron: string;
+  enabled: boolean;
+  sql: string;
+  description?: string;
+}
+
+const LEVEL_LABELS: Record<DataSecurityLevel, string> = {
+  PUBLIC: "公开",
+  INTERNAL: "内部",
+  SECRET: "秘密",
+  TOP_SECRET: "机密",
 };
 
-const INITIAL_RULES: QualityRule[] = [
-	{
-		id: "rule-null-001",
-		name: "客户手机号不可为空",
-		type: "空值",
-		object: "dwd_customer_profile.mobile",
-		recentResult: "通过",
-		owner: "刘敏",
-		status: "启用",
-		referenceCount: 12,
-		frequency: "日批",
-		config: { threshold: 0.01, ignore: ["未知", "null"] },
-	},
-	{
-		id: "rule-unique-001",
-		name: "订单号唯一",
-		type: "唯一性",
-		object: "dws_sales_order.order_id",
-		recentResult: "告警",
-		owner: "陈伟",
-		status: "启用",
-		referenceCount: 9,
-		frequency: "小时级",
-		config: { keys: ["order_id", "channel"], conflict: "写入隔离表" },
-	},
-	{
-		id: "rule-ref-001",
-		name: "区域编码参考字典",
-		type: "参考值",
-		object: "dwd_store.region_code",
-		recentResult: "通过",
-		owner: "张霞",
-		status: "启用",
-		referenceCount: 7,
-		frequency: "分区到达",
-		config: { referenceTable: "dim_region", join: "dwd_store.region_code = dim_region.code", unmatched: 0.02 },
-	},
-	{
-		id: "rule-thr-001",
-		name: "GMV 与目标偏差",
-		type: "阈值",
-		object: "dm_sales_metrics.gmv",
-		recentResult: "通过",
-		owner: "周丽",
-		status: "启用",
-		referenceCount: 6,
-		frequency: "日批",
-		config: { metric: "sum(gmv) - sum(target)", bound: "上下界±10%" },
-	},
-	{
-		id: "rule-sql-001",
-		name: "信用评分波动检测",
-		type: "自定义SQL",
-		object: "dm_risk_score",
-		recentResult: "失败",
-		owner: "李云",
-		status: "停用",
-		referenceCount: 3,
-		frequency: "小时级",
-		config: {
-			sql: "select score_bucket, count(*) as cnt from dm_risk_score where dt = :date group by 1",
-			params: [{ name: ":date", type: "DATE", required: true }],
-		},
-	},
+const SEVERITY_LABELS: Record<SeverityLevel, string> = {
+  INFO: "提示",
+  LOW: "低",
+  MEDIUM: "中",
+  HIGH: "高",
+  CRITICAL: "严重",
+};
+
+const SEVERITY_BADGE: Record<SeverityLevel, "outline" | "secondary" | "default" | "destructive"> = {
+  INFO: "outline",
+  LOW: "secondary",
+  MEDIUM: "default",
+  HIGH: "destructive",
+  CRITICAL: "destructive",
+};
+
+const FREQUENCY_PRESETS: { preset: RuleForm["frequencyPreset"]; label: string; cron: string }[] = [
+  { preset: "HOURLY", label: "小时级", cron: "0 0 * * * ?" },
+  { preset: "DAILY", label: "日批", cron: "0 0 2 * * ?" },
+  { preset: "CUSTOM", label: "自定义", cron: "" },
 ];
 
-const DATASETS = [
-	{
-		id: "dwd_customer_profile",
-		name: "dwd_customer_profile",
-		fields: ["customer_id", "mobile", "email", "created_at"],
-	},
-	{
-		id: "dws_sales_order",
-		name: "dws_sales_order",
-		fields: ["order_id", "channel", "target", "dt"],
-	},
-	{
-		id: "dm_sales_metrics",
-		name: "dm_sales_metrics",
-		fields: ["date", "gmv", "target", "channel"],
-	},
+const DATA_LEVEL_OPTIONS: { value: DataSecurityLevel; label: string }[] = [
+  { value: "PUBLIC", label: "公开" },
+  { value: "INTERNAL", label: "内部" },
+  { value: "SECRET", label: "秘密" },
+  { value: "TOP_SECRET", label: "机密" },
 ];
 
-type RuleForm = {
-	id?: string;
-	name: string;
-	type: RuleType;
-	datasetId: string;
-	fieldIds: string[];
-	scope: "全表" | "分区" | "过滤条件";
-	filter?: string;
-	frequency: "小时级" | "日批" | "分区到达";
-	config: Record<string, unknown>;
-	owner: string;
-	enabled: boolean;
+const SEVERITY_OPTIONS: { value: SeverityLevel; label: string }[] = [
+  { value: "INFO", label: SEVERITY_LABELS.INFO },
+  { value: "LOW", label: SEVERITY_LABELS.LOW },
+  { value: "MEDIUM", label: SEVERITY_LABELS.MEDIUM },
+  { value: "HIGH", label: SEVERITY_LABELS.HIGH },
+  { value: "CRITICAL", label: SEVERITY_LABELS.CRITICAL },
+];
+
+const INITIAL_FORM: RuleForm = {
+  name: "",
+  datasetId: "",
+  owner: "",
+  severity: "MEDIUM",
+  dataLevel: "INTERNAL",
+  frequencyPreset: "DAILY",
+  customCron: "0 0 2 * * ?",
+  enabled: true,
+  sql: "",
+  description: "",
 };
 
-const EMPTY_FORM: RuleForm = {
-	name: "",
-	type: "空值",
-	datasetId: DATASETS[0]?.id ?? "",
-	fieldIds: [],
-	scope: "全表",
-	frequency: "日批",
-	config: {},
-	owner: "",
-	enabled: true,
-};
+const QualityRulesPage = () => {
+  const [rules, setRules] = useState<RuleRow[]>([]);
+  const [ruleLoading, setRuleLoading] = useState(false);
+  const [datasets, setDatasets] = useState<DatasetOption[]>([]);
+  const [datasetLookup, setDatasetLookup] = useState<Map<string, DatasetOption>>(new Map());
+  const [detailRule, setDetailRule] = useState<RuleRow | null>(null);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
+  const [detailRuns, setDetailRuns] = useState<QualityRunView[]>([]);
+  const [runLoading, setRunLoading] = useState(false);
+  const [form, setForm] = useState<RuleForm>(INITIAL_FORM);
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [formOpen, setFormOpen] = useState(false);
 
-export default function QualityRulesPage() {
-	const [rules, setRules] = useState(INITIAL_RULES);
-  const [search, setSearch] = useState("");
-  const [selectedDatasetId, setSelectedDatasetId] = useState<string>(DATASETS[0]?.id ?? "");
-  const [latest, setLatest] = useState<any | null>(null);
-	const [drawerOpen, setDrawerOpen] = useState(false);
-	const [form, setForm] = useState<RuleForm>(EMPTY_FORM);
-	const [sqlPreview, setSqlPreview] = useState("");
-	const [sqlDialogOpen, setSqlDialogOpen] = useState(false);
+  const refreshDatasets = async () => {
+    try {
+      const resp: any = await listDatasets({ page: 0, size: 200 });
+      const content = Array.isArray(resp?.content) ? resp.content : [];
+      const list: DatasetOption[] = content.map((item: any) => ({
+        id: String(item.id),
+        name: item.name || item.hiveTable || item.trinoTable || item.code || String(item.id),
+        hiveDatabase: item.hiveDatabase,
+        hiveTable: item.hiveTable,
+        classification: item.classification,
+      }));
+      setDatasets(list);
+      const map = new Map<string, DatasetOption>();
+      list.forEach((d) => map.set(d.id, d));
+      setDatasetLookup(map);
+      if (!form.datasetId && list.length) {
+        setForm((prev) => ({ ...prev, datasetId: list[0].id }));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("加载数据集失败");
+    }
+  };
 
-	const filteredRules = useMemo(() => {
-		if (!search.trim()) return rules;
-		const lower = search.trim().toLowerCase();
-		return rules.filter((rule) => rule.name.toLowerCase().includes(lower) || rule.object.toLowerCase().includes(lower));
-	}, [rules, search]);
+  const mapRule = (raw: any): RuleRow => {
+    const bindings: RuleBindingView[] = Array.isArray(raw?.bindings)
+      ? raw.bindings.map((binding: any) => ({
+          id: String(binding.id),
+          datasetId: binding.datasetId ? String(binding.datasetId) : undefined,
+          datasetAlias: binding.datasetAlias,
+          scopeType: binding.scopeType,
+          filterExpression: binding.filterExpression,
+        }))
+      : [];
+    const datasetNames = bindings.map((binding) => {
+      if (binding.datasetAlias) return binding.datasetAlias;
+      if (binding.datasetId && datasetLookup.has(binding.datasetId)) {
+        return datasetLookup.get(binding.datasetId)!.name;
+      }
+      return binding.datasetId || "-";
+    });
+    const def = safeParseJson(raw?.latestVersion?.definition);
+    const sqlPreview = extractSql(def);
+    const cron = raw?.frequencyCron || raw?.frequency || raw?.latestVersion?.frequencyCron;
+    return {
+      id: String(raw.id),
+      code: raw.code,
+      name: raw.name || raw.code || String(raw.id),
+      type: raw.type || def?.type || "自定义SQL",
+      owner: raw.owner || raw.createdBy,
+      severity: (raw.severity || "MEDIUM").toUpperCase() as SeverityLevel,
+      dataLevel: (raw.dataLevel || "INTERNAL").toUpperCase() as DataSecurityLevel,
+      frequencyCron: cron,
+      frequencyLabel: toFrequencyLabel(cron),
+      enabled: raw.enabled !== false,
+      datasetNames,
+      datasetIds: bindings.map((b) => b.datasetId || ""),
+      bindings,
+      description: raw.description,
+      sqlPreview,
+      createdAt: raw.createdDate,
+      updatedAt: raw.lastModifiedDate,
+      raw,
+    };
+  };
 
-	const currentDataset = useMemo(
-		() => DATASETS.find((dataset) => dataset.id === form.datasetId) ?? DATASETS[0],
-		[form.datasetId],
-	);
+  const refreshRules = async () => {
+    setRuleLoading(true);
+    try {
+      const resp: any = await listQualityRules();
+      const list = Array.isArray(resp) ? resp : [];
+      const mapped = list.map(mapRule);
+      setRules(mapped);
+    } catch (error) {
+      console.error(error);
+      toast.error("加载质量规则失败");
+    } finally {
+      setRuleLoading(false);
+    }
+  };
 
-	useEffect(() => {
-		// Load from backend and map to local view model; fallback to demo data when empty
-		(async () => {
-			try {
-				const list = (await apiListRules()) as any[];
-				const mapped: QualityRule[] = (list || []).map((it: any) => ({
-					id: String(it.id),
-					name: it.name || "",
-					type: it.type || "自定义SQL",
-					object: it.datasetId || "-",
-					recentResult: "通过",
-					owner: "-",
-					status: it.enabled ? "启用" : "停用",
-					referenceCount: 0,
-					frequency: "日批",
-					config: { expression: it.expression },
-				}));
-				if (mapped.length) setRules(mapped);
-			} catch (e) {
-				console.warn("Load rules failed", e);
-			}
-		})();
-	}, []);
+  useEffect(() => {
+    refreshDatasets();
+    refreshRules();
+  }, []);
 
-	const openCreate = () => {
-		setForm(EMPTY_FORM);
-		setDrawerOpen(true);
-	};
+  useEffect(() => {
+    if (!detailRule) {
+      setDetailRuns([]);
+      return;
+    }
+    setRunLoading(true);
+    (async () => {
+      try {
+        const list: any = await listQualityRuns({ ruleId: detailRule.id, limit: 5 });
+        const mapped: QualityRunView[] = Array.isArray(list)
+          ? list.map((run: any) => ({
+              id: String(run.id),
+              status: run.status || "UNKNOWN",
+              severity: run.severity,
+              startedAt: run.startedAt,
+              finishedAt: run.finishedAt,
+              durationMs: run.durationMs,
+              message: run.message,
+            }))
+          : [];
+        setDetailRuns(mapped);
+      } catch (error) {
+        console.error(error);
+        setDetailRuns([]);
+      } finally {
+        setRunLoading(false);
+      }
+    })();
+  }, [detailRule?.id]);
 
-	const openEdit = (rule: QualityRule) => {
-		setForm({
-			id: rule.id,
-			name: rule.name,
-			type: rule.type,
-			datasetId: rule.object.split(".")[0] ?? DATASETS[0]?.id ?? "",
-			fieldIds: [rule.object],
-			scope: "全表",
-			frequency: (rule.frequency as RuleForm["frequency"]) || "日批",
-			config: rule.config,
-			owner: rule.owner,
-			enabled: rule.status === "启用",
-		});
-		setDrawerOpen(true);
-	};
+  const openCreateForm = () => {
+    const firstDataset = datasets[0]?.id || "";
+    setForm({
+      ...INITIAL_FORM,
+      datasetId: firstDataset,
+      customCron: FREQUENCY_PRESETS.find((p) => p.preset === "DAILY")?.cron ?? "0 0 2 * * ?",
+    });
+    setFormMode("create");
+    setFormOpen(true);
+  };
 
-	const toggleField = (field: string) => {
-		setForm((prev) => {
-			const qualified = `${prev.datasetId}.${field}`;
-			return {
-				...prev,
-				fieldIds: prev.fieldIds.includes(qualified)
-					? prev.fieldIds.filter((item) => item !== qualified)
-					: [...prev.fieldIds, qualified],
-			};
-		});
-	};
+  const openEditForm = (rule: RuleRow) => {
+    const raw = rule.raw || {};
+    const cron = raw.frequencyCron || rule.frequencyCron || "0 0 2 * * ?";
+    const preset = detectPreset(cron);
+    const primaryDataset = rule.datasetIds[0] || "";
+    setForm({
+      id: rule.id,
+      code: raw.code,
+      name: rule.name,
+      datasetId: primaryDataset,
+      owner: rule.owner || "",
+      severity: rule.severity || "MEDIUM",
+      dataLevel: rule.dataLevel || "INTERNAL",
+      frequencyPreset: preset,
+      customCron: preset === "CUSTOM" ? cron : FREQUENCY_PRESETS.find((p) => p.preset === preset)?.cron || cron,
+      enabled: rule.enabled,
+      sql: rule.sqlPreview || "",
+      description: rule.description || "",
+    });
+    setFormMode("edit");
+    setFormOpen(true);
+  };
 
-	const updateConfig = (updates: Record<string, unknown>) => {
-		setForm((prev) => ({ ...prev, config: { ...prev.config, ...updates } }));
-	};
+  const handleSubmit = async () => {
+    if (!form.name.trim()) {
+      toast.error("请输入规则名称");
+      return;
+    }
+    if (!form.datasetId) {
+      toast.error("请选择目标数据集");
+      return;
+    }
+    if (!form.sql.trim()) {
+      toast.error("请填写质量检测 SQL 或表达式");
+      return;
+    }
+    const cron = form.frequencyPreset === "CUSTOM"
+      ? form.customCron?.trim()
+      : FREQUENCY_PRESETS.find((item) => item.preset === form.frequencyPreset)?.cron;
+    if (!cron) {
+      toast.error("请配置执行频率");
+      return;
+    }
+    const dataset = datasetLookup.get(form.datasetId);
+    const payload = {
+      code: form.code?.trim() || undefined,
+      name: form.name.trim(),
+      type: "CUSTOM_SQL",
+      category: "QUALITY",
+      description: form.description?.trim(),
+      owner: form.owner.trim(),
+      severity: form.severity,
+      dataLevel: form.dataLevel,
+      frequencyCron: cron,
+      enabled: form.enabled,
+      datasetId: form.datasetId,
+      definition: {
+        type: "SQL",
+        sql: form.sql,
+      },
+      bindings: [
+        {
+          datasetId: form.datasetId,
+          datasetAlias: dataset?.name,
+          scopeType: "TABLE",
+          fieldRefs: [],
+          filterExpression: null,
+        },
+      ],
+    };
+    try {
+      if (formMode === "create") {
+        await createQualityRule(payload);
+        toast.success("创建质量规则成功");
+      } else if (form.id) {
+        await updateQualityRule(form.id, payload);
+        toast.success("更新质量规则成功");
+      }
+      setFormOpen(false);
+      refreshRules();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error?.message || "保存质量规则失败");
+    }
+  };
 
-	const handleSubmit = async () => {
-		const expression = (form.config as any)?.sql || form.filter || "";
-		const enabled = form.enabled;
-		const name = form.name;
-		const type = form.type;
-		try {
-			if (form.id) {
-				await apiUpdateRule(form.id, { name, type, expression, enabled });
-			} else {
-				await apiCreateRule({ name, type, expression, enabled });
-			}
-			toast.success("已保存质量规则");
-			const list = (await apiListRules()) as any[];
-			const mapped: QualityRule[] = (list || []).map((it: any) => ({
-				id: String(it.id),
-				name: it.name || "",
-				type: it.type || "自定义SQL",
-				object: it.datasetId || "-",
-				recentResult: "通过",
-				owner: "-",
-				status: it.enabled ? "启用" : "停用",
-				referenceCount: 0,
-				frequency: "日批",
-				config: { expression: it.expression },
-			}));
-			setRules(mapped.length ? mapped : INITIAL_RULES);
-			setDrawerOpen(false);
-		} catch (e) {
-			console.error(e);
-			toast.error("保存失败");
-		}
-	};
+  const handleDelete = async (rule: RuleRow) => {
+    if (!window.confirm(`确定删除质量规则「${rule.name}」吗？`)) {
+      return;
+    }
+    try {
+      await deleteQualityRule(rule.id);
+      toast.success("删除成功");
+      refreshRules();
+    } catch (error) {
+      console.error(error);
+      toast.error("删除失败");
+    }
+  };
 
-	return (
-		<div className="space-y-4">
-			<div className="flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-				<Icon icon="solar:checklist-minimalistic-bold" size={18} />
-				质量规则用于度量数据健康，启停和更新均会被审计留痕。
-			</div>
+  const handleToggle = async (rule: RuleRow) => {
+    try {
+      await toggleQualityRule(rule.id, !rule.enabled);
+      toast.success(!rule.enabled ? "已启用" : "已停用");
+      refreshRules();
+    } catch (error) {
+      console.error(error);
+      toast.error("切换状态失败");
+    }
+  };
 
-			<Card>
-				<CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-					<div>
-						<CardTitle>质量规则</CardTitle>
-						<p className="text-sm text-muted-foreground">支持按对象与类型管理规则，抽屉式新建/编辑</p>
-					</div>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              className="w-[220px]"
-              placeholder="搜索规则 / 对象"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <Button onClick={openCreate}>
-              <Icon icon="mdi:plus" className="mr-1" size={16} /> 新建规则
+  const handleManualRun = async (rule: RuleRow) => {
+    try {
+      const bindingId = rule.bindings[0]?.id;
+      if (!bindingId) {
+        toast.error("该规则尚未配置绑定");
+        return;
+      }
+      await triggerQualityRun({ ruleId: rule.id, bindingId, triggerType: "MANUAL" });
+      toast.success("已提交检测任务");
+      refreshRunsForRule(rule.id);
+    } catch (error) {
+      console.error(error);
+      toast.error("触发检测失败");
+    }
+  };
+
+  const refreshRunsForRule = async (ruleId: string) => {
+    if (!detailRule || detailRule.id !== ruleId) return;
+    try {
+      const list: any = await listQualityRuns({ ruleId, limit: 5 });
+      const mapped: QualityRunView[] = Array.isArray(list)
+        ? list.map((run: any) => ({
+            id: String(run.id),
+            status: run.status || "UNKNOWN",
+            severity: run.severity,
+            startedAt: run.startedAt,
+            finishedAt: run.finishedAt,
+            durationMs: run.durationMs,
+            message: run.message,
+          }))
+        : [];
+      setDetailRuns(mapped);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const openDetail = (rule: RuleRow) => {
+    setDetailRule(rule);
+    setDetailDrawerOpen(true);
+  };
+
+  const closeDetail = () => {
+    setDetailDrawerOpen(false);
+    setDetailRule(null);
+    setDetailRuns([]);
+  };
+
+  const datasetSummary = useMemo(() => {
+    const unique = new Set<string>();
+    rules.forEach((rule) => rule.datasetIds.forEach((id) => id && unique.add(id)));
+    return unique.size;
+  }, [rules]);
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>质量规则</CardTitle>
+            <p className="text-sm text-muted-foreground">管理质量检测策略并跟踪执行状态</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={refreshRules} disabled={ruleLoading}>
+              <Icon name="Sync" className="mr-2 h-4 w-4" />刷新
             </Button>
-            <Button
-              variant="outline"
-              onClick={async () => {
-                await apiRunCompliance();
-                toast.success("已触发合规检查");
-              }}
-            >
-              执行合规模拟
-            </Button>
-            <Select value={selectedDatasetId} onValueChange={setSelectedDatasetId}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="选择数据集" />
-              </SelectTrigger>
-              <SelectContent>
-                {DATASETS.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={async () => {
-                if (!selectedDatasetId) return;
-                await triggerQuality(selectedDatasetId);
-                toast.success("已触发质量检查");
-              }}
-              disabled={!selectedDatasetId}
-            >
-              触发数据质量
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                if (!selectedDatasetId) return;
-                const r = (await latestQuality(selectedDatasetId)) as any;
-                setLatest(r);
-              }}
-              disabled={!selectedDatasetId}
-            >
-              查看最新结果
+            <Button onClick={openCreateForm}>
+              <Icon name="Plus" className="mr-2 h-4 w-4" />新增规则
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-					<table className="w-full min-w-[960px] table-fixed border-collapse text-sm">
-						<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-							<tr>
-								<th className="px-3 py-2">规则名</th>
-								<th className="px-3 py-2">类型</th>
-								<th className="px-3 py-2">作用对象</th>
-								<th className="px-3 py-2">最近结果</th>
-								<th className="px-3 py-2">负责人</th>
-								<th className="px-3 py-2">状态</th>
-								<th className="px-3 py-2">引用次数</th>
-								<th className="px-3 py-2 text-right">操作</th>
-							</tr>
-						</thead>
-						<tbody>
-							{filteredRules.map((rule) => (
-								<tr key={rule.id} className="border-b border-border/40 last:border-none">
-									<td className="px-3 py-3 font-medium">{rule.name}</td>
-									<td className="px-3 py-3 text-xs">
-										<Badge variant="secondary">{rule.type}</Badge>
-									</td>
-									<td className="px-3 py-3 text-xs text-muted-foreground">{rule.object}</td>
-									<td className="px-3 py-3">
-										<Badge
-											variant={
-												rule.recentResult === "通过"
-													? "outline"
-													: rule.recentResult === "告警"
-														? "secondary"
-														: "destructive"
-											}
-										>
-											{rule.recentResult}
-										</Badge>
-									</td>
-									<td className="px-3 py-3 text-xs">{rule.owner}</td>
-									<td className="px-3 py-3">
-										<Badge variant={rule.status === "启用" ? "default" : "secondary"}>{rule.status}</Badge>
-									</td>
-									<td className="px-3 py-3 text-xs">{rule.referenceCount}</td>
-									<td className="px-3 py-3 text-right">
-										<Button variant="ghost" size="sm" onClick={() => openEdit(rule)}>
-											编辑
-										</Button>
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={async () => {
-												try {
-													await apiToggleRule(rule.id);
-													toast.success("已切换状态");
-													const list = (await apiListRules()) as any[];
-													setRules(
-														list.map((it: any) => ({
-															id: String(it.id),
-															name: it.name,
-															type: it.type,
-															object: it.datasetId || "-",
-															recentResult: "通过",
-															owner: "-",
-															status: it.enabled ? "启用" : "停用",
-															referenceCount: 0,
-															frequency: "日批",
-															config: { expression: it.expression },
-														})),
-													);
-												} catch (e) {
-													console.error(e);
-												}
-											}}
-										>
-											{rule.status === "启用" ? "停用" : "启用"}
-										</Button>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</CardContent>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <SummaryCard icon="ListChecks" label="规则数量" value={rules.length} />
+            <SummaryCard icon="Database" label="覆盖数据集" value={datasetSummary} />
+            <SummaryCard
+              icon="ShieldCheck"
+              label="启用规则"
+              value={rules.filter((rule) => rule.enabled).length}
+            />
+          </div>
+        </CardContent>
       </Card>
 
-      {latest && (
-        <Card>
-          <CardHeader>
-            <CardTitle>最新质量结果</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(latest, null, 2)}</pre>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle>规则列表</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="hidden w-full flex-col gap-2 md:flex">
+            <div className="grid grid-cols-[2fr,1.2fr,1fr,1fr,1fr,160px] items-center gap-2 border-b pb-2 text-xs uppercase text-muted-foreground">
+              <span>名称 / 编码</span>
+              <span>数据集</span>
+              <span>密级</span>
+              <span>责任人</span>
+              <span>频率</span>
+              <span className="text-right">操作</span>
+            </div>
+            {rules.map((rule) => (
+              <div
+                key={rule.id}
+                className="grid grid-cols-[2fr,1.2fr,1fr,1fr,1fr,160px] items-center gap-2 rounded-md border px-3 py-2 text-sm transition hover:bg-muted/60"
+              >
+                <div className="flex flex-col">
+                  <span className="font-medium text-foreground">{rule.name}</span>
+                  <span className="text-xs text-muted-foreground">{rule.code || rule.id}</span>
+                </div>
+                <div className="text-sm text-muted-foreground truncate">
+                  {rule.datasetNames.length ? rule.datasetNames.join(", ") : "未绑定"}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{LEVEL_LABELS[rule.dataLevel || "INTERNAL"]}</Badge>
+                  {rule.severity && (
+                    <Badge variant={SEVERITY_BADGE[rule.severity]}>{SEVERITY_LABELS[rule.severity]}</Badge>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">{rule.owner || "-"}</div>
+                <div className="text-sm text-muted-foreground">{rule.frequencyLabel || "-"}</div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="icon" title="查看详情" onClick={() => openDetail(rule)}>
+                    <Icon name="Eye" className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" title="手动执行" onClick={() => handleManualRun(rule)}>
+                    <Icon name="Play" className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" title="启用/停用" onClick={() => handleToggle(rule)}>
+                    <Icon name={rule.enabled ? "Pause" : "PlayCircle"} className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" title="编辑" onClick={() => openEditForm(rule)}>
+                    <Icon name="Pencil" className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" title="删除" onClick={() => handleDelete(rule)}>
+                    <Icon name="Trash" className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {!ruleLoading && rules.length === 0 && (
+              <div className="rounded-md border border-dashed p-12 text-center text-sm text-muted-foreground">
+                暂无质量规则，点击右上角“新增规则”开始配置。
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-3 md:hidden">
+            {rules.map((rule) => (
+              <Card key={rule.id} className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-medium text-foreground">{rule.name}</div>
+                    <div className="text-xs text-muted-foreground">{rule.code || rule.id}</div>
+                  </div>
+                  <div className="flex gap-1">
+                    <Badge variant="outline">{LEVEL_LABELS[rule.dataLevel || "INTERNAL"]}</Badge>
+                    {rule.severity && (
+                      <Badge variant={SEVERITY_BADGE[rule.severity]}>{SEVERITY_LABELS[rule.severity]}</Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  <div>
+                    <span className="font-medium text-foreground">数据集：</span>
+                    {rule.datasetNames.length ? rule.datasetNames.join(", ") : "未绑定"}
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">责任人：</span>
+                    {rule.owner || "-"}
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">频率：</span>
+                    {rule.frequencyLabel || "-"}
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openDetail(rule)}>
+                    查看
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleManualRun(rule)}>
+                    执行
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleToggle(rule)}>
+                    {rule.enabled ? "停用" : "启用"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => openEditForm(rule)}>
+                    编辑
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleDelete(rule)}>
+                    删除
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-			<Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-				<DrawerContent className="max-h-[90vh]">
-					<DrawerHeader>
-						<DrawerTitle>{form.id ? "编辑质量规则" : "新建质量规则"}</DrawerTitle>
-						<DrawerDescription>配置作用对象、执行频率以及不同类型的规则逻辑</DrawerDescription>
-					</DrawerHeader>
-					<ScrollArea className="px-6 pb-6">
-						<div className="grid gap-4 md:grid-cols-2">
-							<div className="space-y-2">
-								<Label>规则名称</Label>
-								<Input
-									value={form.name}
-									onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-								/>
-							</div>
-							<div className="space-y-2">
-								<Label>负责人</Label>
-								<Input
-									value={form.owner}
-									onChange={(event) => setForm((prev) => ({ ...prev, owner: event.target.value }))}
-									placeholder="请输入负责人"
-								/>
-							</div>
-							<div className="space-y-2">
-								<Label>规则类型</Label>
-								<Select
-									value={form.type}
-									onValueChange={(value) => setForm((prev) => ({ ...prev, type: value as RuleType, config: {} }))}
-								>
-									<SelectTrigger>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{["空值", "唯一性", "参考值", "阈值", "自定义SQL"].map((option) => (
-											<SelectItem key={option} value={option}>
-												{option}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-							<div className="space-y-2">
-								<Label>执行频率</Label>
-								<Select
-									value={form.frequency}
-									onValueChange={(value) => setForm((prev) => ({ ...prev, frequency: value as RuleForm["frequency"] }))}
-								>
-									<SelectTrigger>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="小时级">按小时</SelectItem>
-										<SelectItem value="日批">按日</SelectItem>
-										<SelectItem value="分区到达">分区到达事件</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
-						</div>
+      <Drawer open={detailDrawerOpen} onOpenChange={(open) => (open ? setDetailDrawerOpen(true) : closeDetail())}>
+        <DrawerContent className="max-h-[90vh]">
+          <DrawerHeader className="flex flex-col items-start gap-2 text-left">
+            <DrawerTitle>{detailRule?.name}</DrawerTitle>
+            <DrawerDescription className="whitespace-pre-line text-sm">
+              规则编码：{detailRule?.code || detailRule?.id}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="grid grid-cols-1 gap-6 px-6 pb-6 lg:grid-cols-2">
+            <section className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground">基础信息</h3>
+              <div className="space-y-2 text-sm">
+                <InfoRow label="责任人" value={detailRule?.owner || "-"} />
+                <InfoRow label="密级" value={detailRule ? LEVEL_LABELS[detailRule.dataLevel || "INTERNAL"] : "-"} />
+                <InfoRow
+                  label="严重程度"
+                  value={detailRule?.severity ? SEVERITY_LABELS[detailRule.severity] : "-"}
+                />
+                <InfoRow label="调度频率" value={detailRule?.frequencyLabel || "-"} />
+                <InfoRow
+                  label="绑定数据集"
+                  value={detailRule?.datasetNames.length ? detailRule.datasetNames.join(", ") : "未绑定"}
+                />
+              </div>
+              <div className="space-y-2 text-sm">
+                <Label>检测 SQL / 表达式</Label>
+                <ScrollArea className="h-48 rounded-md border bg-muted/40 p-3 text-xs font-mono">
+                  {detailRule?.sqlPreview || "暂无配置"}
+                </ScrollArea>
+              </div>
+            </section>
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-muted-foreground">最近检测</h3>
+                <Button size="sm" variant="secondary" onClick={() => detailRule && handleManualRun(detailRule)}>
+                  <Icon name="Play" className="mr-2 h-4 w-4" />手动执行
+                </Button>
+              </div>
+              <div className="space-y-2 text-sm">
+                {runLoading && <div className="text-muted-foreground">正在加载执行记录...</div>}
+                {!runLoading && detailRuns.length === 0 && (
+                  <div className="text-muted-foreground">暂无执行记录</div>
+                )}
+                <div className="space-y-3">
+                  {detailRuns.map((run) => (
+                    <div key={run.id} className="rounded-md border p-3">
+                      <div className="flex items-center justify-between text-sm font-medium">
+                        <span>{run.status}</span>
+                        <Badge variant="outline">{run.severity || detailRule?.severity || "-"}</Badge>
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        <div>开始：{formatTime(run.startedAt)}</div>
+                        <div>完成：{formatTime(run.finishedAt)}</div>
+                        <div>耗时：{formatDuration(run.durationMs)}</div>
+                        <div className="mt-1">说明：{run.message || "-"}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+          <DrawerFooter className="flex flex-row items-center justify-between border-t bg-muted/30 px-6 py-4">
+            <div className="text-xs text-muted-foreground">
+              创建：{formatTime(detailRule?.createdAt)}
+              {" "}· 更新：{formatTime(detailRule?.updatedAt)}
+            </div>
+            <DrawerClose asChild>
+              <Button variant="outline">关闭</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
-						<Tabs defaultValue="target" className="mt-6">
-							<TabsList>
-								<TabsTrigger value="target">作用对象</TabsTrigger>
-								<TabsTrigger value="scope">适用范围</TabsTrigger>
-								<TabsTrigger value="config">规则配置</TabsTrigger>
-							</TabsList>
-							<TabsContent value="target" className="space-y-3 pt-4">
-								<div className="space-y-2">
-									<Label>数据集</Label>
-									<Select
-										value={form.datasetId}
-										onValueChange={(value) => setForm((prev) => ({ ...prev, datasetId: value, fieldIds: [] }))}
-									>
-										<SelectTrigger>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{DATASETS.map((dataset) => (
-												<SelectItem key={dataset.id} value={dataset.id}>
-													{dataset.name}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-								<div className="rounded-md border">
-									<div className="border-b px-4 py-2 text-xs font-semibold uppercase text-muted-foreground">
-										字段选择
-									</div>
-									<div className="max-h-48 space-y-1 overflow-auto px-4 py-3 text-sm">
-										{currentDataset?.fields.map((field) => (
-											<label key={field} className="flex items-center gap-2">
-												<Checkbox
-													checked={form.fieldIds.includes(`${form.datasetId}.${field}`)}
-													onCheckedChange={() => toggleField(field)}
-												/>
-												<span>{field}</span>
-											</label>
-										))}
-									</div>
-								</div>
-							</TabsContent>
-							<TabsContent value="scope" className="space-y-4 pt-4">
-								<div className="space-y-2">
-									<Label>适用范围</Label>
-									<Select
-										value={form.scope}
-										onValueChange={(value) => setForm((prev) => ({ ...prev, scope: value as RuleForm["scope"] }))}
-									>
-										<SelectTrigger>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="全表">全表</SelectItem>
-											<SelectItem value="分区">分区</SelectItem>
-											<SelectItem value="过滤条件">过滤条件</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
-								{form.scope === "过滤条件" ? (
-									<div className="space-y-2">
-										<Label>过滤 SQL</Label>
-										<Textarea
-											value={form.filter ?? ""}
-											onChange={(event) => setForm((prev) => ({ ...prev, filter: event.target.value }))}
-											rows={3}
-											placeholder="dt = current_date"
-										/>
-									</div>
-								) : null}
-							</TabsContent>
-							<TabsContent value="config" className="space-y-4 pt-4">
-								{form.type === "空值" ? (
-									<div className="grid gap-4 md:grid-cols-2">
-										<div className="space-y-2">
-											<Label>允许空占比上限</Label>
-											<Input
-												placeholder="0.01"
-												value={String((form.config.threshold as number | undefined) ?? "")}
-												onChange={(event) => updateConfig({ threshold: Number(event.target.value) })}
-											/>
-										</div>
-										<div className="space-y-2">
-											<Label>忽略值列表</Label>
-											<Textarea
-												placeholder="用逗号分隔"
-												value={(form.config.ignore as string[] | undefined)?.join(",") ?? ""}
-												onChange={(event) =>
-													updateConfig({
-														ignore: event.target.value
-															.split(",")
-															.map((item) => item.trim())
-															.filter(Boolean),
-													})
-												}
-												rows={3}
-											/>
-										</div>
-									</div>
-								) : null}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{formMode === "create" ? "新增质量规则" : "编辑质量规则"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>规则名称</Label>
+              <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>责任人</Label>
+              <Input value={form.owner} onChange={(event) => setForm((prev) => ({ ...prev, owner: event.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>数据集</Label>
+              <Select value={form.datasetId} onValueChange={(value) => setForm((prev) => ({ ...prev, datasetId: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择数据集" />
+                </SelectTrigger>
+                <SelectContent>
+                  {datasets.map((dataset) => (
+                    <SelectItem key={dataset.id} value={dataset.id}>
+                      {dataset.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>密级</Label>
+              <Select
+                value={form.dataLevel}
+                onValueChange={(value: DataSecurityLevel) => setForm((prev) => ({ ...prev, dataLevel: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DATA_LEVEL_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>严重程度</Label>
+              <Select
+                value={form.severity}
+                onValueChange={(value: SeverityLevel) => setForm((prev) => ({ ...prev, severity: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SEVERITY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>执行频率</Label>
+              <Select
+                value={form.frequencyPreset}
+                onValueChange={(value: RuleForm["frequencyPreset"]) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    frequencyPreset: value,
+                    customCron:
+                      value === "CUSTOM"
+                        ? prev.customCron
+                        : FREQUENCY_PRESETS.find((item) => item.preset === value)?.cron || prev.customCron,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FREQUENCY_PRESETS.map((option) => (
+                    <SelectItem key={option.preset} value={option.preset}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {form.frequencyPreset === "CUSTOM" && (
+                <Input
+                  placeholder="请输入 Cron 表达式"
+                  value={form.customCron}
+                  onChange={(event) => setForm((prev) => ({ ...prev, customCron: event.target.value }))}
+                />
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={form.enabled} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, enabled: checked }))} />
+              <Label>启用规则</Label>
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <Label>质量检测 SQL</Label>
+              <Textarea
+                placeholder="请输入检测 SQL，支持使用 :date 等参数占位符"
+                value={form.sql}
+                onChange={(event) => setForm((prev) => ({ ...prev, sql: event.target.value }))}
+                rows={8}
+              />
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <Label>规则说明 (可选)</Label>
+              <Textarea
+                placeholder="描述规则用途、告警阈值等信息"
+                value={form.description}
+                onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleSubmit}>{formMode === "create" ? "创建" : "保存"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
 
-								{form.type === "唯一性" ? (
-									<div className="space-y-3">
-										<div className="space-y-2">
-											<Label>唯一键字段集合</Label>
-											<Textarea
-												value={(form.config.keys as string[] | undefined)?.join(",") ?? ""}
-												onChange={(event) =>
-													updateConfig({
-														keys: event.target.value
-															.split(",")
-															.map((item) => item.trim())
-															.filter(Boolean),
-													})
-												}
-												rows={2}
-											/>
-										</div>
-										<div className="space-y-2">
-											<Label>冲突处理策略</Label>
-											<Select
-												value={(form.config.conflict as string | undefined) ?? "告警"}
-												onValueChange={(value) => updateConfig({ conflict: value })}
-											>
-												<SelectTrigger>
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="告警">仅告警</SelectItem>
-													<SelectItem value="写入隔离表">写入隔离表</SelectItem>
-													<SelectItem value="覆盖旧值">覆盖旧值</SelectItem>
-												</SelectContent>
-											</Select>
-										</div>
-									</div>
-								) : null}
+export default QualityRulesPage;
 
-								{form.type === "参考值" ? (
-									<div className="space-y-3">
-										<div className="space-y-2">
-											<Label>参照表 / 字段</Label>
-											<Input
-												placeholder="dim_region.code"
-												value={(form.config.referenceTable as string | undefined) ?? ""}
-												onChange={(event) => updateConfig({ referenceTable: event.target.value })}
-											/>
-										</div>
-										<div className="space-y-2">
-											<Label>连接条件</Label>
-											<Textarea
-												value={(form.config.join as string | undefined) ?? ""}
-												onChange={(event) => updateConfig({ join: event.target.value })}
-												rows={2}
-												placeholder="dwd.region_code = dim_region.code"
-											/>
-										</div>
-										<div className="space-y-2">
-											<Label>允许未匹配比例</Label>
-											<Input
-												value={String((form.config.unmatched as number | undefined) ?? "")}
-												onChange={(event) => updateConfig({ unmatched: Number(event.target.value) })}
-												placeholder="0.02"
-											/>
-										</div>
-									</div>
-								) : null}
+const SummaryCard = ({ icon, label, value }: { icon: string; label: string; value: number }) => (
+  <Card className="border-dashed">
+    <CardContent className="flex items-center gap-3 py-4">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+        <Icon name={icon} className="h-5 w-5 text-primary" />
+      </div>
+      <div>
+        <div className="text-sm text-muted-foreground">{label}</div>
+        <div className="text-2xl font-semibold text-foreground">{value}</div>
+      </div>
+    </CardContent>
+  </Card>
+);
 
-								{form.type === "阈值" ? (
-									<div className="grid gap-4 md:grid-cols-2">
-										<div className="space-y-2">
-											<Label>度量表达式</Label>
-											<Textarea
-												value={(form.config.metric as string | undefined) ?? ""}
-												onChange={(event) => updateConfig({ metric: event.target.value })}
-												rows={2}
-												placeholder="sum(gmv) - sum(target)"
-											/>
-										</div>
-										<div className="space-y-2">
-											<Label>阈值类型</Label>
-											<Select
-												value={(form.config.bound as string | undefined) ?? "上下界"}
-												onValueChange={(value) => updateConfig({ bound: value })}
-											>
-												<SelectTrigger>
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="上下界">上下界</SelectItem>
-													<SelectItem value="同比">同比</SelectItem>
-													<SelectItem value="环比">环比</SelectItem>
-												</SelectContent>
-											</Select>
-										</div>
-									</div>
-								) : null}
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-start gap-3 text-sm">
+    <span className="w-20 shrink-0 text-muted-foreground">{label}</span>
+    <span className="flex-1 text-foreground">{value}</span>
+  </div>
+);
 
-								{form.type === "自定义SQL" ? (
-									<div className="space-y-3">
-										<div className="space-y-2">
-											<Label>SQL 脚本</Label>
-											<Textarea
-												className="font-mono"
-												rows={8}
-												value={(form.config.sql as string | undefined) ?? ""}
-												onChange={(event) => updateConfig({ sql: event.target.value })}
-											/>
-										</div>
-										<div className="space-y-2">
-											<Label>参数 Schema (JSON)</Label>
-											<Textarea
-												className="font-mono"
-												rows={4}
-												value={JSON.stringify(form.config.params ?? [], null, 2)}
-												onChange={(event) => {
-													try {
-														updateConfig({ params: JSON.parse(event.target.value) });
-													} catch (error) {
-														// ignore parse errors while typing
-													}
-												}}
-											/>
-										</div>
-										<Button
-											variant="outline"
-											onClick={() => {
-												setSqlPreview((form.config.sql as string | undefined) ?? "");
-												setSqlDialogOpen(true);
-											}}
-										>
-											<Icon icon="mdi:database-search" className="mr-1" size={16} /> 示例数据
-										</Button>
-									</div>
-								) : null}
-							</TabsContent>
-						</Tabs>
+const safeParseJson = (value: any): any => {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(String(value));
+  } catch (error) {
+    return null;
+  }
+};
 
-						<div className="mt-6 flex items-center justify-between">
-							<label className="flex items-center gap-2 text-sm">
-								<Switch
-									checked={form.enabled}
-									onCheckedChange={(checked) => setForm((prev) => ({ ...prev, enabled: Boolean(checked) }))}
-								/>
-								启用规则
-							</label>
-						</div>
-					</ScrollArea>
-					<DrawerFooter>
-						<Button onClick={handleSubmit}>保存</Button>
-						<DrawerClose asChild>
-							<Button variant="outline">取消</Button>
-						</DrawerClose>
-					</DrawerFooter>
-				</DrawerContent>
-			</Drawer>
+const extractSql = (definition: any): string => {
+  if (!definition) return "";
+  if (typeof definition === "string") return definition;
+  if (definition.sql) return String(definition.sql);
+  if (definition.query) return String(definition.query);
+  return JSON.stringify(definition, null, 2);
+};
 
-			<Dialog open={sqlDialogOpen} onOpenChange={setSqlDialogOpen}>
-				<DialogContent className="max-w-3xl">
-					<DialogHeader>
-						<DialogTitle>示例 SQL 与结果</DialogTitle>
-					</DialogHeader>
-					<div className="space-y-3">
-						<Label>SQL</Label>
-						<pre className="max-h-48 overflow-auto rounded-md border bg-muted/40 p-3 text-xs font-mono">
-							{sqlPreview || "暂无 SQL"}
-						</pre>
-						<Label>示例数据</Label>
-						<pre className="max-h-48 overflow-auto rounded-md border bg-muted/40 p-3 text-xs font-mono">
-							{SAMPLE_SQL_PREVIEW}
-						</pre>
-					</div>
-				</DialogContent>
-			</Dialog>
-		</div>
-	);
-}
+const toFrequencyLabel = (cron?: string): string | undefined => {
+  if (!cron) return undefined;
+  const preset = FREQUENCY_PRESETS.find((item) => item.cron === cron);
+  if (preset) return preset.label;
+  if (cron === "@partition" || cron === "@event") return "分区触发";
+  return cron;
+};
+
+const detectPreset = (cron: string): RuleForm["frequencyPreset"] => {
+  const preset = FREQUENCY_PRESETS.find((item) => item.cron === cron);
+  if (preset) return preset.preset;
+  return "CUSTOM";
+};
+
+const formatTime = (value?: string) => {
+  if (!value) return "-";
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString();
+  } catch (error) {
+    return value;
+  }
+};
+
+const formatDuration = (ms?: number) => {
+  if (!ms || ms <= 0) return "-";
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remain = seconds % 60;
+  return `${minutes}m${remain ? ` ${remain}s` : ""}`;
+};

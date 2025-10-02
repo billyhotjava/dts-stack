@@ -52,7 +52,6 @@ public class ChangeRequestService {
         cr.setRequestedAt(Instant.now());
         cr.setReason(reason);
         cr.setCategory(resolveCategory(cr.getResourceType()));
-        cr.setSummary(buildSummary(cr.getResourceType(), cr.getAction(), resourceId, after));
         cr.setLastError(null);
         return repository.save(cr);
     }
@@ -71,32 +70,6 @@ public class ChangeRequestService {
             case "ROLE_ASSIGNMENT" -> "ROLE_ASSIGNMENT";
             default -> "GENERAL";
         };
-    }
-
-    private String buildSummary(String resourceType, String action, String resourceId, Map<String, Object> after) {
-        StringBuilder sb = new StringBuilder();
-        if (action != null) {
-            sb.append(action.toUpperCase());
-        }
-        if (resourceType != null) {
-            if (sb.length() > 0) {
-                sb.append(' ');
-            }
-            sb.append(resourceType.toUpperCase());
-        }
-        if (resourceId != null && !resourceId.isBlank()) {
-            sb.append(" → ").append(resourceId);
-        } else if (after != null) {
-            Object name = after.get("username");
-            if (name == null) {
-                name = after.get("name");
-            }
-            if (name != null) {
-                sb.append(" → ").append(String.valueOf(name));
-            }
-        }
-        String summary = sb.toString();
-        return summary.isBlank() ? null : summary;
     }
 
     private Map<String, Object> buildDiff(Map<String, Object> before, Map<String, Object> after) {

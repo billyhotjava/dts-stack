@@ -72,18 +72,31 @@ export const getStandardSettings = () => api.get({ url: "/modeling/standards/set
 export const updateStandardSettings = (data: any) => api.put({ url: "/modeling/standards/settings", data });
 
 // Governance
-export const listRules = () => api.get({ url: "/governance/rules" });
-export const createRule = (data: any) => api.post({ url: "/governance/rules", data });
-export const updateRule = (id: string, data: any) => api.put({ url: `/governance/rules/${id}`, data });
-export const deleteRule = (id: string) => api.delete({ url: `/governance/rules/${id}` });
-export const toggleRule = (id: string) => api.post({ url: `/governance/rules/${id}/toggle` });
+export const listQualityRules = () => api.get({ url: "/governance/quality/rules" });
+export const createQualityRule = (data: any) => api.post({ url: "/governance/quality/rules", data });
+export const updateQualityRule = (id: string, data: any) => api.put({ url: `/governance/quality/rules/${id}`, data });
+export const deleteQualityRule = (id: string) => api.delete({ url: `/governance/quality/rules/${id}` });
+export const toggleQualityRule = (id: string, enabled: boolean) =>
+	api.post({ url: `/governance/quality/rules/${id}/toggle`, data: { enabled } });
 
-export const listComplianceChecks = () => api.get({ url: "/governance/compliance-checks" });
-export const getComplianceCheck = (id: string) => api.get({ url: `/governance/compliance-checks/${id}` });
-export const runCompliance = () => api.post({ url: "/governance/compliance-checks/run" });
+export const triggerQualityRun = (data: any) => api.post({ url: "/governance/quality/runs", data });
+export const listQualityRuns = (params: any = {}) => api.get({ url: "/governance/quality/runs", params });
+export const getQualityRun = (id: string) => api.get({ url: `/governance/quality/runs/${id}` });
 
-// Data quality (tasks)
-export const triggerQuality = (datasetId: string) => api.post({ url: "/data-quality-runs/trigger", params: { datasetId } });
+export const createComplianceBatch = (data: any) => api.post({ url: "/governance/compliance/batches", data });
+export const listComplianceBatches = (params: any = {}) => api.get({ url: "/governance/compliance/batches", params });
+export const getComplianceBatch = (id: string) => api.get({ url: `/governance/compliance/batches/${id}` });
+
+export const listIssues = () => api.get({ url: "/governance/issues" });
+export const createIssue = (data: any) => api.post({ url: "/governance/issues", data });
+export const updateIssue = (id: string, data: any) => api.put({ url: `/governance/issues/${id}`, data });
+export const closeIssue = (id: string, resolution?: string) =>
+	api.post({ url: `/governance/issues/${id}/close`, data: { resolution } });
+export const appendIssueAction = (id: string, data: any) => api.post({ url: `/governance/issues/${id}/actions`, data });
+
+// Data quality (compatibility helpers)
+export const triggerQuality = (datasetId: string, ruleId?: string) =>
+	api.post({ url: "/data-quality-runs/trigger", params: { datasetId, ruleId } });
 export const latestQuality = (datasetId: string) => api.get({ url: "/data-quality-runs/latest", params: { datasetId } });
 
 // Explore

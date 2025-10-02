@@ -105,15 +105,12 @@ export interface AuditLog {
 	module: string;
 	action: string;
 	actor: string;
-	actorRole?: string;
 	resourceType?: string;
 	resourceId?: string;
 	clientIp?: string;
 	clientAgent?: string;
-	requestUri?: string;
 	httpMethod?: string;
 	result: string;
-	latencyMs?: number;
 	extraTags?: string;
 	payloadPreview?: string;
 }

@@ -2,14 +2,13 @@ package com.yuzhi.dts.admin.config;
 
 import com.yuzhi.dts.admin.domain.AdminDataset;
 import com.yuzhi.dts.admin.domain.OrganizationNode;
-import com.yuzhi.dts.admin.domain.PortalMenu;
-import com.yuzhi.dts.admin.domain.PortalMenuVisibility;
 import com.yuzhi.dts.admin.domain.SystemConfig;
 import com.yuzhi.dts.admin.repository.AdminDatasetRepository;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.repository.PortalMenuRepository;
 import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import com.yuzhi.dts.admin.service.OrganizationService;
+import com.yuzhi.dts.admin.service.PortalMenuService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +30,7 @@ public class DevDataSeeder {
     private final OrganizationRepository organizationRepository;
     private final AdminDatasetRepository datasetRepo;
     private final PortalMenuRepository menuRepo;
+    private final PortalMenuService portalMenuService;
     private final SystemConfigRepository sysCfgRepo;
     private final Environment env;
 
@@ -39,6 +39,7 @@ public class DevDataSeeder {
         OrganizationRepository organizationRepository,
         AdminDatasetRepository datasetRepo,
         PortalMenuRepository menuRepo,
+        PortalMenuService portalMenuService,
         SystemConfigRepository sysCfgRepo,
         Environment env
     ) {
@@ -46,6 +47,7 @@ public class DevDataSeeder {
         this.organizationRepository = organizationRepository;
         this.datasetRepo = datasetRepo;
         this.menuRepo = menuRepo;
+        this.portalMenuService = portalMenuService;
         this.sysCfgRepo = sysCfgRepo;
         this.env = env;
     }
@@ -122,48 +124,8 @@ public class DevDataSeeder {
 
     private void seedMenus() {
         if (!menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc().isEmpty()) return;
-        PortalMenu home = new PortalMenu();
-        home.setName("首页");
-        home.setPath("/home");
-        home.setSortOrder(1);
-        applyDefaultVisibility(home);
-        menuRepo.save(home);
-
-        PortalMenu assets = new PortalMenu();
-        assets.setName("数据资产");
-        assets.setPath("/assets");
-        assets.setSortOrder(2);
-        applyDefaultVisibility(assets);
-        menuRepo.save(assets);
-
-        PortalMenu governance = new PortalMenu();
-        governance.setName("数据治理");
-        governance.setPath("/governance");
-        governance.setSortOrder(3);
-        applyDefaultVisibility(governance);
-        menuRepo.save(governance);
-
-        PortalMenu sys = new PortalMenu();
-        sys.setName("系统管理");
-        sys.setPath("/system");
-        sys.setSortOrder(9);
-        applyDefaultVisibility(sys);
-        menuRepo.save(sys);
-
-        log.info("Seeded portal menus");
-    }
-
-    private void applyDefaultVisibility(PortalMenu menu) {
-        menu.addVisibility(newVisibility(menu, "ROLE_OP_ADMIN"));
-        menu.addVisibility(newVisibility(menu, "ROLE_USER"));
-    }
-
-    private PortalMenuVisibility newVisibility(PortalMenu menu, String role) {
-        PortalMenuVisibility visibility = new PortalMenuVisibility();
-        visibility.setMenu(menu);
-        visibility.setRoleCode(role);
-        visibility.setDataLevel("INTERNAL");
-        return visibility;
+        portalMenuService.resetMenusToSeed();
+        log.info("Seeded portal menus from seed data");
     }
 
     private void seedConfigs() {

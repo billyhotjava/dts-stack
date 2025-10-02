@@ -23,7 +23,6 @@ type AuditLogFilters = {
 	actor?: string;
 	person?: string;
 	targetType?: string;
-	targetUri?: string;
 	targetId?: string;
 	result?: string;
 };
@@ -236,28 +235,9 @@ export default function AuditLogPage() {
 				),
 			},
 			{
-				title: "请求 URI",
-				dataIndex: "requestUri",
-				width: 240,
-				ellipsis: true,
-				render: (uri?: string) => (
-					<Tooltip title={uri || "-"}>
-						<Text variant="body2" className="font-mono">
-							{uri || "-"}
-						</Text>
-					</Tooltip>
-				),
-			},
-			{
 				title: "操作者",
 				dataIndex: "actor",
 				width: 140,
-			},
-			{
-				title: "操作者角色",
-				dataIndex: "actorRole",
-				width: 160,
-				render: (role?: string) => role ? formatLabel(role) : "-",
 			},
 			{
 				title: "IP 地址",
@@ -280,12 +260,6 @@ export default function AuditLogPage() {
 					}
 					return <Tag color={meta.color}>{meta.label}</Tag>;
 				},
-			},
-			{
-				title: "耗时(ms)",
-				dataIndex: "latencyMs",
-				width: 110,
-				render: (latency?: number) => (latency != null ? `${latency}` : "-"),
 			},
 			{
 				title: "内容摘要",
@@ -377,9 +351,6 @@ export default function AuditLogPage() {
 											<Form.Item label="目标标识" name="targetId">
 												<Input allowClear placeholder="支持模糊查询，例如 user:alice" style={{ width: 220 }} />
 											</Form.Item>
-											<Form.Item label="目标 URI" name="targetUri">
-												<Input allowClear placeholder="支持模糊查询，如 /api/user" style={{ width: 220 }} />
-											</Form.Item>
 										</div>
 								),
 							},
@@ -440,7 +411,6 @@ export default function AuditLogPage() {
 										<DetailItem label="功能模块" value={formatLabel(selectedLog.module)} />
 										<DetailItem label="操作类型" value={<Tag color={actionMeta.color}>{actionMeta.label}</Tag>} />
 										<DetailItem label="操作者" value={selectedLog.actor} />
-										<DetailItem label="操作者角色" value={formatLabel(selectedLog.actorRole)} />
 										<DetailItem label="结果" value={renderResult(selectedLog.result)} />
 										<DetailItem label="发生时间" value={dayjs(selectedLog.occurredAt).format("YYYY-MM-DD HH:mm:ss")} />
 									</DetailSection>
@@ -454,8 +424,6 @@ export default function AuditLogPage() {
 
 							<DetailSection title="请求上下文">
 								<DetailItem label="HTTP 方法" value={selectedLog.httpMethod || "-"} />
-								<DetailItem label="耗时 (ms)" value={selectedLog.latencyMs != null ? `${selectedLog.latencyMs}` : "-"} />
-								<DetailItem label="请求 URI" value={selectedLog.requestUri || "-"} monospace full />
 								<DetailItem label="IP 地址" value={selectedLog.clientIp || "-"} monospace />
 								<DetailItem label="User-Agent" value={selectedLog.clientAgent || "-"} full />
 								<DetailItem label="标签" value={selectedLog.extraTags || "-"} full />
@@ -533,9 +501,6 @@ function buildQueryParams(filters: AuditLogFilters): Record<string, string> {
 	}
 	if (filters.targetType) {
 		params.resourceType = filters.targetType;
-	}
-	if (filters.targetUri?.trim()) {
-		params.requestUri = filters.targetUri.trim();
 	}
 	if (filters.targetId?.trim()) {
 		params.resource = filters.targetId.trim();

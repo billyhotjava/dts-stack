@@ -18,29 +18,29 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
     @Query(
         value =
             "select * from audit_event e " +
-            "where (:actor is null or e.actor ilike concat('%', :actor, '%')) " +
-            "and (coalesce(:module, '') = '' or e.module ilike concat('%', :module, '%')) " +
-            "and (:action is null or e.action ilike concat('%', :action, '%')) " +
-            "and (coalesce(:result, '') = '' or e.result ilike concat('%', :result, '%')) " +
-            "and (coalesce(:resourceType, '') = '' or e.resource_type ilike concat('%', :resourceType, '%')) " +
-            "and (:resource is null or e.resource_id ilike concat('%', :resource, '%')) " +
-            "and (:requestUri is null or e.request_uri ilike concat('%', :requestUri, '%')) " +
-            "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
-            "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
-            "and (:clientIp is null or cast(e.client_ip as text) ilike concat('%', :clientIp, '%')) " +
+            "where (:actor is null or e.actor ilike :actor escape '\\') " +
+            "and (:module is null or e.module ilike :module escape '\\') " +
+            "and (:action is null or e.action ilike :action escape '\\') " +
+            "and (:result is null or e.result ilike :result escape '\\') " +
+            "and (:resourceType is null or e.resource_type ilike :resourceType escape '\\') " +
+            "and (:resource is null or e.resource_id ilike :resource escape '\\') " +
+            "and (:requestUri is null or e.request_uri ilike :requestUri escape '\\') " +
+            "and (:from is null or e.occurred_at >= :from) " +
+            "and (:to is null or e.occurred_at <= :to) " +
+            "and (:clientIp is null or cast(e.client_ip as text) ilike :clientIp escape '\\') " +
             "order by e.occurred_at desc, e.id desc",
         countQuery =
             "select count(*) from audit_event e " +
-            "where (:actor is null or e.actor ilike concat('%', :actor, '%')) " +
-            "and (coalesce(:module, '') = '' or e.module ilike concat('%', :module, '%')) " +
-            "and (:action is null or e.action ilike concat('%', :action, '%')) " +
-            "and (coalesce(:result, '') = '' or e.result ilike concat('%', :result, '%')) " +
-            "and (coalesce(:resourceType, '') = '' or e.resource_type ilike concat('%', :resourceType, '%')) " +
-            "and (:resource is null or e.resource_id ilike concat('%', :resource, '%')) " +
-            "and (:requestUri is null or e.request_uri ilike concat('%', :requestUri, '%')) " +
-            "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
-            "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
-            "and (:clientIp is null or cast(e.client_ip as text) ilike concat('%', :clientIp, '%'))",
+            "where (:actor is null or e.actor ilike :actor escape '\\') " +
+            "and (:module is null or e.module ilike :module escape '\\') " +
+            "and (:action is null or e.action ilike :action escape '\\') " +
+            "and (:result is null or e.result ilike :result escape '\\') " +
+            "and (:resourceType is null or e.resource_type ilike :resourceType escape '\\') " +
+            "and (:resource is null or e.resource_id ilike :resource escape '\\') " +
+            "and (:requestUri is null or e.request_uri ilike :requestUri escape '\\') " +
+            "and (:from is null or e.occurred_at >= :from) " +
+            "and (:to is null or e.occurred_at <= :to) " +
+            "and (:clientIp is null or cast(e.client_ip as text) ilike :clientIp escape '\\')",
         nativeQuery = true
     )
     Page<AuditEvent> search(

@@ -8,6 +8,7 @@ import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Text } from "@/ui/typography";
+import { PERSON_SECURITY_LEVELS } from "@/constants/governance";
 
 const statusConfig: Record<
 	string,
@@ -57,6 +58,40 @@ const actionMap: Record<string, string> = {
 	RESET_PASSWORD: "重置密码",
 };
 
+const PERSON_SECURITY_LEVEL_LABEL_MAP = PERSON_SECURITY_LEVELS.reduce<Record<string, string>>((acc, item) => {
+	acc[item.value] = item.label;
+	return acc;
+}, {});
+
+const FIELD_LABELS: Record<string, string> = {
+	username: "用户名",
+	email: "邮箱",
+	displayName: "显示名称",
+	name: "名称",
+	code: "编码",
+	roles: "角色",
+	userSecurityLevel: "人员密级",
+	personSecurityLevel: "人员密级",
+	securityLevel: "密级",
+	parentId: "父级编号",
+	key: "配置键",
+	value: "配置值",
+	metadata: "元数据",
+	sortOrder: "排序",
+	component: "页面组件",
+	path: "路径",
+	id: "标识",
+	icon: "图标",
+	operations: "操作列表",
+	datasetIds: "数据集",
+	scopeOrgId: "作用范围",
+	description: "描述",
+	resourceId: "资源标识",
+	role: "角色",
+	userSecurityLevelBefore: "原人员密级",
+	userSecurityLevelAfter: "新人员密级",
+};
+
 const CATEGORY_FILTER_OPTIONS = [
 	{ label: "用户管理", value: "USER_MANAGEMENT" },
 	{ label: "角色管理", value: "ROLE_MANAGEMENT" },
@@ -98,6 +133,66 @@ export default function MyChangeRequestsPage() {
 			return timeB - timeA;
 		});
 	}, [categoryFilter, data]);
+
+	const formatPrimitiveValue = (val: unknown) => {
+		if (val === null || val === undefined || val === "") {
+			return "-";
+		}
+		if (typeof val === "boolean") {
+			return val ? "是" : "否";
+		}
+		return String(val);
+	};
+
+	const renderChangeValue = (value: ChangeRequest["originalValue"]) => {
+		if (value === null || value === undefined || value === "") {
+			return "-";
+		}
+		if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+			return <span className="whitespace-pre-wrap break-all">{formatPrimitiveValue(value)}</span>;
+		}
+		if (Array.isArray(value)) {
+			const flattened = value
+				.map((item) => (typeof item === "object" ? JSON.stringify(item) : formatPrimitiveValue(item)))
+				.filter((item) => item !== "-");
+			if (flattened.length === 0) {
+				return "-";
+			}
+			return <span className="whitespace-pre-wrap break-all">{flattened.join("、")}</span>;
+		}
+		if (typeof value === "object") {
+			const entries = Object.entries(value as Record<string, unknown>).filter(([, fieldValue]) => fieldValue !== undefined && fieldValue !== null && fieldValue !== "");
+			if (entries.length === 0) {
+				return "-";
+			}
+			return (
+				<div className="flex max-h-32 flex-col gap-1 overflow-auto pr-1">
+					{entries.map(([field, fieldValue]) => {
+						const label = FIELD_LABELS[field] ?? field;
+						let display: string;
+						if (Array.isArray(fieldValue)) {
+							display = fieldValue
+								.map((item) => (typeof item === "object" ? JSON.stringify(item) : formatPrimitiveValue(item)))
+								.filter((item) => item !== "-")
+								.join("、") || "-";
+						} else if (typeof fieldValue === "object" && fieldValue !== null) {
+							display = JSON.stringify(fieldValue);
+						} else {
+							display = formatPrimitiveValue(fieldValue);
+						}
+						return (
+							<div key={field} className="rounded-md bg-muted/40 px-2 py-1 text-xs">
+								<span className="font-medium text-muted-foreground">{`<${label}, `}</span>
+								<span className="break-all text-foreground">{display}</span>
+								<span className="font-medium text-muted-foreground">{">"}</span>
+							</div>
+						);
+					})}
+				</div>
+			);
+		}
+		return <span className="whitespace-pre-wrap break-all">{formatPrimitiveValue(value)}</span>;
+	};
 
 	const columns: ColumnsType<ChangeRequest> = [
 		{
@@ -166,10 +261,16 @@ export default function MyChangeRequestsPage() {
 			render: (value?: string) => value || "-",
 		},
 		{
-			title: "摘要",
-			dataIndex: "summary",
-			ellipsis: true,
-			render: (value: string | undefined, record) => value || record.resourceId || "-",
+			title: "原值",
+			dataIndex: "originalValue",
+			width: 220,
+			render: renderChangeValue,
+		},
+		{
+			title: "修改值",
+			dataIndex: "updatedValue",
+			width: 220,
+			render: renderChangeValue,
 		},
 	];
 
