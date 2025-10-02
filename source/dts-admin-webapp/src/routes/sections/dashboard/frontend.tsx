@@ -14,7 +14,6 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 					children: [
 						{ index: true, element: <Navigate to="profile" replace /> },
 						{ path: "profile", element: Component("/pages/management/user/profile") },
-						{ path: "account", element: Component("/pages/management/user/account") },
 					],
 				},
 				{

@@ -128,15 +128,6 @@ const MANAGEMENT_PERMISSION = {
 					route: "profile",
 					component: "/management/user/profile/index.tsx",
 				},
-				{
-					id: "2516598794787938",
-					parentId: "2781684678535711",
-					label: "sys.nav.user.account",
-					name: "Account",
-					type: PermissionType.MENU,
-					route: "account",
-					component: "/management/user/account/index.tsx",
-				},
 			],
 		},
 		{

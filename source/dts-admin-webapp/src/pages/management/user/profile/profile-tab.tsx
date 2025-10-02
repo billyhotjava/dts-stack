@@ -42,7 +42,7 @@ function resolveRoleLabels(roles: unknown): string[] {
 export default function ProfileTab() {
 	const { fullName, firstName, username, email, roles, enabled, id } = useUserInfo();
 
-	const resolvedName = fullName || firstName || username || "-";
+	const resolvedName = fullName?.trim() || firstName?.trim() || username || "-";
 	const roleLabels = useMemo(() => {
 		const labels = resolveRoleLabels(roles);
 		if (labels.length > 0) {
@@ -73,7 +73,7 @@ export default function ProfileTab() {
 					{basicInfo.map((item) => (
 						<div key={item.label} className="space-y-1">
 							<Text variant="body3" className="text-muted-foreground">
-								{item.label}
+								{item.label}：
 							</Text>
 							<Text variant="body2" className="font-medium text-foreground">
 								{item.value}

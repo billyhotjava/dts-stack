@@ -59,15 +59,6 @@ export const DB_MENU: Menu[] = [
 		component: "/pages/management/user/profile",
 	},
 	{
-		id: "management_user_account",
-		parentId: "management_user",
-		name: "sys.nav.user.account",
-		code: "management:user:account",
-		type: MENU,
-		path: "management/user/account",
-		component: "/pages/management/user/account",
-	},
-	{
 		id: "management_system",
 		parentId: "management",
 		name: "sys.nav.system.index",
