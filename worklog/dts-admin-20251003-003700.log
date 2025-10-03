@@ -18,3 +18,27 @@
 2025-10-03 02:21 审批审计字段瘦身：
 - API 返回的审批类日志不再携带 `actorRole`、`latencyMs`、`requestUri` 字段，避免无效信息干扰。
 - 前端审计列表/详情同步移除相关列与筛选项，保持 UI 与后端字段一致，日志阅读更聚焦。
+2025-10-03 02:28 审计检索空参彻底规避：
+- 仓库层将 actor/module/action 等字段统一用 `coalesce(column, '') ilike :param`，默认参数永远走 `%` 模式，不再传 NULL，彻底解决 PostgreSQL `could not determine data type of parameter` 报错。
+- `AdminAuditService.likePattern` 对空输入返回 `%`，既兼容空列也避免 NULL 形参导致的类型推断，再配合原有转义保留模糊搜索体验。
+- 本地 `./mvnw -DskipTests compile` 尝试因 `target` 目录权限（Operation not permitted）中断，需在具备权限的环境确认构建。
+2025-10-03 02:36 审计时间筛选重写：
+- 将查询中的 `(:from is null or e.occurred_at >= :from)` / `(:to is null or e.occurred_at <= :to)` 改写为 `e.occurred_at >= coalesce(:from, e.occurred_at)` 等形式，避免 PostgreSQL 对 `? is null` 占位符推断失败。
+- 待运行环境重新拉取镜像或重启服务后，建议使用 “最近一天” 与空时间筛选组合手动验证查询成功返回。
+2025-10-03 02:44 审计写入启动日志增强：
+- 启动时追加 `repository.count()` 查询，打印当前审计事件总量，方便运维判断积压情况；查询失败会降级为 warn + 不展示总数。
+
+2025-10-03 04:14 菜单管理导航修复方案:
+- 现状: 前端静态导航仍指向 /management/system/permission, dashboard 前端路由缺少该路径, 点击后触发 React Router fallback -> 404。新版审批驱动页挂在 /admin/portal-menus。
+- 目标: 左侧“菜单管理”应打开审批驱动的 PortalMenusView, 同时对旧链接做兼容避免 404。
+- 方案: (1) 更新 frontend 导航配置, 将菜单路径改为 /admin/portal-menus; (2) 在 frontend 路由树上新增 /management/system/permission -> Navigate(/admin/portal-menus) 的后备路由; (3) 保留 adminRoutes 现有实现。
+2025-10-03 04:18 菜单导航调整实施:
+- 更新 frontend 静态导航, 菜单管理跳转至 /admin/portal-menus, 与审批驱动页面保持一致。
+- 前端保留旧路径的后备路由, 自动重定向至新页面以避免 404。
+- 后续验证: 登录 opadmin 账号, 在管理导航点击“菜单管理”, 确认跳转至审批版菜单页且路由栏不再出现 404, 同时手动访问 /management/system/permission 验证重定向。
+
+2025-10-03 04:42 菜单页面桥接实现:
+- 为 legacy 路径 /management/system/permission 提供新的桥接页, 内嵌 AdminGuard + PortalMenusView, 避免旧导航指向 404。
+- 页面顶部增加提醒说明；其余管理操作复用审批版逻辑。
+- 前端路由恢复加载该页面, 兼容历史链接。
+

@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/explore")
+@RequestMapping("/api/explore/legacy")
 @Transactional
 public class ExploreExecResource {
 

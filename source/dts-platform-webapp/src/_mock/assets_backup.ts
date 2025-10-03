@@ -108,10 +108,6 @@ export const DB_MENU: Menu[] = [
 		name: "sys.nav.system.permission",
 		code: "management:system:permission",
 		type: MENU,
-		path: "/management/system/permission",
-		component: "/pages/management/system/permission",
-	},
-	{
 		id: "management_system_approval",
 		parentId: "management_system",
 		name: "sys.nav.system.approval",

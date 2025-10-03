@@ -17,6 +17,17 @@ public class ComplianceBatchItemDto {
     private String evidenceRef;
     private Instant createdDate;
     private String createdBy;
+    private String ruleName;
+    private String ruleCode;
+    private Integer ruleVersion;
+    private String ruleSeverity;
+    private String datasetAlias;
+    private String qualityRunStatus;
+    private Instant qualityRunStartedAt;
+    private Instant qualityRunFinishedAt;
+    private Long qualityRunDurationMs;
+    private String qualityRunMessage;
+    private Instant lastUpdated;
 
     public UUID getId() {
         return id;
@@ -113,5 +124,92 @@ public class ComplianceBatchItemDto {
     public void setCreatedBy(String createdBy) {
         this.createdBy = createdBy;
     }
-}
 
+    public String getRuleName() {
+        return ruleName;
+    }
+
+    public void setRuleName(String ruleName) {
+        this.ruleName = ruleName;
+    }
+
+    public String getRuleCode() {
+        return ruleCode;
+    }
+
+    public void setRuleCode(String ruleCode) {
+        this.ruleCode = ruleCode;
+    }
+
+    public Integer getRuleVersion() {
+        return ruleVersion;
+    }
+
+    public void setRuleVersion(Integer ruleVersion) {
+        this.ruleVersion = ruleVersion;
+    }
+
+    public String getRuleSeverity() {
+        return ruleSeverity;
+    }
+
+    public void setRuleSeverity(String ruleSeverity) {
+        this.ruleSeverity = ruleSeverity;
+    }
+
+    public String getDatasetAlias() {
+        return datasetAlias;
+    }
+
+    public void setDatasetAlias(String datasetAlias) {
+        this.datasetAlias = datasetAlias;
+    }
+
+    public String getQualityRunStatus() {
+        return qualityRunStatus;
+    }
+
+    public void setQualityRunStatus(String qualityRunStatus) {
+        this.qualityRunStatus = qualityRunStatus;
+    }
+
+    public Instant getQualityRunStartedAt() {
+        return qualityRunStartedAt;
+    }
+
+    public void setQualityRunStartedAt(Instant qualityRunStartedAt) {
+        this.qualityRunStartedAt = qualityRunStartedAt;
+    }
+
+    public Instant getQualityRunFinishedAt() {
+        return qualityRunFinishedAt;
+    }
+
+    public void setQualityRunFinishedAt(Instant qualityRunFinishedAt) {
+        this.qualityRunFinishedAt = qualityRunFinishedAt;
+    }
+
+    public Long getQualityRunDurationMs() {
+        return qualityRunDurationMs;
+    }
+
+    public void setQualityRunDurationMs(Long qualityRunDurationMs) {
+        this.qualityRunDurationMs = qualityRunDurationMs;
+    }
+
+    public String getQualityRunMessage() {
+        return qualityRunMessage;
+    }
+
+    public void setQualityRunMessage(String qualityRunMessage) {
+        this.qualityRunMessage = qualityRunMessage;
+    }
+
+    public Instant getLastUpdated() {
+        return lastUpdated;
+    }
+
+    public void setLastUpdated(Instant lastUpdated) {
+        this.lastUpdated = lastUpdated;
+    }
+}

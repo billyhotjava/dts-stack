@@ -52,7 +52,7 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 		titleKey: "sys.nav.portal.governance",
 		children: [
 			{ key: "rules", path: "rules", titleKey: "sys.nav.portal.governanceRules" },
-			{ key: "masking", path: "masking", titleKey: "sys.nav.portal.governanceMasking", descriptionKey: "sys.nav.portal.governanceMaskingCaption" },
+			{ key: "compliance", path: "compliance", titleKey: "sys.nav.portal.governanceCompliance" },
 		],
 	},
 	{
@@ -128,7 +128,6 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 			{ key: "dataSources", path: "data-sources", titleKey: "sys.nav.portal.foundationDataSources" },
 			{ key: "dataStorage", path: "data-storage", titleKey: "sys.nav.portal.foundationDataStorage" },
 			{ key: "taskScheduling", path: "task-scheduling", titleKey: "sys.nav.portal.foundationTaskScheduling" },
-			{ key: "dataSettings", path: "data-settings", titleKey: "sys.nav.portal.foundationDataSettings" },
 		],
 	},
 ];

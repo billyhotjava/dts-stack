@@ -31,7 +31,7 @@ export const frontendNavData: NavProps["data"] = [
 					},
 					{
 						title: "sys.nav.usermgmt.system.permission",
-						path: "/management/system/permission",
+						path: "/management/system/menu",
 						auth: SYSADMIN_ROLES,
 					},
 					{

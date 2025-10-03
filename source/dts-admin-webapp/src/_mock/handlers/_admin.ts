@@ -138,8 +138,7 @@ const systemConfigs: SystemConfigItem[] = [
 	{ id: 3, key: "airflow.deployment", value: "v2.9.0", description: "调度集群版本" },
 ];
 
-// portalMenus are generated from dts-platform-webapp portal navigation as demo data
-// See: dts-platform-webapp/public/portal-menus.demo.json
+// portalMenus mirror the backend seed defined at dts-admin/src/main/resources/config/data/portal-menu-seed.json
 
 const organizations: OrganizationNode[] = [
 	{

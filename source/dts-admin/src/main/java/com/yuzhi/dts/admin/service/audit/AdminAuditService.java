@@ -7,6 +7,8 @@ import com.yuzhi.dts.admin.domain.AuditEvent;
 import com.yuzhi.dts.admin.repository.AuditEventRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -114,7 +116,21 @@ public class AdminAuditService {
         this.lastChainSignature.set(repository.findTopByOrderByIdDesc().map(AuditEvent::getChainSignature).orElse(""));
         running.set(true);
         workerPool.scheduleWithFixedDelay(this::drainQueue, 0, 500, TimeUnit.MILLISECONDS);
-        log.info("Audit writer started with capacity {}", properties.getQueueCapacity());
+        Long existingCount = null;
+        try {
+            existingCount = repository.count();
+        } catch (Exception ex) {
+            log.warn("Failed to query existing audit event count", ex);
+        }
+        if (existingCount != null) {
+            log.info(
+                "Audit writer started with capacity {} and {} existing audit events",
+                properties.getQueueCapacity(),
+                existingCount
+            );
+        } else {
+            log.info("Audit writer started with capacity {}; existing count unavailable", properties.getQueueCapacity());
+        }
     }
 
     @PreDestroy
@@ -135,6 +151,7 @@ public class AdminAuditService {
         event.resourceId = resourceId;
         event.result = defaultString(outcome, "SUCCESS");
         event.payload = payload;
+        logEnqueuedEvent(event);
         offer(event);
     }
 
@@ -146,6 +163,7 @@ public class AdminAuditService {
         if (event.occurredAt == null) {
             event.occurredAt = Instant.now();
         }
+        logEnqueuedEvent(event);
         offer(event);
     }
 
@@ -188,6 +206,17 @@ public class AdminAuditService {
         }
         repository.saveAll(entities);
         lastChainSignature.set(previousChain);
+        if (log.isDebugEnabled()) {
+            AuditEvent last = entities.get(entities.size() - 1);
+            log.debug(
+                "Persisted {} audit events (module={}, action={}, result={}, queueSize={})",
+                entities.size(),
+                last.getModule(),
+                last.getAction(),
+                last.getResult(),
+                queue != null ? queue.size() : -1
+            );
+        }
         if (properties.isForwardEnabled()) {
             entities.forEach(auditClient::enqueue);
         }
@@ -202,13 +231,13 @@ public class AdminAuditService {
         entity.setAction(defaultString(pending.action, "UNKNOWN"));
         entity.setResourceType(pending.resourceType);
         entity.setResourceId(pending.resourceId);
-        entity.setClientIp(pending.clientIp);
+        entity.setClientIp(parseClientIp(pending.clientIp));
         entity.setClientAgent(pending.clientAgent);
         entity.setRequestUri(pending.requestUri);
         entity.setHttpMethod(pending.httpMethod);
         entity.setResult(defaultString(pending.result, "SUCCESS"));
         entity.setLatencyMs(pending.latencyMs);
-        entity.setExtraTags(pending.extraTags);
+        entity.setExtraTags(normalizeExtraTags(pending.extraTags));
 
         byte[] payloadBytes = pending.payload == null ? new byte[0] : objectMapper.writeValueAsBytes(pending.payload);
         byte[] iv = AuditCrypto.randomIv();
@@ -367,7 +396,7 @@ public class AdminAuditService {
     private String likePattern(String value) {
         String normalized = normalize(value);
         if (normalized == null) {
-            return null;
+            return "%";
         }
         return "%" + escapeLike(normalized) + "%";
     }
@@ -377,6 +406,66 @@ public class AdminAuditService {
             .replace("\\", "\\\\")
             .replace("%", "\\%")
             .replace("_", "\\_");
+    }
+
+    private void logEnqueuedEvent(PendingAuditEvent event) {
+        if (!log.isDebugEnabled()) {
+            return;
+        }
+        log.debug(
+            "Queue audit event actor={} module={} action={} result={} resource={} queueSize={}",
+            defaultString(event.actor, "anonymous"),
+            defaultString(event.module, "GENERAL"),
+            defaultString(event.action, "UNKNOWN"),
+            defaultString(event.result, "SUCCESS"),
+            event.resourceId,
+            queue != null ? queue.size() : 0
+        );
+    }
+
+    private InetAddress parseClientIp(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String candidate = raw.trim();
+        if (candidate.length() >= 2 && candidate.startsWith("\"") && candidate.endsWith("\"")) {
+            candidate = candidate.substring(1, candidate.length() - 1);
+        }
+
+        InetAddress parsed = tryParseInet(candidate);
+        if (parsed != null) {
+            return parsed;
+        }
+
+        if (candidate.startsWith("[") && candidate.contains("]")) {
+            String inside = candidate.substring(1, candidate.indexOf(']'));
+            parsed = tryParseInet(inside);
+            if (parsed != null) {
+                return parsed;
+            }
+        }
+
+        int lastColon = candidate.lastIndexOf(':');
+        if (lastColon > 0 && candidate.indexOf(':') == lastColon && candidate.contains(".")) {
+            String withoutPort = candidate.substring(0, lastColon);
+            parsed = tryParseInet(withoutPort);
+            if (parsed != null) {
+                return parsed;
+            }
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug("Discarding invalid client IP string '{}'", raw);
+        }
+        return null;
+    }
+
+    private InetAddress tryParseInet(String value) {
+        try {
+            return InetAddress.getByName(value);
+        } catch (UnknownHostException ex) {
+            return null;
+        }
     }
 
     private String defaultString(String value, String fallback) {
@@ -400,5 +489,25 @@ public class AdminAuditService {
             return properties.getHmacKey();
         }
         return properties.getEncryptionKey();
+    }
+
+    private String normalizeExtraTags(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        try {
+            return objectMapper.readTree(trimmed).toString();
+        } catch (JsonProcessingException ex) {
+            if (log.isDebugEnabled()) {
+                log.debug("extraTags payload is not JSON, storing as string", ex);
+            }
+            try {
+                return objectMapper.writeValueAsString(trimmed);
+            } catch (JsonProcessingException secondary) {
+                log.warn("Failed to serialize extraTags payload as JSON string, discarding", secondary);
+                return null;
+            }
+        }
     }
 }

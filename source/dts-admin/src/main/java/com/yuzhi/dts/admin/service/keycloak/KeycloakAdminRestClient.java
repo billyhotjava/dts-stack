@@ -551,6 +551,21 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     }
 
     @Override
+    public List<KeycloakRoleDTO> listRealmRoles(String accessToken) {
+        try {
+            ResponseEntity<String> response = exchange(rolesEndpoint, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
+                return List.of();
+            }
+            List<Map<String, Object>> body = objectMapper.readValue(response.getBody(), LIST_OF_MAP);
+            return body.stream().map(this::toRoleDto).toList();
+        } catch (Exception ex) {
+            LOG.warn("Failed to list Keycloak roles: {}", ex.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
     public Optional<KeycloakRoleDTO> findRealmRole(String roleName, String accessToken) {
         if (roleName == null || roleName.isBlank()) {
             return Optional.empty();

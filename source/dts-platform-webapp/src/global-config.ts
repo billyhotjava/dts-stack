@@ -56,8 +56,8 @@ const removeTrailingSlash = (path: string) => {
 
 const resolveDefaultRoute = () => {
 	const env = import.meta.env as Record<string, string | undefined>;
-	const routerMode = (env.VITE_APP_ROUTER_MODE || "frontend").trim();
-	const backendFallback = "/workbench"; // first menu path in backend menu DB
+	const routerMode = (env.VITE_APP_ROUTER_MODE || "backend").trim();
+	const backendFallback = DEFAULT_PORTAL_ROUTE;
 	const frontendFallback = DEFAULT_PORTAL_ROUTE;
 
 	const fallback = routerMode === "backend" ? backendFallback : frontendFallback;
@@ -104,8 +104,8 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 	defaultRoute: resolveDefaultRoute(),
 	publicPath: resolvePublicPath(),
 	apiBaseUrl: resolveApiBaseUrl(),
-	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
+	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "backend",
 	routerHistory: (import.meta.env.VITE_APP_ROUTER_HISTORY || "browser") as "browser" | "hash",
-	enablePortalMenuMgmt: String(import.meta.env.VITE_ENABLE_PORTAL_MENU_MGMT || "false").toLowerCase() === "true",
+	enablePortalMenuMgmt: String(import.meta.env.VITE_ENABLE_PORTAL_MENU_MGMT || "true").toLowerCase() === "true",
 	enableSqlWorkbench: String(import.meta.env.VITE_ENABLE_SQL_WORKBENCH || "false").toLowerCase() === "true",
 };

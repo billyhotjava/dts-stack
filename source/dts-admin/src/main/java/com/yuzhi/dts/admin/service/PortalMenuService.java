@@ -39,10 +39,38 @@ public class PortalMenuService {
     private static final Set<String> WRITE_SECTIONS = Set.of("modeling", "governance", "services");
     private static final Set<String> FOUNDATION_SECTIONS = Set.of("foundation");
     private static final Set<String> IAM_SECTIONS = Set.of("iam");
+    private static final Map<String, String> MENU_COMPONENTS = Map.ofEntries(
+        Map.entry("catalog.assets", "/pages/catalog/DatasetsPage"),
+        Map.entry("catalog.accessPolicy", "/pages/catalog/AccessPolicyPage"),
+        Map.entry("catalog.secureViews", "/pages/catalog/SecureViewsPage"),
+        Map.entry("modeling.standards", "/pages/modeling/DataStandardsPage"),
+        Map.entry("governance.rules", "/pages/governance/QualityRulesPage"),
+        Map.entry("governance.compliance", "/pages/governance/CompliancePage"),
+        Map.entry("explore.workbench", "/pages/explore/QueryWorkbenchPage"),
+        Map.entry("explore.savedQueries", "/pages/explore/SavedQueriesPage"),
+        Map.entry("services.api", "/pages/services/ApiServicesPage"),
+        Map.entry("services.products", "/pages/services/DataProductsPage"),
+        Map.entry("services.tokens", "/pages/services/TokensPage"),
+        Map.entry("visualization.dashboards", "/pages/visualization/DashboardsPage"),
+        Map.entry("visualization.cockpit", "/pages/visualization/CockpitPage"),
+        Map.entry("visualization.projects", "/pages/visualization/ProjectsSummaryPage"),
+        Map.entry("visualization.finance", "/pages/visualization/FinanceSummaryPage"),
+        Map.entry("visualization.supplyChain", "/pages/visualization/SupplyChainSummaryPage"),
+        Map.entry("visualization.hr", "/pages/visualization/HRSummaryPage"),
+        Map.entry("iam.classification", "/pages/iam/ClassificationMappingPage"),
+        Map.entry("iam.authorization", "/pages/iam/AuthorizationPage"),
+        Map.entry("iam.simulation", "/pages/iam/SimulationPage"),
+        Map.entry("iam.requests", "/pages/iam/RequestsPage"),
+        Map.entry("foundation.dataSources", "/pages/foundation/DataSourcesPage"),
+        Map.entry("foundation.dataStorage", "/pages/foundation/DataStoragePage"),
+        Map.entry("foundation.taskScheduling", "/pages/foundation/TaskSchedulingPage")
+    );
 
     private final PortalMenuRepository menuRepo;
     private final PortalMenuVisibilityRepository visibilityRepo;
     private final ObjectMapper objectMapper;
+
+    private volatile MenuSeed cachedSeed;
 
     public PortalMenuService(PortalMenuRepository menuRepo, PortalMenuVisibilityRepository visibilityRepo, ObjectMapper objectMapper) {
         this.menuRepo = menuRepo;
@@ -52,6 +80,7 @@ public class PortalMenuService {
 
     @Transactional(readOnly = true)
     public List<PortalMenu> findTree() {
+        ensureSeedMenus();
         return runSafely(
             () -> {
                 List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
@@ -65,6 +94,7 @@ public class PortalMenuService {
 
     @Transactional(readOnly = true)
     public List<PortalMenu> findTreeForAudience(Set<String> roleCodes, Set<String> permissionCodes, String maxDataLevel) {
+        ensureSeedMenus();
         List<PortalMenu> roots = findTree();
         return roots
             .stream()
@@ -240,7 +270,7 @@ public class PortalMenuService {
     }
 
     public void resetMenusToSeed() {
-        MenuSeed seed = loadMenuSeed();
+        MenuSeed seed = menuSeed();
         visibilityRepo.deleteAllInBatch();
         menuRepo.deleteAllInBatch();
 
@@ -251,16 +281,16 @@ public class PortalMenuService {
 
         int sortOrder = 1;
         for (MenuNode section : seed.portalNavSections()) {
-            PortalMenu root = buildMenuTree(section, null, sortOrder++, section.key());
+            String sectionComposite = StringUtils.hasText(section.key()) ? section.key() : "section-" + sortOrder;
+            PortalMenu root = buildMenuTree(section, null, sortOrder++, sectionComposite, sectionComposite);
             menuRepo.save(root);
         }
     }
 
-    private PortalMenu buildMenuTree(MenuNode node, PortalMenu parent, int sortOrder, String sectionKey) {
+    private PortalMenu buildMenuTree(MenuNode node, PortalMenu parent, int sortOrder, String compositeKey, String sectionKey) {
         PortalMenu menu = new PortalMenu();
-        menu.setName(resolveTitle(node));
+        menu.setName(resolveName(node));
         menu.setPath(buildPath(parent, node.path()));
-        menu.setComponent(null);
         menu.setIcon(node.icon());
         menu.setSortOrder(sortOrder);
         menu.setMetadata(writeMetadata(node, parent == null, sectionKey));
@@ -270,25 +300,33 @@ public class PortalMenuService {
             menu.setParent(parent);
         }
 
-        for (PortalMenuVisibility visibility : defaultVisibilities(menu)) {
-            menu.addVisibility(visibility);
-        }
-
         List<PortalMenu> children = new ArrayList<>();
         if (node.children() != null) {
             int childOrder = 1;
             for (MenuNode child : node.children()) {
-                PortalMenu childMenu = buildMenuTree(child, menu, childOrder++, sectionKey);
+                String childKey = child.key() == null ? compositeKey : compositeKey + "." + child.key();
+                PortalMenu childMenu = buildMenuTree(child, menu, childOrder++, childKey, sectionKey);
                 childMenu.setParent(menu);
                 children.add(childMenu);
             }
         }
         menu.setChildren(children);
+        if (children.isEmpty()) {
+            menu.setComponent(resolveComponent(compositeKey));
+        } else {
+            menu.setComponent(null);
+        }
+        for (PortalMenuVisibility visibility : defaultVisibilities(menu)) {
+            menu.addVisibility(visibility);
+        }
         return menu;
     }
 
     private String writeMetadata(MenuNode node, boolean isRoot, String sectionKey) {
         Map<String, Object> metadata = new LinkedHashMap<>();
+        if (StringUtils.hasText(node.key())) {
+            metadata.put("key", node.key());
+        }
         if (isRoot) {
             if (StringUtils.hasText(node.key())) {
                 metadata.put("sectionKey", node.key());
@@ -321,14 +359,14 @@ public class PortalMenuService {
         }
     }
 
-    private String resolveTitle(MenuNode node) {
-        if (StringUtils.hasText(node.title())) {
-            return node.title();
-        }
+    private String resolveName(MenuNode node) {
         if (StringUtils.hasText(node.titleKey())) {
             return node.titleKey();
         }
-        return node.key() != null ? node.key() : "菜单";
+        if (StringUtils.hasText(node.title())) {
+            return node.title();
+        }
+        return StringUtils.hasText(node.key()) ? node.key() : "菜单";
     }
 
     private String buildPath(PortalMenu parent, String segment) {
@@ -347,6 +385,13 @@ public class PortalMenuService {
         return normalized.isEmpty() ? base : base + "/" + normalized;
     }
 
+    private String resolveComponent(String compositeKey) {
+        if (!StringUtils.hasText(compositeKey)) {
+            return null;
+        }
+        return MENU_COMPONENTS.get(compositeKey);
+    }
+
     private MenuSeed loadMenuSeed() {
         ClassPathResource resource = new ClassPathResource("config/data/portal-menu-seed.json");
         if (!resource.exists()) {
@@ -357,6 +402,73 @@ public class PortalMenuService {
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to read portal menu seed", ex);
         }
+    }
+
+    private MenuSeed menuSeed() {
+        MenuSeed seed = cachedSeed;
+        if (seed == null) {
+            synchronized (this) {
+                seed = cachedSeed;
+                if (seed == null) {
+                    seed = loadMenuSeed();
+                    cachedSeed = seed;
+                }
+            }
+        }
+        return seed;
+    }
+
+    private void ensureSeedMenus() {
+        try {
+            MenuSeed seed = menuSeed();
+            List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
+            if (!isSeedAligned(roots, seed)) {
+                resetMenusToSeed();
+            }
+        } catch (Exception ex) {
+            log.warn("Skip portal menu seed verification due to: {}", ex.getMessage());
+        }
+    }
+
+    private boolean isSeedAligned(List<PortalMenu> roots, MenuSeed seed) {
+        List<MenuNode> sections = seed.portalNavSections();
+        if (sections == null || sections.isEmpty()) {
+            return true;
+        }
+        if (roots == null || roots.size() != sections.size()) {
+            return false;
+        }
+        Set<String> expected = sections
+            .stream()
+            .map(MenuNode::key)
+            .filter(StringUtils::hasText)
+            .map(key -> key.trim().toLowerCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (expected.isEmpty()) {
+            return true;
+        }
+        for (PortalMenu root : roots) {
+            String actualKey = extractMetadataKey(root);
+            if (actualKey == null || !expected.contains(actualKey.toLowerCase(Locale.ROOT))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String extractMetadataKey(PortalMenu menu) {
+        if (menu == null || !StringUtils.hasText(menu.getMetadata())) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(menu.getMetadata());
+            if (node.hasNonNull("key")) {
+                return node.get("key").asText();
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to extract key from portal menu metadata: {}", ex.getMessage());
+        }
+        return null;
     }
 
     private List<PortalMenuVisibility> defaultVisibilities(PortalMenu menu) {

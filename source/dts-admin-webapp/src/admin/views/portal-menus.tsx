@@ -36,6 +36,7 @@ export default function PortalMenusView() {
 
 	const [draft, setDraft] = useState<PortalMenuItem>({ ...INITIAL_MENU_DRAFT });
 	const [targetId, setTargetId] = useState<string>("");
+	const [resetting, setResetting] = useState(false);
 
 	const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
 
@@ -93,8 +94,31 @@ export default function PortalMenusView() {
 		}
 	};
 
+	const handleReset = async () => {
+		setResetting(true);
+		try {
+			await adminApi.resetPortalMenus();
+			toast.success("菜单已恢复为默认种子数据");
+			setDraft({ ...INITIAL_MENU_DRAFT });
+			setTargetId("");
+			refresh();
+		} catch (error) {
+			toast.error("恢复默认菜单失败，请稍后再试");
+		} finally {
+			setResetting(false);
+		}
+	};
+
 	return (
 		<div className="space-y-6">
+			<div className="flex flex-wrap items-center justify-between gap-3">
+				<Text variant="body1" className="text-lg font-semibold">
+					门户菜单管理
+				</Text>
+				<Button variant="secondary" onClick={handleReset} disabled={resetting}>
+					{resetting ? "恢复中..." : "恢复默认菜单"}
+				</Button>
+			</div>
 			<div className="grid gap-6 xl:grid-cols-[minmax(0,0.6fr)_minmax(0,0.4fr)]">
 				<Card>
 					<CardHeader>

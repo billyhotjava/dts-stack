@@ -21,6 +21,8 @@ import com.yuzhi.dts.platform.service.governance.dto.QualityRuleBindingDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleVersionDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -32,6 +34,9 @@ import java.util.stream.Collectors;
 final class GovernanceMapper {
 
     private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder().build();
+    private static final Set<String> PASS_STATUSES = Set.of("PASSED", "SUCCESS", "COMPLIANT");
+    private static final Set<String> FAIL_STATUSES = Set.of("FAILED", "NON_COMPLIANT", "BREACHED");
+    private static final Set<String> WAIVE_STATUSES = Set.of("WAIVED", "ACCEPTED_RISK");
 
     private GovernanceMapper() {}
 
@@ -178,6 +183,16 @@ final class GovernanceMapper {
         dto.setCreatedBy(entity.getCreatedBy());
         List<GovComplianceBatchItem> sourceItems = items != null ? items : entity.getItems().stream().collect(Collectors.toList());
         dto.setItems(sourceItems.stream().map(GovernanceMapper::toDto).collect(Collectors.toList()));
+        dto.setTotalItems(sourceItems.size());
+        long passed = sourceItems.stream().filter(item -> isPassedStatus(item.getStatus())).count();
+        long failed = sourceItems.stream().filter(item -> isFailedStatus(item.getStatus())).count();
+        long completed = sourceItems.stream().filter(item -> isCompletedStatus(item.getStatus())).count();
+        dto.setPassedItems((int) passed);
+        dto.setFailedItems((int) failed);
+        dto.setCompletedItems((int) completed);
+        dto.setPendingItems(dto.getTotalItems() != null ? Math.max(0, dto.getTotalItems() - (int) completed) : null);
+        dto.setHasFailure(failed > 0);
+        dto.setLastUpdated(resolveLastUpdated(entity, sourceItems));
         return dto;
     }
 
@@ -198,6 +213,20 @@ final class GovernanceMapper {
         dto.setEvidenceRef(entity.getEvidenceRef());
         dto.setCreatedDate(entity.getCreatedDate());
         dto.setCreatedBy(entity.getCreatedBy());
+        dto.setRuleName(Optional.ofNullable(entity.getRule()).map(GovRule::getName).orElse(null));
+        dto.setRuleCode(Optional.ofNullable(entity.getRule()).map(GovRule::getCode).orElse(null));
+        dto.setRuleVersion(Optional.ofNullable(entity.getRuleVersion()).map(GovRuleVersion::getVersion).orElse(null));
+        dto.setRuleSeverity(Optional.ofNullable(entity.getRule()).map(GovRule::getSeverity).orElse(null));
+        dto.setDatasetAlias(resolveDatasetAlias(entity));
+        dto.setQualityRunStatus(Optional.ofNullable(entity.getQualityRun()).map(GovQualityRun::getStatus).orElse(null));
+        dto.setQualityRunStartedAt(Optional.ofNullable(entity.getQualityRun()).map(GovQualityRun::getStartedAt).orElse(null));
+        dto.setQualityRunFinishedAt(Optional.ofNullable(entity.getQualityRun()).map(GovQualityRun::getFinishedAt).orElse(null));
+        dto.setQualityRunDurationMs(Optional
+            .ofNullable(entity.getQualityRun())
+            .map(GovQualityRun::getDurationMs)
+            .orElse(null));
+        dto.setQualityRunMessage(Optional.ofNullable(entity.getQualityRun()).map(GovQualityRun::getMessage).orElse(null));
+        dto.setLastUpdated(Optional.ofNullable(entity.getLastModifiedDate()).orElse(entity.getCreatedDate()));
         return dto;
     }
 
@@ -244,6 +273,70 @@ final class GovernanceMapper {
         dto.setCreatedDate(entity.getCreatedDate());
         dto.setCreatedBy(entity.getCreatedBy());
         return dto;
+    }
+
+    private static boolean isPassedStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+        return PASS_STATUSES.contains(status.toUpperCase(Locale.ROOT));
+    }
+
+    private static boolean isFailedStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+        return FAIL_STATUSES.contains(status.toUpperCase(Locale.ROOT));
+    }
+
+    private static boolean isCompletedStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+        String normalized = status.toUpperCase(Locale.ROOT);
+        return PASS_STATUSES.contains(normalized) || FAIL_STATUSES.contains(normalized) || WAIVE_STATUSES.contains(normalized);
+    }
+
+    private static Instant resolveLastUpdated(GovComplianceBatch batch, List<GovComplianceBatchItem> items) {
+        Instant batchUpdated = batch.getLastModifiedDate();
+        Instant itemUpdated = items
+            .stream()
+            .map(item -> Optional.ofNullable(item.getLastModifiedDate()).orElse(item.getCreatedDate()))
+            .filter(Objects::nonNull)
+            .max(Comparator.naturalOrder())
+            .orElse(null);
+        return latestInstant(batchUpdated, itemUpdated);
+    }
+
+    private static Instant latestInstant(Instant first, Instant second) {
+        if (first == null) {
+            return second;
+        }
+        if (second == null) {
+            return first;
+        }
+        return first.isAfter(second) ? first : second;
+    }
+
+    private static String resolveDatasetAlias(GovComplianceBatchItem item) {
+        if (item.getDatasetId() == null) {
+            return null;
+        }
+        String alias = Optional
+            .ofNullable(item.getRuleVersion())
+            .map(GovRuleVersion::getBindings)
+            .map(bindings -> bindings
+                .stream()
+                .filter(binding -> item.getDatasetId().equals(binding.getDatasetId()))
+                .map(GovRuleBinding::getDatasetAlias)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null))
+            .orElse(null);
+        if (alias != null && !alias.isBlank()) {
+            return alias.trim();
+        }
+        return item.getDatasetId().toString();
     }
 
     static List<String> splitCsv(String raw) {
@@ -295,4 +388,3 @@ final class GovernanceMapper {
         }
     }
 }
-

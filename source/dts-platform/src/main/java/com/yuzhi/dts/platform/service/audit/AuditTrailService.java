@@ -117,7 +117,21 @@ public class AuditTrailService {
         this.lastChainSignature.set(repository.findTopByOrderByIdDesc().map(AuditEvent::getChainSignature).orElse(""));
         running.set(true);
         workerPool.scheduleWithFixedDelay(this::drainQueue, 0, 500, TimeUnit.MILLISECONDS);
-        log.info("Audit writer started with capacity {}", properties.getQueueCapacity());
+        Long existingCount = null;
+        try {
+            existingCount = repository.count();
+        } catch (Exception ex) {
+            log.warn("Failed to query existing audit event count", ex);
+        }
+        if (existingCount != null) {
+            log.info(
+                "Audit writer started with capacity {} and {} existing audit events",
+                properties.getQueueCapacity(),
+                existingCount
+            );
+        } else {
+            log.info("Audit writer started with capacity {}; existing count unavailable", properties.getQueueCapacity());
+        }
     }
 
     @PreDestroy
@@ -257,7 +271,7 @@ public class AuditTrailService {
         entity.setHttpMethod(pending.httpMethod);
         entity.setResult(defaultString(pending.result, "SUCCESS"));
         entity.setLatencyMs(pending.latencyMs);
-        entity.setExtraTags(pending.extraTags);
+        entity.setExtraTags(normalizeExtraTags(pending.extraTags));
 
         byte[] payloadBytes = serializePayload(pending.payload);
         byte[] iv = AuditCrypto.randomIv();
@@ -302,5 +316,25 @@ public class AuditTrailService {
 
     private static String defaultString(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private String normalizeExtraTags(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        try {
+            return objectMapper.readTree(trimmed).toString();
+        } catch (JsonProcessingException ex) {
+            if (log.isDebugEnabled()) {
+                log.debug("extraTags payload is not JSON, storing as string", ex);
+            }
+            try {
+                return objectMapper.writeValueAsString(trimmed);
+            } catch (JsonProcessingException secondary) {
+                log.warn("Failed to serialize extraTags payload as JSON string, discarding", secondary);
+                return null;
+            }
+        }
     }
 }

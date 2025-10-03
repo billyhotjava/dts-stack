@@ -2,17 +2,15 @@ import type { RouteObject } from "react-router";
 import { Navigate } from "react-router";
 import type { ReactElement } from "react";
 import { PORTAL_NAV_SECTIONS } from "@/constants/portal-navigation";
-import DataDomainManagementPage from "@/pages/catalog/DataDomainManagementPage";
 import DatasetsPage from "@/pages/catalog/DatasetsPage";
 import AccessPolicyPage from "@/pages/catalog/AccessPolicyPage";
 import SecureViewsPage from "@/pages/catalog/SecureViewsPage";
 import DatasetDetailPage from "@/pages/catalog/DatasetDetailPage";
 import QueryWorkbenchPage from "@/pages/explore/QueryWorkbenchPage";
-import DataPreviewPage from "@/pages/explore/DataPreviewPage";
 import SavedQueriesPage from "@/pages/explore/SavedQueriesPage";
 import DataStandardsPage from "@/pages/modeling/DataStandardsPage";
 import QualityRulesPage from "@/pages/governance/QualityRulesPage";
-import MaskingPoliciesPage from "@/pages/governance/MaskingPoliciesPage";
+import CompliancePage from "@/pages/governance/CompliancePage";
 import DataProductsPage from "@/pages/services/DataProductsPage";
 import TokensPage from "@/pages/services/TokensPage";
 import ApiServicesPage from "@/pages/services/ApiServicesPage";
@@ -31,15 +29,12 @@ import FeaturePlaceholder from "@/pages/common/FeaturePlaceholder";
 import DataSourcesPage from "@/pages/foundation/DataSourcesPage";
 import DataStoragePage from "@/pages/foundation/DataStoragePage";
 import TaskSchedulingPage from "@/pages/foundation/TaskSchedulingPage";
-import DataSettingsPage from "@/pages/foundation/DataSettingsPage";
-import PersonalProfilePage from "@/pages/settings/profile";
 
 export function getFrontendDashboardRoutes(): RouteObject[] {
 	const sectionRoutes = PORTAL_NAV_SECTIONS.map((section) => {
 		const childRoutes = section.children.map<RouteObject>((child) => {
 			const FEATURE_COMPONENTS: Record<string, Record<string, () => ReactElement>> = {
 				catalog: {
-					domains: () => <DataDomainManagementPage />,
 					assets: () => <DatasetsPage />,
 					accessPolicy: () => <AccessPolicyPage />,
 					secureViews: () => <SecureViewsPage />,
@@ -49,13 +44,12 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 				},
 				governance: {
 					rules: () => <QualityRulesPage />,
-					masking: () => <MaskingPoliciesPage />,
+					compliance: () => <CompliancePage />,
 				},
-            explore: {
-                workbench: () => <QueryWorkbenchPage />,
-                preview: () => <DataPreviewPage />,
-                savedQueries: () => <SavedQueriesPage />,
-            },
+				explore: {
+					workbench: () => <QueryWorkbenchPage />,
+					savedQueries: () => <SavedQueriesPage />,
+				},
 				services: {
 					api: () => <ApiServicesPage />,
 					products: () => <DataProductsPage />,
@@ -79,7 +73,6 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 					dataSources: () => <DataSourcesPage />,
 					dataStorage: () => <DataStoragePage />,
 					taskScheduling: () => <TaskSchedulingPage />,
-					dataSettings: () => <DataSettingsPage />,
 				},
 			};
 
@@ -119,12 +112,5 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		};
 	});
 
-	const standaloneRoutes: RouteObject[] = [
-		{
-			path: "settings",
-			children: [{ path: "profile", element: <PersonalProfilePage /> }],
-		},
-	];
-
-	return [...sectionRoutes, ...standaloneRoutes];
+	return sectionRoutes;
 }

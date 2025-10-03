@@ -12,7 +12,9 @@ import jakarta.persistence.Table;
 import java.io.Serializable;
 import java.time.Instant;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "audit_event")
@@ -62,12 +64,12 @@ public class AuditEvent implements Serializable {
     @Column(name = "latency_ms")
     private Integer latencyMs;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "payload_iv")
     @JsonIgnore
     private byte[] payloadIv;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "payload_cipher")
     @JsonIgnore
     private byte[] payloadCipher;
@@ -78,6 +80,7 @@ public class AuditEvent implements Serializable {
     @Column(name = "chain_signature", nullable = false, length = 128)
     private String chainSignature;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "extra_tags")
     private String extraTags;
 

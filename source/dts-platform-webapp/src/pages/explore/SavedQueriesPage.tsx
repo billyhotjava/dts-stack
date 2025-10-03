@@ -10,7 +10,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 
 type SavedQuery = { id: string; name?: string; title?: string; sqlText?: string; datasetId?: string };
 
-type ResultSet = { id: string; storageUri: string; columns: string; rowCount?: number; expiresAt?: string };
+type ResultSet = {
+  id: string;
+  storageUri?: string;
+  columns: string;
+  rowCount?: number;
+  expiresAt?: string;
+  datasetName?: string;
+  classification?: string;
+  createdAt?: string;
+};
 
 export default function SavedQueriesPage() {
   const [items, setItems] = useState<SavedQuery[]>([]);
@@ -22,12 +31,31 @@ export default function SavedQueriesPage() {
   const [previewRows, setPreviewRows] = useState<any[]>([]);
   const [previewMasking, setPreviewMasking] = useState<any>(null);
 
+  const maskMode = previewMasking?.mode ?? (Array.isArray(previewMasking?.maskedColumns) ? "heuristic" : undefined);
+  const maskColumns = Array.isArray(previewMasking?.columns)
+    ? previewMasking.columns
+    : Array.isArray(previewMasking?.maskedColumns)
+      ? previewMasking.maskedColumns
+      : [];
+  const maskRules = Array.isArray(previewMasking?.rules) ? previewMasking.rules : [];
+  const maskDefault = previewMasking?.default;
+
   const load = async () => {
     try {
       const data: any = await listSavedQueries();
       setItems(Array.isArray(data) ? data : []);
       const rs: any = await listResultSets();
-      setResultSets(Array.isArray(rs) ? rs : []);
+      const resultSetList: ResultSet[] = (Array.isArray(rs) ? rs : []).map((item: any) => ({
+        id: String(item?.id ?? ""),
+        columns: typeof item?.columns === "string" ? item.columns : Array.isArray(item?.columns) ? item.columns.join(", ") : "",
+        rowCount: item?.rowCount,
+        expiresAt: item?.expiresAt,
+        storageUri: item?.storageUri,
+        datasetName: item?.datasetName,
+        classification: item?.classification,
+        createdAt: item?.createdAt,
+      }));
+      setResultSets(resultSetList);
     } catch (e) {
       console.error(e);
       toast.error("加载保存的查询失败");
@@ -170,8 +198,10 @@ export default function SavedQueriesPage() {
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="border-b px-3 py-2 text-left font-medium">查询编号</th>
+                    <th className="border-b px-3 py-2 text-left font-medium">所属数据集</th>
                     <th className="border-b px-3 py-2 text-left font-medium">列</th>
                     <th className="border-b px-3 py-2 text-left font-medium">行数</th>
+                    <th className="border-b px-3 py-2 text-left font-medium">密级</th>
                     <th className="border-b px-3 py-2 text-left font-medium">过期时间</th>
                     <th className="border-b px-3 py-2 text-left font-medium">操作</th>
                   </tr>
@@ -180,10 +210,12 @@ export default function SavedQueriesPage() {
                   {resultSets.map((rs) => (
                     <tr key={rs.id} className="border-b last:border-b-0">
                       <td className="px-3 py-2">{rs.id}</td>
-                      <td className="px-3 py-2">{rs.columns}</td>
+                      <td className="px-3 py-2">{rs.datasetName ?? "-"}</td>
+                      <td className="px-3 py-2">{rs.columns || "-"}</td>
                       <td className="px-3 py-2">{rs.rowCount ?? "-"}</td>
+                      <td className="px-3 py-2">{rs.classification ?? "-"}</td>
                       <td className="px-3 py-2">{rs.expiresAt ?? "-"}</td>
-                      <td className="px-3 py-2 space-x-2">
+                      <td className="px-3 py-2 space-x-2 text-nowrap">
                         <Button size="sm" variant="outline" onClick={() => handlePreview(rs.id)}>预览</Button>
                         <Button size="sm" variant="ghost" onClick={async () => {
                           try {
@@ -215,19 +247,19 @@ export default function SavedQueriesPage() {
         <div className="space-y-3">
           {previewMasking ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              {previewMasking.mode === "policy" ? (
+              {maskMode === "policy" ? (
                 <div>
                   <p className="font-medium">按策略脱敏</p>
-                  {Array.isArray(previewMasking.rules) && previewMasking.rules.length ? (
-                    <p>规则：{previewMasking.rules.map((r: any) => `${r.column}:${r.fn}`).join(", ")}</p>
+                  {maskRules.length ? (
+                    <p>规则：{maskRules.map((r: any) => `${r.column}:${r.fn}`).join(", ")}</p>
                   ) : null}
-                  {previewMasking.default ? <p>默认：{previewMasking.default}</p> : null}
+                  {maskDefault ? <p>默认：{maskDefault}</p> : null}
                 </div>
               ) : (
                 <div>
                   <p className="font-medium">启发式脱敏</p>
-                  {Array.isArray(previewMasking.columns) && previewMasking.columns.length ? (
-                    <p>列：{previewMasking.columns.join(", ")}</p>
+                  {maskColumns.length ? (
+                    <p>列：{maskColumns.join(", ")}</p>
                   ) : (
                     <p>未识别到敏感列</p>
                   )}

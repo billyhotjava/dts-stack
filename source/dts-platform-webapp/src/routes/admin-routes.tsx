@@ -12,7 +12,7 @@ import UserManagementView from "@/admin/views/user-management";
 import RoleManagementView from "@/admin/views/role-management";
 
 const children: RouteObject[] = [
-    { index: true, element: <Navigate to="orgs" replace /> },
+    { index: true, element: <Navigate to="/admin/orgs" replace /> },
     { path: "orgs", element: <OrgManagementView /> },
     { path: "users", element: <UserManagementView /> },
     { path: "roles", element: <RoleManagementView /> },

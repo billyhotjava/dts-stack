@@ -40,6 +40,7 @@ import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -56,6 +57,21 @@ public class AdminApiResource {
         for (GrantedAuthority a : auths) set.add(a.getAuthority());
         for (String r : roles) if (set.contains(r)) return true;
         return false;
+    }
+
+    private static String canonicalReservedRole(String role) {
+        if (role == null) {
+            return "";
+        }
+        String normalized = role.trim().toUpperCase(Locale.ROOT);
+        if (normalized.startsWith("ROLE_")) {
+            normalized = normalized.substring(5);
+        }
+        return normalized.replace("_", "");
+    }
+
+    private static boolean isReservedRealmRoleName(String role) {
+        return RESERVED_REALM_ROLES.contains(canonicalReservedRole(role));
     }
 
     @GetMapping("/whoami")
@@ -103,6 +119,49 @@ public class AdminApiResource {
     );
     private static final List<String> DEFAULT_PORTAL_ROLES = List.of(AuthoritiesConstants.OP_ADMIN, AuthoritiesConstants.USER);
     private static final Set<String> RESERVED_REALM_ROLES = Set.of("SYSADMIN", "OPADMIN", "AUTHADMIN", "AUDITADMIN");
+
+    private static final List<String> OPERATION_ORDER = List.of("read", "write", "export");
+
+    private record BuiltinRoleSpec(String scope, List<String> operations, String description) {}
+
+    private static final Map<String, BuiltinRoleSpec> BUILTIN_DATA_ROLES = Map.of(
+        "DEPT_OWNER",
+        new BuiltinRoleSpec(
+            "DEPARTMENT",
+            List.of("read", "write", "export"),
+            "负责本部门数据；可读取本部门且密级不超的资源，具备本部门范围写入修改权限；可申请提升密级或设置共享；可授予/回收本部门 EDITOR、VIEWER 权限；导出高敏数据需审批。"
+        ),
+        "DEPT_EDITOR",
+        new BuiltinRoleSpec(
+            "DEPARTMENT",
+            List.of("read", "write", "export"),
+            "覆盖本部门；可读同级密级数据并在本部门内写入；无法调整密级或共享策略；不具备授权管理；导出时受行列与策略限制。"
+        ),
+        "DEPT_VIEWER",
+        new BuiltinRoleSpec(
+            "DEPARTMENT",
+            List.of("read"),
+            "仅浏览本部门密级不超的数据；无写入、密级/共享设置或授权管理能力；导出默认禁止。"
+        ),
+        "INST_OWNER",
+        new BuiltinRoleSpec(
+            "INSTITUTE",
+            List.of("read", "write", "export"),
+            "面向全院共享区；可读取全院共享区内密级不超的数据，并写入全院共享区；可管理全院共享策略（需审批）；负责共享区的编辑/查看授权；导出高敏数据需审批。"
+        ),
+        "INST_EDITOR",
+        new BuiltinRoleSpec(
+            "INSTITUTE",
+            List.of("read", "write", "export"),
+            "在全院共享区操作；可读取共享区符合密级要求的数据并写入同一共享区；无密级或共享策略调整权限；导出受策略限制。"
+        ),
+        "INST_VIEWER",
+        new BuiltinRoleSpec(
+            "INSTITUTE",
+            List.of("read"),
+            "覆盖全院共享区的只读角色；仅能读取密级不超的数据；无写入、策略或授权管理能力；导出被禁用。"
+        )
+    );
 
     public AdminApiResource(
         AdminAuditService auditService,
@@ -324,7 +383,7 @@ public class AdminApiResource {
             return ResponseEntity.badRequest().body(ApiResponse.error("角色名称不能为空"));
         }
         String normalizedName = rawName.toUpperCase(Locale.ROOT);
-        if (RESERVED_REALM_ROLES.contains(normalizedName)) {
+        if (isReservedRealmRoleName(normalizedName)) {
             return ResponseEntity.status(409).body(ApiResponse.error("内置角色不可创建"));
         }
         if (customRoleRepo.findByName(normalizedName).isPresent()) {
@@ -482,10 +541,34 @@ public class AdminApiResource {
 
     @GetMapping("/roles")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> adminRoles() {
+        List<KeycloakRoleDTO> realmRoles = adminUserService.listRealmRoles();
         List<Map<String, Object>> list = new ArrayList<>();
-        list.add(Map.of("id", 1, "name", "SYSADMIN", "memberCount", 1, "updatedAt", new Date().toInstant().toString()));
-        list.add(Map.of("id", 2, "name", "AUTHADMIN", "memberCount", 1, "updatedAt", new Date().toInstant().toString()));
-        list.add(Map.of("id", 3, "name", "AUDITADMIN", "memberCount", 1, "updatedAt", new Date().toInstant().toString()));
+        Instant now = Instant.now();
+        Set<String> emitted = new HashSet<>();
+        for (KeycloakRoleDTO role : realmRoles) {
+            String name = role.getName();
+            if (!StringUtils.hasText(name)) {
+                continue;
+            }
+            if (isReservedRealmRoleName(name)) {
+                continue;
+            }
+            String normalized = name.trim().toUpperCase(Locale.ROOT);
+            BuiltinRoleSpec builtin = BUILTIN_DATA_ROLES.get(normalized);
+            Map<String, Object> summary = toRoleSummary(role, normalized, builtin, now);
+            list.add(summary);
+            emitted.add(normalized);
+        }
+
+        for (Map.Entry<String, BuiltinRoleSpec> entry : BUILTIN_DATA_ROLES.entrySet()) {
+            if (emitted.contains(entry.getKey())) {
+                continue;
+            }
+            list.add(toRoleSummary(null, entry.getKey(), entry.getValue(), now));
+        }
+
+        list.sort(Comparator.comparing(o -> Objects.toString(o.get("name"), "")));
+
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ADMIN_ROLES_LIST", "ADMIN", "roles", "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
@@ -1107,9 +1190,6 @@ public class AdminApiResource {
 
     private static Object extractValue(ChangeRequest cr, String key) {
         Object value = extractChangedValues(cr.getDiffJson(), key);
-        if (value == null) {
-            value = extractValueFromDiff(cr.getDiffJson(), key);
-        }
         if (value == null && "after".equals(key)) {
             value = parseJsonOrRaw(cr.getPayloadJson());
         }
@@ -1174,22 +1254,6 @@ public class AdminApiResource {
             return null;
         }
         return null;
-    }
-
-    private static Object extractValueFromDiff(String diffJson, String key) {
-        if (diffJson == null || diffJson.isBlank()) {
-            return null;
-        }
-        try {
-            JsonNode root = JSON_MAPPER.readTree(diffJson);
-            JsonNode node = root.path(key);
-            if (node.isMissingNode() || node.isNull()) {
-                return null;
-            }
-            return convertNode(node);
-        } catch (JsonProcessingException e) {
-            return null;
-        }
     }
 
     private static Object parseJsonOrRaw(String raw) {
@@ -1299,6 +1363,93 @@ public class AdminApiResource {
         return m;
     }
 
+
+
+    private Map<String, Object> toRoleSummary(KeycloakRoleDTO role, String normalizedName, BuiltinRoleSpec builtin, Instant fallbackInstant) {
+        String displayName = role != null && StringUtils.hasText(role.getName()) ? role.getName().trim() : normalizedName;
+        Map<String, String> attributes = role != null && role.getAttributes() != null ? role.getAttributes() : Collections.emptyMap();
+        LinkedHashSet<String> operations = parseOperations(attributes);
+        if (operations.isEmpty() && builtin != null) {
+            operations.addAll(builtin.operations());
+        }
+        String scope = firstNonBlank(attributes.get("scope"), builtin != null ? builtin.scope() : null);
+        String description = firstNonBlank(
+            role != null ? role.getDescription() : null,
+            attributes.get("description"),
+            builtin != null ? builtin.description() : null
+        );
+        String securityLevel = firstNonBlank(attributes.get("securityLevel"), "GENERAL");
+        int memberCount = parseInteger(attributes.get("memberCount"), attributes.get("members"));
+        String approvalFlow = firstNonBlank(attributes.get("approvalFlow"), "SYSADMIN/AUTHADMIN");
+        String updatedAt = firstNonBlank(attributes.get("updatedAt"), fallbackInstant.toString());
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("id", firstNonBlank(role != null ? role.getId() : null, "role-" + normalizedName));
+        summary.put("name", displayName);
+        summary.put("description", description);
+        summary.put("securityLevel", securityLevel);
+        summary.put("permissions", new ArrayList<>(operations));
+        summary.put("memberCount", memberCount);
+        summary.put("approvalFlow", approvalFlow);
+        summary.put("updatedAt", updatedAt);
+        if (scope != null) {
+            summary.put("scope", scope);
+        }
+        summary.put("operations", new ArrayList<>(operations));
+        summary.put("source", role != null ? "keycloak" : "builtin");
+        return summary;
+    }
+
+    private static LinkedHashSet<String> parseOperations(Map<String, String> attributes) {
+        LinkedHashSet<String> ops = new LinkedHashSet<>();
+        if (attributes == null) {
+            return ops;
+        }
+        String raw = attributes.get("operations");
+        if (StringUtils.hasText(raw)) {
+            LinkedHashSet<String> parsed = Arrays
+                .stream(raw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(s -> s.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+            for (String op : OPERATION_ORDER) {
+                if (parsed.remove(op)) {
+                    ops.add(op);
+                }
+            }
+            ops.addAll(parsed);
+        }
+        return ops;
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private static int parseInteger(String... values) {
+        if (values == null) {
+            return 0;
+        }
+        for (String value : values) {
+            if (!StringUtils.hasText(value)) {
+                continue;
+            }
+            try {
+                return Integer.parseInt(value.trim());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return 0;
+    }
+
     private Map<String, Object> toRoleAssignmentVM(AdminRoleAssignment a) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", a.getId());
@@ -1347,6 +1498,7 @@ public class AdminApiResource {
         if (username.isEmpty() || displayName.isEmpty()) return "请填写用户信息";
         if (datasetIds.isEmpty()) return "请至少选择一个数据集";
         if (ops.isEmpty()) return "请选择需要授权的操作";
+        if (isReservedRealmRoleName(role)) return "系统内置角色不支持在线授权";
         Set<String> allowed = allowedOpsForRole(role);
         if (!ops.stream().allMatch(allowed::contains)) return "角色不支持所选操作";
         Integer userRank = securityRank(userSecLevel);
@@ -1372,18 +1524,29 @@ public class AdminApiResource {
     }
 
     private Set<String> allowedOpsForRole(String role) {
-        String r = role.toUpperCase();
-        if (r.equals("SYSADMIN") || r.equals("OPADMIN")) return Set.of("read","write","export");
-        if (r.equals("AUTHADMIN")) return Set.of("read");
-        if (r.equals("AUDITADMIN")) return Set.of("read","export");
-        // custom role
+        String normalized = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+        String canonical = canonicalReservedRole(normalized);
+        if (RESERVED_REALM_ROLES.contains(canonical)) {
+            return switch (canonical) {
+                case "SYSADMIN", "OPADMIN" -> Set.of("read", "write", "export");
+                case "AUTHADMIN" -> Set.of("read");
+                case "AUDITADMIN" -> Set.of("read", "export");
+                default -> Set.of("read");
+            };
+        }
+        BuiltinRoleSpec builtin = BUILTIN_DATA_ROLES.get(normalized);
+        if (builtin != null) {
+            return new LinkedHashSet<>(builtin.operations());
+        }
         return customRoleRepo
-            .findByName(role)
-            .map(cr -> {
-                Set<String> s = new LinkedHashSet<>(Arrays.asList(cr.getOperationsCsv().split(",")));
-                return s;
-            })
-            .orElse(Set.of("read"));
+            .findByName(normalized)
+            .map(cr -> Arrays
+                .stream(cr.getOperationsCsv().split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toCollection(LinkedHashSet::new))
+            )
+            .orElseGet(() -> new LinkedHashSet<>(List.of("read")));
     }
 
     private static Integer dataRank(String level) {

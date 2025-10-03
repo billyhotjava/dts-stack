@@ -95,6 +95,11 @@ export const adminApi = {
 			url: `/admin/portal/menus/${id}`,
 		}),
 
+	resetPortalMenus: () =>
+		apiClient.post<PortalMenuCollection>({
+			url: "/admin/portal/menus/reset",
+		}),
+
 	getOrganizations: () =>
 		apiClient.get<OrganizationNode[]>({
 			url: "/admin/orgs",

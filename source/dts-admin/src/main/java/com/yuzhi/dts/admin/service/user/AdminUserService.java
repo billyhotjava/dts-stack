@@ -951,6 +951,16 @@ public class AdminUserService {
         }
     }
 
+    public List<KeycloakRoleDTO> listRealmRoles() {
+        try {
+            String token = resolveManagementToken();
+            return keycloakAdminClient.listRealmRoles(token);
+        } catch (Exception ex) {
+            LOG.warn("Failed to list Keycloak realm roles: {}", ex.getMessage());
+            return List.of();
+        }
+    }
+
     private String buildRoleDescription(String scope, Set<String> operations) {
         StringBuilder builder = new StringBuilder();
         if (StringUtils.isNotBlank(scope)) {

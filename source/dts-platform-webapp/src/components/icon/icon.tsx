@@ -25,6 +25,11 @@ export default function Icon({
 	style = {},
 	...props
 }: IconProps) {
+	// Defensive guard: some call sites may provide an undefined or empty icon key
+	if (!icon || typeof icon !== "string") {
+		return null;
+	}
+
 	// Handle URL SVG
 	if (icon.startsWith("url:")) {
 		const url = icon.replace("url:", "");

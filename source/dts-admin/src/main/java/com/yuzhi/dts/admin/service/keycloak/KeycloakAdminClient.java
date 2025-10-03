@@ -35,5 +35,6 @@ public interface KeycloakAdminClient {
     Optional<KeycloakRoleDTO> findRealmRole(String roleName, String accessToken);
 
     KeycloakRoleDTO upsertRealmRole(KeycloakRoleDTO role, String accessToken);
-}
 
+    List<KeycloakRoleDTO> listRealmRoles(String accessToken);
+}

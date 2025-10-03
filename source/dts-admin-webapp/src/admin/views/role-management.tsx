@@ -118,6 +118,39 @@ const DATA_ORDER: Record<OrgDataLevel, number> = {
 
 const LOCKED_ADMIN_ROLES = new Set(["SYSADMIN", "OPADMIN", "AUTHADMIN", "AUDITADMIN"]);
 
+const canonicalRoleName = (value: string) =>
+	value.trim().toUpperCase().replace(/^ROLE_/, "").replace(/_/g, "");
+
+const isLockedAdminRole = (value: string) => LOCKED_ADMIN_ROLES.has(canonicalRoleName(value));
+
+const normalizeScope = (value?: string | null): "DEPARTMENT" | "INSTITUTE" | null => {
+	if (!value) {
+		return null;
+	}
+	const normalized = value.trim().toUpperCase();
+	if (normalized === "DEPARTMENT") {
+		return "DEPARTMENT";
+	}
+	if (normalized === "INSTITUTE") {
+		return "INSTITUTE";
+	}
+	return null;
+};
+
+const normalizeOperations = (ops?: readonly string[] | null): DataOperation[] => {
+	if (!ops) {
+		return [];
+	}
+	const allowed = new Set<DataOperation>();
+	for (const op of ops) {
+		const lower = op.trim().toLowerCase();
+		if (lower === "read" || lower === "write" || lower === "export") {
+			allowed.add(lower as DataOperation);
+		}
+	}
+	return Array.from(allowed);
+};
+
 function getRoleDisplayName(role: Pick<AdminRoleDetail, "name" | "description">) {
 	const description = role.description?.trim();
 	if (!description) {
@@ -190,39 +223,73 @@ export default function RoleManagementView() {
 		operations: new Set<DataOperation>(["read"]),
 	});
 
-	useEffect(() => {
-		if (roles.length > 0 && !selectedId) {
-			setSelectedId(roles[0].id);
-		}
-	}, [roles, selectedId]);
+	const visibleRoles = useMemo(
+		() => roles.filter((role) => !isLockedAdminRole(role.name)),
+		[roles],
+	);
 
-	const selected = useMemo(() => roles.find((role) => role.id === selectedId) ?? null, [roles, selectedId]);
+	useEffect(() => {
+		if (visibleRoles.length === 0) {
+			if (selectedId !== null) {
+				setSelectedId(null);
+			}
+			return;
+		}
+		if (selectedId == null || !visibleRoles.some((role) => role.id === selectedId)) {
+			setSelectedId(visibleRoles[0].id);
+		}
+	}, [visibleRoles, selectedId]);
+
+	const selected = useMemo(
+		() => visibleRoles.find((role) => role.id === selectedId) ?? null,
+		[visibleRoles, selectedId],
+	);
 	const selectedDisplayName = selected ? getRoleDisplayName(selected) : "";
-	const isLockedAdmin = selected ? LOCKED_ADMIN_ROLES.has(selected.name.trim().toUpperCase()) : false;
+	const isLockedAdmin = selected ? isLockedAdminRole(selected.name) : false;
 
 	const datasetMap = useMemo(() => new Map(datasets.map((item) => [item.id, item])), [datasets]);
 
 	const roleOperationMatrix = useMemo(() => {
 		const matrix = new Map<string, DataOperation[]>();
+		roles.forEach((role) => {
+			const key = role.name.trim().toUpperCase();
+			const normalizedOps = normalizeOperations(role.operations ?? role.permissions);
+			if (normalizedOps.length > 0) {
+				matrix.set(key, normalizedOps);
+			}
+		});
 		BUILT_IN_DATA_ROLES.forEach((item) => {
-			matrix.set(item.name, item.operations);
+			const key = item.name.trim().toUpperCase();
+			if (!matrix.has(key)) {
+				matrix.set(key, [...item.operations]);
+			}
 		});
 		customRoles.forEach((role) => {
-			matrix.set(role.name, role.operations);
+			const key = role.name.trim().toUpperCase();
+			matrix.set(key, normalizeOperations(role.operations));
 		});
 		return matrix;
-	}, [customRoles]);
+	}, [roles, customRoles]);
 
 	const roleScopeMatrix = useMemo(() => {
 		const matrix = new Map<string, "DEPARTMENT" | "INSTITUTE">();
+		roles.forEach((role) => {
+			const scope = normalizeScope(role.scope);
+			if (scope) {
+				matrix.set(role.name.trim().toUpperCase(), scope);
+			}
+		});
 		BUILT_IN_DATA_ROLES.forEach((item) => {
-			matrix.set(item.name, item.scope);
+			const key = item.name.trim().toUpperCase();
+			if (!matrix.has(key)) {
+				matrix.set(key, item.scope);
+			}
 		});
 		customRoles.forEach((role) => {
-			matrix.set(role.name, role.scope);
+			matrix.set(role.name.trim().toUpperCase(), role.scope);
 		});
 		return matrix;
-	}, [customRoles]);
+	}, [roles, customRoles]);
 
 	const roleLabelMap = useMemo(() => {
 		const map = { ...BASE_ROLE_LABELS } as Record<string, string>;
@@ -240,9 +307,10 @@ export default function RoleManagementView() {
 		return Array.from(map.entries()).map(([value, label]) => ({ value: String(value), label }));
 	}, [datasets]);
 
-	const assignmentRoleScope = roleScopeMatrix.get(assignmentForm.role) ?? null;
+	const normalizedAssignmentRoleName = assignmentForm.role.trim().toUpperCase();
+	const assignmentRoleScope = normalizedAssignmentRoleName ? roleScopeMatrix.get(normalizedAssignmentRoleName) ?? null : null;
 	const assignmentScopeOrgId = assignmentForm.scopeOrgId ? Number(assignmentForm.scopeOrgId) : null;
-	const availableOperations = roleOperationMatrix.get(assignmentForm.role) ?? ["read", "write", "export"];
+	const availableOperations = normalizedAssignmentRoleName ? roleOperationMatrix.get(normalizedAssignmentRoleName) ?? ["read", "write", "export"] : ["read", "write", "export"];
 
 	useEffect(() => {
 		setAssignmentForm((prev) => {
@@ -281,20 +349,32 @@ export default function RoleManagementView() {
 	}, [datasets, assignmentRoleScope, assignmentScopeOrgId]);
 
 	const assignmentRoleOptions = useMemo(() => {
-		const builtIn = BUILT_IN_DATA_ROLES.filter((role) => !LOCKED_ADMIN_ROLES.has(role.name.trim().toUpperCase())).map(
-			(role) => ({
-				value: role.name,
-				label: role.label,
-			}),
-		);
-		const custom = customRoles
-			.filter((role) => !LOCKED_ADMIN_ROLES.has(role.name.trim().toUpperCase()))
-			.map((role) => ({
-				value: role.name,
-				label: role.name,
-			}));
-		return [...builtIn, ...custom];
-	}, [customRoles]);
+		const options: { value: string; label: string }[] = [];
+		const seen = new Set<string>();
+		BUILT_IN_DATA_ROLES.forEach((role) => {
+			if (isLockedAdminRole(role.name)) {
+				return;
+			}
+			options.push({ value: role.name, label: role.label });
+			seen.add(role.name.trim().toUpperCase());
+		});
+		customRoles
+			.filter((role) => !isLockedAdminRole(role.name))
+			.forEach((role) => {
+				options.push({ value: role.name, label: role.name });
+				seen.add(role.name.trim().toUpperCase());
+			});
+		visibleRoles.forEach((role) => {
+			const value = role.name.trim();
+			const key = value.toUpperCase();
+			if (seen.has(key)) {
+				return;
+			}
+			options.push({ value, label: getRoleDisplayName(role) });
+			seen.add(key);
+		});
+		return options;
+	}, [customRoles, visibleRoles]);
 
 	const aclFindings = useMemo(() => {
 		return assignments
@@ -302,10 +382,10 @@ export default function RoleManagementView() {
 				return assignment.datasetIds.map((datasetId) => {
 					const dataset = datasetMap.get(datasetId);
 					if (!dataset) return null;
-					const allowedOps = roleOperationMatrix.get(assignment.role) ?? ["read"];
+					const allowedOps = roleOperationMatrix.get(assignment.role.trim().toUpperCase()) ?? ["read"];
 					const unauthorizedOps = assignment.operations.filter((op) => !allowedOps.includes(op));
 					const securityOk = SECURITY_ORDER[assignment.userSecurityLevel] >= DATA_ORDER[dataset.dataLevel];
-					const scopeType = roleScopeMatrix.get(assignment.role) ?? null;
+					const scopeType = roleScopeMatrix.get(assignment.role.trim().toUpperCase()) ?? null;
 					const reasons: string[] = [];
 					if (unauthorizedOps.length) {
 						reasons.push(`超出角色可执行操作：${unauthorizedOps.map((op) => OPERATION_LABELS[op]).join("、")}`);
@@ -389,8 +469,7 @@ export default function RoleManagementView() {
 			toast.error("请选择角色");
 			return;
 		}
-		const normalizedAssignmentRole = assignmentForm.role.trim().toUpperCase();
-		if (LOCKED_ADMIN_ROLES.has(normalizedAssignmentRole)) {
+		if (isLockedAdminRole(assignmentForm.role)) {
 			toast.error("该管理员角色由系统维护，无法在此分配成员");
 			return;
 		}
@@ -439,13 +518,12 @@ export default function RoleManagementView() {
 					<CardTitle>角色列表</CardTitle>
 				</CardHeader>
 				<CardContent className="space-y-3">
-					{roles.length === 0 ? <Text variant="body3">暂无角色数据。</Text> : null}
+					{visibleRoles.length === 0 ? <Text variant="body3">暂无角色数据。</Text> : null}
 					<ul className="space-y-2">
-						{roles.map((role) => {
+						{visibleRoles.map((role) => {
 							const isActive = role.id === selectedId;
-							const normalizedRoleName = role.name.trim().toUpperCase();
 							const displayName = getRoleDisplayName(role);
-							const locked = LOCKED_ADMIN_ROLES.has(normalizedRoleName);
+							const locked = isLockedAdminRole(role.name);
 							return (
 								<li key={role.id}>
 									<button

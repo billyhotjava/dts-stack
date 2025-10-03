@@ -164,7 +164,17 @@ type RunResult = {
 	executionId?: string;
 };
 
-type ExecRecord = { id: string; status: string; startedAt?: string; finishedAt?: string; rowCount?: number };
+type ExecRecord = {
+	id: string;
+	status: string;
+	startedAt?: string;
+	finishedAt?: string;
+	rowCount?: number;
+	datasetName?: string;
+	classification?: string;
+	durationMs?: number;
+	sqlText?: string;
+};
 type SavedQueryItem = { id: string; name?: string; title?: string; updatedAt?: string };
 type TableItem = { id: string; name: string };
 
@@ -597,6 +607,11 @@ export default function QueryWorkbenchPage() {
 					startedAt: e.startedAt,
 					finishedAt: e.finishedAt,
 					rowCount: e.rowCount,
+					datasetName: e.datasetName,
+					classification: e.classification,
+					durationMs: e.durationMs,
+					sqlText: e.sqlText,
+					executionId: e.executionId ?? e.id,
 				}));
 				setExecHistory(list);
 			} catch {}
@@ -754,6 +769,11 @@ export default function QueryWorkbenchPage() {
 					startedAt: e.startedAt,
 					finishedAt: e.finishedAt,
 					rowCount: e.rowCount,
+					datasetName: e.datasetName,
+					classification: e.classification,
+					durationMs: e.durationMs,
+					sqlText: e.sqlText,
+					executionId: e.executionId ?? e.id,
 				}));
 				setExecHistory(list);
 			} catch {}
@@ -1119,7 +1139,16 @@ export default function QueryWorkbenchPage() {
 													<p className="text-xs text-muted-foreground">
 														{item.startedAt ?? "-"} → {item.finishedAt ?? "-"}
 													</p>
-													<p className="text-xs text-muted-foreground">行数：{item.rowCount ?? "-"}</p>
+													<p className="text-xs text-muted-foreground">
+														{item.datasetName ?? "临时查询"}
+														{item.classification ? ` · ${item.classification}` : ""}
+														· 行数 {item.rowCount ?? "-"} · {item.durationMs ?? "-"} ms
+													</p>
+													{item.sqlText ? (
+														<p className="text-xs text-muted-foreground break-all">
+															SQL: {item.sqlText.length > 160 ? `${item.sqlText.slice(0, 160)}…` : item.sqlText}
+														</p>
+													) : null}
 												</li>
 											))}
 										</ul>

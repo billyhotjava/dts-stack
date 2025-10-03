@@ -11,7 +11,10 @@ export function normalizeAdminRole(role: string | null | undefined): AdminRole |
 	if (!role) {
 		return null;
 	}
-	const normalized = role.trim().toUpperCase();
+	let normalized = role.trim().toUpperCase();
+	if (normalized.startsWith("ROLE")) {
+		normalized = normalized.replace(/^ROLE[_\-]?/, "");
+	}
 	switch (normalized) {
 		case "SYSADMIN":
 		case "SYS_ADMIN":
@@ -149,6 +152,9 @@ export interface AdminRoleDetail {
 	memberCount: number;
 	approvalFlow: string;
 	updatedAt: string;
+	scope?: "DEPARTMENT" | "INSTITUTE";
+	operations?: DataOperation[];
+	source?: string;
 }
 
 export interface AdminDataset {

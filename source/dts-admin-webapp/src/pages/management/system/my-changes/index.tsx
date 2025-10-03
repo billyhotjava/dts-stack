@@ -72,6 +72,7 @@ const FIELD_LABELS: Record<string, string> = {
 	roles: "角色",
 	userSecurityLevel: "人员密级",
 	personSecurityLevel: "人员密级",
+	personnelSecurityLevel: "人员密级",
 	securityLevel: "密级",
 	parentId: "父级编号",
 	key: "配置键",
@@ -134,65 +135,142 @@ export default function MyChangeRequestsPage() {
 		});
 	}, [categoryFilter, data]);
 
-	const formatPrimitiveValue = (val: unknown) => {
-		if (val === null || val === undefined || val === "") {
-			return "-";
+	const translateSecurityLevel = (field: string | undefined, value: unknown) => {
+		if (typeof value !== "string") {
+			return null;
 		}
-		if (typeof val === "boolean") {
-			return val ? "是" : "否";
+		const upper = value.toUpperCase();
+		if (
+			field &&
+			(field === "personSecurityLevel" || field === "userSecurityLevel" || field === "personnelSecurityLevel")
+		) {
+			return PERSON_SECURITY_LEVEL_LABEL_MAP[upper] ?? null;
 		}
-		return String(val);
+		return PERSON_SECURITY_LEVEL_LABEL_MAP[upper] ?? null;
 	};
 
-	const renderChangeValue = (value: ChangeRequest["originalValue"]) => {
-		if (value === null || value === undefined || value === "") {
-			return "-";
+const isPlainObject = (val: unknown): val is Record<string, unknown> => Boolean(val) && typeof val === "object" && !Array.isArray(val);
+
+const valuesEqual = (a: unknown, b: unknown): boolean => {
+	if (a === b) {
+		return true;
+	}
+	if (Array.isArray(a) && Array.isArray(b)) {
+		if (a.length !== b.length) {
+			return false;
 		}
-		if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-			return <span className="whitespace-pre-wrap break-all">{formatPrimitiveValue(value)}</span>;
-		}
-		if (Array.isArray(value)) {
-			const flattened = value
-				.map((item) => (typeof item === "object" ? JSON.stringify(item) : formatPrimitiveValue(item)))
-				.filter((item) => item !== "-");
-			if (flattened.length === 0) {
-				return "-";
+		return a.every((item, index) => valuesEqual(item, b[index]));
+	}
+	if (isPlainObject(a) && isPlainObject(b)) {
+		const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+		for (const key of keys) {
+			if (!valuesEqual(a[key], b[key])) {
+				return false;
 			}
-			return <span className="whitespace-pre-wrap break-all">{flattened.join("、")}</span>;
 		}
-		if (typeof value === "object") {
-			const entries = Object.entries(value as Record<string, unknown>).filter(([, fieldValue]) => fieldValue !== undefined && fieldValue !== null && fieldValue !== "");
-			if (entries.length === 0) {
-				return "-";
-			}
-			return (
-				<div className="flex max-h-32 flex-col gap-1 overflow-auto pr-1">
-					{entries.map(([field, fieldValue]) => {
-						const label = FIELD_LABELS[field] ?? field;
-						let display: string;
-						if (Array.isArray(fieldValue)) {
-							display = fieldValue
-								.map((item) => (typeof item === "object" ? JSON.stringify(item) : formatPrimitiveValue(item)))
-								.filter((item) => item !== "-")
-								.join("、") || "-";
-						} else if (typeof fieldValue === "object" && fieldValue !== null) {
-							display = JSON.stringify(fieldValue);
-						} else {
-							display = formatPrimitiveValue(fieldValue);
-						}
-						return (
-							<div key={field} className="rounded-md bg-muted/40 px-2 py-1 text-xs">
-								<span className="font-medium text-muted-foreground">{`<${label}, `}</span>
-								<span className="break-all text-foreground">{display}</span>
-								<span className="font-medium text-muted-foreground">{">"}</span>
-							</div>
-						);
-					})}
-				</div>
-			);
+		return true;
+	}
+	return false;
+};
+
+const extractDiffEntries = (beforeValue: unknown, afterValue: unknown) => {
+	const beforeEntries: Array<{ field: string; value: unknown }> = [];
+	const afterEntries: Array<{ field: string; value: unknown }> = [];
+
+	const appendEntry = (field: string, before: unknown, after: unknown) => {
+		if (!valuesEqual(before, after)) {
+			beforeEntries.push({ field, value: before });
+			afterEntries.push({ field, value: after });
 		}
-		return <span className="whitespace-pre-wrap break-all">{formatPrimitiveValue(value)}</span>;
 	};
+
+	if (isPlainObject(beforeValue) || isPlainObject(afterValue)) {
+		const beforeObj = isPlainObject(beforeValue) ? beforeValue : {};
+		const afterObj = isPlainObject(afterValue) ? afterValue : {};
+		const keys = new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]);
+		for (const key of keys) {
+			appendEntry(key, beforeObj[key], afterObj[key]);
+		}
+	} else if (Array.isArray(beforeValue) || Array.isArray(afterValue)) {
+		if (!valuesEqual(beforeValue, afterValue)) {
+			beforeEntries.push({ field: "value", value: beforeValue });
+			afterEntries.push({ field: "value", value: afterValue });
+		}
+	} else if (!valuesEqual(beforeValue, afterValue)) {
+		beforeEntries.push({ field: "value", value: beforeValue });
+		afterEntries.push({ field: "value", value: afterValue });
+	}
+
+	return { beforeEntries, afterEntries };
+};
+
+const formatPrimitiveValue = (field: string | undefined, val: unknown) => {
+	if (val === null || val === undefined || val === "") {
+		return "-";
+	}
+	if (typeof val === "boolean") {
+		return val ? "是" : "否";
+	}
+	if (typeof val === "string") {
+		const translated = translateSecurityLevel(field, val);
+		return translated ?? val;
+	}
+	if (typeof val === "number") {
+		return String(val);
+	}
+	return String(val ?? "-");
+};
+
+const renderValueFragments = (field: string | undefined, value: unknown) => {
+	if (Array.isArray(value)) {
+		const formatted = value
+			.map((item) => (typeof item === "object" ? JSON.stringify(item) : formatPrimitiveValue(field, item)))
+			.filter((entry) => entry !== "-")
+			.join("、");
+		return formatted || "-";
+	}
+	if (isPlainObject(value)) {
+		return JSON.stringify(value);
+	}
+	return formatPrimitiveValue(field, value);
+};
+
+const renderChangeValue = (
+	value: ChangeRequest["originalValue"],
+	otherValue: ChangeRequest["updatedValue"],
+	side: "before" | "after",
+) => {
+	const { beforeEntries, afterEntries } = extractDiffEntries(value, otherValue);
+	const entries = side === "before" ? beforeEntries : afterEntries;
+	if (entries.length === 0) {
+		return "-";
+	}
+	const chips = entries
+		.map(({ field, value: entryValue }) => {
+			const labelKey = field && field !== "value" ? field : side === "before" ? "原值" : "修改值";
+			const label = FIELD_LABELS[labelKey] ?? labelKey;
+			const display = renderValueFragments(field !== "value" ? field : undefined, entryValue);
+			if (!display || display === "-") {
+				return null;
+			}
+			return `<${label}=${display}>`;
+		})
+		.filter(Boolean) as string[];
+
+	if (chips.length === 0) {
+		return "-";
+	}
+
+	return (
+		<div className="flex max-h-32 flex-col gap-1 overflow-auto pr-1">
+			{chips.map((chip) => (
+				<div key={chip} className="rounded-md bg-muted/40 px-2 py-1 text-xs text-foreground break-all">
+					{chip}
+				</div>
+			))}
+		</div>
+	);
+};
 
 	const columns: ColumnsType<ChangeRequest> = [
 		{
@@ -264,13 +342,13 @@ export default function MyChangeRequestsPage() {
 			title: "原值",
 			dataIndex: "originalValue",
 			width: 220,
-			render: renderChangeValue,
+			render: (_value, record) => renderChangeValue(record.originalValue, record.updatedValue, "before"),
 		},
 		{
 			title: "修改值",
 			dataIndex: "updatedValue",
 			width: 220,
-			render: renderChangeValue,
+			render: (_value, record) => renderChangeValue(record.originalValue, record.updatedValue, "after"),
 		},
 	];
 

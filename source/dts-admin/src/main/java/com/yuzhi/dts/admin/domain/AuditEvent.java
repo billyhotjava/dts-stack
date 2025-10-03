@@ -10,9 +10,12 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.io.Serializable;
+import java.net.InetAddress;
 import java.time.Instant;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "audit_event")
@@ -44,8 +47,9 @@ public class AuditEvent implements Serializable {
     @Column(name = "resource_id", length = 256)
     private String resourceId;
 
+    @JdbcTypeCode(SqlTypes.INET)
     @Column(name = "client_ip")
-    private String clientIp;
+    private InetAddress clientIp;
 
     @Column(name = "client_agent", length = 256)
     private String clientAgent;
@@ -62,12 +66,12 @@ public class AuditEvent implements Serializable {
     @Column(name = "latency_ms")
     private Integer latencyMs;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "payload_iv")
     @JsonIgnore
     private byte[] payloadIv;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "payload_cipher")
     @JsonIgnore
     private byte[] payloadCipher;
@@ -78,6 +82,7 @@ public class AuditEvent implements Serializable {
     @Column(name = "chain_signature", nullable = false, length = 128)
     private String chainSignature;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "extra_tags")
     private String extraTags;
 
@@ -162,10 +167,14 @@ public class AuditEvent implements Serializable {
     }
 
     public String getClientIp() {
+        return clientIp != null ? clientIp.getHostAddress() : null;
+    }
+
+    public InetAddress getClientIpAddress() {
         return clientIp;
     }
 
-    public void setClientIp(String clientIp) {
+    public void setClientIp(InetAddress clientIp) {
         this.clientIp = clientIp;
     }
 

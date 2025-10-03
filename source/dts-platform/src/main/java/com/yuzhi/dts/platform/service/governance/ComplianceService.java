@@ -16,12 +16,16 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.dto.ComplianceBatchDto;
 import com.yuzhi.dts.platform.service.governance.dto.ComplianceBatchItemDto;
 import com.yuzhi.dts.platform.service.governance.request.ComplianceBatchRequest;
+import com.yuzhi.dts.platform.service.governance.request.ComplianceItemUpdateRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
@@ -38,6 +42,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class ComplianceService {
 
     private static final Logger log = LoggerFactory.getLogger(ComplianceService.class);
+    private static final Set<String> PASS_STATUSES = Set.of("PASSED", "SUCCESS", "COMPLIANT");
+    private static final Set<String> FAIL_STATUSES = Set.of("FAILED", "NON_COMPLIANT", "BREACHED");
+    private static final Set<String> WAIVE_STATUSES = Set.of("WAIVED", "ACCEPTED_RISK");
 
     private final GovComplianceBatchRepository batchRepository;
     private final GovComplianceBatchItemRepository itemRepository;
@@ -123,10 +130,9 @@ public class ComplianceService {
             }
         }
 
-        batch.setSummary("共派发" + items.size() + "项检查");
-        batchRepository.save(batch);
+        refreshBatchState(batch, items);
         auditService.audit("EXECUTE", "governance.compliance.batch", batch.getId().toString());
-        return GovernanceMapper.toDto(batchRepository.findById(batch.getId()).orElseThrow(), items);
+        return GovernanceMapper.toDto(batch, items);
     }
 
     @Transactional(readOnly = true)
@@ -137,22 +143,107 @@ public class ComplianceService {
     }
 
     @Transactional(readOnly = true)
-    public List<ComplianceBatchDto> recentBatches(int limit) {
-        Pageable pageable = PageRequest.of(0, limit, Sort.Direction.DESC, "createdDate");
-        return batchRepository
-            .findAll(pageable)
-            .getContent()
+    public List<ComplianceBatchDto> recentBatches(int limit, List<String> statusFilter) {
+        int pageSize = limit > 0 ? limit : 10;
+        List<GovComplianceBatch> batches;
+        List<String> normalizedStatuses = normalizeStatuses(statusFilter);
+        if (!normalizedStatuses.isEmpty()) {
+            batches = batchRepository.findByStatusInOrderByCreatedDateDesc(normalizedStatuses);
+            if (batches.size() > pageSize) {
+                batches = batches.subList(0, pageSize);
+            }
+        } else {
+            Pageable pageable = PageRequest.of(0, pageSize, Sort.Direction.DESC, "createdDate");
+            batches = batchRepository.findAll(pageable).getContent();
+        }
+        return batches
             .stream()
             .map(batch -> GovernanceMapper.toDto(batch, itemRepository.findByBatchId(batch.getId())))
             .collect(Collectors.toList());
     }
 
-    public void updateItemStatus(UUID itemId, String status, String conclusion, String evidenceRef) {
+    public ComplianceBatchItemDto updateItem(UUID itemId, ComplianceItemUpdateRequest request, String actor) {
+        if (request == null) {
+            throw new IllegalArgumentException("请求参数不可为空");
+        }
         GovComplianceBatchItem item = itemRepository.findById(itemId).orElseThrow(EntityNotFoundException::new);
-        item.setStatus(status);
-        item.setConclusion(conclusion);
-        item.setEvidenceRef(evidenceRef);
+        if (StringUtils.isNotBlank(request.getStatus())) {
+            item.setStatus(request.getStatus().trim().toUpperCase(Locale.ROOT));
+        }
+        if (request.getConclusion() != null) {
+            item.setConclusion(StringUtils.trimToNull(request.getConclusion()));
+        }
+        if (request.getEvidenceRef() != null) {
+            item.setEvidenceRef(StringUtils.trimToNull(request.getEvidenceRef()));
+        }
         itemRepository.save(item);
+        GovComplianceBatch batch = item.getBatch();
+        refreshBatchState(batch, null);
+        auditService.audit("UPDATE", "governance.compliance.item", actor + ":" + item.getId() + "@" + batch.getId());
+        return GovernanceMapper.toDto(item);
+    }
+
+    private void refreshBatchState(GovComplianceBatch batch, List<GovComplianceBatchItem> cachedItems) {
+        List<GovComplianceBatchItem> items = cachedItems != null ? cachedItems : itemRepository.findByBatchId(batch.getId());
+        int total = items.size();
+        long completed = items.stream().filter(it -> isCompletedStatus(it.getStatus())).count();
+        long failed = items.stream().filter(it -> isFailedStatus(it.getStatus())).count();
+
+        if (total == 0) {
+            batch.setProgressPct(0);
+            batch.setStatus("RUNNING");
+            batch.setFinishedAt(null);
+            batch.setSummary("暂无检查项");
+        } else {
+            int progress = (int) Math.round((completed * 100.0) / total);
+            batch.setProgressPct(Math.min(100, Math.max(0, progress)));
+            if (completed == total) {
+                batch.setStatus(failed > 0 ? "FAILED" : "COMPLETED");
+                if (batch.getFinishedAt() == null) {
+                    batch.setFinishedAt(Instant.now());
+                }
+            } else {
+                batch.setStatus("RUNNING");
+                batch.setFinishedAt(null);
+            }
+            if (completed > 0 && batch.getStartedAt() == null) {
+                batch.setStartedAt(Instant.now());
+            }
+            batch.setSummary(String.format("总计 %d 项，已完成 %d，不合规 %d", total, completed, failed));
+        }
+        batchRepository.save(batch);
+    }
+
+    private List<String> normalizeStatuses(List<String> statuses) {
+        if (statuses == null || statuses.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return statuses
+            .stream()
+            .filter(StringUtils::isNotBlank)
+            .map(value -> value.trim().toUpperCase(Locale.ROOT))
+            .distinct()
+            .collect(Collectors.toList());
+    }
+
+    private static boolean isCompletedStatus(String status) {
+        String normalized = normalizeStatus(status);
+        if (normalized == null) {
+            return false;
+        }
+        return PASS_STATUSES.contains(normalized) || FAIL_STATUSES.contains(normalized) || WAIVE_STATUSES.contains(normalized);
+    }
+
+    private static boolean isFailedStatus(String status) {
+        String normalized = normalizeStatus(status);
+        return normalized != null && FAIL_STATUSES.contains(normalized);
+    }
+
+    private static String normalizeStatus(String status) {
+        if (status == null) {
+            return null;
+        }
+        return status.trim().toUpperCase(Locale.ROOT);
     }
 
     private List<GovRule> resolveRules(List<UUID> ruleIds) {

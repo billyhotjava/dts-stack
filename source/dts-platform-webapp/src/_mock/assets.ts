@@ -157,15 +157,6 @@ const MANAGEMENT_PERMISSION = {
 					component: "/management/system/organization/index.tsx",
 				},
 				{
-					id: "4359580910369984",
-					parentId: "0249937641030250",
-					label: "sys.nav.system.permission",
-					name: "Permission",
-					type: PermissionType.MENU,
-					route: "permission",
-					component: "/management/system/permission/index.tsx",
-				},
-				{
 					id: "1689241785490759",
 					parentId: "0249937641030250",
 					label: "sys.nav.system.role",

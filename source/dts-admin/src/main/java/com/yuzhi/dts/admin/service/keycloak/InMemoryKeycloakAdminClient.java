@@ -164,6 +164,11 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
         return stores.upsertRole(role);
     }
 
+    @Override
+    public List<KeycloakRoleDTO> listRealmRoles(String accessToken) {
+        return stores.listRoles();
+    }
+
     private void ensureUniqueUsername(String username) {
         if (username == null) {
             return;

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Copy the exported portal menus from dts-platform-webapp into
-// dts-admin-webapp mock data so admin menu management uses the platform data.
+// Copy the canonical portal menu seed into admin mock data so the admin UI
+// uses the same structure as the backend seed when MSW is enabled.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -9,16 +9,12 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PLATFORM_ENV_KEY = "DTS_PLATFORM_WEBAPP_PATH";
+const SEED_ENV_KEY = "DTS_PORTAL_MENU_SEED_PATH";
 const REPO_MARKERS = [
   "docker-compose.yml",
   "pnpm-workspace.yaml",
   "pnpm-lock.yaml",
   "package.json",
-];
-
-const REQUIRED_FILES = [
-  ["public", "portal-menus.demo.json"],
 ];
 
 const isDir = (candidate) => {
@@ -27,11 +23,6 @@ const isDir = (candidate) => {
   } catch {
     return false;
   }
-};
-
-const hasRequiredFiles = (candidate) => {
-  if (!isDir(candidate)) return false;
-  return REQUIRED_FILES.every((segments) => fs.existsSync(path.join(candidate, ...segments)));
 };
 
 const collectAncestors = (seed) => {
@@ -59,62 +50,99 @@ const findRepoRoot = (seed) => {
   return null;
 };
 
-const candidateSet = new Set();
-const addCandidate = (candidate) => {
-  if (!candidate) return;
-  const resolved = path.resolve(candidate);
-  candidateSet.add(resolved);
-};
-
 const repoRoot = findRepoRoot(__dirname) || findRepoRoot(process.cwd());
+const seedCandidates = [];
 
-if (process.env[PLATFORM_ENV_KEY]) {
-  addCandidate(process.env[PLATFORM_ENV_KEY]);
+if (process.env[SEED_ENV_KEY]) {
+  seedCandidates.push(path.resolve(process.env[SEED_ENV_KEY]));
 }
 
-for (const base of [__dirname, process.cwd(), repoRoot]) {
-  for (const ancestor of collectAncestors(base)) {
-    if (!ancestor) continue;
-    addCandidate(path.join(ancestor, "dts-platform-webapp"));
-    addCandidate(path.join(ancestor, "source", "dts-platform-webapp"));
-    addCandidate(path.join(ancestor, "packages", "dts-platform-webapp"));
+const repoAnchors = [repoRoot, __dirname, process.cwd()].filter(Boolean);
+const seedRelativePaths = [
+  ["dts-admin", "src", "main", "resources", "config", "data", "portal-menu-seed.json"],
+  ["source", "dts-admin", "src", "main", "resources", "config", "data", "portal-menu-seed.json"],
+];
+
+for (const anchor of repoAnchors) {
+  for (const rel of seedRelativePaths) {
+    seedCandidates.push(path.join(anchor, ...rel));
   }
 }
 
-const candidatePaths = Array.from(candidateSet);
-const platformDir = candidatePaths.find((candidate) => hasRequiredFiles(candidate));
+const seedPath = seedCandidates.find((candidate) => fs.existsSync(candidate));
 
-if (!platformDir) {
+if (!seedPath) {
   console.error(
-    "[sync-portal-menus] Unable to locate dts-platform-webapp with portal menus. Tried:",
-    candidatePaths.join(", "),
+    "[sync-portal-menus] Unable to locate portal-menu-seed.json. Checked:",
+    seedCandidates.join(", "),
   );
   process.exit(0);
 }
 
-const srcMenus = path.join(platformDir, ...REQUIRED_FILES[0]);
+const srcMenus = seedPath;
 const destMenus = path.resolve(__dirname, "..", "src", "_mock", "data", "portal-menus.json");
 
-const srcI18nZh = path.join(
-  platformDir,
-  "src",
-  "locales",
-  "lang",
-  "zh_CN",
-  "sys.json",
-);
 const destI18nZh = path.resolve(__dirname, "..", "src", "_mock", "data", "portal-i18n-zh.json");
+
+const normalizePathSegment = (segment) => {
+  if (!segment) return "";
+  return segment.replace(/^\/+|\/+$/g, "");
+};
+
+const toMenuItems = (nodes = [], parentId = null, parentPath = "", rootKey = null) => {
+  const items = [];
+  nodes.forEach((node, index) => {
+    const key = node.key || `menu_${index}`;
+    const segment = normalizePathSegment(node.path || key);
+    const fullPath = parentPath ? `${parentPath}/${segment}` : `/${segment}`;
+    const id = parentId ? `${parentId}.${key}` : key;
+    const sectionKey = parentId ? rootKey : key;
+    const metadata = {
+      key,
+      sectionKey,
+      ...(parentId ? { entryKey: key } : {}),
+      ...(node.titleKey ? { titleKey: node.titleKey } : {}),
+      ...(node.title ? { title: node.title } : {}),
+      ...(node.icon ? { icon: node.icon } : {}),
+    };
+
+    const menuItem = {
+      id,
+      name: node.titleKey || node.title || key,
+      displayName: node.title || undefined,
+      path: fullPath,
+      icon: node.icon || undefined,
+      sortOrder: index + 1,
+      metadata: JSON.stringify(metadata),
+      securityLevel: "GENERAL",
+      parentId: parentId,
+      children: [],
+    };
+
+    menuItem.children = toMenuItems(node.children || [], id, fullPath, sectionKey);
+    items.push(menuItem);
+  });
+  return items;
+};
 
 try {
   // Ensure destination folder exists
   fs.mkdirSync(path.dirname(destMenus), { recursive: true });
+  const seed = JSON.parse(fs.readFileSync(srcMenus, "utf-8"));
+  const sections = seed?.portalNavSections || [];
+  const flattened = toMenuItems(sections);
+  fs.writeFileSync(destMenus, `${JSON.stringify(flattened, null, "\t")}\n`, "utf-8");
+  console.log(`[sync-portal-menus] Generated portal menus from seed: ${srcMenus} -> ${destMenus}`);
 
-  fs.copyFileSync(srcMenus, destMenus);
-  console.log(`[sync-portal-menus] Synced: ${srcMenus} -> ${destMenus}`);
-
-  if (fs.existsSync(srcI18nZh)) {
+  // Extract zh_CN portal labels if available
+  const zhCandidates = [
+    path.join(repoRoot || "", "dts-platform-webapp", "src", "locales", "lang", "zh_CN", "sys.json"),
+    path.join(repoRoot || "", "source", "dts-platform-webapp", "src", "locales", "lang", "zh_CN", "sys.json"),
+  ];
+  const zhPath = zhCandidates.find((candidate) => fs.existsSync(candidate));
+  if (zhPath) {
     try {
-      const zh = JSON.parse(fs.readFileSync(srcI18nZh, "utf-8"));
+      const zh = JSON.parse(fs.readFileSync(zhPath, "utf-8"));
       const portal = zh?.sys?.nav?.portal || {};
       const mapping = {};
       const indent = "\t";
@@ -124,12 +152,12 @@ try {
         }
       }
       fs.writeFileSync(destI18nZh, `${JSON.stringify(mapping, null, indent)}\n`, "utf-8");
-      console.log(`[sync-portal-menus] Synced i18n zh: ${srcI18nZh} -> ${destI18nZh}`);
+      console.log(`[sync-portal-menus] Synced i18n zh: ${zhPath} -> ${destI18nZh}`);
     } catch (e) {
       console.warn("[sync-portal-menus] Skip i18n zh extraction:", e.message);
     }
   } else {
-    console.warn(`[sync-portal-menus] i18n zh not found: ${srcI18nZh}`);
+    console.warn("[sync-portal-menus] zh_CN portal translations not found; skipped i18n export.");
   }
 } catch (err) {
   console.error("[sync-portal-menus] Failed:", err);

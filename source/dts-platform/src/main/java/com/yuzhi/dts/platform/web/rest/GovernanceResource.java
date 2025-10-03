@@ -5,21 +5,27 @@ import com.yuzhi.dts.platform.service.governance.IssueTicketService;
 import com.yuzhi.dts.platform.service.governance.QualityRuleService;
 import com.yuzhi.dts.platform.service.governance.QualityRunService;
 import com.yuzhi.dts.platform.service.governance.dto.ComplianceBatchDto;
+import com.yuzhi.dts.platform.service.governance.dto.ComplianceBatchItemDto;
 import com.yuzhi.dts.platform.service.governance.dto.IssueActionDto;
 import com.yuzhi.dts.platform.service.governance.dto.IssueTicketDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
 import com.yuzhi.dts.platform.service.governance.request.ComplianceBatchRequest;
+import com.yuzhi.dts.platform.service.governance.request.ComplianceItemUpdateRequest;
 import com.yuzhi.dts.platform.service.governance.request.IssueActionRequest;
 import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.Locale;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -131,14 +137,24 @@ public class GovernanceResource {
 
     @GetMapping("/compliance/batches")
     public ApiResponse<List<ComplianceBatchDto>> listComplianceBatches(
-        @RequestParam(value = "limit", defaultValue = "10") int limit
+        @RequestParam(value = "limit", defaultValue = "10") int limit,
+        @RequestParam(value = "status", required = false) String status
     ) {
-        return ApiResponses.ok(complianceService.recentBatches(limit));
+        return ApiResponses.ok(complianceService.recentBatches(limit, parseStatuses(status)));
     }
 
     @GetMapping("/compliance/batches/{id}")
     public ApiResponse<ComplianceBatchDto> getComplianceBatch(@PathVariable UUID id) {
         return ApiResponses.ok(complianceService.getBatch(id));
+    }
+
+    @PutMapping("/compliance/items/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    public ApiResponse<ComplianceBatchItemDto> updateComplianceItem(
+        @PathVariable UUID id,
+        @RequestBody ComplianceItemUpdateRequest request
+    ) {
+        return ApiResponses.ok(complianceService.updateItem(id, request, currentUser()));
     }
 
     // Issue & remediation APIs ----------------------------------------------
@@ -171,5 +187,17 @@ public class GovernanceResource {
 
     private String currentUser() {
         return SecurityUtils.getCurrentUserLogin().orElse("system");
+    }
+
+    private List<String> parseStatuses(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return List.of();
+        }
+        return Arrays
+            .stream(raw.split(","))
+            .map(String::trim)
+            .filter(value -> !value.isEmpty())
+            .map(value -> value.toUpperCase(Locale.ROOT))
+            .collect(Collectors.toList());
     }
 }

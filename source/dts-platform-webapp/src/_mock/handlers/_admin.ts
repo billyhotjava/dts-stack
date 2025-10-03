@@ -21,7 +21,153 @@ import type {
 } from "@/admin/types";
 import { ResultStatus } from "@/types/enum";
 import { getActiveAdmin } from "../utils/session";
-import portalMenus from "../data/portal-menus.json";
+type PortalNavNode = {
+  key: string;
+  path?: string;
+  icon?: string;
+  titleKey?: string;
+  title?: string;
+  children?: PortalNavNode[];
+};
+
+const PORTAL_NAV_SEED: PortalNavNode[] = [
+  {
+    key: "catalog",
+    path: "catalog",
+    icon: "solar:book-bold-duotone",
+    titleKey: "sys.nav.portal.catalog",
+    title: "数据资产",
+    children: [
+      { key: "assets", path: "assets", titleKey: "sys.nav.portal.catalogAssetsDirectory", title: "数据资产目录" },
+      { key: "accessPolicy", path: "access-policy", titleKey: "sys.nav.portal.catalogAccessPolicy", title: "分级保护与访问策略" },
+      { key: "secureViews", path: "secure-views", titleKey: "sys.nav.portal.catalogSecureViews", title: "安全视图编排" },
+    ],
+  },
+  {
+    key: "modeling",
+    path: "modeling",
+    icon: "solar:documents-bold-duotone",
+    titleKey: "sys.nav.portal.modeling",
+    title: "模型与标准",
+    children: [{ key: "standards", path: "standards", titleKey: "sys.nav.portal.modelingStandards", title: "数据标准" }],
+  },
+  {
+    key: "governance",
+    path: "governance",
+    icon: "solar:shield-check-bold-duotone",
+    titleKey: "sys.nav.portal.governance",
+    title: "治理与质量",
+    children: [
+      { key: "rules", path: "rules", titleKey: "sys.nav.portal.governanceRules", title: "质量规则" },
+      { key: "compliance", path: "compliance", titleKey: "sys.nav.portal.governanceCompliance", title: "合规检查" },
+    ],
+  },
+  {
+    key: "explore",
+    path: "explore",
+    icon: "solar:compass-bold-duotone",
+    titleKey: "sys.nav.portal.explore",
+    title: "数据开发",
+    children: [
+      { key: "workbench", path: "workbench", titleKey: "sys.nav.portal.exploreWorkbench", title: "数据查询和预览" },
+      { key: "savedQueries", path: "saved-queries", titleKey: "sys.nav.portal.exploreSavedQueries", title: "结果集管理" },
+    ],
+  },
+  {
+    key: "visualization",
+    path: "visualization",
+    icon: "solar:pie-chart-bold-duotone",
+    titleKey: "sys.nav.portal.visualization",
+    title: "数据可视化",
+    children: [
+      { key: "dashboards", path: "dashboards", titleKey: "sys.nav.portal.visualizationDashboards", title: "可视化仪表盘" },
+      { key: "cockpit", path: "cockpit", titleKey: "sys.nav.portal.visualizationCockpit", title: "经营驾驶舱" },
+      { key: "projects", path: "projects", titleKey: "sys.nav.portal.visualizationProjects", title: "项目管理看板" },
+      { key: "finance", path: "finance", titleKey: "sys.nav.portal.visualizationFinance", title: "财务看板" },
+      { key: "supplyChain", path: "supply-chain", titleKey: "sys.nav.portal.visualizationSupplyChain", title: "供应链看板" },
+      { key: "hr", path: "hr", titleKey: "sys.nav.portal.visualizationHR", title: "人力看板" },
+    ],
+  },
+  {
+    key: "services",
+    path: "services",
+    icon: "solar:server-bold-duotone",
+    titleKey: "sys.nav.portal.services",
+    title: "数据服务",
+    children: [
+      { key: "api", path: "api", titleKey: "sys.nav.portal.servicesApi", title: "API 服务" },
+      { key: "products", path: "products", titleKey: "sys.nav.portal.servicesProducts", title: "数据产品" },
+      { key: "tokens", path: "tokens", titleKey: "sys.nav.portal.servicesTokens", title: "令牌与密钥" },
+    ],
+  },
+  {
+    key: "iam",
+    path: "iam",
+    icon: "solar:key-minimalistic-bold-duotone",
+    titleKey: "sys.nav.portal.iam",
+    title: "权限与策略",
+    children: [
+      { key: "classification", path: "classification", titleKey: "sys.nav.portal.iamClassification", title: "密级模型映射" },
+      { key: "authorization", path: "authorization", titleKey: "sys.nav.portal.iamAuthorization", title: "资源授权" },
+      { key: "simulation", path: "simulation", titleKey: "sys.nav.portal.iamSimulation", title: "策略模拟与评估" },
+      { key: "requests", path: "requests", titleKey: "sys.nav.portal.iamRequests", title: "权限申请入口" },
+    ],
+  },
+  {
+    key: "foundation",
+    path: "foundation",
+    icon: "solar:database-bold-duotone",
+    titleKey: "sys.nav.portal.foundation",
+    title: "基础数据维护",
+    children: [
+      { key: "dataSources", path: "data-sources", titleKey: "sys.nav.portal.foundationDataSources", title: "数据源" },
+      { key: "dataStorage", path: "data-storage", titleKey: "sys.nav.portal.foundationDataStorage", title: "数据存储" },
+      { key: "taskScheduling", path: "task-scheduling", titleKey: "sys.nav.portal.foundationTaskScheduling", title: "任务调度" },
+    ],
+  },
+];
+
+const normalizeSegment = (segment?: string) => {
+  if (!segment) return "";
+  return segment.replace(/^\/+|\/+$/g, "");
+};
+
+const buildPortalMenus = (nodes: PortalNavNode[], parentId: string | null = null, parentPath = "", rootKey: string | null = null): PortalMenuItem[] =>
+  nodes.map((node, index) => {
+    const key = node.key || `menu_${index}`;
+    const segment = normalizeSegment(node.path || key);
+    const fullPath = parentPath ? `${parentPath}/${segment}` : `/${segment}`;
+    const id = parentId ? `${parentId}.${key}` : key;
+    const sectionKey = parentId ? rootKey || key : key;
+    const metadata: Record<string, string> = { key, sectionKey };
+    if (parentId) {
+      metadata.entryKey = key;
+    }
+    if (node.titleKey) {
+      metadata.titleKey = node.titleKey;
+    }
+    if (node.title) {
+      metadata.title = node.title;
+    }
+    if (node.icon) {
+      metadata.icon = node.icon;
+    }
+
+    return {
+      id,
+      name: node.titleKey || node.title || key,
+      displayName: node.title,
+      path: fullPath,
+      icon: node.icon,
+      sortOrder: index + 1,
+      metadata: JSON.stringify(metadata),
+      securityLevel: "GENERAL",
+      parentId,
+      children: buildPortalMenus(node.children || [], id, fullPath, sectionKey),
+    } satisfies PortalMenuItem;
+  });
+
+const portalMenus = buildPortalMenus(PORTAL_NAV_SEED);
 
 const ADMIN_API = "/api/admin";
 const AUDIT_API = "/api/audit-logs";
@@ -148,7 +294,7 @@ const systemConfigs: SystemConfigItem[] = [
 ];
 
 // portalMenus are generated from dts-platform-webapp portal navigation as demo data
-// See: dts-platform-webapp/public/portal-menus.demo.json
+// Mirrors backend seed at dts-admin/src/main/resources/config/data/portal-menu-seed.json
 
 const organizations: OrganizationNode[] = [
 	{

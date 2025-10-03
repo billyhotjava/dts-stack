@@ -14,6 +14,8 @@ public interface GovIssueTicketRepository extends JpaRepository<GovIssueTicket, 
     List<GovIssueTicket> findByAssignedTo(String assignedTo);
     long countByStatus(String status);
     long countByResolvedAtBetween(Instant from, Instant to);
-    Optional<GovIssueTicket> findFirstBySourceTypeAndSourceIdOrderByCreatedDateDesc(String sourceType, UUID sourceId);
+    Optional<GovIssueTicket> findFirstBySourceTypeAndComplianceBatch_IdOrderByCreatedDateDesc(
+        String sourceType,
+        UUID complianceBatchId
+    );
 }
-

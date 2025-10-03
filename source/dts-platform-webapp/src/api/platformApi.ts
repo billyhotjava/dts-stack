@@ -86,6 +86,7 @@ export const getQualityRun = (id: string) => api.get({ url: `/governance/quality
 export const createComplianceBatch = (data: any) => api.post({ url: "/governance/compliance/batches", data });
 export const listComplianceBatches = (params: any = {}) => api.get({ url: "/governance/compliance/batches", params });
 export const getComplianceBatch = (id: string) => api.get({ url: `/governance/compliance/batches/${id}` });
+export const updateComplianceItem = (id: string, data: any) => api.put({ url: `/governance/compliance/items/${id}`, data });
 
 export const listIssues = () => api.get({ url: "/governance/issues" });
 export const createIssue = (data: any) => api.post({ url: "/governance/issues", data });
@@ -119,9 +120,9 @@ export const deleteResultSet = (id: string) => api.delete({ url: `/explore/resul
 // Explore (CRUD for generated entities)
 export const listSqlConnections = () => api.get({ url: "/sql-connections" });
 export const listQueryWorkspaces = () => api.get({ url: "/query-workspaces" });
-export const listQueryExecutions = () => api.get({ url: "/query-executions" });
-export const listResultSets = () => api.get({ url: "/result-sets" });
-export const cleanupExpiredResultSets = () => api.post({ url: "/result-sets/cleanup" });
+export const listQueryExecutions = () => api.get({ url: "/explore/query-executions" });
+export const listResultSets = () => api.get({ url: "/explore/result-sets" });
+export const cleanupExpiredResultSets = () => api.post({ url: "/explore/result-sets/cleanup" });
 
 // Catalog tables & columns
 export const listTablesByDataset = (datasetId: string, keyword?: string) =>

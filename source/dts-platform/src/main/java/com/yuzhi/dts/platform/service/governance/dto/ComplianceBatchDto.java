@@ -22,6 +22,13 @@ public class ComplianceBatchDto {
     private String metadataJson;
     private Instant createdDate;
     private String createdBy;
+    private Integer totalItems;
+    private Integer completedItems;
+    private Integer passedItems;
+    private Integer failedItems;
+    private Integer pendingItems;
+    private Boolean hasFailure;
+    private Instant lastUpdated;
     private List<ComplianceBatchItemDto> items;
 
     public UUID getId() {
@@ -152,6 +159,62 @@ public class ComplianceBatchDto {
         this.createdBy = createdBy;
     }
 
+    public Integer getTotalItems() {
+        return totalItems;
+    }
+
+    public void setTotalItems(Integer totalItems) {
+        this.totalItems = totalItems;
+    }
+
+    public Integer getCompletedItems() {
+        return completedItems;
+    }
+
+    public void setCompletedItems(Integer completedItems) {
+        this.completedItems = completedItems;
+    }
+
+    public Integer getPassedItems() {
+        return passedItems;
+    }
+
+    public void setPassedItems(Integer passedItems) {
+        this.passedItems = passedItems;
+    }
+
+    public Integer getFailedItems() {
+        return failedItems;
+    }
+
+    public void setFailedItems(Integer failedItems) {
+        this.failedItems = failedItems;
+    }
+
+    public Integer getPendingItems() {
+        return pendingItems;
+    }
+
+    public void setPendingItems(Integer pendingItems) {
+        this.pendingItems = pendingItems;
+    }
+
+    public Boolean getHasFailure() {
+        return hasFailure;
+    }
+
+    public void setHasFailure(Boolean hasFailure) {
+        this.hasFailure = hasFailure;
+    }
+
+    public Instant getLastUpdated() {
+        return lastUpdated;
+    }
+
+    public void setLastUpdated(Instant lastUpdated) {
+        this.lastUpdated = lastUpdated;
+    }
+
     public List<ComplianceBatchItemDto> getItems() {
         return items;
     }
@@ -160,4 +223,3 @@ public class ComplianceBatchDto {
         this.items = items;
     }
 }
-
