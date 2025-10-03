@@ -39,6 +39,7 @@ export default function AuditCenterView() {
 	const [totalElements, setTotalElements] = useState(0);
 	const [totalPages, setTotalPages] = useState(0);
 	const [moduleOptions, setModuleOptions] = useState<string[]>([]);
+	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 	const [exporting, setExporting] = useState(false);
 
 	const loadLogs = useCallback(
@@ -186,13 +187,14 @@ export default function AuditCenterView() {
 				</CardHeader>
 				<CardContent className="overflow-hidden p-0">
 					<div className="overflow-x-auto">
-						<table className="w-full min-w-[960px] table-fixed text-sm">
+						<table className="w-full min-w-[1120px] table-fixed text-sm">
 						<thead className="bg-muted/60">
 							<tr className="text-left">
 								<th className="px-4 py-3 font-medium">ID</th>
 								<th className="px-4 py-3 font-medium">时间</th>
 								<th className="px-4 py-3 font-medium">模块</th>
 								<th className="px-4 py-3 font-medium">操作</th>
+								<th className="px-4 py-3 font-medium">内容摘要</th>
 								<th className="px-4 py-3 font-medium">操作者 / IP</th>
 								<th className="px-4 py-3 font-medium">目标</th>
 								<th className="px-4 py-3 font-medium">结果</th>
@@ -201,13 +203,13 @@ export default function AuditCenterView() {
 						<tbody>
 							{loading ? (
 								<tr>
-									<td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
+									<td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
 										正在加载...
 									</td>
 								</tr>
 							) : logs.length === 0 ? (
 								<tr>
-									<td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
+									<td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
 										暂无审计记录
 									</td>
 								</tr>
@@ -219,9 +221,19 @@ export default function AuditCenterView() {
 										<td className="px-4 py-3">{log.module}</td>
 										<td className="px-4 py-3 text-sm">
 											<div className="font-medium break-words">{log.action}</div>
+										</td>
+										<td className="px-4 py-3 text-xs text-muted-foreground">
 											{log.payloadPreview ? (
-												<div className="text-xs text-muted-foreground break-words">{log.payloadPreview}</div>
-											) : null}
+												<CollapsibleText
+													text={log.payloadPreview}
+													expanded={!!expandedRows[log.id]}
+													onToggle={() =>
+														setExpandedRows((prev) => ({ ...prev, [log.id]: !prev[log.id] }))
+													}
+												/>
+											) : (
+												<span>-</span>
+											)}
 										</td>
 										<td className="px-4 py-3 text-xs text-muted-foreground break-words">
 											<div>操作者：{formatOperatorName(log.actor)}</div>
@@ -265,6 +277,48 @@ export default function AuditCenterView() {
 			</Card>
 		</div>
 	);
+}
+
+function CollapsibleText({
+    text,
+    expanded,
+    onToggle,
+  }: {
+    text: string
+    expanded: boolean
+    onToggle: () => void
+  }) {
+  const tooLong = text && text.length > 160;
+  return (
+    <div className="space-y-1">
+      <pre
+        className="whitespace-pre-wrap break-words font-mono"
+        style={
+          expanded
+            ? undefined
+            : {
+                display: "-webkit-box",
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: "vertical" as any,
+                overflow: "hidden",
+              }
+        }
+      >
+        {text}
+      </pre>
+      {tooLong && (
+        <button
+          type="button"
+          className="text-primary hover:underline text-[12px]"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          aria-label={expanded ? "收起" : "展开"}
+        >
+          {expanded ? "−" : "+"}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function buildQuery(filters: FilterState): Record<string, string> {

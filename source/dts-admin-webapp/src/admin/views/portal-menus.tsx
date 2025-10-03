@@ -4,7 +4,6 @@ import { adminApi } from "@/admin/api/adminApi";
 import type { PortalMenuCollection, PortalMenuItem } from "@/admin/types";
 import { setPortalMenus } from "@/store/portalMenuStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
-import { Input } from "@/ui/input";
 import { Text } from "@/ui/typography";
 import { Button } from "@/ui/button";
 import { Badge } from "@/ui/badge";
@@ -20,25 +19,9 @@ export default function PortalMenusView() {
   const treeMenus = useMemo(() => data?.allMenus ?? data?.menus ?? [], [data?.allMenus, data?.menus]);
   const activeMenus = useMemo(() => data?.menus ?? [], [data?.menus]);
 
-  const [nameDrafts, setNameDrafts] = useState<Record<number, string>>({});
   const [pending, setPending] = useState<Record<number, boolean>>({});
   const [resetting, setResetting] = useState(false);
-
-  useEffect(() => {
-    const drafts: Record<number, string> = {};
-    const hydrate = (items: PortalMenuItem[]) => {
-      items.forEach((item) => {
-        if (item.id != null) {
-          drafts[item.id] = item.displayName ?? item.name ?? "";
-        }
-        if (item.children && item.children.length > 0) {
-          hydrate(item.children);
-        }
-      });
-    };
-    hydrate(treeMenus);
-    setNameDrafts(drafts);
-  }, [treeMenus]);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!isLoading) {
@@ -46,15 +29,23 @@ export default function PortalMenusView() {
     }
   }, [activeMenus, treeMenus, isLoading]);
 
+  // 默认展开第一层
+  useEffect(() => {
+    const next = new Set<number>();
+    const roots = Array.isArray(treeMenus) ? treeMenus : [];
+    for (const item of roots) {
+      if (item?.id != null && item.children && item.children.length > 0) {
+        next.add(item.id);
+      }
+    }
+    setExpanded(next);
+  }, [treeMenus]);
+
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
 
   const updateCache = (next: PortalMenuCollection) => {
     queryClient.setQueryData(["admin", "portal-menus"], next);
-  };
-
-  const updateDraftName = (id: number, value: string) => {
-    setNameDrafts((prev) => ({ ...prev, [id]: value }));
   };
 
   const markPending = (id: number, value: boolean) => {
@@ -67,27 +58,6 @@ export default function PortalMenusView() {
       }
       return next;
     });
-  };
-
-  const handleSaveName = async (id: number) => {
-    const name = (nameDrafts[id] ?? "").trim();
-    if (!name) {
-      toast.error("菜单名称不能为空");
-      return;
-    }
-    markPending(id, true);
-    try {
-      const result = await adminApi.updatePortalMenu(id, {
-        name,
-      } as unknown as PortalMenuItem);
-      updateCache(result);
-      toast.success("菜单名称已保存");
-    } catch (error: any) {
-      toast.error(error?.message || "保存失败，请稍后重试");
-      await refresh();
-    } finally {
-      markPending(id, false);
-    }
   };
 
   const handleToggle = async (id: number, currentlyDeleted: boolean) => {
@@ -138,8 +108,25 @@ export default function PortalMenusView() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>菜单树</CardTitle>
+        <CardHeader className="pb-2">
+          <div className="flex items-center gap-2">
+            <CardTitle className="mr-2">菜单编辑器</CardTitle>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setExpanded(collectFolderIds(treeMenus))}
+              >
+                全部展开
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setExpanded(new Set())}>
+                全部折叠
+              </Button>
+            </div>
+          </div>
+          <Text variant="body3" className="text-muted-foreground">
+            说明：父节点仅用于分组，不提供启用/禁用按钮；叶子节点可切换状态
+          </Text>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -147,14 +134,20 @@ export default function PortalMenusView() {
           ) : treeMenus.length === 0 ? (
             <Text variant="body3">暂无菜单数据</Text>
           ) : (
-            <MenuTree
-              items={treeMenus}
-              nameDrafts={nameDrafts}
-              pending={pending}
-              onNameChange={updateDraftName}
-              onSave={handleSaveName}
-              onToggle={handleToggle}
-            />
+            <div className="space-y-2">
+              {treeMenus.map((item) => (
+                <MenuRow
+                  key={item.id}
+                  item={item}
+                  level={0}
+                  pathNames={[]}
+                  expanded={expanded}
+                  setExpanded={setExpanded}
+                  pending={pending}
+                  onToggle={handleToggle}
+                />
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -162,83 +155,111 @@ export default function PortalMenusView() {
   );
 }
 
-type MenuTreeProps = {
-  items: PortalMenuItem[];
-  nameDrafts: Record<number, string>;
+type MenuRowProps = {
+  item: PortalMenuItem;
+  level: number;
+  pathNames: string[];
+  expanded: Set<number>;
+  setExpanded: (next: Set<number>) => void;
   pending: Record<number, boolean>;
-  onNameChange: (id: number, value: string) => void;
-  onSave: (id: number) => void;
   onToggle: (id: number, currentlyDeleted: boolean) => void;
-  level?: number;
 };
 
-function MenuTree({ items, nameDrafts, pending, onNameChange, onSave, onToggle, level = 0 }: MenuTreeProps) {
-  if (!items.length) {
-    return null;
-  }
+function MenuRow({ item, level, pathNames, expanded, setExpanded, pending, onToggle }: MenuRowProps) {
+  const id = item.id as number | undefined;
+  if (id == null) return null;
+  const name = item.displayName ?? item.name ?? String(id);
+  const children = Array.isArray(item.children) ? item.children : [];
+  const isFolder = children.length > 0;
+  const isExpanded = isFolder && expanded.has(id);
+  const busy = pending[id];
+  const isDeleted = Boolean(item.deleted);
+  const fullPath = [
+    ...pathNames,
+    name,
+  ];
+
+  const toggleExpand = () => {
+    if (!isFolder) return;
+    const next = new Set(expanded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setExpanded(next);
+  };
 
   return (
-    <ul className={level === 0 ? "space-y-4" : "space-y-3"}>
-      {items.map((item) => {
-        if (item.id == null) {
-          return null;
-        }
-        const id = item.id;
-        const originalName = item.displayName ?? item.name ?? "";
-        const currentName = nameDrafts[id] ?? originalName;
-        const changed = currentName.trim() !== originalName;
-        const busy = pending[id];
-        const childMenus = Array.isArray(item.children) ? item.children : [];
-        const isDeleted = Boolean(item.deleted);
-        const isRoot = level === 0;
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 rounded-xl border bg-background px-3 py-2 hover:bg-accent/5">
+        <button
+          aria-label="toggle"
+          className="h-6 w-6 shrink-0 rounded-md border text-xs"
+          onClick={toggleExpand}
+          disabled={!isFolder}
+          title={isFolder ? "折叠/展开" : "无子节点"}
+        >
+          {isFolder ? (isExpanded ? "▾" : "▸") : "·"}
+        </button>
+        <div style={{ marginLeft: level * 14 }} className="-ml-1" />
+        <div className="min-w-0 flex-1 truncate font-semibold">{name}</div>
+        <div className="text-xs text-muted-foreground">/{fullPath.join("/")}</div>
+        <div className="ml-2 flex items-center gap-2">
+          {isFolder ? (
+            <Badge variant="outline">目录</Badge>
+          ) : (
+            <>
+              <Badge variant={isDeleted ? "error" : "success"}>{isDeleted ? "已禁用" : "已启用"}</Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onToggle(id, true)}
+                disabled={busy || !isDeleted}
+              >
+                启用
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onToggle(id, false)}
+                disabled={busy || isDeleted}
+              >
+                禁用
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
 
-        return (
-          <li
-            key={id}
-            className={
-              (isRoot ? "rounded-lg border p-4" : "rounded-md border p-3") +
-              " bg-background shadow-sm"
-            }
-          >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex-1 space-y-2">
-                <Input value={currentName} onChange={(e) => onNameChange(id, e.target.value)} placeholder="菜单名称" />
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span>编号：{id}</span>
-                  {item.path ? <span>路径：{item.path}</span> : null}
-                  <Badge variant={isDeleted ? "outline" : "success"}>{isDeleted ? "已禁用" : "已启用"}</Badge>
-                </div>
-              </div>
-              <div className="flex flex-shrink-0 gap-2">
-                <Button size="sm" onClick={() => onSave(id)} disabled={!changed || busy}>
-                  保存
-                </Button>
-                <Button
-                  size="sm"
-                  variant={isDeleted ? "secondary" : "destructive"}
-                  onClick={() => onToggle(id, isDeleted)}
-                  disabled={busy}
-                >
-                  {isDeleted ? "启用" : "禁用"}
-                </Button>
-              </div>
-            </div>
-            {childMenus.length > 0 ? (
-              <div className="mt-3 space-y-3 border-l pl-4">
-                <MenuTree
-                  items={childMenus}
-                  nameDrafts={nameDrafts}
-                  pending={pending}
-                  onNameChange={onNameChange}
-                  onSave={onSave}
-                  onToggle={onToggle}
-                  level={level + 1}
-                />
-              </div>
-            ) : null}
-          </li>
-        );
-      })}
-    </ul>
+      {isFolder && isExpanded && (
+        <div className="space-y-2 pl-6">
+          {children.map((c) => (
+            <MenuRow
+              key={c.id}
+              item={c}
+              level={level + 1}
+              pathNames={[...pathNames, name]}
+              expanded={expanded}
+              setExpanded={setExpanded}
+              pending={pending}
+              onToggle={onToggle}
+            />)
+          )}
+        </div>
+      )}
+    </div>
   );
+}
+
+function collectFolderIds(items: PortalMenuItem[]): Set<number> {
+  const out = new Set<number>();
+  const walk = (list: PortalMenuItem[]) => {
+    for (const it of list) {
+      if (it?.id == null) continue;
+      if (it.children && it.children.length > 0) {
+        out.add(it.id as number);
+        walk(it.children);
+      }
+    }
+  };
+  walk(items ?? []);
+  return out;
 }

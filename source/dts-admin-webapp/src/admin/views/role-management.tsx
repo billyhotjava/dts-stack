@@ -49,9 +49,18 @@ interface RoleRow {
     description?: string | null;
     scope?: "DEPARTMENT" | "INSTITUTE";
     operations: DataOperation[];
-    menus: string[];
+    menuIds: number[];
+    menuLabels: string[];
     assignments: AdminRoleAssignment[];
     source?: string;
+}
+
+interface MenuOption {
+    id: number;
+    label: string;
+    depth: number;
+    rawRoles: string[];
+    canonicalRoles: string[];
 }
 
 export default function RoleManagementView() {
@@ -97,11 +106,22 @@ export default function RoleManagementView() {
     const isLoading = rolesLoading || customLoading || assignmentLoading || menuLoading;
     const hasError = rolesError || customError || assignmentError || menuError;
 
+    const menuCatalog = useMemo(() => buildMenuCatalog(portalMenus), [portalMenus]);
+    const menuOptions = menuCatalog.options;
+    const menuRoleMap = menuCatalog.menuRoleMap;
+    const roleMenuIndex = menuCatalog.roleToMenuIds;
+    const menuLabelMap = useMemo(() => {
+        const map = new Map<number, string>();
+        menuOptions.forEach((option) => {
+            map.set(option.id, option.label);
+        });
+        return map;
+    }, [menuOptions]);
+
     const roleRows = useMemo(() => {
         const map = new Map<string, RoleRow>();
         const roles = rolesData ?? [];
         const extra = customRoles ?? [];
-        const menuMap = collectRoleMenus(portalMenus);
         const assignmentMap = groupAssignments(assignments);
 
         roles.forEach((role) => {
@@ -109,6 +129,7 @@ export default function RoleManagementView() {
             if (!canonical || RESERVED_ROLE_CODES.has(canonical)) {
                 return;
             }
+            const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
             const entry: RoleRow = {
                 key: role.id?.toString() ?? role.name,
                 authority: role.name,
@@ -117,7 +138,8 @@ export default function RoleManagementView() {
                 description: role.description,
                 scope: role.scope ?? undefined,
                 operations: role.operations ?? [],
-                menus: menuMap.get(canonical) ?? [],
+                menuIds,
+                menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
                 assignments: assignmentMap.get(canonical) ?? [],
                 source: role.source ?? undefined,
             };
@@ -137,7 +159,13 @@ export default function RoleManagementView() {
                     existing.operations = role.operations;
                 }
                 existing.source = existing.source ?? "custom";
+                if (!existing.menuIds.length) {
+                    const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
+                    existing.menuIds = menuIds;
+                    existing.menuLabels = menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`);
+                }
             } else {
+                const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
                 map.set(canonical, {
                     key: `custom-${role.id}`,
                     authority: role.name,
@@ -146,7 +174,8 @@ export default function RoleManagementView() {
                     description: role.description,
                     scope: role.scope,
                     operations: role.operations ?? [],
-                    menus: menuMap.get(canonical) ?? [],
+                    menuIds,
+                    menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
                     assignments: assignmentMap.get(canonical) ?? [],
                     source: "custom",
                 });
@@ -154,7 +183,6 @@ export default function RoleManagementView() {
         });
 
         map.forEach((entry, canonical) => {
-            entry.menus = menuMap.get(canonical) ?? [];
             entry.assignments = assignmentMap.get(canonical) ?? [];
             if (!entry.source) {
                 entry.source = "keycloak";
@@ -162,22 +190,30 @@ export default function RoleManagementView() {
             if (!entry.operations.length) {
                 entry.operations = ["read"];
             }
+            if (!entry.menuIds.length) {
+                const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
+                entry.menuIds = menuIds;
+                entry.menuLabels = menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`);
+            }
         });
 
         return Array.from(map.values()).sort((a, b) => a.displayName.localeCompare(b.displayName, "zh-CN"));
-    }, [rolesData, customRoles, portalMenus, assignments]);
+    }, [rolesData, customRoles, assignments, roleMenuIndex, menuLabelMap]);
 
     const handleCreateSubmitted = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         queryClient.invalidateQueries({ queryKey: ["admin", "custom-roles"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
     }, [queryClient]);
 
     const handleUpdateSubmitted = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
     }, [queryClient]);
 
     const handleDeleteSubmitted = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
     }, [queryClient]);
 
     const columns = useMemo<ColumnsType<RoleRow>>(() => {
@@ -232,7 +268,7 @@ export default function RoleManagementView() {
             },
             {
                 title: "绑定菜单",
-                dataIndex: "menus",
+                dataIndex: "menuLabels",
                 key: "menus",
                 width: 260,
                 render: (menus: string[]) =>
@@ -336,9 +372,26 @@ export default function RoleManagementView() {
                 </CardContent>
             </Card>
 
-            <CreateRoleDialog open={createOpen} onOpenChange={setCreateOpen} onSubmitted={handleCreateSubmitted} />
-            <UpdateRoleDialog target={editTarget} onClose={() => setEditTarget(null)} onSubmitted={handleUpdateSubmitted} />
-            <DeleteRoleDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} onSubmitted={handleDeleteSubmitted} />
+            <CreateRoleDialog
+                open={createOpen}
+                onOpenChange={setCreateOpen}
+                onSubmitted={handleCreateSubmitted}
+                menuOptions={menuOptions}
+                menuRoleMap={menuRoleMap}
+            />
+            <UpdateRoleDialog
+                target={editTarget}
+                onClose={() => setEditTarget(null)}
+                onSubmitted={handleUpdateSubmitted}
+                menuOptions={menuOptions}
+                menuRoleMap={menuRoleMap}
+            />
+            <DeleteRoleDialog
+                target={deleteTarget}
+                onClose={() => setDeleteTarget(null)}
+                onSubmitted={handleDeleteSubmitted}
+                menuRoleMap={menuRoleMap}
+            />
             <MembersDialog target={memberTarget} onClose={() => setMemberTarget(null)} />
         </div>
     );
@@ -348,9 +401,11 @@ interface CreateRoleDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSubmitted: () => void;
+    menuOptions: MenuOption[];
+    menuRoleMap: Map<number, MenuOption>;
 }
 
-function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogProps) {
+function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRoleMap }: CreateRoleDialogProps) {
     const [name, setName] = useState("");
     const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
     const [operations, setOperations] = useState<Set<DataOperation>>(new Set(["read", "write"]));
@@ -358,6 +413,7 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
     const [description, setDescription] = useState("");
     const [reason, setReason] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [selectedMenus, setSelectedMenus] = useState<Set<number>>(new Set());
 
     const resetState = useCallback(() => {
         setName("");
@@ -366,6 +422,7 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
         setAllowDesensitize(true);
         setDescription("");
         setReason("");
+        setSelectedMenus(new Set());
         setSubmitting(false);
     }, []);
 
@@ -376,6 +433,18 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
                 next.add(operation);
             } else {
                 next.delete(operation);
+            }
+            return next;
+        });
+    };
+
+    const toggleMenu = (id: number, checked: boolean) => {
+        setSelectedMenus((prev) => {
+            const next = new Set(prev);
+            if (checked) {
+                next.add(id);
+            } else {
+                next.delete(id);
             }
             return next;
         });
@@ -393,15 +462,29 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
         }
         setSubmitting(true);
         try {
+            const trimmedReason = reason.trim() || undefined;
             const payload = {
                 name: trimmedName.toUpperCase(),
                 scope,
                 operations: Array.from(operations),
                 allowDesensitizeJson: allowDesensitize,
                 description: description.trim() || undefined,
-                reason: reason.trim() || undefined,
+                reason: trimmedReason,
             };
             await adminApi.createCustomRole(payload);
+            if (selectedMenus.size > 0) {
+                try {
+                    await submitMenuChangeRequests({
+                        authority: toRoleAuthority(trimmedName),
+                        desiredMenuIds: new Set(selectedMenus),
+                        originalMenuIds: new Set(),
+                        menuRoleMap,
+                        reason: trimmedReason,
+                    });
+                } catch (error: any) {
+                    toast.error(error?.message ?? "菜单绑定申请提交失败，请在审批中心确认状态");
+                }
+            }
             toast.success("角色创建申请已提交审批");
             onSubmitted();
             onOpenChange(false);
@@ -482,6 +565,33 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
                         </div>
                     </div>
                     <div className="space-y-2">
+                        <span className="font-medium">访问菜单</span>
+                        {menuOptions.length === 0 ? (
+                            <Text variant="body3" className="text-muted-foreground">
+                                暂无可绑定的菜单，请稍后再试。
+                            </Text>
+                        ) : (
+                            <div className="max-h-60 space-y-1 overflow-y-auto rounded-md border p-3">
+                                {menuOptions.map((option) => (
+                                    <label
+                                        key={option.id}
+                                        className="flex items-center gap-2 text-sm"
+                                        style={{ paddingLeft: option.depth * 16 }}
+                                    >
+                                        <Checkbox
+                                            checked={selectedMenus.has(option.id)}
+                                            onCheckedChange={(value) => toggleMenu(option.id, value === true)}
+                                        />
+                                        {option.label}
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                        <Text variant="body3" className="text-muted-foreground">
+                            审批通过后，所选菜单将自动纳入该角色的可访问范围。
+                        </Text>
+                    </div>
+                    <div className="space-y-2">
                         <label htmlFor="role-description" className="font-medium">
                             说明（可选）
                         </label>
@@ -523,14 +633,17 @@ interface UpdateRoleDialogProps {
     target: RoleRow | null;
     onClose: () => void;
     onSubmitted: () => void;
+    menuOptions: MenuOption[];
+    menuRoleMap: Map<number, MenuOption>;
 }
 
-function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProps) {
+function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleMap }: UpdateRoleDialogProps) {
     const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
     const [operations, setOperations] = useState<Set<DataOperation>>(new Set());
     const [description, setDescription] = useState("");
     const [reason, setReason] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [selectedMenus, setSelectedMenus] = useState<Set<number>>(new Set());
 
     useEffect(() => {
         if (!target) {
@@ -540,6 +653,7 @@ function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProp
         setOperations(new Set(target.operations.length ? target.operations : ["read"]));
         setDescription(target.description ?? "");
         setReason("");
+        setSelectedMenus(new Set(target.menuIds));
         setSubmitting(false);
     }, [target]);
 
@@ -555,6 +669,18 @@ function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProp
         });
     };
 
+    const toggleMenu = (id: number, checked: boolean) => {
+        setSelectedMenus((prev) => {
+            const next = new Set(prev);
+            if (checked) {
+                next.add(id);
+            } else {
+                next.delete(id);
+            }
+            return next;
+        });
+    };
+
     const handleSubmit = async () => {
         if (!target) {
             return;
@@ -563,22 +689,45 @@ function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProp
             toast.error("至少选择一个操作权限");
             return;
         }
+        const trimmedReason = reason.trim() || undefined;
+        const desiredMenus = new Set(selectedMenus);
+        const originalMenus = new Set(target.menuIds);
+        const menuChanged = !setsEqual(desiredMenus, originalMenus);
+        const scopeChanged = (target.scope ?? "DEPARTMENT") !== scope;
+        const descriptionChanged = (target.description ?? "") !== description.trim();
+        const operationsChanged = !setsEqual(new Set(target.operations), operations);
+
+        if (!menuChanged && !scopeChanged && !descriptionChanged && !operationsChanged) {
+            toast.info("未检测到变更，无需提交审批");
+            return;
+        }
         setSubmitting(true);
         try {
-            const payload = {
-                resourceType: "ROLE",
-                action: "UPDATE",
-                resourceId: target.authority,
-                payloadJson: JSON.stringify({
-                    name: target.authority,
-                    scope,
-                    operations: Array.from(operations),
-                    description: description.trim() || undefined,
-                }),
-                reason: reason.trim() || undefined,
-            };
-            const change = await adminApi.createChangeRequest(payload);
-            await adminApi.submitChangeRequest(change.id);
+            if (scopeChanged || descriptionChanged || operationsChanged) {
+                const payload = {
+                    resourceType: "ROLE",
+                    action: "UPDATE",
+                    resourceId: target.authority,
+                    payloadJson: JSON.stringify({
+                        name: target.authority,
+                        scope,
+                        operations: Array.from(operations),
+                        description: description.trim() || undefined,
+                    }),
+                    reason: trimmedReason,
+                };
+                const change = await adminApi.createChangeRequest(payload);
+                await adminApi.submitChangeRequest(change.id);
+            }
+            if (menuChanged) {
+                await submitMenuChangeRequests({
+                    authority: toRoleAuthority(target.authority),
+                    desiredMenuIds: desiredMenus,
+                    originalMenuIds: originalMenus,
+                    menuRoleMap,
+                    reason: trimmedReason,
+                });
+            }
             toast.success("更新申请已提交审批");
             onSubmitted();
             onClose();
@@ -659,6 +808,33 @@ function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProp
                                 onChange={(event) => setReason(event.target.value)}
                             />
                         </div>
+                        <div className="space-y-2">
+                            <span className="font-medium">绑定菜单</span>
+                            {menuOptions.length === 0 ? (
+                                <Text variant="body3" className="text-muted-foreground">
+                                    暂无可配置的菜单。
+                                </Text>
+                            ) : (
+                                <div className="max-h-60 space-y-1 overflow-y-auto rounded-md border p-3">
+                                    {menuOptions.map((option) => (
+                                        <label
+                                            key={option.id}
+                                            className="flex items-center gap-2 text-sm"
+                                            style={{ paddingLeft: option.depth * 16 }}
+                                        >
+                                            <Checkbox
+                                                checked={selectedMenus.has(option.id)}
+                                                onCheckedChange={(value) => toggleMenu(option.id, value === true)}
+                                            />
+                                            {option.label}
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                            <Text variant="body3" className="text-muted-foreground">
+                                提交审批后，菜单可见性会按最新配置下发。
+                            </Text>
+                        </div>
                     </div>
                 ) : null}
                 <DialogFooter className="flex justify-end gap-2">
@@ -678,9 +854,10 @@ interface DeleteRoleDialogProps {
     target: RoleRow | null;
     onClose: () => void;
     onSubmitted: () => void;
+    menuRoleMap: Map<number, MenuOption>;
 }
 
-function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProps) {
+function DeleteRoleDialog({ target, onClose, onSubmitted, menuRoleMap }: DeleteRoleDialogProps) {
     const [reason, setReason] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
@@ -695,15 +872,25 @@ function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProp
         }
         setSubmitting(true);
         try {
+            const trimmedReason = reason.trim() || undefined;
             const payload = {
                 resourceType: "ROLE",
                 action: "DELETE",
                 resourceId: target.authority,
                 payloadJson: JSON.stringify({ name: target.authority }),
-                reason: reason.trim() || undefined,
+                reason: trimmedReason,
             };
             const change = await adminApi.createChangeRequest(payload);
             await adminApi.submitChangeRequest(change.id);
+            if (target.menuIds.length) {
+                await submitMenuChangeRequests({
+                    authority: toRoleAuthority(target.authority),
+                    desiredMenuIds: new Set(),
+                    originalMenuIds: new Set(target.menuIds),
+                    menuRoleMap,
+                    reason: trimmedReason,
+                });
+            }
             toast.success("删除申请已提交审批");
             onSubmitted();
             onClose();
@@ -814,36 +1001,141 @@ function canonicalRole(value: string | null | undefined): string {
     return value.trim().toUpperCase().replace(/^ROLE[_-]?/, "").replace(/_/g, "");
 }
 
-function collectRoleMenus(collection: PortalMenuCollection | undefined): Map<string, string[]> {
-    const map = new Map<string, string[]>();
-    const visit = (items?: PortalMenuItem[]) => {
+function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
+    options: MenuOption[];
+    roleToMenuIds: Map<string, number[]>;
+    menuRoleMap: Map<number, MenuOption>;
+} {
+    const options: MenuOption[] = [];
+    const roleToMenuIds = new Map<string, number[]>();
+    const menuRoleMap = new Map<number, MenuOption>();
+
+    const visit = (items: PortalMenuItem[] | undefined, depth: number, ancestors: string[]) => {
         if (!items) {
             return;
         }
         items.forEach((item) => {
-            const label = item.displayName || item.name || item.path;
-            const allowed = item.allowedRoles ?? [];
-            allowed.forEach((roleCode) => {
-                const canonical = canonicalRole(roleCode);
-                if (!canonical) {
-                    return;
-                }
-                const existing = map.get(canonical);
-                if (existing) {
-                    if (!existing.includes(label)) {
-                        existing.push(label);
-                    }
-                } else {
-                    map.set(canonical, [label]);
-                }
-            });
+            const labelText = item.displayName || item.name || item.path || `菜单 ${item.id ?? ""}`;
+            const chain = [...ancestors, labelText];
+            const normalizedRoles = (item.allowedRoles ?? [])
+                .map((role) => toRoleAuthority(role))
+                .filter((role) => role.length > 0);
+            const canonicalRoles = normalizedRoles.map(canonicalRole).filter((role) => role.length > 0);
+
+            if (item.id != null) {
+                const option: MenuOption = {
+                    id: item.id,
+                    label: chain.join(" / "),
+                    depth,
+                    rawRoles: normalizedRoles,
+                    canonicalRoles,
+                };
+                options.push(option);
+                menuRoleMap.set(option.id, option);
+                canonicalRoles.forEach((role) => {
+                    const list = roleToMenuIds.get(role) ?? [];
+                    list.push(option.id);
+                    roleToMenuIds.set(role, list);
+                });
+            }
+
             if (item.children?.length) {
-                visit(item.children);
+                visit(item.children, depth + 1, chain);
             }
         });
     };
-    visit(collection?.allMenus ?? collection?.menus);
-    return map;
+
+    visit(collection?.allMenus ?? collection?.menus, 0, []);
+
+    roleToMenuIds.forEach((ids, role) => {
+        const unique = Array.from(new Set(ids));
+        unique.sort((a, b) => a - b);
+        roleToMenuIds.set(role, unique);
+    });
+
+    return { options, roleToMenuIds, menuRoleMap };
+}
+
+async function submitMenuChangeRequests(params: {
+    authority: string;
+    desiredMenuIds: Set<number>;
+    originalMenuIds: Set<number>;
+    menuRoleMap: Map<number, MenuOption>;
+    reason?: string;
+}) {
+    const { authority, desiredMenuIds, originalMenuIds, menuRoleMap, reason } = params;
+    const affectedIds = new Set<number>();
+    desiredMenuIds.forEach((id) => affectedIds.add(id));
+    originalMenuIds.forEach((id) => affectedIds.add(id));
+    const tasks: Promise<void>[] = [];
+
+    affectedIds.forEach((menuId) => {
+        const option = menuRoleMap.get(menuId);
+        if (!option) {
+            return;
+        }
+        const existingRoles = new Set(option.rawRoles);
+        const shouldHave = desiredMenuIds.has(menuId);
+        const currentlyHas = existingRoles.has(authority);
+        if (shouldHave === currentlyHas) {
+            return;
+        }
+        if (shouldHave) {
+            existingRoles.add(authority);
+        } else {
+            existingRoles.delete(authority);
+        }
+        const allowedRoles = Array.from(existingRoles).sort();
+        tasks.push(
+            (async () => {
+                const payload = {
+                    resourceType: "PORTAL_MENU",
+                    action: "UPDATE",
+                    resourceId: String(menuId),
+                    payloadJson: JSON.stringify({ allowedRoles }),
+                    reason,
+                };
+                const change = await adminApi.createChangeRequest(payload);
+                await adminApi.submitChangeRequest(change.id);
+                option.rawRoles = allowedRoles;
+                option.canonicalRoles = allowedRoles.map(canonicalRole).filter((role) => role.length > 0);
+            })()
+        );
+    });
+
+    if (tasks.length === 0) {
+        return;
+    }
+    await Promise.all(tasks);
+}
+
+function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+    if (a.size !== b.size) {
+        return false;
+    }
+    for (const item of a) {
+        if (!b.has(item)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function toRoleAuthority(value: string | null | undefined): string {
+    if (!value) {
+        return "";
+    }
+    let normalized = value.trim().toUpperCase();
+    if (normalized.startsWith("ROLE_")) {
+        normalized = normalized.substring(5);
+    } else if (normalized.startsWith("ROLE-")) {
+        normalized = normalized.substring(5);
+    }
+    normalized = normalized.replace(/[^A-Z0-9_]/g, "_").replace(/_+/g, "_");
+    if (!normalized) {
+        return "";
+    }
+    return `ROLE_${normalized}`;
 }
 
 function groupAssignments(assignments: AdminRoleAssignment[] | undefined): Map<string, AdminRoleAssignment[]> {

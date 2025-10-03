@@ -1,4 +1,4 @@
-import { Button, Collapse, DatePicker, Form, Input, Modal, Select, Space, Spin, Table, Tag, Tooltip, message } from "antd";
+import { Button, Collapse, DatePicker, Form, Input, Modal, Select, Space, Spin, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType, TablePaginationConfig, TableProps } from "antd/es/table";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
@@ -60,6 +60,7 @@ export default function AuditLogPage() {
 	const [detailModalVisible, setDetailModalVisible] = useState(false);
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [selectedLog, setSelectedLog] = useState<AuditLogDetail | null>(null);
+	const [expandedMap, setExpandedMap] = useState<Record<number, boolean>>({});
 	const roles = useUserRoles();
 
 	const actorOptions = useMemo(() => {
@@ -261,16 +262,27 @@ export default function AuditLogPage() {
 					return <Tag color={meta.color}>{meta.label}</Tag>;
 				},
 			},
-			{
-				title: "内容摘要",
-				dataIndex: "payloadPreview",
-				width: 240,
-				render: (preview?: string) => (
-					<Tooltip title={preview || "-"}>
-						<span>{preview || "-"}</span>
-					</Tooltip>
-				),
-			},
+    {
+            title: "内容摘要",
+            dataIndex: "payloadPreview",
+            width: 320,
+            render: (preview: string | undefined, record) => (
+                <Typography.Paragraph
+                    className="m-0 font-mono text-xs"
+                    style={{ whiteSpace: "pre-wrap" }}
+                    ellipsis={{
+                        rows: 3,
+                        expandable: true,
+                        symbol: expandedMap[record.id] ? "收起" : "展开",
+                        expanded: expandedMap[record.id] === true,
+                        onExpand: () => setExpandedMap((prev) => ({ ...prev, [record.id]: !(prev[record.id] === true) })),
+                        tooltip: false,
+                    }}
+                >
+                    {preview || "-"}
+                </Typography.Paragraph>
+            ),
+    },
 			{
 				title: "发生时间",
 				dataIndex: "occurredAt",
