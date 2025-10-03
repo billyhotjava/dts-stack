@@ -1,4 +1,3 @@
-import type { CustomUserAttributeKey } from "@/constants/user";
 import { CUSTOM_USER_ATTRIBUTE_KEYS } from "@/constants/user";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -27,7 +26,7 @@ const RESERVED_PROFILE_ATTRIBUTES = new Set<string>([
 	...CUSTOM_USER_ATTRIBUTE_KEYS,
 ]);
 
-const getSingleAttributeValue = (attributes: Record<string, string[]> | undefined, key: CustomUserAttributeKey) => {
+const getSingleAttributeValue = (attributes: Record<string, string[]> | undefined, key: string) => {
 	const values = attributes?.[key];
 	if (!values || values.length === 0) {
 		return "";

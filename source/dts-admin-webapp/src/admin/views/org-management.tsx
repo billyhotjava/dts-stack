@@ -71,6 +71,8 @@ export default function OrgManagementView() {
 	const { data: tree = [], isLoading } = useQuery({
 		queryKey: ["admin", "organizations"],
 		queryFn: adminApi.getOrganizations,
+		refetchOnWindowFocus: true,
+		refetchInterval: 60000,
 	});
 	const [search, setSearch] = useState("");
 	const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -141,23 +143,12 @@ export default function OrgManagementView() {
             toast.error(error instanceof Error ? error.message : "删除部门失败");
         },
     });
-	const [syncing, setSyncing] = useState(false);
 
-	const syncOrganizations = async (successMessage?: string) => {
-		setSyncing(true);
-		try {
-			const tree = await adminApi.syncOrganizations();
-			queryClient.setQueryData(["admin", "organizations"], tree);
-			toast.success(successMessage ?? "组织结构已与 Keycloak 同步");
-		} catch (error) {
-			console.error(error);
-			toast.error(error instanceof Error ? error.message : "同步失败，请稍后重试");
-		} finally {
-			setSyncing(false);
-		}
+	const refreshOrganizations = async () => {
+		await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
 	};
 
-	const formLoading = createMutation.isPending || updateMutation.isPending || syncing;
+	const formLoading = createMutation.isPending || updateMutation.isPending;
 
 	const openCreateRoot = () => {
 		setFormState({ open: true, mode: "create", parentId: null, target: null });
@@ -193,7 +184,8 @@ export default function OrgManagementView() {
                 await createMutation.mutateAsync(payload);
                 closeForm();
                 setSelectedId(parentId);
-                await syncOrganizations("部门已创建并同步 Keycloak");
+                await refreshOrganizations();
+                toast.success("部门已创建并同步 Keycloak");
             } catch (error) {
                 console.error(error);
             }
@@ -209,7 +201,8 @@ export default function OrgManagementView() {
             try {
                 await updateMutation.mutateAsync({ id: formState.target.id, payload });
                 closeForm();
-                await syncOrganizations("部门信息已更新并同步 Keycloak");
+                await refreshOrganizations();
+                toast.success("部门信息已更新并同步 Keycloak");
             } catch (error) {
                 console.error(error);
             }
@@ -228,7 +221,8 @@ export default function OrgManagementView() {
                 }
                 return current;
             });
-            await syncOrganizations("部门已删除并同步 Keycloak");
+            await refreshOrganizations();
+            toast.success("部门已删除并同步 Keycloak");
         } catch (error) {
             console.error(error);
         }
@@ -276,19 +270,11 @@ export default function OrgManagementView() {
 				<CardHeader className="space-y-3">
 					<div className="flex items-center justify-between gap-3">
 						<CardTitle>组织结构</CardTitle>
-						<div className="flex items-center gap-2">
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => syncOrganizations()}
-								disabled={syncing}
-							>
-								{syncing ? "同步中..." : "同步 Keycloak"}
-							</Button>
-							<Button size="sm" onClick={openCreateRoot}>
-								创建部门
-							</Button>
-						</div>
+					<div className="flex items-center gap-2">
+						<Button size="sm" onClick={openCreateRoot}>
+							创建部门
+						</Button>
+					</div>
 					</div>
 					<Text variant="body3" className="text-xs text-muted-foreground">
 						组织结构变更会即时保存并同步至 Keycloak，请谨慎操作。
@@ -336,18 +322,18 @@ export default function OrgManagementView() {
 							<Button variant="outline" size="sm" onClick={openCreateChild} disabled={!selected}>
 								创建下级
 							</Button>
-						<Button variant="outline" size="sm" onClick={openEdit} disabled={!selected || syncing}>
-								编辑
-							</Button>
-							<Button
-							variant="ghost"
-								size="sm"
-								className="text-destructive hover:text-destructive"
-								onClick={openDelete}
-								disabled={!selected || syncing}
-							>
-								删除
-							</Button>
+					<Button variant="outline" size="sm" onClick={openEdit} disabled={!selected}>
+						编辑
+					</Button>
+					<Button
+						variant="ghost"
+						size="sm"
+						className="text-destructive hover:text-destructive"
+						onClick={openDelete}
+						disabled={!selected || deleteMutation.isPending}
+					>
+						删除
+					</Button>
 						</div>
 					</CardHeader>
 					<CardContent className="space-y-4 text-sm">
@@ -408,7 +394,7 @@ export default function OrgManagementView() {
 					open={deleteState.open}
 					name={deleteState.target?.name}
 					childCount={deleteState.target?.children?.length ?? 0}
-						loading={deleteMutation.isPending || syncing}
+							loading={deleteMutation.isPending}
 					onCancel={closeDelete}
 					onConfirm={handleConfirmDelete}
 				/>

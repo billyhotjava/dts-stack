@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { KeycloakUser, PaginationParams, UserProfileConfig, UserTableRow } from "#/keycloak";
 import { KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
-import type { CustomUserAttributeKey } from "@/constants/user";
 import { Icon } from "@/components/icon";
 import zhCN from "@/locales/lang/zh_CN";
 import { PERSON_SECURITY_LEVELS } from "@/constants/governance";
@@ -31,7 +30,7 @@ const RESERVED_PROFILE_ATTRIBUTE_NAMES = new Set([
 	"data_levels",
 ]);
 
-const getSingleAttributeValue = (attributes: Record<string, string[]> | undefined, key: CustomUserAttributeKey) => {
+const getSingleAttributeValue = (attributes: Record<string, string[]> | undefined, key: string) => {
 	const values = attributes?.[key];
 	if (!values || values.length === 0) {
 		return "";

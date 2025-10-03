@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "@/utils";
-import { Text } from "@/ui/typography";
+import { Text, Title } from "@/ui/typography";
 
 type DetailSectionProps = {
 	title?: string;
@@ -20,16 +20,16 @@ export function DetailSection({ title, description, columns = 2, children }: Det
 
 	return (
 		<section className="space-y-3 rounded-xl border border-border bg-background/90 p-4 shadow-sm">
-			{(title || description) && (
-				<header className="space-y-1">
-					{title && (
-						<Text variant="h4" className="text-base font-semibold">
-							{title}
-						</Text>
-					)}
-					{description && <p className="text-xs text-muted-foreground">{description}</p>}
-				</header>
-			)}
+				{(title || description) && (
+					<header className="space-y-1">
+						{title && (
+							<Title as="h4" className="text-base font-semibold">
+								{title}
+							</Title>
+						)}
+						{description && <p className="text-xs text-muted-foreground">{description}</p>}
+					</header>
+				)}
 			<div className={gridClass}>{children}</div>
 		</section>
 	);

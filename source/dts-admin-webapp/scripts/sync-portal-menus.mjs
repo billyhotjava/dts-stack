@@ -57,7 +57,20 @@ if (process.env[SEED_ENV_KEY]) {
   seedCandidates.push(path.resolve(process.env[SEED_ENV_KEY]));
 }
 
-const repoAnchors = [repoRoot, __dirname, process.cwd()].filter(Boolean);
+const parentAnchors = [];
+if (repoRoot) {
+  const parent = path.resolve(repoRoot, "..");
+  if (parent && parent !== repoRoot) {
+    parentAnchors.push(parent);
+    const grand = path.resolve(parent, "..");
+    if (grand && grand !== parent) {
+      parentAnchors.push(grand);
+    }
+  }
+}
+
+const anchorSet = new Set([repoRoot, ...parentAnchors, __dirname, process.cwd()].filter(Boolean));
+const repoAnchors = Array.from(anchorSet);
 const seedRelativePaths = [
   ["dts-admin", "src", "main", "resources", "config", "data", "portal-menu-seed.json"],
   ["source", "dts-admin", "src", "main", "resources", "config", "data", "portal-menu-seed.json"],
