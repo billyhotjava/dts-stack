@@ -21,6 +21,9 @@ const CATEGORY_LABELS: Record<TaskCategory, string> = {
 	role: "角色管理",
 };
 
+const USER_RESOURCE_TYPES = new Set(["USER"]);
+const ROLE_RESOURCE_TYPES = new Set(["ROLE", "CUSTOM_ROLE", "ROLE_ASSIGNMENT", "PORTAL_MENU"]);
+
 const ACTION_LABELS: Record<string, string> = {
 	CREATE: "新增",
 	UPDATE: "更新",
@@ -63,9 +66,16 @@ type AugmentedChangeRequest = ChangeRequest & {
 const CATEGORY_ORDER: TaskCategory[] = ["user", "role"];
 
 function resolveCategory(resourceType: string | null | undefined): TaskCategory | null {
-	const normalized = resourceType?.toUpperCase();
-	if (normalized === "USER") return "user";
-	if (normalized === "ROLE") return "role";
+	if (!resourceType) {
+		return null;
+	}
+	const normalized = resourceType.trim().toUpperCase();
+	if (USER_RESOURCE_TYPES.has(normalized)) {
+		return "user";
+	}
+	if (ROLE_RESOURCE_TYPES.has(normalized)) {
+		return "role";
+	}
 	return null;
 }
 
@@ -228,34 +238,50 @@ export default function ApprovalCenterView() {
 		});
 	}, [changeRequests, decisions]);
 
-	const pendingGroups = useMemo(() => {
-		const groups: Record<TaskCategory, AugmentedChangeRequest[]> = {
-			user: [],
-			role: [],
-		};
-		for (const item of augmentedRequests) {
-			const category = resolveCategory(item.resourceType);
-			if (!category) continue;
-			if (item.effectiveStatus === "APPROVED" || item.effectiveStatus === "REJECTED") continue;
-			groups[category].push(item);
-		}
-		return groups;
-	}, [augmentedRequests]);
+    const pendingGroups = useMemo(() => {
+        const groups: Record<TaskCategory, AugmentedChangeRequest[]> = {
+            user: [],
+            role: [],
+        };
+        for (const item of augmentedRequests) {
+            const category = resolveCategory(item.resourceType);
+            if (!category) continue;
+            if (item.effectiveStatus === "APPROVED" || item.effectiveStatus === "REJECTED") continue;
+            groups[category].push(item);
+        }
+        const byTimeDesc = (a: AugmentedChangeRequest, b: AugmentedChangeRequest) => {
+            const ta = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+            const tb = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+            if (tb !== ta) return tb - ta;
+            return (b.id || 0) - (a.id || 0);
+        };
+        groups.user.sort(byTimeDesc);
+        groups.role.sort(byTimeDesc);
+        return groups;
+    }, [augmentedRequests]);
 
-	const completedGroups = useMemo(() => {
-		const groups: Record<TaskCategory, AugmentedChangeRequest[]> = {
-			user: [],
-			role: [],
-		};
-		for (const item of augmentedRequests) {
-			const category = resolveCategory(item.resourceType);
-			if (!category) continue;
-			if (item.effectiveStatus === "APPROVED" || item.effectiveStatus === "REJECTED") {
-				groups[category].push(item);
-			}
-		}
-		return groups;
-	}, [augmentedRequests]);
+    const completedGroups = useMemo(() => {
+        const groups: Record<TaskCategory, AugmentedChangeRequest[]> = {
+            user: [],
+            role: [],
+        };
+        for (const item of augmentedRequests) {
+            const category = resolveCategory(item.resourceType);
+            if (!category) continue;
+            if (item.effectiveStatus === "APPROVED" || item.effectiveStatus === "REJECTED") {
+                groups[category].push(item);
+            }
+        }
+        const byTimeDesc = (a: AugmentedChangeRequest, b: AugmentedChangeRequest) => {
+            const ta = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+            const tb = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+            if (tb !== ta) return tb - ta;
+            return (b.id || 0) - (a.id || 0);
+        };
+        groups.user.sort(byTimeDesc);
+        groups.role.sort(byTimeDesc);
+        return groups;
+    }, [augmentedRequests]);
 
 	const categoriesWithData = useMemo(() => {
 		return CATEGORY_ORDER.filter((category) => {

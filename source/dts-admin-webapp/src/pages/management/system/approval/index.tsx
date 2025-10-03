@@ -1,4 +1,4 @@
-import { Button, Input, Modal, Table, Tag, Tooltip } from "antd";
+import { Button, Input, Modal, Table, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
@@ -9,6 +9,7 @@ import useUserStore from "@/store/userStore";
 import { useUserRoles } from "@/store/userStore";
 import ApprovalCenterView from "@/admin/views/approval-center";
 import { Badge } from "@/ui/badge";
+import { Icon } from "@/components/icon";
 import { Card, CardContent, CardHeader } from "@/ui/card";
 import { Text } from "@/ui/typography";
 import { DetailItem, DetailSection } from "@/components/detail/DetailSection";
@@ -25,6 +26,24 @@ interface UserInfoChange {
 	after?: KeycloakUser;
 }
 
+function canonicalRole(value: unknown): string {
+	if (!value) {
+		return "";
+	}
+	let source: unknown = value;
+	if (typeof value === "object") {
+		const candidate = (value as { name?: unknown; code?: unknown }).name ?? (value as { name?: unknown; code?: unknown }).code;
+		if (typeof candidate === "string") {
+			source = candidate;
+		}
+	}
+	if (typeof source !== "string") {
+		return "";
+	}
+	const normalized = source.trim().toUpperCase().replace(/^ROLE[_-]?/, "").replace(/[_-]/g, "");
+	return normalized;
+}
+
 export default function ApprovalPage() {
 	const [approvals, setApprovals] = useState<BasicApprovalRequest[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -37,22 +56,7 @@ export default function ApprovalPage() {
 	const { userInfo } = useUserStore();
 	const roles = useUserRoles();
 	const isAuthAdmin = useMemo(() => {
-		return roles.some((role) => {
-			if (typeof role === "string") {
-				return role.toUpperCase() === "AUTHADMIN";
-			}
-			if (role && typeof role === "object") {
-				const objectRole = role as { name?: unknown; code?: unknown };
-				const candidate =
-					typeof objectRole.name === "string"
-						? objectRole.name
-						: typeof objectRole.code === "string"
-							? objectRole.code
-							: null;
-				return candidate?.toUpperCase() === "AUTHADMIN";
-			}
-			return false;
-		});
+		return roles.some((role) => canonicalRole(role) === "AUTHADMIN");
 	}, [roles]);
 
 	// 加载审批请求列表
@@ -61,10 +65,16 @@ export default function ApprovalPage() {
 			return;
 		}
 		setLoading(true);
-		try {
-			// 后端列表接口只返回基本审批信息，不包含items字段
-			const data = await KeycloakApprovalService.getApprovalRequests();
-			setApprovals(data as BasicApprovalRequest[]);
+    try {
+        // 后端列表接口只返回基本审批信息，不包含items字段
+        const data = await KeycloakApprovalService.getApprovalRequests();
+        const byTimeDesc = (a: BasicApprovalRequest, b: BasicApprovalRequest) => {
+            const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            if (tb !== ta) return tb - ta;
+            return (b.id || 0) - (a.id || 0);
+        };
+        setApprovals((data as BasicApprovalRequest[]).slice().sort(byTimeDesc));
 		} catch (error: any) {
 			console.error("Error loading approvals:", error);
 			toast.error(`加载审批列表失败: ${error.message || "未知错误"}`);
@@ -218,10 +228,18 @@ export default function ApprovalPage() {
                     GRANT_ROLE: { text: "分配角色", color: "green" },
                     REVOKE_ROLE: { text: "移除角色", color: "purple" },
                 };
-				const config = typeMap[type] || { text: type, color: "default" };
-				return <Tag color={config.color}>{config.text}</Tag>;
-			},
-		},
+                const config = typeMap[type] || { text: type, color: "default" };
+                const variantMap: Record<string, Parameters<typeof Badge>[0]["variant"]> = {
+                    blue: "info",
+                    orange: "warning",
+                    green: "success",
+                    purple: "secondary",
+                    red: "destructive",
+                    default: "outline",
+                };
+                return <Badge variant={variantMap[config.color] || "outline"}>{config.text}</Badge>;
+            },
+        },
 		{
 			title: "申请人",
 			dataIndex: "requester",
@@ -273,15 +291,14 @@ export default function ApprovalPage() {
 			key: "action",
 			width: 120,
 			fixed: "right",
-			render: (_, record) => (
-				<div className="flex gap-1">
-					<Button size="small" onClick={() => handleViewDetail(record)}>
-						查看
-					</Button>
-					{/* 根据需求，移除处理按钮 */}
-				</div>
-			),
-		},
+            render: (_, record) => (
+                <div className="flex items-center justify-center gap-1">
+                    <Button variant="ghost" size="sm" title="查看详情" onClick={() => handleViewDetail(record)}>
+                        <Icon icon="mdi:eye" size={16} />
+                    </Button>
+                </div>
+            ),
+        },
 	];
 
 	// 初始化加载
@@ -306,21 +323,22 @@ export default function ApprovalPage() {
 					</div>
 				</CardHeader>
 				<CardContent>
-					<Table
-						rowKey="id"
-						columns={columns}
-						dataSource={approvals as any[]}
-						loading={loading}
-						size="small"
-						className="text-sm"
-						rowClassName={() => "text-sm"}
-						scroll={{ x: 1000 }}
-						pagination={{
-							showSizeChanger: true,
-							showQuickJumper: true,
-							showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
-						}}
-					/>
+                <Table
+                    rowKey="id"
+                    columns={columns}
+                    dataSource={approvals as any[]}
+                    loading={loading}
+                    size="small"
+                    className="text-sm"
+                    rowClassName={() => "text-sm"}
+                    scroll={{ x: 1400 }}
+                    pagination={{
+                        pageSize: 10,
+                        showSizeChanger: true,
+                        showQuickJumper: true,
+                        showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                    }}
+                />
 				</CardContent>
 			</Card>
 

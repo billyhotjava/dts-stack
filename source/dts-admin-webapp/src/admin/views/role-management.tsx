@@ -471,7 +471,10 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                 description: description.trim() || undefined,
                 reason: trimmedReason,
             };
-            await adminApi.createCustomRole(payload);
+            const change = await adminApi.createCustomRole(payload);
+            if (change?.id != null) {
+                await adminApi.submitChangeRequest(change.id);
+            }
             if (selectedMenus.size > 0) {
                 try {
                     await submitMenuChangeRequests({
