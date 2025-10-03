@@ -1,11 +1,13 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/admin/api/adminApi";
 import type { PortalMenuCollection, PortalMenuItem } from "@/admin/types";
+import { setPortalMenus } from "@/store/portalMenuStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Text } from "@/ui/typography";
 import { Button } from "@/ui/button";
+import { Badge } from "@/ui/badge";
 import { toast } from "sonner";
 
 export default function PortalMenusView() {
@@ -15,8 +17,8 @@ export default function PortalMenusView() {
     queryFn: adminApi.getPortalMenus,
   });
 
-  const activeMenus = useMemo(() => data?.active ?? [], [data?.active]);
-  const deletedMenus = useMemo(() => buildMenuHierarchy(data?.deleted ?? []), [data?.deleted]);
+  const treeMenus = useMemo(() => data?.allMenus ?? data?.menus ?? [], [data?.allMenus, data?.menus]);
+  const activeMenus = useMemo(() => data?.menus ?? [], [data?.menus]);
 
   const [nameDrafts, setNameDrafts] = useState<Record<number, string>>({});
   const [pending, setPending] = useState<Record<number, boolean>>({});
@@ -34,10 +36,15 @@ export default function PortalMenusView() {
         }
       });
     };
-    hydrate(activeMenus);
-    hydrate(deletedMenus);
+    hydrate(treeMenus);
     setNameDrafts(drafts);
-  }, [activeMenus, deletedMenus]);
+  }, [treeMenus]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setPortalMenus(activeMenus, treeMenus);
+    }
+  }, [activeMenus, treeMenus, isLoading]);
 
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
@@ -83,10 +90,10 @@ export default function PortalMenusView() {
     }
   };
 
-  const handleToggle = async (id: number, enable: boolean) => {
+  const handleToggle = async (id: number, currentlyDeleted: boolean) => {
     markPending(id, true);
     try {
-      if (enable) {
+      if (currentlyDeleted) {
         const result = await adminApi.updatePortalMenu(id, {
           deleted: false,
         } as unknown as PortalMenuItem);
@@ -130,74 +137,48 @@ export default function PortalMenusView() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>启用菜单</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Text variant="body3">加载中..</Text>
-            ) : activeMenus.length === 0 ? (
-              <Text variant="body3">暂无启用的菜单</Text>
-            ) : (
-              <MenuTree
-                items={activeMenus}
-                mode="active"
-                nameDrafts={nameDrafts}
-                pending={pending}
-                onNameChange={updateDraftName}
-                onSave={handleSaveName}
-                onToggle={handleToggle}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>禁用菜单</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Text variant="body3">加载中..</Text>
-            ) : deletedMenus.length === 0 ? (
-              <Text variant="body3">暂无禁用的菜单</Text>
-            ) : (
-              <MenuTree
-                items={deletedMenus}
-                mode="disabled"
-                nameDrafts={nameDrafts}
-                pending={pending}
-                onNameChange={updateDraftName}
-                onSave={handleSaveName}
-                onToggle={handleToggle}
-              />
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>菜单树</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Text variant="body3">加载中..</Text>
+          ) : treeMenus.length === 0 ? (
+            <Text variant="body3">暂无菜单数据</Text>
+          ) : (
+            <MenuTree
+              items={treeMenus}
+              nameDrafts={nameDrafts}
+              pending={pending}
+              onNameChange={updateDraftName}
+              onSave={handleSaveName}
+              onToggle={handleToggle}
+            />
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
 type MenuTreeProps = {
   items: PortalMenuItem[];
-  mode: "active" | "disabled";
   nameDrafts: Record<number, string>;
   pending: Record<number, boolean>;
   onNameChange: (id: number, value: string) => void;
   onSave: (id: number) => void;
-  onToggle: (id: number, enabled: boolean) => void;
+  onToggle: (id: number, currentlyDeleted: boolean) => void;
+  level?: number;
 };
 
-function MenuTree({ items, mode, nameDrafts, pending, onNameChange, onSave, onToggle }: MenuTreeProps) {
+function MenuTree({ items, nameDrafts, pending, onNameChange, onSave, onToggle, level = 0 }: MenuTreeProps) {
   if (!items.length) {
     return null;
   }
 
   return (
-    <ul className="space-y-3">
+    <ul className={level === 0 ? "space-y-4" : "space-y-3"}>
       {items.map((item) => {
         if (item.id == null) {
           return null;
@@ -208,15 +189,24 @@ function MenuTree({ items, mode, nameDrafts, pending, onNameChange, onSave, onTo
         const changed = currentName.trim() !== originalName;
         const busy = pending[id];
         const childMenus = Array.isArray(item.children) ? item.children : [];
+        const isDeleted = Boolean(item.deleted);
+        const isRoot = level === 0;
 
         return (
-          <li key={id} className="rounded-md border p-3">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <li
+            key={id}
+            className={
+              (isRoot ? "rounded-lg border p-4" : "rounded-md border p-3") +
+              " bg-background shadow-sm"
+            }
+          >
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex-1 space-y-2">
                 <Input value={currentName} onChange={(e) => onNameChange(id, e.target.value)} placeholder="菜单名称" />
-                <div className="text-xs text-muted-foreground">
-                  编号：{id}
-                  {item.path ? ` · 路径：${item.path}` : ""}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>编号：{id}</span>
+                  {item.path ? <span>路径：{item.path}</span> : null}
+                  <Badge variant={isDeleted ? "outline" : "success"}>{isDeleted ? "已禁用" : "已启用"}</Badge>
                 </div>
               </div>
               <div className="flex flex-shrink-0 gap-2">
@@ -225,24 +215,24 @@ function MenuTree({ items, mode, nameDrafts, pending, onNameChange, onSave, onTo
                 </Button>
                 <Button
                   size="sm"
-                  variant={mode === "active" ? "destructive" : "secondary"}
-                  onClick={() => onToggle(id, mode === "disabled")}
+                  variant={isDeleted ? "secondary" : "destructive"}
+                  onClick={() => onToggle(id, isDeleted)}
                   disabled={busy}
                 >
-                  {mode === "active" ? "禁用" : "启用"}
+                  {isDeleted ? "启用" : "禁用"}
                 </Button>
               </div>
             </div>
             {childMenus.length > 0 ? (
-              <div className="mt-3 border-l pl-4">
+              <div className="mt-3 space-y-3 border-l pl-4">
                 <MenuTree
                   items={childMenus}
-                  mode={mode}
                   nameDrafts={nameDrafts}
                   pending={pending}
                   onNameChange={onNameChange}
                   onSave={onSave}
                   onToggle={onToggle}
+                  level={level + 1}
                 />
               </div>
             ) : null}
@@ -251,63 +241,4 @@ function MenuTree({ items, mode, nameDrafts, pending, onNameChange, onSave, onTo
       })}
     </ul>
   );
-}
-
-function buildMenuHierarchy(items: PortalMenuItem[]): PortalMenuItem[] {
-  if (!items.length) {
-    return [];
-  }
-
-  const nodes = new Map<number, PortalMenuItem>();
-  const roots: PortalMenuItem[] = [];
-
-  for (const item of items) {
-    if (item.id == null) {
-      continue;
-    }
-    nodes.set(item.id, { ...item, children: [] });
-  }
-
-  for (const item of items) {
-    if (item.id == null) {
-      continue;
-    }
-    const node = nodes.get(item.id);
-    if (!node) {
-      continue;
-    }
-    const parentId = item.parentId ?? null;
-    if (parentId != null && nodes.has(parentId)) {
-      const parent = nodes.get(parentId);
-      if (parent) {
-        if (!Array.isArray(parent.children)) {
-          parent.children = [];
-        }
-        parent.children.push(node);
-      }
-    } else {
-      roots.push(node);
-    }
-  }
-
-  const sortBranch = (branch: PortalMenuItem[]) => {
-    branch.sort((a, b) => {
-      const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
-      const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
-      if (orderA !== orderB) {
-        return orderA - orderB;
-      }
-      const idA = a.id ?? 0;
-      const idB = b.id ?? 0;
-      return idA - idB;
-    });
-    for (const node of branch) {
-      if (Array.isArray(node.children) && node.children.length > 0) {
-        sortBranch(node.children);
-      }
-    }
-  };
-
-  sortBranch(roots);
-  return roots;
 }

@@ -87,12 +87,13 @@ export interface PortalMenuItem {
 	displayName?: string;
 	securityLevel?: SecurityLevel;
 	deleted?: boolean;
+	allowedRoles?: string[];
 	children?: PortalMenuItem[];
 }
 
 export interface PortalMenuCollection {
-	active: PortalMenuItem[];
-	deleted: PortalMenuItem[];
+	menus: PortalMenuItem[];
+	allMenus?: PortalMenuItem[];
 }
 
 export type OrgDataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
@@ -179,7 +180,6 @@ export interface AdminCustomRole {
 	operations: DataOperation[];
 	maxRows?: number | null;
 	allowDesensitizeJson?: boolean;
-	maxDataLevel: OrgDataLevel;
 	description?: string;
 	createdBy: string;
 	createdAt: string;
@@ -205,8 +205,8 @@ export interface CreateCustomRolePayload {
 	operations: DataOperation[];
 	maxRows?: number | null;
 	allowDesensitizeJson?: boolean;
-	maxDataLevel: OrgDataLevel;
 	description?: string;
+	reason?: string;
 }
 
 export interface CreateRoleAssignmentPayload {

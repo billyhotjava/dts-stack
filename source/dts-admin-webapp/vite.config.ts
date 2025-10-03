@@ -4,6 +4,10 @@ import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig, loadEnv } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { fileURLToPath } from "node:url";
+import { resolve as resolvePath } from "node:path";
+
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const rawEnv = loadEnv(mode, process.cwd(), "");
@@ -41,6 +45,13 @@ export default defineConfig(({ mode }) => {
 					template: "treemap",
 				}),
 		].filter(Boolean),
+
+		resolve: {
+			alias: {
+				"@": resolvePath(rootDir, "src"),
+				"#": resolvePath(rootDir, "src/types"),
+			},
+		},
 
     server: {
       open: true,

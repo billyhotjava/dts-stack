@@ -190,7 +190,7 @@ export default function RoleModal({ open, mode, role, onCancel, onSuccess }: Rol
         adminApi
             .getPortalMenus()
             .then((menus) => {
-                const list = menus?.active ?? [];
+                const list = menus?.menus ?? [];
                 setMenuTree(mapPortalMenusToMenuTree(list));
                 setMenuSecurityMap(collectMenuSecurityMap(list));
             })

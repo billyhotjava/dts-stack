@@ -154,7 +154,7 @@ export const adminApi = {
 		}),
 
 	createCustomRole: (payload: CreateCustomRolePayload) =>
-		apiClient.post<AdminCustomRole>({
+		apiClient.post<ChangeRequest>({
 			url: "/admin/custom-roles",
 			data: payload,
 		}),
@@ -165,7 +165,7 @@ export const adminApi = {
 		}),
 
 	createRoleAssignment: (payload: CreateRoleAssignmentPayload) =>
-		apiClient.post<AdminRoleAssignment>({
+		apiClient.post<ChangeRequest>({
 			url: "/admin/role-assignments",
 			data: payload,
 		}),

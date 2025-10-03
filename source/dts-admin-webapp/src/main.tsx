@@ -18,7 +18,7 @@ if (GLOBAL_CONFIG.routerMode === "backend") {
     await menuService.getMenuList();
     try {
         const menus = await adminApi.getPortalMenus();
-        setPortalMenus(menus?.active ?? []);
+        setPortalMenus(menus?.menus ?? [], menus?.allMenus ?? menus?.menus ?? []);
     } catch (e) {
         // eslint-disable-next-line no-console
         console.warn("[main] Failed to prefetch portal menus:", e);
