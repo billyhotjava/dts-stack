@@ -115,28 +115,28 @@ public class ExploreResource {
         @PathVariable UUID executionId,
         @RequestBody(required = false) Map<String, Object> body
     ) {
-        Optional<ResultSet> optional = resultSetRepo.findById(executionId);
-        if (optional.isEmpty()) {
-            return ApiResponses.error("Result set not found");
-        }
-        ResultSet record = optional.get();
-        int ttlDays = 7;
-        if (body != null && body.get("ttlDays") != null) {
-            try {
-                ttlDays = Math.max(1, Integer.parseInt(String.valueOf(body.get("ttlDays"))));
-            } catch (NumberFormatException ignored) {}
-        }
-        Instant now = Instant.now();
-        record.setTtlDays(ttlDays);
-        record.setExpiresAt(now.plus(ttlDays, ChronoUnit.DAYS));
-        record.setStorageUri("oss://datalake/explore/" + executionId + ".parquet");
-        resultSetRepo.save(record);
-        audit.audit("UPDATE", "explore.result.save", executionId.toString());
-        Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("id", executionId);
-        resp.put("expiresAt", Optional.ofNullable(record.getExpiresAt()).map(Instant::toString).orElse(null));
-        resp.put("storageUri", record.getStorageUri());
-        return ApiResponses.ok(resp);
+        return resultSetRepo
+            .findById(executionId)
+            .map(record -> {
+                int ttlDays = 7;
+                if (body != null && body.get("ttlDays") != null) {
+                    try {
+                        ttlDays = Math.max(1, Integer.parseInt(String.valueOf(body.get("ttlDays"))));
+                    } catch (NumberFormatException ignored) {}
+                }
+                Instant now = Instant.now();
+                record.setTtlDays(ttlDays);
+                record.setExpiresAt(now.plus(ttlDays, ChronoUnit.DAYS));
+                record.setStorageUri("oss://datalake/explore/" + executionId + ".parquet");
+                resultSetRepo.save(record);
+                audit.audit("UPDATE", "explore.result.save", executionId.toString());
+                Map<String, Object> resp = new LinkedHashMap<>();
+                resp.put("id", executionId);
+                resp.put("expiresAt", Optional.ofNullable(record.getExpiresAt()).map(Instant::toString).orElse(null));
+                resp.put("storageUri", record.getStorageUri());
+                return ApiResponses.ok(resp);
+            })
+            .orElseGet(() -> ApiResponses.error("Result set not found"));
     }
 
     @GetMapping("/query-executions")
@@ -203,23 +203,23 @@ public class ExploreResource {
         @PathVariable UUID id,
         @RequestParam(name = "rows", defaultValue = "50") int rowsLimit
     ) {
-        Optional<ResultSet> optional = resultSetRepo.findById(id);
-        if (optional.isEmpty()) {
-            return ApiResponses.error("Result set not found");
-        }
-        ResultSet record = optional.get();
-        List<String> headers = parseColumns(record.getColumns());
-        PreviewPayload preview = readPreview(record.getPreviewColumns());
-        List<Map<String, Object>> rows = preview.hasRows()
-            ? cloneRows(preview.getRows(), rowsLimit)
-            : generateFallbackRows(headers, rowsLimit);
-        Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("headers", headers);
-        resp.put("rows", rows);
-        resp.put("rowCount", record.getRowCount());
-        resp.put("masking", Optional.ofNullable(preview.getMasking()).orElseGet(() -> buildMasking(headers)));
-        audit.audit("READ", "explore.result.preview", id.toString());
-        return ApiResponses.ok(resp);
+        return resultSetRepo
+            .findById(id)
+            .map(record -> {
+                List<String> headers = parseColumns(record.getColumns());
+                PreviewPayload preview = readPreview(record.getPreviewColumns());
+                List<Map<String, Object>> rows = preview.hasRows()
+                    ? cloneRows(preview.getRows(), rowsLimit)
+                    : generateFallbackRows(headers, rowsLimit);
+                Map<String, Object> resp = new LinkedHashMap<>();
+                resp.put("headers", headers);
+                resp.put("rows", rows);
+                resp.put("rowCount", record.getRowCount());
+                resp.put("masking", Optional.ofNullable(preview.getMasking()).orElseGet(() -> buildMasking(headers)));
+                audit.audit("READ", "explore.result.preview", id.toString());
+                return ApiResponses.ok(resp);
+            })
+            .orElseGet(() -> ApiResponses.error("Result set not found"));
     }
 
     @DeleteMapping("/result-sets/{id}")

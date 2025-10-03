@@ -26,11 +26,7 @@ public class PortalOpaqueTokenIntrospector implements OpaqueTokenIntrospector {
 
     @Override
     public DefaultOAuth2AuthenticatedPrincipal introspect(String token) {
-        var sessionOpt = sessionRegistry.findByAccessToken(token);
-        if (sessionOpt.isEmpty()) {
-            throw invalidToken();
-        }
-        var session = sessionOpt.get();
+        var session = sessionRegistry.findByAccessToken(token).orElseThrow(this::invalidToken);
 
         Map<String, Object> attributes = new HashMap<>();
         attributes.put(OAuth2TokenIntrospectionClaimNames.ACTIVE, Boolean.TRUE);

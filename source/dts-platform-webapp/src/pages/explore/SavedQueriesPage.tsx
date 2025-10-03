@@ -341,7 +341,7 @@ export default function SavedQueriesPage() {
     <div className="space-y-4">
       {showDatasetHint ? (
         <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          <span>当前尚未同步任何数据集，请先在「基础数据维护 > 数据源」中完成配置。</span>
+          <span>当前尚未同步任何数据集，请先在「基础数据维护 &gt; 数据源」中完成配置。</span>
           <Button variant="ghost" size="sm" onClick={load}>
             重试
           </Button>
