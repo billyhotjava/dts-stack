@@ -116,6 +116,20 @@ public class PortalMenuService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public List<PortalMenu> findAllMenusOrdered() {
+        ensureSeedMenus();
+        return runSafely(
+            () -> {
+                List<PortalMenu> all = menuRepo.findAllByOrderBySortOrderAscIdAsc();
+                all.forEach(this::touch);
+                return all;
+            },
+            List.of(),
+            "full menu list"
+        );
+    }
+
     private <T> T runSafely(java.util.concurrent.Callable<T> action, T fallback, String label) {
         try {
             return action.call();

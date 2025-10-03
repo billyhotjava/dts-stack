@@ -102,11 +102,25 @@ export const latestQuality = (datasetId: string) => api.get({ url: "/data-qualit
 
 // Explore
 export const previewQuery = (data: any) => api.post({ url: "/explore/query/preview", data });
+export interface SavedQueryCreatePayload {
+  name: string;
+  sqlText: string;
+  datasetId?: string | null;
+}
+
+export interface SavedQueryUpdatePayload {
+  name?: string;
+  sqlText?: string;
+  datasetId?: string | null;
+}
+
 export const listSavedQueries = () => api.get({ url: "/explore/saved-queries" });
-export const createSavedQuery = (data: any) => api.post({ url: "/explore/saved-queries", data });
+export const createSavedQuery = (data: SavedQueryCreatePayload) => api.post({ url: "/explore/saved-queries", data });
 export const deleteSavedQuery = (id: string) => api.delete({ url: `/explore/saved-queries/${id}` });
 export const runSavedQuery = (id: string) => api.post({ url: `/explore/saved-queries/${id}/run` });
 export const getSavedQuery = (id: string) => api.get({ url: `/explore/saved-queries/${id}` });
+export const updateSavedQuery = (id: string, data: SavedQueryUpdatePayload) =>
+  api.put({ url: `/explore/saved-queries/${id}`, data });
 
 // Explore (new APIs)
 export const executeExplore = (data: any) => api.post({ url: "/explore/execute", data });

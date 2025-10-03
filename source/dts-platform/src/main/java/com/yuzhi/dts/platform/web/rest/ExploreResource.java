@@ -4,16 +4,19 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.explore.ExecEnums;
+import com.yuzhi.dts.platform.domain.explore.ExploreSavedQuery;
 import com.yuzhi.dts.platform.domain.explore.QueryExecution;
 import com.yuzhi.dts.platform.domain.explore.ResultSet;
 import com.yuzhi.dts.platform.domain.explore.ResultSet.StorageFormat;
-import com.yuzhi.dts.platform.domain.explore.ExploreSavedQuery;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.explore.ExploreSavedQueryRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
-import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.explore.dto.CreateSavedQueryRequest;
+import com.yuzhi.dts.platform.service.explore.dto.UpdateSavedQueryRequest;
+import com.yuzhi.dts.platform.service.security.AccessChecker;
+import jakarta.validation.Valid;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -31,11 +34,14 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/explore")
 @Transactional
+@Validated
 public class ExploreResource {
 
     private static final int HISTORY_LIMIT = 50;
@@ -262,8 +268,23 @@ public class ExploreResource {
     }
 
     @PostMapping("/saved-queries")
-    public ApiResponse<ExploreSavedQuery> createSaved(@RequestBody ExploreSavedQuery item) {
-        ExploreSavedQuery saved = savedRepo.save(item);
+    public ApiResponse<ExploreSavedQuery> createSaved(@Valid @RequestBody CreateSavedQueryRequest request) {
+        UUID datasetId = null;
+        if (StringUtils.hasText(request.getDatasetId())) {
+            var datasetCheck = validateDatasetAssociation(request.getDatasetId().trim());
+            if (!datasetCheck.success()) {
+                audit.audit("DENY", "explore.savedQuery", datasetCheck.auditHint());
+                return ApiResponses.error(datasetCheck.message());
+            }
+            datasetId = datasetCheck.dataset() != null ? datasetCheck.dataset().getId() : null;
+        }
+
+        ExploreSavedQuery entity = new ExploreSavedQuery();
+        entity.setName(trimToLength(request.getName(), 128));
+        entity.setSqlText(trimToLength(request.getSqlText(), 4096));
+        entity.setDatasetId(datasetId);
+
+        ExploreSavedQuery saved = savedRepo.save(entity);
         audit.audit("CREATE", "explore.savedQuery", saved.getId().toString());
         return ApiResponses.ok(saved);
     }
@@ -273,6 +294,55 @@ public class ExploreResource {
         savedRepo.deleteById(id);
         audit.audit("DELETE", "explore.savedQuery", id.toString());
         return ApiResponses.ok(Boolean.TRUE);
+    }
+
+    @PutMapping("/saved-queries/{id}")
+    public ApiResponse<ExploreSavedQuery> updateSaved(@PathVariable UUID id, @Valid @RequestBody UpdateSavedQueryRequest request) {
+        ExploreSavedQuery existing = savedRepo.findById(id).orElse(null);
+        if (existing == null) {
+            return ApiResponses.error("Saved query not found");
+        }
+
+        boolean mutated = false;
+        if (request.getName() != null) {
+            String name = trimToLength(request.getName(), 128);
+            if (!StringUtils.hasText(name)) {
+                return ApiResponses.error("name cannot be blank");
+            }
+            existing.setName(name);
+            mutated = true;
+        }
+        if (request.getSqlText() != null) {
+            String sqlText = trimToLength(request.getSqlText(), 4096);
+            if (!StringUtils.hasText(sqlText)) {
+                return ApiResponses.error("sqlText cannot be blank");
+            }
+            existing.setSqlText(sqlText);
+            mutated = true;
+        }
+        if (request.isDatasetIdPresent()) {
+            String datasetIdRaw = request.getDatasetId();
+            if (!StringUtils.hasText(datasetIdRaw)) {
+                existing.setDatasetId(null);
+                mutated = true;
+            } else {
+                var datasetCheck = validateDatasetAssociation(datasetIdRaw.trim());
+                if (!datasetCheck.success()) {
+                    audit.audit("DENY", "explore.savedQuery", datasetCheck.auditHint());
+                    return ApiResponses.error(datasetCheck.message());
+                }
+                existing.setDatasetId(datasetCheck.dataset() != null ? datasetCheck.dataset().getId() : null);
+                mutated = true;
+            }
+        }
+
+        if (!mutated) {
+            return ApiResponses.error("No fields to update");
+        }
+
+        ExploreSavedQuery saved = savedRepo.save(existing);
+        audit.audit("UPDATE", "explore.savedQuery", id.toString());
+        return ApiResponses.ok(saved);
     }
 
     @GetMapping("/saved-queries/{id}")
@@ -298,6 +368,26 @@ public class ExploreResource {
         Map<String, Object> payload = generateResult(dataset, Optional.ofNullable(q.getSqlText()).orElse(""), true);
         audit.audit("EXECUTE", "explore.savedQuery.run", id.toString());
         return ApiResponses.ok(payload);
+    }
+
+    private DatasetAssociationResult validateDatasetAssociation(String datasetIdRaw) {
+        if (!StringUtils.hasText(datasetIdRaw)) {
+            return DatasetAssociationResult.success(null);
+        }
+        UUID datasetId;
+        try {
+            datasetId = UUID.fromString(datasetIdRaw);
+        } catch (IllegalArgumentException ex) {
+            return DatasetAssociationResult.failure("datasetId must be a valid UUID", "invalid:" + datasetIdRaw);
+        }
+        CatalogDataset dataset = datasetRepo.findById(datasetId).orElse(null);
+        if (dataset == null) {
+            return DatasetAssociationResult.failure("指定的数据集不存在", "missing:" + datasetId);
+        }
+        if (!accessChecker.canRead(dataset)) {
+            return DatasetAssociationResult.failure("Access denied for dataset", datasetId.toString());
+        }
+        return DatasetAssociationResult.success(dataset);
     }
 
     private CatalogDataset resolveDataset(Object datasetIdRaw) {
@@ -518,6 +608,29 @@ public class ExploreResource {
             return dataset.getId().toString();
         }
         return Objects.toString(raw, "adhoc");
+    }
+
+    private record DatasetAssociationResult(boolean success, CatalogDataset dataset, String message, String auditHint) {
+
+        static DatasetAssociationResult success(CatalogDataset dataset) {
+            return new DatasetAssociationResult(true, dataset, null, dataset != null && dataset.getId() != null ? dataset.getId().toString() : "");
+        }
+
+        static DatasetAssociationResult failure(String message, String auditHint) {
+            return new DatasetAssociationResult(false, null, message, auditHint);
+        }
+    }
+
+    private String asText(Object value) {
+        return value != null ? String.valueOf(value).trim() : null;
+    }
+
+    private String trimToLength(String value, int max) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.length() > max ? trimmed.substring(0, max) : trimmed;
     }
 
     private String extractSql(Map<String, Object> body) {

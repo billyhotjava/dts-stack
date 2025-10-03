@@ -851,17 +851,48 @@ public class AdminApiResource {
     }
 
     private Map<String, Object> buildPortalMenuCollection() {
-        List<Map<String, Object>> active = new ArrayList<>();
-        for (PortalMenu menu : portalMenuService.findTree()) {
-            active.add(toMenuVM(menu));
+        List<PortalMenu> allMenus = portalMenuService.findAllMenusOrdered();
+        Comparator<PortalMenu> ordering = menuOrdering();
+        Map<Long, PortalMenu> idIndex = new LinkedHashMap<>();
+        Map<Long, List<PortalMenu>> childrenLookup = new LinkedHashMap<>();
+        List<PortalMenu> roots = new ArrayList<>();
+
+        for (PortalMenu menu : allMenus) {
+            if (menu.getId() != null) {
+                idIndex.put(menu.getId(), menu);
+            }
         }
-        List<Map<String, Object>> deleted = new ArrayList<>();
-        for (PortalMenu menu : portalMenuService.findDeletedMenus()) {
-            deleted.add(toDeletedMenuVM(menu));
+
+        for (PortalMenu menu : allMenus) {
+            Long parentId = menu.getParent() != null ? menu.getParent().getId() : null;
+            if (parentId == null || !idIndex.containsKey(parentId)) {
+                roots.add(menu);
+            } else {
+                childrenLookup.computeIfAbsent(parentId, key -> new ArrayList<>()).add(menu);
+            }
         }
+
+        roots.sort(ordering);
+        for (List<PortalMenu> children : childrenLookup.values()) {
+            children.sort(ordering);
+        }
+
+        List<Map<String, Object>> activeTree = new ArrayList<>();
+        List<Map<String, Object>> fullTree = new ArrayList<>();
+        for (PortalMenu root : roots) {
+            Map<String, Object> fullNode = toMenuTreeNode(root, childrenLookup, true);
+            if (fullNode != null) {
+                fullTree.add(fullNode);
+            }
+            Map<String, Object> activeNode = toMenuTreeNode(root, childrenLookup, false);
+            if (activeNode != null) {
+                activeTree.add(activeNode);
+            }
+        }
+
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("active", active);
-        payload.put("deleted", deleted);
+        payload.put("menus", activeTree);
+        payload.put("allMenus", fullTree);
         return payload;
     }
 
@@ -918,7 +949,7 @@ public class AdminApiResource {
             if (deleted) {
                 markMenuDeleted(target);
             } else {
-                target.setDeleted(false);
+                restoreMenu(target);
             }
         }
     }
@@ -1445,6 +1476,23 @@ public class AdminApiResource {
         }
     }
 
+    private void restoreMenu(PortalMenu menu) {
+        menu.setDeleted(false);
+        Long id = menu.getId();
+        if (id == null) {
+            if (menu.getChildren() != null) {
+                for (PortalMenu child : menu.getChildren()) {
+                    restoreMenu(child);
+                }
+            }
+            return;
+        }
+        List<PortalMenu> children = portalMenuRepo.findByParentIdOrderBySortOrderAscIdAsc(id);
+        for (PortalMenu child : children) {
+            restoreMenu(child);
+        }
+    }
+
     private String resolveMenuDisplayName(PortalMenu menu) {
         String metadata = menu.getMetadata();
         if (metadata != null && !metadata.isBlank()) {
@@ -1597,51 +1645,60 @@ public class AdminApiResource {
         return node.toString();
     }
 
-    private Map<String, Object> toMenuVM(PortalMenu p) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", p.getId());
-        m.put("name", p.getName());
-        m.put("displayName", resolveMenuDisplayName(p));
-        m.put("path", p.getPath());
-        m.put("component", p.getComponent());
-        m.put("icon", p.getIcon());
-        m.put("sortOrder", p.getSortOrder());
-        m.put("metadata", p.getMetadata());
-        m.put("securityLevel", p.getSecurityLevel());
-        m.put("deleted", p.isDeleted());
-        m.put("parentId", p.getParent() != null ? p.getParent().getId() : null);
-        List<Map<String, Object>> visibilityRules = p.getVisibilities().stream().map(this::toVisibilityRule).toList();
-        m.put("visibilityRules", visibilityRules);
-        m.put("allowedRoles", visibilityRules.stream().map(rule -> Objects.toString(rule.get("role"), null)).filter(Objects::nonNull).distinct().toList());
-        m.put("allowedPermissions", visibilityRules.stream().map(rule -> Objects.toString(rule.get("permission"), null)).filter(value -> value != null && !value.isBlank()).distinct().toList());
-        m.put("maxDataLevel", deriveMenuMaxDataLevel(visibilityRules));
-        if (p.getChildren() != null && !p.getChildren().isEmpty()) {
-            List<Map<String, Object>> children = new ArrayList<>();
-            for (PortalMenu c : p.getChildren()) children.add(toMenuVM(c));
-            m.put("children", children);
-        }
-        return m;
+    private Comparator<PortalMenu> menuOrdering() {
+        return Comparator
+            .comparing((PortalMenu menu) -> menu.getSortOrder() == null ? Integer.MAX_VALUE : menu.getSortOrder())
+            .thenComparingLong(menu -> menu.getId() == null ? Long.MAX_VALUE : menu.getId());
     }
 
-    private Map<String, Object> toDeletedMenuVM(PortalMenu p) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", p.getId());
-        m.put("name", p.getName());
-        m.put("displayName", resolveMenuDisplayName(p));
-        m.put("path", p.getPath());
-        m.put("component", p.getComponent());
-        m.put("icon", p.getIcon());
-        m.put("sortOrder", p.getSortOrder());
-        m.put("metadata", p.getMetadata());
-        m.put("securityLevel", p.getSecurityLevel());
-        m.put("deleted", p.isDeleted());
-        m.put("parentId", p.getParent() != null ? p.getParent().getId() : null);
-        List<Map<String, Object>> visibilityRules = p.getVisibilities().stream().map(this::toVisibilityRule).toList();
-        m.put("visibilityRules", visibilityRules);
-        m.put("allowedRoles", visibilityRules.stream().map(rule -> Objects.toString(rule.get("role"), null)).filter(Objects::nonNull).distinct().toList());
-        m.put("allowedPermissions", visibilityRules.stream().map(rule -> Objects.toString(rule.get("permission"), null)).filter(value -> value != null && !value.isBlank()).distinct().toList());
-        m.put("maxDataLevel", deriveMenuMaxDataLevel(visibilityRules));
-        return m;
+    private Map<String, Object> toMenuTreeNode(PortalMenu menu, Map<Long, List<PortalMenu>> childrenLookup, boolean includeDeleted) {
+        if (!includeDeleted && menu.isDeleted()) {
+            return null;
+        }
+        Map<String, Object> node = new LinkedHashMap<>();
+        node.put("id", menu.getId());
+        node.put("name", menu.getName());
+        node.put("displayName", resolveMenuDisplayName(menu));
+        node.put("path", menu.getPath());
+        node.put("component", menu.getComponent());
+        node.put("icon", menu.getIcon());
+        node.put("sortOrder", menu.getSortOrder());
+        node.put("metadata", menu.getMetadata());
+        node.put("securityLevel", menu.getSecurityLevel());
+        node.put("deleted", menu.isDeleted());
+        node.put("parentId", menu.getParent() != null ? menu.getParent().getId() : null);
+        List<Map<String, Object>> visibilityRules = menu.getVisibilities().stream().map(this::toVisibilityRule).toList();
+        node.put("visibilityRules", visibilityRules);
+        node.put(
+            "allowedRoles",
+            visibilityRules.stream().map(rule -> Objects.toString(rule.get("role"), null)).filter(Objects::nonNull).distinct().toList()
+        );
+        node.put(
+            "allowedPermissions",
+            visibilityRules
+                .stream()
+                .map(rule -> Objects.toString(rule.get("permission"), null))
+                .filter(value -> value != null && !value.isBlank())
+                .distinct()
+                .toList()
+        );
+        node.put("maxDataLevel", deriveMenuMaxDataLevel(visibilityRules));
+
+        Long id = menu.getId();
+        List<PortalMenu> children = id == null ? List.of() : childrenLookup.getOrDefault(id, List.of());
+        if (!children.isEmpty()) {
+            List<Map<String, Object>> childNodes = new ArrayList<>();
+            for (PortalMenu child : children) {
+                Map<String, Object> childNode = toMenuTreeNode(child, childrenLookup, includeDeleted);
+                if (childNode != null) {
+                    childNodes.add(childNode);
+                }
+            }
+            if (!childNodes.isEmpty()) {
+                node.put("children", childNodes);
+            }
+        }
+        return node;
     }
 
     private Map<String, Object> toDatasetVM(AdminDataset d) {

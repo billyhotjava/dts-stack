@@ -5,10 +5,10 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.16.xsd"
 >
     <changeSet id="20251007-02-data-standard" author="platform">
-        <comment>Replace modeling_standard with data standard ledger tables</comment>
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="modeling_standard"/>
         </preConditions>
+        <comment>Replace modeling_standard with data standard ledger tables</comment>
         <dropTable tableName="modeling_standard" cascadeConstraints="true"/>
     </changeSet>
 

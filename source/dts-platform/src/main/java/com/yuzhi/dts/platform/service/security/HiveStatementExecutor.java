@@ -5,6 +5,9 @@ import com.yuzhi.dts.platform.service.security.dto.StatementExecutionResult;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.sql.SQLSyntaxErrorException;
+import java.sql.SQLTimeoutException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +50,15 @@ public class HiveStatementExecutor {
         } catch (ClassNotFoundException e) {
             log.warn("Hive JDBC driver not present: {}", e.getMessage());
             for (var entry : entries) {
-                results.add(new StatementExecutionResult(entry.getKey(), entry.getValue(), StatementExecutionResult.Status.FAILED, "Hive driver missing"));
+                results.add(
+                    new StatementExecutionResult(
+                        entry.getKey(),
+                        entry.getValue(),
+                        StatementExecutionResult.Status.FAILED,
+                        "Hive driver missing",
+                        "DRIVER_MISSING"
+                    )
+                );
             }
             return results;
         }
@@ -75,9 +86,10 @@ public class HiveStatementExecutor {
                         stmt.execute(sql);
                         results.add(new StatementExecutionResult(key, sql, StatementExecutionResult.Status.SUCCEEDED, "OK"));
                     } catch (SQLException ex) {
-                        log.warn("Hive statement execution failed: {}", ex.getMessage());
+                        String code = resolveErrorCode(ex);
                         String reason = sanitize(ex.getMessage());
-                        results.add(new StatementExecutionResult(key, sql, StatementExecutionResult.Status.FAILED, reason));
+                        log.warn("Hive statement execution failed [{}]: {}", code, reason);
+                        results.add(new StatementExecutionResult(key, sql, StatementExecutionResult.Status.FAILED, reason, code));
                         if (!properties.isTolerant()) {
                             throw ex;
                         }
@@ -88,10 +100,12 @@ public class HiveStatementExecutor {
             log.error("Hive connection/statement failure: {}", ex.getMessage());
             if (results.isEmpty()) {
                 for (var entry : entries) {
-                    results.add(new StatementExecutionResult(entry.getKey(), entry.getValue(), StatementExecutionResult.Status.FAILED, sanitize(ex.getMessage())));
+                    results.add(new StatementExecutionResult(entry.getKey(), entry.getValue(), StatementExecutionResult.Status.FAILED, sanitize(ex.getMessage()), resolveErrorCode(ex)));
                 }
             } else {
-                results.replaceAll(res -> res.status() == StatementExecutionResult.Status.SUCCEEDED ? res : new StatementExecutionResult(res.key(), res.sql(), StatementExecutionResult.Status.FAILED, sanitize(ex.getMessage())));
+                String reason = sanitize(ex.getMessage());
+                String code = resolveErrorCode(ex);
+                results.replaceAll(res -> res.status() == StatementExecutionResult.Status.SUCCEEDED ? res : new StatementExecutionResult(res.key(), res.sql(), StatementExecutionResult.Status.FAILED, reason, code));
             }
         }
         return results;
@@ -102,5 +116,22 @@ public class HiveStatementExecutor {
             return "Execution failed";
         }
         return message.replaceAll("\n", " ").trim();
+    }
+
+    private String resolveErrorCode(SQLException ex) {
+        if (ex instanceof SQLTimeoutException) {
+            return "TIMEOUT";
+        }
+        if (ex instanceof SQLSyntaxErrorException) {
+            return "SYNTAX";
+        }
+        if (ex instanceof SQLIntegrityConstraintViolationException) {
+            return "CONSTRAINT";
+        }
+        String sqlState = ex.getSQLState();
+        if (StringUtils.hasText(sqlState)) {
+            return sqlState;
+        }
+        return ex.getClass().getSimpleName();
     }
 }

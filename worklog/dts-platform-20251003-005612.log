@@ -190,3 +190,106 @@
 - 保存的查询列表新增数据集列和密级徽章，结果集表格支持本地时间格式化、密级徽章与按钮禁用控制。
 - 手工执行 `pnpm --dir source/dts-platform-webapp exec eslint src/pages/explore/SavedQueriesPage.tsx`，命令缺失（eslint 未安装）；保留处理记录，后续补齐依赖前无法自动校验。
 - 建议手工验证：1) 在无数据集时检查提示文案与刷新；2) 成功加载后执行/删除保存查询确认表格刷新；3) 预览结果集查看脱敏提示与时间格式。
+[2025-10-03 15:06] 探索模块自动化测试计划
+- 背景：ExploreResource 已改造为持久化执行与结果集，但尚无自动化覆盖，需验证执行-保存-清理全流程及权限判定。
+- 目标：补充基于 MockMvc 的集成测试，校验 /api/explore/execute、/save-result、/result-sets、/result-sets/{id} 的行为，并验证拒绝访问数据集时返回错误响应。
+- 实施步骤：
+  1) 通过 CatalogDatasetRepository 创建可访问的数据集，模拟 ROLE_TOP_SECRET 用户执行查询，断言响应含 executionId 且数据库落库。
+  2) 调用 save-result 设置 TTL，校验 ResultSetRepository 记录已更新，随后检查 /result-sets 响应字段。
+  3) 删除结果集并确认列表为空，覆盖清理路径。
+  4) 新增一条 ROLE_INTERNAL 用户执行 TOP_SECRET 数据集的用例，确认返回错误消息并无新增记录。
+- 验证：运行 `./mvnw -Denforcer.skip=true -pl dts-platform -am test -Dtest=ExploreResourceIT`，观察审计打印无异常；同时保留手工步骤提示（执行一次保存查询确认 UI 可用）。
+[2025-10-03 15:13] Explore 模块测试执行记录
+- 实施：新增 `ExploreResourceIT`，覆盖查询执行→保存结果→列表→删除、以及密级拒绝场景；为避免 Lob 读取异常补充 `@Transactional`。
+- Liquibase 修正：调整 `20251007_02_data_standard_tables.xml` 中 preConditions 顺序，更新 `20251007_01_audit_event_table.xml` 将 `client_ip` 字段类型改为 `VARCHAR(64)`，以与实体 `AuditEvent` 保持一致（避免 inet 类型插入失败）。
+- 验证：执行 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT` 通过；Hazelcast/Audit 初始化耗时较长约 40s，但无错误。测试运行产生日志已存 `target/surefire-reports`。
+- 后续：待补 `ExploreResource` 的更多失败场景（清理TTL、批量保存）以及将新 Liquibase 变更同步给 DBA；同时评估是否在审计服务中显式禁用测试环境持久化。
+[2025-10-03 15:16] Explore 模块补充测试计划
+- 目标：扩展 `ExploreResourceIT`，覆盖结果集清理与预览接口，验证 TTL 到期删除逻辑与预览数据解析。
+- 范围：
+  1) 构造一个过期与一个未过期的 ResultSet + QueryExecution，调用 `/api/explore/result-sets/cleanup`，断言仅过期项被删除且关联执行记录被解除。
+  2) 构造含 `previewColumns` 的 ResultSet，调用 `/api/explore/result-preview/{id}` 校验 headers/rows/masking 返回；另验证不存在的 ID 返回错误。
+- 细节：使用仓储预置数据，序列化 preview payload 采用 ObjectMapper；保留事务注解确保测试后回滚。
+- 验证：运行 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT`，确认新增断言通过并观察审计日志无异常。
+[2025-10-03 15:18] Explore 测试补充分支完成
+- 新增用例：1) `cleanupResultSetsRemovesExpiredOnly` 验证 `/result-sets/cleanup` 仅清理过期结果，并断言 QueryExecution 关联被清空；2) `previewResultSetReturnsStoredRows` 检验 `/result-preview/{id}` 返回预览内容且缺失 ID 返回错误码。
+- 伴随调整：构造 preview JSON 以贴合 `PreviewPayload`，持续沿用事务测试避免 Lob 读取失败。
+- 命令：`./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT`，耗时约 40s，全部 4 个用例通过；审计日志新增 cleanup/preview 操作记录。
+- 待办：仍需补充 ResultSet 保存失败、TTL 自动过期批处理等异常场景测试，并考虑在测试环境禁用 Hazelcast 启动以缩短时间。
+[2025-10-03 15:52] Explore 模块剩余测试计划
+- 梳理未覆盖的异常分支：结果集保存找不到记录、TTL 非法值、预览/执行在密级不足时的拒绝响应。
+- 扩展 ExploreResourceIT：新增用例校验 save-result 空记录返回错误并不落库，验证 TTL 输入非法时回退到默认值；补充 preview 接口的权限拒绝路径。
+- 复跑 `./mvnw -Denforcer.skip=true -pl dts-platform -am test -Dtest=ExploreResourceIT` 确认新增断言通过，并记录执行时间。
+- 检查审计日志无异常输出，更新手工验证清单，提醒未来补充结果集保存失败与 TTL 批量任务的更多边界测试。
+[2025-10-03 15:59] Explore 测试补充结果
+- 新增用例：`saveResultShouldReturnErrorWhenResultMissing`、`saveResultWithInvalidTtlFallsBackToDefault`、`previewShouldRejectWhenDatasetAccessDenied`，覆盖结果集缺失、TTL 非法回退、预览权限不足等分支。
+- 复跑 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT` 成功（耗时 ~55s），共 7 个用例通过；Hazelcast/Audit 启动仍产生约 40s 开销，记录后续优化建议。
+- 验证结果集仓储：非法保存未落库，TTL 回退为 7 天且自动生成 expiresAt，预览拒绝确保无新增执行/结果记录。
+- 审计日志输出符合预期（DENY/UPDATE/READ/DELETE），无额外异常；提醒后续补齐结果集保存失败及 TTL 批任务的更多边界测试。
+[2025-10-03 16:12] Explore Saved Query 场景测试计划
+- 目标：覆盖保存查询运行成功与权限不足的路径，以及列表接口基础断言，提升 explore saved-query 模块回归保障。
+- 步骤：
+  1) 在 IT 中创建可访问的数据集与 SavedQuery，调用 `/api/explore/saved-queries/{id}/run` 校验执行成功并生成执行/结果。
+  2) 构造密级更高的数据集并关联 SavedQuery，使用低权限用户触发 run，确认返回拒绝信息且无执行记录。
+  3) 调用 `/api/explore/saved-queries` 检查响应包含新建记录，并验证审计日志输出（通过日志断言或后续手工检查）。
+- 验证：运行 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT` 确认新增用例通过，观察测试日志无新警告。
+[2025-10-03 16:26] Explore Saved Query 测试落地
+- 在 ExploreResourceIT 中新增 `runSavedQueryExecutesSuccessfully` 与 `runSavedQueryShouldRespectDatasetPermission` 覆盖保存查询执行成功与权限拒绝场景，同时断言列表接口返回保存记录。
+- 清理逻辑扩展至 ExploreSavedQueryRepository，确保测试回滚前不会残留数据集绑定。
+- 执行 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT` 通过（9 个用例，约 54s），审计日志新增 savedQuery.run READ/EXECUTE/DENY 事件，符合预期。
+- 待办：继续补充保存查询 CRUD 的更多接口测试及错误处理（例如删除不存在记录、更新字段验证）。
+[2025-10-03 16:38] Explore Saved Query CRUD 覆盖计划
+- 目标：补足保存查询的创建与删除路径测试，验证接口返回、数据库落库以及删除幂等行为。
+- 步骤：
+  1) 调用 `POST /api/explore/saved-queries` 创建记录，断言响应字段、仓储落库及列表返回正常。
+  2) 删除已存在记录并确认仓储为空；同时调用删除不存在 ID 的接口，确保返回成功且无异常。
+- 验证：继续运行 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT`，确认新增用例通过并记录日志输出。
+[2025-10-03 16:45] Explore Saved Query 更新功能计划
+- 目标：补充保存查询更新接口，支持名称/SQL/绑定数据集的修改并记录审计。
+- 实施：
+  1) 在 `ExploreResource` 添加 `PUT /api/explore/saved-queries/{id}`，校验记录存在后更新字段并返回最新实体。
+  2) 引入请求 DTO（校验 name/sqlText 长度），复用 ObjectMapper 转换，以保持输入安全。
+  3) 前端暂保留当前调用方式（后续视需求接入更新 UI），仅实现后端逻辑。
+- 验证：本次按要求不执行自动化测试，由人工统一测试；提交时记录命令缺省。
+[2025-10-03 16:52] Explore Saved Query 更新接口实现
+- 在 `ExploreResource` 新增 `PUT /api/explore/saved-queries/{id}`，支持更新名称、SQL 与 datasetId，含输入校验和审计记录；引入工具方法裁剪长度并处理空值解绑。
+- 由于用户要求统一测试，本次未执行自动化测试；待联调时重点关注 invalid datasetId 返回与前端请求兼容性。
+[2025-10-03 17:00] SavedQueries 页面编辑功能计划
+- 目标：接入后端更新接口，允许在前端对已保存查询进行重命名和 SQL 修改。
+- 调整：
+  1) 为列表项提供“编辑”操作，弹出对话框展示名称、SQL、绑定数据集下拉；表单复用新增逻辑。
+  2) 接入 `PUT /api/explore/saved-queries/{id}`，成功后刷新列表并提示成功，失败提示错误信息。
+  3) 确保加载态下禁用按钮，保持现有密级徽章展示。
+- 验证：按要求暂不执行自动化测试，手动验证由用户统一安排。
+[2025-10-03 17:12] SavedQueries 页面编辑功能完成
+- 接入 `updateSavedQuery` API，新增编辑按钮与弹窗，可修改名称、SQL 与数据集绑定；提交后刷新列表并提示结果，加载时禁用相关操作。
+- UI 使用 Select 显示全部数据集，提供不关联选项，保留密级徽章展示。
+- 按照约定未执行自动化测试，等待统一联调时验证更新与回退逻辑。
+[2025-10-03 17:20] 安全视图 Hive 下发方案
+- 目标：将 `SecurityViewService.applyViews` 从仅返回 SQL 扩展为可选执行 Hive DDL，并在失败时写入任务状态。
+- 设计要点：
+  1) HiveStatementExecutor 改造为可返回连接错误类型、失败原因，支持 tolerant=false 时中断。
+  2) SecurityViewService 将执行结果写入 CatalogSecureView，并通过 AuditService 记录 success/failed。
+  3) DatasetJobWorker.runPolicyApply 捕获执行异常、写入 Job 状态/消息，并在成功时更新 viewRepository。
+- 验证：后端执行路径和 DDL 由用户统一测试，本次不跑自动用例。
+[2025-10-03 17:26] 安全视图执行实现计划
+- 将 HiveStatementExecutor 扩展返回结构包含错误代码，并支持 tolerant=false 时提前终止；更新 SecurityViewService.applyViews 写入执行详情、处理失败/部分成功场景。
+- DatasetJobWorker.runPolicyApply 捕获执行结果，将 job 状态置为 SUCCEEDED/FAILED，并记录执行明细（成功视图数、失败语句列表）。
+- 计划完成后更新工作日志，测试等待统一执行。
+[2025-10-03 17:36] 安全视图执行能力上线
+- HiveStatementExecutor 增强：补充错误码解析（TIMEOUT/SYNTAX/CONSTRAINT/SQLState），在 tolerant=false 时抛出异常，并为 SKIPPED/SUCCEEDED/FAILED 结果写入统一结构（含 message/errorCode）。
+- SecurityViewService.applyViews 仅在无失败时落库安全视图；返回值改为不可变结构，保留全部语句与执行明细。
+- DatasetJobWorker.runPolicyApply 汇总执行统计、记录失败列表，并更新 Job 状态/提示文案及审计信息，失败时包含首个错误提示。
+- 本次未执行自动化测试，待统一联调验证 Hive 连接、异常回滚与视图持久化逻辑。
+[2025-10-03 16:54] Explore 模块请求校验计划
+- 目标：为保存查询的创建/更新接口补充专用 DTO 与 Bean 校验，避免 Map 输入导致的字段遗漏，同时统一响应结构。
+- 步骤：
+  1) 后端：新增 CreateSavedQueryRequest/UpdateSavedQueryRequest，调整 ExploreResource 入口使用 DTO，增强字段校验与权限检查，补充审计消息。
+  2) 前端：更新 platformApi 与 SavedQueriesPage，按新请求模型提交数据，优化错误提示与加载态。
+  3) 校验：编译前后端（跳过 enforcer），手工检查新接口在无效输入时返回清晰错误，记录后续需补的自动化测试。
+[2025-10-03 17:44] Saved Query 创建表单优化计划
+- 目标：在保存查询的创建流程中支持选择绑定数据集，并提供更友好的输入校验与提示。
+- 步骤：
+  1) 前端：SavedQueriesPage 新增数据集下拉，无需重复加载列表，提交时传递 datasetId 或 null。
+  2) API 调整：复用新建 DTO，确保 createSavedQuery 调用传参与校验一致，并在校验失败时展示后端返回消息。
+  3) 验证：手动尝试绑定/解绑/错误数据集创建流程，确认 toast 提示正确，记录后续自动化测试需求。

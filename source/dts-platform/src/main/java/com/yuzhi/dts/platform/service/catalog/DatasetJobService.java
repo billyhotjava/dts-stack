@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.SecurityViewService;
+import com.yuzhi.dts.platform.service.security.dto.StatementExecutionResult;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -243,17 +244,66 @@ public class DatasetJobService {
                 var policy = accessPolicyRepository.findByDataset(dataset).orElse(null);
                 var execution = securityViewService.applyViews(dataset, policy, refreshOption != null ? refreshOption : "NONE");
 
+                var executionResults = execution.executionResults();
+                long failed = executionResults.stream().filter(r -> r.status() == StatementExecutionResult.Status.FAILED).count();
+                long skipped = executionResults.stream().filter(r -> r.status() == StatementExecutionResult.Status.SKIPPED).count();
+                long succeeded = executionResults.stream().filter(r -> r.status() == StatementExecutionResult.Status.SUCCEEDED).count();
+
                 result.put("statements", execution.statements());
-                result.put("executionResults", execution.executionResults());
+                result.put("executionResults", executionResults);
                 result.put("persistedViews", execution.persistedViews());
+                result.put(
+                    "summary",
+                    Map.of(
+                        "total",
+                        executionResults.size(),
+                        "succeeded",
+                        succeeded,
+                        "skipped",
+                        skipped,
+                        "failed",
+                        failed
+                    )
+                );
+                if (failed > 0) {
+                    result.put(
+                        "failures",
+                        executionResults
+                            .stream()
+                            .filter(r -> r.status() == StatementExecutionResult.Status.FAILED)
+                            .map(r -> Map.of(
+                                    "key",
+                                    r.key(),
+                                    "message",
+                                    r.message(),
+                                    "errorCode",
+                                    r.errorCode()
+                                ))
+                            .toList()
+                    );
+                }
                 job.setDetailPayload(writeResult(result));
                 job.setFinishedAt(Instant.now());
 
                 boolean success = execution.success();
                 job.setStatus(success ? DatasetJobStatus.SUCCEEDED.name() : DatasetJobStatus.FAILED.name());
-                job.setMessage(success ? "安全视图已发布" : "安全视图执行失败");
+                if (success) {
+                    job.setMessage("安全视图已发布 (" + execution.persistedViews() + " 条)");
+                } else {
+                    String failureHint = executionResults
+                        .stream()
+                        .filter(r -> r.status() == StatementExecutionResult.Status.FAILED)
+                        .map(r -> r.key() + ": " + r.message())
+                        .findFirst()
+                        .orElse("执行失败");
+                    job.setMessage("安全视图执行失败: " + truncate(failureHint));
+                }
                 jobRepository.save(job);
-                auditService.audit(success ? "SUCCESS" : "ERROR", "policy.apply", dataset.getId() + ":" + execution.persistedViews());
+                auditService.audit(
+                    success ? "SUCCESS" : "ERROR",
+                    "policy.apply",
+                    dataset.getId() + ":" + (success ? execution.persistedViews() : ("failed=" + failed))
+                );
             } catch (Exception ex) {
                 workerLog.error("Policy apply job failed: {}", ex.getMessage());
                 job.setStatus(DatasetJobStatus.FAILED.name());

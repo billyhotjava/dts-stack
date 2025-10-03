@@ -91,8 +91,8 @@ export interface PortalMenuItem {
 }
 
 export interface PortalMenuCollection {
-	active: PortalMenuItem[];
-	deleted: PortalMenuItem[];
+	menus: PortalMenuItem[];
+	allMenus?: PortalMenuItem[];
 }
 
 export type OrgDataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";

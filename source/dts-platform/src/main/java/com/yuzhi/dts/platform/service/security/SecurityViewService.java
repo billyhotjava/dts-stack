@@ -71,7 +71,8 @@ public class SecurityViewService {
         Map<String, String> statements = previewViews(dataset, policy);
         String schemaHint = dataset.getHiveDatabase();
         List<StatementExecutionResult> executionResults = hiveStatementExecutor.execute(statements, schemaHint);
-        boolean success = executionResults.stream().noneMatch(r -> r.status() == StatementExecutionResult.Status.FAILED);
+        boolean hasFailure = executionResults.stream().anyMatch(r -> r.status() == StatementExecutionResult.Status.FAILED);
+        boolean success = !hasFailure;
 
         int persisted = 0;
         if (success) {
@@ -97,7 +98,7 @@ public class SecurityViewService {
                 persisted = toSave.size();
             }
         }
-        return new SecurityViewExecutionResult(statements, executionResults, persisted, success);
+        return new SecurityViewExecutionResult(Map.copyOf(statements), List.copyOf(executionResults), persisted, success);
     }
 
     private String resolveLevel(String key) {

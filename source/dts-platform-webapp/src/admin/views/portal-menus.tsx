@@ -11,10 +11,12 @@ import { toast } from "sonner";
 
 export default function PortalMenusView() {
 	const queryClient = useQueryClient();
-	const { data = [] } = useQuery({
+	const { data } = useQuery({
 		queryKey: ["admin", "portal-menus"],
 		queryFn: adminApi.getPortalMenus,
 	});
+
+	const menus = data?.menus ?? [];
 
 	const [draft, setDraft] = useState<PortalMenuItem>({ name: "", path: "" });
 	const [targetId, setTargetId] = useState<string>("");
@@ -73,7 +75,7 @@ export default function PortalMenusView() {
 					<CardTitle>现有菜单树</CardTitle>
 				</CardHeader>
 				<CardContent>
-					{data.length === 0 ? <Text variant="body3">暂无菜单数据。</Text> : <MenuTree items={data} />}
+					{menus.length === 0 ? <Text variant="body3">暂无菜单数据。</Text> : <MenuTree items={menus} />}
 				</CardContent>
 			</Card>
 

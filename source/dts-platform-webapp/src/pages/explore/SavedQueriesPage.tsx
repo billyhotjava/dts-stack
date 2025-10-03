@@ -15,8 +15,14 @@ import {
   deleteResultSet,
   cleanupExpiredResultSets,
   listDatasets,
+  updateSavedQuery,
+  type SavedQueryCreatePayload,
+  type SavedQueryUpdatePayload,
 } from "@/api/platformApi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+
+const NONE_DATASET_VALUE = "__NONE__";
 
 type SavedQuery = { id: string; name?: string; title?: string; sqlText?: string; datasetId?: string };
 
@@ -119,10 +125,17 @@ export default function SavedQueriesPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [sql, setSql] = useState("SELECT 1 AS col_1");
+  const [newDatasetId, setNewDatasetId] = useState<string | undefined>();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
   const [previewRows, setPreviewRows] = useState<any[]>([]);
   const [previewMasking, setPreviewMasking] = useState<any>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editSql, setEditSql] = useState("SELECT 1 AS col_1");
+  const [editDatasetId, setEditDatasetId] = useState<string | undefined>();
 
   const datasetMap = useMemo(() => {
     return datasets.reduce<Record<string, Dataset>>((acc, item) => {
@@ -173,6 +186,11 @@ export default function SavedQueriesPage() {
         return acc;
       }, {});
       setDatasets(datasetList);
+      if (datasetList.length === 0) {
+        setNewDatasetId(undefined);
+      } else if (newDatasetId && newDatasetId !== NONE_DATASET_VALUE && !datasetMapLocal[newDatasetId]) {
+        setNewDatasetId(undefined);
+      }
 
       const savedList = Array.isArray(savedResp) ? savedResp : Array.isArray((savedResp as any)?.data) ? (savedResp as any).data : [];
       setItems(savedList);
@@ -217,14 +235,25 @@ export default function SavedQueriesPage() {
       return;
     }
     try {
-      await createSavedQuery({ name: title, title, sqlText: sql });
+      const payload: SavedQueryCreatePayload = {
+        name: title.trim(),
+        sqlText: sql,
+      };
+      if (newDatasetId && newDatasetId !== NONE_DATASET_VALUE) {
+        payload.datasetId = newDatasetId;
+      } else if (newDatasetId === NONE_DATASET_VALUE) {
+        payload.datasetId = null;
+      }
+      await createSavedQuery(payload);
       toast.success("已保存查询");
       setTitle("");
       setSql("SELECT 1 AS col_1");
+      setNewDatasetId(undefined);
       await load();
     } catch (e) {
       console.error(e);
-      toast.error("保存失败");
+      const message = typeof (e as any)?.message === "string" ? (e as any).message : "保存失败";
+      toast.error(message);
     }
   };
 
@@ -236,6 +265,47 @@ export default function SavedQueriesPage() {
     } catch (e) {
       console.error(e);
       toast.error("删除失败");
+    }
+  };
+
+  const openEditDialog = (item: SavedQuery) => {
+    setEditId(item.id);
+    setEditName(item.name || item.title || "");
+    setEditSql(item.sqlText || "SELECT 1 AS col_1");
+    setEditDatasetId(item.datasetId || undefined);
+    setEditOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editId) {
+      toast.error("未找到待更新的查询");
+      return;
+    }
+    if (!editName.trim() || !editSql.trim()) {
+      toast.error("请输入名称和 SQL");
+      return;
+    }
+    setEditSubmitting(true);
+    try {
+      const payload: SavedQueryUpdatePayload = {
+        name: editName.trim(),
+        sqlText: editSql,
+      };
+      if (editDatasetId && editDatasetId !== NONE_DATASET_VALUE) {
+        payload.datasetId = editDatasetId;
+      } else if (editDatasetId === NONE_DATASET_VALUE || editDatasetId === undefined) {
+        payload.datasetId = null;
+      }
+      await updateSavedQuery(editId, payload);
+      toast.success("已更新保存的查询");
+      setEditOpen(false);
+      await load();
+    } catch (e) {
+      console.error(e);
+      const message = typeof (e as any)?.message === "string" ? (e as any).message : "更新失败";
+      toast.error(message);
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -290,6 +360,30 @@ export default function SavedQueriesPage() {
             <Label>SQL</Label>
             <Textarea rows={4} value={sql} onChange={(e) => setSql(e.target.value)} />
           </div>
+          {datasets.length ? (
+            <div className="space-y-1">
+              <Label>绑定数据集（可选）</Label>
+              <Select
+                value={newDatasetId ?? NONE_DATASET_VALUE}
+                onValueChange={(value) => setNewDatasetId(value === NONE_DATASET_VALUE ? undefined : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择数据集" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_DATASET_VALUE}>不关联数据集</SelectItem>
+                  {datasets.map((dataset) => (
+                    <SelectItem key={dataset.id} value={dataset.id}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate">{dataset.name}</span>
+                        {classificationBadge(dataset.classification)}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div>
             <Button onClick={handleCreate} disabled={isLoading}>保存</Button>
           </div>
@@ -338,6 +432,9 @@ export default function SavedQueriesPage() {
                         )}
                       </td>
                       <td className="px-3 py-2 space-x-2">
+                        <Button size="sm" variant="outline" onClick={() => openEditDialog(it)} disabled={isLoading}>
+                          编辑
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => handleRun(it.id)} disabled={isLoading}>
                           执行
                         </Button>
@@ -512,6 +609,58 @@ export default function SavedQueriesPage() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setPreviewOpen(false)}>关闭</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog
+      open={editOpen}
+      onOpenChange={(open) => {
+        setEditOpen(open);
+        if (!open) {
+          setEditSubmitting(false);
+        }
+      }}
+    >
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>编辑保存的查询</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>名称</Label>
+            <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="请输入名称" />
+          </div>
+          <div className="space-y-1">
+            <Label>SQL</Label>
+            <Textarea rows={4} value={editSql} onChange={(e) => setEditSql(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>关联数据集</Label>
+            <Select
+              value={editDatasetId ?? NONE_DATASET_VALUE}
+              onValueChange={(value) => setEditDatasetId(value === NONE_DATASET_VALUE ? undefined : value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择数据集" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE_DATASET_VALUE}>不关联数据集</SelectItem>
+                {datasets.map((dataset) => (
+                  <SelectItem key={dataset.id} value={dataset.id}>
+                    {dataset.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setEditOpen(false)} disabled={editSubmitting}>
+            取消
+          </Button>
+          <Button onClick={handleUpdate} disabled={editSubmitting}>
+            保存修改
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
