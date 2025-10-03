@@ -50,6 +50,11 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/authenticate")).permitAll()
                     .requestMatchers(mvc.pattern("/api/auth-info")).permitAll()
                     .requestMatchers(mvc.pattern("/api/keycloak/auth/**")).permitAll()
+                    // Portal menu endpoints are needed by the platform for initial navigation
+                    .requestMatchers(mvc.pattern("/api/menu"))
+                        .permitAll()
+                    .requestMatchers(mvc.pattern("/api/menu/**"))
+                        .permitAll()
                     // Localization endpoints are required by the login/UI bootstrap without auth
                     .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
                     // Admin service is governance-only: restrict all API endpoints to the triad roles

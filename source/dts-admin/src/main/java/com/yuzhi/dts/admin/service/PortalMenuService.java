@@ -6,6 +6,7 @@ import com.yuzhi.dts.admin.domain.PortalMenu;
 import com.yuzhi.dts.admin.domain.PortalMenuVisibility;
 import com.yuzhi.dts.admin.repository.PortalMenuRepository;
 import com.yuzhi.dts.admin.repository.PortalMenuVisibilityRepository;
+import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -34,7 +35,13 @@ public class PortalMenuService {
 
     private static final Logger log = LoggerFactory.getLogger(PortalMenuService.class);
 
-    private static final List<String> DEFAULT_MENU_ROLES = List.of("ROLE_OP_ADMIN", "ROLE_USER");
+    private static final List<String> DEFAULT_MENU_ROLES = List.of(
+        "ROLE_SYS_ADMIN",
+        "ROLE_AUTH_ADMIN",
+        "ROLE_AUDITOR_ADMIN",
+        "ROLE_OP_ADMIN",
+        "ROLE_USER"
+    );
     private static final Set<String> BASE_READ_SECTIONS = Set.of("catalog", "explore", "visualization");
     private static final Set<String> WRITE_SECTIONS = Set.of("modeling", "governance", "services");
     private static final Set<String> FOUNDATION_SECTIONS = Set.of("foundation");
@@ -212,7 +219,17 @@ public class PortalMenuService {
         if (CollectionUtils.isEmpty(roleCodes)) {
             return false;
         }
-        return roleCodes.contains(visibility.getRoleCode());
+        if (roleCodes.contains(visibility.getRoleCode())) {
+            return true;
+        }
+        if (
+            roleCodes.contains(AuthoritiesConstants.SYS_ADMIN) ||
+            roleCodes.contains(AuthoritiesConstants.AUTH_ADMIN) ||
+            roleCodes.contains(AuthoritiesConstants.AUDITOR_ADMIN)
+        ) {
+            return true;
+        }
+        return false;
     }
 
     private boolean matchesPermission(PortalMenuVisibility visibility, Set<String> permissionCodes) {
