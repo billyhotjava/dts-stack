@@ -29,11 +29,13 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
 	(config) => {
-		// 从userStore获取访问令牌
-		const { userToken } = userStore.getState();
-		if (userToken.accessToken) {
-			config.headers.Authorization = `Bearer ${userToken.accessToken}`;
-		}
+    // 从userStore获取访问令牌，但对无需鉴权的端点（如Keycloak本地化）不附带令牌，避免无谓的鉴权失败
+    const { userToken } = userStore.getState();
+    const url = `${config.baseURL || ''}${config.url || ''}`;
+    const skipAuth = typeof config.url === 'string' && config.url.includes('/keycloak/localization/');
+    if (!skipAuth && userToken.accessToken) {
+        config.headers.Authorization = `Bearer ${userToken.accessToken}`;
+    }
 
 		// 添加请求日志
 		console.log("API Request:", config.method?.toUpperCase(), config.baseURL, config.url, config);
