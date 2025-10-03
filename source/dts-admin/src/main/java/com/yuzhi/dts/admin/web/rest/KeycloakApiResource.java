@@ -370,12 +370,13 @@ public class KeycloakApiResource {
             if (cached != null && cached.getUsername() != null) {
                 return cached.getUsername();
             }
-            Optional<KeycloakUserDTO> remote = keycloakAdminClient.findById(id, accessToken);
-            if (remote.isPresent()) {
-                KeycloakUserDTO user = remote.get();
-                cacheUser(user);
-                return user.getUsername();
-            }
+            return keycloakAdminClient
+                .findById(id, accessToken)
+                .map(user -> {
+                    cacheUser(user);
+                    return user.getUsername();
+                })
+                .orElse(null);
         }
         return null;
     }
@@ -821,11 +822,19 @@ public class KeycloakApiResource {
     @GetMapping("/approval-requests/{id}")
     public ResponseEntity<ApiResponse<ApprovalDTOs.ApprovalRequestDetail>> getApproval(@PathVariable long id) {
         Optional<ApprovalDTOs.ApprovalRequestDetail> detail = adminUserService.findApprovalDetail(id);
-        if (detail.isEmpty()) {
-            return ResponseEntity.status(404).body(ApiResponse.error("审批请求不存在"));
-        }
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "APPROVAL_DETAIL", "APPROVAL", String.valueOf(id), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(detail.get()));
+        return detail
+            .map(found -> {
+                auditService.record(
+                    SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+                    "APPROVAL_DETAIL",
+                    "APPROVAL",
+                    String.valueOf(id),
+                    "SUCCESS",
+                    null
+                );
+                return ResponseEntity.ok(ApiResponse.ok(found));
+            })
+            .orElseGet(() -> ResponseEntity.status(404).body(ApiResponse.error("审批请求不存在")));
     }
 
     @GetMapping("/keycloak/approvals")
@@ -879,10 +888,10 @@ public class KeycloakApiResource {
     @PostMapping("/keycloak/user-sync/process/{id}")
     public ResponseEntity<ApiResponse<Void>> syncApproved(@PathVariable long id) {
         Optional<ApprovalDTOs.ApprovalRequestDetail> detail = adminUserService.findApprovalDetail(id);
-        if (detail.isEmpty()) {
+        ApprovalDTOs.ApprovalRequestDetail current = detail.orElse(null);
+        if (current == null) {
             return ResponseEntity.status(404).body(ApiResponse.error("审批请求不存在"));
         }
-        ApprovalDTOs.ApprovalRequestDetail current = detail.get();
         if (!"PENDING".equalsIgnoreCase(current.status)) {
             return ResponseEntity.ok(ApiResponse.ok(null));
         }

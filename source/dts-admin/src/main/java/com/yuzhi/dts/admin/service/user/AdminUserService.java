@@ -990,7 +990,7 @@ public class AdminUserService {
             Optional<KeycloakUserDTO> existing = keycloakAdminClient.findByUsername(dto.getUsername(), accessToken);
             KeycloakUserDTO target;
             if (existing.isPresent()) {
-                KeycloakUserDTO current = existing.get();
+                KeycloakUserDTO current = existing.orElseThrow();
                 String keycloakId = current.getId();
                 if (keycloakId != null && !keycloakId.isBlank()) {
                     dto.setId(keycloakId);

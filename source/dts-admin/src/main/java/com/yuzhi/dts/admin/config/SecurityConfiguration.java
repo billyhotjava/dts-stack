@@ -50,6 +50,8 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/authenticate")).permitAll()
                     .requestMatchers(mvc.pattern("/api/auth-info")).permitAll()
                     .requestMatchers(mvc.pattern("/api/keycloak/auth/**")).permitAll()
+                    // Localization endpoints are required by the login/UI bootstrap without auth
+                    .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
                     // Admin service is governance-only: restrict all API endpoints to the triad roles
                     .requestMatchers(mvc.pattern("/api/admin/**"))
                         .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN)
