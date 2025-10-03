@@ -6,6 +6,7 @@ public class KeycloakGroupDTO {
     private String id;
     private String name;
     private String path;
+    private String description;
     private Map<String, List<String>> attributes = new HashMap<>();
     private List<String> realmRoles = new ArrayList<>();
     private Map<String, List<String>> clientRoles = new HashMap<>();
@@ -17,6 +18,8 @@ public class KeycloakGroupDTO {
     public void setName(String name) { this.name = name; }
     public String getPath() { return path; }
     public void setPath(String path) { this.path = path; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
     public Map<String, List<String>> getAttributes() { return attributes; }
     public void setAttributes(Map<String, List<String>> attributes) { this.attributes = attributes; }
     public List<String> getRealmRoles() { return realmRoles; }
@@ -26,4 +29,3 @@ public class KeycloakGroupDTO {
     public List<KeycloakGroupDTO> getSubGroups() { return subGroups; }
     public void setSubGroups(List<KeycloakGroupDTO> subGroups) { this.subGroups = subGroups; }
 }
-

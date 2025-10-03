@@ -70,7 +70,7 @@ const pickAttributeValue = (attributes: Record<string, string[]> | undefined, ke
 };
 
 function UserProfile() {
-	const { avatar, fullName, firstName, username, email, roles, attributes, id } = useUserInfo();
+	const { avatar, fullName, firstName, username, email, roles, attributes } = useUserInfo();
 	const [detail, setDetail] = useState<KeycloakUser | null>(null);
 
 	useEffect(() => {
@@ -169,7 +169,7 @@ function UserProfile() {
 				</div>
 			</div>
 
-			<ProfileTab detail={detail} pickAttributeValue={pickAttributeValue} />
+			<ProfileTab detail={detail} resolveAttributeValue={pickAttributeValue} />
 		</div>
 	);
 }

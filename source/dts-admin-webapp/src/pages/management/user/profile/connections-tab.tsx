@@ -1,131 +1,136 @@
-import { faker } from "@faker-js/faker";
-import { Icon } from "@/components/icon";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { KeycloakUserService } from "@/api/services/keycloakService";
+import { Avatar, AvatarFallback, AvatarImage } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
-import { Card } from "@/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Skeleton } from "@/ui/skeleton";
 import { Text } from "@/ui/typography";
+import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
+import type { KeycloakUser } from "#/keycloak";
 
 export default function ConnectionsTab() {
-	const items = [
-		{
-			avatar: faker.image.avatarGitHub(),
-			name: faker.person.fullName(),
-			title: "UI Designer",
-			tags: ["Figma", "Sketch"],
-			projects: "18",
-			tasks: "834",
-			connections: "129",
-			connected: true,
+	const { data, isLoading, isError, error } = useQuery({
+		queryKey: ["keycloak", "recent-users"],
+		queryFn: async () => {
+			const users = await KeycloakUserService.getAllUsers({ max: 30 });
+			return users;
 		},
-		{
-			avatar: faker.image.avatarGitHub(),
-			name: faker.person.fullName(),
-			title: "Developer",
-			tags: ["Angular", "React"],
-			projects: "118",
-			tasks: "2.32k",
-			connections: "1.29k",
-			connected: false,
-		},
-		{
-			avatar: faker.image.avatarGitHub(),
-			name: faker.person.fullName(),
-			title: "Developer",
-			tags: ["Html", "React"],
-			projects: "32",
-			tasks: "1.25k",
-			connections: "890",
-			connected: false,
-		},
-		{
-			avatar: faker.image.avatarGitHub(),
-			name: faker.person.fullName(),
-			title: "UI/UX Designer",
-			tags: ["Figma", "Sketch", "Photoshop"],
-			projects: "86",
-			tasks: "12.4k",
-			connections: "890",
-			connected: false,
-		},
-		{
-			avatar: faker.image.avatarGitHub(),
-			name: faker.person.fullName(),
-			title: "Full Stack Developer",
-			tags: ["React", "Html", "Node.js"],
-			projects: "244",
-			tasks: "23.9k",
-			connections: "2.14k",
-			connected: true,
-		},
-		{
-			avatar: faker.image.avatarGitHub(),
-			name: faker.person.fullName(),
-			title: "SEO",
-			tags: ["Analysis", "Writing"],
-			projects: "32",
-			tasks: "1.28k",
-			connections: "1.27k",
-			connected: false,
-		},
-	];
+	});
+
+	const users = useMemo(() => data ?? [], [data]);
+
+	if (isLoading) {
+		return (
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+				{Array.from({ length: 6 }).map((_, index) => (
+					<Card key={index}>
+						<CardHeader className="flex flex-col items-center gap-3">
+							<Skeleton className="h-20 w-20 rounded-full" />
+							<Skeleton className="h-4 w-32" />
+							<Skeleton className="h-3 w-24" />
+						</CardHeader>
+						<CardContent className="flex flex-col items-center gap-2">
+							<Skeleton className="h-3 w-24" />
+							<Skeleton className="h-3 w-20" />
+						</CardContent>
+					</Card>
+				))}
+			</div>
+		);
+	}
+
+	if (isError) {
+		return (
+			<Alert variant="destructive">
+				<AlertTitle>加载用户列表失败</AlertTitle>
+				<AlertDescription>{error instanceof Error ? error.message : "请稍后重试。"}</AlertDescription>
+			</Alert>
+		);
+	}
+
+	if (!users.length) {
+		return (
+			<Alert>
+				<AlertTitle>暂无其他用户</AlertTitle>
+				<AlertDescription>系统中暂未检索到其他用户信息。</AlertDescription>
+			</Alert>
+		);
+	}
+
+	const normalizeDisplayName = (user: KeycloakUser) => {
+		const attributeFullName = Array.isArray(user.attributes?.fullName)
+			? user.attributes?.fullName.find((item) => item?.trim()) || user.attributes?.fullName[0]
+			: undefined;
+		if (attributeFullName) {
+			return attributeFullName;
+		}
+		const composedName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+		if (composedName) {
+			return composedName;
+		}
+		return user.username || "-";
+	};
+
+	const deriveInitial = (label: string) => {
+		if (!label) return "?";
+		const characters = Array.from(label.trim());
+		return characters.slice(0, 2).join("");
+	};
+
 	return (
 		<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-			{items.map((item) => (
-				<Card className="w-full flex-col items-center" key={item.name}>
-					<img alt="" src={item.avatar} className="h-20 w-20 rounded-full" />
+			{users.map((user) => {
+				const displayName = normalizeDisplayName(user);
+				const email = user.email || "无邮箱信息";
+				const username = user.username || "-";
+				const tags: string[] = [];
+				if (Array.isArray(user.realmRoles) && user.realmRoles.length) {
+					tags.push(...user.realmRoles.slice(0, 3));
+				}
+				if (Array.isArray(user.groups) && user.groups.length) {
+					tags.push(...user.groups.slice(0, 3));
+				}
+				const avatarAttribute = Array.isArray(user.attributes?.avatar)
+					? user.attributes?.avatar.find((item) => item && item.trim()) || user.attributes?.avatar[0]
+					: undefined;
+				const avatarUrl = avatarAttribute || undefined;
 
-					<Text variant="body1" className="mt-4 font-semibold">
-						{item.name}
-					</Text>
-					<Text variant="body2" className="opacity-50">
-						{item.title}
-					</Text>
-
-					<div className="mt-4 flex gap-4">
-						{item.tags.map((tag) => (
-							<Badge key={tag} variant="info">
-								{tag}
-							</Badge>
-						))}
-					</div>
-
-					<div className="mt-4 flex gap-4">
-						<div className="[ flex flex-col  items-center">
-							<Text variant="body1" className="text-xl font-semibold">
-								{item.projects}
+				return (
+					<Card className="flex flex-col items-center" key={`${user.id ?? username}-${username}`}>
+						<CardHeader className="flex flex-col items-center gap-3">
+							<Avatar className="h-20 w-20">
+								<AvatarImage src={avatarUrl} />
+								<AvatarFallback>{deriveInitial(displayName)}</AvatarFallback>
+							</Avatar>
+							<CardTitle className="text-center text-base font-semibold">
+								{displayName}
+							</CardTitle>
+							<Text variant="body3" className="text-muted-foreground">
+								{username}
 							</Text>
-							<Text variant="body2" className="opacity-60">
-								Projects
+						</CardHeader>
+						<CardContent className="flex w-full flex-col items-center gap-3">
+							<Text variant="body3" className="text-muted-foreground">
+								{email}
 							</Text>
-						</div>
-						<div className="[ flex flex-col  items-center">
-							<Text variant="body1" className="text-xl font-semibold">
-								{item.tasks}
-							</Text>
-							<Text variant="body2" className="opacity-60">
-								Tasks
-							</Text>
-						</div>
-						<div className="[ flex flex-col  items-center">
-							<Text variant="body1" className="text-xl font-semibold">
-								{item.connections}
-							</Text>
-							<Text variant="body2" className="opacity-60">
-								Tasks
-							</Text>
-						</div>
-					</div>
-
-					<div className="mt-4 flex">
-						<Button variant={item.connected ? "default" : "outline"}>
-							<Icon icon="ri:user-add-line" size={14} />
-							<Text variant="body2" className="ml-2">
-								CONNECTED
-							</Text>
-						</Button>
-					</div>
-				</Card>
-			))}
+							{tags.length ? (
+								<div className="flex flex-wrap justify-center gap-2">
+									{tags.map((tag) => (
+										<Badge key={`${user.id}-${tag}`} variant="outline">
+											{tag}
+										</Badge>
+									))}
+								</div>
+							) : (
+								<Text variant="body3" className="text-muted-foreground">
+									暂无角色或分组信息
+								</Text>
+							)}
+						</CardContent>
+					</Card>
+				);
+			})}
 		</div>
 	);
 }

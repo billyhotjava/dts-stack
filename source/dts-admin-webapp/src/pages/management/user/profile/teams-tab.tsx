@@ -1,81 +1,116 @@
-import { fakeAvatars } from "@/_mock/utils";
+import { useQuery } from "@tanstack/react-query";
+import { KeycloakGroupService } from "@/api/services/keycloakService";
 import { Icon } from "@/components/icon";
-import { Avatar, AvatarImage } from "@/ui/avatar";
+import { useUserInfo } from "@/store/userStore";
+import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
-import { Card, CardContent } from "@/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Skeleton } from "@/ui/skeleton";
+import { Text } from "@/ui/typography";
 
 export default function TeamsTab() {
-	const items = [
-		{
-			icon: <Icon icon="logos:react" size={40} />,
-			name: "React Developers",
-			desc: "We don’t make assumptions about the rest of your technology stack, so you can develop new features in React.",
-			members: fakeAvatars(25),
-			tags: ["React", "AntD"],
+	const { id: userId, username } = useUserInfo();
+
+	const { data, isLoading, isError, error } = useQuery({
+		queryKey: ["keycloak", "user-groups", userId],
+		queryFn: async () => {
+			if (!userId) {
+				return [];
+			}
+			const groups = await KeycloakGroupService.getUserGroups(userId);
+			return groups;
 		},
-		{
-			icon: <Icon icon="logos:vue" size={40} />,
-			name: "Vue.js Dev Team",
-			desc: "The development of Vue and its ecosystem is guided by an international team, some of whom have chosen to be featured below.",
-			members: fakeAvatars(20),
-			tags: ["Vue.js", "Developer"],
-		},
-		{
-			icon: <Icon icon="logos:figma" size={40} />,
-			name: "Figma Resources",
-			desc: "Explore, install, use, and remix thousands of plugins and files published to the Figma Community by designers and developers.",
-			members: fakeAvatars(45),
-			tags: ["UI/UX", "Figma"],
-		},
-		{
-			icon: <Icon icon="logos:html-5" size={40} />,
-			name: "Only Beginners",
-			desc: "Learn the basics of how websites work, front-end vs back-end, and using a code editor. Learn basic HTML, CSS, and…",
-			members: fakeAvatars(50),
-			tags: ["CSS", "HTML"],
-		},
-		{
-			icon: <Icon icon="logos:adobe-xd" size={40} />,
-			name: "Creative Designers",
-			desc: "A design or product team is more than just the people on it. A team includes the people, the roles they play.  ",
-			members: fakeAvatars(55),
-			tags: ["Sketch", "XD"],
-		},
-	];
+		enabled: Boolean(userId),
+	});
+
+	if (!userId) {
+		return (
+			<Alert>
+				<AlertTitle>无法识别当前用户</AlertTitle>
+				<AlertDescription>请重新登录后再查看团队信息。</AlertDescription>
+			</Alert>
+		);
+	}
+
+	if (isLoading) {
+		return (
+			<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+				{Array.from({ length: 4 }).map((_, index) => (
+					<Card key={index}>
+						<CardHeader>
+							<Skeleton className="h-6 w-48" />
+						</CardHeader>
+						<CardContent className="space-y-3">
+							<Skeleton className="h-4 w-full" />
+							<Skeleton className="h-4 w-3/4" />
+							<div className="flex gap-2">
+								<Skeleton className="h-5 w-16" />
+								<Skeleton className="h-5 w-20" />
+							</div>
+						</CardContent>
+					</Card>
+				))}
+			</div>
+		);
+	}
+
+	if (isError) {
+		return (
+			<Alert variant="destructive">
+				<AlertTitle>加载团队失败</AlertTitle>
+				<AlertDescription>{error instanceof Error ? error.message : "请稍后重试。"}</AlertDescription>
+			</Alert>
+		);
+	}
+
+	const groups = data ?? [];
+
+	if (!groups.length) {
+		return (
+			<Alert>
+				<AlertTitle>没有关联的团队</AlertTitle>
+				<AlertDescription>
+					{username ? `${username} 当前未加入任何 Keycloak 组。` : "当前用户未加入任何 Keycloak 组。"}
+				</AlertDescription>
+			</Alert>
+		);
+	}
+
 	return (
 		<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-			{items.map((item) => (
-				<Card key={item.name} className="flex w-full flex-col">
-					<CardContent>
-						<header className="flex w-full items-center">
-							{item.icon}
-							<span className="ml-4 text-xl opacity-70">{item.name}</span>
-
-							<div className="ml-auto flex opacity-70">
-								<Button variant="ghost" size="icon">
-									<Icon icon="solar:star-line-duotone" size={18} />
-								</Button>
-								<Button variant="ghost" size="icon">
-									<Icon icon="fontisto:more-v-a" size={18} />
-								</Button>
-							</div>
-						</header>
-						<main className="my-4 opacity-70">{item.desc}</main>
-						<footer className="flex w-full items-center">
-							{item.members.slice(0, 4).map((memberAvatar) => (
-								<Avatar key={memberAvatar}>
-									<AvatarImage src={memberAvatar} />
-								</Avatar>
-							))}
-							<div className="ml-auto flex items-center gap-1">
-								{item.tags.map((tag) => (
-									<Badge key={tag} variant="info">
-										{tag}
+			{groups.map((group) => (
+				<Card key={group.id} className="flex w-full flex-col">
+					<CardHeader className="flex flex-row items-center gap-3">
+						<Icon icon="solar:users-group-rounded-bold-duotone" size={32} className="text-primary" />
+						<div className="flex flex-col">
+							<CardTitle>{group.name || group.path || "未命名组"}</CardTitle>
+							<Text variant="body3" className="text-muted-foreground">
+								{group.path}
+							</Text>
+						</div>
+					</CardHeader>
+					<CardContent className="space-y-3">
+						{group.attributes ? (
+							<div className="flex flex-wrap gap-2">
+								{Object.entries(group.attributes).map(([key, value]) => (
+									<Badge key={key} variant="outline">
+										{key}: {Array.isArray(value) ? value.join("、") : value}
 									</Badge>
 								))}
 							</div>
-						</footer>
+						) : null}
+						{group.subGroups && group.subGroups.length > 0 ? (
+							<div className="space-y-1">
+								<Text variant="body3" className="text-muted-foreground">
+									子组：
+								</Text>
+								<div className="flex flex-wrap gap-2">
+									{group.subGroups.map((subGroup) => (
+										<Badge key={subGroup.id}>{subGroup.name || subGroup.path}</Badge>
+									))}
+								</div>
+							</div>
+						) : null}
 					</CardContent>
 				</Card>
 			))}

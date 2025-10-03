@@ -29,6 +29,9 @@ export interface KeycloakUser {
 	emailVerified?: boolean;
 	attributes?: Record<string, string[]>;
 	groups?: string[];
+	fullName?: string;
+	avatar?: string;
+	roles?: string[];
 	realmRoles?: string[];
 	clientRoles?: Record<string, string[]>;
 	createdTimestamp?: number;

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const SOURCE_FILE = resolve(process.cwd(), "src/_mock/assets_backup.ts");
@@ -51,6 +51,10 @@ function buildMenuTree(items) {
 }
 
 function main() {
+    if (!existsSync(SOURCE_FILE)) {
+        console.warn(`[export-menu] Source file not found: ${SOURCE_FILE}. Mock assets have been removed; skip export.`);
+        return;
+    }
 	const fileContent = readFileSync(SOURCE_FILE, "utf8");
 	const arraySource = extractMenuSource(fileContent);
 	const menuItems = parseMenu(arraySource);

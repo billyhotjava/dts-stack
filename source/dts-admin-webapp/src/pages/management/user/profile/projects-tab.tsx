@@ -1,153 +1,107 @@
-import { faker } from "@faker-js/faker";
-import dayjs from "dayjs";
-import { fakeAvatars } from "@/_mock/utils";
-import { AvatarGroup } from "@/components/avatar-group";
-import { Icon } from "@/components/icon";
-import { Avatar, AvatarImage } from "@/ui/avatar";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { KeycloakUserService } from "@/api/services/keycloakService";
+import { useUserInfo } from "@/store/userStore";
+import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
-import { Card, CardContent } from "@/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Skeleton } from "@/ui/skeleton";
 import { Text } from "@/ui/typography";
+import type { KeycloakRole } from "#/keycloak";
 
 export default function ProjectsTab() {
-	const items = [
-		{
-			icon: <Icon icon="logos:react" size={40} />,
-			name: "Admin Template",
-			client: faker.person.fullName(),
-			desc: "Time is our most valuable asset, that is why we want to help you save it by creating…",
-			members: fakeAvatars(5),
-			startDate: dayjs(faker.date.past({ years: 1 })),
-			deadline: dayjs(faker.date.future({ years: 1 })),
-			messages: 236,
-			allHours: "98/135",
-			allTasks: faker.number.int({ min: 60, max: 99 }),
-			closedTasks: faker.number.int({ min: 30, max: 60 }),
+	const { id: userId, username } = useUserInfo();
+
+	const { data, isLoading, isError, error } = useQuery({
+		queryKey: ["keycloak", "user-roles", userId],
+		queryFn: async () => {
+			if (!userId) {
+				return [] as KeycloakRole[];
+			}
+			const roles = await KeycloakUserService.getUserRoles(userId);
+			return roles;
 		},
-		{
-			icon: <Icon icon="logos:vue" size={40} />,
-			name: "App Design",
-			desc: "App design combines the user interface (UI) and user experience (UX).  ",
-			client: faker.person.fullName(),
-			members: fakeAvatars(7),
-			startDate: dayjs(faker.date.past({ years: 1 })),
-			deadline: dayjs(faker.date.future({ years: 1 })),
-			messages: 236,
-			allHours: "880/421",
-			allTasks: faker.number.int({ min: 60, max: 99 }),
-			closedTasks: faker.number.int({ min: 30, max: 60 }),
-		},
-		{
-			icon: <Icon icon="logos:figma" size={40} />,
-			name: "Figma Dashboard",
-			desc: "Use this template to organize your design project. Some of the key features are… ",
-			client: faker.person.fullName(),
-			members: fakeAvatars(3),
-			startDate: dayjs(faker.date.past({ years: 1 })),
-			deadline: dayjs(faker.date.future({ years: 1 })),
-			messages: 236,
-			allHours: "1.2k/820",
-			allTasks: faker.number.int({ min: 60, max: 99 }),
-			closedTasks: faker.number.int({ min: 30, max: 60 }),
-		},
-		{
-			icon: <Icon icon="logos:html-5" size={40} />,
-			name: "Create Website",
-			desc: "Your domain name should reflect your products or services so that your...  ",
-			client: faker.person.fullName(),
-			members: fakeAvatars(11),
-			startDate: dayjs(faker.date.past({ years: 1 })),
-			deadline: dayjs(faker.date.future({ years: 1 })),
-			messages: 236,
-			allHours: "142/420",
-			allTasks: faker.number.int({ min: 60, max: 99 }),
-			closedTasks: faker.number.int({ min: 30, max: 60 }),
-		},
-		{
-			icon: <Icon icon="logos:adobe-xd" size={40} />,
-			name: "Logo Design",
-			desc: "Premium logo designs created by top logo designers. Create the branding of business.  ",
-			client: faker.person.fullName(),
-			members: fakeAvatars(5),
-			startDate: dayjs(faker.date.past({ years: 1 })),
-			deadline: dayjs(faker.date.future({ years: 1 })),
-			messages: 232,
-			allHours: "580/445",
-			allTasks: faker.number.int({ min: 60, max: 99 }),
-			closedTasks: faker.number.int({ min: 30, max: 60 }),
-		},
-	];
+		enabled: Boolean(userId),
+	});
+
+	const flattenedRoles = useMemo(() => {
+		if (!data) return [] as KeycloakRole[];
+		return data;
+	}, [data]);
+
+	if (!userId) {
+		return (
+			<Alert>
+				<AlertTitle>无法识别当前用户</AlertTitle>
+				<AlertDescription>请登录后再查看角色信息。</AlertDescription>
+			</Alert>
+		);
+	}
+
+	if (isLoading) {
+		return (
+			<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+				{Array.from({ length: 4 }).map((_, index) => (
+					<Card key={index}>
+						<CardHeader className="space-y-2">
+							<Skeleton className="h-5 w-40" />
+							<Skeleton className="h-4 w-64" />
+						</CardHeader>
+						<CardContent className="space-y-2">
+							<Skeleton className="h-3 w-32" />
+							<Skeleton className="h-3 w-24" />
+							<Skeleton className="h-3 w-20" />
+						</CardContent>
+					</Card>
+				))}
+			</div>
+		);
+	}
+
+	if (isError) {
+		return (
+			<Alert variant="destructive">
+				<AlertTitle>加载角色失败</AlertTitle>
+				<AlertDescription>{error instanceof Error ? error.message : "请稍后重试。"}</AlertDescription>
+			</Alert>
+		);
+	}
+
+	if (!flattenedRoles.length) {
+		return (
+			<Alert>
+				<AlertTitle>没有关联的角色</AlertTitle>
+				<AlertDescription>
+					{username ? `${username} 当前未关联任何角色。` : "当前用户未关联任何角色。"}
+				</AlertDescription>
+			</Alert>
+		);
+	}
 	return (
 		<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-			{items.map((item) => (
-				<Card key={item.name} className="flex w-full flex-col">
-					<CardContent>
-						<header className="flex w-full items-center">
-							{item.icon}
-
-							<div className="flex flex-col">
-								<Text variant="body1" className="ml-4">
-									{item.name}
-								</Text>
-								<Text variant="caption" className="ml-4">
-									Client: {item.client}
-								</Text>
-							</div>
-
-							<div className="ml-auto flex opacity-70">
-								<Button variant="ghost" size="icon">
-									<Icon icon="fontisto:more-v-a" size={18} />
-								</Button>
-							</div>
-						</header>
-
-						<main className="mt-4 w-full">
-							<div className="my-2 flex justify-between">
-								<Text variant="body1">
-									Start Date:
-									<Text variant="caption" className="ml-2">
-										{item.startDate.format("DD/MM/YYYY")}
-									</Text>
-								</Text>
-
-								<Text variant="body1">
-									Deadline:
-									<Text variant="caption" className="ml-2">
-										{item.deadline.format("DD/MM/YYYY")}
-									</Text>
-								</Text>
-							</div>
-							<span className="opacity-70">{item.desc}</span>
-						</main>
-
-						<footer className="flex w-full  flex-col items-center">
-							<div className="mb-4 flex w-full justify-between">
-								<span>
-									<Text variant="body1">All Hours:</Text>
-									<Text variant="caption" className="ml-2">
-										{item.allHours}
-									</Text>
-								</span>
-
-								<Badge variant="warning">{item.deadline.diff(dayjs(), "day")} days left</Badge>
-							</div>
-							<div className="flex w-full ">
-								<AvatarGroup max={{ count: 3 }} size="small">
-									{item.members.map((memberAvatar) => (
-										<Avatar key={memberAvatar}>
-											<AvatarImage src={memberAvatar} />
-										</Avatar>
-									))}
-								</AvatarGroup>
-
-								<div className="ml-auto flex items-center opacity-50">
-									<Icon icon="solar:chat-round-line-linear" size={24} />
-									<Text variant="subTitle2" className="ml-2">
-										{item.messages}
-									</Text>
-								</div>
-							</div>
-						</footer>
+			{flattenedRoles.map((role) => (
+				<Card key={role.id || role.name}>
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2">
+							<Text variant="body1" className="font-semibold">
+								{role.name}
+							</Text>
+							{role.composite ? <Badge variant="outline">复合角色</Badge> : null}
+						</CardTitle>
+					</CardHeader>
+					<CardContent className="space-y-2">
+						<Text variant="body2" className="text-muted-foreground">
+							{role.description || "该角色暂无描述。"}
+						</Text>
+						<div className="flex flex-wrap gap-2">
+							{role.attributes
+								? Object.entries(role.attributes).map(([key, value]) => (
+									<Badge key={key} variant="outline">
+										{key}: {Array.isArray(value) ? value.join("、") : String(value)}
+									</Badge>
+								))
+								: null}
+						</div>
 					</CardContent>
 				</Card>
 			))}

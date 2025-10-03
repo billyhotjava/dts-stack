@@ -5,16 +5,19 @@ import { type Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { adminApi } from "@/admin/api/adminApi";
-import { ChangeRequestForm } from "@/admin/components/change-request-form";
 import { useAdminLocale } from "@/admin/lib/locale";
-import type { OrganizationNode, OrganizationPayload, OrgDataLevel } from "@/admin/types";
+import type {
+    OrganizationNode,
+    OrganizationCreatePayload,
+    OrganizationUpdatePayload,
+    OrgDataLevel,
+} from "@/admin/types";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
-import { Label } from "@/ui/label";
 import { ScrollArea } from "@/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Text } from "@/ui/typography";
@@ -65,11 +68,6 @@ const orgFormSchema = z.object({
         }
         return value;
     }, z.string().max(2000, "部门说明过长").optional()),
-    reason: z
-        .string()
-        .trim()
-        .min(1, "请填写审批原因")
-        .max(500, "审批原因不宜超过500字"),
 });
 
 type OrgFormValues = z.infer<typeof orgFormSchema>;
@@ -127,17 +125,53 @@ export default function OrgManagementView() {
 	}, [flattened]);
 
     const createMutation = useMutation({
-        mutationFn: (payload: OrganizationPayload) => adminApi.createOrganization(payload),
+        mutationFn: (payload: OrganizationCreatePayload) => adminApi.createOrganization(payload),
+        onSuccess: (tree) => {
+            queryClient.setQueryData(["admin", "organizations"], tree);
+        },
+        onError: (error: unknown) => {
+            console.error(error);
+            toast.error(error instanceof Error ? error.message : "创建部门失败");
+        },
     });
     const updateMutation = useMutation({
-        mutationFn: ({ id, payload }: { id: number; payload: OrganizationPayload }) =>
+        mutationFn: ({ id, payload }: { id: number; payload: OrganizationUpdatePayload }) =>
             adminApi.updateOrganization(id, payload),
+        onSuccess: (tree) => {
+            queryClient.setQueryData(["admin", "organizations"], tree);
+        },
+        onError: (error: unknown) => {
+            console.error(error);
+            toast.error(error instanceof Error ? error.message : "更新部门失败");
+        },
     });
     const deleteMutation = useMutation({
-        mutationFn: ({ id, reason }: { id: number; reason: string }) => adminApi.deleteOrganization(id, reason),
+        mutationFn: (id: number) => adminApi.deleteOrganization(id),
+        onSuccess: (tree) => {
+            queryClient.setQueryData(["admin", "organizations"], tree);
+        },
+        onError: (error: unknown) => {
+            console.error(error);
+            toast.error(error instanceof Error ? error.message : "删除部门失败");
+        },
     });
+	const [syncing, setSyncing] = useState(false);
 
-	const formLoading = createMutation.isPending || updateMutation.isPending;
+	const syncOrganizations = async (successMessage?: string) => {
+		setSyncing(true);
+		try {
+			const tree = await adminApi.syncOrganizations();
+			queryClient.setQueryData(["admin", "organizations"], tree);
+			toast.success(successMessage ?? "组织结构已与 Keycloak 同步");
+		} catch (error) {
+			console.error(error);
+			toast.error(error instanceof Error ? error.message : "同步失败，请稍后重试");
+		} finally {
+			setSyncing(false);
+		}
+	};
+
+	const formLoading = createMutation.isPending || updateMutation.isPending || syncing;
 
 	const openCreateRoot = () => {
 		setFormState({ open: true, mode: "create", parentId: null, target: null });
@@ -163,16 +197,15 @@ export default function OrgManagementView() {
 
     const handleSubmitForm = async (values: OrgFormValues) => {
         if (formState.mode === "create") {
-            const payload: OrganizationPayload = {
+            const payload: OrganizationCreatePayload = {
                 ...values,
                 parentId: formState.parentId ?? null,
             };
             try {
-                const changeRequest = await createMutation.mutateAsync(payload);
-                toast.success(`新增请求已提交审批 (单号 #${changeRequest.id})`);
+                await createMutation.mutateAsync(payload);
                 closeForm();
                 setSelectedId(formState.parentId ?? null);
-                await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
+                await syncOrganizations("部门已创建并同步 Keycloak");
             } catch (error) {
                 console.error(error);
             }
@@ -180,32 +213,32 @@ export default function OrgManagementView() {
         }
 
         if (formState.mode === "edit" && formState.target) {
-            const payload: OrganizationPayload = { ...values };
+            const payload: OrganizationUpdatePayload = {
+                ...values,
+            };
             try {
-                const changeRequest = await updateMutation.mutateAsync({ id: formState.target.id, payload });
-                toast.success(`更新请求已提交审批 (单号 #${changeRequest.id})`);
+                await updateMutation.mutateAsync({ id: formState.target.id, payload });
                 closeForm();
-                await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
+                await syncOrganizations("部门信息已更新并同步 Keycloak");
             } catch (error) {
                 console.error(error);
             }
         }
     };
 
-    const handleConfirmDelete = async (reason: string) => {
+    const handleConfirmDelete = async () => {
         const target = deleteState.target;
         if (!target) return;
         try {
-            const changeRequest = await deleteMutation.mutateAsync({ id: target.id, reason });
-            toast.success(`删除请求已提交审批 (单号 #${changeRequest.id})`);
+            await deleteMutation.mutateAsync(target.id);
             closeDelete();
-            await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
             setSelectedId((current) => {
                 if (current === target.id) {
                     return target.parentId ?? null;
                 }
                 return current;
             });
+            await syncOrganizations("部门已删除并同步 Keycloak");
         } catch (error) {
             console.error(error);
         }
@@ -227,7 +260,6 @@ export default function OrgManagementView() {
                 contact: editingNode.contact ?? "",
                 phone: editingNode.phone ?? "",
                 description: editingNode.description ?? "",
-                reason: "",
             }
         : {
                 name: "",
@@ -235,7 +267,6 @@ export default function OrgManagementView() {
                 contact: "",
                 phone: "",
                 description: "",
-                reason: "",
             };
 
 	return (
@@ -244,12 +275,22 @@ export default function OrgManagementView() {
 				<CardHeader className="space-y-3">
 					<div className="flex items-center justify-between gap-3">
 						<CardTitle>组织结构</CardTitle>
-						<Button size="sm" onClick={openCreateRoot}>
-							新增部门
-						</Button>
+						<div className="flex items-center gap-2">
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => syncOrganizations()}
+								disabled={syncing}
+							>
+								{syncing ? "同步中..." : "同步 Keycloak"}
+							</Button>
+							<Button size="sm" onClick={openCreateRoot}>
+								新增部门
+							</Button>
+						</div>
 					</div>
 					<Text variant="body3" className="text-xs text-muted-foreground">
-						所有新增、编辑、删除都会生成审批单，审批通过后系统才会同步至 Keycloak。
+						组织结构变更会即时保存并同步至 Keycloak，请谨慎操作。
 					</Text>
 					<Input
 						placeholder="搜索部门 / 联系人 / 数据密级"
@@ -294,15 +335,15 @@ export default function OrgManagementView() {
 							<Button variant="outline" size="sm" onClick={openCreateChild} disabled={!selected}>
 								新增下级
 							</Button>
-							<Button variant="outline" size="sm" onClick={openEdit} disabled={!selected}>
+						<Button variant="outline" size="sm" onClick={openEdit} disabled={!selected || syncing}>
 								编辑
 							</Button>
 							<Button
-								variant="ghost"
+							variant="ghost"
 								size="sm"
 								className="text-destructive hover:text-destructive"
 								onClick={openDelete}
-								disabled={!selected}
+								disabled={!selected || syncing}
 							>
 								删除
 							</Button>
@@ -341,6 +382,16 @@ export default function OrgManagementView() {
 										{selected.description}
 									</div>
 								) : null}
+								<div className="grid gap-3 sm:grid-cols-2">
+									<div>
+										<p className="text-xs text-muted-foreground">Keycloak 组 ID</p>
+										<p className="text-sm font-medium text-foreground">{selected.keycloakGroupId ?? "--"}</p>
+									</div>
+									<div>
+										<p className="text-xs text-muted-foreground">组路径</p>
+										<p className="text-sm font-medium text-foreground">{selected.groupPath ?? "--"}</p>
+									</div>
+								</div>
 							</>
 						) : (
 							<Text variant="body3" className="text-muted-foreground">
@@ -350,14 +401,6 @@ export default function OrgManagementView() {
 					</CardContent>
 				</Card>
 
-				<Card>
-					<CardHeader>
-						<CardTitle>发起组织变更</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<ChangeRequestForm initialTab="org" />
-					</CardContent>
-				</Card>
 			</div>
 
 			<OrganizationFormDialog
@@ -374,7 +417,7 @@ export default function OrgManagementView() {
 					open={deleteState.open}
 					name={deleteState.target?.name}
 					childCount={deleteState.target?.children?.length ?? 0}
-					loading={deleteMutation.isPending}
+						loading={deleteMutation.isPending || syncing}
 					onCancel={closeDelete}
 					onConfirm={handleConfirmDelete}
 				/>
@@ -556,7 +599,7 @@ function OrganizationFormDialog({
 			<DialogContent className="min-w-[420px] max-w-[520px]">
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
-						<DialogDescription>提交后将生成审批单，审批通过后才会生效。</DialogDescription>
+						<DialogDescription>提交后会立即保存并同步至 Keycloak。</DialogDescription>
 					</DialogHeader>
 				{parentLabel ? (
 					<div className="rounded-md border border-dashed border-muted/60 bg-muted/30 p-3 text-xs text-muted-foreground">
@@ -648,28 +691,11 @@ function OrganizationFormDialog({
 									</FormItem>
 								)}
 							/>
-							<FormField
-								control={form.control}
-								name="reason"
-								render={({ field }) => (
-									<FormItem>
-										<FormLabel>审批原因</FormLabel>
-										<FormControl>
-											<Textarea
-												placeholder="请填写拟新增/调整的原因，审批通过后方可生效"
-												rows={4}
-												{...field}
-											/>
-										</FormControl>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
-							<DialogFooter>
-								<Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-									取消
-								</Button>
-								<Button type="submit" disabled={loading}>
+						<DialogFooter>
+							<Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+								取消
+							</Button>
+							<Button type="submit" disabled={loading}>
 								{loading ? `${submitText}中...` : submitText}
 							</Button>
 						</DialogFooter>
@@ -686,91 +712,39 @@ interface ConfirmDeleteDialogProps {
     childCount?: number;
     loading?: boolean;
     onCancel: () => void;
-    onConfirm: (reason: string) => void;
+    onConfirm: () => void;
 }
 
 function ConfirmDeleteDialog({ open, name, childCount = 0, loading, onCancel, onConfirm }: ConfirmDeleteDialogProps) {
-    const [reason, setReason] = useState("");
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (open) {
-            setReason("");
-            setError(null);
-        }
-    }, [open]);
-
     const handleOpenChange = (value: boolean) => {
         if (!value && !loading) {
             onCancel();
         }
     };
 
-    const handleSubmit = () => {
-        const trimmed = reason.trim();
-        if (!trimmed) {
-            setError("请填写审批原因");
-            return;
-        }
-        onConfirm(trimmed);
-    };
-
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="min-w-[420px] max-w-[500px]">
+            <DialogContent className="min-w-[420px] max-w-[480px]">
                 <DialogHeader>
-                    <DialogTitle>提交删除审批</DialogTitle>
-                    <DialogDescription>审批通过前不会实际删除，提交前请确认审批说明。</DialogDescription>
+                    <DialogTitle>确认删除部门</DialogTitle>
+                    <DialogDescription>删除后会立即同步至 Keycloak，请谨慎操作。</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-2 text-sm">
-                    <div>
-                        <p>
-                            即将删除：<span className="font-medium text-foreground">{name ?? "未命名部门"}</span>
+                <div className="space-y-3 py-2 text-sm">
+                    <p>
+                        即将删除：<span className="font-medium text-foreground">{name ?? "未命名部门"}</span>
+                    </p>
+                    {childCount > 0 ? (
+                        <p className="text-xs text-destructive/80">
+                            该部门包含 {childCount} 个下级部门，删除后将同时移除所有下级节点。
                         </p>
-                        {childCount > 0 ? (
-                            <p className="mt-1 text-xs text-destructive/80">
-                                该部门包含 {childCount} 个下级部门，审批通过后将一并删除。
-                            </p>
-                        ) : null}
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="org-delete-reason" className="text-xs font-medium text-muted-foreground">
-                            审批原因
-                        </Label>
-                        <Textarea
-                            id="org-delete-reason"
-                            value={reason}
-                            onChange={(event) => {
-                                setReason(event.target.value);
-                                if (error) {
-                                    setError(null);
-                                }
-                            }}
-                            onBlur={() => {
-                                if (!reason.trim()) {
-                                    setError("请填写审批原因");
-                                }
-                            }}
-                            placeholder="请描述删除原因，审批通过后才会执行删除"
-                            rows={4}
-                        />
-                        {error ? (
-                            <p className="text-xs text-destructive">{error}</p>
-                        ) : (
-                            <p className="text-xs text-muted-foreground">审批通过后系统才会同步删除该部门。</p>
-                        )}
-                    </div>
+                    ) : null}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onCancel} disabled={loading}>
                         取消
                     </Button>
-                    <Button
-                        variant="destructive"
-                        onClick={handleSubmit}
-                        disabled={loading || reason.trim().length === 0}
-                    >
-                        {loading ? "提交中..." : "提交审批"}
+                    <Button variant="destructive" onClick={onConfirm} disabled={loading}>
+                        {loading ? "删除中..." : "确认删除"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

@@ -9,12 +9,13 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.Collection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -184,6 +185,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             throw toRuntime("创建 Keycloak 组失败", response);
         }
         Optional<KeycloakGroupDTO> created = findGroupByLocation(response, accessToken)
+            .or(() -> findGroupByAttributes(payload, accessToken))
             .or(() -> findGroupByName(payload.getName(), accessToken));
         return created.orElseGet(() -> copyGroup(payload));
     }
@@ -197,6 +199,22 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             throw toRuntime("更新 Keycloak 组失败", response);
         }
         return findGroup(groupId, accessToken).orElseGet(() -> copyGroup(payload));
+    }
+
+    @Override
+    public void moveGroup(String groupId, String groupName, String parentGroupId, String accessToken) {
+        if (groupId == null || groupId.isBlank()) {
+            throw new IllegalArgumentException("groupId 不能为空");
+        }
+        URI target = parentGroupId == null || parentGroupId.isBlank() ? groupsEndpoint : groupUri(parentGroupId, "children");
+        Map<String, Object> representation = new LinkedHashMap<>();
+        representation.put("id", groupId);
+        representation.put("name", groupName == null ? groupId : groupName);
+        ResponseEntity<String> response = exchange(target, HttpMethod.POST, accessToken, representation);
+        int status = response.getStatusCode().value();
+        if (status != 201 && status != 204) {
+            throw toRuntime("移动 Keycloak 组失败", response);
+        }
     }
 
     @Override
@@ -317,11 +335,73 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         return Optional.empty();
     }
 
+    private Optional<KeycloakGroupDTO> findGroupByAttributes(KeycloakGroupDTO payload, String accessToken) {
+        if (payload == null || payload.getAttributes() == null || payload.getAttributes().isEmpty()) {
+            return Optional.empty();
+        }
+        List<String> orgIds = payload.getAttributes().get("dts_org_id");
+        if (orgIds == null || orgIds.isEmpty()) {
+            return Optional.empty();
+        }
+        String expected = null;
+        for (String candidate : orgIds) {
+            if (StringUtils.hasText(candidate)) {
+                expected = candidate;
+                break;
+            }
+        }
+        if (!StringUtils.hasText(expected)) {
+            return Optional.empty();
+        }
+        for (KeycloakGroupDTO root : listGroups(accessToken)) {
+            Optional<KeycloakGroupDTO> match = findGroupByAttribute(root, "dts_org_id", expected);
+            if (match.isPresent()) {
+                return match;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<KeycloakGroupDTO> findGroupByAttribute(KeycloakGroupDTO node, String key, String expected) {
+        if (node == null) {
+            return Optional.empty();
+        }
+        if (attributeMatches(node, key, expected)) {
+            return Optional.of(copyGroup(node));
+        }
+        if (node.getSubGroups() != null) {
+            for (KeycloakGroupDTO child : node.getSubGroups()) {
+                Optional<KeycloakGroupDTO> match = findGroupByAttribute(child, key, expected);
+                if (match.isPresent()) {
+                    return match;
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private boolean attributeMatches(KeycloakGroupDTO node, String key, String expected) {
+        if (!StringUtils.hasText(key) || !StringUtils.hasText(expected) || node.getAttributes() == null) {
+            return false;
+        }
+        List<String> values = node.getAttributes().get(key);
+        if (values == null || values.isEmpty()) {
+            return false;
+        }
+        for (String value : values) {
+            if (value != null && Objects.equals(expected, value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private KeycloakGroupDTO copyGroup(KeycloakGroupDTO source) {
         KeycloakGroupDTO target = new KeycloakGroupDTO();
         target.setId(source.getId());
         target.setName(source.getName());
         target.setPath(source.getPath());
+        target.setDescription(source.getDescription());
         Map<String, List<String>> attrs = new LinkedHashMap<>();
         if (source.getAttributes() != null) {
             source.getAttributes().forEach((key, value) -> attrs.put(key, value == null ? List.of() : new ArrayList<>(value)));
@@ -406,6 +486,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         if (dto.getName() != null) {
             rep.put("name", dto.getName());
         }
+        rep.put("description", dto.getDescription() == null ? "" : dto.getDescription());
         if (dto.getAttributes() != null && !dto.getAttributes().isEmpty()) {
             Map<String, List<String>> attributes = new LinkedHashMap<>();
             dto.getAttributes().forEach((key, value) -> {
@@ -459,6 +540,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         dto.setId(stringValue(map.get("id")));
         dto.setName(stringValue(map.get("name")));
         dto.setPath(stringValue(map.get("path")));
+        dto.setDescription(stringValue(map.get("description")));
         dto.setAttributes(stringListMap(map.get("attributes")));
         dto.setRealmRoles(stringList(map.get("realmRoles")));
         dto.setClientRoles(stringListMap(map.get("clientRoles")));

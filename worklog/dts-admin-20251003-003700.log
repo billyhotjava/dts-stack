@@ -42,3 +42,12 @@
 - 页面顶部增加提醒说明；其余管理操作复用审批版逻辑。
 - 前端路由恢复加载该页面, 兼容历史链接。
 
+2025-10-03 05:42 MSW与假数据清理（dts-admin-webapp）：
+- 移除 src/_mock 目录及 mockServiceWorker 资源，彻底关闭 MSW 入口，package.json 删除 msw 配置并刷新 pnpm-lock.yaml。
+- 主入口 main.tsx 删除动态 import/mock 启动逻辑，确保仅调用真实后台 API。
+- 用户侧页签（团队、项目、联系人）改为调用 Keycloak 实际接口：
+  * 团队页使用 KeycloakGroupService.getUserGroups 展示所属 Keycloak 组。
+  * 角色页取 KeycloakUserService.getUserRoles 并展示角色属性。
+  * 联系人页加载 KeycloakUserService.getAllUsers，真实显示用户列表及角色/组标签。
+- 清理 multi-tabs 钩子与类型定义中的 mock 引用，扩展 KeycloakUser 类型以兼容后端返回字段。
+- build 检查仍受 PortalMenus/RoleManagement 等历史类型错误阻挡，未在本次修复范围内。

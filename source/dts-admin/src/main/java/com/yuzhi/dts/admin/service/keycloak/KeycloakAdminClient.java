@@ -30,6 +30,8 @@ public interface KeycloakAdminClient {
 
     KeycloakGroupDTO updateGroup(String groupId, KeycloakGroupDTO payload, String accessToken);
 
+    void moveGroup(String groupId, String groupName, String parentGroupId, String accessToken);
+
     void deleteGroup(String groupId, String accessToken);
 
     Optional<KeycloakRoleDTO> findRealmRole(String roleName, String accessToken);

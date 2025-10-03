@@ -19,7 +19,11 @@ import apiService, {
 import { apiPublish, apiExecute } from "@/api/platformApi";
 import SensitiveNotice from "@/components/security/SensitiveNotice";
 
-function LevelBadge({ level }: { level: string }) {
+
+function LevelBadge({ level }: { level?: string | null }) {
+	if (!level) {
+		return <Badge variant="outline" className="border border-dashed text-muted-foreground">未设置</Badge>;
+	}
 	const color =
 		level === "机密"
 			? "bg-rose-100 text-rose-700 border-rose-300"
@@ -104,6 +108,13 @@ export default function ApiServiceDetailPage() {
 					<h2 className="text-lg font-semibold">{detail.name}</h2>
 					<div className="text-xs text-muted-foreground font-mono">
 						{detail.method} {detail.path}
+					</div>
+					<div className="text-xs text-muted-foreground">
+						绑定数据集：{detail.datasetName || "-"}
+					</div>
+					<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+						{detail.latestVersion && <Badge variant="outline">版本 {detail.latestVersion}</Badge>}
+						{detail.lastPublishedAt && <span>最近发布：{new Date(detail.lastPublishedAt).toLocaleString()}</span>}
 					</div>
 				</div>
                 <div className="flex items-center gap-3">
@@ -201,16 +212,24 @@ export default function ApiServiceDetailPage() {
 								<CardHeader>
 									<CardTitle className="text-base">策略摘要</CardTitle>
 								</CardHeader>
-								<CardContent className="space-y-2 text-sm">
-									<div>
-										最低密级：
-										<LevelBadge level={detail.policy.minLevel} />
-									</div>
-									<div>列掩码：{detail.policy.maskedColumns.join("、") || "-"}</div>
-									<div>
-										行过滤：<span className="font-mono text-xs">{detail.policy.rowFilter}</span>
-									</div>
-								</CardContent>
+							<CardContent className="space-y-2 text-sm">
+								<div className="flex items-center gap-2">
+									<span>最低密级：</span>
+									<LevelBadge level={detail.policy?.minLevel} />
+								</div>
+								<div>
+									列掩码：
+									{detail.policy?.maskedColumns?.length ? detail.policy.maskedColumns.join("、") : "-"}
+								</div>
+								<div>
+									行过滤：{" "}
+									{detail.policy?.rowFilter ? (
+											<span className="font-mono text-xs">{detail.policy.rowFilter}</span>
+										) : (
+											<span>-</span>
+										)}
+								</div>
+							</CardContent>
 							</Card>
 							<Card>
 								<CardHeader>

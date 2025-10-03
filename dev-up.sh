@@ -14,11 +14,43 @@ usage(){
 }
 
 clean_maven_targets(){
-  for module in dts-admin dts-platform; do
+  for module in dts-admin dts-platform dts-common; do
     local module_target="source/${module}/target"
     if [[ -d "${module_target}" ]]; then
       echo "[dev-up] Removing stale build output: ${module_target}"
       rm -rf "${module_target}"
+    fi
+  done
+}
+
+clean_node_modules(){
+  for webapp in dts-platform-webapp dts-admin-webapp; do
+    local webapp_dir="source/${webapp}"
+    if [[ -d "${webapp_dir}" ]]; then
+      echo "[dev-up] Cleaning Node.js artifacts in: ${webapp_dir}"
+      # Remove node_modules
+      if [[ -d "${webapp_dir}/node_modules" ]]; then
+        rm -rf "${webapp_dir}/node_modules"
+      fi
+      # Remove pnpm artifacts
+      if [[ -d "${webapp_dir}/.pnpm" ]]; then
+        rm -rf "${webapp_dir}/.pnpm"
+      fi
+      # Remove pnpm store cache
+      if [[ -d "${webapp_dir}/node_modules/.pnpm" ]]; then
+        rm -rf "${webapp_dir}/node_modules/.pnpm"
+      fi
+      # Remove build outputs
+      if [[ -d "${webapp_dir}/dist" ]]; then
+        rm -rf "${webapp_dir}/dist"
+      fi
+      if [[ -d "${webapp_dir}/build" ]]; then
+        rm -rf "${webapp_dir}/build"
+      fi
+      # Remove Vite cache
+      if [[ -d "${webapp_dir}/node_modules/.vite" ]]; then
+        rm -rf "${webapp_dir}/node_modules/.vite"
+      fi
     fi
   done
 }
@@ -144,6 +176,7 @@ if [[ "$MODE" == "local" ]]; then
 else
   echo "[dev-up] Starting source dev services with build ..."
   clean_maven_targets
+  clean_node_modules
   "${compose_cmd[@]}" "${compose_files[@]}" up -d --build "${services[@]}"
 fi
 

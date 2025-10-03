@@ -11,22 +11,8 @@ import { registerLocalIcons } from "./components/icon";
 import { GLOBAL_CONFIG } from "./global-config";
 import ErrorBoundary from "./routes/components/error-boundary";
 import { getRoutesSection } from "./routes/sections";
-import { urlJoin } from "./utils";
 
 await registerLocalIcons();
-
-// Force-disable MSW mocks; flip manually if you need them.
-const shouldEnableMock = false;
-
-// In production builds, MSW stays tree-shaken while disabled.
-// Use dynamic import so that prod bundle tree-shakes mock code by default.
-if (import.meta.env.DEV && shouldEnableMock) {
-	const { worker } = await import("./_mock");
-	await worker.start({
-		onUnhandledRequest: "bypass",
-		serviceWorker: { url: urlJoin(GLOBAL_CONFIG.publicPath, "mockServiceWorker.js") },
-	});
-}
 
 if (GLOBAL_CONFIG.routerMode === "backend") {
     await menuService.getMenuList();

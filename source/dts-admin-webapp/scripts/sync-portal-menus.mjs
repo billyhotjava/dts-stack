@@ -80,9 +80,16 @@ if (!seedPath) {
 }
 
 const srcMenus = seedPath;
-const destMenus = path.resolve(__dirname, "..", "src", "_mock", "data", "portal-menus.json");
+const mockRoot = path.resolve(__dirname, "..", "src", "_mock");
 
-const destI18nZh = path.resolve(__dirname, "..", "src", "_mock", "data", "portal-i18n-zh.json");
+if (!fs.existsSync(mockRoot)) {
+  console.warn("[sync-portal-menus] Mock directory removed; skip MSW seed export.");
+  process.exit(0);
+}
+
+const destMenus = path.join(mockRoot, "data", "portal-menus.json");
+
+const destI18nZh = path.join(mockRoot, "data", "portal-i18n-zh.json");
 
 const normalizePathSegment = (segment) => {
   if (!segment) return "";

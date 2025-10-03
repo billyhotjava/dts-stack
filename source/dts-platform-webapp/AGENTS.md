@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 - Vite + React + TypeScript. Entry `src/main.tsx`; routes from `src/routes`; pages in `src/pages`.
 - Admin features in `src/admin`. Shared UI/logic in `src/components`, `src/hooks`, `src/store` (Zustand), and `src/utils`.
-- Mocks and fixtures in `src/_mock` (MSW). Design tokens in `src/theme` and `tailwind.config.ts`.
+- Design tokens in `src/theme` and `tailwind.config.ts`.
 - Processed assets in `src/assets`; static files in `public/`.
 - Centralize runtime defaults in `src/global-config.ts` (avoid scattered env fallbacks).
 
@@ -23,7 +23,7 @@
 ## Testing Guidelines
 - Treat `pnpm build` as the baseline regression gate.
 - Add colocated specs as `*.test.ts(x)` where logic warrants automation.
-- Mock network traffic with MSW handlers in `src/_mock`; keep fixtures near consumers.
+- Prefer exercising backend APIs directly; if stubbing is unavoidable, place lightweight fixtures next to consumers.
 - Document manual verification steps in PRs until coverage expands.
 
 ## Commit & Pull Request Guidelines

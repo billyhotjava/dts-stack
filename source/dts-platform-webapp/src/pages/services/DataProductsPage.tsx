@@ -1,498 +1,304 @@
-import { useMemo, useState } from "react";
-import clsx from "clsx";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Icon } from "@/components/icon";
+import { listDataProducts, getDataProductDetail, type DataProductDetail, type DataProductSummary, type DataProductVersion } from "@/api/services/dataProductsService";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
+import { Label } from "@/ui/label";
 import { ScrollArea } from "@/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
-import { Separator } from "@/ui/separator";
+import SensitiveNotice from "@/components/security/SensitiveNotice";
 
-type ProductType = "宽表" | "指标视图" | "快照";
-
-type ProductSummary = {
-	id: string;
-	name: string;
-	type: ProductType;
-	datasets: string[];
-	version: string;
-	sla: string;
-	lastProducedAt: string;
-	subscriptions: number;
-	status: "启用" | "停用" | "灰度";
-};
-
-const PRODUCT_SUMMARIES: ProductSummary[] = [
-	{
-		id: "prd-cust-wide",
-		name: "客户 360 宽表",
-		type: "宽表",
-		datasets: ["dwd_customer_profile", "dwd_customer_behavior"],
-		version: "v3.2",
-		sla: "小时级",
-		lastProducedAt: "2024-12-09 08:05",
-		subscriptions: 28,
-		status: "启用",
-	},
-	{
-		id: "prd-sales-metrics",
-		name: "销售指标视图",
-		type: "指标视图",
-		datasets: ["dm_sales_order", "dm_sales_target"],
-		version: "v2.6",
-		sla: "日批",
-		lastProducedAt: "2024-12-08 23:10",
-		subscriptions: 41,
-		status: "启用",
-	},
-	{
-		id: "prd-risk-snapshot",
-		name: "风险案件周报快照",
-		type: "快照",
-		datasets: ["dws_risk_case"],
-		version: "v1.4",
-		sla: "周批",
-		lastProducedAt: "2024-12-06 07:00",
-		subscriptions: 12,
-		status: "灰度",
-	},
-];
-
-type ProductField = {
-	name: string;
-	type: string;
-	term?: string;
-	masked: boolean;
-	description?: string;
-};
-
-type ProductDetail = {
-	id: string;
-	fields: ProductField[];
-	bloodlineSummary: string;
-	classificationStrategy: string;
-	maskingStrategy: string;
-	refreshFrequency: string;
-	latencyObjective: string;
-	failurePolicy: string;
-	versions: Array<{
-		version: string;
-		status: "current" | "gray" | "archived";
-		releasedAt: string;
-		diffSummary: string;
-	}>;
-	consumption: {
-		rest: {
-			endpoint: string;
-			auth: string;
-		};
-		jdbc: {
-			driver: string;
-			url: string;
-		};
-		file: {
-			objectStorePath: string;
-			sharedPath: string;
-			formats: string[];
-		};
+function StatusBadge({ status }: { status?: string }) {
+	if (!status) return <Badge variant="outline">未设置</Badge>;
+	const map: Record<string, string> = {
+		"启用": "bg-emerald-100 text-emerald-700",
+		"停用": "bg-slate-200 text-slate-600",
+		"灰度": "bg-amber-100 text-amber-700",
 	};
-};
+	const cls = map[status] ?? "bg-slate-100 text-slate-700";
+	return <Badge className={cls}>{status}</Badge>;
+}
 
-const PRODUCT_DETAILS: ProductDetail[] = [
-	{
-		id: "prd-cust-wide",
-		fields: [
-			{ name: "customer_id", type: "STRING", term: "客户编号", masked: false, description: "主键" },
-			{ name: "customer_name", type: "STRING", masked: true, term: "客户姓名" },
-			{ name: "career_level", type: "STRING", masked: false, term: "职业等级" },
-			{ name: "lifecycle_stage", type: "STRING", masked: false },
-			{ name: "total_asset", type: "DECIMAL", masked: true, description: "加总金融资产" },
-			{ name: "avg_monthly_active_days", type: "DECIMAL", masked: false },
-		],
-		bloodlineSummary: "汇聚 ODS 客户主数据、交易行为明细及 CRM 互动记录并进行标准化融合",
-		classificationStrategy: "字段按密级标注：姓名/资产为秘密，其余为内部。",
-		maskingStrategy: "对 PII 字段默认使用字符替换，对资产字段按区间脱敏。",
-		refreshFrequency: "T+1 05:30 完成产出",
-		latencyObjective: "延迟不超过 30 分钟",
-		failurePolicy: "连续失败 2 次触发钉钉/邮箱告警，支持手动补数",
-		versions: [
-			{ version: "v3.2", status: "current", releasedAt: "2024-12-08", diffSummary: "新增职业等级字段" },
-			{ version: "v3.1", status: "archived", releasedAt: "2024-11-20", diffSummary: "优化资产脱敏策略" },
-			{ version: "v3.0", status: "archived", releasedAt: "2024-11-01", diffSummary: "切换血缘到新版数据域" },
-		],
-		consumption: {
-			rest: {
-				endpoint: "https://api.data-platform.local/products/customer-360",
-				auth: "OAuth2 Client Credentials",
-			},
-			jdbc: {
-				driver: "com.platform.jdbc.Driver",
-				url: "jdbc:platform://gateway.local:8443/customer360",
-			},
-			file: {
-				objectStorePath: "oss://datalake/prod/customer360/daily/",
-				sharedPath: "/mnt/share/customer360/",
-				formats: ["parquet", "csv"],
-			},
-		},
-	},
-	{
-		id: "prd-sales-metrics",
-		fields: [
-			{ name: "date", type: "DATE", masked: false },
-			{ name: "channel", type: "STRING", masked: false },
-			{ name: "gmv", type: "DECIMAL", masked: false },
-			{ name: "orders", type: "INTEGER", masked: false },
-			{ name: "target_completion", type: "DECIMAL", masked: false },
-		],
-		bloodlineSummary: "按渠道汇总订单宽表并关联目标视图，输出 GMV/订单/完成率指标",
-		classificationStrategy: "指标均为内部数据，订单字段脱敏至聚合层",
-		maskingStrategy: "聚合后无需额外脱敏，明细字段不可导出",
-		refreshFrequency: "每日 06:00",
-		latencyObjective: "+60 分钟",
-		failurePolicy: "失败立即短信告警负责人，并自动回滚上一版本",
-		versions: [
-			{ version: "v2.6", status: "current", releasedAt: "2024-12-07", diffSummary: "新增目标完成率字段" },
-			{ version: "v2.5", status: "archived", releasedAt: "2024-11-15", diffSummary: "GMV 口径同步销售平台" },
-		],
-		consumption: {
-			rest: {
-				endpoint: "https://api.data-platform.local/products/sales-metrics",
-				auth: "API Key",
-			},
-			jdbc: {
-				driver: "com.platform.jdbc.Driver",
-				url: "jdbc:platform://gateway.local:8443/salesmetrics",
-			},
-			file: {
-				objectStorePath: "oss://datalake/prod/sales-metrics/",
-				sharedPath: "/mnt/share/sales-metrics/",
-				formats: ["parquet"],
-			},
-		},
-	},
-	{
-		id: "prd-risk-snapshot",
-		fields: [
-			{ name: "report_week", type: "STRING", masked: false },
-			{ name: "risk_category", type: "STRING", masked: false },
-			{ name: "case_count", type: "INTEGER", masked: false },
-			{ name: "high_risk_ratio", type: "DECIMAL", masked: false },
-			{ name: "insight", type: "STRING", masked: false },
-		],
-		bloodlineSummary: "从风控案件数据集按周快照汇总，结合风险标签体系生成洞察",
-		classificationStrategy: "默认密级为内部，洞察字段含敏感文本时升级至秘密",
-		maskingStrategy: "洞察字段包含个人信息时自动正则脱敏",
-		refreshFrequency: "每周一 07:00",
-		latencyObjective: "2 小时",
-		failurePolicy: "失败后自动重试 3 次，仍失败转人工排查",
-		versions: [
-			{ version: "v1.4", status: "gray", releasedAt: "2024-12-02", diffSummary: "新增风险洞察描述" },
-			{ version: "v1.3", status: "current", releasedAt: "2024-11-18", diffSummary: "引入风险标签维度" },
-		],
-		consumption: {
-			rest: {
-				endpoint: "https://api.data-platform.local/products/risk-weekly",
-				auth: "OAuth2 Client Credentials",
-			},
-			jdbc: {
-				driver: "com.platform.jdbc.Driver",
-				url: "jdbc:platform://gateway.local:8443/risk-weekly",
-			},
-			file: {
-				objectStorePath: "oss://datalake/prod/risk-weekly/",
-				sharedPath: "/mnt/share/risk-weekly/",
-				formats: ["csv", "xlsx"],
-			},
-		},
-	},
-];
+function LevelBadge({ level }: { level?: string }) {
+	if (!level) return <Badge variant="outline">未分类</Badge>;
+	const cls =
+		level === "机密"
+			? "bg-rose-100 text-rose-700"
+			: level === "秘密"
+				? "bg-red-100 text-red-700"
+				: level === "内部"
+					? "bg-amber-100 text-amber-800"
+					: "bg-slate-100 text-slate-700";
+	return <Badge className={cls}>{level}</Badge>;
+}
 
-const STATUS_VARIANTS: Record<
-	ProductSummary["status"],
-	{ label: string; variant: "default" | "secondary" | "outline" | "destructive" }
-> = {
-	启用: { label: "启用", variant: "default" },
-	停用: { label: "停用", variant: "secondary" },
-	灰度: { label: "灰度", variant: "outline" },
-};
+function ProductCard({ item, active, onSelect }: { item: DataProductSummary; active: boolean; onSelect: (id: string) => void }) {
+	return (
+		<button
+			onClick={() => onSelect(item.id)}
+			className={`w-full rounded-lg border px-4 py-3 text-left transition ${active ? "border-primary bg-primary/5" : "hover:border-primary/60"}`}
+		>
+			<div className="flex items-center justify-between">
+				<div className="space-y-1">
+					<div className="flex items-center gap-2">
+						<span className="text-sm font-semibold">{item.name}</span>
+						<Badge variant="outline">{item.productType || "未分类"}</Badge>
+					</div>
+					<div className="text-xs text-muted-foreground">编码：{item.code}</div>
+					<div className="text-xs text-muted-foreground">绑定数据集：{item.datasets.join("、") || "-"}</div>
+				</div>
+				<div className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
+					<StatusBadge status={item.status} />
+					{item.currentVersion && <span>当前版本：{item.currentVersion}</span>}
+					<span>订阅：{item.subscriptions}</span>
+				</div>
+			</div>
+		</button>
+	);
+}
+
+function VersionBlock({ version }: { version: DataProductVersion }) {
+	return (
+		<div className="rounded-md border p-4">
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<div className="flex items-center gap-2 text-sm font-medium">
+					<Icon icon="solar:bookmark-bold-duotone" className="text-primary" />
+					{version.version}
+					{version.status && <Badge variant="outline">{version.status}</Badge>}
+				</div>
+				<div className="text-xs text-muted-foreground">
+					{version.releasedAt ? new Date(version.releasedAt).toLocaleString() : "未发布"}
+				</div>
+			</div>
+			{version.diffSummary && <div className="mt-2 text-xs text-muted-foreground">变更说明：{version.diffSummary}</div>}
+			<div className="mt-3 space-y-2">
+				<Label className="text-xs text-muted-foreground">字段列表</Label>
+				<div className="overflow-x-auto">
+					<table className="w-full min-w-[480px] table-fixed border-collapse text-xs">
+						<thead className="bg-muted/40">
+							<tr>
+								<th className="px-2 py-2 text-left font-medium">字段</th>
+								<th className="px-2 py-2 text-left font-medium">类型</th>
+								<th className="px-2 py-2 text-left font-medium">术语</th>
+								<th className="px-2 py-2 text-left font-medium">脱敏</th>
+								<th className="px-2 py-2 text-left font-medium">描述</th>
+							</tr>
+						</thead>
+						<tbody>
+							{version.fields.map((f) => (
+								<tr key={f.name} className="border-b last:border-b-0">
+									<td className="px-2 py-2 font-medium">{f.name}</td>
+									<td className="px-2 py-2">{f.type || "-"}</td>
+									<td className="px-2 py-2">{f.term || "-"}</td>
+									<td className="px-2 py-2">{f.masked ? "是" : "否"}</td>
+									<td className="px-2 py-2 text-muted-foreground">{f.description || "-"}</td>
+								</tr>
+							))}
+							{!version.fields.length && (
+								<tr>
+									<td colSpan={5} className="px-2 py-4 text-center text-muted-foreground">
+										暂无字段信息
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+			</div>
+			<div className="mt-3 grid gap-3 md:grid-cols-3 text-xs">
+				<div className="rounded-md border p-3">
+					<div className="text-muted-foreground">REST 接入</div>
+					<div className="mt-1 font-mono text-[11px] text-muted-foreground break-all">
+						{version.consumption?.rest?.endpoint || "-"}
+					</div>
+				</div>
+				<div className="rounded-md border p-3">
+					<div className="text-muted-foreground">JDBC</div>
+					<div className="mt-1 font-mono text-[11px] text-muted-foreground break-all">
+						{version.consumption?.jdbc?.url || "-"}
+					</div>
+				</div>
+				<div className="rounded-md border p-3">
+					<div className="text-muted-foreground">文件分发</div>
+					<div className="mt-1 text-muted-foreground">
+						{version.consumption?.file?.objectStorePath || "-"}
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
 
 export default function DataProductsPage() {
-	const [search, setSearch] = useState("");
-	const [selectedId, setSelectedId] = useState(PRODUCT_SUMMARIES[0]?.id ?? "");
+	const [products, setProducts] = useState<DataProductSummary[]>([]);
+	const [loadingList, setLoadingList] = useState(false);
+	const [loadingDetail, setLoadingDetail] = useState(false);
+	const [keyword, setKeyword] = useState("");
+	const [typeFilter, setTypeFilter] = useState<string>("all");
+	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [detail, setDetail] = useState<DataProductDetail | null>(null);
+
+	useEffect(() => {
+		const fetchList = async () => {
+			setLoadingList(true);
+			try {
+				const data = await listDataProducts();
+				setProducts(data);
+				if (data.length) {
+					setSelectedId(data[0].id);
+				}
+			} catch (error) {
+				console.error(error);
+				toast.error("数据产品列表加载失败");
+			} finally {
+				setLoadingList(false);
+			}
+		};
+		void fetchList();
+	}, []);
+
+	useEffect(() => {
+		if (!selectedId) {
+			setDetail(null);
+			return;
+		}
+		const fetchDetail = async () => {
+			setLoadingDetail(true);
+			try {
+				const data = await getDataProductDetail(selectedId);
+				setDetail(data);
+			} catch (error) {
+				console.error(error);
+				toast.error("加载数据产品详情失败");
+			} finally {
+				setLoadingDetail(false);
+			}
+		};
+		void fetchDetail();
+	}, [selectedId]);
 
 	const filteredProducts = useMemo(() => {
-		return PRODUCT_SUMMARIES.filter((product) => {
-			if (!search.trim()) return true;
-			const lower = search.toLowerCase();
-			return (
-				product.name.toLowerCase().includes(lower) ||
-				product.datasets.some((dataset) => dataset.toLowerCase().includes(lower))
-			);
+		const kw = keyword.trim().toLowerCase();
+		return products.filter((item) => {
+			const kwMatch = kw
+				? `${item.name}${item.code}${item.datasets.join(" ")}`.toLowerCase().includes(kw)
+				: true;
+			const typeMatch = typeFilter === "all" ? true : (item.productType || "").toLowerCase() === typeFilter.toLowerCase();
+			return kwMatch && typeMatch;
 		});
-	}, [search]);
+	}, [products, keyword, typeFilter]);
 
-	const activeProduct = useMemo(() => PRODUCT_DETAILS.find((detail) => detail.id === selectedId), [selectedId]);
-	const activeSummary = useMemo(() => PRODUCT_SUMMARIES.find((summary) => summary.id === selectedId), [selectedId]);
+	const typeOptions = useMemo(() => {
+		const set = new Set<string>();
+		products.forEach((p) => {
+			if (p.productType) set.add(p.productType);
+		});
+		return ["all", ...Array.from(set)];
+	}, [products]);
 
 	return (
 		<div className="space-y-4">
-			<div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-				<Icon icon="solar:shield-keyhole-bold" className="text-amber-500" size={18} />
-				数据产品统一依赖策略中心的密级与订阅审批，导出需走导出中心。
-				{activeSummary ? (
-					<Badge variant="outline" className="border-amber-400 text-amber-700">
-						当前：{activeSummary.name} · 状态 {activeSummary.status}
-					</Badge>
-				) : null}
-			</div>
-
-			<div className="grid gap-4 xl:grid-cols-[380px,1fr]">
-				<Card className="h-[calc(100vh-260px)]">
-					<CardHeader className="space-y-3">
-						<CardTitle className="text-base">数据产品</CardTitle>
-						<Input placeholder="搜索产品 / 数据集" value={search} onChange={(event) => setSearch(event.target.value)} />
-					</CardHeader>
-					<CardContent className="p-0">
-						<ScrollArea className="h-[calc(100vh-360px)]">
-							<table className="w-full text-sm">
-								<thead className="sticky top-0 bg-muted/20 text-left text-xs uppercase text-muted-foreground">
-									<tr>
-										<th className="px-4 py-2">产品名</th>
-										<th className="px-4 py-2">类型</th>
-										<th className="px-4 py-2">绑定数据集</th>
-										<th className="px-4 py-2">版本</th>
-										<th className="px-4 py-2">SLA</th>
-										<th className="px-4 py-2">最近产出</th>
-										<th className="px-4 py-2">订阅数</th>
-										<th className="px-4 py-2 text-right">状态</th>
-									</tr>
-								</thead>
-								<tbody>
-									{filteredProducts.map((product) => (
-										<tr
-											key={product.id}
-											className={clsx("cursor-pointer border-b border-border/40 last:border-none", {
-												"bg-primary/10": product.id === selectedId,
-											})}
-											onClick={() => setSelectedId(product.id)}
-										>
-											<td className="px-4 py-3 font-medium">{product.name}</td>
-											<td className="px-4 py-3">
-												<Badge variant="secondary">{product.type}</Badge>
-											</td>
-											<td className="px-4 py-3 text-xs text-muted-foreground">{product.datasets.join(", ")}</td>
-											<td className="px-4 py-3 text-xs">{product.version}</td>
-											<td className="px-4 py-3 text-xs">{product.sla}</td>
-											<td className="px-4 py-3 text-xs text-muted-foreground">{product.lastProducedAt}</td>
-											<td className="px-4 py-3 text-xs">{product.subscriptions}</td>
-											<td className="px-4 py-3 text-right">
-												<Badge variant={STATUS_VARIANTS[product.status].variant}>
-													{STATUS_VARIANTS[product.status].label}
-												</Badge>
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
+			<SensitiveNotice />
+			<Card>
+				<CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+					<CardTitle className="text-base">数据产品目录</CardTitle>
+					<div className="flex flex-wrap items-center gap-2">
+						<Label className="text-xs text-muted-foreground">关键词</Label>
+						<Input
+							className="w-[220px]"
+							placeholder="名称/编码/数据集"
+							value={keyword}
+							onChange={(e) => setKeyword(e.target.value)}
+						/>
+						<Label className="ml-2 text-xs text-muted-foreground">类型</Label>
+						<Tabs value={typeFilter} onValueChange={setTypeFilter} className="max-w-full">
+							<TabsList>
+								{typeOptions.map((opt) => (
+									<TabsTrigger key={opt} value={opt} className="capitalize">
+										{opt === "all" ? "全部" : opt}
+									</TabsTrigger>
+								))}
+							</TabsList>
+						</Tabs>
+						<Button variant="outline" size="sm" onClick={() => void setSelectedId(filteredProducts[0]?.id || null)} disabled={loadingList}>
+							刷新
+						</Button>
+					</div>
+				</CardHeader>
+				<CardContent>
+					<div className="grid gap-4 lg:grid-cols-[360px,1fr]">
+						<ScrollArea className="max-h-[520px] pr-4">
+							<div className="space-y-3">
+								{loadingList && <div className="text-xs text-muted-foreground">加载中…</div>}
+								{!loadingList && filteredProducts.map((item) => (
+									<ProductCard key={item.id} item={item} active={item.id === selectedId} onSelect={setSelectedId} />
+								))}
+								{!loadingList && !filteredProducts.length && (
+									<div className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
+										暂无匹配的数据产品
+									</div>
+								)}
+							</div>
 						</ScrollArea>
-					</CardContent>
-				</Card>
-
-				{activeProduct && activeSummary ? (
-					<Card className="h-[calc(100vh-260px)]">
-						<CardHeader className="flex flex-col gap-2 md:flex-row md:justify-between md:items-center">
-							<div>
-								<CardTitle className="text-xl font-semibold">{activeSummary.name}</CardTitle>
-								<p className="text-sm text-muted-foreground">
-									{activeSummary.type} · 当前版本 {activeSummary.version} · SLA {activeSummary.sla}
-								</p>
-							</div>
-							<div className="flex gap-2">
-								<Button variant="outline">
-									<Icon icon="mdi:bell-ring-outline" className="mr-1" size={16} />
-									订阅动态
-								</Button>
-								<Button>
-									<Icon icon="mdi:rocket-launch" className="mr-1" size={16} />
-									发起订阅
-								</Button>
-							</div>
-						</CardHeader>
-						<CardContent className="flex h-full flex-col">
-							<Tabs defaultValue="schema" className="flex h-full flex-col">
-								<TabsList className="w-full justify-start">
-									<TabsTrigger value="schema">Schema</TabsTrigger>
-									<TabsTrigger value="sla">SLA</TabsTrigger>
-									<TabsTrigger value="versions">版本</TabsTrigger>
-									<TabsTrigger value="consume">消费方式</TabsTrigger>
-								</TabsList>
-								<TabsContent value="schema" className="flex-1 overflow-hidden">
-									<ScrollArea className="h-full">
-										<div className="space-y-4 py-4">
-											<div className="space-y-2">
-												<h3 className="text-sm font-semibold">字段定义</h3>
-												<table className="w-full text-sm">
-													<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-														<tr>
-															<th className="px-3 py-2">字段</th>
-															<th className="px-3 py-2">类型</th>
-															<th className="px-3 py-2">业务术语</th>
-															<th className="px-3 py-2">脱敏</th>
-														</tr>
-													</thead>
-													<tbody>
-														{activeProduct.fields.map((field) => (
-															<tr key={field.name} className="border-b border-border/40 last:border-none">
-																<td className="px-3 py-2">
-																	<div className="font-medium">{field.name}</div>
-																	{field.description ? (
-																		<div className="text-xs text-muted-foreground">{field.description}</div>
-																	) : null}
-																</td>
-																<td className="px-3 py-2 text-xs text-muted-foreground">{field.type}</td>
-																<td className="px-3 py-2 text-xs">{field.term ?? "--"}</td>
-																<td className="px-3 py-2">
-																	<Badge variant={field.masked ? "secondary" : "outline"}>
-																		{field.masked ? "已脱敏" : "原始"}
-																	</Badge>
-																</td>
-															</tr>
-														))}
-													</tbody>
-												</table>
-											</div>
-											<Separator />
-											<div className="grid gap-4 md:grid-cols-2">
-												<Card>
-													<CardHeader>
-														<CardTitle className="text-sm">血缘摘要</CardTitle>
-													</CardHeader>
-													<CardContent className="text-sm text-muted-foreground">
-														{activeProduct.bloodlineSummary}
-													</CardContent>
-												</Card>
-												<Card>
-													<CardHeader>
-														<CardTitle className="text-sm">分级 / 脱敏策略</CardTitle>
-													</CardHeader>
-													<CardContent className="space-y-2 text-sm text-muted-foreground">
-														<p>分级：{activeProduct.classificationStrategy}</p>
-														<p>脱敏：{activeProduct.maskingStrategy}</p>
-													</CardContent>
-												</Card>
-											</div>
-										</div>
-									</ScrollArea>
-								</TabsContent>
-								<TabsContent value="sla" className="flex-1 overflow-auto py-4">
-									<div className="grid gap-4 md:grid-cols-3">
-										<Card>
-											<CardHeader>
-												<CardTitle className="text-sm">刷新周期</CardTitle>
-											</CardHeader>
-											<CardContent className="text-sm text-muted-foreground">
-												{activeProduct.refreshFrequency}
-											</CardContent>
-										</Card>
-										<Card>
-											<CardHeader>
-												<CardTitle className="text-sm">时延目标</CardTitle>
-											</CardHeader>
-											<CardContent className="text-sm text-muted-foreground">
-												{activeProduct.latencyObjective}
-											</CardContent>
-										</Card>
-										<Card>
-											<CardHeader>
-												<CardTitle className="text-sm">失败策略</CardTitle>
-											</CardHeader>
-											<CardContent className="text-sm text-muted-foreground">{activeProduct.failurePolicy}</CardContent>
-										</Card>
+						<div className="min-h-[400px]">
+							{loadingDetail && <div className="text-xs text-muted-foreground">详情加载中…</div>}
+							{!loadingDetail && detail && (
+								<div className="space-y-4">
+									<div className="flex flex-wrap items-center gap-3">
+										<h3 className="text-lg font-semibold">{detail.name}</h3>
+										<Badge variant="outline">{detail.productType || "未分类"}</Badge>
+										<LevelBadge level={detail.classification} />
+										<StatusBadge status={detail.status} />
 									</div>
-								</TabsContent>
-
-								<TabsContent value="versions" className="flex-1 overflow-hidden py-4">
-									<ScrollArea className="h-full">
-										<div className="space-y-3">
-											{activeProduct.versions.map((version) => (
-												<Card
-													key={version.version}
-													className={clsx({ "border-primary": version.status === "current" })}
-												>
-													<CardHeader className="flex flex-row items-center justify-between">
-														<div>
-															<CardTitle className="text-sm">版本 {version.version}</CardTitle>
-															<p className="text-xs text-muted-foreground">发布于 {version.releasedAt}</p>
-														</div>
-														<div className="flex gap-2">
-															{version.status === "gray" ? (
-																<Button size="sm" variant="outline">
-																	灰度发布
-																</Button>
-															) : null}
-															{version.status !== "current" ? (
-																<Button size="sm" variant="ghost">
-																	回滚到此版本
-																</Button>
-															) : null}
-														</div>
-													</CardHeader>
-													<CardContent className="text-sm text-muted-foreground">{version.diffSummary}</CardContent>
-												</Card>
+									<div className="grid gap-3 md:grid-cols-3 text-xs">
+										<div className="rounded-md border p-3">
+											<div className="text-muted-foreground">SLA</div>
+											<div className="mt-1 font-medium">{detail.sla || "-"}</div>
+										</div>
+										<div className="rounded-md border p-3">
+											<div className="text-muted-foreground">刷新频率</div>
+											<div className="mt-1 font-medium">{detail.refreshFrequency || "-"}</div>
+										</div>
+										<div className="rounded-md border p-3">
+											<div className="text-muted-foreground">订阅数</div>
+											<div className="mt-1 font-medium">{detail.subscriptions}</div>
+										</div>
+									</div>
+									<div className="rounded-md border p-4 text-sm">
+										<div className="text-xs text-muted-foreground">绑定数据集</div>
+										<div className="mt-1 flex flex-wrap gap-2">
+											{detail.datasets.length ? detail.datasets.map((ds) => <Badge key={ds} variant="secondary">{ds}</Badge>) : <span className="text-xs text-muted-foreground">无</span>}
+										</div>
+									</div>
+									{detail.description && (
+										<Card>
+											<CardHeader>
+												<CardTitle className="text-base">说明</CardTitle>
+											</CardHeader>
+											<CardContent className="text-sm text-muted-foreground">{detail.description}</CardContent>
+										</Card>
+									)}
+									<Card>
+										<CardHeader>
+											<CardTitle className="text-base">版本列表</CardTitle>
+										</CardHeader>
+										<CardContent className="space-y-3">
+											{detail.versions.map((v) => (
+												<VersionBlock key={v.version} version={v} />
 											))}
-										</div>
-									</ScrollArea>
-								</TabsContent>
-
-								<TabsContent value="consume" className="flex-1 overflow-auto py-4">
-									<div className="grid gap-4 md:grid-cols-3">
-										<Card>
-											<CardHeader>
-												<CardTitle className="flex items-center gap-2 text-sm">
-													<Icon icon="mdi:cloud" size={16} /> REST API
-												</CardTitle>
-											</CardHeader>
-											<CardContent className="space-y-2 text-sm text-muted-foreground">
-												<p>Endpoint：{activeProduct.consumption.rest.endpoint}</p>
-												<p>认证：{activeProduct.consumption.rest.auth}</p>
-											</CardContent>
-										</Card>
-										<Card>
-											<CardHeader>
-												<CardTitle className="flex items-center gap-2 text-sm">
-													<Icon icon="mdi:database" size={16} /> JDBC / SQL
-												</CardTitle>
-											</CardHeader>
-											<CardContent className="space-y-2 text-sm text-muted-foreground">
-												<p>Driver：{activeProduct.consumption.jdbc.driver}</p>
-												<p>URL：{activeProduct.consumption.jdbc.url}</p>
-											</CardContent>
-										</Card>
-										<Card>
-											<CardHeader>
-												<CardTitle className="flex items-center gap-2 text-sm">
-													<Icon icon="mdi:folder" size={16} /> 文件投递
-												</CardTitle>
-											</CardHeader>
-											<CardContent className="space-y-2 text-sm text-muted-foreground">
-												<p>对象存储：{activeProduct.consumption.file.objectStorePath}</p>
-												<p>共享目录：{activeProduct.consumption.file.sharedPath}</p>
-												<p>格式：{activeProduct.consumption.file.formats.join(" / ")}</p>
-											</CardContent>
-										</Card>
-									</div>
-								</TabsContent>
-							</Tabs>
-						</CardContent>
-					</Card>
-				) : (
-					<Card className="flex h-[calc(100vh-260px)] items-center justify-center text-sm text-muted-foreground">
-						请选择左侧数据产品查看详情
-					</Card>
-				)}
-			</div>
+											{!detail.versions.length && <div className="text-xs text-muted-foreground">暂无版本信息</div>}
+										</CardContent>
+									</Card>
+								</div>
+							)}
+							{!loadingDetail && !detail && <div className="text-xs text-muted-foreground">请选择左侧数据产品查看详情</div>}
+						</div>
+					</div>
+				</CardContent>
+			</Card>
 		</div>
 	);
 }

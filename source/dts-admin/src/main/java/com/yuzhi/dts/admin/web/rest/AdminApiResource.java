@@ -21,6 +21,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import com.yuzhi.dts.admin.service.OrganizationService;
+import com.yuzhi.dts.admin.service.OrganizationSyncService;
 import com.yuzhi.dts.admin.domain.OrganizationNode;
 import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
 import com.yuzhi.dts.admin.service.PortalMenuService;
@@ -97,6 +98,7 @@ public class AdminApiResource {
     // --- Minimal audit endpoints ---
     private final AdminAuditService auditService;
     private final OrganizationService orgService;
+    private final OrganizationSyncService organizationSyncService;
     private final ChangeRequestRepository crRepo;
     private final ChangeRequestService changeRequestService;
     private final PortalMenuService portalMenuService;
@@ -166,6 +168,7 @@ public class AdminApiResource {
     public AdminApiResource(
         AdminAuditService auditService,
         OrganizationService orgService,
+        OrganizationSyncService organizationSyncService,
         ChangeRequestRepository crRepo,
         ChangeRequestService changeRequestService,
         PortalMenuService portalMenuService,
@@ -180,6 +183,7 @@ public class AdminApiResource {
     ) {
         this.auditService = auditService;
         this.orgService = orgService;
+        this.organizationSyncService = organizationSyncService;
         this.crRepo = crRepo;
         this.changeRequestService = changeRequestService;
         this.portalMenuService = portalMenuService;
@@ -287,78 +291,135 @@ public class AdminApiResource {
 
     @GetMapping("/orgs")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> orgs() {
-        List<Map<String, Object>> tree = new ArrayList<>();
-        for (OrganizationNode n : orgService.findTree()) tree.add(toOrgVM(n, List.of()));
+        List<Map<String, Object>> tree = buildOrgTree();
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ORG_LIST", "ORG", "tree", "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(tree));
     }
 
     @PostMapping("/orgs")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> createOrg(@RequestBody Map<String, Object> payload) {
-        String name = Objects.toString(payload.get("name"), null);
-        String dataLevel = Objects.toString(payload.get("dataLevel"), null);
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> createOrg(@RequestBody Map<String, Object> payload) {
+        String name = trimToNull(payload.get("name"));
         Long parentId = payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString());
-        String contact = Objects.toString(payload.get("contact"), null);
-        String phone = Objects.toString(payload.get("phone"), null);
-        String description = Objects.toString(payload.get("description"), null);
-        String reason = normalizeReason(payload.get("reason"));
-        if (!StringUtils.hasText(reason)) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("请填写审批原因"));
+        String description = trimToNull(payload.get("description"));
+
+        if (!StringUtils.hasText(name)) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("部门名称不能为空"));
         }
-        if (name == null || name.isBlank() || dataLevel == null || dataLevel.isBlank()) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("部门名称和数据密级不能为空"));
+
+        try {
+            OrganizationNode created = orgService.create(name, parentId, description);
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("name", created.getName());
+            if (created.getParent() != null) {
+                detail.put("parentId", created.getParent().getId());
+            }
+            if (StringUtils.hasText(description)) {
+                detail.put("description", description);
+            }
+            auditService.record(
+                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                "ORG_CREATE",
+                "ORG",
+                created.getId() == null ? name : String.valueOf(created.getId()),
+                "SUCCESS",
+                detail
+            );
+
+            return ResponseEntity.ok(ApiResponse.ok(buildOrgTree()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         }
-        Map<String, Object> after = new LinkedHashMap<>();
-        after.put("name", name);
-        after.put("dataLevel", dataLevel);
-        after.put("parentId", parentId);
-        after.put("contact", contact);
-        after.put("phone", phone);
-        after.put("description", description);
-        ChangeRequest cr = changeRequestService.draft("ORG", "CREATE", null, after, null, reason);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ORG_CREATE_REQUEST", "ORG", name, "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @PutMapping("/orgs/{id}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> updateOrg(@PathVariable int id, @RequestBody Map<String, Object> payload) {
-        OrganizationNode existing = organizationRepository.findById((long) id).orElse(null);
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> updateOrg(@PathVariable long id, @RequestBody Map<String, Object> payload) {
+        OrganizationNode existing = organizationRepository.findById(id).orElse(null);
         if (existing == null) {
             return ResponseEntity.status(404).body(ApiResponse.error("部门不存在"));
         }
-        String reason = normalizeReason(payload.get("reason"));
-        if (!StringUtils.hasText(reason)) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("请填写审批原因"));
+
+        String name = payload.containsKey("name") ? trimToNull(payload.get("name")) : existing.getName();
+        String description = payload.containsKey("description") ? trimToNull(payload.get("description")) : existing.getDescription();
+        Long parentId = payload.containsKey("parentId")
+            ? (payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString()))
+            : (existing.getParent() == null ? null : existing.getParent().getId());
+
+        if (!StringUtils.hasText(name)) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("部门名称不能为空"));
         }
-        Map<String, Object> before = toOrgPayload(existing);
-        Map<String, Object> after = new LinkedHashMap<>(before);
-        if (payload.containsKey("name")) after.put("name", Objects.toString(payload.get("name"), null));
-        if (payload.containsKey("dataLevel")) after.put("dataLevel", Objects.toString(payload.get("dataLevel"), null));
-        if (payload.containsKey("contact")) after.put("contact", Objects.toString(payload.get("contact"), null));
-        if (payload.containsKey("phone")) after.put("phone", Objects.toString(payload.get("phone"), null));
-        if (payload.containsKey("description")) after.put("description", Objects.toString(payload.get("description"), null));
-        ChangeRequest cr = changeRequestService.draft("ORG", "UPDATE", String.valueOf(id), after, before, reason);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ORG_UPDATE_REQUEST", "ORG", String.valueOf(id), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+
+        Optional<OrganizationNode> updated;
+        try {
+            updated = orgService.update(id, name, description, parentId);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+        }
+        if (updated.isEmpty()) {
+            return ResponseEntity.status(404).body(ApiResponse.error("部门不存在"));
+        }
+
+        Map<String, Object> updateDetail = new LinkedHashMap<>();
+        updateDetail.put("name", name);
+        if (parentId != null) {
+            updateDetail.put("parentId", parentId);
+        }
+        if (StringUtils.hasText(description)) {
+            updateDetail.put("description", description);
+        }
+        auditService.record(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "ORG_UPDATE",
+            "ORG",
+            String.valueOf(id),
+            "SUCCESS",
+            updateDetail
+        );
+
+        return ResponseEntity.ok(ApiResponse.ok(buildOrgTree()));
     }
 
     @DeleteMapping("/orgs/{id}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteOrg(
-        @PathVariable int id,
-        @RequestBody(required = false) Map<String, Object> payload
-    ) {
-        OrganizationNode existing = organizationRepository.findById((long) id).orElse(null);
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> deleteOrg(@PathVariable long id) {
+        OrganizationNode existing = organizationRepository.findById(id).orElse(null);
         if (existing == null) {
             return ResponseEntity.status(404).body(ApiResponse.error("部门不存在"));
         }
-        String reason = normalizeReason(payload == null ? null : payload.get("reason"));
-        if (!StringUtils.hasText(reason)) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("请填写审批原因"));
+        orgService.delete(id);
+        auditService.record(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "ORG_DELETE",
+            "ORG",
+            String.valueOf(id),
+            "SUCCESS",
+            Map.of("name", existing.getName())
+        );
+        return ResponseEntity.ok(ApiResponse.ok(buildOrgTree()));
+    }
+
+    @PostMapping("/orgs/sync")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> syncOrganizations() {
+        try {
+            organizationSyncService.syncAll();
+            auditService.record(
+                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                "ORG_SYNC",
+                "ORG",
+                "all",
+                "SUCCESS",
+                Map.of("sync", "keycloak")
+            );
+            return ResponseEntity.ok(ApiResponse.ok(buildOrgTree()));
+        } catch (RuntimeException ex) {
+            auditService.record(
+                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                "ORG_SYNC",
+                "ORG",
+                "all",
+                "FAILURE",
+                Map.of("error", ex.getMessage())
+            );
+            return ResponseEntity.status(500).body(ApiResponse.error("同步失败: " + ex.getMessage()));
         }
-        Map<String, Object> before = toOrgPayload(existing);
-        ChangeRequest cr = changeRequestService.draft("ORG", "DELETE", String.valueOf(id), Map.of("deleted", true), before, reason);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ORG_DELETE_REQUEST", "ORG", String.valueOf(id), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @GetMapping("/datasets")
@@ -611,6 +672,14 @@ public class AdminApiResource {
         return ResponseEntity.ok(ApiResponse.ok(sections));
     }
 
+    private List<Map<String, Object>> buildOrgTree() {
+        List<Map<String, Object>> tree = new ArrayList<>();
+        for (OrganizationNode node : orgService.findTree()) {
+            tree.add(toOrgVM(node, List.of()));
+        }
+        return tree;
+    }
+
     private static Map<String, Object> toOrgVM(OrganizationNode e, List<String> ancestors) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", e.getId());
@@ -649,6 +718,14 @@ public class AdminApiResource {
         m.put("description", node.getDescription());
         m.put("keycloakGroupId", node.getKeycloakGroupId());
         return m;
+    }
+
+    private String trimToNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
     }
 
     private Map<String, Object> toSystemConfigMap(SystemConfig cfg) {
@@ -709,6 +786,14 @@ public class AdminApiResource {
         if (body.containsKey("parentId")) {
             Object v = body.get("parentId");
             m.put("parentId", v == null ? null : Long.valueOf(v.toString()));
+        }
+        if (body.containsKey("deleted")) {
+            Object v = body.get("deleted");
+            if (v instanceof Boolean b) {
+                m.put("deleted", b);
+            } else if (v != null) {
+                m.put("deleted", Boolean.valueOf(v.toString()));
+            }
         }
         List<String> allowedRoles = readStringList(body.get("allowedRoles"));
         if (!allowedRoles.isEmpty()) {
@@ -1000,7 +1085,8 @@ public class AdminApiResource {
                     String nextContact = Objects.toString(payload.getOrDefault("contact", entity.getContact()), entity.getContact());
                     String nextPhone = Objects.toString(payload.getOrDefault("phone", entity.getPhone()), entity.getPhone());
                     String nextDescription = Objects.toString(payload.getOrDefault("description", entity.getDescription()), entity.getDescription());
-                    orgService.update(id, nextName, nextLevel, nextContact, nextPhone, nextDescription);
+                    Long parentId = entity.getParent() == null ? null : entity.getParent().getId();
+                    orgService.update(id, nextName, nextLevel, nextContact, nextPhone, nextDescription, parentId);
                 });
         } else if ("DELETE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());

@@ -129,6 +129,31 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
     }
 
     @Override
+    public void moveGroup(String groupId, String groupName, String parentGroupId, String accessToken) {
+        KeycloakGroupDTO existing = stores.groups.get(groupId);
+        if (existing == null) {
+            throw new IllegalArgumentException("Keycloak group not found: " + groupId);
+        }
+        String previousParentId = stores.groupParents.remove(groupId);
+        if (previousParentId != null) {
+            KeycloakGroupDTO previousParent = stores.groups.get(previousParentId);
+            if (previousParent != null) {
+                previousParent.getSubGroups().removeIf(g -> groupId.equals(g.getId()));
+            }
+        }
+        if (StringUtils.isNotBlank(parentGroupId)) {
+            KeycloakGroupDTO parent = stores.groups.get(parentGroupId);
+            if (parent == null) {
+                throw new IllegalArgumentException("Parent Keycloak group not found: " + parentGroupId);
+            }
+            parent.getSubGroups().add(existing);
+            stores.groupParents.put(groupId, parentGroupId);
+        } else {
+            stores.groupParents.remove(groupId);
+        }
+    }
+
+    @Override
     public void deleteGroup(String groupId, String accessToken) {
         KeycloakGroupDTO existing = stores.groups.get(groupId);
         if (existing == null) {

@@ -9,7 +9,8 @@ import type {
 	CreateCustomRolePayload,
 	CreateRoleAssignmentPayload,
 	OrganizationNode,
-	OrganizationPayload,
+	OrganizationCreatePayload,
+	OrganizationUpdatePayload,
 	PermissionCatalogSection,
 	PortalMenuCollection,
 	PortalMenuItem,
@@ -105,22 +106,26 @@ export const adminApi = {
 			url: "/admin/orgs",
 		}),
 
-	createOrganization: (payload: OrganizationPayload) =>
-		apiClient.post<ChangeRequest>({
+	createOrganization: (payload: OrganizationCreatePayload) =>
+		apiClient.post<OrganizationNode[]>({
 			url: "/admin/orgs",
 			data: payload,
 		}),
 
-	updateOrganization: (id: number, payload: OrganizationPayload) =>
-		apiClient.put<ChangeRequest>({
+	updateOrganization: (id: number, payload: OrganizationUpdatePayload) =>
+		apiClient.put<OrganizationNode[]>({
 			url: `/admin/orgs/${id}`,
 			data: payload,
 		}),
 
-	deleteOrganization: (id: number, reason: string) =>
-		apiClient.delete<ChangeRequest>({
+	deleteOrganization: (id: number) =>
+		apiClient.delete<OrganizationNode[]>({
 			url: `/admin/orgs/${id}`,
-			data: { reason },
+		}),
+
+	syncOrganizations: () =>
+		apiClient.post<OrganizationNode[]>({
+			url: "/admin/orgs/sync",
 		}),
 
 	getAdminUsers: () =>

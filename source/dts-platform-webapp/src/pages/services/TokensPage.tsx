@@ -5,17 +5,16 @@ import { Badge } from "@/ui/badge";
 import { toast } from "sonner";
 import { createToken, deleteToken, listMyTokens } from "@/api/platformApi";
 
-type Token = {
+type TokenInfo = {
 	id: string;
-	token: string;
+	tokenHint: string;
 	revoked: boolean;
 	expiresAt?: string;
-	createdBy?: string;
-	createdDate?: string;
+	createdAt?: string;
 };
 
 export default function TokensPage() {
-	const [tokens, setTokens] = useState<Token[]>([]);
+	const [tokens, setTokens] = useState<TokenInfo[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [creating, setCreating] = useState(false);
 
@@ -23,7 +22,7 @@ export default function TokensPage() {
 		setLoading(true);
 		try {
 			const data = await listMyTokens();
-			setTokens(data as unknown as Token[]);
+			setTokens((data as TokenInfo[]).map((t) => ({ ...t, tokenHint: t.tokenHint ?? "****" })));
 		} finally {
 			setLoading(false);
 		}
@@ -36,8 +35,14 @@ export default function TokensPage() {
 	const onCreate = async () => {
 		setCreating(true);
 		try {
-			await createToken();
-			toast.success("已生成新的访问令牌");
+			const result = (await createToken()) as { token: string; info: TokenInfo };
+			toast.success(
+				<div className="space-y-1 text-left">
+					<div>已生成新的访问令牌，请立即妥善保存：</div>
+					<div className="rounded bg-muted px-3 py-2 font-mono text-xs">{result.token}</div>
+				</div>,
+				{ duration: 8000 },
+			);
 			await load();
 		} catch (e) {
 			console.error(e);
@@ -87,7 +92,7 @@ export default function TokensPage() {
 							<tbody>
 								{tokens.map((t) => (
 									<tr key={t.id} className="border-b last:border-b-0">
-										<td className="px-3 py-2 font-mono text-xs break-all">{t.token}</td>
+										<td className="px-3 py-2 font-mono text-xs break-all">{t.tokenHint}</td>
 										<td className="px-3 py-2">
 											<Badge variant={t.revoked ? "secondary" : "default"}>{t.revoked ? "已吊销" : "有效"}</Badge>
 										</td>
@@ -95,7 +100,7 @@ export default function TokensPage() {
 											{t.expiresAt ? new Date(t.expiresAt).toLocaleString() : "-"}
 										</td>
 										<td className="px-3 py-2 text-xs text-muted-foreground">
-											{t.createdDate ? new Date(t.createdDate).toLocaleString() : "-"}
+											{t.createdAt ? new Date(t.createdAt).toLocaleString() : "-"}
 										</td>
 										<td className="px-3 py-2">
 											<Button variant="ghost" size="sm" onClick={() => onDelete(t.id)}>

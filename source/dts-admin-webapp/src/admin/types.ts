@@ -121,14 +121,16 @@ export interface OrganizationNode {
 	children?: OrganizationNode[];
 }
 
-export interface OrganizationPayload {
+export interface OrganizationCreatePayload {
     name: string;
-    dataLevel: OrgDataLevel;
-    parentId?: number | null;
-    contact?: string;
-    phone?: string;
     description?: string;
-    reason: string;
+    parentId?: number | null;
+}
+
+export interface OrganizationUpdatePayload {
+    name?: string;
+    description?: string;
+    parentId?: number | null;
 }
 
 export interface AdminUser {

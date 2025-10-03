@@ -75,7 +75,8 @@ export default function ApiServicesPage() {
 	const filtered = useMemo(() => {
 		const kw = keyword.trim().toLowerCase();
 		return list.filter((it) => {
-			const kwMatch = kw ? (it.name + it.dataset + it.path).toLowerCase().includes(kw) : true;
+			const datasetLabel = it.datasetName ?? "";
+			const kwMatch = kw ? `${it.name}${datasetLabel}${it.path}`.toLowerCase().includes(kw) : true;
 			const methodMatch = method === "all" ? true : it.method === method;
 			const statusMatch = status === "all" ? true : it.status === status;
 			return kwMatch && methodMatch && statusMatch;
@@ -159,16 +160,20 @@ export default function ApiServicesPage() {
 										</div>
 									</td>
 									<td className="px-3 py-2">
-										<a
-											className="text-primary hover:underline"
-											href="/catalog/datasets"
-											onClick={(e) => {
-												e.preventDefault();
-												router.push("/catalog/datasets");
-											}}
-										>
-											{it.dataset}
-										</a>
+										{it.datasetName ? (
+											<a
+												className="text-primary hover:underline"
+												href={it.datasetId ? `/catalog/assets/${it.datasetId}` : "/catalog/assets"}
+												onClick={(e) => {
+													e.preventDefault();
+													router.push(it.datasetId ? `/catalog/assets/${it.datasetId}` : "/catalog/assets");
+												}}
+											>
+												{it.datasetName}
+											</a>
+										) : (
+											<span className="text-xs text-muted-foreground">未绑定</span>
+										)}
 									</td>
 									<td className="px-3 py-2">
 										<Badge variant="outline">{it.method}</Badge>

@@ -48,30 +48,17 @@ function resolveRoleLabels(roles: unknown): string[] {
 		.filter((item): item is string => Boolean(item));
 }
 
-const pickAttributeValue = (attributes: Record<string, string[]> | undefined, keys: string[]) => {
-	if (!attributes) return "";
-	for (const key of keys) {
-		const values = attributes[key];
-		if (Array.isArray(values) && values.length > 0) {
-			const found = values.find((item) => item && item.trim());
-			if (found) return found.trim();
-			return values[0] ? values[0].trim() : "";
-		}
-	}
-	return "";
-};
-
 interface ProfileTabProps {
 	detail?: KeycloakUser | null;
-	pickAttributeValue: (attributes: Record<string, string[]> | undefined, keys: string[]) => string;
+	resolveAttributeValue: (attributes: Record<string, string[]> | undefined, keys: string[]) => string;
 }
 
-export default function ProfileTab({ detail, pickAttributeValue }: ProfileTabProps) {
+export default function ProfileTab({ detail, resolveAttributeValue }: ProfileTabProps) {
 	const { fullName, firstName, username, email, roles, enabled, id, attributes } = useUserInfo();
 	const detailAttributes = detail?.attributes as Record<string, string[]> | undefined;
 	const storeAttributes = attributes as Record<string, string[]> | undefined;
 
-	const attributeFullName = pickAttributeValue(detailAttributes, ["fullName", "fullname"]) || pickAttributeValue(storeAttributes, ["fullName", "fullname"]);
+	const attributeFullName = resolveAttributeValue(detailAttributes, ["fullName", "fullname"]) || resolveAttributeValue(storeAttributes, ["fullName", "fullname"]);
 	const resolvedUsername = detail?.username || username || "-";
 	const resolvedEmail = detail?.email || email || "-";
 	const roleLabels = useMemo(() => {

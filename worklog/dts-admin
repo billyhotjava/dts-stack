@@ -1,0 +1,39 @@
+Org Management & Keycloak Group Sync Plan (2025-10-03)
+
+Context
+- Keycloak 26.3.4, flat groups (no enforced root) and no custom attributes; dept_code unchecked.
+- DTS-Admin owns authoritative organization tree (table organization_node) and must push structure into Keycloak.
+- Users may belong to multiple organizations; users lacking valid dept_code should reside under a dedicated “待分配” org node managed in DTS-Admin.
+
+Backend Changes
+- Simplify /admin/orgs REST handlers (AdminApiResource) to perform immediate mutations instead of raising ChangeRequest drafts; retain audit logging via AdminAuditService.
+- Extend OrganizationService with operations: create/update/delete/move node, list/add/remove members, bulk sync (pushDbTree, reconcileExternal, repairGroupIds), and dept_code alignment helpers.
+- Introduce OrganizationSyncService coordinating local tree vs Keycloak: build virtual root, ensure parent-first creation, reparent groups when parent changes, purge/flag orphaned Keycloak groups, and normalize attributes (data_level/contact/phone/description/dts_org_id).
+- Add migration helpers ensuring a single, reserved “待分配” node exists; expose identifier via configuration/lookup for member reassignment.
+- Update OrganizationRepository / entity to track sync metadata (e.g., last_synced_at, external_hash) if needed for drift detection.
+- Expand KeycloakAdminClient & Rest client to support: reparentGroup, listGroupMembers, addUserToGroup, removeUserFromGroup, searchGroups by path/name, and user attribute patch (dept_code).
+- Member management flow: when a user is assigned to an org, add Keycloak membership, set dept_code to primary org (stored in org node attribute), and optionally maintain additional memberships list; when removed, drop membership and, if primary removed, move to “待分配”.
+- Implement server-side validation & normalization (names trimmed, data level enum enforced, phone pattern) and guard against cyclic moves.
+- Provide manual sync endpoints (/admin/orgs/sync, /admin/orgs/{id}/sync, /admin/orgs/reconcile-members) with detailed audit events.
+
+Frontend Adjustments
+- Redesign org management view: left tree (drag/drop reorder, search, pending badge), right panel with tabs (Details, Members, Sync status); remove ChangeRequestForm usage.
+- Details tab: inline edit with immediate save, displays Keycloak identifiers/path and last sync info; supports move via drag/drop or parent selector.
+- Members tab: table listing Keycloak users, filters (keyword/dept_code), actions to add existing user, change primary org, remove membership; show “待分配” badge for unassigned users.
+- Surface manual sync triggers and health indicators (e.g., mismatch counts) using the new API endpoints.
+
+Operations & Logging
+- All mutations emit audit records (ORG_CREATE/UPDATE/DELETE/MOVE, ORG_MEMBER_ADD/REMOVE, ORG_SYNC) with before/after payload snippets and Keycloak result.
+- Ensure error handling wraps Keycloak failures with actionable messages and leaves database consistent (transactional boundaries, retries where safe).
+- Prepare runbook: initial push (bootstrap tree -> Keycloak), handling orphan groups, verifying dept_code alignment, restoring from sync errors.
+
+Implementation Order
+1. Backend refactor: APIs without ChangeRequest, service capabilities, Keycloak client extensions, audit updates.
+2. Ensure “待分配” node migration and bootstrap push logic; add sync endpoints.
+3. Frontend redesign consuming new APIs and enabling drag/drop + member management.
+4. Verification: unit/service tests for Org service helpers, manual E2E via docker-compose (tree CRUD, move, member edits, sync error paths), confirm Keycloak groups/attributes and dept_code updates.
+
+Update (2025-10-03T02:55:40Z):
+- Align with approval policy: organization tree CRUD stays immediate, but member reassignment still requires ChangeRequest. Org management will no longer expose member edit actions; maintainers use dedicated approval-driven flow elsewhere.
+- Frontend adjustments: drop Members tab from org view, show read-only snapshot or link to approval workflow instead.
+- Backend: keep member management endpoints guarded behind request pipeline; organization APIs stay as planned.

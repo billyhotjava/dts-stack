@@ -6,17 +6,19 @@ export type ApiServiceStatus = "PUBLISHED" | "OFFLINE";
 
 export interface ApiServiceSummary {
 	id: string;
+	code: string;
 	name: string;
-	dataset: string; // 绑定数据集/视图
+	datasetId?: string;
+	datasetName?: string;
 	method: ApiHttpMethod;
 	path: string;
-	classification: string; // 最低密级（公开/内部/秘密/机密）
-	qps: number; // 当前QPS
-	qpsLimit: number; // 上限QPS
-	dailyLimit: number; // 日调用上限
+	classification?: string;
+	qps: number;
+	qpsLimit: number;
+	dailyLimit: number;
 	status: ApiServiceStatus;
-	recentCalls: number; // 最近调用总量
-	sparkline: number[]; // 最近调用量趋势
+	recentCalls: number;
+	sparkline: number[];
 }
 
 export interface ApiFieldDef {
@@ -27,13 +29,13 @@ export interface ApiFieldDef {
 }
 
 export interface ApiServiceDetail extends ApiServiceSummary {
+	policy: {
+		minLevel?: string | null;
+		maskedColumns: string[];
+		rowFilter?: string | null;
+	};
 	input: ApiFieldDef[];
 	output: ApiFieldDef[];
-	policy: {
-		minLevel: string;
-		maskedColumns: string[];
-		rowFilter: string;
-	};
 	quotas: {
 		qpsLimit: number;
 		dailyLimit: number;
@@ -44,6 +46,9 @@ export interface ApiServiceDetail extends ApiServiceSummary {
 		maskedHits: number;
 		denies: number;
 	};
+	latestVersion?: string | null;
+	lastPublishedAt?: string | null;
+	description?: string | null;
 }
 
 export interface TryInvokeRequest {
@@ -61,7 +66,7 @@ export interface TryInvokeResponse {
 
 export interface ApiMetricsResponse {
 	series: { timestamp: number; calls: number; qps: number }[];
-	levelDistribution: { label: string; value: number }[]; // 公开/内部/秘密/机密
+	levelDistribution: { label: string; value: number }[];
 	recentCalls: { user: string; level: string; rowCount: number; policy: string }[];
 }
 

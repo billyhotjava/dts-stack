@@ -4,7 +4,7 @@
 - Source lives in `src/`. `src/main.tsx` boots the Vite admin shell and wires routes from `src/routes` to views under `src/pages`.
 - Feature code: `src/admin`. Shared primitives: `src/components`, `src/hooks`, `src/store`, `src/utils`.
 - Tests are colocated beside subjects as `*.test.ts[x]`.
-- Mocks: `src/_mock`. Theme tokens & Tailwind helpers: `src/theme`.
+- Theme tokens & Tailwind helpers: `src/theme`.
 - Assets (bundled): `src/assets`. Static files: `public/`. Production builds emit to `dist/`.
 
 ## Build, Test, and Development Commands
@@ -22,7 +22,7 @@
 
 ## Testing Guidelines
 - No dedicated runner yet; use `pnpm build` to surface TypeScript regressions.
-- Colocate tests with implementations; reuse fixtures from `src/_mock` and stub network calls with existing MSW handlers.
+- Colocate tests with implementations; prefer exercising real API clients or light-weight stubs under `src/tests` when backend contracts are unavailable.
 - Until automation lands, document manual verification (browsers, flags) in PR descriptions.
 
 ## Commit & Pull Request Guidelines
@@ -33,4 +33,3 @@
 ## Security & Configuration Tips
 - Centralize defaults in `src/global-config.ts` rather than scattering env constants.
 - Adjust Tailwind tokens in `tailwind.config.ts`; formatting defaults live in `biome.json`.
-

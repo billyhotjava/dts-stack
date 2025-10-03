@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
@@ -24,6 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrganizationService {
 
     private static final Logger LOG = LoggerFactory.getLogger(OrganizationService.class);
+
+    private static final String UNASSIGNED_ORG_NAME = "待分配";
+    private static final String UNASSIGNED_DESCRIPTION = "待分配用户暂存组织";
+    private static final String UNASSIGNED_DATA_LEVEL = "DATA_INTERNAL";
 
     private final OrganizationRepository repository;
     private final KeycloakAdminClient keycloakAdminClient;
@@ -57,19 +62,12 @@ public class OrganizationService {
         }
     }
 
-    public OrganizationNode create(
-        String name,
-        String dataLevel,
-        Long parentId,
-        String contact,
-        String phone,
-        String description
-    ) {
+    public OrganizationNode create(String name, Long parentId, String description) {
         OrganizationNode entity = new OrganizationNode();
         entity.setName(name);
-        entity.setDataLevel(dataLevel);
-        entity.setContact(contact);
-        entity.setPhone(phone);
+        entity.setDataLevel(resolveInheritedLevel(parentId, null));
+        entity.setContact(null);
+        entity.setPhone(null);
         entity.setDescription(description);
 
         OrganizationNode parent = null;
@@ -79,41 +77,128 @@ public class OrganizationService {
             parent.getChildren().add(entity);
         }
 
+        OrganizationNode saved = repository.save(entity);
+
         if (isKeycloakSyncEnabled()) {
             String token = resolveManagementToken();
             if (parent != null) {
                 ensureGroupSynced(parent, token);
             }
-            ensureGroupSynced(entity, token, parent);
+            ensureGroupSynced(saved, token, parent);
+            synchronizeGroup(saved, token);
         }
 
-        return repository.save(entity);
+        return saved;
     }
 
-    public Optional<OrganizationNode> update(
-        Long id,
-        String name,
-        String dataLevel,
-        String contact,
-        String phone,
-        String description
-    ) {
+    public Optional<OrganizationNode> update(Long id, String name, String description, Long parentId) {
         return repository
             .findById(id)
             .map(entity -> {
+                Long previousParentId = getId(entity.getParent());
+                OrganizationNode newParent = resolveParent(parentId, entity);
+                if (!Objects.equals(getId(entity.getParent()), getId(newParent))) {
+                    reassignParent(entity, newParent);
+                }
                 entity.setName(name);
-                entity.setDataLevel(dataLevel);
-                entity.setContact(contact);
-                entity.setPhone(phone);
+                entity.setDataLevel(resolveInheritedLevel(getId(newParent), entity.getDataLevel()));
+                entity.setContact(null);
+                entity.setPhone(null);
                 entity.setDescription(description);
                 OrganizationNode saved = repository.save(entity);
                 if (isKeycloakSyncEnabled()) {
                     String token = resolveManagementToken();
                     ensureGroupSynced(saved, token, saved.getParent());
+                    Long currentParentId = getId(saved.getParent());
+                    if (!Objects.equals(previousParentId, currentParentId)) {
+                        moveGroup(saved, token, currentParentId == null ? null : saved.getParent().getKeycloakGroupId());
+                    }
                     synchronizeGroup(saved, token);
                 }
                 return saved;
             });
+    }
+
+    public OrganizationNode ensureUnassignedRoot() {
+        OrganizationNode node =
+            repository
+                .findFirstByNameAndParentIsNull(UNASSIGNED_ORG_NAME)
+                .orElseGet(() -> create(UNASSIGNED_ORG_NAME, UNASSIGNED_DATA_LEVEL, null, null, null, UNASSIGNED_DESCRIPTION));
+        boolean dirty = false;
+        if (!Objects.equals(node.getDataLevel(), UNASSIGNED_DATA_LEVEL)) {
+            node.setDataLevel(UNASSIGNED_DATA_LEVEL);
+            dirty = true;
+        }
+        if (!Objects.equals(node.getDescription(), UNASSIGNED_DESCRIPTION)) {
+            node.setDescription(UNASSIGNED_DESCRIPTION);
+            dirty = true;
+        }
+        if (dirty) {
+            node = repository.save(node);
+        }
+        if (isKeycloakSyncEnabled()) {
+            String token = resolveManagementToken();
+            ensureGroupSynced(node, token, null);
+            synchronizeGroup(node, token);
+        }
+        return node;
+    }
+
+    public void pushTreeToKeycloak() {
+        if (!isKeycloakSyncEnabled()) {
+            return;
+        }
+        String token = resolveManagementToken();
+        for (OrganizationNode root : findTree()) {
+            syncSubtree(root, token);
+        }
+    }
+
+    private OrganizationNode resolveParent(Long parentId, OrganizationNode child) {
+        if (parentId == null) {
+            return null;
+        }
+        if (child.getId() != null && Objects.equals(child.getId(), parentId)) {
+            throw new IllegalArgumentException("不能将组织设置为自己的父级");
+        }
+        OrganizationNode parent = repository
+            .findById(parentId)
+            .orElseThrow(() -> new IllegalArgumentException("指定的上级组织不存在: " + parentId));
+        if (createsCycle(parent, child)) {
+            throw new IllegalArgumentException("不能将组织移动到其子节点之下");
+        }
+        return parent;
+    }
+
+    private boolean createsCycle(OrganizationNode candidateParent, OrganizationNode child) {
+        OrganizationNode cursor = candidateParent;
+        while (cursor != null) {
+            if (child.getId() != null && Objects.equals(child.getId(), cursor.getId())) {
+                return true;
+            }
+            cursor = cursor.getParent();
+        }
+        return false;
+    }
+
+    private void reassignParent(OrganizationNode node, OrganizationNode newParent) {
+        OrganizationNode currentParent = node.getParent();
+        if (currentParent != null && currentParent.getChildren() != null) {
+            currentParent.getChildren().removeIf(child -> Objects.equals(child.getId(), node.getId()));
+        }
+        node.setParent(newParent);
+        if (newParent != null) {
+            if (newParent.getChildren() == null) {
+                newParent.setChildren(new ArrayList<>());
+            }
+            if (newParent.getChildren().stream().noneMatch(child -> Objects.equals(child.getId(), node.getId()))) {
+                newParent.getChildren().add(node);
+            }
+        }
+    }
+
+    private Long getId(OrganizationNode node) {
+        return node == null ? null : node.getId();
     }
 
     public void delete(Long id) {
@@ -160,7 +245,27 @@ public class OrganizationService {
             return;
         }
         if (StringUtils.isNotBlank(node.getKeycloakGroupId())) {
-            return;
+            try {
+                if (keycloakAdminClient.findGroup(node.getKeycloakGroupId(), token).isPresent()) {
+                    return;
+                }
+                LOG.warn(
+                    "Keycloak group {} referenced by org {} (id={}) is missing, recreating",
+                    node.getKeycloakGroupId(),
+                    node.getName(),
+                    node.getId()
+                );
+            } catch (RuntimeException ex) {
+                LOG.warn(
+                    "Failed to verify Keycloak group {} for org {} (id={}): {}",
+                    node.getKeycloakGroupId(),
+                    node.getName(),
+                    node.getId(),
+                    ex.getMessage()
+                );
+            }
+            node.setKeycloakGroupId(null);
+            repository.save(node);
         }
         OrganizationNode resolvedParent = parent != null ? parent : node.getParent();
         if (resolvedParent != null) {
@@ -213,10 +318,38 @@ public class OrganizationService {
         node.setKeycloakGroupId(null);
     }
 
+    private void syncSubtree(OrganizationNode node, String token) {
+        ensureGroupSynced(node, token, node.getParent());
+        synchronizeGroup(node, token);
+        if (node.getChildren() != null) {
+            for (OrganizationNode child : node.getChildren()) {
+                syncSubtree(child, token);
+            }
+        }
+    }
+
+    private void moveGroup(OrganizationNode node, String token, String parentGroupId) {
+        if (StringUtils.isBlank(node.getKeycloakGroupId())) {
+            return;
+        }
+        try {
+            keycloakAdminClient.moveGroup(node.getKeycloakGroupId(), node.getName(), parentGroupId, token);
+            LOG.info(
+                "Moved Keycloak group {} under parent {} (org id={})",
+                node.getKeycloakGroupId(),
+                parentGroupId,
+                node.getId()
+            );
+        } catch (RuntimeException ex) {
+            throw new IllegalStateException("移动 Keycloak 组失败: " + ex.getMessage(), ex);
+        }
+    }
+
     private KeycloakGroupDTO toKeycloakGroupDto(OrganizationNode node) {
         KeycloakGroupDTO dto = new KeycloakGroupDTO();
         dto.setId(node.getKeycloakGroupId());
         dto.setName(node.getName());
+        dto.setDescription(StringUtils.trimToNull(node.getDescription()));
         dto.setAttributes(buildGroupAttributes(node));
         return dto;
     }
@@ -232,13 +365,22 @@ public class OrganizationService {
         if (StringUtils.isNotBlank(node.getPhone())) {
             attributes.put("phone", List.of(node.getPhone()));
         }
-        if (StringUtils.isNotBlank(node.getDescription())) {
-            attributes.put("description", List.of(node.getDescription()));
+        String description = StringUtils.trimToNull(node.getDescription());
+        if (description != null) {
+            attributes.put("description", List.of(description));
+        } else {
+            attributes.put("description", List.of());
         }
         if (node.getId() != null) {
             attributes.put("dts_org_id", List.of(String.valueOf(node.getId())));
         }
         return attributes;
     }
-}
 
+    private String normalizeDataLevel(String value) {
+        if (StringUtils.isBlank(value)) {
+            return null;
+        }
+        return value.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+    }
+}

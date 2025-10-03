@@ -5,7 +5,6 @@ import DraftsView from "@/admin/views/drafts";
 import ApprovalCenterView from "@/admin/views/approval-center";
 import AuditCenterView from "@/admin/views/audit-center";
 import OpsConfigView from "@/admin/views/ops-config";
-import PortalMenusView from "@/admin/views/portal-menus";
 import OrgManagementView from "@/admin/views/org-management";
 import UserManagementView from "@/admin/views/user-management";
 import RoleManagementView from "@/admin/views/role-management";
@@ -38,7 +37,7 @@ export const adminRoutes: RouteObject[] = [
 			{ path: "approval", element: <ApprovalCenterView /> },
 			{ path: "audit", element: <AuditCenterView /> },
 			{ path: "ops", element: <OpsConfigView /> },
-			{ path: "portal-menus", element: <PortalMenusView /> },
+			{ path: "portal-menus", element: <Navigate to="/management/system/menu" replace /> },
 			{ path: "*", element: <Navigate to="/403" replace /> },
 		],
 	},

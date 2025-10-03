@@ -16,13 +16,16 @@ public class SvcToken extends AbstractAuditingEntity<UUID> implements Serializab
     private UUID id;
 
     @Column(name = "token", length = 128)
-    private String token;
+    private String tokenHash;
 
     @Column(name = "revoked")
     private Boolean revoked = Boolean.FALSE;
 
     @Column(name = "expires_at")
     private Instant expiresAt;
+
+    @Column(name = "token_hint", length = 32)
+    private String tokenHint;
 
     @Override
     public UUID getId() {
@@ -33,12 +36,12 @@ public class SvcToken extends AbstractAuditingEntity<UUID> implements Serializab
         this.id = id;
     }
 
-    public String getToken() {
-        return token;
+    public String getTokenHash() {
+        return tokenHash;
     }
 
-    public void setToken(String token) {
-        this.token = token;
+    public void setTokenHash(String tokenHash) {
+        this.tokenHash = tokenHash;
     }
 
     public Boolean getRevoked() {
@@ -56,5 +59,12 @@ public class SvcToken extends AbstractAuditingEntity<UUID> implements Serializab
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
     }
-}
 
+    public String getTokenHint() {
+        return tokenHint;
+    }
+
+    public void setTokenHint(String tokenHint) {
+        this.tokenHint = tokenHint;
+    }
+}
