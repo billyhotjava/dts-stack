@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/admin/api/adminApi";
-import type { PortalMenuItem } from "@/admin/types";
+import type { PortalMenuCollection, PortalMenuItem } from "@/admin/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Text } from "@/ui/typography";
@@ -16,7 +16,7 @@ export default function PortalMenusView() {
   });
 
   const activeMenus = useMemo(() => data?.active ?? [], [data?.active]);
-  const deletedMenus = useMemo(() => data?.deleted ?? [], [data?.deleted]);
+  const deletedMenus = useMemo(() => buildMenuHierarchy(data?.deleted ?? []), [data?.deleted]);
 
   const [nameDrafts, setNameDrafts] = useState<Record<number, string>>({});
   const [pending, setPending] = useState<Record<number, boolean>>({});
@@ -42,6 +42,10 @@ export default function PortalMenusView() {
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
 
+  const updateCache = (next: PortalMenuCollection) => {
+    queryClient.setQueryData(["admin", "portal-menus"], next);
+  };
+
   const updateDraftName = (id: number, value: string) => {
     setNameDrafts((prev) => ({ ...prev, [id]: value }));
   };
@@ -66,25 +70,14 @@ export default function PortalMenusView() {
     }
     markPending(id, true);
     try {
-      await adminApi.draftUpdateMenu(id, {
+      const result = await adminApi.updatePortalMenu(id, {
         name,
       } as unknown as PortalMenuItem);
-      // Optimistic: update local cache
-      queryClient.setQueryData(["admin", "portal-menus"], (prev: any) => {
-        if (!prev) return prev;
-        const { active = [], deleted = [] } = prev as {
-          active: PortalMenuItem[];
-          deleted: PortalMenuItem[];
-        };
-        return {
-          active: updateNameInTree(active, id, name),
-          deleted: updateNameInList(deleted, id, name),
-        };
-      });
-      toast.success("已提交名称变更");
+      updateCache(result);
+      toast.success("菜单名称已保存");
+    } catch (error: any) {
+      toast.error(error?.message || "保存失败，请稍后重试");
       await refresh();
-    } catch (error) {
-      toast.error("提交失败，请稍后重试");
     } finally {
       markPending(id, false);
     }
@@ -94,25 +87,19 @@ export default function PortalMenusView() {
     markPending(id, true);
     try {
       if (enable) {
-        await adminApi.draftUpdateMenu(id, {
+        const result = await adminApi.updatePortalMenu(id, {
           deleted: false,
         } as unknown as PortalMenuItem);
-        // optimistic: move from deleted -> active
-        queryClient.setQueryData(["admin", "portal-menus"], (prev: any) =>
-          moveMenu(prev, id, true),
-        );
-        toast.success("已提交启用请求");
+        updateCache(result);
+        toast.success("菜单已启用");
       } else {
-        await adminApi.draftDeleteMenu(id);
-        // optimistic: move from active -> deleted (include subtree)
-        queryClient.setQueryData(["admin", "portal-menus"], (prev: any) =>
-          moveMenu(prev, id, false),
-        );
-        toast.success("已提交禁用请求");
+        const result = await adminApi.deletePortalMenu(id);
+        updateCache(result);
+        toast.success("菜单已禁用");
       }
+    } catch (error: any) {
+      toast.error(error?.message || "操作失败，请稍后重试");
       await refresh();
-    } catch (error) {
-      toast.error("提交失败，请稍后重试");
     } finally {
       markPending(id, false);
     }
@@ -121,11 +108,12 @@ export default function PortalMenusView() {
   const handleReset = async () => {
     setResetting(true);
     try {
-      await adminApi.resetPortalMenus();
-      toast.success("已提交恢复默认菜单请求");
+      const result = await adminApi.resetPortalMenus();
+      updateCache(result);
+      toast.success("默认菜单已恢复");
+    } catch (error: any) {
+      toast.error(error?.message || "恢复失败，请稍后再试");
       await refresh();
-    } catch (error) {
-      toast.error("恢复失败，请稍后再试");
     } finally {
       setResetting(false);
     }
@@ -245,11 +233,11 @@ function MenuTree({ items, mode, nameDrafts, pending, onNameChange, onSave, onTo
                 </Button>
               </div>
             </div>
-            {mode === "active" && childMenus.length > 0 ? (
+            {childMenus.length > 0 ? (
               <div className="mt-3 border-l pl-4">
                 <MenuTree
                   items={childMenus}
-                  mode="active"
+                  mode={mode}
                   nameDrafts={nameDrafts}
                   pending={pending}
                   onNameChange={onNameChange}
@@ -265,119 +253,61 @@ function MenuTree({ items, mode, nameDrafts, pending, onNameChange, onSave, onTo
   );
 }
 
-// ---------- helpers for optimistic updates ----------
+function buildMenuHierarchy(items: PortalMenuItem[]): PortalMenuItem[] {
+  if (!items.length) {
+    return [];
+  }
 
-function clone<T>(v: T): T {
-  return JSON.parse(JSON.stringify(v));
-}
+  const nodes = new Map<number, PortalMenuItem>();
+  const roots: PortalMenuItem[] = [];
 
-function updateNameInTree(list: PortalMenuItem[], id: number, name: string): PortalMenuItem[] {
-  const next = clone(list);
-  const dfs = (nodes?: PortalMenuItem[]) => {
-    if (!nodes) return;
-    for (const n of nodes) {
-      if (n.id === id) {
-        n.displayName = name;
-        n.name = n.name || name;
-        return;
+  for (const item of items) {
+    if (item.id == null) {
+      continue;
+    }
+    nodes.set(item.id, { ...item, children: [] });
+  }
+
+  for (const item of items) {
+    if (item.id == null) {
+      continue;
+    }
+    const node = nodes.get(item.id);
+    if (!node) {
+      continue;
+    }
+    const parentId = item.parentId ?? null;
+    if (parentId != null && nodes.has(parentId)) {
+      const parent = nodes.get(parentId);
+      if (parent) {
+        if (!Array.isArray(parent.children)) {
+          parent.children = [];
+        }
+        parent.children.push(node);
       }
-      if (n.children && n.children.length) dfs(n.children);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  const sortBranch = (branch: PortalMenuItem[]) => {
+    branch.sort((a, b) => {
+      const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      const idA = a.id ?? 0;
+      const idB = b.id ?? 0;
+      return idA - idB;
+    });
+    for (const node of branch) {
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        sortBranch(node.children);
+      }
     }
   };
-  dfs(next);
-  return next;
-}
 
-function updateNameInList(list: PortalMenuItem[], id: number, name: string): PortalMenuItem[] {
-  const next = clone(list);
-  for (const n of next) {
-    if (n.id === id) {
-      n.displayName = name;
-      n.name = n.name || name;
-      break;
-    }
-  }
-  return next;
+  sortBranch(roots);
+  return roots;
 }
-
-function removeFromTreeById(list: PortalMenuItem[], id: number): { nextTree: PortalMenuItem[]; removed?: PortalMenuItem } {
-  const next = clone(list);
-  let removed: PortalMenuItem | undefined;
-  const walk = (nodes: PortalMenuItem[]) => {
-    for (let i = 0; i < nodes.length; i++) {
-      const n = nodes[i];
-      if (n.id === id) {
-        removed = n;
-        nodes.splice(i, 1);
-        return true;
-      }
-      if (n.children && n.children.length) {
-        const hit = walk(n.children);
-        if (hit) return true;
-      }
-    }
-    return false;
-  };
-  walk(next);
-  return { nextTree: next, removed };
-}
-
-function flattenTree(node?: PortalMenuItem): PortalMenuItem[] {
-  if (!node) return [];
-  const out: PortalMenuItem[] = [];
-  const stack: PortalMenuItem[] = [node];
-  while (stack.length) {
-    const n = stack.pop()!;
-    const copy = { ...n, children: undefined } as PortalMenuItem;
-    out.push(copy);
-    if (n.children && n.children.length) {
-      for (const c of n.children) stack.push(c);
-    }
-  }
-  return out;
-}
-
-function addToTree(list: PortalMenuItem[], node: PortalMenuItem): PortalMenuItem[] {
-  const next = clone(list);
-  const parentId = node.parentId ?? null;
-  if (parentId == null) {
-    next.push({ ...node, children: node.children ?? [] });
-    return next;
-  }
-  const dfs = (nodes?: PortalMenuItem[]): boolean => {
-    if (!nodes) return false;
-    for (const n of nodes) {
-      if (n.id === parentId) {
-        const children = Array.isArray(n.children) ? n.children : (n.children = []);
-        children.push({ ...node, children: node.children ?? [] });
-        return true;
-      }
-      if (n.children && n.children.length) {
-        if (dfs(n.children)) return true;
-      }
-    }
-    return false;
-  };
-  if (!dfs(next)) {
-    next.push({ ...node, children: node.children ?? [] });
-  }
-  return next;
-}
-
-function moveMenu(prev: any, id: number, enable: boolean) {
-  if (!prev) return prev;
-  const data = prev as { active: PortalMenuItem[]; deleted: PortalMenuItem[] };
-  if (enable) {
-    const idx = data.deleted.findIndex((m) => m.id === id);
-    if (idx >= 0) {
-      const [item] = data.deleted.splice(idx, 1);
-      return { active: addToTree(data.active, item), deleted: data.deleted };
-    }
-    return prev;
-  } else {
-    const { nextTree, removed } = removeFromTreeById(data.active, id);
-    const moved = flattenTree(removed);
-    return { active: nextTree, deleted: [...data.deleted, ...moved] };
-  }
-}
-

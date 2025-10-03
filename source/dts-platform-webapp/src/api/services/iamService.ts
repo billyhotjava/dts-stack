@@ -1,7 +1,7 @@
 import apiClient from "../apiClient";
 
 export type UserClassificationItem = {
-	id: number;
+	id: string;
 	username: string;
 	displayName: string;
 	orgPath: string[];
@@ -27,7 +27,7 @@ export type SyncFailureItem = {
 };
 
 export type SyncStatus = {
-	lastSyncAt: string;
+	lastSyncAt?: string | null;
 	deltaCount: number;
 	failures: SyncFailureItem[];
 };
@@ -41,7 +41,7 @@ function searchUsers(keyword: string) {
 	});
 }
 
-function refreshUser(id: number) {
+function refreshUser(id: string) {
 	return apiClient.post<UserClassificationItem>({
 		url: `${BASE}/users/${id}/refresh`,
 	});

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -54,61 +54,6 @@ type Dataset = {
 	description?: string;
 	fields: DatasetField[];
 };
-
-const DATASETS: Dataset[] = [
-	{
-		id: "cdp_sales_orders",
-		name: "CDP_销售订单事实表",
-		source: "CDP",
-		database: "cdp_prod",
-		schema: "fact",
-		classification: "SECRET",
-		rowCount: 12_540_000,
-		description: "按日汇总的销售订单事实表，结合渠道/地区维度",
-		fields: [
-			{ name: "order_date", type: "date", description: "订单日期", lineage: "ods.orders.order_date" },
-			{ name: "channel", type: "string", description: "销售渠道", term: "渠道" },
-			{ name: "region", type: "string", description: "大区" },
-			{ name: "amount", type: "decimal", description: "含税金额", lineage: "ods.orders.total_amount" },
-			{ name: "quantity", type: "int", description: "销量" },
-			{ name: "customer_id", type: "string", description: "客户唯一标识" },
-		],
-	},
-	{
-		id: "mdm_customer_profile",
-		name: "MDM_客户主数据",
-		source: "MDM",
-		database: "mdm_core",
-		schema: "dimension",
-		classification: "INTERNAL",
-		rowCount: 820_000,
-		description: "统一的客户档案，含密级字段",
-		fields: [
-			{ name: "customer_id", type: "string", description: "客户编号", lineage: "mdm.customer.id" },
-			{ name: "customer_name", type: "string", description: "客户名称" },
-			{ name: "level", type: "string", description: "客户等级" },
-			{ name: "sensitivity", type: "string", description: "密级" },
-			{ name: "created_at", type: "timestamp", description: "创建时间" },
-		],
-	},
-	{
-		id: "ods_oper_log",
-		name: "ODS_操作日志明细",
-		source: "ODS",
-		database: "ods_prod",
-		schema: "logs",
-		classification: "PUBLIC",
-		rowCount: 65_000_000,
-		description: "应用程序操作日志，适合排查问题",
-		fields: [
-			{ name: "event_time", type: "timestamp", description: "事件时间" },
-			{ name: "module", type: "string", description: "服务模块" },
-			{ name: "level", type: "string", description: "日志级别" },
-			{ name: "message", type: "string", description: "日志内容" },
-			{ name: "trace_id", type: "string", description: "链路追踪编号" },
-		],
-	},
-];
 
 function toUiDataset(apiItem: any): Dataset {
 	return {
@@ -345,7 +290,7 @@ function VisualQueryBuilder({
 									onValueChange={(value) => onAggregationChange(aggregation.id, { fn: value as Aggregation["fn"] })}
 								>
 									<SelectTrigger>
-										<SelectValue />
+										<SelectValue placeholder="选择数据源" />
 									</SelectTrigger>
 									<SelectContent>
 										{["SUM", "AVG", "COUNT", "MIN", "MAX"].map((fn) => (
@@ -396,7 +341,7 @@ function VisualQueryBuilder({
 										onValueChange={(value) => onFilterChange(filter.id, { operator: value as FilterOperator })}
 									>
 										<SelectTrigger>
-											<SelectValue />
+											<SelectValue placeholder={tables.length ? "选择表" : "暂无可选表"} />
 										</SelectTrigger>
 										<SelectContent>
 											{["=", "<>", ">", ">=", "<", "<=", "LIKE"].map((operator) => (
@@ -443,7 +388,7 @@ function VisualQueryBuilder({
 										onValueChange={(value) => onSortChange(sorter.id, { direction: value as "ASC" | "DESC" })}
 									>
 										<SelectTrigger>
-											<SelectValue />
+											<SelectValue placeholder={tables.length ? "选择表" : "暂无可选表"} />
 										</SelectTrigger>
 										<SelectContent>
 											<SelectItem value="ASC">升序</SelectItem>
@@ -478,8 +423,11 @@ export default function QueryWorkbenchPage() {
 	}
 
 	const [remoteDatasets, setRemoteDatasets] = useState<Dataset[]>([]);
+	const [isDatasetsLoading, setDatasetsLoading] = useState<boolean>(false);
+	const [datasetsError, setDatasetsError] = useState<string | null>(null);
 	const [selectedSource, setSelectedSource] = useState<string>("");
-	const datasets = useMemo(() => (remoteDatasets.length ? remoteDatasets : DATASETS), [remoteDatasets]);
+	const hasRemoteDatasets = remoteDatasets.length > 0;
+	const datasets = remoteDatasets;
 	const datasetsBySource = useMemo(
 		() => datasets.filter((dataset) => (selectedSource ? dataset.source === selectedSource : true)),
 		[datasets, selectedSource],
@@ -502,6 +450,7 @@ export default function QueryWorkbenchPage() {
 	const [pageIndex, setPageIndex] = useState(0);
 	const [pageSize, setPageSize] = useState(10);
 	const [exportDialogOpen, setExportDialogOpen] = useState(false);
+	const showDatasetEmptyHint = !isDatasetsLoading && !hasRemoteDatasets;
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const [drawerTab, setDrawerTab] = useState("history");
 	const [planSteps, setPlanSteps] = useState<string[]>([]);
@@ -514,23 +463,42 @@ export default function QueryWorkbenchPage() {
 		setSelectedDatasetId(defaultDataset);
 	}, [defaultDataset]);
 
-	useEffect(() => {
-		// Load from backend
-		(async () => {
-			try {
-				const resp: any = await listDatasets({ page: 0, size: 100 });
-				const list = Array.isArray(resp?.content) ? resp.content : [];
-				const ui = list.map(toUiDataset);
-				setRemoteDatasets(ui);
-				if (ui.length) {
-					setSelectedSource(ui[0].source);
-					setSelectedDatasetId(ui[0].id);
-				}
-			} catch (e) {
-				console.error(e);
+	const reloadDatasets = useCallback(async () => {
+		setDatasetsLoading(true);
+		setDatasetsError(null);
+		try {
+			const resp: any = await listDatasets({ page: 0, size: 100 });
+			const list = Array.isArray(resp?.content) ? resp.content : [];
+			const ui = list.map(toUiDataset);
+			setRemoteDatasets(ui);
+			if (ui.length) {
+				const existingSource =
+					selectedSource && ui.some((item) => item.source === selectedSource)
+						? selectedSource
+						: ui[0].source;
+				setSelectedSource(existingSource);
+				const candidates = ui.filter((item) => !existingSource || item.source === existingSource);
+				const matchedDataset = ui.find(
+					(item) => item.id === selectedDatasetId && (!existingSource || item.source === existingSource),
+				);
+				const nextDatasetId = matchedDataset?.id ?? candidates[0]?.id ?? ui[0].id;
+				setSelectedDatasetId(nextDatasetId ?? "");
+			} else {
+				setSelectedSource("");
+				setSelectedDatasetId("");
 			}
-		})();
-	}, []);
+		} catch (e: any) {
+			console.error(e);
+			const message = typeof e?.message === "string" ? e.message : "数据集加载失败";
+			setDatasetsError(message);
+		} finally {
+			setDatasetsLoading(false);
+		}
+	}, [selectedDatasetId, selectedSource]);
+
+	useEffect(() => {
+		reloadDatasets();
+	}, [reloadDatasets]);
 
 	// Load tables for selected dataset
 	useEffect(() => {
@@ -836,12 +804,35 @@ export default function QueryWorkbenchPage() {
 								</Button>
 							</div>
 						</CardTitle>
+						<div className="space-y-2 text-xs text-muted-foreground">
+							{isDatasetsLoading ? <p>正在加载可用数据集...</p> : null}
+							{datasetsError ? (
+								<div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+									<span className="text-amber-600">{datasetsError}</span>
+									<Button variant="ghost" size="sm" onClick={reloadDatasets}>
+										重试
+									</Button>
+								</div>
+							) : null}
+							{showDatasetEmptyHint && !datasetsError && !isDatasetsLoading ? (
+								<div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+									<span>当前没有可用的数据集，请先在基础数据维护中配置数据源。</span>
+									<Button variant="ghost" size="sm" onClick={reloadDatasets}>
+										刷新
+									</Button>
+								</div>
+							) : null}
+						</div>
 						<div className="grid gap-3 lg:grid-cols-3">
 							<div className="space-y-1">
 								<Label className="text-xs text-muted-foreground">数据源</Label>
-								<Select value={selectedSource} onValueChange={setSelectedSource}>
+								<Select
+									value={selectedSource}
+									onValueChange={setSelectedSource}
+									disabled={isDatasetsLoading || showDatasetEmptyHint}
+								>
 									<SelectTrigger>
-										<SelectValue />
+										<SelectValue placeholder={showDatasetEmptyHint ? "暂无数据源" : "选择数据源"} />
 									</SelectTrigger>
 									<SelectContent>
 										{availableSources.map((source) => (
@@ -854,9 +845,13 @@ export default function QueryWorkbenchPage() {
 							</div>
 							<div className="space-y-1 lg:col-span-2">
 								<Label className="text-xs text-muted-foreground">数据集</Label>
-								<Select value={selectedDatasetId} onValueChange={setSelectedDatasetId}>
+								<Select
+									value={selectedDatasetId}
+									onValueChange={setSelectedDatasetId}
+									disabled={isDatasetsLoading || showDatasetEmptyHint}
+								>
 									<SelectTrigger>
-										<SelectValue />
+										<SelectValue placeholder={showDatasetEmptyHint ? "暂无数据集" : "选择数据集"} />
 									</SelectTrigger>
 									<SelectContent>
 										{dataSourceDatasets.map((dataset) => (
@@ -876,9 +871,13 @@ export default function QueryWorkbenchPage() {
 								) : null}
 								<div className="space-y-1">
 									<Label className="text-xs text-muted-foreground">表</Label>
-									<Select value={selectedTableId} onValueChange={setSelectedTableId}>
+									<Select
+										value={selectedTableId}
+										onValueChange={setSelectedTableId}
+										disabled={isDatasetsLoading || !tables.length}
+									>
 										<SelectTrigger>
-											<SelectValue />
+											<SelectValue placeholder={tables.length ? "选择表" : "暂无可选表"} />
 										</SelectTrigger>
 										<SelectContent>
 											{tables.map((t) => (
@@ -905,13 +904,13 @@ export default function QueryWorkbenchPage() {
 							<TabsContent value="sql" className="space-y-3">
 								<div className="flex items-center justify-between">
 									<div className="flex items-center gap-2">
-										<Button size="sm" onClick={handleRunQuery} disabled={isRunning}>
-											{isRunning ? "运行中..." : "运行"}
-										</Button>
+									<Button size="sm" onClick={handleRunQuery} disabled={isRunning || !selectedDataset || isDatasetsLoading}>
+										{isRunning ? "运行中..." : "运行"}
+									</Button>
 										<Button size="sm" variant="outline" onClick={() => setIsRunning(false)} disabled={!isRunning}>
 											停止
 										</Button>
-										<Button size="sm" variant="outline" onClick={handleExplain}>
+									<Button size="sm" variant="outline" onClick={handleExplain} disabled={!selectedDataset}>
 											执行计划
 										</Button>
 										<Button

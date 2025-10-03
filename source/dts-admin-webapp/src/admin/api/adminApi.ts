@@ -79,20 +79,20 @@ export const adminApi = {
 			url: "/admin/portal/menus",
 		}),
 
-	draftCreateMenu: (menu: PortalMenuItem) =>
-		apiClient.post<ChangeRequest>({
+	createPortalMenu: (menu: PortalMenuItem) =>
+		apiClient.post<PortalMenuCollection>({
 			url: "/admin/portal/menus",
 			data: menu,
 		}),
 
-	draftUpdateMenu: (id: number, menu: PortalMenuItem) =>
-		apiClient.put<ChangeRequest>({
+	updatePortalMenu: (id: number, menu: PortalMenuItem) =>
+		apiClient.put<PortalMenuCollection>({
 			url: `/admin/portal/menus/${id}`,
 			data: menu,
 		}),
 
-	draftDeleteMenu: (id: number) =>
-		apiClient.delete<ChangeRequest>({
+	deletePortalMenu: (id: number) =>
+		apiClient.delete<PortalMenuCollection>({
 			url: `/admin/portal/menus/${id}`,
 		}),
 

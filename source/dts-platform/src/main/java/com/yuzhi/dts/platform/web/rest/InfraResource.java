@@ -1,18 +1,22 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import com.yuzhi.dts.platform.domain.service.InfraDataSource;
-import com.yuzhi.dts.platform.domain.service.InfraDataStorage;
 import com.yuzhi.dts.platform.domain.service.InfraTaskSchedule;
-import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
-import com.yuzhi.dts.platform.repository.service.InfraDataStorageRepository;
 import com.yuzhi.dts.platform.repository.service.InfraTaskScheduleRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionService;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
+import com.yuzhi.dts.platform.service.infra.InfraManagementService;
+import com.yuzhi.dts.platform.service.infra.dto.ConnectionTestLogDto;
+import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
+import com.yuzhi.dts.platform.service.infra.dto.DataStorageRequest;
+import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
+import com.yuzhi.dts.platform.service.infra.dto.InfraDataStorageDto;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,24 +27,27 @@ import org.springframework.web.bind.annotation.*;
 @Transactional
 public class InfraResource {
 
-    private final InfraDataSourceRepository dsRepo;
-    private final InfraDataStorageRepository storageRepo;
     private final InfraTaskScheduleRepository schedRepo;
     private final AuditService audit;
+    private final InfraManagementService managementService;
     private final HiveConnectionService hiveConnectionService;
 
-    public InfraResource(InfraDataSourceRepository dsRepo, InfraDataStorageRepository storageRepo, InfraTaskScheduleRepository schedRepo, AuditService audit, HiveConnectionService hiveConnectionService) {
-        this.dsRepo = dsRepo;
-        this.storageRepo = storageRepo;
+    public InfraResource(
+        InfraTaskScheduleRepository schedRepo,
+        AuditService audit,
+        InfraManagementService managementService,
+        HiveConnectionService hiveConnectionService
+    ) {
         this.schedRepo = schedRepo;
         this.audit = audit;
+        this.managementService = managementService;
         this.hiveConnectionService = hiveConnectionService;
     }
 
     // Data sources
     @GetMapping("/data-sources")
-    public ApiResponse<List<InfraDataSource>> listDataSources() {
-        var list = dsRepo.findAll();
+    public ApiResponse<List<InfraDataSourceDto>> listDataSources() {
+        var list = managementService.listDataSources();
         audit.audit("READ", "infra.dataSource", "list");
         return ApiResponses.ok(list);
     }
@@ -49,29 +56,26 @@ public class InfraResource {
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "')")
     public ApiResponse<HiveConnectionTestResult> testDataSourceConnection(@Valid @RequestBody HiveConnectionTestRequest request) {
         var result = hiveConnectionService.testConnection(request);
+        var user = SecurityUtils.getCurrentUserLogin().orElse("system");
+        managementService.recordConnectionTest(null, request, result, user);
         audit.audit("TEST", "infra.dataSource", "test-connection:" + request.getLoginPrincipal());
         return ApiResponses.ok(result);
     }
 
     @PostMapping("/data-sources")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "')")
-    public ApiResponse<InfraDataSource> createDataSource(@Valid @RequestBody InfraDataSource ds) {
-        var saved = dsRepo.save(ds);
-        audit.audit("CREATE", "infra.dataSource", String.valueOf(saved.getId()));
+    public ApiResponse<InfraDataSourceDto> createDataSource(@Valid @RequestBody DataSourceRequest request) {
+        var user = SecurityUtils.getCurrentUserLogin().orElse("system");
+        var saved = managementService.createDataSource(request, user);
+        audit.audit("CREATE", "infra.dataSource", String.valueOf(saved.id()));
         return ApiResponses.ok(saved);
     }
 
     @PutMapping("/data-sources/{id}")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "')")
-    public ApiResponse<InfraDataSource> updateDataSource(@PathVariable UUID id, @Valid @RequestBody InfraDataSource patch) {
-        var existing = dsRepo.findById(id).orElseThrow();
-        existing.setName(patch.getName());
-        existing.setType(patch.getType());
-        existing.setJdbcUrl(patch.getJdbcUrl());
-        existing.setUsername(patch.getUsername());
-        existing.setProps(patch.getProps());
-        existing.setDescription(patch.getDescription());
-        var saved = dsRepo.save(existing);
+    public ApiResponse<InfraDataSourceDto> updateDataSource(@PathVariable UUID id, @Valid @RequestBody DataSourceRequest request) {
+        var user = SecurityUtils.getCurrentUserLogin().orElse("system");
+        var saved = managementService.updateDataSource(id, request, user);
         audit.audit("UPDATE", "infra.dataSource", String.valueOf(id));
         return ApiResponses.ok(saved);
     }
@@ -79,37 +83,33 @@ public class InfraResource {
     @DeleteMapping("/data-sources/{id}")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "')")
     public ApiResponse<Boolean> deleteDataSource(@PathVariable UUID id) {
-        dsRepo.deleteById(id);
+        managementService.deleteDataSource(id);
         audit.audit("DELETE", "infra.dataSource", String.valueOf(id));
         return ApiResponses.ok(Boolean.TRUE);
     }
 
     // Data storages
     @GetMapping("/data-storages")
-    public ApiResponse<List<InfraDataStorage>> listDataStorages() {
-        var list = storageRepo.findAll();
+    public ApiResponse<List<InfraDataStorageDto>> listDataStorages() {
+        var list = managementService.listDataStorages();
         audit.audit("READ", "infra.dataStorage", "list");
         return ApiResponses.ok(list);
     }
 
     @PostMapping("/data-storages")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "')")
-    public ApiResponse<InfraDataStorage> createDataStorage(@Valid @RequestBody InfraDataStorage st) {
-        var saved = storageRepo.save(st);
-        audit.audit("CREATE", "infra.dataStorage", String.valueOf(saved.getId()));
+    public ApiResponse<InfraDataStorageDto> createDataStorage(@Valid @RequestBody DataStorageRequest request) {
+        var user = SecurityUtils.getCurrentUserLogin().orElse("system");
+        var saved = managementService.createDataStorage(request, user);
+        audit.audit("CREATE", "infra.dataStorage", String.valueOf(saved.id()));
         return ApiResponses.ok(saved);
     }
 
     @PutMapping("/data-storages/{id}")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "')")
-    public ApiResponse<InfraDataStorage> updateDataStorage(@PathVariable UUID id, @Valid @RequestBody InfraDataStorage patch) {
-        var existing = storageRepo.findById(id).orElseThrow();
-        existing.setName(patch.getName());
-        existing.setType(patch.getType());
-        existing.setLocation(patch.getLocation());
-        existing.setProps(patch.getProps());
-        existing.setDescription(patch.getDescription());
-        var saved = storageRepo.save(existing);
+    public ApiResponse<InfraDataStorageDto> updateDataStorage(@PathVariable UUID id, @Valid @RequestBody DataStorageRequest request) {
+        var user = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("system");
+        var saved = managementService.updateDataStorage(id, request, user);
         audit.audit("UPDATE", "infra.dataStorage", String.valueOf(id));
         return ApiResponses.ok(saved);
     }
@@ -117,9 +117,21 @@ public class InfraResource {
     @DeleteMapping("/data-storages/{id}")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "')")
     public ApiResponse<Boolean> deleteDataStorage(@PathVariable UUID id) {
-        storageRepo.deleteById(id);
+        managementService.deleteDataStorage(id);
         audit.audit("DELETE", "infra.dataStorage", String.valueOf(id));
         return ApiResponses.ok(Boolean.TRUE);
+    }
+
+    @GetMapping("/data-sources/test-logs")
+    public ApiResponse<List<ConnectionTestLogDto>> recentTestLogs(@RequestParam(required = false) UUID dataSourceId) {
+        var logs = managementService.recentTestLogs(dataSourceId);
+        audit.audit("READ", "infra.dataSource.testLogs", dataSourceId != null ? dataSourceId.toString() : "recent");
+        return ApiResponses.ok(logs);
+    }
+
+    @GetMapping("/features")
+    public ApiResponse<Map<String, Object>> features() {
+        return ApiResponses.ok(Map.of("multiSourceEnabled", managementService.isMultiSourceEnabled()));
     }
 
     // Task schedules

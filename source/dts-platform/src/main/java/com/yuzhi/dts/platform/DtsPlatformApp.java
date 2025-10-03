@@ -17,6 +17,7 @@ import java.util.Collection;
 import java.util.Optional;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
+import com.yuzhi.dts.platform.config.InfraSecurityProperties;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -37,6 +38,7 @@ import tech.jhipster.config.JHipsterConstants;
     AuditProperties.class,
     DataStandardProperties.class,
     GovernanceProperties.class,
+    InfraSecurityProperties.class,
 })
 public class DtsPlatformApp {
 

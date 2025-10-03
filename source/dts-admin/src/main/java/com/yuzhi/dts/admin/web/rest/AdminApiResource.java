@@ -19,6 +19,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import com.yuzhi.dts.admin.service.OrganizationService;
 import com.yuzhi.dts.admin.service.OrganizationSyncService;
@@ -50,6 +52,7 @@ import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 public class AdminApiResource {
 
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+    private static final Logger log = LoggerFactory.getLogger(AdminApiResource.class);
 
     public record WhoAmI(boolean allowed, String role, String username, String email) {}
 
@@ -231,27 +234,66 @@ public class AdminApiResource {
 
     @GetMapping("/portal/menus")
     public ResponseEntity<ApiResponse<Map<String, Object>>> portalMenus() {
-        List<Map<String, Object>> active = new ArrayList<>();
-        for (PortalMenu menu : portalMenuService.findTree()) {
-            active.add(toMenuVM(menu));
-        }
-        List<Map<String, Object>> deleted = new ArrayList<>();
-        for (PortalMenu menu : portalMenuService.findDeletedMenus()) {
-            deleted.add(toDeletedMenuVM(menu));
-        }
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("active", active);
-        payload.put("deleted", deleted);
+        Map<String, Object> payload = buildPortalMenuCollection();
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "PORTAL_MENU_LIST", "MENU", "admin", "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(payload));
     }
 
     @PostMapping("/portal/menus")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> draftCreateMenu(@RequestBody Map<String, Object> body) {
-        Map<String, Object> after = readPortalMenuPayload(body);
-        ChangeRequest cr = changeRequestService.draft("PORTAL_MENU", "CREATE", null, after, null, Objects.toString(body.get("reason"), null));
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "PORTAL_MENU_CREATE", "PORTAL_MENU", String.valueOf(body.getOrDefault("name", "menu")), "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createMenu(@RequestBody Map<String, Object> body) {
+        Map<String, Object> payload = readPortalMenuPayload(body);
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        Map<String, Object> auditDetail = new LinkedHashMap<>();
+        auditDetail.put("request", payload);
+        try {
+            String name = trimToNull(payload.get("name"));
+            String path = trimToNull(payload.get("path"));
+            if (!StringUtils.hasText(name) || !StringUtils.hasText(path)) {
+                throw new IllegalArgumentException("菜单名称和路径不能为空");
+            }
+
+            PortalMenu menu = new PortalMenu();
+            menu.setName(name);
+            menu.setPath(path);
+            if (payload.containsKey("component")) {
+                menu.setComponent(trimToNull(payload.get("component")));
+            }
+            if (payload.containsKey("icon")) {
+                menu.setIcon(trimToNull(payload.get("icon")));
+            }
+            if (payload.containsKey("sortOrder")) {
+                menu.setSortOrder(payload.get("sortOrder") == null ? null : Integer.valueOf(payload.get("sortOrder").toString()));
+            }
+            menu.setMetadata(normalizeMenuMetadata(payload.get("metadata")));
+            menu.setSecurityLevel(normalizeMenuSecurityLevel(payload.get("securityLevel")));
+            menu.setDeleted(payload.containsKey("deleted") ? toBoolean(payload.get("deleted")) : false);
+
+            Long parentId = toNullableLong(payload.get("parentId"));
+            if (parentId != null) {
+                PortalMenu parent = portalMenuRepo
+                    .findById(parentId)
+                    .orElseThrow(() -> new IllegalArgumentException("父菜单不存在"));
+                menu.setParent(parent);
+            }
+
+            menu = portalMenuRepo.save(menu);
+            List<PortalMenuVisibility> visibilities = buildVisibilityEntities(payload, menu);
+            portalMenuService.replaceVisibilities(menu, visibilities);
+
+            PortalMenu persisted = portalMenuRepo.findById(menu.getId()).orElse(menu);
+            auditDetail.put("created", toPortalMenuPayload(persisted));
+            auditService.record(actor, "PORTAL_MENU_CREATE", "PORTAL_MENU", String.valueOf(persisted.getId()), "SUCCESS", auditDetail);
+            return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
+        } catch (IllegalArgumentException ex) {
+            auditDetail.put("error", ex.getMessage());
+            auditService.record(actor, "PORTAL_MENU_CREATE", "PORTAL_MENU", Objects.toString(payload.get("name"), "menu"), "FAILURE", auditDetail);
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+        } catch (Exception ex) {
+            auditDetail.put("error", ex.getMessage());
+            auditService.record(actor, "PORTAL_MENU_CREATE", "PORTAL_MENU", Objects.toString(payload.get("name"), "menu"), "FAILURE", auditDetail);
+            log.error("Failed to create portal menu", ex);
+            return ResponseEntity.internalServerError().body(ApiResponse.error("创建菜单失败: " + ex.getMessage()));
+        }
     }
 
     @PostMapping("/portal/menus/reset")
@@ -262,31 +304,71 @@ public class AdminApiResource {
     }
 
     @PutMapping("/portal/menus/{id}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> draftUpdateMenu(@PathVariable String id, @RequestBody Map<String, Object> body) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateMenu(@PathVariable String id, @RequestBody Map<String, Object> body) {
         Long menuId = Long.valueOf(id);
         PortalMenu beforeEntity = portalMenuRepo.findById(menuId).orElse(null);
         if (beforeEntity == null) {
             return ResponseEntity.status(404).body(ApiResponse.error("菜单不存在"));
         }
+        Map<String, Object> payload = readPortalMenuPayload(body);
         Map<String, Object> before = toPortalMenuPayload(beforeEntity);
-        Map<String, Object> after = new LinkedHashMap<>(before);
-        after.putAll(readPortalMenuPayload(body));
-        ChangeRequest cr = changeRequestService.draft("PORTAL_MENU", "UPDATE", id, after, before, Objects.toString(body.get("reason"), null));
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "PORTAL_MENU_UPDATE", "PORTAL_MENU", id, "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        try {
+            applyMenuUpdates(beforeEntity, payload);
+            boolean visibilityTouched = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
+            if (visibilityTouched) {
+                List<PortalMenuVisibility> visibilities = buildVisibilityEntities(payload, beforeEntity);
+                portalMenuService.replaceVisibilities(beforeEntity, visibilities);
+            } else {
+                portalMenuRepo.save(beforeEntity);
+            }
+            PortalMenu persisted = portalMenuRepo.findById(menuId).orElse(beforeEntity);
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("before", before);
+            detail.put("after", toPortalMenuPayload(persisted));
+            auditService.record(actor, "PORTAL_MENU_UPDATE", "PORTAL_MENU", id, "SUCCESS", detail);
+            return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
+        } catch (IllegalArgumentException ex) {
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("before", before);
+            detail.put("error", ex.getMessage());
+            auditService.record(actor, "PORTAL_MENU_UPDATE", "PORTAL_MENU", id, "FAILURE", detail);
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+        } catch (Exception ex) {
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("before", before);
+            detail.put("error", ex.getMessage());
+            auditService.record(actor, "PORTAL_MENU_UPDATE", "PORTAL_MENU", id, "FAILURE", detail);
+            log.error("Failed to update portal menu {}", id, ex);
+            return ResponseEntity.internalServerError().body(ApiResponse.error("更新菜单失败: " + ex.getMessage()));
+        }
     }
 
     @DeleteMapping("/portal/menus/{id}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> draftDeleteMenu(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteMenu(@PathVariable String id) {
         Long menuId = Long.valueOf(id);
         PortalMenu entity = portalMenuRepo.findById(menuId).orElse(null);
         if (entity == null) {
             return ResponseEntity.status(404).body(ApiResponse.error("菜单不存在"));
         }
         Map<String, Object> before = toPortalMenuPayload(entity);
-        ChangeRequest cr = changeRequestService.draft("PORTAL_MENU", "DELETE", id, Map.of("deleted", true), before, null);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "PORTAL_MENU_DELETE", "PORTAL_MENU", id, "SUCCESS", null);
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        try {
+            markMenuDeleted(entity);
+            portalMenuRepo.save(entity);
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("before", before);
+            detail.put("after", toPortalMenuPayload(entity));
+            auditService.record(actor, "PORTAL_MENU_DELETE", "PORTAL_MENU", id, "SUCCESS", detail);
+            return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
+        } catch (Exception ex) {
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("before", before);
+            detail.put("error", ex.getMessage());
+            auditService.record(actor, "PORTAL_MENU_DELETE", "PORTAL_MENU", id, "FAILURE", detail);
+            log.error("Failed to delete portal menu {}", id, ex);
+            return ResponseEntity.internalServerError().body(ApiResponse.error("删除菜单失败: " + ex.getMessage()));
+        }
     }
 
     @GetMapping("/orgs")
@@ -768,6 +850,136 @@ public class AdminApiResource {
         return m;
     }
 
+    private Map<String, Object> buildPortalMenuCollection() {
+        List<Map<String, Object>> active = new ArrayList<>();
+        for (PortalMenu menu : portalMenuService.findTree()) {
+            active.add(toMenuVM(menu));
+        }
+        List<Map<String, Object>> deleted = new ArrayList<>();
+        for (PortalMenu menu : portalMenuService.findDeletedMenus()) {
+            deleted.add(toDeletedMenuVM(menu));
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("active", active);
+        payload.put("deleted", deleted);
+        return payload;
+    }
+
+    private void applyMenuUpdates(PortalMenu target, Map<String, Object> payload) {
+        if (payload.containsKey("name")) {
+            String name = trimToNull(payload.get("name"));
+            if (!StringUtils.hasText(name)) {
+                throw new IllegalArgumentException("菜单名称不能为空");
+            }
+            target.setName(name);
+        }
+        if (payload.containsKey("path")) {
+            String path = trimToNull(payload.get("path"));
+            if (!StringUtils.hasText(path)) {
+                throw new IllegalArgumentException("菜单路径不能为空");
+            }
+            target.setPath(path);
+        }
+        if (payload.containsKey("component")) {
+            target.setComponent(trimToNull(payload.get("component")));
+        }
+        if (payload.containsKey("icon")) {
+            target.setIcon(trimToNull(payload.get("icon")));
+        }
+        if (payload.containsKey("sortOrder")) {
+            Object sort = payload.get("sortOrder");
+            target.setSortOrder(sort == null ? null : Integer.valueOf(sort.toString()));
+        }
+        if (payload.containsKey("metadata")) {
+            target.setMetadata(normalizeMenuMetadata(payload.get("metadata")));
+        }
+        if (payload.containsKey("securityLevel")) {
+            target.setSecurityLevel(normalizeMenuSecurityLevel(payload.get("securityLevel")));
+        }
+        if (payload.containsKey("parentId")) {
+            Long parentId = toNullableLong(payload.get("parentId"));
+            if (parentId == null) {
+                target.setParent(null);
+            } else {
+                PortalMenu parent = portalMenuRepo
+                    .findById(parentId)
+                    .orElseThrow(() -> new IllegalArgumentException("父菜单不存在"));
+                if (target.getId() != null && Objects.equals(parent.getId(), target.getId())) {
+                    throw new IllegalArgumentException("父菜单不能选择自身");
+                }
+                if (isDescendantOf(target, parent)) {
+                    throw new IllegalArgumentException("父菜单不能选择当前菜单的子节点");
+                }
+                target.setParent(parent);
+            }
+        }
+        if (payload.containsKey("deleted")) {
+            boolean deleted = toBoolean(payload.get("deleted"));
+            if (deleted) {
+                markMenuDeleted(target);
+            } else {
+                target.setDeleted(false);
+            }
+        }
+    }
+
+    private String normalizeMenuMetadata(Object metadata) {
+        if (metadata == null) {
+            return null;
+        }
+        if (metadata instanceof String s) {
+            String trimmed = s.trim();
+            return trimmed.isEmpty() ? null : trimmed;
+        }
+        try {
+            return JSON_MAPPER.writeValueAsString(metadata);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalArgumentException("菜单元数据格式错误", ex);
+        }
+    }
+
+    private Long toNullableLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return Long.valueOf(number.longValue());
+        }
+        String text = value.toString().trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        return Long.valueOf(text);
+    }
+
+    private boolean toBoolean(Object value) {
+        if (value instanceof Boolean b) {
+            return b.booleanValue();
+        }
+        if (value == null) {
+            return false;
+        }
+        String text = value.toString().trim();
+        if (text.isEmpty()) {
+            return false;
+        }
+        return "true".equalsIgnoreCase(text) || "1".equals(text) || "yes".equalsIgnoreCase(text);
+    }
+
+    private boolean isDescendantOf(PortalMenu root, PortalMenu candidateParent) {
+        if (root == null || candidateParent == null) {
+            return false;
+        }
+        PortalMenu cursor = candidateParent;
+        while (cursor != null) {
+            if (root.getId() != null && cursor.getId() != null && Objects.equals(cursor.getId(), root.getId())) {
+                return true;
+            }
+            cursor = cursor.getParent();
+        }
+        return false;
+    }
+
     private Map<String, Object> readPortalMenuPayload(Map<String, Object> body) {
         Map<String, Object> m = new LinkedHashMap<>();
         if (body == null) {
@@ -1027,6 +1239,17 @@ public class AdminApiResource {
                     if (payload.containsKey("securityLevel")) {
                         target.setSecurityLevel(normalizeMenuSecurityLevel(payload.get("securityLevel")));
                     }
+                    if (payload.containsKey("deleted")) {
+                        Object dv = payload.get("deleted");
+                        boolean flag;
+                        if (dv instanceof Boolean b) {
+                            flag = b.booleanValue();
+                        } else {
+                            String s = Objects.toString(dv, "");
+                            flag = "true".equalsIgnoreCase(s) || "1".equals(s);
+                        }
+                        target.setDeleted(flag);
+                    }
                     if (
                         payload.containsKey("visibilityRules") ||
                         payload.containsKey("allowedRoles") ||
@@ -1068,12 +1291,9 @@ public class AdminApiResource {
         String action = cr.getAction();
         if ("CREATE".equalsIgnoreCase(action)) {
             String name = Objects.toString(payload.get("name"), null);
-            String dataLevel = Objects.toString(payload.get("dataLevel"), null);
             Long parentId = payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString());
-            String contact = Objects.toString(payload.get("contact"), null);
-            String phone = Objects.toString(payload.get("phone"), null);
             String description = Objects.toString(payload.get("description"), null);
-            OrganizationNode created = orgService.create(name, dataLevel, parentId, contact, phone, description);
+            OrganizationNode created = orgService.create(name, parentId, description);
             cr.setResourceId(String.valueOf(created.getId()));
         } else if ("UPDATE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());
@@ -1081,12 +1301,16 @@ public class AdminApiResource {
                 .findById(id)
                 .ifPresent(entity -> {
                     String nextName = Objects.toString(payload.getOrDefault("name", entity.getName()), entity.getName());
-                    String nextLevel = Objects.toString(payload.getOrDefault("dataLevel", entity.getDataLevel()), entity.getDataLevel());
-                    String nextContact = Objects.toString(payload.getOrDefault("contact", entity.getContact()), entity.getContact());
-                    String nextPhone = Objects.toString(payload.getOrDefault("phone", entity.getPhone()), entity.getPhone());
-                    String nextDescription = Objects.toString(payload.getOrDefault("description", entity.getDescription()), entity.getDescription());
-                    Long parentId = entity.getParent() == null ? null : entity.getParent().getId();
-                    orgService.update(id, nextName, nextLevel, nextContact, nextPhone, nextDescription, parentId);
+                    String nextDescription = Objects
+                        .toString(payload.getOrDefault("description", entity.getDescription()), entity.getDescription());
+                    Long nextParentId;
+                    if (payload.containsKey("parentId")) {
+                        Object parentRaw = payload.get("parentId");
+                        nextParentId = parentRaw == null ? null : Long.valueOf(parentRaw.toString());
+                    } else {
+                        nextParentId = entity.getParent() == null ? null : entity.getParent().getId();
+                    }
+                    orgService.update(id, nextName, nextDescription, nextParentId);
                 });
         } else if ("DELETE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());

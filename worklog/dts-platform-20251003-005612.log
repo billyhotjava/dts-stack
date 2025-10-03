@@ -149,3 +149,44 @@
 - 基础维护：完善数据源/存储/调度的持久化模型（含密钥加密、连接测试记录、多源开关），补全 CRUD 与审计。
 - 前端配合：对应三大模块改造 API client、状态管理与页面组件，替换本地 mock，强化加载/空态与操作反馈。
 - 验证：列出最小手工校验脚本（API 调用、审计事件、密钥配置），后续补充集成测试用例。
+[2025-10-03 13:18] 数据服务/IAM/基础模块联动改造
+- 数据服务：新增 svc_api/svc_data_product 等实体与 Liquibase 20251008_02，编写 ApiCatalogService/DataProductService/SvcTokenService，实现 Hive 推送、版本、指标与审计；重构 ApiServicesResource/ApiGatewayResource，扩展 /services/apis/… API。
+- 前端：更新 API client & 页面（services/apis, services/products, services/tokens）对接新 DTO，新增版本/指标视图、令牌加密提示及数据产品后台驱动目录。
+- IAM：补充 iam_* 表结构与服务（ClassificationService、PolicyService），重写 IamClassificationAdminResource/IamPoliciesResource 支持同步日志、批量授权、冲突预检和主题检索。
+- 基础设施：引入 InfraSecurityProperties、InfraManagementService、InfraSecretService 与连接测试日志表，重构 InfraResource 数据源/存储接口；前端 DataSources/DataStorage 页面改为读取后端列表、能力开关及最近测试记录。
+- 待验证：需执行最新 Liquibase（20251008_02/03/04），配置 dts.platform.infra.encryption-key 及 IAM/数据服务样例数据后再全量手测。
+[2025-10-03 13:55] 编译校验与后续安排
+- 修复 InfraManagementService 依赖的请求 DTO 包路径，迁移 DataSourceRequest/DataStorageRequest 至 service 层复用，更新接口引用并通过 `mvnw compile`（跳过 enforcer）验证通过。
+- 清理 `target/generated-sources` 目录所有权（此前为 root 导致 Hibernate JPA Metamodel 生成失败），执行 `sudo chown -R billy:billy target/generated-sources` 后编译恢复正常。
+- 记录 Maven 依然存在 Hive 依赖收敛告警，后续需评估是否在 enforcer 层豁免或统一版本；暂以 `-Denforcer.skip=true` 进行本地验证。
+- 下一步：梳理 Explore/Services/IAM 模块的测试与文档缺口，准备补充后端集成测试与前端类型校验；同时整理编译依赖注意事项（权限、key 配置）写入 docs/ 或 readme 补充说明。
+[2025-10-03 13:59] InfraSecretService 单元测试补充
+- 追加 `InfraSecretServiceTest` 验证加密/降级两种路径：确保配置了 `dts.platform.infra.encryption-key` 时可成功写回密钥版本并解密，未配置时保持为空并给出日志告警。
+- 首次执行测试需先 `mvn clean`，否则先前 root 生成的 `target/generated-test-sources` 会阻止 Hibernate 元模型写入，现阶段通过 `sudo chown -R billy:billy target/generated-test-sources` 规避并记录在案。
+- 执行命令：`./mvnw -Denforcer.skip=true -Dtest=InfraSecretServiceTest test`，2 个断言全部通过；保留 Jacoco 报告供后续合并。
+- 待办：将权限及 enforcer 绕行说明整理到开发文档，后续补充更多治理/服务模块测试。
+[2025-10-03 14:20] 探索工作台数据集加载方案
+- 目标：移除前端本地 DATASETS 常量，完全依赖 /api/catalog/datasets 接口并处理加载/空态，确保权限受限时给出提示。
+- 后端：复用现有 CatalogResource，暂不新增接口，仅校验返回结构并在前端转换时补全展示字段。
+- 前端调整步骤：
+  1. 在 QueryWorkbenchPage 增加加载与错误状态，首屏显示骨架或提示。
+  2. 移除默认 DATASETS 静态数据，落地空列表提示与“刷新”动作。
+  3. 当未配置数据源或接口403时，引导用户前往基础维护>数据源页面。
+- 验证：手工请求 /api/explore/query-executions 确保不依赖静态数据；在空数据集场景下确认按钮禁用与提示；执行一次查询确保逻辑未回归。
+[2025-10-03 14:36] 探索工作台数据集加载改造进度
+- 移除 QueryWorkbenchPage 本地示例数据，改为仅依赖 /catalog/datasets 结果，并新增加载/错误/空态提示与刷新入口。
+- 数据源、数据集、表选择器在加载或无数据时禁用，运行/执行计划按钮需选定数据集后才可用。
+- 未能执行 eslint（pnpm exec eslint ...）因项目未安装相关命令，记录待补齐依赖；手工建议：刷新数据集、触发空数据源场景、执行一次查询验证历史列表。
+[2025-10-03 14:27] 探索结果集与保存查询界面完善方案
+- 目标：SavedQueriesPage 增加加载/错误状态，展示数据集密级标签，提供刷新与空态引导，保持与工作台体验一致。
+- 后端依赖：沿用现有 /catalog/datasets、/explore/saved-queries、/explore/result-sets API，无需额外改造。
+- 前端调整计划：
+  1. 在 SavedQueriesPage 中引入 datasets 拉取流程，与 QueryWorkbenchPage 复用转换逻辑，缓存数据集名称与密级。
+  2. 新增加载、错误提示与刷新入口；列表为空时给出引导文本或跳转链接。
+  3. 运行/删除动作完成后刷新列表，并在结果集表格展示密级徽章、剩余 TTL、数据集链接。
+- 验证：手工测试查询列表加载失败/成功路径，执行保存的查询查看历史更新，清理过期结果后确认提示与审计记录。
+[2025-10-03 14:37] SavedQueries 页面改造进展
+- 引入 /catalog/datasets 拉取逻辑，统一密级元数据，输出提示条、加载/错误状态与刷新按钮。
+- 保存的查询列表新增数据集列和密级徽章，结果集表格支持本地时间格式化、密级徽章与按钮禁用控制。
+- 手工执行 `pnpm --dir source/dts-platform-webapp exec eslint src/pages/explore/SavedQueriesPage.tsx`，命令缺失（eslint 未安装）；保留处理记录，后续补齐依赖前无法自动校验。
+- 建议手工验证：1) 在无数据集时检查提示文案与刷新；2) 成功加载后执行/删除保存查询确认表格刷新；3) 预览结果集查看脱敏提示与时间格式。

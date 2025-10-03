@@ -31,6 +31,17 @@ public class InfraDataStorage extends AbstractAuditingEntity<UUID> implements Se
     @Column(name = "description", length = 512)
     private String description;
 
+    @Lob
+    @Column(name = "secure_props")
+    private byte[] secureProps;
+
+    @Lob
+    @Column(name = "secure_iv")
+    private byte[] secureIv;
+
+    @Column(name = "secure_key_version", length = 32)
+    private String secureKeyVersion;
+
     @Override
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
@@ -44,4 +55,10 @@ public class InfraDataStorage extends AbstractAuditingEntity<UUID> implements Se
     public void setProps(String props) { this.props = props; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public byte[] getSecureProps() { return secureProps; }
+    public void setSecureProps(byte[] secureProps) { this.secureProps = secureProps; }
+    public byte[] getSecureIv() { return secureIv; }
+    public void setSecureIv(byte[] secureIv) { this.secureIv = secureIv; }
+    public String getSecureKeyVersion() { return secureKeyVersion; }
+    public void setSecureKeyVersion(String secureKeyVersion) { this.secureKeyVersion = secureKeyVersion; }
 }

@@ -12,7 +12,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,17 +62,23 @@ public class OrganizationService {
     }
 
     public OrganizationNode create(String name, Long parentId, String description) {
+        OrganizationNode parent = null;
+        if (parentId != null) {
+            parent = repository.findById(parentId).orElseThrow();
+        }
+
         OrganizationNode entity = new OrganizationNode();
         entity.setName(name);
-        entity.setDataLevel(resolveInheritedLevel(parentId, null));
+        entity.setDataLevel(determineDataLevel(parent, null));
         entity.setContact(null);
         entity.setPhone(null);
         entity.setDescription(description);
 
-        OrganizationNode parent = null;
-        if (parentId != null) {
-            parent = repository.findById(parentId).orElseThrow();
+        if (parent != null) {
             entity.setParent(parent);
+            if (parent.getChildren() == null) {
+                parent.setChildren(new ArrayList<>());
+            }
             parent.getChildren().add(entity);
         }
 
@@ -101,7 +106,7 @@ public class OrganizationService {
                     reassignParent(entity, newParent);
                 }
                 entity.setName(name);
-                entity.setDataLevel(resolveInheritedLevel(getId(newParent), entity.getDataLevel()));
+                entity.setDataLevel(determineDataLevel(newParent, entity.getDataLevel()));
                 entity.setContact(null);
                 entity.setPhone(null);
                 entity.setDescription(description);
@@ -120,10 +125,9 @@ public class OrganizationService {
     }
 
     public OrganizationNode ensureUnassignedRoot() {
-        OrganizationNode node =
-            repository
-                .findFirstByNameAndParentIsNull(UNASSIGNED_ORG_NAME)
-                .orElseGet(() -> create(UNASSIGNED_ORG_NAME, UNASSIGNED_DATA_LEVEL, null, null, null, UNASSIGNED_DESCRIPTION));
+        OrganizationNode node = repository
+            .findFirstByNameAndParentIsNull(UNASSIGNED_ORG_NAME)
+            .orElseGet(() -> create(UNASSIGNED_ORG_NAME, null, UNASSIGNED_DESCRIPTION));
         boolean dirty = false;
         if (!Objects.equals(node.getDataLevel(), UNASSIGNED_DATA_LEVEL)) {
             node.setDataLevel(UNASSIGNED_DATA_LEVEL);
@@ -375,6 +379,15 @@ public class OrganizationService {
             attributes.put("dts_org_id", List.of(String.valueOf(node.getId())));
         }
         return attributes;
+    }
+
+    private String determineDataLevel(OrganizationNode parent, String fallback) {
+        String candidate = parent != null ? parent.getDataLevel() : fallback;
+        String normalized = normalizeDataLevel(candidate);
+        if (StringUtils.isNotBlank(normalized)) {
+            return normalized;
+        }
+        return UNASSIGNED_DATA_LEVEL;
     }
 
     private String normalizeDataLevel(String value) {

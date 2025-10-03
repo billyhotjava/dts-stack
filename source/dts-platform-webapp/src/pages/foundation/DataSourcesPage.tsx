@@ -1,9 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { testHiveConnection } from "@/api/services/infraService";
+import {
+	fetchInfraFeatures,
+	listConnectionTestLogs,
+	listInfraDataSources,
+	testHiveConnection,
+	type ConnectionTestLog,
+	type InfraDataSource,
+	type InfraFeatureFlags,
+} from "@/api/services/infraService";
 import { Icon } from "@/components/icon";
 import type { HiveConnectionTestResult } from "#/infra";
 import { Button } from "@/ui/button";
@@ -128,10 +136,52 @@ export default function DataSourcesPage() {
 
   const jdbcPreview = useMemo(() => buildJdbcUrl(watched), [watched]);
 
+  const [features, setFeatures] = useState<InfraFeatureFlags | null>(null);
+  const [sources, setSources] = useState<InfraDataSource[]>([]);
+  const [logs, setLogs] = useState<ConnectionTestLog[]>([]);
+  const [loadingFeatures, setLoadingFeatures] = useState(false);
+  const [loadingSources, setLoadingSources] = useState(false);
+  const [loadingLogs, setLoadingLogs] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<HiveConnectionTestResult | null>(null);
   const [connectionAdvancedOpen, setConnectionAdvancedOpen] = useState(false);
   const [kerberosAdvancedOpen, setKerberosAdvancedOpen] = useState(false);
+
+  const loadFeatures = async () => {
+    setLoadingFeatures(true);
+    try {
+      const data = await fetchInfraFeatures();
+      setFeatures(data);
+    } finally {
+      setLoadingFeatures(false);
+    }
+  };
+
+  const loadSources = async () => {
+    setLoadingSources(true);
+    try {
+      const data = await listInfraDataSources();
+      setSources(data);
+    } finally {
+      setLoadingSources(false);
+    }
+  };
+
+  const loadLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const data = await listConnectionTestLogs();
+      setLogs(data);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadFeatures();
+    void loadSources();
+    void loadLogs();
+  }, []);
 
   const handleKeytabUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -192,6 +242,7 @@ export default function DataSourcesPage() {
     try {
       const result = await testHiveConnection(payload);
       setTestResult(result);
+      await loadLogs();
       if (result.success) {
         toast.success(`连接成功，用时 ${result.elapsedMillis} ms`);
       } else {
@@ -653,6 +704,124 @@ export default function DataSourcesPage() {
           </Card>
         </form>
       </Form>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle className="text-base">基础能力开关</CardTitle>
+            <CardDescription>多源支持等基础能力状态来自后端配置。</CardDescription>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={loadFeatures} disabled={loadingFeatures}>
+            <Icon icon="solar:refresh-bold" className="mr-1 h-4 w-4" /> 刷新
+          </Button>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <Badge variant={features?.multiSourceEnabled ? "default" : "secondary"}>
+              多数据源 {features?.multiSourceEnabled ? "已启用" : "未启用"}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            如需支持多个外部 Hive 集群，请联系运维开启多源能力并补充密钥。
+          </p>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base">已登记数据源</CardTitle>
+              <CardDescription>展示后端注册的数据源摘要（不包含敏感信息）。</CardDescription>
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={loadSources} disabled={loadingSources}>
+              <Icon icon="solar:refresh-bold" className="mr-1 h-4 w-4" /> 刷新
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="max-h-[280px] overflow-y-auto rounded-md border">
+              <table className="w-full table-fixed border-collapse text-sm">
+                <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">名称</th>
+                    <th className="px-3 py-2 font-medium">类型</th>
+                    <th className="px-3 py-2 font-medium">连接串</th>
+                    <th className="px-3 py-2 font-medium">密钥</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sources.map((item) => (
+                    <tr key={item.id} className="border-b last:border-b-0">
+                      <td className="px-3 py-2 font-medium">{item.name}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{item.type}</td>
+                      <td className="px-3 py-2 text-xs font-mono text-muted-foreground break-all">{item.jdbcUrl}</td>
+                      <td className="px-3 py-2">
+                        <Badge variant="outline">{item.hasSecrets ? "已加密" : "未配置"}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                  {!sources.length && (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-6 text-center text-xs text-muted-foreground">
+                        {loadingSources ? "加载中…" : "暂无已登记数据源"}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              该列表仅展示概要信息，如需新增/编辑数据源，请通过后端 API 或配置文件管理。
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base">最近连接测试</CardTitle>
+              <CardDescription>展示最近 20 次后端记录的 Hive 连接自测结果。</CardDescription>
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={loadLogs} disabled={loadingLogs}>
+              <Icon icon="solar:refresh-bold" className="mr-1 h-4 w-4" /> 刷新
+            </Button>
+          </CardHeader>
+          <CardContent className="max-h-[280px] overflow-y-auto">
+            <table className="w-full table-fixed border-collapse text-sm">
+              <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">时间</th>
+                  <th className="px-3 py-2 font-medium">结果</th>
+                  <th className="px-3 py-2 font-medium">耗时</th>
+                  <th className="px-3 py-2 font-medium">备注</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <tr key={log.id} className="border-b last:border-b-0">
+                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                      {log.createdAt ? new Date(log.createdAt).toLocaleString() : "-"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge variant={log.result === "SUCCESS" ? "default" : "destructive"}>{log.result}</Badge>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{log.elapsedMs ?? "-"} ms</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{log.message || "-"}</td>
+                  </tr>
+                ))}
+                {!logs.length && (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-xs text-muted-foreground">
+                      {loadingLogs ? "加载中…" : "暂无测试记录"}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+
     </div>
   );
 }

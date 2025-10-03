@@ -84,9 +84,9 @@ public class DevDataSeeder {
         if (!organizationRepository.findAll().isEmpty()) {
             return;
         }
-        OrganizationNode root = orgService.create("总部", "GENERAL", null, "王强", "13900000001", "集团总部");
-        orgService.create("生产中心", "GENERAL", root.getId(), "刘洋", "13900000002", "生产业务条线");
-        orgService.create("研究院", "GENERAL", root.getId(), "周星", "13900000003", "数据产品研发");
+        OrganizationNode root = orgService.create("总部", null, "集团总部");
+        orgService.create("生产中心", root.getId(), "生产业务条线");
+        orgService.create("研究院", root.getId(), "数据产品研发");
         log.info("Seeded default organizations");
     }
 

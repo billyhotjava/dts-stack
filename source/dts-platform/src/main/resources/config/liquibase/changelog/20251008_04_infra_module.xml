@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.16.xsd"
+>
+    <changeSet id="20251008-12-infra-datasource-secrets" author="platform">
+        <addColumn tableName="infra_data_source">
+            <column name="secure_props" type="bytea"/>
+        </addColumn>
+        <addColumn tableName="infra_data_source">
+            <column name="secure_iv" type="bytea"/>
+        </addColumn>
+        <addColumn tableName="infra_data_source">
+            <column name="secure_key_version" type="varchar(32)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20251008-13-infra-storage-secrets" author="platform">
+        <addColumn tableName="infra_data_storage">
+            <column name="secure_props" type="bytea"/>
+        </addColumn>
+        <addColumn tableName="infra_data_storage">
+            <column name="secure_iv" type="bytea"/>
+        </addColumn>
+        <addColumn tableName="infra_data_storage">
+            <column name="secure_key_version" type="varchar(32)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20251008-14-infra-connection-log" author="platform">
+        <createTable tableName="infra_connection_test_log">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="data_source_id" type="uuid"/>
+            <column name="request_payload" type="text"/>
+            <column name="result" type="varchar(32)"/>
+            <column name="message" type="varchar(512)"/>
+            <column name="elapsed_ms" type="int"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_infra_conn_log_datasource" tableName="infra_connection_test_log">
+            <column name="data_source_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

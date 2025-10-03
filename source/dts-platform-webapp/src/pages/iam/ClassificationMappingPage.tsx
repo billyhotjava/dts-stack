@@ -299,7 +299,7 @@ export default function ClassificationMappingPage() {
 						<div className="grid gap-4 md:grid-cols-3">
 							<div className="rounded-lg border p-4">
 								<div className="text-xs text-muted-foreground">上次同步时间</div>
-								<div className="text-sm font-medium">{new Date(syncStatus.lastSyncAt).toLocaleString()}</div>
+								<div className="text-sm font-medium">{syncStatus.lastSyncAt ? new Date(syncStatus.lastSyncAt).toLocaleString() : "-"}</div>
 							</div>
 							<div className="rounded-lg border p-4">
 								<div className="text-xs text-muted-foreground">增量数量</div>

@@ -1,11 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Textarea } from "@/ui/textarea";
 import { toast } from "sonner";
-import { createSavedQuery, deleteSavedQuery, listSavedQueries, runSavedQuery, listResultSets, previewResultSet, deleteResultSet, cleanupExpiredResultSets } from "@/api/platformApi";
+import {
+  createSavedQuery,
+  deleteSavedQuery,
+  listSavedQueries,
+  runSavedQuery,
+  listResultSets,
+  previewResultSet,
+  deleteResultSet,
+  cleanupExpiredResultSets,
+  listDatasets,
+} from "@/api/platformApi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/ui/dialog";
 
 type SavedQuery = { id: string; name?: string; title?: string; sqlText?: string; datasetId?: string };
@@ -18,18 +28,120 @@ type ResultSet = {
   expiresAt?: string;
   datasetName?: string;
   classification?: string;
+  classificationKey?: Classification;
   createdAt?: string;
 };
+
+const CLASSIFICATION_META = {
+  TOP_SECRET: { label: "机密", tone: "bg-rose-500/10 text-rose-500" },
+  SECRET: { label: "秘密", tone: "bg-amber-500/10 text-amber-500" },
+  INTERNAL: { label: "内部", tone: "bg-sky-500/10 text-sky-500" },
+  PUBLIC: { label: "公开", tone: "bg-emerald-500/10 text-emerald-600" },
+} as const;
+
+const CLASSIFICATION_LABEL_MAP: Record<string, Classification> = {
+  机密: "TOP_SECRET",
+  SECRET: "SECRET",
+  SECRET_LEVEL: "SECRET",
+  秘密: "SECRET",
+  INTERNAL: "INTERNAL",
+  内部: "INTERNAL",
+  PUBLIC: "PUBLIC",
+  公开: "PUBLIC",
+  TOP_SECRET: "TOP_SECRET",
+};
+
+type Classification = keyof typeof CLASSIFICATION_META;
+
+type Dataset = {
+  id: string;
+  name: string;
+  classification: Classification;
+  trinoCatalog?: string;
+  hiveDatabase?: string;
+  hiveTable?: string;
+};
+
+function toUiDataset(input: any): Dataset {
+  const classification = String(input?.classification || "INTERNAL").toUpperCase();
+  return {
+    id: String(input?.id ?? ""),
+    name: String(input?.name || input?.hiveTable || input?.id || "未知数据集"),
+    classification: (classification in CLASSIFICATION_META ? classification : "INTERNAL") as Classification,
+    trinoCatalog: input?.trinoCatalog,
+    hiveDatabase: input?.hiveDatabase,
+    hiveTable: input?.hiveTable,
+  };
+}
+
+function classificationBadge(level?: Classification) {
+  if (!level) return null;
+  const meta = CLASSIFICATION_META[level];
+  if (!meta) return null;
+  return (
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold ${meta.tone}`}>
+      {meta.label}
+    </span>
+  );
+}
+
+function resolveClassification(value?: string): Classification | undefined {
+  if (!value) return undefined;
+  const trimmed = String(value).trim();
+  if (!trimmed) return undefined;
+  const upper = trimmed.toUpperCase();
+  if (upper in CLASSIFICATION_META) {
+    return upper as Classification;
+  }
+  if (trimmed in CLASSIFICATION_LABEL_MAP) {
+    return CLASSIFICATION_LABEL_MAP[trimmed];
+  }
+  if (upper in CLASSIFICATION_LABEL_MAP) {
+    return CLASSIFICATION_LABEL_MAP[upper];
+  }
+  return undefined;
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+}
 
 export default function SavedQueriesPage() {
   const [items, setItems] = useState<SavedQuery[]>([]);
   const [resultSets, setResultSets] = useState<ResultSet[]>([]);
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [isLoading, setLoading] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [sql, setSql] = useState("SELECT 1 AS col_1");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
   const [previewRows, setPreviewRows] = useState<any[]>([]);
   const [previewMasking, setPreviewMasking] = useState<any>(null);
+
+  const datasetMap = useMemo(() => {
+    return datasets.reduce<Record<string, Dataset>>((acc, item) => {
+      acc[item.id] = item;
+      return acc;
+    }, {});
+  }, [datasets]);
+
+  const enhancedSavedQueries = useMemo(() => {
+    return items.map((item) => {
+      const datasetInfo = item.datasetId ? datasetMap[item.datasetId] : undefined;
+      const classification = datasetInfo?.classification;
+      return {
+        ...item,
+        datasetName: datasetInfo?.name ?? (item.datasetId ? `ID: ${item.datasetId}` : undefined),
+        datasetClassification: classification,
+      };
+    });
+  }, [items, datasetMap]);
 
   const maskMode = previewMasking?.mode ?? (Array.isArray(previewMasking?.maskedColumns) ? "heuristic" : undefined);
   const maskColumns = Array.isArray(previewMasking?.columns)
@@ -41,24 +153,59 @@ export default function SavedQueriesPage() {
   const maskDefault = previewMasking?.default;
 
   const load = async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
-      const data: any = await listSavedQueries();
-      setItems(Array.isArray(data) ? data : []);
-      const rs: any = await listResultSets();
-      const resultSetList: ResultSet[] = (Array.isArray(rs) ? rs : []).map((item: any) => ({
-        id: String(item?.id ?? ""),
-        columns: typeof item?.columns === "string" ? item.columns : Array.isArray(item?.columns) ? item.columns.join(", ") : "",
-        rowCount: item?.rowCount,
-        expiresAt: item?.expiresAt,
-        storageUri: item?.storageUri,
-        datasetName: item?.datasetName,
-        classification: item?.classification,
-        createdAt: item?.createdAt,
-      }));
+      const [datasetResp, savedResp, resultResp] = await Promise.all([
+        listDatasets({ page: 0, size: 200 }),
+        listSavedQueries(),
+        listResultSets(),
+      ]);
+
+      const datasetListRaw = Array.isArray((datasetResp as any)?.content)
+        ? (datasetResp as any).content
+        : Array.isArray(datasetResp)
+          ? datasetResp
+          : [];
+      const datasetList = datasetListRaw.map(toUiDataset).filter((item: Dataset) => item.id);
+      const datasetMapLocal = datasetList.reduce<Record<string, Dataset>>((acc, entry) => {
+        acc[entry.id] = entry;
+        return acc;
+      }, {});
+      setDatasets(datasetList);
+
+      const savedList = Array.isArray(savedResp) ? savedResp : Array.isArray((savedResp as any)?.data) ? (savedResp as any).data : [];
+      setItems(savedList);
+
+      const resultSetListRaw = Array.isArray(resultResp) ? resultResp : Array.isArray((resultResp as any)?.data) ? (resultResp as any).data : resultResp;
+      const resultSetList: ResultSet[] = (Array.isArray(resultSetListRaw) ? resultSetListRaw : []).map((item: any) => {
+        const datasetInfo = item?.datasetId ? datasetMapLocal[item.datasetId] : undefined;
+        const classificationKey = resolveClassification(item?.classification ?? datasetInfo?.classification);
+        const columns = Array.isArray(item?.columns)
+          ? item.columns.join(", ")
+          : typeof item?.columns === "string"
+            ? item.columns
+            : "";
+        return {
+          id: String(item?.id ?? ""),
+          columns,
+          rowCount: item?.rowCount,
+          expiresAt: item?.expiresAt,
+          storageUri: item?.storageUri,
+          datasetName: datasetInfo?.name ?? item?.datasetName,
+          classification: classificationKey ? CLASSIFICATION_META[classificationKey].label : item?.classification,
+          classificationKey,
+          createdAt: item?.createdAt,
+        };
+      });
       setResultSets(resultSetList);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast.error("加载保存的查询失败");
+      const message = typeof e?.message === "string" ? e.message : "加载保存的查询失败";
+      setLoadError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -117,9 +264,19 @@ export default function SavedQueriesPage() {
     }
   };
 
+  const showDatasetHint = !isLoading && !datasets.length && !loadError;
+
   return (
     <>
     <div className="space-y-4">
+      {showDatasetHint ? (
+        <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <span>当前尚未同步任何数据集，请先在「基础数据维护 > 数据源」中完成配置。</span>
+          <Button variant="ghost" size="sm" onClick={load}>
+            重试
+          </Button>
+        </div>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">新建保存的查询</CardTitle>
@@ -134,32 +291,59 @@ export default function SavedQueriesPage() {
             <Textarea rows={4} value={sql} onChange={(e) => setSql(e.target.value)} />
           </div>
           <div>
-            <Button onClick={handleCreate}>保存</Button>
+            <Button onClick={handleCreate} disabled={isLoading}>保存</Button>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">已保存的查询</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">已保存的查询</CardTitle>
+            <div className="flex items-center gap-2">
+              {loadError ? (
+                <span className="text-xs text-red-500">{loadError}</span>
+              ) : isLoading ? (
+                <span className="text-xs text-muted-foreground">加载中...</span>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={load} disabled={isLoading}>
+                刷新
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          {items.length ? (
+          {enhancedSavedQueries.length ? (
             <div className="overflow-hidden rounded-md border">
               <table className="w-full border-collapse text-sm">
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="border-b px-3 py-2 text-left font-medium">名称</th>
+                    <th className="border-b px-3 py-2 text-left font-medium">数据集</th>
                     <th className="border-b px-3 py-2 text-left font-medium">操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((it) => (
+                  {enhancedSavedQueries.map((it) => (
                     <tr key={it.id} className="border-b last:border-b-0">
                       <td className="px-3 py-2">{it.title || it.name || it.id}</td>
+                      <td className="px-3 py-2">
+                        {it.datasetName ? (
+                          <div className="flex items-center gap-2">
+                            {classificationBadge(it.datasetClassification)}
+                            <span>{it.datasetName}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">未关联数据集</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 space-x-2">
-                        <Button size="sm" variant="outline" onClick={() => handleRun(it.id)}>执行</Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDelete(it.id)}>删除</Button>
+                        <Button size="sm" variant="outline" onClick={() => handleRun(it.id)} disabled={isLoading}>
+                          执行
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleDelete(it.id)} disabled={isLoading}>
+                          删除
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -167,7 +351,9 @@ export default function SavedQueriesPage() {
               </table>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">暂无保存的查询</div>
+            <div className="text-sm text-muted-foreground">
+              暂无保存的查询，可在「数据查询和预览」页面保存常用 SQL。
+            </div>
           )}
         </CardContent>
       </Card>
@@ -177,17 +363,35 @@ export default function SavedQueriesPage() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">结果集管理</CardTitle>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={async () => { try { await load(); toast.success("已刷新"); } catch {} }}>刷新</Button>
-              <Button size="sm" onClick={async () => {
-                try {
-                  const r: any = await cleanupExpiredResultSets();
-                  toast.success(`已清理 ${r?.deleted ?? 0} 条过期结果集`);
-                  await load();
-                } catch (e) {
-                  console.error(e);
-                  toast.error("清理失败");
-                }
-              }}>清理过期</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await load();
+                    toast.success("已刷新");
+                  } catch {}
+                }}
+                disabled={isLoading}
+              >
+                刷新
+              </Button>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const r: any = await cleanupExpiredResultSets();
+                    toast.success(`已清理 ${r?.deleted ?? 0} 条过期结果集`);
+                    await load();
+                  } catch (e) {
+                    console.error(e);
+                    toast.error("清理失败");
+                  }
+                }}
+                disabled={isLoading}
+              >
+                清理过期
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -213,20 +417,38 @@ export default function SavedQueriesPage() {
                       <td className="px-3 py-2">{rs.datasetName ?? "-"}</td>
                       <td className="px-3 py-2">{rs.columns || "-"}</td>
                       <td className="px-3 py-2">{rs.rowCount ?? "-"}</td>
-                      <td className="px-3 py-2">{rs.classification ?? "-"}</td>
-                      <td className="px-3 py-2">{rs.expiresAt ?? "-"}</td>
+                      <td className="px-3 py-2">
+                        {rs.classificationKey || rs.classification ? (
+                          <div className="flex items-center gap-2">
+                            {classificationBadge(rs.classificationKey)}
+                            <span>{rs.classification ?? CLASSIFICATION_META[rs.classificationKey!]?.label ?? "-"}</span>
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="px-3 py-2">{formatDateTime(rs.expiresAt)}</td>
                       <td className="px-3 py-2 space-x-2 text-nowrap">
-                        <Button size="sm" variant="outline" onClick={() => handlePreview(rs.id)}>预览</Button>
-                        <Button size="sm" variant="ghost" onClick={async () => {
-                          try {
-                            await deleteResultSet(rs.id);
-                            toast.success("已删除结果集");
-                            await load();
-                          } catch (e) {
-                            console.error(e);
-                            toast.error("删除失败");
-                          }
-                        }}>删除</Button>
+                        <Button size="sm" variant="outline" onClick={() => handlePreview(rs.id)} disabled={isLoading}>
+                          预览
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={async () => {
+                            try {
+                              await deleteResultSet(rs.id);
+                              toast.success("已删除结果集");
+                              await load();
+                            } catch (e) {
+                              console.error(e);
+                              toast.error("删除失败");
+                            }
+                          }}
+                          disabled={isLoading}
+                        >
+                          删除
+                        </Button>
                       </td>
                     </tr>
                   ))}
