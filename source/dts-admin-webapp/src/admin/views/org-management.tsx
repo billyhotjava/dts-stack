@@ -40,34 +40,14 @@ const LEGACY_LEVEL_MAP: Record<string, OrgDataLevel> = {
 
 const orgFormSchema = z.object({
     name: z.string().trim().min(1, "请输入部门名称"),
-    dataLevel: z.enum(DATA_LEVEL_VALUES, { required_error: "请选择数据密级" }),
-    contact: z.preprocess((value) => {
-        if (typeof value === "string") {
-            const trimmed = value.trim();
-            return trimmed.length === 0 ? undefined : trimmed;
-        }
-        return value;
-    }, z.string().max(32, "联系人姓名过长").optional()),
-    phone: z.preprocess(
-        (value) => {
-            if (typeof value === "string") {
-                const trimmed = value.trim();
-                return trimmed.length === 0 ? undefined : trimmed;
-            }
-            return value;
-        },
-        z
-            .string()
-            .regex(/^[0-9+\-()\s]{5,20}$/, "请输入有效的联系电话")
-            .optional(),
-    ),
     description: z.preprocess((value) => {
         if (typeof value === "string") {
             const trimmed = value.trim();
             return trimmed.length === 0 ? undefined : trimmed;
         }
-        return value;
+        return value ?? undefined;
     }, z.string().max(2000, "部门说明过长").optional()),
+    parentId: z.number().int().positive().nullable().optional(),
 });
 
 type OrgFormValues = z.infer<typeof orgFormSchema>;
@@ -78,6 +58,12 @@ interface FormState {
 	mode: "create" | "edit";
 	parentId: number | null;
 	target: FlattenedOrganization | null;
+}
+
+interface ParentOption {
+	value: string;
+	label: string;
+	disabled?: boolean;
 }
 
 export default function OrgManagementView() {
@@ -196,15 +182,17 @@ export default function OrgManagementView() {
 	const closeDelete = () => setDeleteState({ open: false, target: null });
 
     const handleSubmitForm = async (values: OrgFormValues) => {
+        const parentId = values.parentId ?? null;
         if (formState.mode === "create") {
             const payload: OrganizationCreatePayload = {
-                ...values,
-                parentId: formState.parentId ?? null,
+                name: values.name,
+                description: values.description,
+                parentId,
             };
             try {
                 await createMutation.mutateAsync(payload);
                 closeForm();
-                setSelectedId(formState.parentId ?? null);
+                setSelectedId(parentId);
                 await syncOrganizations("部门已创建并同步 Keycloak");
             } catch (error) {
                 console.error(error);
@@ -214,7 +202,9 @@ export default function OrgManagementView() {
 
         if (formState.mode === "edit" && formState.target) {
             const payload: OrganizationUpdatePayload = {
-                ...values,
+                name: values.name,
+                description: values.description,
+                parentId,
             };
             try {
                 await updateMutation.mutateAsync({ id: formState.target.id, payload });
@@ -245,29 +235,40 @@ export default function OrgManagementView() {
     };
 
 	const editingNode = formState.mode === "edit" ? formState.target : null;
-	const parentLabel =
-		formState.mode === "create"
-			? formState.parentId
-				? (formState.target?.path.join(" / ") ?? "")
-				: "无（一级部门）"
-			: editingNode
-				? editingNode.path.slice(0, -1).join(" / ") || "无（一级部门）"
-				: undefined;
     const initialValues: OrgFormValues = editingNode
         ? {
                 name: editingNode.name,
-                dataLevel: normalizeDataLevel(editingNode.dataLevel ?? editingNode.sensitivity),
-                contact: editingNode.contact ?? "",
-                phone: editingNode.phone ?? "",
                 description: editingNode.description ?? "",
+                parentId: editingNode.parentId ?? null,
             }
         : {
                 name: "",
-                dataLevel: normalizeDataLevel(formState.target?.dataLevel ?? formState.target?.sensitivity),
-                contact: "",
-                phone: "",
                 description: "",
+                parentId: formState.parentId ?? null,
             };
+
+	const disabledParentIds = useMemo(() => {
+		if (formState.mode !== "edit" || !formState.target) {
+			return new Set<number>();
+		}
+		const ids = new Set<number>([formState.target.id]);
+		for (const id of collectDescendantIds(formState.target)) {
+			ids.add(id);
+		}
+		return ids;
+	}, [formState]);
+
+	const parentOptions = useMemo(() => {
+		return flattened.map((node) => {
+			const indentPrefix = node.level > 1 ? `${"--".repeat(node.level - 1)} ` : "";
+			const label = `${indentPrefix}${node.name}`;
+			return {
+				value: node.id.toString(),
+				label,
+				disabled: disabledParentIds.has(node.id),
+			};
+		});
+	}, [disabledParentIds, flattened]);
 
 	return (
 		<div className="grid gap-6 xl:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
@@ -285,7 +286,7 @@ export default function OrgManagementView() {
 								{syncing ? "同步中..." : "同步 Keycloak"}
 							</Button>
 							<Button size="sm" onClick={openCreateRoot}>
-								新增部门
+								创建部门
 							</Button>
 						</div>
 					</div>
@@ -293,7 +294,7 @@ export default function OrgManagementView() {
 						组织结构变更会即时保存并同步至 Keycloak，请谨慎操作。
 					</Text>
 					<Input
-						placeholder="搜索部门 / 联系人 / 数据密级"
+						placeholder="搜索部门 / 数据密级"
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
 					/>
@@ -333,7 +334,7 @@ export default function OrgManagementView() {
 						<CardTitle>组织详情</CardTitle>
 						<div className="flex flex-wrap gap-2">
 							<Button variant="outline" size="sm" onClick={openCreateChild} disabled={!selected}>
-								新增下级
+								创建下级
 							</Button>
 						<Button variant="outline" size="sm" onClick={openEdit} disabled={!selected || syncing}>
 								编辑
@@ -367,16 +368,6 @@ export default function OrgManagementView() {
 								<p className="text-muted-foreground">
 									上级部门：{selected.path.slice(0, -1).join(" / ") || "无（一级部门）"}
 								</p>
-								<div className="grid gap-3 sm:grid-cols-2">
-									<div>
-										<p className="text-xs text-muted-foreground">联系人</p>
-										<p className="text-sm font-medium text-foreground">{selected.contact ?? "--"}</p>
-									</div>
-									<div>
-										<p className="text-xs text-muted-foreground">联系电话</p>
-										<p className="text-sm font-medium text-foreground">{selected.phone ?? "--"}</p>
-									</div>
-								</div>
 								{selected.description ? (
 									<div className="rounded-md border border-dashed border-muted/60 bg-muted/30 p-3 text-sm text-muted-foreground">
 										{selected.description}
@@ -408,7 +399,7 @@ export default function OrgManagementView() {
 				mode={formState.mode}
 				loading={formLoading}
 				initialValues={initialValues}
-				parentLabel={parentLabel}
+				parentOptions={parentOptions}
 				onSubmit={handleSubmitForm}
 				onClose={closeForm}
 			/>
@@ -440,6 +431,18 @@ function flattenTree(
 	return result;
 }
 
+function collectDescendantIds(node?: OrganizationNode | null): number[] {
+	if (!node?.children?.length) {
+		return [];
+	}
+	const ids: number[] = [];
+	for (const child of node.children) {
+		ids.push(child.id);
+		ids.push(...collectDescendantIds(child));
+	}
+	return ids;
+}
+
 function filterTree(
 	tree: OrganizationNode[],
 	keyword: string,
@@ -451,8 +454,6 @@ function filterTree(
 		const translated = translateLevel(node.dataLevel ?? node.sensitivity, fallback);
 		const hit =
 			includesKeyword(node.name) ||
-			includesKeyword(node.contact) ||
-			includesKeyword(node.phone) ||
 			includesKeyword(node.dataLevel ?? node.sensitivity) ||
 			includesKeyword(fallback) ||
 			includesKeyword(translated);
@@ -518,13 +519,6 @@ function OrganizationTree({ tree, onSelect, selectedId, depth = 0, translateLeve
 						>
 							<div className="flex min-w-0 flex-1 flex-col">
 								<span className="truncate font-medium">{node.name}</span>
-								{node.contact ? (
-									<span
-										className={`truncate text-xs ${isActive ? "text-primary-foreground/80" : "text-muted-foreground"}`}
-									>
-										{node.contact}
-									</span>
-								) : null}
 							</div>
 							<Badge variant={getDataLevelBadgeVariant(node.dataLevel ?? node.sensitivity)} className="ml-2">
 								{translateLevel(
@@ -556,7 +550,7 @@ interface OrganizationFormDialogProps {
 	mode: "create" | "edit";
 	loading?: boolean;
 	initialValues: OrgFormValues;
-	parentLabel?: string;
+	parentOptions: ParentOption[];
 	onSubmit: (values: OrgFormValues) => Promise<void>;
 	onClose: () => void;
 }
@@ -566,7 +560,7 @@ function OrganizationFormDialog({
 	mode,
 	loading,
 	initialValues,
-	parentLabel,
+	parentOptions,
 	onSubmit,
 	onClose,
 }: OrganizationFormDialogProps) {
@@ -591,8 +585,8 @@ function OrganizationFormDialog({
 		await onSubmit(values);
 	});
 
-	const title = mode === "create" ? "新增部门" : "编辑部门";
-	const submitText = mode === "create" ? "新增" : "保存";
+	const title = mode === "create" ? "创建部门" : "编辑部门";
+	const submitText = mode === "create" ? "创建" : "保存";
 
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
@@ -601,12 +595,6 @@ function OrganizationFormDialog({
 						<DialogTitle>{title}</DialogTitle>
 						<DialogDescription>提交后会立即保存并同步至 Keycloak。</DialogDescription>
 					</DialogHeader>
-				{parentLabel ? (
-					<div className="rounded-md border border-dashed border-muted/60 bg-muted/30 p-3 text-xs text-muted-foreground">
-						<span className="font-medium text-foreground">上级部门：</span>
-						{parentLabel}
-					</div>
-				) : null}
 				<Form {...form}>
 					<form onSubmit={handleSubmit} className="space-y-4">
 						<FormField
@@ -624,73 +612,52 @@ function OrganizationFormDialog({
 						/>
 						<FormField
 							control={form.control}
-							name="dataLevel"
+							name="parentId"
+							render={({ field }) => {
+								const value = field.value == null ? "root" : String(field.value);
+								return (
+									<FormItem>
+										<FormLabel>上级部门</FormLabel>
+										<FormControl>
+											<Select
+												onValueChange={(next) => field.onChange(next === "root" ? null : Number(next))}
+												value={value}
+											>
+												<SelectTrigger className="w-full justify-between">
+													<SelectValue placeholder="请选择上级部门" />
+												</SelectTrigger>
+												<SelectContent>
+													<SelectItem value="root">无（一级部门）</SelectItem>
+													{parentOptions.map((option) => (
+														<SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+															{option.label}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								);
+							}}
+						/>
+						<FormField
+							control={form.control}
+							name="description"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>数据密级</FormLabel>
+									<FormLabel>部门说明</FormLabel>
 									<FormControl>
-										<Select onValueChange={field.onChange} value={field.value}>
-											<SelectTrigger className="w-full justify-between">
-												<SelectValue placeholder="请选择数据密级" />
-											</SelectTrigger>
-											<SelectContent>
-												{DATA_LEVEL_OPTIONS.map((option) => (
-													<SelectItem key={option.value} value={option.value}>
-														{option.label}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
+										<Textarea
+											placeholder="可选，描述部门职责、范围等信息"
+											rows={3}
+											{...field}
+										/>
 									</FormControl>
 									<FormMessage />
 								</FormItem>
 							)}
 						/>
-						<div className="grid gap-4 sm:grid-cols-2">
-							<FormField
-								control={form.control}
-								name="contact"
-								render={({ field }) => (
-									<FormItem>
-										<FormLabel>联系人</FormLabel>
-										<FormControl>
-											<Input placeholder="请输入联系人" {...field} />
-										</FormControl>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
-							<FormField
-								control={form.control}
-								name="phone"
-								render={({ field }) => (
-									<FormItem>
-										<FormLabel>联系电话</FormLabel>
-										<FormControl>
-											<Input placeholder="请输入联系电话" {...field} />
-										</FormControl>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
-							</div>
-							<FormField
-								control={form.control}
-								name="description"
-								render={({ field }) => (
-									<FormItem>
-										<FormLabel>部门说明</FormLabel>
-										<FormControl>
-											<Textarea
-												placeholder="可选，描述部门职责、范围等信息"
-												rows={3}
-												{...field}
-											/>
-										</FormControl>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
 						<DialogFooter>
 							<Button type="button" variant="outline" onClick={onClose} disabled={loading}>
 								取消

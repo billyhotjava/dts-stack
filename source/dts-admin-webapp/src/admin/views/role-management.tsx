@@ -88,6 +88,8 @@ const OPERATION_LABELS: Record<DataOperation, string> = {
 	export: "导出",
 };
 
+const DEFAULT_OPERATIONS: readonly DataOperation[] = ["read", "write", "export"];
+
 const DATA_LEVEL_LABELS: Record<OrgDataLevel, string> = {
 	DATA_PUBLIC: "公开",
 	DATA_INTERNAL: "内部",
@@ -310,7 +312,9 @@ export default function RoleManagementView() {
 	const normalizedAssignmentRoleName = assignmentForm.role.trim().toUpperCase();
 	const assignmentRoleScope = normalizedAssignmentRoleName ? roleScopeMatrix.get(normalizedAssignmentRoleName) ?? null : null;
 	const assignmentScopeOrgId = assignmentForm.scopeOrgId ? Number(assignmentForm.scopeOrgId) : null;
-	const availableOperations = normalizedAssignmentRoleName ? roleOperationMatrix.get(normalizedAssignmentRoleName) ?? ["read", "write", "export"] : ["read", "write", "export"];
+	const availableOperations = normalizedAssignmentRoleName
+		? roleOperationMatrix.get(normalizedAssignmentRoleName) ?? DEFAULT_OPERATIONS
+		: DEFAULT_OPERATIONS;
 
 	useEffect(() => {
 		setAssignmentForm((prev) => {
@@ -320,11 +324,14 @@ export default function RoleManagementView() {
 					nextOperations.add(op);
 				}
 			}
-			if (nextOperations.size === prev.operations.size && availableOperations.every((op) => prev.operations.has(op))) {
-				return prev;
-			}
 			if (nextOperations.size === 0) {
 				nextOperations.add(availableOperations[0] ?? "read");
+			}
+			const isSameSelection =
+				nextOperations.size === prev.operations.size &&
+				Array.from(prev.operations).every((op) => nextOperations.has(op));
+			if (isSameSelection) {
+				return prev;
 			}
 			return { ...prev, operations: nextOperations };
 		});

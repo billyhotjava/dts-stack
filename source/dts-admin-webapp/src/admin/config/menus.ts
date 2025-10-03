@@ -8,10 +8,9 @@ export interface AdminMenuItem {
 }
 
 const sysadminMenus: AdminMenuItem[] = [
-	{ key: "org", label: "组织机构", path: "/admin/orgs", icon: "solar:buildings-outline" },
 	{ key: "users", label: "用户管理", path: "/admin/users", icon: "solar:users-group-outline" },
-	{ key: "roles", label: "角色管理", path: "/admin/roles", icon: "solar:shield-user-bold" },
 	{ key: "approval", label: "任务审批", path: "/admin/approval", icon: "solar:verify-outline" },
+	{ key: "audit", label: "日志审计", path: "/admin/audit", icon: "solar:history-bold" },
 	{ key: "ops", label: "系统运维", path: "/admin/ops", icon: "solar:settings-outline" },
 	{ key: "portal-menus", label: "菜单管理", path: "/admin/portal-menus", icon: "solar:list-bold" },
 	{ key: "mine", label: "我发起的变更", path: "/admin/drafts", icon: "solar:inbox-outline" },
