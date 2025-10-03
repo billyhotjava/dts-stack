@@ -1223,6 +1223,8 @@ public class AdminApiResource {
                 applySystemConfigChange(cr);
             } else if ("ORG".equalsIgnoreCase(cr.getResourceType())) {
                 applyOrganizationChange(cr);
+            } else if ("ROLE".equalsIgnoreCase(cr.getResourceType())) {
+                applyRoleChange(cr, actor);
             } else if ("CUSTOM_ROLE".equalsIgnoreCase(cr.getResourceType())) {
                 applyCustomRoleChange(cr, actor);
             } else if ("ROLE_ASSIGNMENT".equalsIgnoreCase(cr.getResourceType())) {
@@ -1348,6 +1350,79 @@ public class AdminApiResource {
             orgService.delete(id);
         }
         cr.setStatus("APPLIED");
+    }
+
+    private void applyRoleChange(ChangeRequest cr, String actor) throws Exception {
+        Map<String, Object> payload = fromJson(cr.getPayloadJson());
+        String action = cr.getAction();
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("payload", payload);
+        String rawName = Objects.toString(payload.get("name"), cr.getResourceId());
+        String normalizedName = rawName == null ? null : rawName.trim().toUpperCase(Locale.ROOT);
+        String auditAction = "ROLE_" + (action == null ? "UNKNOWN" : action.toUpperCase(Locale.ROOT)) + "_EXECUTE";
+        try {
+            if ("UPDATE".equalsIgnoreCase(action)) {
+                if (!StringUtils.hasText(normalizedName)) {
+                    throw new IllegalArgumentException("角色名称不能为空");
+                }
+                String scopeValue = Objects.toString(payload.get("scope"), null);
+                String normalizedScope = scopeValue == null ? null : scopeValue.trim().toUpperCase(Locale.ROOT);
+                LinkedHashSet<String> operations = readStringList(payload.get("operations"))
+                    .stream()
+                    .map(String::trim)
+                    .filter(StringUtils::hasText)
+                    .map(op -> op.toLowerCase(Locale.ROOT))
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+                if (operations.isEmpty()) {
+                    throw new IllegalArgumentException("请至少保留一个操作权限");
+                }
+                String description = Objects.toString(payload.get("description"), null);
+                Integer maxRows = payload.get("maxRows") == null ? null : Integer.valueOf(payload.get("maxRows").toString());
+                Boolean allowDesensitize = payload.containsKey("allowDesensitizeJson")
+                    ? Boolean.TRUE.equals(payload.get("allowDesensitizeJson"))
+                    : null;
+
+                detail.put("scope", normalizedScope);
+                detail.put("operations", new ArrayList<>(operations));
+                detail.put("description", description);
+                if (maxRows != null) {
+                    detail.put("maxRows", maxRows);
+                }
+                if (allowDesensitize != null) {
+                    detail.put("allowDesensitizeJson", allowDesensitize);
+                }
+
+                if (!StringUtils.hasText(cr.getResourceId())) {
+                    cr.setResourceId(normalizedName);
+                }
+
+                adminUserService.syncRealmRole(normalizedName, normalizedScope, operations);
+
+                customRoleRepo
+                    .findByName(normalizedName)
+                    .ifPresent(role -> {
+                        role.setScope(normalizedScope);
+                        role.setOperationsCsv(String.join(",", operations));
+                        role.setDescription(description);
+                        if (maxRows != null) {
+                            role.setMaxRows(maxRows);
+                        }
+                        if (allowDesensitize != null) {
+                            role.setAllowDesensitizeJson(allowDesensitize);
+                        }
+                        customRoleRepo.save(role);
+                    });
+
+                cr.setStatus("APPLIED");
+                auditService.record(actor, auditAction, "ROLE", normalizedName, "SUCCESS", detail);
+            } else {
+                throw new IllegalStateException("未支持的角色操作: " + action);
+            }
+        } catch (Exception ex) {
+            detail.put("error", ex.getMessage());
+            auditService.record(actor, auditAction, "ROLE", normalizedName, "FAILURE", detail);
+            throw ex;
+        }
     }
 
     private void applyCustomRoleChange(ChangeRequest cr, String actor) throws Exception {

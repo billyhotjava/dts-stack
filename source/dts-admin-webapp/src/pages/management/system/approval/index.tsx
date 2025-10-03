@@ -343,18 +343,20 @@ export default function ApprovalPage() {
 			</Card>
 
 			{/* 审批详情模态框 */}
-			<Modal
-				title="审批请求详情"
-				open={!!selectedRequest}
-				onCancel={() => {
-					setSelectedRequest(null);
-					setUserInfoChange(null);
-				}}
-				footer={[
-					selectedRequest?.status === "PENDING" && (
-						<div key="actions" className="flex justify-end gap-2">
-							<Button onClick={showRejectModalHandler} loading={actionLoading}>
-								拒绝
+            <Modal
+                title="审批请求详情"
+                open={!!selectedRequest}
+                onCancel={() => {
+                    setSelectedRequest(null);
+                    setUserInfoChange(null);
+                }}
+                style={{ top: 32 }}
+                bodyStyle={{ maxHeight: '65vh', overflowY: 'auto' }}
+                footer={[
+                    selectedRequest?.status === "PENDING" && (
+                        <div key="actions" className="flex justify-end gap-2">
+                            <Button onClick={showRejectModalHandler} loading={actionLoading}>
+                                拒绝
 							</Button>
 							<Button
 								type="primary"
@@ -375,8 +377,8 @@ export default function ApprovalPage() {
 						关闭
 					</Button>,
 				]}
-				width={800}
-			>
+                width={800}
+            >
 				{selectedRequest && (() => {
 					const statusMeta = getApprovalStatusMeta(selectedRequest.status);
 					const changeRows = userInfoChange ? buildUserChangeRows(userInfoChange) : [];
@@ -645,8 +647,8 @@ function renderFieldValue(value: unknown): ReactNode {
 type ApprovalItemDetail = ApprovalRequestDetail["items"][number];
 
 function ApprovalItemCard({ item, index }: { item: ApprovalItemDetail; index: number }) {
-	return (
-		<div className="space-y-3 rounded-lg border border-dashed border-border/60 bg-background/80 p-4">
+    return (
+        <div className="space-y-3 rounded-lg border border-dashed border-border/60 bg-background/80 p-4">
 			<div className="flex items-center justify-between text-xs text-muted-foreground">
 				<span>审批项 #{index + 1}</span>
 				<span>序号 {item.seqNumber}</span>
@@ -660,17 +662,13 @@ function ApprovalItemCard({ item, index }: { item: ApprovalItemDetail; index: nu
 					<p className="text-[11px] uppercase tracking-wide text-muted-foreground">目标标识</p>
 					<div className="mt-1 break-all font-mono text-sm">{item.targetId || "-"}</div>
 				</div>
-				<div className="md:col-span-2">
-					<p className="text-[11px] uppercase tracking-wide text-muted-foreground">数据</p>
-					<div className="mt-1 rounded-md bg-muted/60 px-3 py-2">
-						<pre className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed">
-							{formatPayloadDisplay(item.payload)}
-						</pre>
-					</div>
-				</div>
-			</div>
-		</div>
-	);
+                <div className="md:col-span-2">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">数据</p>
+                    <CollapsiblePre text={formatPayloadDisplay(item.payload)} />
+                </div>
+            </div>
+        </div>
+    );
 }
 
 function formatPayloadDisplay(payload: string): string {
@@ -683,4 +681,32 @@ function formatPayloadDisplay(payload: string): string {
 	} catch (error) {
 		return payload;
 	}
+}
+
+function CollapsiblePre({ text, rows = 10 }: { text: string; rows?: number }) {
+    const [expanded, setExpanded] = useState(false);
+    const style: React.CSSProperties = expanded
+        ? { whiteSpace: 'pre-wrap' }
+        : {
+              display: '-webkit-box',
+              WebkitLineClamp: rows,
+              WebkitBoxOrient: 'vertical' as any,
+              overflow: 'hidden',
+              whiteSpace: 'pre-wrap',
+          };
+    const tooLong = (text || '').length > 400;
+    return (
+        <div className="mt-1 rounded-md bg-muted/60 px-3 py-2">
+            <pre className="break-all font-mono text-xs leading-relaxed" style={style}>
+                {text || '-'}
+            </pre>
+            {tooLong && (
+                <div className="mt-1 text-right">
+                    <Button size="sm" variant="ghost" onClick={() => setExpanded((v) => !v)}>
+                        {expanded ? '收起' : '展开'}
+                    </Button>
+                </div>
+            )}
+        </div>
+    );
 }

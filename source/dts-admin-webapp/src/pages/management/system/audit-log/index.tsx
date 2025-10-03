@@ -46,6 +46,31 @@ const RESULT_LABELS: Record<string, { label: string; color: string }> = {
 	ERROR: { label: "错误", color: "red" },
 };
 
+function canonicalRole(value: unknown): string {
+	if (!value) {
+		return "";
+	}
+	let source: unknown = value;
+	if (typeof value === "object") {
+		const candidate = (value as { name?: unknown; code?: unknown }).name ?? (value as { name?: unknown; code?: unknown }).code;
+		if (typeof candidate === "string") {
+			source = candidate;
+		}
+	}
+	if (typeof source !== "string") {
+		return "";
+	}
+	return source.trim().toUpperCase().replace(/^ROLE[_-]?/, "").replace(/[_-]/g, "");
+}
+
+const ACTOR_OPTION_MAP: Record<string, { value: string; label: string }> = {
+	SYSADMIN: { value: "sysadmin", label: "系统管理员" },
+	AUTHADMIN: { value: "authadmin", label: "授权管理员" },
+	AUDITADMIN: { value: "auditadmin", label: "安全审计员" },
+	AUDITORADMIN: { value: "auditadmin", label: "安全审计员" },
+	BUSINESS: { value: "business", label: "业务系统" },
+};
+
 export default function AuditLogPage() {
 	const [form] = Form.useForm<AuditLogFilters>();
 	const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -64,24 +89,34 @@ export default function AuditLogPage() {
 	const roles = useUserRoles();
 
 	const actorOptions = useMemo(() => {
-		const opts: { label: string; value: string }[] = [];
-		const normalizeRole = (value: string) => value.toUpperCase();
-		if (roles.some((role: any) => normalizeRole(typeof role === "string" ? role : role?.name || role?.code || "") === "AUTHADMIN")) {
-			opts.push({ label: "系统管理员", value: "sysadmin" }, { label: "安全审计员", value: "auditadmin" });
+		const normalizedRoles = new Set(
+			roles
+				.map((role: unknown) => canonicalRole(role))
+				.filter((role): role is string => role.length > 0),
+		);
+		const options: { value: string; label: string }[] = [];
+		const pushOption = (key: keyof typeof ACTOR_OPTION_MAP) => {
+			const entry = ACTOR_OPTION_MAP[key];
+			if (!entry) {
+				return;
+			}
+			if (!options.find((item) => item.value === entry.value)) {
+				options.push({ value: entry.value, label: entry.label });
+			}
+		};
+		pushOption("SYSADMIN");
+		if (normalizedRoles.has("AUTHADMIN") || normalizedRoles.has("SYSADMIN")) {
+			pushOption("AUTHADMIN");
 		}
-		if (roles.some((role: any) => normalizeRole(typeof role === "string" ? role : role?.name || role?.code || "") === "AUDITADMIN")) {
-			opts.push(
-				{ label: "系统管理员", value: "sysadmin" },
-				{ label: "授权管理员", value: "authadmin" },
-				{ label: "业务系统", value: "business" },
-			);
+		if (normalizedRoles.has("AUDITADMIN") || normalizedRoles.has("AUDITORADMIN")) {
+			pushOption("BUSINESS");
+		} else {
+			pushOption("AUDITADMIN");
 		}
-		if (opts.length === 0) {
-			opts.push({ label: "系统管理员", value: "sysadmin" }, { label: "安全审计员", value: "auditadmin" });
+		if (!options.find((item) => item.value === ACTOR_OPTION_MAP.AUTHADMIN.value)) {
+			pushOption("AUTHADMIN");
 		}
-		const dedup = new Map<string, string>();
-		opts.forEach((item) => dedup.set(item.value, item.label));
-		return Array.from(dedup.entries()).map(([value, label]) => ({ value, label }));
+		return options;
 	}, [roles]);
 
 	const moduleOptions = useMemo(() => {
@@ -384,8 +419,10 @@ export default function AuditLogPage() {
 						columns={columns}
 						dataSource={logs}
 						loading={loading}
+						size="small"
+						className="text-sm"
 						rowClassName={() => "text-sm"}
-						scroll={{ x: 1500 }}
+						scroll={{ x: 1400 }}
 						pagination={{
 							current: pagination.current,
 							pageSize: pagination.pageSize,

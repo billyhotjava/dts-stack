@@ -640,8 +640,9 @@ public class AdminUserService {
         Set<Long> changeRequestIds = extractChangeRequestIds(approval);
         Instant now = Instant.now();
         try {
-            String managementToken = resolveManagementToken();
-            applyApproval(approval, managementToken, approver);
+            // Prefer the caller's access token if provided; fall back to service account
+            String tokenToUse = (accessToken != null && !accessToken.isBlank()) ? accessToken : resolveManagementToken();
+            applyApproval(approval, tokenToUse, approver);
             approval.setStatus(ApprovalStatus.APPLIED.name());
             approval.setDecidedAt(now);
             approval.setApprover(approver);

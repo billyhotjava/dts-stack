@@ -222,23 +222,11 @@ export default function RoleManagementView() {
                 title: "角色",
                 dataIndex: "displayName",
                 key: "name",
-                width: 220,
-                render: (_value, record) => (
-                    <div className="flex flex-col gap-1">
-                        <span className="font-medium">{record.displayName}</span>
-                        {record.description ? (
-                            <Text variant="body3" className="text-muted-foreground">
-                                {record.description}
-                            </Text>
-                        ) : null}
-                        <div className="flex flex-wrap gap-2 text-xs">
-                            <Badge variant="outline">{record.authority}</Badge>
-                            <Badge variant={record.source === "custom" ? "secondary" : "outline"}>
-                                {SOURCE_LABELS[record.source ?? "keycloak"] ?? record.source ?? "Keycloak"}
-                            </Badge>
-                        </div>
-                    </div>
-                ),
+                width: 240,
+                render: (_value, record) => {
+                    const label = (record.description && record.description.trim()) || record.displayName || record.authority;
+                    return <span className="font-medium">{label}</span>;
+                },
             },
             {
                 title: "作用域",
@@ -707,6 +695,7 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
         setSubmitting(true);
         try {
             if (scopeChanged || descriptionChanged || operationsChanged) {
+                const nextOperations = Array.from(operations);
                 const payload = {
                     resourceType: "ROLE",
                     action: "UPDATE",
@@ -714,8 +703,22 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
                     payloadJson: JSON.stringify({
                         name: target.authority,
                         scope,
-                        operations: Array.from(operations),
+                        operations: nextOperations,
                         description: description.trim() || undefined,
+                    }),
+                    diffJson: JSON.stringify({
+                        before: {
+                            name: target.authority,
+                            scope: target.scope ?? null,
+                            operations: target.operations ?? [],
+                            description: target.description ?? null,
+                        },
+                        after: {
+                            name: target.authority,
+                            scope,
+                            operations: nextOperations,
+                            description: description.trim() || null,
+                        },
                     }),
                     reason: trimmedReason,
                 };

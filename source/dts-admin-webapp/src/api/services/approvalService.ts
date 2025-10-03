@@ -26,6 +26,52 @@ export class KeycloakApprovalService {
 	}
 
 	/**
+	 * 根据变更请求ID查找对应的审批请求ID
+	 * 兼容现有后端：遍历列表并按需拉取详情以判断payload中的 changeRequestId
+	 */
+	static async findApprovalIdByChangeRequestId(changeRequestId: number): Promise<number | null> {
+		const list = await this.getApprovalRequests();
+		for (const item of list) {
+			try {
+				const detail = await this.getApprovalRequestById(item.id);
+				for (const it of detail.items || []) {
+					if (!it?.payload) continue;
+					try {
+						const payload = JSON.parse(it.payload);
+						const cid = Number(payload?.changeRequestId);
+						if (cid === changeRequestId) {
+							return item.id;
+						}
+					} catch {}
+				}
+			} catch {}
+		}
+		return null;
+	}
+
+	/**
+	 * 审批通过（按变更请求ID）
+	 */
+	static async approveByChangeRequest(changeRequestId: number, approver: string, note?: string) {
+		const approvalId = await this.findApprovalIdByChangeRequestId(changeRequestId);
+		if (approvalId == null) {
+			throw new Error("未找到匹配的审批请求");
+		}
+		return this.approveRequest(approvalId, { approver, note: note || "" });
+	}
+
+	/**
+	 * 审批拒绝（按变更请求ID）
+	 */
+	static async rejectByChangeRequest(changeRequestId: number, approver: string, note?: string) {
+		const approvalId = await this.findApprovalIdByChangeRequestId(changeRequestId);
+		if (approvalId == null) {
+			throw new Error("未找到匹配的审批请求");
+		}
+		return this.rejectRequest(approvalId, { approver, note: note || "" });
+	}
+
+	/**
 	 * 审批通过请求
 	 */
 	static approveRequest(requestId: number, data: ApprovalActionRequest): Promise<KeycloakApiResponse> {

@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Text } from "@/ui/typography";
 import { toast } from "sonner";
+import { KeycloakApprovalService } from "@/api/services/approvalService";
 import { useUserInfo } from "@/store/userStore";
 
 type TaskCategory = "user" | "role";
@@ -34,21 +35,34 @@ const ACTION_LABELS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
 	PENDING: "待审批",
+	PROCESSING: "处理中",
 	ON_HOLD: "待定",
 	APPROVED: "已通过",
+	APPLIED: "已应用",
 	REJECTED: "已驳回",
+	FAILED: "失败",
 	DRAFT: "草稿",
 };
 
 const STATUS_BADGE: Record<string, "outline" | "secondary" | "destructive"> = {
 	PENDING: "outline",
+	PROCESSING: "outline",
 	ON_HOLD: "outline",
 	APPROVED: "secondary",
+	APPLIED: "secondary",
 	REJECTED: "destructive",
+	FAILED: "destructive",
 	DRAFT: "outline",
 };
 
-type DecisionStatus = "PENDING" | "ON_HOLD" | "APPROVED" | "REJECTED";
+type DecisionStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "ON_HOLD"
+  | "APPROVED"
+  | "APPLIED"
+  | "REJECTED"
+  | "FAILED";
 
 interface DecisionRecord {
 	status: DecisionStatus;
@@ -193,7 +207,7 @@ function formatJson(value: Record<string, unknown> | null) {
 
 function normalizeStatus(status?: string | null): DecisionStatus {
 	const normalized = status?.toUpperCase();
-	if (normalized === "APPROVED" || normalized === "REJECTED") {
+	if (normalized === "APPROVED" || normalized === "REJECTED" || normalized === "APPLIED") {
 		return normalized;
 	}
 	if (normalized === "ON_HOLD") {
@@ -203,6 +217,7 @@ function normalizeStatus(status?: string | null): DecisionStatus {
 }
 
 export default function ApprovalCenterView() {
+    const queryClient = useQueryClient();
 	const sessionContext = useContext(AdminSessionContext);
 	const userInfo = useUserInfo();
 	const session = sessionContext ?? {
@@ -246,7 +261,13 @@ export default function ApprovalCenterView() {
         for (const item of augmentedRequests) {
             const category = resolveCategory(item.resourceType);
             if (!category) continue;
-            if (item.effectiveStatus === "APPROVED" || item.effectiveStatus === "REJECTED") continue;
+            if (
+                item.effectiveStatus === "APPROVED" ||
+                item.effectiveStatus === "APPLIED" ||
+                item.effectiveStatus === "REJECTED" ||
+                (item.status && item.status.toUpperCase() === "FAILED")
+            )
+                continue;
             groups[category].push(item);
         }
         const byTimeDesc = (a: AugmentedChangeRequest, b: AugmentedChangeRequest) => {
@@ -268,7 +289,12 @@ export default function ApprovalCenterView() {
         for (const item of augmentedRequests) {
             const category = resolveCategory(item.resourceType);
             if (!category) continue;
-            if (item.effectiveStatus === "APPROVED" || item.effectiveStatus === "REJECTED") {
+            if (
+                item.effectiveStatus === "APPROVED" ||
+                item.effectiveStatus === "APPLIED" ||
+                item.effectiveStatus === "REJECTED" ||
+                (item.status && item.status.toUpperCase() === "FAILED")
+            ) {
                 groups[category].push(item);
             }
         }
@@ -435,31 +461,55 @@ export default function ApprovalCenterView() {
 	);
 
 
-	const handleDecision = (status: DecisionStatus) => {
-		if (!activeTask) return;
-		setDecisionLoading(true);
-		const decisionId = activeTask.id;
-		const decidedBy = session.username ?? session.email ?? "authadmin";
-		window.setTimeout(() => {
-			setDecisions((prev) => ({
-				...prev,
-				[decisionId]: {
-					status,
-					decidedAt: status === "APPROVED" || status === "REJECTED" ? new Date().toISOString() : null,
-					decidedBy,
-				},
-			}));
-			setDecisionLoading(false);
-			setActiveTaskId(null);
-			const message =
-				status === "APPROVED"
-					? "已批准该变更请求"
-					: status === "REJECTED"
-						? "已拒绝该变更请求"
-						: "已将该请求标记为待定";
-			toast.success(message);
-		}, 480);
-	};
+    const handleDecision = async (status: DecisionStatus) => {
+        if (!activeTask) return;
+        setDecisionLoading(true);
+        const decisionId = activeTask.id;
+        const decidedBy = session.username ?? session.email ?? "authadmin";
+        try {
+            const resourceType = (activeTask.resourceType || "").toUpperCase();
+            const actionType = (activeTask.action || "").toUpperCase();
+            const useKeycloakApproval =
+                resourceType === "USER" ||
+                (resourceType === "ROLE" && ["GRANT_ROLE", "REVOKE_ROLE"].includes(actionType));
+
+            if (status === "APPROVED") {
+                if (useKeycloakApproval) {
+                    await KeycloakApprovalService.approveByChangeRequest(decisionId, decidedBy, "批准");
+                } else {
+                    await adminApi.approveChangeRequest(decisionId, "批准");
+                }
+            } else if (status === "REJECTED") {
+                if (useKeycloakApproval) {
+                    await KeycloakApprovalService.rejectByChangeRequest(decisionId, decidedBy, "拒绝");
+                } else {
+                    await adminApi.rejectChangeRequest(decisionId, "拒绝");
+                }
+            } else {
+                // 待定：仅前端标注，方便继续处理
+            }
+
+            setDecisions((prev) => ({
+                ...prev,
+                [decisionId]: {
+                    status,
+                    decidedAt:
+                        status === "APPROVED" || status === "REJECTED" || status === "APPLIED"
+                            ? new Date().toISOString()
+                            : null,
+                    decidedBy,
+                },
+            }));
+            toast.success(status === "APPROVED" ? "已批准该变更请求" : status === "REJECTED" ? "已拒绝该变更请求" : "已将该请求标记为待定");
+            // 刷新后端变更请求列表
+            await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests"] });
+        } catch (e: any) {
+            toast.error(e?.message || "审批操作失败");
+        } finally {
+            setDecisionLoading(false);
+            setActiveTaskId(null);
+        }
+    };
 
 	const handleCloseDialog = () => {
 		if (!decisionLoading) {
