@@ -187,9 +187,9 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       S3_BUCKET: ${S3_BUCKET}
-    entrypoint: ["/bin/sh","-c","/init.sh"]
+    entrypoint: ["/bin/sh","-c","/init/init.sh"]
     volumes:
-      - ./services/dts-minio-init/init/init.sh:/init.sh:ro
+      - ./services/dts-minio-init/init:/init:ro
     restart: "no"
     networks:
       - dts-core
