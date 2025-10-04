@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { TreeSelect } from "antd";
-import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest } from "#/服务端";
+import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest } from "#/keycloak";
 import { KeycloakRoleService, KeycloakUserService } from "@/api/services/keycloakService";
 import { adminApi } from "@/admin/api/adminApi";
 import { POSITION_SUGGESTIONS } from "@/constants/user";
@@ -278,9 +278,9 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			const resolvedLevel = PERSON_SECURITY_LEVELS.some((option) => option.value === candidateLevel)
 				? candidateLevel
 				: "NON_SECRET";
-			const existingGroups = Array.isArray(user.groups)
-				? user.groups.map((item) => normalizeGroupPath(item)).filter((item) => item)
-				: [];
+    const existingGroups = Array.isArray(user.groups)
+					? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
+					: [];
             const normalizedAttributes = normalizeAttributesForState(user.attributes || {}, resolvedLevel);
             const initialFormData: FormData = {
                 username: user.username || "",

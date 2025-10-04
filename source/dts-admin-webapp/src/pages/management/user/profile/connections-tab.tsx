@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Skeleton } from "@/ui/skeleton";
 import { Text } from "@/ui/typography";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
-import type { KeycloakUser } from "#/服务端";
+import type { KeycloakUser } from "#/keycloak";
 
 export default function ConnectionsTab() {
 	const { data, isLoading, isError, error } = useQuery({

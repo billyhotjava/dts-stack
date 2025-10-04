@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { ApprovalRequest } from "#/服务端";
+import type { ApprovalRequest } from "#/keycloak";
 import { KeycloakApprovalService } from "@/api/services/approvalService";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";

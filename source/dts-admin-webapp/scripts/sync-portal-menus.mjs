@@ -85,10 +85,18 @@ for (const anchor of repoAnchors) {
 const seedPath = seedCandidates.find((candidate) => fs.existsSync(candidate));
 
 if (!seedPath) {
-  console.error(
-    "[sync-portal-menus] Unable to locate portal-menu-seed.json. Checked:",
-    seedCandidates.join(", "),
-  );
+  // Fall back silently: generate an empty mock file if MSW directory exists.
+  const mockRoot = path.resolve(__dirname, "..", "src", "_mock");
+  const destMenus = path.join(mockRoot, "data", "portal-menus.json");
+  try {
+    if (fs.existsSync(mockRoot)) {
+      fs.mkdirSync(path.dirname(destMenus), { recursive: true });
+      fs.writeFileSync(destMenus, "[]\n", "utf-8");
+      console.warn("[sync-portal-menus] Seed not found. Wrote empty portal-menus.json for MSW.");
+    } else {
+      console.warn("[sync-portal-menus] Seed not found and no MSW dir; skipping.");
+    }
+  } catch {}
   process.exit(0);
 }
 

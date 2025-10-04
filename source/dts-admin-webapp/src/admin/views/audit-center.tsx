@@ -44,7 +44,7 @@ export default function AuditCenterView() {
 	const [page, setPage] = useState(0);
 	const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
 	const [totalElements, setTotalElements] = useState(0);
-	const [totalPages, setTotalPages] = useState(0);
+    // totalPages not displayed in UI; omit to satisfy TS noUnusedLocals
 	const [moduleOptions, setModuleOptions] = useState<string[]>([]);
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 	const [exporting, setExporting] = useState(false);
@@ -61,7 +61,7 @@ export default function AuditCenterView() {
 				setPage(response.page);
 				setSize(response.size);
 				setTotalElements(response.totalElements);
-				setTotalPages(response.totalPages);
+                // totalPages is not used in UI; skip storing
 				setModuleOptions((prev) => {
 					const values = new Set(prev);
 					response.content.forEach((item) => values.add(item.module));

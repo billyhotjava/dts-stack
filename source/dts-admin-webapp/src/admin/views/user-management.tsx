@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnsType } from "antd/es/table";
 import { Table } from "antd";
-import type { KeycloakUser } from "#/服务端";
+import type { KeycloakUser } from "#/keycloak";
 import { KeycloakUserService } from "@/api/services/keycloakService";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -15,9 +15,9 @@ import { useRouter } from "@/routes/hooks";
 
 function collectRoleNames(user: KeycloakUser): string[] {
   const names = new Set<string>();
-  (user.realmRoles || []).forEach((r) => r && names.add(r));
+  (user.realmRoles || []).forEach((r: string) => r && names.add(r));
   if (user.clientRoles) {
-    Object.values(user.clientRoles).forEach((arr) => arr?.forEach((r) => r && names.add(r)));
+    (Object.values(user.clientRoles) as string[][]).forEach((arr: string[]) => arr?.forEach((r: string) => r && names.add(r)));
   }
   return Array.from(names);
 }
@@ -155,7 +155,7 @@ export default function UserManagementView() {
         </CardHeader>
         <CardContent>
           <Table
-            rowKey={(r) => r.id || r.username}
+            rowKey={(r) => String(r.id ?? r.username)}
             columns={columns}
             dataSource={list}
             loading={loading}

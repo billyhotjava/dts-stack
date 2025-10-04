@@ -33,11 +33,7 @@ const SCOPE_LABELS: Record<"DEPARTMENT" | "INSTITUTE", string> = {
     INSTITUTE: "研究所共享区",
 };
 
-const SOURCE_LABELS: Record<string, string> = {
-    builtin: "预置",
-    服务端: "服务端",
-    custom: "自定义",
-};
+// SOURCE_LABELS unused; removed to satisfy TS noUnusedLocals
 
 const RESERVED_ROLE_CODES = new Set(["SYSADMIN", "AUTHADMIN", "AUDITADMIN", "OPADMIN"]);
 
@@ -238,7 +234,6 @@ export default function RoleManagementView() {
                 width: 240,
                 onCell: () => ({ style: { verticalAlign: "middle" } }),
                 render: (_value, record) => {
-                    const zh = (record.nameZh && record.nameZh.trim()) || record.displayName || record.authority;
                     const code = record.code || record.canonical;
                     const en = record.nameEn || "";
                     return (

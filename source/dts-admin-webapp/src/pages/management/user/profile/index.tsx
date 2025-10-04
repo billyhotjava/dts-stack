@@ -8,7 +8,7 @@ import { Avatar, AvatarImage } from "@/ui/avatar";
 import { Text, Title } from "@/ui/typography";
 import ProfileTab from "./profile-tab";
 import { KeycloakUserService } from "@/api/services/keycloakService";
-import type { KeycloakUser } from "#/服务端";
+import type { KeycloakUser } from "#/keycloak";
 
 const ROLE_LABEL_MAP: Record<string, string> = {
 	SYSADMIN: "系统管理员",

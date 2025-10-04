@@ -1,9 +1,8 @@
-import type { CustomUserAttributeKey } from "@/constants/user";
 import { CUSTOM_USER_ATTRIBUTE_KEYS } from "@/constants/user";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
-import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } from "#/服务端";
+import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } from "#/keycloak";
 import { KeycloakGroupService, KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
 import { Icon } from "@/components/icon";
 import { useParams, useRouter } from "@/routes/hooks";
@@ -26,7 +25,7 @@ const RESERVED_PROFILE_ATTRIBUTES = new Set<string>([
   ...CUSTOM_USER_ATTRIBUTE_KEYS,
 ]);
 
-const getSingleAttributeValue = (attributes: Record<string, string[]> | undefined, key: CustomUserAttributeKey) => {
+const getSingleAttributeValue = (attributes: Record<string, string[]> | undefined, key: string) => {
   const values = attributes?.[key];
   if (!values || values.length === 0) {
     return "";
@@ -46,7 +45,7 @@ export default function UserDetailView() {
   const [error, setError] = useState<string>("");
 
   // UserProfile相关状态
-  const [userProfileConfig, setUserProfileConfig] = useState<UserProfileConfig | null>(null);
+  const [, setUserProfileConfig] = useState<UserProfileConfig | null>(null);
   const [_profileLoading, setProfileLoading] = useState(false);
   const [_profileError, setProfileError] = useState<string>("");
 
