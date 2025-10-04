@@ -1,3 +1,4 @@
+/* 重置密码功能已停用，保留原实现以备后续恢复。
 import { useState } from "react";
 import { toast } from "sonner";
 import type { ResetPasswordRequest } from "#/服务端";
@@ -115,3 +116,9 @@ export default function ResetPasswordModal({ open, userId, username, onCancel, o
     </Dialog>
   );
 }
+*/
+
+export default function ResetPasswordModal() {
+  return null;
+}
+export {};

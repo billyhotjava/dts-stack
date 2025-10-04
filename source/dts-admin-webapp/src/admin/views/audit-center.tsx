@@ -1,14 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { Table } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import dayjs from "dayjs";
+import { Calendar as CalendarIcon, Clock3 } from "lucide-react";
+import { toast } from "sonner";
 import { AuditLogService } from "@/api/services/auditLogService";
 import type { AuditLog, AuditLogPageResponse } from "#/entity";
-import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
-import { Input } from "@/ui/input";
-import { Text } from "@/ui/typography";
 import { GLOBAL_CONFIG } from "@/global-config";
 import userStore from "@/store/userStore";
-import { toast } from "sonner";
+import { Badge } from "@/ui/badge";
+import { Button } from "@/ui/button";
+import { Calendar } from "@/ui/calendar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Input } from "@/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
+import { Text } from "@/ui/typography";
+import { cn } from "@/utils";
 
 interface FilterState {
 	from?: string;
@@ -102,11 +109,87 @@ export default function AuditCenterView() {
 		}
 	}, [filters]);
 
-	const paginationText = useMemo(() => {
-		const from = page * size + 1;
-		const to = Math.min(totalElements, (page + 1) * size);
-		return totalElements === 0 ? "暂无记录" : `显示第 ${from}-${to} 条，共 ${totalElements} 条`;
-	}, [page, size, totalElements]);
+    // 使用 Antd Table 的分页展示，无需单独显示分页文案
+
+    const columns = useMemo<ColumnsType<AuditLog>>(
+        () => [
+            {
+                title: "ID",
+                dataIndex: "id",
+                key: "id",
+                width: 80,
+                render: (id: number) => <span className="font-medium">{id}</span>,
+            },
+            {
+                title: "时间",
+                dataIndex: "occurredAt",
+                key: "occurredAt",
+                width: 180,
+                render: (value: string) => <span className="text-sm">{formatDateTime(value)}</span>,
+            },
+            { title: "模块", dataIndex: "module", key: "module", width: 160 },
+            {
+                title: "操作",
+                dataIndex: "action",
+                key: "action",
+                width: 260,
+                ellipsis: true,
+                render: (val: string) => <div className="text-sm font-medium break-words">{val}</div>,
+            },
+            {
+                title: "内容摘要",
+                dataIndex: "payloadPreview",
+                key: "payloadPreview",
+                ellipsis: true,
+                render: (value: string | undefined, record) =>
+                    value ? (
+                        <CollapsibleText
+                            text={value}
+                            expanded={!!expandedRows[record.id]}
+                            onToggle={() =>
+                                setExpandedRows((prev) => ({ ...prev, [record.id]: !prev[record.id] }))
+                            }
+                        />
+                    ) : (
+                        <span>-</span>
+                    ),
+            },
+            {
+                title: "操作者 / IP",
+                dataIndex: "actor",
+                key: "actor",
+                width: 220,
+                render: (_: string, record) => (
+                    <div className="text-xs text-muted-foreground break-words">
+                        <div>操作者：{formatOperatorName(record.actor)}</div>
+                        <div>IP：{record.clientIp || "-"}</div>
+                    </div>
+                ),
+            },
+            {
+                title: "目标",
+                dataIndex: "resourceId",
+                key: "resource",
+                width: 220,
+                render: (_: string, record) => (
+                    <div className="text-xs text-muted-foreground break-words">
+                        <div>{record.resourceType || "-"}</div>
+                        <div>{record.resourceId || "-"}</div>
+                    </div>
+                ),
+            },
+            {
+                title: "结果",
+                dataIndex: "result",
+                key: "result",
+                width: 120,
+                render: (val: string) => (
+                    <Badge variant={val === "FAILURE" ? "destructive" : "secondary"}>{val}</Badge>
+                ),
+            },
+        ],
+        [expandedRows]
+    );
 
     return (
         <div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
@@ -183,103 +266,35 @@ export default function AuditCenterView() {
                 </CardContent>
             </Card>
 
-			<Card>
-                <CardHeader className="space-y-2">
+            <Card>
+                <CardHeader className="pb-2">
                     <CardTitle>日志记录</CardTitle>
-                    <Text variant="body3" className="text-muted-foreground">
-                        {paginationText}
-                    </Text>
                 </CardHeader>
-				<CardContent className="overflow-hidden p-0">
-					<div className="overflow-x-auto">
-						<table className="w-full min-w-[1120px] table-fixed text-sm">
-						<thead className="bg-muted/60">
-							<tr className="text-left">
-								<th className="px-4 py-3 font-medium">ID</th>
-								<th className="px-4 py-3 font-medium">时间</th>
-								<th className="px-4 py-3 font-medium">模块</th>
-								<th className="px-4 py-3 font-medium">操作</th>
-								<th className="px-4 py-3 font-medium">内容摘要</th>
-								<th className="px-4 py-3 font-medium">操作者 / IP</th>
-								<th className="px-4 py-3 font-medium">目标</th>
-								<th className="px-4 py-3 font-medium">结果</th>
-							</tr>
-						</thead>
-						<tbody>
-							{loading ? (
-								<tr>
-									<td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
-										正在加载...
-									</td>
-								</tr>
-							) : logs.length === 0 ? (
-								<tr>
-									<td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
-										暂无审计记录
-									</td>
-								</tr>
-							) : (
-								logs.map((log) => (
-									<tr key={log.id} className="border-b align-top last:border-b-0">
-										<td className="px-4 py-3 font-medium">{log.id}</td>
-										<td className="px-4 py-3 text-sm">{formatDateTime(log.occurredAt)}</td>
-										<td className="px-4 py-3">{log.module}</td>
-										<td className="px-4 py-3 text-sm">
-											<div className="font-medium break-words">{log.action}</div>
-										</td>
-										<td className="px-4 py-3 text-xs text-muted-foreground">
-											{log.payloadPreview ? (
-												<CollapsibleText
-													text={log.payloadPreview}
-													expanded={!!expandedRows[log.id]}
-													onToggle={() =>
-														setExpandedRows((prev) => ({ ...prev, [log.id]: !prev[log.id] }))
-													}
-												/>
-											) : (
-												<span>-</span>
-											)}
-										</td>
-										<td className="px-4 py-3 text-xs text-muted-foreground break-words">
-											<div>操作者：{formatOperatorName(log.actor)}</div>
-											<div>IP：{log.clientIp || "-"}</div>
-										</td>
-										<td className="px-4 py-3 text-xs text-muted-foreground break-words">
-											<div>{log.resourceType || "-"}</div>
-											<div>{log.resourceId || "-"}</div>
-										</td>
-										<td className="px-4 py-3">
-											<Badge variant={log.result === "FAILURE" ? "destructive" : "secondary"}>{log.result}</Badge>
-										</td>
-									</tr>
-								))
-							)}
-						</tbody>
-						</table>
-					</div>
-				</CardContent>
-				<CardContent className="flex items-center justify-between pt-0">
-					<div className="text-sm text-muted-foreground">{paginationText}</div>
-					<div className="flex items-center gap-2">
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => loadLogs(Math.max(page - 1, 0), size)}
-							disabled={page === 0 || loading}
-						>
-							上一页
-						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => loadLogs(Math.min(page + 1, totalPages - 1), size)}
-							disabled={page >= totalPages - 1 || loading}
-						>
-							下一页
-						</Button>
-					</div>
-				</CardContent>
-			</Card>
+                <CardContent>
+                    <Table<AuditLog>
+                        rowKey="id"
+                        columns={columns}
+                        dataSource={logs}
+                        loading={loading}
+                        pagination={{
+                            current: page + 1,
+                            pageSize: size,
+                            total: totalElements,
+                            showSizeChanger: true,
+                            pageSizeOptions: [10, 20, 50, 100],
+                            showQuickJumper: true,
+                            showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                            onChange: (current, pageSize) => {
+                                setPage(current - 1);
+                                setSize(pageSize);
+                            },
+                        }}
+                        size="small"
+                        tableLayout="fixed"
+                        scroll={{ x: 1200 }}
+                    />
+                </CardContent>
+            </Card>
 		</div>
 	);
 }
@@ -380,15 +395,16 @@ function formatDateTime(value: string) {
 }
 
 function formatOperatorName(value: string) {
-	const normalized = value?.toLowerCase?.();
-	if (!normalized) {
-		return value;
-	}
-	const label = ADMIN_LABELS[normalized];
-	if (label) {
-		return `${label}（${value}）`;
-	}
-	return value;
+    const normalized = value?.toLowerCase?.();
+    if (!normalized) {
+        return value;
+    }
+    const label = ADMIN_LABELS[normalized];
+    if (label) {
+        return `${label}（${value}）`;
+    }
+    // 其余用户统一归类为“业务系统”操作人
+    return `业务系统（${value}）`;
 }
 
 interface FieldProps {
@@ -398,17 +414,84 @@ interface FieldProps {
 	placeholder?: string;
 }
 
-function DateTimeField({ label, value, onChange }: FieldProps) {
+function DateTimeField({ label, value, onChange, placeholder }: FieldProps) {
+	const [open, setOpen] = useState(false);
+	const parsed = value ? dayjs(value) : undefined;
+	const displayText = parsed ? parsed.format("YYYY-MM-DD HH:mm") : placeholder ?? "yyyy-mm-dd --:--";
+
+	const handleDateSelect = useCallback(
+		(selectedDate?: Date) => {
+			if (!selectedDate) {
+				onChange(undefined);
+				return;
+			}
+			const base = dayjs(selectedDate);
+			const next = base
+				.hour(parsed?.hour() ?? 0)
+				.minute(parsed?.minute() ?? 0)
+				.second(parsed?.second() ?? 0)
+				.millisecond(0);
+			onChange(next.format("YYYY-MM-DDTHH:mm"));
+		},
+		[onChange, parsed],
+	);
+
+	const handleTimeChange = useCallback(
+		(event: ChangeEvent<HTMLInputElement>) => {
+			const timeValue = event.target.value;
+			if (!timeValue) {
+				if (parsed) {
+					const cleared = parsed.hour(0).minute(0).second(0).millisecond(0);
+					onChange(cleared.format("YYYY-MM-DDTHH:mm"));
+				}
+				return;
+			}
+			const [hour, minute] = timeValue.split(":").map((item) => Number.parseInt(item, 10));
+			const base = parsed ?? dayjs();
+			const next = base.hour(Number.isFinite(hour) ? hour : 0).minute(Number.isFinite(minute) ? minute : 0).second(0).millisecond(0);
+			onChange(next.format("YYYY-MM-DDTHH:mm"));
+		},
+		[onChange, parsed],
+	);
+
 	return (
 		<div className="space-y-2">
 			<Text variant="body3" className="text-muted-foreground">
 				{label}
 			</Text>
-			<Input
-				type="datetime-local"
-				value={value ?? ""}
-				onChange={(event) => onChange(event.target.value || undefined)}
-			/>
+			<Popover open={open} onOpenChange={setOpen}>
+				<PopoverTrigger asChild>
+					<Button
+						variant="outline"
+						className={cn(
+							"w-full justify-start text-left font-normal",
+							!parsed && "text-muted-foreground",
+						)}
+					>
+						<CalendarIcon className="mr-2 size-4" />
+						{displayText}
+					</Button>
+				</PopoverTrigger>
+				<PopoverContent className="w-72 space-y-4" align="start">
+					<Calendar mode="single" selected={parsed?.toDate()} onSelect={handleDateSelect} initialFocus />
+					<div className="flex items-center gap-2">
+						<div className="relative w-full">
+							<Input type="time" value={parsed ? parsed.format("HH:mm") : ""} onChange={handleTimeChange} className="pl-9" />
+							<Clock3 className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+						</div>
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() => {
+								onChange(undefined);
+								setOpen(false);
+							}}
+						>
+							清除
+						</Button>
+					</div>
+				</PopoverContent>
+			</Popover>
 		</div>
 	);
 }

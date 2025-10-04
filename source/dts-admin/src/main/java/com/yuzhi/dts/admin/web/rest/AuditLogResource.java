@@ -74,19 +74,98 @@ public class AuditLogResource {
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(size, 200), parseSort(sort));
         Instant fromDate = parseInstant(from, "from");
         Instant toDate = parseInstant(to, "to");
-        Page<AuditEvent> pageResult = auditService.search(
-            actor,
-            module,
-            action,
-            result,
-            resourceType,
-            resource,
-            requestUri,
-            fromDate,
-            toDate,
-            clientIp,
-            pageable
-        );
+
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        boolean isSysAdmin = hasAuthority(auth, AuthoritiesConstants.SYS_ADMIN);
+        boolean isAuthAdmin = hasAuthority(auth, AuthoritiesConstants.AUTH_ADMIN);
+        boolean isAuditAdmin = hasAuthority(auth, AuthoritiesConstants.AUDITOR_ADMIN);
+
+        Page<AuditEvent> pageResult;
+        if (isSysAdmin) {
+            // sysadmin：不可查看任何审计记录
+            pageResult = new PageImpl<>(java.util.List.of(), pageable, 0);
+        } else if (isAuthAdmin) {
+            java.util.List<String> allowed = java.util.List.of(
+                AuthoritiesConstants.SYS_ADMIN,
+                AuthoritiesConstants.AUDITOR_ADMIN
+            );
+            String current = SecurityUtils.getCurrentUserLogin().orElse(null);
+            java.util.List<String> excludedActors = current != null ? java.util.List.of(current.toLowerCase()) : java.util.List.of();
+            pageResult = (excludedActors.isEmpty()) ? auditService.searchAllowedRoles(
+                actor,
+                module,
+                action,
+                result,
+                resourceType,
+                resource,
+                requestUri,
+                fromDate,
+                toDate,
+                clientIp,
+                allowed,
+                pageable
+            ) : auditService.searchAllowedRolesExcludeActors(
+                actor,
+                module,
+                action,
+                result,
+                resourceType,
+                resource,
+                requestUri,
+                fromDate,
+                toDate,
+                clientIp,
+                allowed,
+                excludedActors,
+                pageable
+            );
+        } else if (isAuditAdmin) {
+            String current = SecurityUtils.getCurrentUserLogin().orElse(null);
+            java.util.List<String> excludedActors = current != null ? java.util.List.of(current.toLowerCase()) : java.util.List.of();
+            pageResult = (excludedActors.isEmpty()) ? auditService.searchExcludeRoles(
+                actor,
+                module,
+                action,
+                result,
+                resourceType,
+                resource,
+                requestUri,
+                fromDate,
+                toDate,
+                clientIp,
+                java.util.List.of(AuthoritiesConstants.AUDITOR_ADMIN),
+                pageable
+            ) : auditService.searchExcludeRolesExcludeActors(
+                actor,
+                module,
+                action,
+                result,
+                resourceType,
+                resource,
+                requestUri,
+                fromDate,
+                toDate,
+                clientIp,
+                java.util.List.of(AuthoritiesConstants.AUDITOR_ADMIN),
+                excludedActors,
+                pageable
+            );
+        } else {
+            pageResult = auditService.search(
+                actor,
+                module,
+                action,
+                result,
+                resourceType,
+                resource,
+                requestUri,
+                fromDate,
+                toDate,
+                clientIp,
+                pageable
+            );
+        }
         List<AuditEventView> views = pageResult.getContent().stream().map(this::toView).toList();
         Page<AuditEventView> viewPage = new PageImpl<>(views, pageable, pageResult.getTotalElements());
         Map<String, Object> payload = new HashMap<>();
@@ -114,18 +193,92 @@ public class AuditLogResource {
     ) throws IOException {
         Instant fromDate = parseInstant(from, "from");
         Instant toDate = parseInstant(to, "to");
-        List<AuditEvent> events = auditService.findAllForExport(
-            actor,
-            module,
-            action,
-            result,
-            resourceType,
-            resource,
-            requestUri,
-            fromDate,
-            toDate,
-            clientIp
-        );
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        boolean isSysAdmin = hasAuthority(auth, AuthoritiesConstants.SYS_ADMIN);
+        boolean isAuthAdmin = hasAuthority(auth, AuthoritiesConstants.AUTH_ADMIN);
+        boolean isAuditAdmin = hasAuthority(auth, AuthoritiesConstants.AUDITOR_ADMIN);
+
+        List<AuditEvent> events;
+        if (isSysAdmin) {
+            // sysadmin：不可导出任何审计记录
+            events = java.util.List.of();
+        } else if (isAuthAdmin) {
+            String current = SecurityUtils.getCurrentUserLogin().orElse(null);
+            java.util.List<String> excludedActors = current != null ? java.util.List.of(current.toLowerCase()) : java.util.List.of();
+            events = excludedActors.isEmpty()
+                ? auditService.findAllForExportAllowedRoles(
+                    actor,
+                    module,
+                    action,
+                    result,
+                    resourceType,
+                    resource,
+                    requestUri,
+                    fromDate,
+                    toDate,
+                    clientIp,
+                    java.util.List.of(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN)
+                )
+                : auditService.findAllForExportAllowedRolesExcludeActors(
+                    actor,
+                    module,
+                    action,
+                    result,
+                    resourceType,
+                    resource,
+                    requestUri,
+                    fromDate,
+                    toDate,
+                    clientIp,
+                    java.util.List.of(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN),
+                    excludedActors
+                );
+        } else if (isAuditAdmin) {
+            String current = SecurityUtils.getCurrentUserLogin().orElse(null);
+            java.util.List<String> excludedActors = current != null ? java.util.List.of(current.toLowerCase()) : java.util.List.of();
+            events = excludedActors.isEmpty()
+                ? auditService.findAllForExportExcludeRoles(
+                    actor,
+                    module,
+                    action,
+                    result,
+                    resourceType,
+                    resource,
+                    requestUri,
+                    fromDate,
+                    toDate,
+                    clientIp,
+                    java.util.List.of(AuthoritiesConstants.AUDITOR_ADMIN)
+                )
+                : auditService.findAllForExportExcludeRolesExcludeActors(
+                    actor,
+                    module,
+                    action,
+                    result,
+                    resourceType,
+                    resource,
+                    requestUri,
+                    fromDate,
+                    toDate,
+                    clientIp,
+                    java.util.List.of(AuthoritiesConstants.AUDITOR_ADMIN),
+                    excludedActors
+                );
+        } else {
+            events = auditService.findAllForExport(
+                actor,
+                module,
+                action,
+                result,
+                resourceType,
+                resource,
+                requestUri,
+                fromDate,
+                toDate,
+                clientIp
+            );
+        }
         StringBuilder sb = new StringBuilder();
         sb.append("id,timestamp,module,action,actor,result,resource,clientIp\n");
         for (AuditEvent event : events) {
@@ -270,6 +423,14 @@ public class AuditLogResource {
             return "";
         }
         return '"' + value.replace("\"", "\"\"") + '"';
+    }
+
+    private boolean hasAuthority(org.springframework.security.core.Authentication auth, String role) {
+        if (auth == null || auth.getAuthorities() == null) return false;
+        for (org.springframework.security.core.GrantedAuthority a : auth.getAuthorities()) {
+            if (role.equals(a.getAuthority())) return true;
+        }
+        return false;
     }
 
     private static final class AuditEventDetailView extends AuditEventView {

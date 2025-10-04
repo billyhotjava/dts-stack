@@ -168,7 +168,8 @@ type MenuRowProps = {
 function MenuRow({ item, level, pathNames, expanded, setExpanded, pending, onToggle }: MenuRowProps) {
   const id = item.id as number | undefined;
   if (id == null) return null;
-  const name = item.displayName ?? item.name ?? String(id);
+  const baseName = item.displayName ?? item.name ?? String(id);
+  const name = id != null ? `id${id}-${baseName}` : baseName;
   const children = Array.isArray(item.children) ? item.children : [];
   const isFolder = children.length > 0;
   const isExpanded = isFolder && expanded.has(id);

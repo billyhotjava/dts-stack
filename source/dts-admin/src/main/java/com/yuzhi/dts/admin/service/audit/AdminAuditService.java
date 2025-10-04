@@ -286,6 +286,180 @@ public class AdminAuditService {
         );
     }
 
+    public Page<AuditEvent> searchAllowedRoles(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        java.util.List<String> roles,
+        Pageable pageable
+    ) {
+        Pageable effectivePageable = pageable;
+        if (pageable != null && pageable.getSort().isSorted()) {
+            effectivePageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        }
+        return repository.searchAllowedRoles(
+            likePattern(actor),
+            likePattern(module),
+            likePattern(action),
+            likePattern(result),
+            likePattern(resourceType),
+            likePattern(resource),
+            likePattern(requestUri),
+            from,
+            to,
+            likePattern(clientIp),
+            roles,
+            effectivePageable
+        );
+    }
+
+    public Page<AuditEvent> searchAllowedRolesExcludeActors(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        java.util.List<String> roles,
+        java.util.List<String> excludedActors,
+        Pageable pageable
+    ) {
+        Pageable effectivePageable = pageable;
+        if (pageable != null && pageable.getSort().isSorted()) {
+            effectivePageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        }
+        return repository.searchAllowedRolesExcludeActors(
+            likePattern(actor),
+            likePattern(module),
+            likePattern(action),
+            likePattern(result),
+            likePattern(resourceType),
+            likePattern(resource),
+            likePattern(requestUri),
+            from,
+            to,
+            likePattern(clientIp),
+            roles,
+            excludedActors,
+            effectivePageable
+        );
+    }
+
+    public Page<AuditEvent> searchExcludeRole(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        String excludedRole,
+        Pageable pageable
+    ) {
+        Pageable effectivePageable = pageable;
+        if (pageable != null && pageable.getSort().isSorted()) {
+            effectivePageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        }
+        return repository.searchExcludeRole(
+            likePattern(actor),
+            likePattern(module),
+            likePattern(action),
+            likePattern(result),
+            likePattern(resourceType),
+            likePattern(resource),
+            likePattern(requestUri),
+            from,
+            to,
+            likePattern(clientIp),
+            excludedRole,
+            effectivePageable
+        );
+    }
+
+    public Page<AuditEvent> searchExcludeRoles(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        java.util.List<String> excludedRoles,
+        Pageable pageable
+    ) {
+        Pageable effectivePageable = pageable;
+        if (pageable != null && pageable.getSort().isSorted()) {
+            effectivePageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        }
+        return repository.searchExcludeRoles(
+            likePattern(actor),
+            likePattern(module),
+            likePattern(action),
+            likePattern(result),
+            likePattern(resourceType),
+            likePattern(resource),
+            likePattern(requestUri),
+            from,
+            to,
+            likePattern(clientIp),
+            excludedRoles,
+            effectivePageable
+        );
+    }
+
+    public Page<AuditEvent> searchExcludeRolesExcludeActors(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        java.util.List<String> excludedRoles,
+        java.util.List<String> excludedActors,
+        Pageable pageable
+    ) {
+        Pageable effectivePageable = pageable;
+        if (pageable != null && pageable.getSort().isSorted()) {
+            effectivePageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        }
+        return repository.searchExcludeRolesExcludeActors(
+            likePattern(actor),
+            likePattern(module),
+            likePattern(action),
+            likePattern(result),
+            likePattern(resourceType),
+            likePattern(resource),
+            likePattern(requestUri),
+            from,
+            to,
+            likePattern(clientIp),
+            excludedRoles,
+            excludedActors,
+            effectivePageable
+        );
+    }
+
     public List<AuditEventView> list(
         String actor,
         String module,
@@ -336,6 +510,165 @@ public class AdminAuditService {
                 Pageable.unpaged()
             )
             .getContent();
+    }
+
+    public List<AuditEvent> findAllForExportAllowedRoles(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        java.util.List<String> roles
+    ) {
+        return repository
+            .searchAllowedRoles(
+                likePattern(actor),
+                likePattern(module),
+                likePattern(action),
+                likePattern(result),
+                likePattern(resourceType),
+                likePattern(resource),
+                likePattern(requestUri),
+                from,
+                to,
+                likePattern(clientIp),
+                roles,
+                Pageable.unpaged()
+            )
+            .getContent();
+    }
+
+    public List<AuditEvent> findAllForExportAllowedRolesExcludeActors(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        java.util.List<String> roles,
+        java.util.List<String> excludedActors
+    ) {
+        return repository
+            .searchAllowedRolesExcludeActors(
+                likePattern(actor),
+                likePattern(module),
+                likePattern(action),
+                likePattern(result),
+                likePattern(resourceType),
+                likePattern(resource),
+                likePattern(requestUri),
+                from,
+                to,
+                likePattern(clientIp),
+                roles,
+                excludedActors,
+                Pageable.unpaged()
+            )
+            .getContent();
+    }
+
+    public List<AuditEvent> findAllForExportExcludeRole(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        String excludedRole
+    ) {
+        Page<AuditEvent> page = repository
+            .searchExcludeRole(
+                likePattern(actor),
+                likePattern(module),
+                likePattern(action),
+                likePattern(result),
+                likePattern(resourceType),
+                likePattern(resource),
+                likePattern(requestUri),
+                from,
+                to,
+                likePattern(clientIp),
+                excludedRole,
+                Pageable.unpaged()
+            );
+        return page.getContent();
+    }
+
+    public List<AuditEvent> findAllForExportExcludeRoles(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        java.util.List<String> excludedRoles
+    ) {
+        Page<AuditEvent> page = repository
+            .searchExcludeRoles(
+                likePattern(actor),
+                likePattern(module),
+                likePattern(action),
+                likePattern(result),
+                likePattern(resourceType),
+                likePattern(resource),
+                likePattern(requestUri),
+                from,
+                to,
+                likePattern(clientIp),
+                excludedRoles,
+                Pageable.unpaged()
+            );
+        return page.getContent();
+    }
+
+    public List<AuditEvent> findAllForExportExcludeRolesExcludeActors(
+        String actor,
+        String module,
+        String action,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        java.util.List<String> excludedRoles,
+        java.util.List<String> excludedActors
+    ) {
+        Page<AuditEvent> page = repository
+            .searchExcludeRolesExcludeActors(
+                likePattern(actor),
+                likePattern(module),
+                likePattern(action),
+                likePattern(result),
+                likePattern(resourceType),
+                likePattern(resource),
+                likePattern(requestUri),
+                from,
+                to,
+                likePattern(clientIp),
+                excludedRoles,
+                excludedActors,
+                Pageable.unpaged()
+            );
+        return page.getContent();
     }
 
     public long purgeAll() {

@@ -42,6 +42,7 @@ const SOURCE_LABELS: Record<string, string> = {
 const RESERVED_ROLE_CODES = new Set(["SYSADMIN", "AUTHADMIN", "AUDITADMIN", "OPADMIN"]);
 
 interface RoleRow {
+    id?: number;
     key: string;
     authority: string;
     displayName: string;
@@ -136,6 +137,7 @@ export default function RoleManagementView() {
             }
             const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
             const entry: RoleRow = {
+                id: role.id,
                 key: role.id?.toString() ?? role.name,
                 authority: role.name,
                 displayName: (role as any).nameZh || role.name,
@@ -277,30 +279,7 @@ export default function RoleManagementView() {
                     );
                 },
             },
-            {
-                title: "操作权限",
-                dataIndex: "operations",
-                key: "operations",
-                width: 160,
-                onCell: () => ({ style: { verticalAlign: "middle" } }),
-                render: (_ops: DataOperation[], record) => {
-                    const operations = record.operations || [];
-                    const tags: string[] = operations.map((op) => OPERATION_LABELS[op]);
-                    if (record.canManage) tags.push("授权管理");
-                    return tags.length ? (
-                        <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
-                            {tags.slice(0, 2).map((t) => (
-                                <Badge key={t} variant="outline">{t}</Badge>
-                            ))}
-                            {tags.length > 2 ? (
-                                <Badge variant="secondary">+{tags.length - 2}</Badge>
-                            ) : null}
-                        </div>
-                    ) : (
-                        <Text variant="body3" className="text-muted-foreground">未配置</Text>
-                    );
-                },
-            },
+            // 隐藏操作权限列，角色默认仅具备读取权限
             {
                 title: "绑定菜单",
                 dataIndex: "menuLabels",
@@ -348,6 +327,7 @@ export default function RoleManagementView() {
                 title: "操作",
                 key: "actions",
                 width: 200,
+                fixed: "right",
                 onCell: () => ({ style: { verticalAlign: "middle" } }),
                 render: (_value, record) => {
                     const immutable = record.source === "builtin";
@@ -454,7 +434,6 @@ interface CreateRoleDialogProps {
 function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRoleMap }: CreateRoleDialogProps) {
     const [name, setName] = useState("");
     const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
-    const [operations, setOperations] = useState<Set<DataOperation>>(new Set(["read", "write"]));
     const [allowDesensitize, setAllowDesensitize] = useState(true);
     const [description, setDescription] = useState("");
     const [reason, setReason] = useState("");
@@ -464,25 +443,12 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
     const resetState = useCallback(() => {
         setName("");
         setScope("DEPARTMENT");
-        setOperations(new Set(["read", "write"]));
         setAllowDesensitize(true);
         setDescription("");
         setReason("");
         setSelectedMenus(new Set());
         setSubmitting(false);
     }, []);
-
-    const toggleOperation = (operation: DataOperation, checked: boolean) => {
-        setOperations((prev) => {
-            const next = new Set(prev);
-            if (checked) {
-                next.add(operation);
-            } else {
-                next.delete(operation);
-            }
-            return next;
-        });
-    };
 
     const toggleMenu = (id: number, checked: boolean) => {
         setSelectedMenus((prev) => {
@@ -507,17 +473,13 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
             toast.error("请输入说明");
             return;
         }
-        if (operations.size === 0) {
-            toast.error("至少选择一个操作权限");
-            return;
-        }
         setSubmitting(true);
         try {
             const trimmedReason = reason.trim() || undefined;
             const payload = {
                 name: trimmedName.toUpperCase(),
                 scope,
-                operations: Array.from(operations),
+                operations: ["read"] as DataOperation[],
                 allowDesensitizeJson: allowDesensitize,
                 description: trimmedDescription,
                 reason: trimmedReason,
@@ -610,27 +572,19 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-2">
+                        {/* <div className="space-y-2">
                             <span className="font-medium">脱敏策略</span>
                             <label className="flex items-center gap-2 text-sm">
                                 <Checkbox checked={allowDesensitize} onCheckedChange={(value) => setAllowDesensitize(value === true)} />
                                 需脱敏 JSON 输出
                             </label>
-                        </div>
+                        </div> */}
                     </div>
                     <div className="space-y-2">
                         <span className="font-medium">操作权限</span>
-                        <div className="flex flex-wrap gap-4">
-                            {(Object.keys(OPERATION_LABELS) as DataOperation[]).map((operation) => (
-                                <label key={operation} className="flex items-center gap-2 text-sm">
-                                    <Checkbox
-                                        checked={operations.has(operation)}
-                                        onCheckedChange={(value) => toggleOperation(operation, value === true)}
-                                    />
-                                    {OPERATION_LABELS[operation]}
-                                </label>
-                            ))}
-                        </div>
+                        <Text variant="body3" className="text-muted-foreground">
+                            默认仅授予读取权限
+                        </Text>
                     </div>
                     <div className="space-y-2">
                         <span className="font-medium">访问菜单</span>
@@ -696,7 +650,6 @@ interface UpdateRoleDialogProps {
 
 function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleMap }: UpdateRoleDialogProps) {
     const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
-    const [operations, setOperations] = useState<Set<DataOperation>>(new Set());
     const [description, setDescription] = useState("");
     const [reason, setReason] = useState("");
     const [submitting, setSubmitting] = useState(false);
@@ -707,24 +660,11 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
             return;
         }
         setScope(target.scope ?? "DEPARTMENT");
-        setOperations(new Set(target.operations.length ? target.operations : ["read"]));
         setDescription(target.description ?? "");
         setReason("");
         setSelectedMenus(new Set(target.menuIds));
         setSubmitting(false);
     }, [target]);
-
-    const toggleOperation = (operation: DataOperation, checked: boolean) => {
-        setOperations((prev) => {
-            const next = new Set(prev);
-            if (checked) {
-                next.add(operation);
-            } else {
-                next.delete(operation);
-            }
-            return next;
-        });
-    };
 
     const toggleMenu = (id: number, checked: boolean) => {
         setSelectedMenus((prev) => {
@@ -742,45 +682,45 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
         if (!target) {
             return;
         }
-        if (operations.size === 0) {
-            toast.error("至少选择一个操作权限");
-            return;
-        }
         const trimmedReason = reason.trim() || undefined;
         const desiredMenus = new Set(selectedMenus);
         const originalMenus = new Set(target.menuIds);
         const menuChanged = !setsEqual(desiredMenus, originalMenus);
         const scopeChanged = (target.scope ?? "DEPARTMENT") !== scope;
         const descriptionChanged = (target.description ?? "") !== description.trim();
-        const operationsChanged = !setsEqual(new Set(target.operations), operations);
+        const nextOperations = target.operations && target.operations.length ? target.operations : ["read"];
 
-        if (!menuChanged && !scopeChanged && !descriptionChanged && !operationsChanged) {
+        if (!menuChanged && !scopeChanged && !descriptionChanged) {
             toast.info("未检测到变更，无需提交审批");
             return;
         }
         setSubmitting(true);
         try {
-            if (scopeChanged || descriptionChanged || operationsChanged) {
-                const nextOperations = Array.from(operations);
+            if (scopeChanged || descriptionChanged) {
+                const normalizedAuthority = toRoleAuthority(target.authority);
+                const resourceIdentifier = normalizedAuthority || target.authority;
                 const payload = {
                     resourceType: "ROLE",
                     action: "UPDATE",
-                    resourceId: target.authority,
+                    resourceId: resourceIdentifier,
                     payloadJson: JSON.stringify({
-                        name: target.authority,
+                        id: target.id,
+                        name: resourceIdentifier,
                         scope,
                         operations: nextOperations,
                         description: description.trim() || undefined,
                     }),
                     diffJson: JSON.stringify({
                         before: {
-                            name: target.authority,
+                            id: target.id ?? null,
+                            name: resourceIdentifier,
                             scope: target.scope ?? null,
                             operations: target.operations ?? [],
                             description: target.description ?? null,
                         },
                         after: {
-                            name: target.authority,
+                            id: target.id ?? null,
+                            name: resourceIdentifier,
                             scope,
                             operations: nextOperations,
                             description: description.trim() || null,
@@ -841,24 +781,18 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-2">
+                            {/* <div className="space-y-2">
                                 <span className="font-medium">操作权限</span>
-                                <div className="flex flex-wrap gap-3">
-                                    {(Object.keys(OPERATION_LABELS) as DataOperation[]).map((operation) => (
-                                        <label key={operation} className="flex items-center gap-2 text-sm">
-                                            <Checkbox
-                                                checked={operations.has(operation)}
-                                                onCheckedChange={(value) => toggleOperation(operation, value === true)}
-                                            />
-                                            {OPERATION_LABELS[operation]}
-                                        </label>
-                                    ))}
+                                <div className="text-sm text-muted-foreground">
+                                    {target.operations?.length
+                                        ? target.operations.map((op) => OPERATION_LABELS[op]).join("、")
+                                        : OPERATION_LABELS.read}
                                 </div>
-                            </div>
+                            </div> */}
                         </div>
                         <div className="space-y-2">
                             <label htmlFor="edit-description" className="font-medium">
-                                说明
+                                描述
                             </label>
                             <Textarea
                                 id="edit-description"
@@ -945,11 +879,12 @@ function DeleteRoleDialog({ target, onClose, onSubmitted, menuRoleMap }: DeleteR
         setSubmitting(true);
         try {
             const trimmedReason = reason.trim() || undefined;
+            const authority = toRoleAuthority(target.authority);
             const payload = {
                 resourceType: "ROLE",
                 action: "DELETE",
-                resourceId: target.authority,
-                payloadJson: JSON.stringify({ name: target.authority }),
+                resourceId: authority,
+                payloadJson: JSON.stringify({ id: target.id, name: authority }),
                 reason: trimmedReason,
             };
             const change = await adminApi.createChangeRequest(payload);

@@ -392,6 +392,7 @@ export default function ApprovalCenterView() {
 				title: "操作",
 				key: "actions",
 				width: 120,
+				fixed: "right" as const,
 				align: "right" as const,
 				render: (_: unknown, record) => (
 					<Button

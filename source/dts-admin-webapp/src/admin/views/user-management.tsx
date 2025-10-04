@@ -92,6 +92,7 @@ export default function UserManagementView() {
         title: "操作",
         key: "actions",
         width: 180,
+        fixed: "right" as const,
         render: (_, record) => (
           <div className="flex items-center gap-2">
             <Button
@@ -165,6 +166,7 @@ export default function UserManagementView() {
               showQuickJumper: true,
               showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
             }}
+            scroll={{ x: 1200 }}
           />
         </CardContent>
       </Card>

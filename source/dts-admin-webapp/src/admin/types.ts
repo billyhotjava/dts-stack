@@ -27,6 +27,8 @@ export function normalizeAdminRole(role: string | null | undefined): AdminRole |
 			return "AUTHADMIN";
 		case "AUDITADMIN":
 		case "AUDIT_ADMIN":
+		case "AUDITORADMIN":
+		case "AUDITOR_ADMIN":
 			return "AUDITADMIN";
 		default:
 			return null;
