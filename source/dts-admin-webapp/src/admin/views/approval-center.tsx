@@ -23,7 +23,8 @@ const CATEGORY_LABELS: Record<TaskCategory, string> = {
 };
 
 const USER_RESOURCE_TYPES = new Set(["USER"]);
-const ROLE_RESOURCE_TYPES = new Set(["ROLE", "CUSTOM_ROLE", "ROLE_ASSIGNMENT", "PORTAL_MENU"]);
+const ROLE_RESOURCE_TYPES = new Set(["ROLE", "CUSTOM_ROLE", "ROLE_ASSIGNMENT"]);
+// 仅保留用户/角色类审批
 
 const ACTION_LABELS: Record<string, string> = {
 	CREATE: "新增",
@@ -90,7 +91,8 @@ function resolveCategory(resourceType: string | null | undefined): TaskCategory 
 	if (ROLE_RESOURCE_TYPES.has(normalized)) {
 		return "role";
 	}
-	return null;
+    // 其余类型不再纳入审批列表
+    return null;
 }
 
 function parseJson(value?: string | null): unknown {
@@ -568,16 +570,22 @@ export default function ApprovalCenterView() {
 										暂无待审批条目。
 									</Text>
 								) : (
-									<Table
-										rowKey="id"
-										columns={pendingColumns}
-										dataSource={selectedPending}
-										pagination={false}
-										size="small"
-										className="text-sm"
-										rowClassName={() => "text-sm"}
-										scroll={{ x: 1100 }}
-									/>
+                                <Table
+                                    rowKey="id"
+                                    columns={pendingColumns}
+                                    dataSource={selectedPending}
+                                    pagination={{
+                                        pageSize: 10,
+                                        showSizeChanger: true,
+                                        pageSizeOptions: [10, 20, 50, 100],
+                                        showQuickJumper: true,
+                                        showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                                    }}
+                                    size="small"
+                                    className="text-sm"
+                                    rowClassName={() => "text-sm"}
+                                    scroll={{ x: 1100 }}
+                                />
 								)}
 							</>
 						)}
@@ -613,16 +621,22 @@ export default function ApprovalCenterView() {
 										暂无历史审批记录。
 									</Text>
 								) : (
-									<Table
-										rowKey="id"
-										columns={completedColumns}
-										dataSource={selectedCompleted}
-										pagination={false}
-										size="small"
-										className="text-sm"
-										rowClassName={() => "text-sm"}
-										scroll={{ x: 1100 }}
-									/>
+                                <Table
+                                    rowKey="id"
+                                    columns={completedColumns}
+                                    dataSource={selectedCompleted}
+                                    pagination={{
+                                        pageSize: 10,
+                                        showSizeChanger: true,
+                                        pageSizeOptions: [10, 20, 50, 100],
+                                        showQuickJumper: true,
+                                        showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                                    }}
+                                    size="small"
+                                    className="text-sm"
+                                    rowClassName={() => "text-sm"}
+                                    scroll={{ x: 1100 }}
+                                />
 								)}
 							</>
 						)}
@@ -637,7 +651,7 @@ export default function ApprovalCenterView() {
 						<DialogDescription>请核对变更内容后选择处理操作。</DialogDescription>
 					</DialogHeader>
 					{activeTask ? (
-						<div className="space-y-5 text-sm">
+						<div className="space-y-5 text-sm max-h-[60vh] overflow-y-auto pr-1">
 							<div className="grid gap-4 sm:grid-cols-2">
 								<div className="space-y-1">
 									<Text variant="body3" className="text-muted-foreground">
@@ -685,7 +699,7 @@ export default function ApprovalCenterView() {
 									<Text variant="body3" className="text-muted-foreground">
 										提交内容
 									</Text>
-									<pre className="max-h-64 overflow-auto rounded-md bg-muted/40 p-3 text-xs">
+									<pre className="max-h-64 overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre-wrap break-words">
 										{formatJson(activePayload)}
 									</pre>
 								</div>
@@ -702,7 +716,7 @@ export default function ApprovalCenterView() {
 											<Text variant="body3" className="text-muted-foreground">
 												变更前
 											</Text>
-											<pre className="max-h-48 overflow-auto rounded-md bg-muted/40 p-3 text-xs">
+											<pre className="max-h-48 overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre-wrap break-words">
 												{formatJson(diffBefore)}
 											</pre>
 										</div>
@@ -712,7 +726,7 @@ export default function ApprovalCenterView() {
 											<Text variant="body3" className="text-muted-foreground">
 												变更后
 											</Text>
-											<pre className="max-h-48 overflow-auto rounded-md bg-muted/40 p-3 text-xs">
+											<pre className="max-h-48 overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre-wrap break-words">
 												{formatJson(diffAfter)}
 											</pre>
 										</div>

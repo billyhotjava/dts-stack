@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { adminApi } from "@/admin/api/adminApi";
 import type { AdminUser } from "@/admin/types";
@@ -19,10 +19,32 @@ const STATUS_COLORS: Record<string, "default" | "secondary" | "outline" | "destr
 };
 
 export default function UserManagementView() {
-	const { data: users = [], isLoading } = useQuery({
+	// 兼容不同返回结构：数组或 {items|list|records|data}
+	const { data: usersResp, isLoading } = useQuery({
 		queryKey: ["admin", "users"],
 		queryFn: adminApi.getAdminUsers,
 	});
+	const warnedRef = useRef(false);
+	const users: AdminUser[] = useMemo(() => {
+		const warnOnce = (msg: string) => {
+			if (!isLoading && !warnedRef.current) {
+				toast.error(msg, { position: "top-center" });
+				warnedRef.current = true;
+			}
+		};
+
+		const container: any = usersResp;
+		const arr = toArray(container);
+		if (!arr) {
+			warnOnce("用户数据格式异常，无法解析");
+			return [];
+		}
+		const coerced = arr.map(coerceAdminUser).filter((x): x is AdminUser => x != null);
+		if (!isLoading && coerced.length !== arr.length) {
+			warnOnce("部分用户数据字段缺失，已忽略异常项");
+		}
+		return coerced;
+	}, [usersResp, isLoading]);
 	const { translateRole, translateStatus } = useAdminLocale();
 	const [keyword, setKeyword] = useState("");
 	const [roleFilter, setRoleFilter] = useState("");
@@ -201,4 +223,29 @@ function statusText(status: string) {
 		default:
 			return status;
 	}
+}
+
+// ---- Type guards & coercion helpers ----
+function toArray(value: any): any[] | null {
+    if (Array.isArray(value)) return value;
+    if (Array.isArray(value?.items)) return value.items;
+    if (Array.isArray(value?.list)) return value.list;
+    if (Array.isArray(value?.records)) return value.records;
+    if (Array.isArray(value?.data)) return value.data;
+    return null;
+}
+
+function coerceAdminUser(raw: any): AdminUser | null {
+    if (!raw || typeof raw !== "object") return null;
+    const id = typeof raw.id === "number" ? raw.id : Number(raw.id);
+    const username = typeof raw.username === "string" ? raw.username : undefined;
+    if (!Number.isFinite(id) || !username) return null;
+    const roles = Array.isArray(raw.roles) ? raw.roles.filter((r: any) => typeof r === "string") : [];
+    const orgPath = Array.isArray(raw.orgPath) ? raw.orgPath.filter((s: any) => typeof s === "string") : undefined;
+    const displayName = typeof raw.displayName === "string" ? raw.displayName : undefined;
+    const email = typeof raw.email === "string" ? raw.email : undefined;
+    const securityLevel = typeof raw.securityLevel === "string" ? raw.securityLevel : String(raw.securityLevel ?? "");
+    const status = typeof raw.status === "string" ? raw.status : String(raw.status ?? "");
+    const lastLoginAt = typeof raw.lastLoginAt === "string" ? raw.lastLoginAt : undefined;
+    return { id, username, displayName, email, orgPath, roles, securityLevel, status, lastLoginAt };
 }

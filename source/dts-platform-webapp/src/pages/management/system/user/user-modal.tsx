@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest, UserProfileConfig } from "#/keycloak";
-import { KeycloakRoleService, KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
+import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest } from "#/keycloak";
+import { KeycloakRoleService, KeycloakUserService } from "@/api/services/keycloakService";
 import { DEPARTMENT_SUGGESTIONS, POSITION_SUGGESTIONS } from "@/constants/user";
 import { Icon } from "@/components/icon";
 import { Alert, AlertDescription } from "@/ui/alert";
@@ -13,30 +13,12 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
-import { UserProfileField } from "./user-profile-field";
-import { t } from "@/locales/i18n";
 import {
 	PERSON_SECURITY_LEVELS,
-	deriveDataLevels,
 	isApplicationAdminRole,
 	isDataRole,
 	isGovernanceRole,
 } from "@/constants/governance";
-
-const RESERVED_PROFILE_ATTRIBUTE_NAMES = [
-	"username",
-	"email",
-	"firstName",
-	"lastName",
-	"fullName",
-	"locale",
-	"department",
-	"position",
-	"person_security_level",
-	"personnel_security_level",
-	"person_level",
-	"data_levels",
-];
 
 interface UserModalProps {
 	open: boolean;
@@ -90,8 +72,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [userRoles, setUserRoles] = useState<KeycloakRole[]>([]);
 	const [roleError, setRoleError] = useState<string>("");
 	const [personLevel, setPersonLevel] = useState<string>("NON_SECRET");
-	const [userProfileConfig, setUserProfileConfig] = useState<UserProfileConfig | null>(null);
-	const [profileLoading, setProfileLoading] = useState(false);
 
 	const normalizeAttributesForState = useCallback(
 		(attributes: Record<string, string[]> = {}, level?: string): Record<string, string[]> => {
@@ -114,16 +94,13 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				: undefined;
 
 			if (resolvedLevel) {
-				const derived = deriveDataLevels(resolvedLevel);
 				cloned.personnel_security_level = [resolvedLevel];
 				cloned.person_security_level = [resolvedLevel];
 				cloned.person_level = [resolvedLevel];
-				cloned.data_levels = [...derived];
 			} else {
 				delete cloned.personnel_security_level;
 				delete cloned.person_security_level;
 				delete cloned.person_level;
-				delete cloned.data_levels;
 			}
 
 			Object.keys(cloned).forEach((key) => {
@@ -150,8 +127,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		return normalizeAttributesForState(formData.attributes, personLevel);
 	}, [formData.attributes, normalizeAttributesForState, personLevel]);
 
-	const derivedDataLevels = useMemo(() => deriveDataLevels(personLevel), [personLevel]);
-
 	const updateSingleValueAttribute = (key: string, value: string) => {
 		setFormData((prev) => {
 			const nextAttributes = { ...prev.attributes };
@@ -168,40 +143,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			};
 		});
 	};
-
-	const handleProfileFieldChange = (attributeName: string, value: string | string[]) => {
-		setFormData((prev) => {
-			const nextAttributes = { ...prev.attributes };
-			const normalizedValues = Array.isArray(value)
-				? value.map((item) => item.trim()).filter((item) => item.length > 0)
-				: typeof value === "string" && value.trim().length > 0
-					? [value.trim()]
-					: [];
-
-			if (normalizedValues.length > 0) {
-				nextAttributes[attributeName] = normalizedValues;
-			} else {
-				delete nextAttributes[attributeName];
-			}
-
-			return {
-				...prev,
-				attributes: nextAttributes,
-			};
-		});
-	};
-
-	const loadUserProfileConfig = useCallback(async () => {
-		setProfileLoading(true);
-		try {
-			const config = await KeycloakUserProfileService.getUserProfileConfig();
-			setUserProfileConfig(config);
-		} catch (err) {
-			console.error("Error loading user profile config:", err);
-		} finally {
-			setProfileLoading(false);
-		}
-	}, []);
 
 	const loadRoles = useCallback(async () => {
 		try {
@@ -316,8 +257,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 
 		loadRoles();
-		loadUserProfileConfig();
-	}, [open, loadRoles, loadUserProfileConfig]);
+	}, [open, loadRoles]);
 
 	const hasUserInfoChanged = (normalizedAttributes?: Record<string, string[]>): boolean => {
 		const { originalData } = formState;
@@ -347,24 +287,13 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			return;
 		}
 
-		const attributesPayload = buildAttributesPayload();
-
-		if (userProfileConfig?.attributes) {
-			for (const attribute of userProfileConfig.attributes) {
-				if (RESERVED_PROFILE_ATTRIBUTE_NAMES.includes(attribute.name)) {
-					continue;
-				}
-
-				if (attribute.required) {
-					const value = attributesPayload[attribute.name];
-					if (!value || value.length === 0) {
-						const displayName = attribute.displayName.replace(/\$\{([^}]*)\}/g, "$1");
-						setError(`"${t(displayName) || attribute.name}" 是必填字段`);
-						return;
-					}
-				}
-			}
+		// 校验必填的人员密级
+		if (!personLevel || personLevel === "") {
+			setError("人员密级为必填项，请选择");
+			return;
 		}
+
+		const attributesPayload = buildAttributesPayload();
 
 		const hasUserInfoChanges = hasUserInfoChanged(attributesPayload);
 		const hasRoleChanges = formState.roleChanges.length > 0;
@@ -450,9 +379,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 	};
 
-	const resolveRoleBadgeVariant = (
-		roleName: string,
-	): "default" | "secondary" | "destructive" | "info" | "warning" | "success" | "error" | "outline" => {
+	const resolveRoleBadgeVariant = (roleName: string): "default" | "secondary" | "destructive" | "info" | "warning" | "success" | "error" | "outline" => {
 		if (isDataRole(roleName)) return "secondary";
 		if (isGovernanceRole(roleName)) return "warning";
 		if (isApplicationAdminRole(roleName)) return "info";
@@ -587,6 +514,24 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 										placeholder={`例如：${POSITION_SUGGESTIONS.join("、")}`}
 									/>
 								</div>
+								<div className="space-y-2">
+									<Label htmlFor="personLevel">人员密级 *</Label>
+									<Select value={personLevel} onValueChange={handlePersonLevelChange}>
+										<SelectTrigger className="w-full justify-between">
+											<SelectValue placeholder="请选择人员密级" />
+										</SelectTrigger>
+										<SelectContent>
+											{PERSON_SECURITY_LEVELS.map((option) => (
+												<SelectItem key={option.value} value={option.value}>
+													{option.label}（{option.value}）
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<p className="text-xs text-muted-foreground">
+										选择人员密级用于控制数据访问范围和角色分配。
+									</p>
+								</div>
 							</div>
 
 							<div className="grid grid-cols-2 gap-4">
@@ -617,77 +562,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									<Label htmlFor="emailVerified">邮箱已验证</Label>
 								</div>
 							</div>
-						</CardContent>
-					</Card>
-
-					<Card>
-						<CardHeader>
-							<CardTitle className="text-lg">安全属性</CardTitle>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div className="space-y-2">
-								<Label>人员密级 *</Label>
-								<Select value={personLevel} onValueChange={handlePersonLevelChange}>
-									<SelectTrigger className="w-full justify-between">
-										<SelectValue placeholder="请选择人员密级" />
-									</SelectTrigger>
-									<SelectContent>
-										{PERSON_SECURITY_LEVELS.map((option) => (
-											<SelectItem key={option.value} value={option.value}>
-												{option.label}（{option.value}）
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								<p className="text-xs text-muted-foreground">
-									人员密级决定自动分配的数据访问范围和可授予的数据密级角色。
-								</p>
-							</div>
-
-							<div className="space-y-2">
-								<Label>可访问数据密级（自动派生）</Label>
-								<div className="flex flex-wrap gap-2">
-									{derivedDataLevels.length > 0 ? (
-										derivedDataLevels.map((level) => (
-											<Badge key={level} variant="secondary">
-												{level.replace("_", " ")}
-											</Badge>
-										))
-									) : (
-										<span className="text-muted-foreground text-sm">未配置人员密级</span>
-									)}
-								</div>
-								<p className="text-xs text-muted-foreground">数据密级角色将由系统自动同步，请勿手动调整。</p>
-							</div>
-						</CardContent>
-					</Card>
-
-					<Card>
-						<CardHeader>
-							<CardTitle className="text-lg">扩展属性</CardTitle>
-						</CardHeader>
-						<CardContent>
-							{profileLoading ? (
-								<div className="flex items-center text-sm text-muted-foreground">
-									<Icon icon="mdi:loading" className="animate-spin mr-2" />
-									<span>加载配置中...</span>
-								</div>
-							) : userProfileConfig?.attributes ? (
-								<div className="grid grid-cols-2 gap-4">
-									{userProfileConfig.attributes
-										.filter((attr) => !RESERVED_PROFILE_ATTRIBUTE_NAMES.includes(attr.name))
-										.map((attribute) => (
-											<UserProfileField
-												key={attribute.name}
-												attribute={attribute}
-												value={formData.attributes[attribute.name]}
-												onChange={(value) => handleProfileFieldChange(attribute.name, value)}
-											/>
-										))}
-								</div>
-							) : (
-								<p className="text-sm text-muted-foreground">暂无额外属性配置。</p>
-							)}
 						</CardContent>
 					</Card>
 

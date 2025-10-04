@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { TreeSelect } from "antd";
-import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest, UserProfileConfig } from "#/keycloak";
-import { KeycloakRoleService, KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
+import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest } from "#/keycloak";
+import { KeycloakRoleService, KeycloakUserService } from "@/api/services/keycloakService";
 import { adminApi } from "@/admin/api/adminApi";
 import { POSITION_SUGGESTIONS } from "@/constants/user";
 import type { OrganizationNode } from "@/admin/types";
@@ -16,33 +17,12 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
-import { UserProfileField } from "./user-profile-field";
-import { t } from "@/locales/i18n";
 import {
-	DATA_SECURITY_LEVEL_LABELS,
 	PERSON_SECURITY_LEVELS,
-	deriveDataLevels,
 	isApplicationAdminRole,
 	isDataRole,
 	isGovernanceRole,
 } from "@/constants/governance";
-
-const RESERVED_PROFILE_ATTRIBUTE_NAMES = [
-	"username",
-	"email",
-	"firstName",
-	"lastName",
-	"fullName",
-	"locale",
-	"department",
-	"position",
-	"person_security_level",
-	"personnel_security_level",
-	"person_level",
-	"data_levels",
-];
-
-const DATA_LEVEL_LABEL_MAP = DATA_SECURITY_LEVEL_LABELS as Record<string, string>;
 
 type OrgTreeOption = {
 	value: string;
@@ -133,6 +113,7 @@ const createEmptyFormState = (): FormState => ({
 });
 
 export default function UserModal({ open, mode, user, onCancel, onSuccess }: UserModalProps) {
+	const queryClient = useQueryClient();
 	const [formData, setFormData] = useState<FormData>(() => createEmptyFormData());
 	const [formState, setFormState] = useState<FormState>(() => createEmptyFormState());
 	const [loading, setLoading] = useState(false);
@@ -141,9 +122,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [userRoles, setUserRoles] = useState<KeycloakRole[]>([]);
 	const [roleError, setRoleError] = useState<string>("");
 	const [personLevel, setPersonLevel] = useState<string>("GENERAL");
-	const [userProfileConfig, setUserProfileConfig] = useState<UserProfileConfig | null>(null);
-	const [profileLoading, setProfileLoading] = useState(false);
-
 	const [orgOptions, setOrgOptions] = useState<OrgTreeOption[]>([]);
 	const [orgIndex, setOrgIndex] = useState<Record<string, OrganizationNode>>({});
 	const [orgLoading, setOrgLoading] = useState(false);
@@ -221,12 +199,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		return normalizeAttributesForState(formData.attributes, personLevel);
 	}, [formData.attributes, normalizeAttributesForState, personLevel]);
 
-	const derivedDataLevels = useMemo(() => deriveDataLevels(personLevel), [personLevel]);
-	const resolveDataLevelLabel = useCallback(
-		(level: string) => DATA_LEVEL_LABEL_MAP[level] ?? level.replace(/^DATA_/, "").replace(/_/g, " "),
-		[],
-	);
-
 	const updateSingleValueAttribute = (key: string, value: string) => {
 		setFormData((prev) => {
 			const nextAttributes = { ...prev.attributes };
@@ -243,40 +215,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			};
 		});
 	};
-
-	const handleProfileFieldChange = (attributeName: string, value: string | string[]) => {
-		setFormData((prev) => {
-			const nextAttributes = { ...prev.attributes };
-			const normalizedValues = Array.isArray(value)
-				? value.map((item) => item.trim()).filter((item) => item.length > 0)
-				: typeof value === "string" && value.trim().length > 0
-					? [value.trim()]
-					: [];
-
-			if (normalizedValues.length > 0) {
-				nextAttributes[attributeName] = normalizedValues;
-			} else {
-				delete nextAttributes[attributeName];
-			}
-
-			return {
-				...prev,
-				attributes: nextAttributes,
-			};
-		});
-	};
-
-	const loadUserProfileConfig = useCallback(async () => {
-		setProfileLoading(true);
-		try {
-			const config = await KeycloakUserProfileService.getUserProfileConfig();
-			setUserProfileConfig(config);
-		} catch (err) {
-			console.error("Error loading user profile config:", err);
-		} finally {
-			setProfileLoading(false);
-		}
-	}, []);
 
 	const loadRoles = useCallback(async () => {
 		try {
@@ -413,9 +351,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 
 		loadRoles();
-		loadUserProfileConfig();
 		loadOrganizations();
-	}, [open, loadRoles, loadUserProfileConfig, loadOrganizations]);
+	}, [open, loadRoles, loadOrganizations]);
 
 	const hasUserInfoChanged = (
 		normalizedAttributes?: Record<string, string[]>,
@@ -461,23 +398,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			return;
 		}
 
-		if (userProfileConfig?.attributes) {
-			for (const attribute of userProfileConfig.attributes) {
-				if (RESERVED_PROFILE_ATTRIBUTE_NAMES.includes(attribute.name)) {
-					continue;
-				}
-
-				if (attribute.required) {
-					const value = attributesPayload[attribute.name];
-					if (!value || value.length === 0) {
-						const displayName = attribute.displayName.replace(/\$\{([^}]*)\}/g, "$1");
-						setError(`"${t(displayName) || attribute.name}" 是必填字段`);
-						return;
-					}
-				}
-			}
-		}
-
 		const hasUserInfoChanges = hasUserInfoChanged(attributesPayload, groupPathsPayload);
 		const hasRoleChanges = formState.roleChanges.length > 0;
 
@@ -489,73 +409,77 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		setLoading(true);
 		setError("");
 
-		try {
-			if (mode === "create") {
-				const createData: CreateUserRequest = {
-					username,
-					email: email || undefined,
-					firstName: fullName,
-					enabled: formData.enabled,
-					emailVerified: formData.emailVerified,
-					attributes: attributesPayload,
-					groups: groupPathsPayload.length > 0 ? groupPathsPayload : undefined,
-				};
+        try {
+            // 恢复使用 Keycloak 接口，由后端生成审批请求并内嵌 changeRequestId，避免“审批请求不存在”
+            if (mode === "create") {
+                const createData: CreateUserRequest = {
+                    username,
+                    email: email || undefined,
+                    firstName: fullName,
+                    enabled: formData.enabled,
+                    emailVerified: formData.emailVerified,
+                    attributes: attributesPayload,
+                    groups: groupPathsPayload.length > 0 ? groupPathsPayload : undefined,
+                };
 
-				const response = await KeycloakUserService.createUser(createData);
-				if (response.userId) {
-					toast.success("用户创建请求已提交，等待审批");
-				} else {
-					toast.success("用户创建请求提交成功");
-				}
-			} else if (mode === "edit" && user?.id) {
-				const emailPayload = email || (formState.originalData.email ? "" : undefined);
+                const response = await KeycloakUserService.createUser(createData);
+                if (response?.message) {
+                    toast.success(response.message);
+                } else {
+                    toast.success("用户创建请求已提交，等待审批");
+                }
+            } else if (mode === "edit" && user?.id) {
+                const emailPayload = email || (formState.originalData.email ? "" : undefined);
 
-				if (hasUserInfoChanges) {
-					const updateData: UpdateUserRequest = {
-						id: user.id,
-						username,
-						email: emailPayload,
-						firstName: fullName,
-						enabled: formData.enabled,
-						emailVerified: formData.emailVerified,
-						attributes: attributesPayload,
-						groups: groupPathsPayload.length > 0 ? groupPathsPayload : [],
-					};
+                if (hasUserInfoChanges) {
+                    const updateData: UpdateUserRequest = {
+                        id: user.id,
+                        username,
+                        email: emailPayload,
+                        firstName: fullName,
+                        enabled: formData.enabled,
+                        emailVerified: formData.emailVerified,
+                        attributes: attributesPayload,
+                        groups: groupPathsPayload.length > 0 ? groupPathsPayload : [],
+                    };
 
-					const response = await KeycloakUserService.updateUser(user.id, updateData);
-					if (response.message) {
-						toast.success(`用户信息更新请求提交成功: ${response.message}`);
-					} else {
-						toast.success("用户信息更新请求提交成功");
-					}
-				}
+                    const response = await KeycloakUserService.updateUser(user.id, updateData);
+                    if (response?.message) {
+                        toast.success(`用户信息更新请求提交成功: ${response.message}`);
+                    } else {
+                        toast.success("用户信息更新请求提交成功");
+                    }
+                }
 
-				if (hasRoleChanges) {
-					const rolesToAdd = formState.roleChanges.filter((rc) => rc.action === "add").map((rc) => rc.role);
+                if (hasRoleChanges) {
+                    const rolesToAdd = formState.roleChanges.filter((rc) => rc.action === "add").map((rc) => rc.role);
 
-					if (rolesToAdd.length > 0) {
-						const response = await KeycloakUserService.assignRolesToUser(user.id, rolesToAdd);
-						if (response.message) {
-							toast.success(`角色分配请求提交成功: ${response.message}`);
-						} else {
-							toast.success("角色分配请求提交成功");
-						}
-					}
+                    if (rolesToAdd.length > 0) {
+                        const response = await KeycloakUserService.assignRolesToUser(user.id, rolesToAdd);
+                        if (response?.message) {
+                            toast.success(`角色分配请求提交成功: ${response.message}`);
+                        } else {
+                            toast.success("角色分配请求提交成功");
+                        }
+                    }
 
-					const rolesToRemove = formState.roleChanges.filter((rc) => rc.action === "remove").map((rc) => rc.role);
+                    const rolesToRemove = formState.roleChanges.filter((rc) => rc.action === "remove").map((rc) => rc.role);
 
-					if (rolesToRemove.length > 0) {
-						const response = await KeycloakUserService.removeRolesFromUser(user.id, rolesToRemove);
-						if (response.message) {
-							toast.success(`角色移除请求提交成功: ${response.message}`);
-						} else {
-							toast.success("角色移除请求提交成功");
-						}
-					}
-				}
-			}
+                    if (rolesToRemove.length > 0) {
+                        const response = await KeycloakUserService.removeRolesFromUser(user.id, rolesToRemove);
+                        if (response?.message) {
+                            toast.success(`角色移除请求提交成功: ${response.message}`);
+                        } else {
+                            toast.success("角色移除请求提交成功");
+                        }
+                    }
+                }
+            }
 
-			onSuccess();
+            // 刷新“我发起的变更”和“审批中心”列表
+            try { await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests", "mine", "dashboard"] }); } catch {}
+            try { await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests"] }); } catch {}
+            onSuccess();
 		} catch (err: any) {
 			setError(err.message || "操作失败");
 			console.error("Error saving user:", err);
@@ -711,6 +635,29 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 										placeholder={`例如：${POSITION_SUGGESTIONS.join("、")}`}
 									/>
 								</div>
+								<div className="space-y-2">
+									<Label>人员密级 *</Label>
+									<Select value={personLevel} onValueChange={handlePersonLevelChange}>
+										<SelectTrigger className="w-full justify-between">
+											<SelectValue placeholder="请选择人员密级" />
+										</SelectTrigger>
+										<SelectContent>
+											{PERSON_SECURITY_LEVELS.map((option) => (
+												<SelectItem
+													key={option.value}
+													value={option.value}
+													disabled={option.value === "NON_SECRET"}
+													className={option.value === "NON_SECRET" ? "hidden" : undefined}
+											>
+												{option.label}
+											</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<p className="text-xs text-muted-foreground">
+										人员密级决定自动分配的数据访问范围和可授予的数据密级角色。
+									</p>
+								</div>
 							</div>
 
 							<div className="grid grid-cols-2 gap-4">
@@ -744,81 +691,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 						</CardContent>
 					</Card>
 
-					<Card>
-						<CardHeader>
-							<CardTitle className="text-lg">安全属性</CardTitle>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div className="space-y-2">
-								<Label>人员密级 *</Label>
-								<Select value={personLevel} onValueChange={handlePersonLevelChange}>
-									<SelectTrigger className="w-full justify-between">
-										<SelectValue placeholder="请选择人员密级" />
-									</SelectTrigger>
-								<SelectContent>
-									{PERSON_SECURITY_LEVELS.map((option) => (
-										<SelectItem
-											key={option.value}
-											value={option.value}
-											disabled={option.value === "NON_SECRET"}
-											className={option.value === "NON_SECRET" ? "hidden" : undefined}
-										>
-											{option.label}（{option.value}）
-										</SelectItem>
-									))}
-								</SelectContent>
-								</Select>
-								<p className="text-xs text-muted-foreground">
-									人员密级决定自动分配的数据访问范围和可授予的数据密级角色。
-								</p>
-							</div>
-
-							<div className="space-y-2">
-								<Label>可访问数据密级（自动派生）</Label>
-								<div className="flex flex-wrap gap-2">
-									{derivedDataLevels.length > 0 ? (
-										derivedDataLevels.map((level) => (
-											<Badge key={level} variant="secondary">
-												{resolveDataLevelLabel(level)}
-											</Badge>
-										))
-									) : (
-										<span className="text-muted-foreground text-sm">未配置人员密级</span>
-									)}
-								</div>
-								<p className="text-xs text-muted-foreground">数据密级角色将由系统自动同步，请勿手动调整。</p>
-							</div>
-						</CardContent>
-					</Card>
-
-					<Card>
-						<CardHeader>
-							<CardTitle className="text-lg">扩展属性</CardTitle>
-						</CardHeader>
-						<CardContent>
-							{profileLoading ? (
-								<div className="flex items-center text-sm text-muted-foreground">
-									<Icon icon="mdi:loading" className="animate-spin mr-2" />
-									<span>加载配置中...</span>
-								</div>
-							) : userProfileConfig?.attributes ? (
-								<div className="grid grid-cols-2 gap-4">
-									{userProfileConfig.attributes
-										.filter((attr) => !RESERVED_PROFILE_ATTRIBUTE_NAMES.includes(attr.name))
-										.map((attribute) => (
-											<UserProfileField
-												key={attribute.name}
-												attribute={attribute}
-												value={formData.attributes[attribute.name]}
-												onChange={(value) => handleProfileFieldChange(attribute.name, value)}
-											/>
-										))}
-								</div>
-							) : (
-								<p className="text-sm text-muted-foreground">暂无额外属性配置。</p>
-							)}
-						</CardContent>
-					</Card>
 
 					{mode === "edit" && user?.id && (
 						<Card>

@@ -241,13 +241,14 @@ export default function GroupMembersModal({ open, groupId, groupName, onCancel, 
 						dataSource={users}
 						loading={loading}
 						scroll={{ x: 800, y: 400 }}
-						pagination={{
-							pageSize: 20,
-							showSizeChanger: true,
-							showQuickJumper: true,
-							showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
-						}}
-					/>
+                    pagination={{
+                        pageSize: 10,
+                        showSizeChanger: true,
+                        pageSizeOptions: [10, 20, 50, 100],
+                        showQuickJumper: true,
+                        showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                    }}
+                />
 				</div>
 
 				<DialogFooter>

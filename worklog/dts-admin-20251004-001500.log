@@ -1,0 +1,122 @@
+DTS Admin - IAM/角色管理方案
+
+----------------------------------------
+1) 角色管理界面布局与交互（中文展示）
+----------------------------------------
+- 列表字段：角色 / 作用域 / 操作权限 / 绑定菜单 / 成员 / 操作
+- 角色：显示中文名（粗体）+ code（灰字小字）+ 英文名（悬浮）
+- 作用域：部门（含子部门） DEPT / 研究所共享区 INST
+- 操作权限：读取 / 写入 / 授权管理 / 导出（标签显示）
+- 绑定菜单：数量 + 弹窗编辑
+- 成员：人数 + 绑定管理
+- 操作：成员 / 编辑 / 删除
+
+----------------------------------------
+2) 角色中英文与稳定ID对照
+----------------------------------------
+中文名称    | 英文名称          | code(ID)       | zone | 权限
+---------------------------------------------------------------
+部门负责人  | Dept Owner       | DEPT_OWNER     | DEPT | 读✔ 写✔ 授✔ 导✖
+部门编辑    | Dept Editor      | DEPT_EDITOR    | DEPT | 读✔ 写✔ 授✖ 导✖
+部门查看    | Dept Viewer      | DEPT_VIEWER    | DEPT | 读✔ 写✖ 授✖ 导✖
+研究所负责人| Institute Owner  | INST_OWNER     | INST | 读✔ 写✔ 授✔ 导✖
+研究所编辑  | Institute Editor | INST_EDITOR    | INST | 读✔ 写✔ 授✖ 导✖
+研究所查看  | Institute Viewer | INST_VIEWER    | INST | 读✔ 写✖ 授✖ 导✖
+
+备注：
+- code 为 Keycloak Realm Role 名称和数据库唯一标识
+- description 用中文/英文说明
+- 数据密级不要作为角色，而作为资源标签
+
+----------------------------------------
+3) JDL 文件定义
+----------------------------------------
+enum Zone {
+  DEPT,
+  INST
+}
+
+entity Dept {
+  code String required unique,
+  nameZh String required,
+  nameEn String required,
+  parentCode String,
+  path String required
+}
+
+entity Role {
+  code String required unique,
+  nameZh String required,
+  nameEn String required,
+  zone Zone required,
+  canRead Boolean required,
+  canWrite Boolean required,
+  canManage Boolean required,
+  canExport Boolean required,
+  description String
+}
+
+entity Menu {
+  code String required unique,
+  nameZh String required,
+  nameEn String required,
+  parentCode String,
+  sortOrder Integer
+}
+
+entity RoleMenu {
+  roleCode String required,
+  menuCode String required
+}
+
+entity UserRoleBinding {
+  keycloakUserId String required,
+  roleCode String required,
+  boundDeptCode String,
+  createdAt Instant required,
+  createdBy String
+}
+
+relationship OneToMany {
+  Dept{children(code)} to Dept{parentCode}
+}
+
+paginate Dept with pagination
+paginate Role with pagination
+paginate Menu with pagination
+paginate RoleMenu with pagination
+paginate UserRoleBinding with pagination
+
+service all with serviceClass
+dto * with mapstruct
+filter *
+
+----------------------------------------
+4) 初始化数据 SQL 示例
+----------------------------------------
+INSERT INTO role (code, name_zh, name_en, zone, can_read, can_write, can_manage, can_export, description)
+VALUES
+('DEPT_OWNER','部门负责人','Dept Owner','DEPT', true, true,  true,  false, '本部门含子部门；读写与授权管理'),
+('DEPT_EDITOR','部门编辑','Dept Editor','DEPT', true, true,  false, false, '本部门含子部门；读写'),
+('DEPT_VIEWER','部门查看','Dept Viewer','DEPT', true, false, false, false, '本部门含子部门；只读'),
+('INST_OWNER','研究所负责人','Institute Owner','INST', true, true,  true,  false, '研究所共享区；读写与共享策略管理'),
+('INST_EDITOR','研究所编辑','Institute Editor','INST', true, true,  false, false, '研究所共享区；读写'),
+('INST_VIEWER','研究所查看','Institute Viewer','INST', true, false, false, false, '研究所共享区；只读');
+
+----------------------------------------
+5) 前端渲染要点
+----------------------------------------
+- 表格显示：nameZh 粗体 + code 灰字 + nameEn 悬浮
+- 权限标签直接取 canRead/canWrite/canManage/canExport
+- 菜单：显示绑定数量，点开树编辑
+- 成员：人数统计 + 弹窗管理
+- 编辑页：中文/英文名 + code(只读) + zone + 权限复选 + 备注
+- 国际化：使用 i18n 资源包；Keycloak 属性用字典映射中文说明
+
+----------------------------------------
+6) Keycloak 建议
+----------------------------------------
+- name = code (如 DEPT_OWNER)
+- description = 中文名 / 英文名
+- attributes 可附：zone, canWrite, canManage
+- dts-admin 与 Keycloak 同步：新增/更新/删除角色保持一致

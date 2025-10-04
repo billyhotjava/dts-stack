@@ -204,6 +204,10 @@
         "CREATE": "创建",
         "UPDATE": "更新",
         "DELETE": "删除",
+        "ENABLE": "启用",
+        "DISABLE": "禁用",
+        "GRANT_ROLE": "授权角色",
+        "REVOKE_ROLE": "回收角色",
         "BIND_ROLE": "绑定角色",
         "UNBIND_ROLE": "解绑角色",
         "CONFIG_SET": "配置变更",
@@ -215,6 +219,9 @@
       },
       "status": {
         "PENDING": "待审批",
+        "PROCESSING": "处理中",
+        "ON_HOLD": "待定",
+        "APPLIED": "已应用",
         "APPROVED": "已通过",
         "REJECTED": "已驳回",
         "FAILED": "失败",
@@ -226,10 +233,13 @@
       "resource": {
         "USER": "用户",
         "ROLE": "角色",
+        "CUSTOM_ROLE": "自定义角色",
+        "ROLE_ASSIGNMENT": "角色指派",
         "ORG": "组织",
         "CONFIG": "系统配置",
         "MENU": "菜单",
         "PORTAL_MENU": "门户菜单",
+        "CHANGE_REQUEST": "变更请求",
         "UNKNOWN": "未知资源"
       },
       "outcome": {

@@ -108,17 +108,29 @@ export default function AuditCenterView() {
 		return totalElements === 0 ? "暂无记录" : `显示第 ${from}-${to} 条，共 ${totalElements} 条`;
 	}, [page, size, totalElements]);
 
-	return (
-		<div className="space-y-6">
-			<Card>
-				<CardHeader className="space-y-2">
-					<CardTitle>查询条件</CardTitle>
-					<Text variant="body3" className="text-muted-foreground">
-						支持按时间范围、功能模块、操作人、目标位置与 IP 筛选审计记录。
-					</Text>
-				</CardHeader>
-				<CardContent className="space-y-4">
-					<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+    return (
+        <div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
+            {/* 老页面布局样式：页眉 + 右侧操作区 */}
+            <div className="flex flex-wrap items-center gap-3">
+                <Text variant="body1" className="text-lg font-semibold">日志审计</Text>
+                <div className="ml-auto flex items-center gap-2">
+                    <Button variant="outline" onClick={handleRefresh} disabled={loading}>
+                        {loading ? "刷新中..." : "刷新"}
+                    </Button>
+                    <Button onClick={handleExport} disabled={exporting || logs.length === 0}>
+                        {exporting ? "正在导出..." : "导出日志"}
+                    </Button>
+                </div>
+            </div>
+            <Card>
+                <CardHeader className="space-y-2">
+                    <CardTitle>查询条件</CardTitle>
+                    <Text variant="body3" className="text-muted-foreground">
+                        支持按时间范围、功能模块、操作人、目标位置与 IP 筛选审计记录。
+                    </Text>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
 						<DateTimeField
 							label="起始时间"
 							value={filters.from}
@@ -160,31 +172,24 @@ export default function AuditCenterView() {
 							onChange={(value) => setFilters((prev) => ({ ...prev, action: value || undefined }))}
 						/>
 					</div>
-					<div className="flex flex-wrap gap-3">
-						<Button type="button" variant="outline" onClick={() => setFilters({})}>
-							重置条件
-						</Button>
-						<Button type="button" variant="ghost" onClick={handleRefresh} disabled={loading}>
-							{loading ? "刷新中..." : "刷新"}
-						</Button>
-					</div>
-				</CardContent>
-			</Card>
+                    <div className="flex flex-wrap gap-3">
+                        <Button type="button" variant="outline" onClick={() => setFilters({})}>
+                            重置条件
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={handleRefresh} disabled={loading}>
+                            {loading ? "刷新中..." : "刷新"}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
 
 			<Card>
-				<CardHeader className="space-y-2 sm:flex sm:items-center sm:justify-between sm:space-y-0">
-					<div>
-						<CardTitle>日志记录</CardTitle>
-						<Text variant="body3" className="text-muted-foreground">
-							{paginationText}
-						</Text>
-					</div>
-					<div className="flex items-center gap-2">
-						<Button type="button" onClick={handleExport} disabled={exporting || logs.length === 0}>
-							{exporting ? "正在导出..." : "导出日志"}
-						</Button>
-					</div>
-				</CardHeader>
+                <CardHeader className="space-y-2">
+                    <CardTitle>日志记录</CardTitle>
+                    <Text variant="body3" className="text-muted-foreground">
+                        {paginationText}
+                    </Text>
+                </CardHeader>
 				<CardContent className="overflow-hidden p-0">
 					<div className="overflow-x-auto">
 						<table className="w-full min-w-[1120px] table-fixed text-sm">

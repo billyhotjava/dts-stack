@@ -158,6 +158,15 @@ export interface AdminRoleDetail {
 	scope?: "DEPARTMENT" | "INSTITUTE";
 	operations?: DataOperation[];
 	source?: string;
+	// Extended fields for richer role presentation (optional, backend-provided)
+	code?: string;
+	nameZh?: string;
+	nameEn?: string;
+	zone?: "DEPT" | "INST";
+	canRead?: boolean;
+	canWrite?: boolean;
+	canExport?: boolean;
+	canManage?: boolean;
 }
 
 export interface AdminDataset {

@@ -859,13 +859,8 @@ public class KeycloakApiResource {
         try {
             return switch (normalized) {
                 case "approve" -> {
-                    String token = currentAccessToken();
-                    if (token == null || token.isBlank()) {
-                        yield ResponseEntity
-                            .status(HttpStatus.UNAUTHORIZED)
-                            .body(ApiResponse.error("缺少授权令牌，无法执行审批操作"));
-                    }
-                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.approve(id, approver, note, token);
+                    // Use service account token inside service; current user is already authorized by Spring Security
+                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.approve(id, approver, note, null);
                     yield ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 case "reject" -> {
@@ -948,12 +943,61 @@ public class KeycloakApiResource {
     }
 
     @PostMapping("/keycloak/auth/logout")
-    public ResponseEntity<ApiResponse<Void>> logout() {
-        return ResponseEntity.ok(ApiResponse.ok(null));
+    public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) Map<String, String> body) {
+        String refreshToken = Optional.ofNullable(body).map(b -> b.get("refreshToken")).orElse(null);
+        try {
+            if (refreshToken != null && !refreshToken.isBlank()) {
+                try {
+                    keycloakAuthService.logout(refreshToken);
+                } catch (Exception ex) {
+                    // attempt best-effort revoke as a fallback
+                    try { keycloakAuthService.revokeRefreshToken(refreshToken); } catch (Exception ignore) {}
+                    throw ex;
+                }
+            }
+            auditService.record(currentUser(), "KC_AUTH_LOGOUT", "KC_AUTH", "self", "SUCCESS", null);
+            return ResponseEntity.ok(ApiResponse.ok(null));
+        } catch (Exception ex) {
+            auditService.record(currentUser(), "KC_AUTH_LOGOUT", "KC_AUTH", "self", "FAILURE", Optional.ofNullable(ex.getMessage()).orElse("logout failed"));
+            // From client perspective, even if Keycloak-side logout fails, we clear local session; return 200 to avoid blocking UX.
+            return ResponseEntity.ok(ApiResponse.ok(null));
+        }
     }
 
     @PostMapping("/keycloak/auth/refresh")
-    public ResponseEntity<ApiResponse<Map<String, String>>> refresh() {
-        return ResponseEntity.ok(ApiResponse.ok(Map.of("accessToken", UUID.randomUUID().toString())));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> refresh(@RequestBody(required = false) Map<String, String> body) {
+        String refreshToken = Optional.ofNullable(body).map(b -> b.get("refreshToken")).orElse(null);
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("缺少 refreshToken"));
+        }
+        try {
+            KeycloakAuthService.TokenResponse tokens = keycloakAuthService.refreshTokens(refreshToken);
+            Map<String, Object> data = new HashMap<>();
+            data.put("accessToken", tokens.accessToken());
+            if (tokens.refreshToken() != null) {
+                data.put("refreshToken", tokens.refreshToken());
+            }
+            if (tokens.expiresIn() != null) {
+                data.put("expiresIn", tokens.expiresIn());
+            }
+            if (tokens.refreshExpiresIn() != null) {
+                data.put("refreshExpiresIn", tokens.refreshExpiresIn());
+            }
+            if (tokens.tokenType() != null) {
+                data.put("tokenType", tokens.tokenType());
+            }
+            if (tokens.scope() != null) {
+                data.put("scope", tokens.scope());
+            }
+            auditService.record(currentUser(), "KC_AUTH_REFRESH", "KC_AUTH", "self", "SUCCESS", null);
+            return ResponseEntity.ok(ApiResponse.ok(data));
+        } catch (BadCredentialsException ex) {
+            auditService.record(currentUser(), "KC_AUTH_REFRESH", "KC_AUTH", "self", "FAILURE", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
+        } catch (Exception ex) {
+            String message = Optional.ofNullable(ex.getMessage()).filter(m -> !m.isBlank()).orElse("刷新失败，请稍后再试");
+            auditService.record(currentUser(), "KC_AUTH_REFRESH", "KC_AUTH", "self", "FAILURE", message);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(message));
+        }
     }
 }

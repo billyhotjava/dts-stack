@@ -33,6 +33,8 @@ public class KeycloakAuthService {
     private final ObjectMapper objectMapper;
     private final URI tokenEndpoint;
     private final URI userInfoEndpoint;
+    private final URI logoutEndpoint;
+    private final URI revokeEndpoint;
     private final String clientId;
     private final String clientSecret;
     private final String scopeParam;
@@ -52,6 +54,8 @@ public class KeycloakAuthService {
         this.scopeParam = normaliseScope(scope);
         this.tokenEndpoint = UriComponentsBuilder.fromUriString(issuerUri).path("/protocol/openid-connect/token").build().toUri();
         this.userInfoEndpoint = UriComponentsBuilder.fromUriString(issuerUri).path("/protocol/openid-connect/userinfo").build().toUri();
+        this.logoutEndpoint = UriComponentsBuilder.fromUriString(issuerUri).path("/protocol/openid-connect/logout").build().toUri();
+        this.revokeEndpoint = UriComponentsBuilder.fromUriString(issuerUri).path("/protocol/openid-connect/revoke").build().toUri();
     }
 
     public TokenResponse obtainToken(String username, String password) {
@@ -64,6 +68,42 @@ public class KeycloakAuthService {
         Map<String, Object> userInfo = fetchUserInfo(tokens.accessToken());
         Map<String, Object> enrichedUser = buildUserProfile(username, userInfo, claims);
         return new LoginResult(tokens, enrichedUser);
+    }
+
+    /**
+     * Refresh tokens using Keycloak's refresh_token grant.
+     */
+    public TokenResponse refreshTokens(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new IllegalArgumentException("refreshToken must not be blank");
+        }
+
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "refresh_token");
+        form.add("refresh_token", refreshToken);
+        form.add("client_id", clientId);
+        if (!clientSecret.isBlank()) {
+            form.add("client_secret", clientSecret);
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        try {
+            ResponseEntity<TokenResponse> response = restTemplate.exchange(
+                tokenEndpoint,
+                HttpMethod.POST,
+                new HttpEntity<>(form, headers),
+                TokenResponse.class
+            );
+            TokenResponse body = response.getBody();
+            if (body == null || body.accessToken() == null) {
+                throw new IllegalStateException("Keycloak refresh response missing access_token");
+            }
+            return body;
+        } catch (HttpStatusCodeException ex) {
+            throw translateAuthError(ex);
+        }
     }
 
     private TokenResponse exchangeForTokens(String username, String password) {
@@ -124,6 +164,70 @@ public class KeycloakAuthService {
             return body;
         } catch (HttpStatusCodeException ex) {
             throw translateAuthError(ex);
+        }
+    }
+
+    /**
+     * Perform RP-initiated logout to invalidate the refresh token/session in Keycloak.
+     */
+    public void logout(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new IllegalArgumentException("refreshToken must not be blank");
+        }
+
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("client_id", clientId);
+        if (!clientSecret.isBlank()) {
+            form.add("client_secret", clientSecret);
+        }
+        form.add("refresh_token", refreshToken);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        try {
+            ResponseEntity<Void> response = restTemplate.exchange(
+                logoutEndpoint,
+                HttpMethod.POST,
+                new HttpEntity<>(form, headers),
+                Void.class
+            );
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new IllegalStateException("Keycloak logout failed: status=" + response.getStatusCode());
+            }
+        } catch (HttpStatusCodeException ex) {
+            throw translateAuthError(ex);
+        }
+    }
+
+    /**
+     * Revoke refresh token as a safety fallback.
+     */
+    public void revokeRefreshToken(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("client_id", clientId);
+        if (!clientSecret.isBlank()) {
+            form.add("client_secret", clientSecret);
+        }
+        form.add("token", refreshToken);
+        form.add("token_type_hint", "refresh_token");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        try {
+            restTemplate.exchange(
+                revokeEndpoint,
+                HttpMethod.POST,
+                new HttpEntity<>(form, headers),
+                Void.class
+            );
+        } catch (RestClientException ex) {
+            // best-effort; ignore
+            log.debug("Keycloak revoke failed: {}", ex.getMessage());
         }
     }
 

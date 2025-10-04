@@ -12,6 +12,35 @@ const STORAGE_KEYS = {
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
+function decodeJwtExp(token?: string): number | null {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (payload.length % 4 !== 0) payload += "=";
+    const json = atob(payload);
+    const obj = JSON.parse(json);
+    if (obj && typeof obj.exp === "number") {
+      return obj.exp * 1000; // to ms
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function nextRefreshDelayMs(accessToken?: string): number {
+  const MIN_DELAY = 30 * 1000; // 30s
+  const DEFAULT_DELAY = 4 * 60 * 1000; // 4m fallback
+  const SKEW = 60 * 1000; // refresh 60s before expiry
+  const expMs = decodeJwtExp(accessToken);
+  if (!expMs) return DEFAULT_DELAY;
+  const now = Date.now();
+  const ms = Math.max(MIN_DELAY, expMs - now - SKEW);
+  return ms;
+}
+
 export default function SessionManager() {
   const router = useRouter();
   const user = useUserInfo();
@@ -65,30 +94,42 @@ export default function SessionManager() {
 
   useEffect(() => {
     if (!isLoggedIn || !token?.refreshToken) return;
-    let stopped = false;
-    const interval = setInterval(async () => {
-      if (stopped) return;
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const schedule = (delay: number) => {
+      if (cancelled) return;
+      timer = window.setTimeout(run, delay);
+    };
+
+    const run = async () => {
+      if (cancelled) return;
       try {
         const res = await userService.refresh(token.refreshToken!);
         const nextAccess = (res as any)?.accessToken;
         const nextRefresh = (res as any)?.refreshToken;
         if (nextAccess) {
           setUserToken({ accessToken: nextAccess, refreshToken: nextRefresh || token.refreshToken });
+          schedule(nextRefreshDelayMs(nextAccess));
+          return;
         }
+        // If backend didn't return new access token, reschedule based on current one.
+        schedule(nextRefreshDelayMs(token.accessToken));
       } catch (err) {
         toast.error("会话已过期，请重新登录");
         clearUserInfoAndToken();
         localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
         router.replace("/auth/login");
       }
-    }, 4 * 60 * 1000);
+    };
+
+    schedule(nextRefreshDelayMs(token.accessToken));
 
     return () => {
-      stopped = true;
-      clearInterval(interval);
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
     };
-  }, [isLoggedIn, token?.refreshToken, setUserToken, clearUserInfoAndToken, router]);
+  }, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken, router]);
 
   return null;
 }
-

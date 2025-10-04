@@ -26,6 +26,7 @@ import com.yuzhi.dts.admin.service.OrganizationService;
 import com.yuzhi.dts.admin.service.OrganizationSyncService;
 import com.yuzhi.dts.admin.domain.OrganizationNode;
 import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
+import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.service.PortalMenuService;
 import com.yuzhi.dts.admin.domain.PortalMenu;
 import com.yuzhi.dts.admin.domain.PortalMenuVisibility;
@@ -103,6 +104,7 @@ public class AdminApiResource {
     private final OrganizationService orgService;
     private final OrganizationSyncService organizationSyncService;
     private final ChangeRequestRepository crRepo;
+    private final AdminApprovalRequestRepository approvalRepo;
     private final ChangeRequestService changeRequestService;
     private final PortalMenuService portalMenuService;
     private final AdminDatasetRepository datasetRepo;
@@ -152,19 +154,19 @@ public class AdminApiResource {
         new BuiltinRoleSpec(
             "INSTITUTE",
             List.of("read", "write", "export"),
-            "面向全院共享区；可读取全院共享区内密级不超的数据，并写入全院共享区；可管理全院共享策略（需审批）；负责共享区的编辑/查看授权；导出高敏数据需审批。"
+            "面向全所共享区；可读取全所共享区内密级不超的数据，并写入全所共享区；可管理全所共享策略（需审批）；负责共享区的编辑/查看授权；导出高敏数据需审批。"
         ),
         "INST_EDITOR",
         new BuiltinRoleSpec(
             "INSTITUTE",
             List.of("read", "write", "export"),
-            "在全院共享区操作；可读取共享区符合密级要求的数据并写入同一共享区；无密级或共享策略调整权限；导出受策略限制。"
+            "在全所共享区操作；可读取共享区符合密级要求的数据并写入同一共享区；无密级或共享策略调整权限；导出受策略限制。"
         ),
         "INST_VIEWER",
         new BuiltinRoleSpec(
             "INSTITUTE",
             List.of("read"),
-            "覆盖全院共享区的只读角色；仅能读取密级不超的数据；无写入、策略或授权管理能力；导出被禁用。"
+            "覆盖全所共享区的只读角色；仅能读取密级不超的数据；无写入、策略或授权管理能力；导出被禁用。"
         )
     );
 
@@ -173,6 +175,7 @@ public class AdminApiResource {
         OrganizationService orgService,
         OrganizationSyncService organizationSyncService,
         ChangeRequestRepository crRepo,
+        AdminApprovalRequestRepository approvalRepo,
         ChangeRequestService changeRequestService,
         PortalMenuService portalMenuService,
         AdminDatasetRepository datasetRepo,
@@ -188,6 +191,7 @@ public class AdminApiResource {
         this.orgService = orgService;
         this.organizationSyncService = organizationSyncService;
         this.crRepo = crRepo;
+        this.approvalRepo = approvalRepo;
         this.changeRequestService = changeRequestService;
         this.portalMenuService = portalMenuService;
         this.datasetRepo = datasetRepo;
@@ -619,6 +623,28 @@ public class AdminApiResource {
         var list = crRepo.findByRequestedBy(me).stream().map(AdminApiResource::toChangeVM).toList();
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "CR_LIST_MINE", "CHANGE_REQUEST", me, "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(list));
+    }
+
+    /**
+     * 维护：清理所有“提交申请(变更请求)”与“审批请求”的历史数据。
+     * 仅限系统管理员或授权管理员调用。
+     */
+    @PostMapping("/maintenance/purge-requests")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('ROLE_SYS_ADMIN','ROLE_AUTH_ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> purgeRequests(@RequestBody(required = false) Map<String, Object> body) {
+        String actor = com.yuzhi.dts.admin.security.SecurityUtils.getCurrentUserLogin().orElse("sysadmin");
+        long approvals = approvalRepo.count();
+        long changes = crRepo.count();
+
+        // 先清理审批请求（级联删除其 items），再清理变更请求
+        approvalRepo.deleteAllInBatch();
+        crRepo.deleteAllInBatch();
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("deletedApprovals", approvals);
+        result.put("deletedChangeRequests", changes);
+        auditService.record(actor, "MAINTENANCE_PURGE_REQUESTS", "ADMIN", "purge", "SUCCESS", result.toString());
+        return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
     @PostMapping("/change-requests")
@@ -1824,6 +1850,24 @@ public class AdminApiResource {
         int memberCount = parseInteger(attributes.get("memberCount"), attributes.get("members"));
         String approvalFlow = firstNonBlank(attributes.get("approvalFlow"), "SYSADMIN/AUTHADMIN");
         String updatedAt = firstNonBlank(attributes.get("updatedAt"), fallbackInstant.toString());
+
+        // New fields aligned with worklog spec (minimal, derived when possible)
+        String nameZh = firstNonBlank(attributes.get("nameZh"), null);
+        String nameEn = firstNonBlank(attributes.get("nameEn"), null);
+        String code = normalizedName;
+        String zone = null;
+        if ("DEPARTMENT".equalsIgnoreCase(scope)) {
+            zone = "DEPT";
+        } else if ("INSTITUTE".equalsIgnoreCase(scope)) {
+            zone = "INST";
+        }
+        boolean canRead = operations.contains("read");
+        boolean canWrite = operations.contains("write");
+        boolean canExport = operations.contains("export");
+        boolean canManage =
+            // Prefer explicit attribute, otherwise infer for *_OWNER
+            Boolean.parseBoolean(firstNonBlank(attributes.get("canManage"), "false")) || normalizedName.endsWith("_OWNER");
+
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("id", firstNonBlank(role != null ? role.getId() : null, "role-" + normalizedName));
         summary.put("name", displayName);
@@ -1838,6 +1882,16 @@ public class AdminApiResource {
         }
         summary.put("operations", new ArrayList<>(operations));
         summary.put("source", role != null ? "keycloak" : "builtin");
+
+        // Additional presentation fields
+        summary.put("code", code);
+        if (nameZh != null) summary.put("nameZh", nameZh);
+        if (nameEn != null) summary.put("nameEn", nameEn);
+        if (zone != null) summary.put("zone", zone);
+        summary.put("canRead", canRead);
+        summary.put("canWrite", canWrite);
+        summary.put("canExport", canExport);
+        summary.put("canManage", canManage);
         return summary;
     }
 
@@ -1909,7 +1963,7 @@ public class AdminApiResource {
     }
 
     private String resolveOrgName(Long orgId) {
-        if (orgId == null) return "全院共享区";
+        if (orgId == null) return "全所共享区";
         for (OrganizationNode root : orgService.findTree()) {
             OrganizationNode found = findOrg(root, orgId);
             if (found != null) return found.getName();
@@ -1953,7 +2007,7 @@ public class AdminApiResource {
             if (dr == null) return "数据密级无效";
             if (userRank < dr) return "用户密级不足以访问数据集 " + d.getBusinessCode();
             if (scopeOrgId == null) {
-                if (!Boolean.TRUE.equals(d.getIsInstituteShared())) return "数据集 " + d.getBusinessCode() + " 未进入全院共享区";
+                if (!Boolean.TRUE.equals(d.getIsInstituteShared())) return "数据集 " + d.getBusinessCode() + " 未进入全所共享区";
             } else if (!Objects.equals(scopeOrgId, d.getOwnerOrgId())) {
                 return "数据集 " + d.getBusinessCode() + " 不属于所选机构";
             }

@@ -338,9 +338,21 @@ export default function UserDetail() {
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
-					{userRoles.length > 0 ? (
-						<Table rowKey="id" columns={roleColumns} dataSource={userRoles} pagination={false} size="small" />
-					) : (
+                    {userRoles.length > 0 ? (
+                        <Table
+                            rowKey="id"
+                            columns={roleColumns}
+                            dataSource={userRoles}
+                            pagination={{
+                                pageSize: 10,
+                                showSizeChanger: true,
+                                pageSizeOptions: [10, 20, 50, 100],
+                                showQuickJumper: true,
+                                showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                            }}
+                            size="small"
+                        />
+                    ) : (
 						<div className="text-center py-8 text-muted-foreground">
 							<Icon icon="mdi:account-group-outline" size={48} className="mx-auto mb-2 opacity-50" />
 							<p>暂无分配角色</p>
@@ -355,9 +367,21 @@ export default function UserDetail() {
 					<CardTitle>所属组 ({userGroups.length})</CardTitle>
 				</CardHeader>
 				<CardContent>
-					{userGroups.length > 0 ? (
-						<Table rowKey="id" columns={groupColumns} dataSource={userGroups} pagination={false} size="small" />
-					) : (
+                    {userGroups.length > 0 ? (
+                        <Table
+                            rowKey="id"
+                            columns={groupColumns}
+                            dataSource={userGroups}
+                            pagination={{
+                                pageSize: 10,
+                                showSizeChanger: true,
+                                pageSizeOptions: [10, 20, 50, 100],
+                                showQuickJumper: true,
+                                showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                            }}
+                            size="small"
+                        />
+                    ) : (
 						<div className="text-center py-8 text-muted-foreground">
 							<Icon icon="mdi:account-group-outline" size={48} className="mx-auto mb-2 opacity-50" />
 							<p>暂无所属组</p>

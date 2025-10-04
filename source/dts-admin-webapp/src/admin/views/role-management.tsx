@@ -24,13 +24,13 @@ import { toast } from "sonner";
 
 const OPERATION_LABELS: Record<DataOperation, string> = {
     read: "读取",
-    write: "编辑",
+    write: "写入",
     export: "导出",
 };
 
 const SCOPE_LABELS: Record<"DEPARTMENT" | "INSTITUTE", string> = {
-    DEPARTMENT: "部门",
-    INSTITUTE: "全院共享区",
+    DEPARTMENT: "部门（含子部门）",
+    INSTITUTE: "研究所共享区",
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -46,9 +46,14 @@ interface RoleRow {
     authority: string;
     displayName: string;
     canonical: string;
+    code?: string;
+    nameZh?: string;
+    nameEn?: string;
+    zone?: "DEPT" | "INST";
     description?: string | null;
     scope?: "DEPARTMENT" | "INSTITUTE";
     operations: DataOperation[];
+    canManage?: boolean;
     menuIds: number[];
     menuLabels: string[];
     assignments: AdminRoleAssignment[];
@@ -133,11 +138,16 @@ export default function RoleManagementView() {
             const entry: RoleRow = {
                 key: role.id?.toString() ?? role.name,
                 authority: role.name,
-                displayName: role.name,
+                displayName: (role as any).nameZh || role.name,
                 canonical,
+                code: (role as any).code || canonical,
+                nameZh: (role as any).nameZh,
+                nameEn: (role as any).nameEn,
+                zone: (role as any).zone,
                 description: role.description,
                 scope: role.scope ?? undefined,
                 operations: role.operations ?? [],
+                canManage: (role as any).canManage ?? canonical.endsWith("_OWNER"),
                 menuIds,
                 menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
                 assignments: assignmentMap.get(canonical) ?? [],
@@ -174,6 +184,7 @@ export default function RoleManagementView() {
                     description: role.description,
                     scope: role.scope,
                     operations: role.operations ?? [],
+                    canManage: canonical.endsWith("_OWNER"),
                     menuIds,
                     menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
                     assignments: assignmentMap.get(canonical) ?? [],
@@ -223,9 +234,17 @@ export default function RoleManagementView() {
                 dataIndex: "displayName",
                 key: "name",
                 width: 240,
+                onCell: () => ({ style: { verticalAlign: "middle" } }),
                 render: (_value, record) => {
-                    const label = (record.description && record.description.trim()) || record.displayName || record.authority;
-                    return <span className="font-medium">{label}</span>;
+                    const zh = (record.nameZh && record.nameZh.trim()) || record.displayName || record.authority;
+                    const code = record.code || record.canonical;
+                    const en = record.nameEn || "";
+                    return (
+                        <div title={en || undefined} className="flex min-w-0 flex-col">
+                            <span className="truncate font-medium">{code}</span>
+                            {/* <span className="truncate text-xs text-muted-foreground">{code}</span> */}
+                        </div>
+                    );
                 },
             },
             {
@@ -233,42 +252,71 @@ export default function RoleManagementView() {
                 dataIndex: "scope",
                 key: "scope",
                 width: 140,
-                render: (scope?: "DEPARTMENT" | "INSTITUTE") =>
-                    scope ? SCOPE_LABELS[scope] : <Text variant="body3" className="text-muted-foreground">未设置</Text>,
+                onCell: () => ({ style: { verticalAlign: "middle", whiteSpace: "nowrap" } }),
+                render: (_scope: "DEPARTMENT" | "INSTITUTE" | undefined, record) => {
+                    const scope = record.scope;
+                    const zone = record.zone;
+                    if (!scope) return <Text variant="body3" className="text-muted-foreground">未设置</Text>;
+                    const label = SCOPE_LABELS[scope];
+                    const zoneLabel = zone ? ` ${zone}` : "";
+                    return <span>{label}{zoneLabel}</span>;
+                },
+            },
+            {
+                title: "描述",
+                dataIndex: "description",
+                key: "description",
+                width: 260,
+                onCell: () => ({ style: { verticalAlign: "middle" } }),
+                render: (value: string | null | undefined) => {
+                    const v = (value ?? "").trim();
+                    return v ? (
+                        <span className="truncate block max-w-full" title={v}>{v}</span>
+                    ) : (
+                        <Text variant="body3" className="text-muted-foreground">未填写</Text>
+                    );
+                },
             },
             {
                 title: "操作权限",
                 dataIndex: "operations",
                 key: "operations",
-                width: 200,
-                render: (operations: DataOperation[]) =>
-                    operations.length ? (
-                        <div className="flex flex-wrap gap-1">
-                            {operations.map((operation) => (
-                                <Badge key={operation} variant="outline">
-                                    {OPERATION_LABELS[operation]}
-                                </Badge>
+                width: 160,
+                onCell: () => ({ style: { verticalAlign: "middle" } }),
+                render: (_ops: DataOperation[], record) => {
+                    const operations = record.operations || [];
+                    const tags: string[] = operations.map((op) => OPERATION_LABELS[op]);
+                    if (record.canManage) tags.push("授权管理");
+                    return tags.length ? (
+                        <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
+                            {tags.slice(0, 2).map((t) => (
+                                <Badge key={t} variant="outline">{t}</Badge>
                             ))}
+                            {tags.length > 2 ? (
+                                <Badge variant="secondary">+{tags.length - 2}</Badge>
+                            ) : null}
                         </div>
                     ) : (
                         <Text variant="body3" className="text-muted-foreground">未配置</Text>
-                    ),
+                    );
+                },
             },
             {
                 title: "绑定菜单",
                 dataIndex: "menuLabels",
                 key: "menus",
-                width: 260,
+                width: 220,
+                onCell: () => ({ style: { verticalAlign: "middle" } }),
                 render: (menus: string[]) =>
                     menus.length ? (
-                        <div className="flex flex-wrap gap-1">
-                            {menus.slice(0, 4).map((menu) => (
+                        <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
+                            {menus.slice(0, 3).map((menu) => (
                                 <Badge key={menu} variant="outline">
                                     {menu}
                                 </Badge>
                             ))}
-                            {menus.length > 4 ? (
-                                <Badge variant="secondary">+{menus.length - 4}</Badge>
+                            {menus.length > 3 ? (
+                                <Badge variant="secondary">+{menus.length - 3}</Badge>
                             ) : null}
                         </div>
                     ) : (
@@ -278,16 +326,18 @@ export default function RoleManagementView() {
             {
                 title: "成员",
                 key: "members",
+                width: 220,
+                onCell: () => ({ style: { verticalAlign: "middle" } }),
                 render: (_value, record) =>
                     record.assignments.length ? (
-                        <div className="flex flex-wrap gap-1">
-                            {record.assignments.slice(0, 4).map((assignment) => (
+                        <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
+                            {record.assignments.slice(0, 2).map((assignment) => (
                                 <Badge key={assignment.id} variant="outline">
                                     {assignment.displayName || assignment.username}
                                 </Badge>
                             ))}
-                            {record.assignments.length > 4 ? (
-                                <Badge variant="secondary">+{record.assignments.length - 4}</Badge>
+                            {record.assignments.length > 2 ? (
+                                <Badge variant="secondary">+{record.assignments.length - 2}</Badge>
                             ) : null}
                         </div>
                     ) : (
@@ -297,8 +347,8 @@ export default function RoleManagementView() {
             {
                 title: "操作",
                 key: "actions",
-                fixed: "right",
-                width: 220,
+                width: 200,
+                onCell: () => ({ style: { verticalAlign: "middle" } }),
                 render: (_value, record) => {
                     const immutable = record.source === "builtin";
                     return (
@@ -353,8 +403,16 @@ export default function RoleManagementView() {
                             rowKey="key"
                             columns={columns}
                             dataSource={roleRows}
-                            pagination={false}
-                            scroll={{ x: 1100 }}
+                            pagination={{
+                                pageSize: 10,
+                                showSizeChanger: true,
+                                pageSizeOptions: [10, 20, 50, 100],
+                                showQuickJumper: true,
+                                showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                            }}
+                            size="small"
+                            tableLayout="fixed"
+                            scroll={{ x: 1400 }}
                         />
                     )}
                 </CardContent>
@@ -444,6 +502,11 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
             toast.error("请输入角色名称");
             return;
         }
+        const trimmedDescription = description.trim();
+        if (!trimmedDescription) {
+            toast.error("请输入说明");
+            return;
+        }
         if (operations.size === 0) {
             toast.error("至少选择一个操作权限");
             return;
@@ -456,7 +519,7 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                 scope,
                 operations: Array.from(operations),
                 allowDesensitizeJson: allowDesensitize,
-                description: description.trim() || undefined,
+                description: trimmedDescription,
                 reason: trimmedReason,
             };
             const change = await adminApi.createCustomRole(payload);
@@ -504,19 +567,33 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                     <DialogTitle>新增角色</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 text-sm">
-                    <div className="space-y-2">
-                        <label htmlFor="role-name" className="font-medium">
-                            角色名称
-                        </label>
-                        <Input
-                            id="role-name"
-                            placeholder="如：DEPT_OWNER"
-                            value={name}
-                            onChange={(event) => setName(event.target.value)}
-                        />
-                        <Text variant="body3" className="text-muted-foreground">
-                            建议使用大写英文与下划线，审批通过后会同步至 Keycloak。
-                        </Text>
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                            <label htmlFor="role-name" className="font-medium">
+                                角色名称
+                            </label>
+                            <Input
+                                id="role-name"
+                                placeholder="如：DEPT_OWNER"
+                                value={name}
+                                onChange={(event) => setName(event.target.value)}
+                            />
+                            <Text variant="body3" className="text-muted-foreground">
+                                建议使用大写英文与下划线
+                            </Text>
+                        </div>
+                        <div className="space-y-2">
+                            <label htmlFor="role-description" className="font-medium">
+                             描述 
+                            </label>
+                            <Textarea
+                                id="role-description"
+                                rows={2}
+                                placeholder="补充角色用途，便于审批记录"
+                                value={description}
+                                onChange={(event) => setDescription(event.target.value)}
+                            />
+                        </div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
@@ -529,7 +606,7 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="DEPARTMENT">部门</SelectItem>
-                                    <SelectItem value="INSTITUTE">全院共享区</SelectItem>
+                                    <SelectItem value="INSTITUTE">全所共享区</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -582,18 +659,7 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                             审批通过后，所选菜单将自动纳入该角色的可访问范围。
                         </Text>
                     </div>
-                    <div className="space-y-2">
-                        <label htmlFor="role-description" className="font-medium">
-                            说明（可选）
-                        </label>
-                        <Textarea
-                            id="role-description"
-                            rows={3}
-                            placeholder="补充角色用途，便于审批记录"
-                            value={description}
-                            onChange={(event) => setDescription(event.target.value)}
-                        />
-                    </div>
+                    
                     <div className="space-y-2">
                         <label htmlFor="role-reason" className="font-medium">
                             审批备注（可选）
@@ -771,7 +837,7 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="DEPARTMENT">部门</SelectItem>
-                                        <SelectItem value="INSTITUTE">全院共享区</SelectItem>
+                                        <SelectItem value="INSTITUTE">全所共享区</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -792,7 +858,7 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
                         </div>
                         <div className="space-y-2">
                             <label htmlFor="edit-description" className="font-medium">
-                                说明（可选）
+                                说明
                             </label>
                             <Textarea
                                 id="edit-description"
@@ -977,7 +1043,7 @@ function MembersDialog({ target, onClose }: MembersDialogProps) {
                                         {assignment.username}
                                     </Text>
                                 </div>
-                                <Badge variant="outline">{assignment.scopeOrgName || "全院共享区"}</Badge>
+                                <Badge variant="outline">{assignment.scopeOrgName || "全所共享区"}</Badge>
                             </div>
                             <div className="mt-2 flex flex-wrap gap-2">
                                 <Badge variant="secondary">{assignment.userSecurityLevel}</Badge>
