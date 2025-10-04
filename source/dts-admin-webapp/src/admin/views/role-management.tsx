@@ -697,15 +697,15 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
         setSubmitting(true);
         try {
             if (scopeChanged || descriptionChanged) {
-                const normalizedAuthority = toRoleAuthority(target.authority);
-                const resourceIdentifier = normalizedAuthority || target.authority;
+                const roleName = toRoleName(target.authority);
+                const resourceIdentifier = roleName || target.authority;
                 const payload = {
                     resourceType: "ROLE",
                     action: "UPDATE",
                     resourceId: resourceIdentifier,
                     payloadJson: JSON.stringify({
                         id: target.id,
-                        name: resourceIdentifier,
+                        name: roleName,
                         scope,
                         operations: nextOperations,
                         description: description.trim() || undefined,
@@ -713,14 +713,14 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
                     diffJson: JSON.stringify({
                         before: {
                             id: target.id ?? null,
-                            name: resourceIdentifier,
+                            name: roleName,
                             scope: target.scope ?? null,
                             operations: target.operations ?? [],
                             description: target.description ?? null,
                         },
                         after: {
                             id: target.id ?? null,
-                            name: resourceIdentifier,
+                            name: roleName,
                             scope,
                             operations: nextOperations,
                             description: description.trim() || null,
@@ -879,12 +879,12 @@ function DeleteRoleDialog({ target, onClose, onSubmitted, menuRoleMap }: DeleteR
         setSubmitting(true);
         try {
             const trimmedReason = reason.trim() || undefined;
-            const authority = toRoleAuthority(target.authority);
+            const roleName = toRoleName(target.authority);
             const payload = {
                 resourceType: "ROLE",
                 action: "DELETE",
-                resourceId: authority,
-                payloadJson: JSON.stringify({ id: target.id, name: authority }),
+                resourceId: roleName,
+                payloadJson: JSON.stringify({ id: target.id, name: roleName }),
                 reason: trimmedReason,
             };
             const change = await adminApi.createChangeRequest(payload);
@@ -1008,6 +1008,19 @@ function canonicalRole(value: string | null | undefined): string {
     return value.trim().toUpperCase().replace(/^ROLE[_-]?/, "").replace(/_/g, "");
 }
 
+function toRoleName(value: string | null | undefined): string {
+    if (!value) return "";
+    let upper = value.trim().toUpperCase();
+    if (upper.startsWith("ROLE_")) {
+        upper = upper.substring(5);
+    } else if (upper.startsWith("ROLE-")) {
+        upper = upper.substring(5);
+    }
+    // keep underscores; normalize other non-word to underscore and collapse
+    upper = upper.replace(/[^A-Z0-9_]/g, "_").replace(/_+/g, "_");
+    return upper;
+}
+
 function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
     options: MenuOption[];
     roleToMenuIds: Map<string, number[]>;
@@ -1074,46 +1087,47 @@ async function submitMenuChangeRequests(params: {
     const affectedIds = new Set<number>();
     desiredMenuIds.forEach((id) => affectedIds.add(id));
     originalMenuIds.forEach((id) => affectedIds.add(id));
-    const tasks: Promise<void>[] = [];
 
+    // Build batched updates: only include items where the role binding actually changes
+    const updates: { id: number; allowedRoles: string[]; _beforeAllowedRoles: string[] }[] = [];
     affectedIds.forEach((menuId) => {
         const option = menuRoleMap.get(menuId);
-        if (!option) {
-            return;
-        }
-        const existingRoles = new Set(option.rawRoles);
+        if (!option) return;
+        const beforeAllowedRoles = option.rawRoles;
+        const existingRoles = new Set(beforeAllowedRoles);
         const shouldHave = desiredMenuIds.has(menuId);
         const currentlyHas = existingRoles.has(authority);
-        if (shouldHave === currentlyHas) {
-            return;
-        }
-        if (shouldHave) {
-            existingRoles.add(authority);
-        } else {
-            existingRoles.delete(authority);
-        }
+        if (shouldHave === currentlyHas) return;
+        if (shouldHave) existingRoles.add(authority);
+        else existingRoles.delete(authority);
         const allowedRoles = Array.from(existingRoles).sort();
-        tasks.push(
-            (async () => {
-                const payload = {
-                    resourceType: "PORTAL_MENU",
-                    action: "UPDATE",
-                    resourceId: String(menuId),
-                    payloadJson: JSON.stringify({ allowedRoles }),
-                    reason,
-                };
-                const change = await adminApi.createChangeRequest(payload);
-                await adminApi.submitChangeRequest(change.id);
-                option.rawRoles = allowedRoles;
-                option.canonicalRoles = allowedRoles.map(canonicalRole).filter((role) => role.length > 0);
-            })()
-        );
+        updates.push({ id: menuId, allowedRoles, _beforeAllowedRoles: beforeAllowedRoles });
     });
 
-    if (tasks.length === 0) {
-        return;
-    }
-    await Promise.all(tasks);
+    if (updates.length === 0) return;
+
+    const payload = {
+        resourceType: "PORTAL_MENU",
+        action: "BATCH_UPDATE",
+        resourceId: undefined,
+        payloadJson: JSON.stringify({ updates: updates.map(({ id, allowedRoles }) => ({ id, allowedRoles })) }),
+        diffJson: JSON.stringify({
+            items: updates.map((u) => ({ id: u.id, before: { allowedRoles: u._beforeAllowedRoles }, after: { allowedRoles: u.allowedRoles } })),
+        }),
+        category: "PORTAL_MENU",
+        reason,
+    } as const;
+
+    const change = await adminApi.createChangeRequest(payload as any);
+    await adminApi.submitChangeRequest(change.id);
+
+    // Optimistically update local cache for immediate feedback
+    updates.forEach(({ id, allowedRoles }) => {
+        const option = menuRoleMap.get(id);
+        if (!option) return;
+        option.rawRoles = allowedRoles;
+        option.canonicalRoles = allowedRoles.map(canonicalRole).filter((role) => role.length > 0);
+    });
 }
 
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {

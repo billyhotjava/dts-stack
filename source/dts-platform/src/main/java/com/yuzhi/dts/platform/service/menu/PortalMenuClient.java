@@ -58,6 +58,53 @@ public class PortalMenuClient {
         return Collections.emptyList();
     }
 
+    /**
+     * Fetch portal menu tree with audience hints so that dts-admin can filter by roles/permissions/dataLevel.
+     */
+    public List<RemoteMenuNode> fetchMenuTreeForAudience(List<String> roles, List<String> permissions, String dataLevel) {
+        if (!props.isEnabled()) {
+            log.debug("Portal menu client disabled via configuration");
+            return List.of();
+        }
+        try {
+            StringBuilder qs = new StringBuilder();
+            if (roles != null) {
+                for (String r : roles) {
+                    if (r == null || r.isBlank()) continue;
+                    if (qs.length() == 0) qs.append("?"); else qs.append("&");
+                    qs.append("roles=").append(urlEncode(r));
+                }
+            }
+            if (permissions != null) {
+                for (String p : permissions) {
+                    if (p == null || p.isBlank()) continue;
+                    if (qs.length() == 0) qs.append("?"); else qs.append("&");
+                    qs.append("permissions=").append(urlEncode(p));
+                }
+            }
+            if (dataLevel != null && !dataLevel.isBlank()) {
+                if (qs.length() == 0) qs.append("?"); else qs.append("&");
+                qs.append("dataLevel=").append(urlEncode(dataLevel));
+            }
+            URI uri = buildUri(props.getApiPath(), "/menu" + qs.toString());
+            ResponseEntity<ApiEnvelope<List<RemoteMenuNode>>> response = restExchange(uri, MENU_TREE_TYPE);
+            ApiEnvelope<List<RemoteMenuNode>> body = response.getBody();
+            if (body != null && body.isSuccess() && body.data() != null) {
+                return body.data();
+            }
+            log.warn(
+                "Portal menu audience request returned no data: status={} message={} uri={}",
+                body != null ? body.status() : null,
+                body != null ? body.message() : null,
+                uri
+            );
+        } catch (Exception ex) {
+            log.warn("Failed to fetch portal menu tree (audience) from dts-admin: {}", ex.getMessage());
+            log.debug("Portal menu audience fetch stack", ex);
+        }
+        return Collections.emptyList();
+    }
+
     private URI buildUri(String basePath, String suffix) {
         String baseUrl = props.getBaseUrl();
         if (!StringUtils.hasText(baseUrl)) {
@@ -77,6 +124,14 @@ public class PortalMenuClient {
         }
         HttpEntity<Void> request = new HttpEntity<>(headers);
         return restTemplate.exchange(uri, HttpMethod.GET, request, type);
+    }
+
+    private String urlEncode(String s) {
+        try {
+            return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            return s;
+        }
     }
 
     public Map<String, Object> createPortalMenu(Map<String, Object> payload) {

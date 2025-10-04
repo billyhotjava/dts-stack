@@ -63,6 +63,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         this.usersEndpoint = resolveUsersEndpoint(issuerUri);
         this.rolesEndpoint = resolveRolesEndpoint(issuerUri);
         this.groupsEndpoint = resolveGroupsEndpoint(issuerUri);
+        LOG.info("Keycloak admin endpoints: users={}, roles={}, groups={}", usersEndpoint, rolesEndpoint, groupsEndpoint);
     }
 
     @Override
@@ -475,10 +476,35 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         }
         HttpEntity<?> entity = payload == null ? new HttpEntity<>(headers) : new HttpEntity<>(payload, headers);
         try {
-            return restTemplate.exchange(uri, method, entity, String.class);
+            if (LOG.isDebugEnabled()) {
+                String bodyPreview;
+                try {
+                    bodyPreview = payload == null ? "<none>" : objectMapper.writeValueAsString(payload);
+                } catch (Exception e) {
+                    bodyPreview = String.valueOf(payload);
+                }
+                LOG.debug("KC ADMIN REQ method={}, uri={}, payload={}", method, uri, truncate(bodyPreview));
+            }
+            ResponseEntity<String> resp = restTemplate.exchange(uri, method, entity, String.class);
+            int code = resp.getStatusCode().value();
+            if (code >= 400) {
+                String respBody = resp.getBody();
+                LOG.warn("KC ADMIN RESP status={} uri={} body={}", code, uri, truncate(respBody));
+            } else if (LOG.isDebugEnabled()) {
+                LOG.debug("KC ADMIN RESP status={} uri={}", code, uri);
+            }
+            return resp;
         } catch (HttpStatusCodeException ex) {
-            return ResponseEntity.status(ex.getStatusCode()).headers(ex.getResponseHeaders()).body(ex.getResponseBodyAsString());
+            String respBody = ex.getResponseBodyAsString();
+            LOG.warn("KC ADMIN EX status={} uri={} body={} error={}", ex.getStatusCode().value(), uri, truncate(respBody), ex.getMessage());
+            return ResponseEntity.status(ex.getStatusCode()).headers(ex.getResponseHeaders()).body(respBody);
         }
+    }
+
+    private String truncate(String text) {
+        if (text == null) return "<null>";
+        String t = text.replaceAll("\n", " ");
+        return t.length() > 500 ? t.substring(0, 500) + "..." : t;
     }
 
     private Map<String, Object> toGroupRepresentation(KeycloakGroupDTO dto) {
@@ -690,6 +716,79 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             throw toRuntime("同步 Keycloak 角色失败", response);
         }
         return findRealmRole(role.getName(), accessToken).orElse(role);
+    }
+
+    @Override
+    public void addRealmRolesToUser(String userId, List<String> roleNames, String accessToken) {
+        if (userId == null || userId.isBlank() || roleNames == null || roleNames.isEmpty()) {
+            return;
+        }
+        URI uri = userUri(userId, "role-mappings", "realm");
+        List<Map<String, Object>> payload = toRealmRoleRepresentations(roleNames, accessToken);
+        if (payload.isEmpty()) return;
+        LOG.info("KC ADMIN add roles to user: userId={}, roles={}", userId, roleNames);
+        ResponseEntity<String> response = exchange(uri, HttpMethod.POST, accessToken, payload);
+        int status = response.getStatusCode().value();
+        if (status != 200 && status != 201 && status != 204) {
+            throw toRuntime("分配用户 Realm 角色失败", response);
+        }
+    }
+
+    @Override
+    public void removeRealmRolesFromUser(String userId, List<String> roleNames, String accessToken) {
+        if (userId == null || userId.isBlank() || roleNames == null || roleNames.isEmpty()) {
+            return;
+        }
+        URI uri = userUri(userId, "role-mappings", "realm");
+        List<Map<String, Object>> payload = toRealmRoleRepresentations(roleNames, accessToken);
+        if (payload.isEmpty()) return;
+        LOG.info("KC ADMIN remove roles from user: userId={}, roles={}", userId, roleNames);
+        ResponseEntity<String> response = exchange(uri, HttpMethod.DELETE, accessToken, payload);
+        int status = response.getStatusCode().value();
+        if (status != 200 && status != 204) {
+            throw toRuntime("移除用户 Realm 角色失败", response);
+        }
+    }
+
+    @Override
+    public List<String> listUserRealmRoles(String userId, String accessToken) {
+        if (userId == null || userId.isBlank()) {
+            return List.of();
+        }
+        URI uri = userUri(userId, "role-mappings", "realm");
+        try {
+            LOG.debug("KC ADMIN list user realm roles: userId={}", userId);
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
+                return List.of();
+            }
+            List<Map<String, Object>> body = objectMapper.readValue(response.getBody(), LIST_OF_MAP);
+            List<String> names = new ArrayList<>();
+            for (Map<String, Object> m : body) {
+                String name = stringValue(m.get("name"));
+                if (name != null && !name.isBlank()) names.add(name);
+            }
+            return names;
+        } catch (Exception ex) {
+            LOG.warn("Failed to list realm roles for user {}: {}", userId, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private List<Map<String, Object>> toRealmRoleRepresentations(List<String> roleNames, String accessToken) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (String name : roleNames) {
+            if (name == null || name.isBlank()) continue;
+            Optional<KeycloakRoleDTO> role = findRealmRole(name, accessToken);
+            Map<String, Object> rep = new LinkedHashMap<>();
+            rep.put("name", name);
+            role.map(KeycloakRoleDTO::getId).filter(id -> id != null && !id.isBlank()).ifPresent(id -> rep.put("id", id));
+            if (role.isEmpty()) {
+                LOG.warn("Realm role not found in Keycloak by name='{}' when building role-mappings payload; proceeding with name only", name);
+            }
+            list.add(rep);
+        }
+        return list;
     }
 
     private Map<String, Object> toRoleRepresentation(KeycloakRoleDTO dto) {

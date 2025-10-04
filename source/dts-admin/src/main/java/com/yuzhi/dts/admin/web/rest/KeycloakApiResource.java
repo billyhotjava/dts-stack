@@ -33,6 +33,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Value;
 
 @RestController
 @RequestMapping("/api")
@@ -44,6 +45,14 @@ public class KeycloakApiResource {
     private final KeycloakAuthService keycloakAuthService;
     private final KeycloakAdminClient keycloakAdminClient;
     private final AdminUserService adminUserService;
+
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class);
+
+    @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}")
+    private String managementClientId;
+
+    @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}")
+    private String managementClientSecret;
 
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
     private static final Map<String, String> DATA_LEVEL_ALIASES = Map.ofEntries(
@@ -75,13 +84,10 @@ public class KeycloakApiResource {
     // ---- Users ----
     @GetMapping("/keycloak/users")
     public ResponseEntity<List<KeycloakUserDTO>> listUsers(@RequestParam(defaultValue = "0") int first, @RequestParam(defaultValue = "100") int max) {
-        String token = currentAccessToken();
+        String token = adminAccessToken();
         List<KeycloakUserDTO> list = filterProtectedUsers(keycloakAdminClient.listUsers(first, max, token));
-        if (list.isEmpty()) {
-            list = filterProtectedUsers(stores.listUsers(first, max));
-        } else {
-            list.forEach(this::cacheUser);
-        }
+        if (!list.isEmpty()) list.forEach(this::cacheUser);
+        if (list.isEmpty()) list = filterProtectedUsers(stores.listUsers(first, max));
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "KC_USERS_LIST", "KC_USER", "list", "SUCCESS", null);
         return ResponseEntity.ok(list);
     }
@@ -90,7 +96,7 @@ public class KeycloakApiResource {
     public ResponseEntity<List<KeycloakUserDTO>> searchUsers(@RequestParam String username) {
         String q = username == null ? "" : username.toLowerCase();
         List<KeycloakUserDTO> list = filterProtectedUsers(keycloakAdminClient
-            .findByUsername(username, currentAccessToken())
+            .findByUsername(username, adminAccessToken())
             .map(List::of)
             .orElseGet(List::of));
         if (list.isEmpty()) {
@@ -109,13 +115,8 @@ public class KeycloakApiResource {
 
     @GetMapping("/keycloak/users/{id}")
     public ResponseEntity<?> getUser(@PathVariable String id) {
-        KeycloakUserDTO u = stores.findUserById(id);
-        if (u == null) {
-            u = keycloakAdminClient.findById(id, currentAccessToken()).orElse(null);
-            if (u != null) {
-                cacheUser(u);
-            }
-        }
+        KeycloakUserDTO u = keycloakAdminClient.findById(id, adminAccessToken()).orElse(stores.findUserById(id));
+        if (u != null) cacheUser(u);
         if (u == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "KC_USER_DETAIL", "KC_USER", id, "SUCCESS", null);
         return ResponseEntity.ok(u);
@@ -123,11 +124,27 @@ public class KeycloakApiResource {
 
     @PostMapping("/keycloak/users")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createUser(@RequestBody KeycloakUserDTO payload, HttpServletRequest request) {
+        try {
+            LOG.info("FE payload(createUser): username={}, email={}, enabled={}, hasAttributes={}, groupsCount={}",
+                payload.getUsername(), payload.getEmail(), payload.getEnabled(),
+                payload.getAttributes() != null && !payload.getAttributes().isEmpty(),
+                payload.getGroups() == null ? 0 : payload.getGroups().size());
+            LOG.info("FE payload(createUser) names: firstName={}, lastName={}, fullName={}",
+                payload.getFirstName(), payload.getLastName(), payload.getFullName());
+            if (payload.getAttributes() != null) {
+                String pl = extractFirst(payload.getAttributes(), "person_level", "person_security_level", "personnel_security_level");
+                String dl = extractFirst(payload.getAttributes(), "data_levels", "dataLevels");
+                LOG.info("FE payload(createUser) attributes: person_level={}, data_levels(first)={} ", pl, dl);
+            }
+        } catch (Exception ignored) {}
         if (payload.getUsername() == null || payload.getUsername().isBlank()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("用户名不能为空"));
         }
         try {
             UserOperationRequest command = toOperationRequest(payload);
+            LOG.info("Resolved(createUser) command: username={}, fullName={}, email={}, groupsCount={}",
+                command.getUsername(), command.getFullName(), command.getEmail(),
+                command.getGroupPaths() == null ? 0 : command.getGroupPaths().size());
             ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitCreate(
                 command,
                 currentUser(),
@@ -153,12 +170,29 @@ public class KeycloakApiResource {
         @RequestBody KeycloakUserDTO patch,
         HttpServletRequest request
     ) {
-        String username = resolveUsername(id, patch.getUsername(), currentAccessToken());
+        try {
+            LOG.info("FE payload(updateUser): id={}, username={}, email={}, enabled={}, hasAttributes={}, groupsCount={}, realmRolesCount={}",
+                id, patch.getUsername(), patch.getEmail(), patch.getEnabled(),
+                patch.getAttributes() != null && !patch.getAttributes().isEmpty(),
+                patch.getGroups() == null ? 0 : patch.getGroups().size(),
+                patch.getRealmRoles() == null ? 0 : patch.getRealmRoles().size());
+            LOG.info("FE payload(updateUser) names: firstName={}, lastName={}, fullName={}",
+                patch.getFirstName(), patch.getLastName(), patch.getFullName());
+            if (patch.getAttributes() != null) {
+                String pl = extractFirst(patch.getAttributes(), "person_level", "person_security_level", "personnel_security_level");
+                String dl = extractFirst(patch.getAttributes(), "data_levels", "dataLevels");
+                LOG.info("FE payload(updateUser) attributes: person_level={}, data_levels(first)={}", pl, dl);
+            }
+        } catch (Exception ignored) {}
+        String username = resolveUsername(id, patch.getUsername(), adminAccessToken());
         if (username == null) {
             return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         }
         UserOperationRequest command = toOperationRequest(patch);
         command.setUsername(username);
+        LOG.info("Resolved(updateUser) command: id={}, username={}, fullName={}, email={}, groupsCount={}",
+            id, command.getUsername(), command.getFullName(), command.getEmail(),
+            command.getGroupPaths() == null ? 0 : command.getGroupPaths().size());
         ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitUpdate(
             username,
             command,
@@ -185,7 +219,7 @@ public class KeycloakApiResource {
 
     @DeleteMapping("/keycloak/users/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> deleteUser(@PathVariable String id, HttpServletRequest request) {
-        String username = resolveUsername(id, null, currentAccessToken());
+        String username = resolveUsername(id, null, adminAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("用户删除功能已禁用，请改用停用操作"));
     }
@@ -196,7 +230,7 @@ public class KeycloakApiResource {
         @RequestBody Map<String, Object> body,
         HttpServletRequest request
     ) {
-        String username = resolveUsername(id, null, currentAccessToken());
+        String username = resolveUsername(id, null, adminAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         String password = Objects.toString(body.get("password"), null);
         boolean temporary = Boolean.TRUE.equals(body.get("temporary"));
@@ -234,7 +268,7 @@ public class KeycloakApiResource {
         @RequestBody Map<String, Object> body,
         HttpServletRequest request
     ) {
-        String username = resolveUsername(id, null, currentAccessToken());
+        String username = resolveUsername(id, null, adminAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         Object val = body.get("enabled");
         boolean enabled = Boolean.TRUE.equals(val) || (val instanceof Boolean b && b);
@@ -269,7 +303,7 @@ public class KeycloakApiResource {
         @RequestBody Map<String, String> body,
         HttpServletRequest request
     ) {
-        String username = resolveUsername(id, null, currentAccessToken());
+        String username = resolveUsername(id, null, adminAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         String level = String.valueOf(body.getOrDefault("person_level", "")).toUpperCase();
         if (!List.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE").contains(level)) {
@@ -556,6 +590,24 @@ public class KeycloakApiResource {
         return null;
     }
 
+    private String adminAccessToken() {
+        try {
+            var tokenResponse = keycloakAuthService.obtainClientCredentialsToken(managementClientId, managementClientSecret);
+            String token = tokenResponse == null ? null : tokenResponse.accessToken();
+            if (token == null || token.isBlank()) {
+                throw new IllegalStateException("Keycloak 管理客户端未返回 access_token");
+            }
+            // Lightweight trace to confirm service account token flow works
+            org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class)
+                .debug("Obtained admin access token using clientId={}", managementClientId);
+            return token;
+        } catch (Exception ex) {
+            org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class)
+                .warn("Failed to obtain admin access token: {}", ex.getMessage());
+            throw new IllegalStateException("获取 Keycloak 管理客户端访问令牌失败: " + ex.getMessage(), ex);
+        }
+    }
+
     private String currentUser() {
         return SecurityUtils.getCurrentUserLogin().orElse("unknown");
     }
@@ -573,16 +625,23 @@ public class KeycloakApiResource {
 
     @GetMapping("/keycloak/users/{id}/roles")
     public ResponseEntity<List<KeycloakRoleDTO>> getUserRoles(@PathVariable String id) {
-        KeycloakUserDTO u = stores.findUserById(id);
-        if (u == null) return ResponseEntity.ok(List.of());
-        List<KeycloakRoleDTO> roles = u
-            .getRealmRoles()
-            .stream()
-            .map(stores.roles::get)
-            .filter(Objects::nonNull)
-            .toList();
+        List<String> names = keycloakAdminClient.listUserRealmRoles(id, adminAccessToken());
+        org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class)
+            .info("Fetched user realm roles from Keycloak: userId={}, roles={}", id, names);
+        if (names.isEmpty()) return ResponseEntity.ok(List.of());
+        Map<String, KeycloakRoleDTO> catalog = new LinkedHashMap<>();
+        for (KeycloakRoleDTO role : adminUserService.listRealmRoles()) {
+            if (role.getName() != null) catalog.put(role.getName(), role);
+        }
+        List<KeycloakRoleDTO> roles = names.stream().map(n -> catalog.getOrDefault(n, fallbackRole(n))).toList();
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "KC_USER_ROLES_LIST", "KC_USER", id, "SUCCESS", null);
         return ResponseEntity.ok(roles);
+    }
+
+    private KeycloakRoleDTO fallbackRole(String name) {
+        KeycloakRoleDTO dto = new KeycloakRoleDTO();
+        dto.setName(name);
+        return dto;
     }
 
     @PostMapping("/keycloak/users/{id}/roles")
@@ -591,7 +650,11 @@ public class KeycloakApiResource {
         @RequestBody List<KeycloakRoleDTO> roles,
         HttpServletRequest request
     ) {
-        String username = resolveUsername(id, null, currentAccessToken());
+        try {
+            List<String> names = roles == null ? List.of() : roles.stream().map(KeycloakRoleDTO::getName).filter(Objects::nonNull).toList();
+            LOG.info("FE payload(assignRoles): id={}, names={}", id, names);
+        } catch (Exception ignored) {}
+        String username = resolveUsername(id, null, adminAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         List<String> roleNames = roles.stream().map(KeycloakRoleDTO::getName).filter(Objects::nonNull).toList();
         ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitGrantRoles(
@@ -624,7 +687,11 @@ public class KeycloakApiResource {
         @RequestBody List<KeycloakRoleDTO> roles,
         HttpServletRequest request
     ) {
-        String username = resolveUsername(id, null, currentAccessToken());
+        try {
+            List<String> names = roles == null ? List.of() : roles.stream().map(KeycloakRoleDTO::getName).filter(Objects::nonNull).toList();
+            LOG.info("FE payload(removeRoles): id={}, names={}", id, names);
+        } catch (Exception ignored) {}
+        String username = resolveUsername(id, null, adminAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         List<String> roleNames = roles.stream().map(KeycloakRoleDTO::getName).filter(Objects::nonNull).toList();
         ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitRevokeRoles(

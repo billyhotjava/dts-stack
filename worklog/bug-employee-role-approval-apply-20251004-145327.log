@@ -1,0 +1,38 @@
+[Summary]
+- Added debug/trace logging for Keycloak admin API requests/responses and approval apply stages (update/grant/revoke/create).
+- Fixed Keycloak realm role typo DATA_INTERNA -> DATA_INTERNAL (services/dts-keycloak/realm-init.json).
+- Ensured role-mappings are applied on user create path (previously only user PUT; Keycloak ignores realmRoles in representation).
+
+[Files Changed]
+- source/dts-admin/service/keycloak/KeycloakAdminRestClient.java: log endpoints; log requests/responses; log add/remove/list roles; warn when role name not found when building payload.
+- source/dts-admin/service/user/AdminUserService.java: log approval apply deltas; apply role-mappings on create; log grant/revoke actions; log approval execution start/failure.
+- source/dts-admin/web/rest/KeycloakApiResource.java: debug log for admin token retrieval; info log for getUserRoles.
+- services/dts-keycloak/realm-init.json: rename DATA_INTERNA -> DATA_INTERNAL.
+
+[Likely Root Causes Observed]
+1) Role assignment on create was not using role-mappings endpoint; Keycloak ignores realmRoles in user representation. Result: after approval, roles appear unchanged.
+2) Realm role name typo (DATA_INTERNA) breaks any logic relying on DATA_INTERNAL role. Mapping by name would fail; now corrected.
+3) If service account lacks realm-management permissions (manage-users/manage-roles/view-roles), Keycloak returns 403; new logs will show this clearly.
+
+[How to Verify]
+- Tail backend logs and perform: update roles, grant, revoke, and create-with-roles flows.
+  docker compose logs -f dts-admin
+  Expect lines like:
+    "Keycloak admin endpoints: ..."
+    "KC ADMIN REQ ... uri=.../admin/realms/<realm>/users/<id>/role-mappings/realm ..."
+    "KC ADMIN RESP status=..."
+    "Approval applyUpdate roles delta ... toAdd=..., toRemove=..."
+- After approval succeeds, check roles reflect in Keycloak:
+  - GET via UI or curl: /api/keycloak/users/{id}/roles
+  - Should include assigned/removed roles.
+
+[Key Config Checks]
+- dts-admin env:
+  - DTS_KEYCLOAK_ADMIN_CLIENT_ID / DTS_KEYCLOAK_ADMIN_CLIENT_SECRET must point to a Keycloak client with Service Accounts Enabled and realm-management roles: view-users, manage-users, view-roles, manage-roles.
+  - Issuer URI should be reachable for both OIDC and /admin endpoints.
+
+[If Keycloak Already Running]
+- For the DATA_INTERNAL rename to take effect, either re-import realm or correct the role name manually in Keycloak (Realm Roles -> rename). Existing assignments may need adjustment.
+
+[Next]
+- If still failing, capture the new log lines around 4xx/5xx for the role-mappings endpoints to pinpoint permission or routing issues.

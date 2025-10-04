@@ -38,3 +38,13 @@
 - 基础依赖（Traefik/Keycloak/Postgres/MinIO/Nessie/Trino）由 `docker-compose.yml` 管理；
   应用由 `docker-compose-app.yml` 管理；开发联调由 `docker-compose.dev.yml` 管理。
 - 如需变更域名，修改 `.env` 的 `BASE_DOMAIN` 后可重跑 `./init.sh`。
+
+【变更请求优化：角色菜单批量申请】
+- 在“角色管理”页面，针对同一角色一次性勾选/取消多个菜单后，系统将合并为一条变更请求（`PORTAL_MENU`/`BATCH_UPDATE`），审批一次即可全部生效。
+- 审批中心会显示每个菜单的前后差异（allowedRoles before/after）。
+- 如需查看提交记录：`Admin → 我的申请` 列表中类别显示为 `PORTAL_MENU`。
+
+【快速健康检查】
+- 查看容器状态：`docker compose ps`
+- Trino 探活：`docker compose exec dts-trino wget -qO- http://localhost:8080/v1/info`
+- SSO 探活：`curl -k https://sso.${BASE_DOMAIN}`

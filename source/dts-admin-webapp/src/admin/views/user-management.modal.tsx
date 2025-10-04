@@ -281,15 +281,15 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			const existingGroups = Array.isArray(user.groups)
 				? user.groups.map((item) => normalizeGroupPath(item)).filter((item) => item)
 				: [];
-			const normalizedAttributes = normalizeAttributesForState(user.attributes || {}, resolvedLevel);
-			const initialFormData: FormData = {
-				username: user.username || "",
-				fullName: (user.firstName || user.lastName || user.attributes?.fullname?.[0] || "").trim(),
-				email: user.email || "",
-				enabled: user.enabled ?? true,
-				emailVerified: user.emailVerified ?? false,
-				attributes: normalizedAttributes,
-			};
+            const normalizedAttributes = normalizeAttributesForState(user.attributes || {}, resolvedLevel);
+            const initialFormData: FormData = {
+                username: user.username || "",
+                fullName: (user.fullName || user.firstName || user.lastName || user.attributes?.fullname?.[0] || "").trim(),
+                email: user.email || "",
+                enabled: user.enabled ?? true,
+                emailVerified: user.emailVerified ?? false,
+                attributes: normalizedAttributes,
+            };
 
 			setPersonLevel(resolvedLevel);
 			setUserRoles([]);
@@ -416,6 +416,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                     username,
                     email: email || undefined,
                     firstName: fullName,
+                    fullName: fullName,
                     enabled: formData.enabled,
                     emailVerified: formData.emailVerified,
                     attributes: attributesPayload,
@@ -437,6 +438,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                         username,
                         email: emailPayload,
                         firstName: fullName,
+                        fullName: fullName,
                         enabled: formData.enabled,
                         emailVerified: formData.emailVerified,
                         attributes: attributesPayload,

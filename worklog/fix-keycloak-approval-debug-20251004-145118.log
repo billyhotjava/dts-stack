@@ -1,0 +1,1 @@
+[2025-10-04T14:51:18+08:00] Add debug logs for Keycloak admin API, approval apply, and endpoints. Verify env mapping and admin client usage.

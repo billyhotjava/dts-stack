@@ -1,0 +1,55 @@
+===== dts-admin 2025-10-03 00:37:00 (dts-admin-20251003-003700.log) =====
+2025-10-03 00:37 审计执行日志补齐（用户+角色）：
+- 审批通过后调用 Keycloak 的所有 `apply*` 流程都会落库审计，覆盖账号创建/修改/删除、启停、密级与数据级、角色授予/回收、密码重置等场景，并附带执行详情与失败原因。
+- 角色与角色指派的变更在审批执行环节追加 SUCCESS/FAILURE 记录，记录生成的角色 ID、指派对象、操作集及通知结果，保证审批→落地全链路可追踪。
+- `applyChangeRequest` 现向子流程传递执行人身份，便于执行审计记录标记真实操作者。
+2025-10-03 00:46 审计查询稳定性修复：
+- 去掉审计查询中的 `cast(:param as text)` 写法，避免 PostgreSQL 在参数为 NULL 时拒绝执行并导致日志列表查询报错。
+- 与此同时改用 `:from`/`:to` 判空条件，确保时间范围筛选可选且不会触发 SQLGrammarException。
+- 复查用户/角色相关 `record` 调用未变，检索接口恢复后即可看到新增的 SUCCESS/FAILURE 审计记录。
+2025-10-03 01:02 审计查询 IP 过滤修复：
+- 将 `client_ip` 字段在搜索语句中显式转换为 text，再执行 `ilike` 模糊匹配，避免 PostgreSQL inet 类型与 text 比较导致的 `operator does not exist: inet ~~* text` 错误。
+2025-10-03 01:15 审计查询空参兼容：
+- 改用 `coalesce(:param, '') = ''` 判空，并对 module/result/resourceType 的模糊匹配统一走 `concat('%', :param, '%')`，让 PostgreSQL 在参数为 NULL 时也能明确按 text 处理，彻底消除 `could not determine data type of parameter` 报错。
+2025-10-03 01:26 审计查询时间区间修复：
+- 将 `(:from is null or e.occurred_at >= :from)`、`(:to is null or e.occurred_at <= :to)` 改写成 `e.occurred_at >= coalesce(:from, e.occurred_at)` 等形式，避免 PostgreSQL 在判空语句中无法推断参数类型，再次触发 `could not determine data type`。
+2025-10-03 02:04 审计检索模糊参数修复：
+- 改用统一的 `%keyword%` 模式并在仓库层添加 `escape '\\'`，确保用户/审批操作能够按角色、模块模糊搜索且不会触发 inet/timestamptz 类型推断错误。
+- 在 `AdminAuditService` 中集中处理参数转义，避免 UI 输入 `%`、`_` 时被 PostgreSQL 视作通配符导致漏检。
+2025-10-03 02:21 审批审计字段瘦身：
+- API 返回的审批类日志不再携带 `actorRole`、`latencyMs`、`requestUri` 字段，避免无效信息干扰。
+- 前端审计列表/详情同步移除相关列与筛选项，保持 UI 与后端字段一致，日志阅读更聚焦。
+2025-10-03 02:28 审计检索空参彻底规避：
+- 仓库层将 actor/module/action 等字段统一用 `coalesce(column, '') ilike :param`，默认参数永远走 `%` 模式，不再传 NULL，彻底解决 PostgreSQL `could not determine data type of parameter` 报错。
+- `AdminAuditService.likePattern` 对空输入返回 `%`，既兼容空列也避免 NULL 形参导致的类型推断，再配合原有转义保留模糊搜索体验。
+- 本地 `./mvnw -DskipTests compile` 尝试因 `target` 目录权限（Operation not permitted）中断，需在具备权限的环境确认构建。
+2025-10-03 02:36 审计时间筛选重写：
+- 将查询中的 `(:from is null or e.occurred_at >= :from)` / `(:to is null or e.occurred_at <= :to)` 改写为 `e.occurred_at >= coalesce(:from, e.occurred_at)` 等形式，避免 PostgreSQL 对 `? is null` 占位符推断失败。
+- 待运行环境重新拉取镜像或重启服务后，建议使用 “最近一天” 与空时间筛选组合手动验证查询成功返回。
+2025-10-03 02:44 审计写入启动日志增强：
+- 启动时追加 `repository.count()` 查询，打印当前审计事件总量，方便运维判断积压情况；查询失败会降级为 warn + 不展示总数。
+
+2025-10-03 04:14 菜单管理导航修复方案:
+- 现状: 前端静态导航仍指向 /management/system/permission, dashboard 前端路由缺少该路径, 点击后触发 React Router fallback -> 404。新版审批驱动页挂在 /admin/portal-menus。
+- 目标: 左侧“菜单管理”应打开审批驱动的 PortalMenusView, 同时对旧链接做兼容避免 404。
+- 方案: (1) 更新 frontend 导航配置, 将菜单路径改为 /admin/portal-menus; (2) 在 frontend 路由树上新增 /management/system/permission -> Navigate(/admin/portal-menus) 的后备路由; (3) 保留 adminRoutes 现有实现。
+2025-10-03 04:18 菜单导航调整实施:
+- 更新 frontend 静态导航, 菜单管理跳转至 /admin/portal-menus, 与审批驱动页面保持一致。
+- 前端保留旧路径的后备路由, 自动重定向至新页面以避免 404。
+- 后续验证: 登录 opadmin 账号, 在管理导航点击“菜单管理”, 确认跳转至审批版菜单页且路由栏不再出现 404, 同时手动访问 /management/system/permission 验证重定向。
+
+2025-10-03 04:42 菜单页面桥接实现:
+- 为 legacy 路径 /management/system/permission 提供新的桥接页, 内嵌 AdminGuard + PortalMenusView, 避免旧导航指向 404。
+- 页面顶部增加提醒说明；其余管理操作复用审批版逻辑。
+- 前端路由恢复加载该页面, 兼容历史链接。
+
+2025-10-03 05:42 MSW与假数据清理（dts-admin-webapp）：
+- 移除 src/_mock 目录及 mockServiceWorker 资源，彻底关闭 MSW 入口，package.json 删除 msw 配置并刷新 pnpm-lock.yaml。
+- 主入口 main.tsx 删除动态 import/mock 启动逻辑，确保仅调用真实后台 API。
+- 用户侧页签（团队、项目、联系人）改为调用 Keycloak 实际接口：
+  * 团队页使用 KeycloakGroupService.getUserGroups 展示所属 Keycloak 组。
+  * 角色页取 KeycloakUserService.getUserRoles 并展示角色属性。
+  * 联系人页加载 KeycloakUserService.getAllUsers，真实显示用户列表及角色/组标签。
+- 清理 multi-tabs 钩子与类型定义中的 mock 引用，扩展 KeycloakUser 类型以兼容后端返回字段。
+- build 检查仍受 PortalMenus/RoleManagement 等历史类型错误阻挡，未在本次修复范围内。
+

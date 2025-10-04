@@ -1,0 +1,1 @@
+[2025-10-04T14:52:08+08:00] Fix Keycloak realm role name typo: DATA_INTERNA -> DATA_INTERNAL in services/dts-keycloak/realm-init.json. Requires re-import or manual role rename in Keycloak realm S10.

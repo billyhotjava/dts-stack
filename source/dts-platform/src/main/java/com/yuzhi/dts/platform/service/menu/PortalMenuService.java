@@ -26,7 +26,14 @@ public class PortalMenuService {
     }
 
     public List<PortalMenuTreeItem> getMenuTree() {
-        List<RemoteMenuNode> remote = client.fetchMenuTree();
+        // Try to forward current user's roles/permissions to dts-admin so it can filter menus.
+        List<String> roles = currentAuthorities();
+        List<RemoteMenuNode> remote;
+        if (roles != null && !roles.isEmpty()) {
+            remote = client.fetchMenuTreeForAudience(roles, List.of(), null);
+        } else {
+            remote = client.fetchMenuTree();
+        }
         return remote.stream().map(node -> mapTree(node, null, null)).collect(Collectors.toCollection(ArrayList::new));
     }
 
@@ -38,6 +45,19 @@ public class PortalMenuService {
             flatten(root, pathStack, flat);
         }
         return flat;
+    }
+
+    private List<String> currentAuthorities() {
+        try {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext()
+                .getAuthentication();
+            if (auth == null || auth.getAuthorities() == null) return List.of();
+            return auth.getAuthorities().stream().map(org.springframework.security.core.GrantedAuthority::getAuthority).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+        } catch (Exception ex) {
+            log.debug("No authorities found in SecurityContext: {}", ex.getMessage());
+            return List.of();
+        }
     }
 
     public List<PortalMenuTreeNode> getMenuTreeView() {

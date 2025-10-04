@@ -23,7 +23,8 @@ const CATEGORY_LABELS: Record<TaskCategory, string> = {
 };
 
 const USER_RESOURCE_TYPES = new Set(["USER"]);
-const ROLE_RESOURCE_TYPES = new Set(["ROLE", "CUSTOM_ROLE", "ROLE_ASSIGNMENT"]);
+// Include menu visibility changes in Role category so "绑定菜单" edits appear in approvals
+const ROLE_RESOURCE_TYPES = new Set(["ROLE", "CUSTOM_ROLE", "ROLE_ASSIGNMENT", "PORTAL_MENU"]);
 // 仅保留用户/角色类审批
 
 const ACTION_LABELS: Record<string, string> = {
@@ -134,43 +135,92 @@ function resolveTarget(request: ChangeRequest): string {
 }
 
 function summarizeDetails(request: ChangeRequest): string {
-	const payload = asRecord(parseJson(request.payloadJson));
-	const diff = asRecord(parseJson(request.diffJson));
-	if (payload) {
-		const entries = Object.entries(payload).filter(([, value]) => value != null);
-		if (entries.length === 0) return "—";
-		return entries
-			.slice(0, 3)
-			.map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`)
-			.join("；");
-	}
-	if (diff) {
-		const after = asRecord(diff.after);
-		if (after) {
-			return summarizeDetails({ ...request, payloadJson: JSON.stringify(after) });
-		}
-		return JSON.stringify(diff);
-	}
-	return "—";
+    const payload = asRecord(parseJson(request.payloadJson));
+    const diff = asRecord(parseJson(request.diffJson));
+    // Prefer diff summary for batch updates
+    if (diff && Array.isArray((diff as any).items) && ((diff as any).items as any[]).length > 0) {
+        const items = ((diff as any).items as any[]).slice(0, 3);
+        const parts: string[] = [];
+        for (const it of items) {
+            const id = it?.id ?? "?";
+            const before = asRecord(it?.before) || {};
+            const after = asRecord(it?.after) || {};
+            const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+            const changed = keys.filter((k) => JSON.stringify((before as any)[k]) !== JSON.stringify((after as any)[k]));
+            if (changed.length === 0) continue;
+            const detail = changed
+                .slice(0, 2)
+                .map((k) => `${k}: ${fmtValue((before as any)[k])} → ${fmtValue((after as any)[k])}`)
+                .join("，");
+            parts.push(`菜单${id}: ${detail}`);
+        }
+        const extra = ((diff as any).items as any[]).length - items.length;
+        return parts.length ? parts.join("；") + (extra > 0 ? `（等${extra}项）` : "") : "—";
+    }
+    if (payload) {
+        const entries = Object.entries(payload).filter(([, value]) => value != null);
+        if (entries.length === 0) return "—";
+        return entries
+            .slice(0, 3)
+            .map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`)
+            .join("；");
+    }
+    if (diff) {
+        const after = asRecord(diff.after);
+        if (after) {
+            return summarizeDetails({ ...request, payloadJson: JSON.stringify(after) });
+        }
+        return JSON.stringify(diff);
+    }
+    return "—";
 }
 
 function summarizeDiffPairs(request: ChangeRequest): string {
-	const diff = asRecord(parseJson(request.diffJson));
-	if (!diff) return "—";
-	const before = asRecord(diff.before) || {};
-	const after = asRecord(diff.after) || {};
-	const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
-	const changes: string[] = [];
-	for (const key of keys) {
-		const a = (before as any)[key];
-		const b = (after as any)[key];
-		if (JSON.stringify(a) !== JSON.stringify(b)) {
-			const aText = typeof a === "string" ? a : a == null ? "—" : JSON.stringify(a);
-			const bText = typeof b === "string" ? b : b == null ? "—" : JSON.stringify(b);
-			changes.push(`${key}: ${aText} → ${bText}`);
-		}
-	}
-	return changes.length > 0 ? changes.join("；") : "—";
+    const diff = asRecord(parseJson(request.diffJson));
+    if (!diff) return "—";
+    // Handle batch diff: { items: [{ id, before, after }] }
+    if (Array.isArray((diff as any).items)) {
+        const items = (diff as any).items as any[];
+        const lines: string[] = [];
+        for (const it of items.slice(0, 3)) {
+            const id = it?.id ?? "?";
+            const before = asRecord(it?.before) || {};
+            const after = asRecord(it?.after) || {};
+            const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+            const changes: string[] = [];
+            for (const key of keys) {
+                const a = (before as any)[key];
+                const b = (after as any)[key];
+                if (JSON.stringify(a) !== JSON.stringify(b)) {
+                    changes.push(`${key}: ${fmtValue(a)} → ${fmtValue(b)}`);
+                }
+            }
+            if (changes.length) {
+                lines.push(`菜单${id}: ${changes.join("，")}`);
+            }
+        }
+        const extra = items.length - Math.min(items.length, 3);
+        return lines.length ? lines.join("；") + (extra > 0 ? `（等${extra}项）` : "") : "—";
+    }
+    const before = asRecord(diff.before) || {};
+    const after = asRecord(diff.after) || {};
+    const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+    const changes: string[] = [];
+    for (const key of keys) {
+        const a = (before as any)[key];
+        const b = (after as any)[key];
+        if (JSON.stringify(a) !== JSON.stringify(b)) {
+            changes.push(`${key}: ${fmtValue(a)} → ${fmtValue(b)}`);
+        }
+    }
+    return changes.length > 0 ? changes.join("；") : "—";
+}
+
+function fmtValue(v: unknown): string {
+    if (v == null) return "—";
+    if (Array.isArray(v)) return `[${v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ")}]`;
+    if (typeof v === "string") return v;
+    return JSON.stringify(v);
 }
 
 function getActionText(request: ChangeRequest): string {

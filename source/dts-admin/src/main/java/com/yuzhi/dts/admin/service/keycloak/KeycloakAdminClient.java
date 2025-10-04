@@ -39,4 +39,19 @@ public interface KeycloakAdminClient {
     KeycloakRoleDTO upsertRealmRole(KeycloakRoleDTO role, String accessToken);
 
     List<KeycloakRoleDTO> listRealmRoles(String accessToken);
+
+    /**
+     * Assign realm roles to a user using Keycloak role-mappings endpoint.
+     */
+    void addRealmRolesToUser(String userId, List<String> roleNames, String accessToken);
+
+    /**
+     * Remove realm roles from a user using Keycloak role-mappings endpoint.
+     */
+    void removeRealmRolesFromUser(String userId, List<String> roleNames, String accessToken);
+
+    /**
+     * List realm role names mapped to a user.
+     */
+    List<String> listUserRealmRoles(String userId, String accessToken);
 }

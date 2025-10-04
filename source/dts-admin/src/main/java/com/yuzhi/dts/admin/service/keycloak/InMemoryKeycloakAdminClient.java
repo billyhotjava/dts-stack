@@ -269,4 +269,21 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
         copy.setSubGroups(children);
         return copy;
     }
+
+    @Override
+    public void addRealmRolesToUser(String userId, List<String> roleNames, String accessToken) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'addRealmRolesToUser'");
+    }
+
+    @Override
+    public void removeRealmRolesFromUser(String userId, List<String> roleNames, String accessToken) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'removeRealmRolesFromUser'");
+    }
+
+    @Override
+    public List<String> listUserRealmRoles(String userId, String accessToken) {
+        return List.of();
+    }
 }

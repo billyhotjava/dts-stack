@@ -1,0 +1,32 @@
+[2025-10-04 13:44] 源码扫描疑似问题清单
+
+[前端-结构与路由]
+- admin 项目内存在嵌套目录: source/dts-admin-webapp/dts-platform-webapp（属主 root:root），可能是误拷贝/解压遗留，易导致 Vite/打包包含多余文件或权限异常。
+- dts-platform-webapp 大量复用 admin 端模块（@/admin/*）；需确认运行时按角色隔离导航与权限，避免普通业务用户看到管理页面入口。
+- admin 菜单/路由已切至 /admin/portal-menus（多处命中）；建议手测旧路径 /management/system/permission 是否已重定向，避免残留入口。
+
+[前端-环境与代理]
+- 两个 Webapp 的 GLOBAL_CONFIG.apiBaseUrl 默认 '/api'，同域路由正确；但本地 Vite 代理需正确设置 VITE_API_PROXY_TARGET/VITE_API_PROXY_PREFIX，否则 /api 未转发至容器 8081。
+- 平台前端 vite.config.ts 默认代理 http://localhost:18082（宿主调试），dev compose 内则注入 http://dts-platform:8081（容器调试）；切换模式时需确保 .env.development 与容器环境一致，避免 404。
+
+[前端-脚本与工具]
+- source/dts-platform-webapp/scripts/export-menu.js 依赖 src/_mock/assets_backup.ts 的 DB_MENU，但该文件缺失；执行脚本会抛错（scripts/export-menu.js:5,11）。
+- 工具链统一为 Biome/Lefthook；执行 'pnpm exec eslint' 会失败（非缺陷但需文档明确，worklog 已记录）。
+
+[后端-菜单与可见性]
+- dts-admin 已实现 PortalMenu 与 PortalMenuVisibility 的增删改查与审批替换；dts-platform 侧也有 PortalMenuService（仅拉取展示）。需确认平台端是否完全改为从 admin 同步/裁剪，避免双写两套菜单树。
+- Admin BasicApiResource 支持基于角色/密级过滤树；需核对 token 中 roleCodes/dataLevel 与 Keycloak realm-init.json 角色命名一致，以免过滤失效。
+
+[后端-配置与依赖]
+- dev 配置依赖 builds/patch-app-dev-yml.sh 将 datasource 切到环境变量；若直接 mvn 运行且未打补丁，可能仍指向默认 DB，导致连接失败或误连。
+- dts-platform POM 引入 hive-jdbc 3.1.3；此前 worklog 提及 Enforcer/依赖收敛告警，构建可能需 -Denforcer.skip=true（构建稳定性风险）。
+
+[数据与对象存储]
+- MinIO 初始化脚本已补齐；仍需验证 S3_BUCKET 与后端/前端引用一致（导出/可视化/结果集等路径是否依赖该桶）。
+
+[可观测与日志]
+- 前端大量 console.log/error 便于开发；Vite 生产构建配置已 drop console（检查 vite.config.ts 的 esbuild.drop）。建议验收生产包是否生效。
+
+[易混与潜在]
+- admin Webapp 内的 'dts-platform-webapp' 目录可能影响包管理/CI 体积与权限，建议移除或仅脚本只读引用 source/ 路径。
+- 平台前端 routerMode 默认 'backend'；若后端菜单未就绪，需确认前端空菜单/403 的兜底体验（默认路由、空态提示）。

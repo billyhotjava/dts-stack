@@ -642,6 +642,7 @@ public class AdminUserService {
         try {
             // Always use service account for reliability (caller token may lack admin privileges)
             String tokenToUse = resolveManagementToken();
+            LOG.info("Applying approval id={} type={} items={} by approver={}", id, approval.getType(), approval.getItems().size(), approver);
             applyApproval(approval, tokenToUse, approver);
             approval.setStatus(ApprovalStatus.APPLIED.name());
             approval.setDecidedAt(now);
@@ -658,6 +659,7 @@ public class AdminUserService {
             approvalRepository.save(approval);
             updateChangeRequestStatus(changeRequestIds, ApprovalStatus.PENDING.name(), null, null, ex.getMessage());
             auditService.record(approver, "APPROVAL_REQUEUE", "APPROVAL", String.valueOf(id), "SUCCESS", ex.getMessage());
+            LOG.warn("Approval id={} failed to apply: {}", id, ex.getMessage());
             throw new IllegalStateException("审批执行失败: " + ex.getMessage(), ex);
         }
     }
@@ -923,13 +925,19 @@ public class AdminUserService {
     }
 
     public void syncRealmRole(String roleName, String scope, Set<String> operations) {
+        syncRealmRole(roleName, scope, operations, null);
+    }
+
+    public void syncRealmRole(String roleName, String scope, Set<String> operations, String description) {
         if (StringUtils.isBlank(roleName)) {
             return;
         }
         String normalizedRole = roleName.trim();
         KeycloakRoleDTO dto = new KeycloakRoleDTO();
         dto.setName(normalizedRole);
-        dto.setDescription(buildRoleDescription(scope, operations));
+        String computed = buildRoleDescription(scope, operations);
+        String desc = StringUtils.isNotBlank(description) ? description.trim() : computed;
+        dto.setDescription(desc);
         LinkedHashMap<String, String> attributes = new LinkedHashMap<>();
         if (StringUtils.isNotBlank(scope)) {
             attributes.put("scope", scope.trim().toUpperCase(Locale.ROOT));
@@ -940,13 +948,27 @@ public class AdminUserService {
                 operations.stream().map(op -> op.toLowerCase(Locale.ROOT)).collect(Collectors.joining(","))
             );
         }
+        if (StringUtils.isNotBlank(description)) {
+            attributes.put("description", desc);
+        }
         if (!attributes.isEmpty()) {
             dto.setAttributes(attributes);
         }
         try {
             String token = resolveManagementToken();
+            // Backward-compatible update: if role with given name not found, also try ROLE_ prefix
+            String nameToUse = dto.getName();
+            try {
+                if (keycloakAdminClient.findRealmRole(nameToUse, token).isEmpty()) {
+                    String alt = nameToUse.startsWith("ROLE_") ? nameToUse.substring(5) : ("ROLE_" + nameToUse);
+                    if (keycloakAdminClient.findRealmRole(alt, token).isPresent()) {
+                        dto.setName(alt);
+                        nameToUse = alt;
+                    }
+                }
+            } catch (Exception ignored) {}
             keycloakAdminClient.upsertRealmRole(dto, token);
-            LOG.info("Synchronized realm role {} to Keycloak", normalizedRole);
+            LOG.info("Synchronized realm role {} to Keycloak (scope={}, ops={}, hasCustomDesc={})", nameToUse, scope, operations, StringUtils.isNotBlank(description));
         } catch (Exception ex) {
             LOG.warn("Failed to synchronize realm role {}: {}", normalizedRole, ex.getMessage());
         }
@@ -1010,6 +1032,21 @@ public class AdminUserService {
             } else {
                 target = keycloakAdminClient.createUser(dto, accessToken);
             }
+            // Apply realm roles via role-mappings if provided in payload
+            List<String> requestedRoles = stringList(payload.get("realmRoles"));
+            if (requestedRoles != null && !requestedRoles.isEmpty()) {
+                LOG.info("Approval applyCreate assign roles username={}, id={}, roles={}", target.getUsername(), target.getId(), requestedRoles);
+                try {
+                    keycloakAdminClient.addRealmRolesToUser(target.getId(), requestedRoles, accessToken);
+                    // Refresh assigned role names from Keycloak
+                    List<String> names = keycloakAdminClient.listUserRealmRoles(target.getId(), accessToken);
+                    if (names != null && !names.isEmpty()) {
+                        target.setRealmRoles(new ArrayList<>(names));
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Failed to assign realm roles on create for user {}: {}", target.getUsername(), e.getMessage());
+                }
+            }
             syncSnapshot(target);
             detail.put("keycloakId", target.getId());
             detail.put("realmRoles", target.getRealmRoles());
@@ -1033,7 +1070,32 @@ public class AdminUserService {
             KeycloakUserDTO update = toUserDto(payload);
             ensureAllowedSecurityLevel(extractPersonLevel(update), "人员密级不允许为非密");
             update.setId(existing.getId());
+            // If realmRoles present in payload, apply via role-mappings API instead of user PUT
+            List<String> requestedRoles = stringList(payload.get("realmRoles"));
+            if (requestedRoles != null && !requestedRoles.isEmpty()) {
+                List<String> currentRoles = existing.getRealmRoles() == null ? List.of() : existing.getRealmRoles();
+                LinkedHashSet<String> req = new LinkedHashSet<>(requestedRoles);
+                LinkedHashSet<String> cur = new LinkedHashSet<>(currentRoles);
+                List<String> toAdd = req.stream().filter(r -> !cur.contains(r)).toList();
+                List<String> toRemove = cur.stream().filter(r -> !req.contains(r)).toList();
+                LOG.info("Approval applyUpdate roles delta for user username={}, id={}: toAdd={}, toRemove={}", existing.getUsername(), existing.getId(), toAdd, toRemove);
+                if (!toAdd.isEmpty()) {
+                    keycloakAdminClient.addRealmRolesToUser(existing.getId(), toAdd, accessToken);
+                }
+                if (!toRemove.isEmpty()) {
+                    keycloakAdminClient.removeRealmRolesFromUser(existing.getId(), toRemove, accessToken);
+                }
+                // Avoid including roles in representation update
+                update.setRealmRoles(new ArrayList<>());
+            }
             KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), update, accessToken);
+            // refresh role names from role-mappings to keep snapshot accurate
+            try {
+                List<String> names = keycloakAdminClient.listUserRealmRoles(existing.getId(), accessToken);
+                if (names != null && !names.isEmpty()) {
+                    updated.setRealmRoles(new ArrayList<>(names));
+                }
+            } catch (Exception ignored) {}
             syncSnapshot(updated);
             detail.put("keycloakId", existing.getId());
             detail.put("realmRoles", updated.getRealmRoles());
@@ -1078,12 +1140,17 @@ public class AdminUserService {
         try {
             String keycloakId = stringValue(payload.get("keycloakId"));
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
-            LinkedHashSet<String> roles = new LinkedHashSet<>(
-                existing.getRealmRoles() == null ? List.of() : existing.getRealmRoles()
-            );
-            roles.addAll(rolesToAdd);
-            existing.setRealmRoles(new ArrayList<>(roles));
-            KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
+            LOG.info("Approval applyGrantRoles username={}, id={}, roles={}", existing.getUsername(), existing.getId(), rolesToAdd);
+            if (!rolesToAdd.isEmpty()) {
+                keycloakAdminClient.addRealmRolesToUser(existing.getId(), rolesToAdd, accessToken);
+            }
+            KeycloakUserDTO updated = keycloakAdminClient.findById(existing.getId(), accessToken).orElse(existing);
+            try {
+                List<String> names = keycloakAdminClient.listUserRealmRoles(existing.getId(), accessToken);
+                if (names != null && !names.isEmpty()) {
+                    updated.setRealmRoles(new ArrayList<>(names));
+                }
+            } catch (Exception ignored) {}
             syncSnapshot(updated);
             detail.put("keycloakId", existing.getId());
             detail.put("resultRoles", updated.getRealmRoles());
@@ -1105,16 +1172,15 @@ public class AdminUserService {
         try {
             String keycloakId = stringValue(payload.get("keycloakId"));
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
-            if (existing.getRealmRoles() != null) {
-                existing.setRealmRoles(
-                    existing
-                        .getRealmRoles()
-                        .stream()
-                        .filter(role -> !remove.contains(role))
-                        .toList()
-                );
+            LOG.info("Approval applyRevokeRoles username={}, id={}, roles={}", existing.getUsername(), existing.getId(), remove);
+            if (!remove.isEmpty()) {
+                keycloakAdminClient.removeRealmRolesFromUser(existing.getId(), remove, accessToken);
             }
-            KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
+            KeycloakUserDTO updated = keycloakAdminClient.findById(existing.getId(), accessToken).orElse(existing);
+            try {
+                List<String> names = keycloakAdminClient.listUserRealmRoles(existing.getId(), accessToken);
+                updated.setRealmRoles(new ArrayList<>(names));
+            } catch (Exception ignored) {}
             syncSnapshot(updated);
             detail.put("keycloakId", existing.getId());
             detail.put("resultRoles", updated.getRealmRoles());

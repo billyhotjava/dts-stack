@@ -24,7 +24,7 @@ const STATUS_BADGE: Record<string, "default" | "secondary" | "success" | "warnin
 type CategoryKey = "user" | "role";
 
 const USER_RESOURCE_TYPES = new Set(["USER"]);
-const ROLE_RESOURCE_TYPES = new Set(["ROLE", "CUSTOM_ROLE", "ROLE_ASSIGNMENT"]);
+const ROLE_RESOURCE_TYPES = new Set(["ROLE", "CUSTOM_ROLE", "ROLE_ASSIGNMENT", "PORTAL_MENU"]);
 
 const CATEGORY_OPTIONS: Array<{ key: CategoryKey; label: string }> = [
   { key: "user", label: "用户管理" },
@@ -107,6 +107,15 @@ export default function MyChangesView() {
       key: "action",
       width: 120,
       render: (value: string) => <Badge variant="secondary">{translateAction(value, value)}</Badge>,
+    },
+    {
+      title: "变更内容",
+      dataIndex: "diffJson",
+      key: "diffJson",
+      ellipsis: true,
+      render: (_: unknown, record) => (
+        <div className="text-xs text-muted-foreground">{summarizeChange(record)}</div>
+      ),
     },
     {
       title: "状态",
@@ -217,3 +226,68 @@ function byRequestedAtDesc(a: ChangeRequest, b: ChangeRequest) {
   return tb - ta;
 }
 
+// Helpers to summarize payload/diff into a short string (handles batch updates)
+function parseJson(value?: string | null): unknown {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  return null;
+}
+
+function fmtValue(v: unknown): string {
+  if (v == null) return "—";
+  if (Array.isArray(v)) return `[${v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ")}]`;
+  if (typeof v === "string") return v;
+  return JSON.stringify(v);
+}
+
+function summarizeChange(request: ChangeRequest): string {
+  const payload = asRecord(parseJson(request.payloadJson));
+  const diff = asRecord(parseJson(request.diffJson));
+  if (diff && Array.isArray((diff as any).items) && ((diff as any).items as any[]).length > 0) {
+    const items = ((diff as any).items as any[]).slice(0, 3);
+    const parts: string[] = [];
+    for (const it of items) {
+      const id = it?.id ?? "?";
+      const before = asRecord(it?.before) || {};
+      const after = asRecord(it?.after) || {};
+      const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+      const changed = keys.filter((k) => JSON.stringify((before as any)[k]) !== JSON.stringify((after as any)[k]));
+      if (changed.length === 0) continue;
+      const detail = changed
+        .slice(0, 2)
+        .map((k) => `${k}: ${fmtValue((before as any)[k])} → ${fmtValue((after as any)[k])}`)
+        .join("，");
+      parts.push(`菜单${id}: ${detail}`);
+    }
+    const extra = ((diff as any).items as any[]).length - items.length;
+    return parts.length ? parts.join("；") + (extra > 0 ? `（等${extra}项）` : "") : "—";
+  }
+  if (payload) {
+    const entries = Object.entries(payload).filter(([, v]) => v != null);
+    if (entries.length === 0) return "—";
+    return entries
+      .slice(0, 3)
+      .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
+      .join("；");
+  }
+  if (diff) {
+    const before = asRecord((diff as any).before) || {};
+    const after = asRecord((diff as any).after) || {};
+    const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+    const changed = keys.filter((k) => JSON.stringify((before as any)[k]) !== JSON.stringify((after as any)[k]));
+    if (changed.length === 0) return "—";
+    return changed
+      .slice(0, 3)
+      .map((k) => `${k}: ${fmtValue((before as any)[k])} → ${fmtValue((after as any)[k])}`)
+      .join("；");
+  }
+  return "—";
+}

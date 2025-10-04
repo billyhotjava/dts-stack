@@ -56,6 +56,7 @@ public class KeycloakAuthService {
         this.userInfoEndpoint = UriComponentsBuilder.fromUriString(issuerUri).path("/protocol/openid-connect/userinfo").build().toUri();
         this.logoutEndpoint = UriComponentsBuilder.fromUriString(issuerUri).path("/protocol/openid-connect/logout").build().toUri();
         this.revokeEndpoint = UriComponentsBuilder.fromUriString(issuerUri).path("/protocol/openid-connect/revoke").build().toUri();
+        log.info("Keycloak OIDC endpoints: issuer={}, token={}, userinfo={}", issuerUri, tokenEndpoint, userInfoEndpoint);
     }
 
     public TokenResponse obtainToken(String username, String password) {

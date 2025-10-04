@@ -1,0 +1,297 @@
+===== dts-platform 2025-10-03 00:56:12 (dts-platform-20251003-005612.log) =====
+[2025-10-03 00:56] 治理与质量模块方案整理
+
+[定位与目标]
+- 治理负责制定制度化质量标准与合规要求，质量负责执行监控，形成“发现-诊断-处置”闭环，结果反哺资产目录与权限策略。
+
+[功能分块建议]
+- 质量规则库：内置空值/唯一性/参考值/阈值/自定义SQL模板，支持版本、责任人、密级。
+- 质量监控中心：基于异步任务执行质量作业，展示运行进度、历史结果、告警阈值。
+- 合规检查台账：法规/制度条目绑定规则集与数据集，出具批次结果与证据链。
+- 问题工单与处置：自动生成整改单，跟踪状态、影响资产与处理记录。
+
+[后端技术方案]
+- 复用异步Job框架，新增 `QualityRuleRunJob`、`ComplianceCheckJob`，默认走星环 Hive/Inceptor，多源作为隐藏开关。
+- 扩展治理域实体（规则/版本/批次/工单），质量结果写入 `quality_run`、`quality_run_metric` 等表，所有操作接入 `AuditService`。
+- 执行轨迹与长任务事件同步记录到 `audit_event`，附件或证据沿用现有加密存储。
+
+[前端交互设计]
+- 治理导航拆分为“质量规则”“质量监控”“合规检查”“问题台账”四页，提供模板向导、执行进度、批次证据、台账视图等。
+- 数据集详情与 IAM 策略页接收质量结果摘要，提示风险等级与敏感度调整建议。
+
+[集成要点]
+- 与资产目录联动：质量评分写回数据集、驱动安全视图策略。
+- 与调度服务对接：支持 cron/一次性触发，失败回调生成工单。
+- 默认单数据源，配置页开放隐藏开关开启多源能力；遵循公开/内部/秘密/机密密级模型。
+
+[待确认问题]
+- 合规条目来源与维护主体。
+- 质量任务频率、时延及告警通道需求。
+- 问题工单是否对接现有 ITSM。
+- 质量指标对外共享范围与脱敏策略。
+[2025-10-03 01:04] 治理与质量实施任务拆解
+
+[后端基础]
+1. Liquibase：新增治理域表(`gov_rule`, `gov_rule_version`, `gov_rule_binding`, `gov_quality_run`, `gov_quality_metric`, `gov_compliance_batch`, `gov_issue_ticket`, `gov_issue_action`)及索引视图。
+2. 配置：`GovernanceProperties` 管理执行频率、重试、默认数据源、多源开关。
+3. 实体与仓储：对应 JPA 实体、DTO、MapStruct 映射、Repository。
+
+[质量规则与执行]
+4. Service：`QualityRuleService` 维护规则CRUD、版本、绑定数据集，校验密级与责任人。
+5. 调度：`QualityJobOrchestrator` 基于现有 `DatasetJobService` 注册 `QUALITY_RULE_RUN` job，提交执行上下文。
+6. Hive执行：扩展 `HiveStatementExecutor` 支持质量检测SQL、指标聚合、异常处理。
+7. 异步回调：落库运行结果(`gov_quality_run`/`gov_quality_metric`)，标记状态、耗时、错误详情，并写入 `audit_event`。
+
+[合规检查]
+8. 规则组合：`ComplianceTemplateService` 构建法规条目与质量规则映射。
+9. 检查任务：`ComplianceCheckJob` 执行模板，生成批次记录与证据占位。
+10. API：`GovernanceResource` 扩展 `POST /compliance-runs`、`GET /compliance-runs/{id}` 等接口，支持分页/过滤。
+
+[问题台账]
+11. Ticket模型：`IssueTicketService` 自动创建工单、流转状态、责任分配。
+12. 行动记录：新增 `IssueAction` 实体记录处置动作、附件、审计。与质量/合规结果联动。
+
+[前端治理模块]
+13. 质量规则页：改造为后端驱动列表、模板向导、版本展示、执行按钮。
+14. 质量监控页：新增运行历史表、趋势图、运行详情抽屉、告警高亮。
+15. 合规检查页：批次列表、运行状态、证据上传入口。
+16. 问题台账页：工单列表、状态筛选、指派/处置、行动时间线。
+17. 全局：更新路由、导航、i18n、API请求包装、通知提示。
+
+[集成与配置]
+18. 数据集详情：展示质量评分、最近运行、合规状态。
+19. IAM策略：根据质量等级给出策略建议或自动阻断。
+20. 调度集成：前端提供 cron/一次性执行配置；后端调用 Foundation 调度API。
+21. 多数据源开关：设置页展示多源开关，仅管理员可见。
+22. 审计：所有 REST + Job 关键节点调用 `AuditService`，覆写 dts-admin 逻辑。
+
+[测试与验证]
+23. 单元测试：服务层（规则校验、执行结果聚合、工单流转）。
+24. 集成测试：API flow（创建规则→执行→结果→工单）、合规批次、附件加密。
+25. 前端测试：React 组件测试/关键E2E脚本（规则管理、监控、合规、台账）。
+26. 文档：在 worklog/README 中补录操作手册、配置说明、手工验证步骤。
+
+[部署前置]
+27. 配置项与密钥：文档化 `governance.*`、附件加密 key、调度账号。
+28. Liquibase 应用顺序：更新 master changelog，并在部署手册中加入执行顺序与回滚策略。
+29. 性能与安全复核：质量任务并发、超时、失败重试策略评审。
+[2025-10-03 01:27] 后端治理模块改造进度
+- 新增 Liquibase 变更 20251008_01，覆盖治理规则扩展、版本、绑定、质量执行、合规批次、问题台账等表结构，并更新 master.xml。
+- 引入 `GovernanceProperties` 及默认配置，扩展 `application.yml`；注册在 `DtsPlatformApp` 中。
+- 扩展治理领域实体/仓储：`GovRule` 增强元数据，新增版本、绑定、质量执行、合规批次/条目、问题工单/动作实体与 JPA 仓储。
+- 衍生 DTO/请求模型与 `GovernanceMapper`，服务层实现 `QualityRuleService`、`QualityRunService`、`ComplianceService`、`IssueTicketService` 及审计集成，落地 Hive 执行、异步调度。
+- 重写 `GovernanceResource`、`QualityResource`，提供质量规则/运行、合规批次、问题台账 REST 接口；旧接口兼容返回值更新。
+- Maven 编译通过（存在历史依赖收敛告警），Spotless 自动整理；`target/` 目录归属修复。
+[2025-10-03 01:38] 前端治理页面与数据集联动更新
+- 重写治理>质量规则页面：改为实时加载后端数据、展示密级/严重度/绑定数据集、支持启停与手动触发执行；新增抽屉详情与新增/编辑对话框，使用新接口(`/governance/quality/*`)。
+- 更新全局 API 封装：新增质量规则/运行、合规批次、问题台账方法；保留 `/data-quality-runs/*` 兼容入口并指向新治理管道。
+- 数据集详情页新增“质量监控”卡片：展示最近一次检测状态并可一键触发质量检测（调用 `/data-quality-runs/trigger` 与最新结果查询），引导跳转治理模块。
+[2025-10-03 02:44] 审计写入启动日志增强
+- 启动线程启动时查询 `audit_event` 总数并写入日志，辅助定位积压；若查询失败则降级 warn 并保留原启动日志。
+[2025-10-03 02:52] 修复治理工单仓储查询导致的启动失败
+- `GovIssueTicketRepository` 改为按 `complianceBatch.id` 派生查询，匹配实体字段，避免 Spring Data 在启动时抛出 `No property 'sourceId'` 异常。
+- 保留 `source_id` 外键列语义，后续若支持其他来源需扩展实体/仓储映射。
+- 尝试执行 `./mvnw -DskipTests compile`，因既有依赖收敛冲突与 `target/generated-sources/annotations` 目录权限导致失败；需修复根因后再复测。
+[2025-10-03 03:18] 前端 Icon 组件容错
+- 发现部分页面传入未初始化的 icon 标识导致 `icon.startsWith` 抛异常，界面空白。
+- 在 `src/components/icon/icon.tsx` 增加字符串校验，遇到空值时优雅返回 `null`，防止整页崩溃；后续可结合 telemetry 定位具体来源。
+[2025-10-03 03:21] 合规检查功能任务拆解
+- 后端：补充合规批次/条目 DTO（规则/数据集名称、质量运行状态、统计汇总），提供条目状态与证据更新 API，所有入口写审计日志。
+- 前端：实现治理>合规检查页面，涵盖批次列表、详情抽屉、批次新建向导、证据/结论登记，打通质量运行跳转。
+- 集成验证：补齐 i18n、导航描述，编写手工验证步骤与调用示例，评估后端 API（含异常）日志是否落审计。
+[2025-10-03 03:41] 合规检查后端+前端改造
+- 后端：扩充 `ComplianceBatchDto/ItemDto` 统计字段与质量运行信息，新增 `PUT /api/governance/compliance/items/{id}` 以登记结论/证据，列表接口支持状态过滤，同时引入进度刷新逻辑与审计记录。
+- 前端：实现治理>合规检查页面（批次表格、侧边抽屉详情、批次新建弹窗、检查项结果登记对话框），串联新 API 并加入状态/密级展示、证据链接与数据集跳转。
+- 构建：执行 `pnpm build` 时命中既有 TypeScript 校验缺陷（例如 `src/admin/views/portal-menus.tsx` 等缺少字段定义），本次改动未新增其他编译错误；需后续集中治理历史类型问题。
+[2025-10-03 04:12] Portal剩余模块方案梳理
+- 数据开发（数据查询和预览、结果集管理）
+  * 后端：基于现有 `ExploreResource` 拓展 SQL 执行上下文，新增查询编排服务支持参数化模板、分页返回、结果缓存与清理任务；Saved Query 持久化补充标签、密级、最近运行状态，执行走异步 job 并落审计。
+  * 前端：重构 QueryWorkbench 拆分数据集选择、SQL 编辑、执行历史、数据预览四区，支持参数占位及 mask 标识；结果集管理页面改为服务端分页、提供下载/共享、关联数据资产快捷跳转。
+  * 交付：补充 `/api/explore/results` 结果查询、`/api/explore/history` 历史记录 API，编写手工验证步骤与审计检查清单。
+- 数据可视化（仪表盘、经营驾驶舱、主题看板）
+  * 后端：`VisualizationResource` 引入 DashboardRegistry（静态配置+API源），支持多主题指标、订阅、Embed URL；新增运行时数据缓存与健康状态接口，所有访问记审计。
+  * 前端：为仪表盘/驾驶舱/主题看板编排统一布局组件，支持 KPI 卡、趋势图、指标维度切换，提供外部跳转与嵌入 iframe 占位；列表页允许按密级/主题过滤。
+  * 后续：预留与 BI 网关的集成点（token 透传/单点），在验证记录中标注所需配置。
+- 数据服务（API 服务、数据产品、令牌与密钥）
+  * 后端：拆分 `ServicesResource` 为 API catalog、产品目录、Token 管理三个聚合；API 部分补充发布审批、流控策略、调用指标模拟；数据产品落库资产关联、版本、SLA，提供下载/订阅接口；Token 模块完善密钥加密与吊销审计。
+  * 前端：API 列表支持多条件筛选、可视化调用趋势与策略详情；数据产品页提供目录表格+详情抽屉+版本时间线+消费方式卡片；令牌页增加生成限制、用途备注、复制提示。
+  * 集成：与 IAM 授权打通（API/Product 绑定资源授权项），执行操作要写入 `audit_event`。
+- 权限与策略（密级映射、资源授权、策略模拟、权限申请）
+  * 后端：补强化密级映射模型（数据密级/人员密级）、资源授权工作流（草稿→审批→生效）、策略模拟引擎（基于策略 DSL 解释器），权限申请接入审批与通知；所有流程记录操作轨迹。
+  * 前端：分类映射页支持拖拽映射、批量编辑；资源授权页展示资产树、策略摘要、审批状态；模拟页提供凭证/上下文输入与评估结果差异对比；申请入口支持模板、进度跟踪。
+  * 依赖：复用 Job/Audit 框架，必要时新增 `iam_policy_change` job 类型；文档化默认角色。
+- 基础数据维护（数据源、数据存储、任务调度）
+  * 后端：数据源管理完善 CRUD/测试接口、密钥加密与多源开关；数据存储提供集群/桶/库表元数据查询及容量、加密策略；任务调度与 Foundation 服务打通，支持 Cron 表达式校验、依赖展示、运行记录审计。
+  * 前端：数据源表格+侧边详情，接入测试结果展示；数据存储页面提供按类型分组、容量图表、密级标识；任务调度页实现任务拓扑、运行历史时间线、手工触发与暂停按钮。
+  * 保障：所有敏感配置走机密存储（沿用 data-standard 加密工具），在验证指引中注明密钥要求。
+- 跨模块共性
+  * 扩展 `AuditService` 标签集，确保新接口、后台任务、下载操作均落 audit。
+  * 更新 OpenAPI/前端 API 封装、i18n 文本、导航标签；准备手工验证大纲及后续自动化测试清单。
+[2025-10-03 04:52] 数据开发模块原型增强
+- 后端 `ExploreResource` 引入执行历史/结果集内存缓存：`/explore/execute` 返回 executionId 并写入 `executionHistory`，新增 `/explore/query-executions`、`/explore/result-sets`、`/explore/result-preview/{id}`、`/explore/result-sets/{id}`、`/explore/result-sets/cleanup`、`/explore/save-result/{id}` 等 API，同时统一审计标签、支持按数据集密级标注。
+- 查询结果生成逻辑支持列名推断、行数据克隆、脱敏提示，`runSaved` 复用执行逻辑；快速 explain 输出结构化步骤与估算代价。
+- 前端工作台对接新接口：执行历史展示数据集/密级/耗时/SQL 摘要，结果集管理表增加数据集列、密级、到期时间，并兼容后端返回的 `maskedColumns`；API 封装更新到 `/explore/*` 路径。
+- `pnpm` 未运行；尝试 `./mvnw -DskipTests compile` 时仍受 Hive 依赖收敛和 target 目录权限影响而失败（老问题，未在本次处理）。
+[2025-10-03 09:17] 探索模块持久化任务规划
+- 将 /api/explore/* 结果写入 query_execution/result_set 表，内存缓存改为数据库存储，结果预览序列化至 preview_columns。
+- 扩展历史/结果集查询接口，输出数据集名称与密级信息，支持 TTL 清理同步更新 Job 审计。
+- 前端工作台/结果集管理适配持久化结构，确保执行历史、保存/预览流程在空数据与刷新场景可用。
+[2025-10-03 09:34] 数据可视化模块任务规划
+- 后端：扩展 /api/vis/* 返回结构化指标卡、趋势与健康状态，按密级过滤并补充仪表盘目录接口，所有返回体加入时间戳/来源标记，确保审计记录到位。
+- 前端：统一可视化页面骨架，列表页接入新目录数据，详情卡片展示 KPI/趋势/链接并提供空状态与刷新控制。
+- 验证：列出手工确认步骤（API 调用、密级过滤、链接跳转），留待后续自动化覆盖。
+[2025-10-03 05:45] MSW Mock 资产下线（dts-platform-webapp）
+- 删除 src/_mock 目录与 public/mockServiceWorker.js，确保编译包不再包含 MSW 及示例 handlers。
+- main.tsx 已无 mock 注入逻辑，本次清理后构建仅依赖真实后端 API；package.json 无需额外调整。
+- 未触及现有功能代码，构建仍受既有类型错误限制（portal-menus/nav-data 等），需后续专门处理。
+[2025-10-03 12:43] 剩余模块实施计划
+- 数据服务：建立 API/产品/令牌实体与 Liquibase 变更，编写聚合 Service 输出列表、详情、指标及试调响应，并补齐审计。
+- IAM：实现密级同步、策略批量授权、冲突预检与模拟评估的 Service 层，统一 REST DTO，驱动现有前端交互。
+- 基础维护：完善数据源/存储/调度的持久化模型（含密钥加密、连接测试记录、多源开关），补全 CRUD 与审计。
+- 前端配合：对应三大模块改造 API client、状态管理与页面组件，替换本地 mock，强化加载/空态与操作反馈。
+- 验证：列出最小手工校验脚本（API 调用、审计事件、密钥配置），后续补充集成测试用例。
+[2025-10-03 13:18] 数据服务/IAM/基础模块联动改造
+- 数据服务：新增 svc_api/svc_data_product 等实体与 Liquibase 20251008_02，编写 ApiCatalogService/DataProductService/SvcTokenService，实现 Hive 推送、版本、指标与审计；重构 ApiServicesResource/ApiGatewayResource，扩展 /services/apis/… API。
+- 前端：更新 API client & 页面（services/apis, services/products, services/tokens）对接新 DTO，新增版本/指标视图、令牌加密提示及数据产品后台驱动目录。
+- IAM：补充 iam_* 表结构与服务（ClassificationService、PolicyService），重写 IamClassificationAdminResource/IamPoliciesResource 支持同步日志、批量授权、冲突预检和主题检索。
+- 基础设施：引入 InfraSecurityProperties、InfraManagementService、InfraSecretService 与连接测试日志表，重构 InfraResource 数据源/存储接口；前端 DataSources/DataStorage 页面改为读取后端列表、能力开关及最近测试记录。
+- 待验证：需执行最新 Liquibase（20251008_02/03/04），配置 dts.platform.infra.encryption-key 及 IAM/数据服务样例数据后再全量手测。
+[2025-10-03 13:55] 编译校验与后续安排
+- 修复 InfraManagementService 依赖的请求 DTO 包路径，迁移 DataSourceRequest/DataStorageRequest 至 service 层复用，更新接口引用并通过 `mvnw compile`（跳过 enforcer）验证通过。
+- 清理 `target/generated-sources` 目录所有权（此前为 root 导致 Hibernate JPA Metamodel 生成失败），执行 `sudo chown -R billy:billy target/generated-sources` 后编译恢复正常。
+- 记录 Maven 依然存在 Hive 依赖收敛告警，后续需评估是否在 enforcer 层豁免或统一版本；暂以 `-Denforcer.skip=true` 进行本地验证。
+- 下一步：梳理 Explore/Services/IAM 模块的测试与文档缺口，准备补充后端集成测试与前端类型校验；同时整理编译依赖注意事项（权限、key 配置）写入 docs/ 或 readme 补充说明。
+[2025-10-03 13:59] InfraSecretService 单元测试补充
+- 追加 `InfraSecretServiceTest` 验证加密/降级两种路径：确保配置了 `dts.platform.infra.encryption-key` 时可成功写回密钥版本并解密，未配置时保持为空并给出日志告警。
+- 首次执行测试需先 `mvn clean`，否则先前 root 生成的 `target/generated-test-sources` 会阻止 Hibernate 元模型写入，现阶段通过 `sudo chown -R billy:billy target/generated-test-sources` 规避并记录在案。
+- 执行命令：`./mvnw -Denforcer.skip=true -Dtest=InfraSecretServiceTest test`，2 个断言全部通过；保留 Jacoco 报告供后续合并。
+- 待办：将权限及 enforcer 绕行说明整理到开发文档，后续补充更多治理/服务模块测试。
+[2025-10-03 14:20] 探索工作台数据集加载方案
+- 目标：移除前端本地 DATASETS 常量，完全依赖 /api/catalog/datasets 接口并处理加载/空态，确保权限受限时给出提示。
+- 后端：复用现有 CatalogResource，暂不新增接口，仅校验返回结构并在前端转换时补全展示字段。
+- 前端调整步骤：
+  1. 在 QueryWorkbenchPage 增加加载与错误状态，首屏显示骨架或提示。
+  2. 移除默认 DATASETS 静态数据，落地空列表提示与“刷新”动作。
+  3. 当未配置数据源或接口403时，引导用户前往基础维护>数据源页面。
+- 验证：手工请求 /api/explore/query-executions 确保不依赖静态数据；在空数据集场景下确认按钮禁用与提示；执行一次查询确保逻辑未回归。
+[2025-10-03 14:36] 探索工作台数据集加载改造进度
+- 移除 QueryWorkbenchPage 本地示例数据，改为仅依赖 /catalog/datasets 结果，并新增加载/错误/空态提示与刷新入口。
+- 数据源、数据集、表选择器在加载或无数据时禁用，运行/执行计划按钮需选定数据集后才可用。
+- 未能执行 eslint（pnpm exec eslint ...）因项目未安装相关命令，记录待补齐依赖；手工建议：刷新数据集、触发空数据源场景、执行一次查询验证历史列表。
+[2025-10-03 14:27] 探索结果集与保存查询界面完善方案
+- 目标：SavedQueriesPage 增加加载/错误状态，展示数据集密级标签，提供刷新与空态引导，保持与工作台体验一致。
+- 后端依赖：沿用现有 /catalog/datasets、/explore/saved-queries、/explore/result-sets API，无需额外改造。
+- 前端调整计划：
+  1. 在 SavedQueriesPage 中引入 datasets 拉取流程，与 QueryWorkbenchPage 复用转换逻辑，缓存数据集名称与密级。
+  2. 新增加载、错误提示与刷新入口；列表为空时给出引导文本或跳转链接。
+  3. 运行/删除动作完成后刷新列表，并在结果集表格展示密级徽章、剩余 TTL、数据集链接。
+- 验证：手工测试查询列表加载失败/成功路径，执行保存的查询查看历史更新，清理过期结果后确认提示与审计记录。
+[2025-10-03 14:37] SavedQueries 页面改造进展
+- 引入 /catalog/datasets 拉取逻辑，统一密级元数据，输出提示条、加载/错误状态与刷新按钮。
+- 保存的查询列表新增数据集列和密级徽章，结果集表格支持本地时间格式化、密级徽章与按钮禁用控制。
+- 手工执行 `pnpm --dir source/dts-platform-webapp exec eslint src/pages/explore/SavedQueriesPage.tsx`，命令缺失（eslint 未安装）；保留处理记录，后续补齐依赖前无法自动校验。
+- 建议手工验证：1) 在无数据集时检查提示文案与刷新；2) 成功加载后执行/删除保存查询确认表格刷新；3) 预览结果集查看脱敏提示与时间格式。
+[2025-10-03 15:06] 探索模块自动化测试计划
+- 背景：ExploreResource 已改造为持久化执行与结果集，但尚无自动化覆盖，需验证执行-保存-清理全流程及权限判定。
+- 目标：补充基于 MockMvc 的集成测试，校验 /api/explore/execute、/save-result、/result-sets、/result-sets/{id} 的行为，并验证拒绝访问数据集时返回错误响应。
+- 实施步骤：
+  1) 通过 CatalogDatasetRepository 创建可访问的数据集，模拟 ROLE_TOP_SECRET 用户执行查询，断言响应含 executionId 且数据库落库。
+  2) 调用 save-result 设置 TTL，校验 ResultSetRepository 记录已更新，随后检查 /result-sets 响应字段。
+  3) 删除结果集并确认列表为空，覆盖清理路径。
+  4) 新增一条 ROLE_INTERNAL 用户执行 TOP_SECRET 数据集的用例，确认返回错误消息并无新增记录。
+- 验证：运行 `./mvnw -Denforcer.skip=true -pl dts-platform -am test -Dtest=ExploreResourceIT`，观察审计打印无异常；同时保留手工步骤提示（执行一次保存查询确认 UI 可用）。
+[2025-10-03 15:13] Explore 模块测试执行记录
+- 实施：新增 `ExploreResourceIT`，覆盖查询执行→保存结果→列表→删除、以及密级拒绝场景；为避免 Lob 读取异常补充 `@Transactional`。
+- Liquibase 修正：调整 `20251007_02_data_standard_tables.xml` 中 preConditions 顺序，更新 `20251007_01_audit_event_table.xml` 将 `client_ip` 字段类型改为 `VARCHAR(64)`，以与实体 `AuditEvent` 保持一致（避免 inet 类型插入失败）。
+- 验证：执行 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT` 通过；Hazelcast/Audit 初始化耗时较长约 40s，但无错误。测试运行产生日志已存 `target/surefire-reports`。
+- 后续：待补 `ExploreResource` 的更多失败场景（清理TTL、批量保存）以及将新 Liquibase 变更同步给 DBA；同时评估是否在审计服务中显式禁用测试环境持久化。
+[2025-10-03 15:16] Explore 模块补充测试计划
+- 目标：扩展 `ExploreResourceIT`，覆盖结果集清理与预览接口，验证 TTL 到期删除逻辑与预览数据解析。
+- 范围：
+  1) 构造一个过期与一个未过期的 ResultSet + QueryExecution，调用 `/api/explore/result-sets/cleanup`，断言仅过期项被删除且关联执行记录被解除。
+  2) 构造含 `previewColumns` 的 ResultSet，调用 `/api/explore/result-preview/{id}` 校验 headers/rows/masking 返回；另验证不存在的 ID 返回错误。
+- 细节：使用仓储预置数据，序列化 preview payload 采用 ObjectMapper；保留事务注解确保测试后回滚。
+- 验证：运行 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT`，确认新增断言通过并观察审计日志无异常。
+[2025-10-03 15:18] Explore 测试补充分支完成
+- 新增用例：1) `cleanupResultSetsRemovesExpiredOnly` 验证 `/result-sets/cleanup` 仅清理过期结果，并断言 QueryExecution 关联被清空；2) `previewResultSetReturnsStoredRows` 检验 `/result-preview/{id}` 返回预览内容且缺失 ID 返回错误码。
+- 伴随调整：构造 preview JSON 以贴合 `PreviewPayload`，持续沿用事务测试避免 Lob 读取失败。
+- 命令：`./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT`，耗时约 40s，全部 4 个用例通过；审计日志新增 cleanup/preview 操作记录。
+- 待办：仍需补充 ResultSet 保存失败、TTL 自动过期批处理等异常场景测试，并考虑在测试环境禁用 Hazelcast 启动以缩短时间。
+[2025-10-03 15:52] Explore 模块剩余测试计划
+- 梳理未覆盖的异常分支：结果集保存找不到记录、TTL 非法值、预览/执行在密级不足时的拒绝响应。
+- 扩展 ExploreResourceIT：新增用例校验 save-result 空记录返回错误并不落库，验证 TTL 输入非法时回退到默认值；补充 preview 接口的权限拒绝路径。
+- 复跑 `./mvnw -Denforcer.skip=true -pl dts-platform -am test -Dtest=ExploreResourceIT` 确认新增断言通过，并记录执行时间。
+- 检查审计日志无异常输出，更新手工验证清单，提醒未来补充结果集保存失败与 TTL 批量任务的更多边界测试。
+[2025-10-03 15:59] Explore 测试补充结果
+- 新增用例：`saveResultShouldReturnErrorWhenResultMissing`、`saveResultWithInvalidTtlFallsBackToDefault`、`previewShouldRejectWhenDatasetAccessDenied`，覆盖结果集缺失、TTL 非法回退、预览权限不足等分支。
+- 复跑 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT` 成功（耗时 ~55s），共 7 个用例通过；Hazelcast/Audit 启动仍产生约 40s 开销，记录后续优化建议。
+- 验证结果集仓储：非法保存未落库，TTL 回退为 7 天且自动生成 expiresAt，预览拒绝确保无新增执行/结果记录。
+- 审计日志输出符合预期（DENY/UPDATE/READ/DELETE），无额外异常；提醒后续补齐结果集保存失败及 TTL 批任务的更多边界测试。
+[2025-10-03 16:12] Explore Saved Query 场景测试计划
+- 目标：覆盖保存查询运行成功与权限不足的路径，以及列表接口基础断言，提升 explore saved-query 模块回归保障。
+- 步骤：
+  1) 在 IT 中创建可访问的数据集与 SavedQuery，调用 `/api/explore/saved-queries/{id}/run` 校验执行成功并生成执行/结果。
+  2) 构造密级更高的数据集并关联 SavedQuery，使用低权限用户触发 run，确认返回拒绝信息且无执行记录。
+  3) 调用 `/api/explore/saved-queries` 检查响应包含新建记录，并验证审计日志输出（通过日志断言或后续手工检查）。
+- 验证：运行 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT` 确认新增用例通过，观察测试日志无新警告。
+[2025-10-03 16:26] Explore Saved Query 测试落地
+- 在 ExploreResourceIT 中新增 `runSavedQueryExecutesSuccessfully` 与 `runSavedQueryShouldRespectDatasetPermission` 覆盖保存查询执行成功与权限拒绝场景，同时断言列表接口返回保存记录。
+- 清理逻辑扩展至 ExploreSavedQueryRepository，确保测试回滚前不会残留数据集绑定。
+- 执行 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT` 通过（9 个用例，约 54s），审计日志新增 savedQuery.run READ/EXECUTE/DENY 事件，符合预期。
+- 待办：继续补充保存查询 CRUD 的更多接口测试及错误处理（例如删除不存在记录、更新字段验证）。
+[2025-10-03 16:38] Explore Saved Query CRUD 覆盖计划
+- 目标：补足保存查询的创建与删除路径测试，验证接口返回、数据库落库以及删除幂等行为。
+- 步骤：
+  1) 调用 `POST /api/explore/saved-queries` 创建记录，断言响应字段、仓储落库及列表返回正常。
+  2) 删除已存在记录并确认仓储为空；同时调用删除不存在 ID 的接口，确保返回成功且无异常。
+- 验证：继续运行 `./mvnw -Denforcer.skip=true test -Dtest=ExploreResourceIT`，确认新增用例通过并记录日志输出。
+[2025-10-03 16:45] Explore Saved Query 更新功能计划
+- 目标：补充保存查询更新接口，支持名称/SQL/绑定数据集的修改并记录审计。
+- 实施：
+  1) 在 `ExploreResource` 添加 `PUT /api/explore/saved-queries/{id}`，校验记录存在后更新字段并返回最新实体。
+  2) 引入请求 DTO（校验 name/sqlText 长度），复用 ObjectMapper 转换，以保持输入安全。
+  3) 前端暂保留当前调用方式（后续视需求接入更新 UI），仅实现后端逻辑。
+- 验证：本次按要求不执行自动化测试，由人工统一测试；提交时记录命令缺省。
+[2025-10-03 16:52] Explore Saved Query 更新接口实现
+- 在 `ExploreResource` 新增 `PUT /api/explore/saved-queries/{id}`，支持更新名称、SQL 与 datasetId，含输入校验和审计记录；引入工具方法裁剪长度并处理空值解绑。
+- 由于用户要求统一测试，本次未执行自动化测试；待联调时重点关注 invalid datasetId 返回与前端请求兼容性。
+[2025-10-03 17:00] SavedQueries 页面编辑功能计划
+- 目标：接入后端更新接口，允许在前端对已保存查询进行重命名和 SQL 修改。
+- 调整：
+  1) 为列表项提供“编辑”操作，弹出对话框展示名称、SQL、绑定数据集下拉；表单复用新增逻辑。
+  2) 接入 `PUT /api/explore/saved-queries/{id}`，成功后刷新列表并提示成功，失败提示错误信息。
+  3) 确保加载态下禁用按钮，保持现有密级徽章展示。
+- 验证：按要求暂不执行自动化测试，手动验证由用户统一安排。
+[2025-10-03 17:12] SavedQueries 页面编辑功能完成
+- 接入 `updateSavedQuery` API，新增编辑按钮与弹窗，可修改名称、SQL 与数据集绑定；提交后刷新列表并提示结果，加载时禁用相关操作。
+- UI 使用 Select 显示全部数据集，提供不关联选项，保留密级徽章展示。
+- 按照约定未执行自动化测试，等待统一联调时验证更新与回退逻辑。
+[2025-10-03 17:20] 安全视图 Hive 下发方案
+- 目标：将 `SecurityViewService.applyViews` 从仅返回 SQL 扩展为可选执行 Hive DDL，并在失败时写入任务状态。
+- 设计要点：
+  1) HiveStatementExecutor 改造为可返回连接错误类型、失败原因，支持 tolerant=false 时中断。
+  2) SecurityViewService 将执行结果写入 CatalogSecureView，并通过 AuditService 记录 success/failed。
+  3) DatasetJobWorker.runPolicyApply 捕获执行异常、写入 Job 状态/消息，并在成功时更新 viewRepository。
+- 验证：后端执行路径和 DDL 由用户统一测试，本次不跑自动用例。
+[2025-10-03 17:26] 安全视图执行实现计划
+- 将 HiveStatementExecutor 扩展返回结构包含错误代码，并支持 tolerant=false 时提前终止；更新 SecurityViewService.applyViews 写入执行详情、处理失败/部分成功场景。
+- DatasetJobWorker.runPolicyApply 捕获执行结果，将 job 状态置为 SUCCEEDED/FAILED，并记录执行明细（成功视图数、失败语句列表）。
+- 计划完成后更新工作日志，测试等待统一执行。
+[2025-10-03 17:36] 安全视图执行能力上线
+- HiveStatementExecutor 增强：补充错误码解析（TIMEOUT/SYNTAX/CONSTRAINT/SQLState），在 tolerant=false 时抛出异常，并为 SKIPPED/SUCCEEDED/FAILED 结果写入统一结构（含 message/errorCode）。
+- SecurityViewService.applyViews 仅在无失败时落库安全视图；返回值改为不可变结构，保留全部语句与执行明细。
+- DatasetJobWorker.runPolicyApply 汇总执行统计、记录失败列表，并更新 Job 状态/提示文案及审计信息，失败时包含首个错误提示。
+- 本次未执行自动化测试，待统一联调验证 Hive 连接、异常回滚与视图持久化逻辑。
+[2025-10-03 16:54] Explore 模块请求校验计划
+- 目标：为保存查询的创建/更新接口补充专用 DTO 与 Bean 校验，避免 Map 输入导致的字段遗漏，同时统一响应结构。
+- 步骤：
+  1) 后端：新增 CreateSavedQueryRequest/UpdateSavedQueryRequest，调整 ExploreResource 入口使用 DTO，增强字段校验与权限检查，补充审计消息。
+  2) 前端：更新 platformApi 与 SavedQueriesPage，按新请求模型提交数据，优化错误提示与加载态。
+  3) 校验：编译前后端（跳过 enforcer），手工检查新接口在无效输入时返回清晰错误，记录后续需补的自动化测试。
+[2025-10-03 17:44] Saved Query 创建表单优化计划
+- 目标：在保存查询的创建流程中支持选择绑定数据集，并提供更友好的输入校验与提示。
+- 步骤：
+  1) 前端：SavedQueriesPage 新增数据集下拉，无需重复加载列表，提交时传递 datasetId 或 null。
+  2) API 调整：复用新建 DTO，确保 createSavedQuery 调用传参与校验一致，并在校验失败时展示后端返回消息。
+  3) 验证：手动尝试绑定/解绑/错误数据集创建流程，确认 toast 提示正确，记录后续自动化测试需求。
+

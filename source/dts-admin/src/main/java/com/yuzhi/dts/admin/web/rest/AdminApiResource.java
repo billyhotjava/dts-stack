@@ -79,6 +79,15 @@ public class AdminApiResource {
         return RESERVED_REALM_ROLES.contains(canonicalReservedRole(role));
     }
 
+    private static String stripRolePrefix(String name) {
+        if (name == null) return null;
+        String upper = name.trim().toUpperCase(java.util.Locale.ROOT);
+        if (upper.startsWith("ROLE_")) {
+            return upper.substring(5);
+        }
+        return upper;
+    }
+
     @GetMapping("/whoami")
     public ResponseEntity<ApiResponse<WhoAmI>> whoami(Principal principal) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -529,7 +538,7 @@ public class AdminApiResource {
         if (rawName.isEmpty()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("角色名称不能为空"));
         }
-        String normalizedName = rawName.toUpperCase(Locale.ROOT);
+        String normalizedName = stripRolePrefix(rawName);
         if (isReservedRealmRoleName(normalizedName)) {
             return ResponseEntity.status(409).body(ApiResponse.error("内置角色不可创建"));
         }
@@ -1321,6 +1330,39 @@ public class AdminApiResource {
                         portalMenuRepo.save(target);
                     }
                 });
+        } else if ("BATCH_UPDATE".equalsIgnoreCase(action) || "BULK_UPDATE".equalsIgnoreCase(action)) {
+            // Expect payload: { updates: [ { id: number, allowedRoles: string[], allowedPermissions?: string[], maxDataLevel?: string } ] }
+            Object rawItems = payload.get("updates");
+            if (rawItems instanceof java.util.Collection<?> col) {
+                for (Object it : col) {
+                    if (!(it instanceof java.util.Map<?, ?> m)) {
+                        continue;
+                    }
+                    Object idObj = m.get("id");
+                    if (idObj == null) {
+                        continue;
+                    }
+                    Long id;
+                    try {
+                        id = Long.valueOf(idObj.toString());
+                    } catch (NumberFormatException nfe) {
+                        continue;
+                    }
+                    final Long fid = id;
+                    portalMenuRepo
+                        .findById(fid)
+                        .ifPresent(target -> {
+                            // Build a minimal payload map for visibility update using existing helpers
+                            java.util.Map<String, Object> updatePayload = new java.util.LinkedHashMap<>();
+                            if (m.containsKey("allowedRoles")) updatePayload.put("allowedRoles", m.get("allowedRoles"));
+                            if (m.containsKey("allowedPermissions")) updatePayload.put("allowedPermissions", m.get("allowedPermissions"));
+                            if (m.containsKey("maxDataLevel")) updatePayload.put("maxDataLevel", m.get("maxDataLevel"));
+                            if (m.containsKey("visibilityRules")) updatePayload.put("visibilityRules", m.get("visibilityRules"));
+                            java.util.List<PortalMenuVisibility> updatedVisibilities = buildVisibilityEntities(updatePayload, target);
+                            portalMenuService.replaceVisibilities(target, updatedVisibilities);
+                        });
+                }
+            }
         } else if ("DELETE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());
             portalMenuRepo
@@ -1384,7 +1426,14 @@ public class AdminApiResource {
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("payload", payload);
         String rawName = Objects.toString(payload.get("name"), cr.getResourceId());
-        String normalizedName = rawName == null ? null : rawName.trim().toUpperCase(Locale.ROOT);
+        String normalizedName = stripRolePrefix(rawName);
+        org.slf4j.LoggerFactory.getLogger(AdminApiResource.class)
+            .info("FE payload(role-change): action={}, rawName={}, normalizedName={}, scope={}, hasOps={}",
+                action,
+                rawName,
+                normalizedName,
+                Objects.toString(payload.get("scope"), null),
+                payload.get("operations") != null);
         String auditAction = "ROLE_" + (action == null ? "UNKNOWN" : action.toUpperCase(Locale.ROOT)) + "_EXECUTE";
         try {
             if ("UPDATE".equalsIgnoreCase(action)) {
@@ -1422,7 +1471,7 @@ public class AdminApiResource {
                     cr.setResourceId(normalizedName);
                 }
 
-                adminUserService.syncRealmRole(normalizedName, normalizedScope, operations);
+                adminUserService.syncRealmRole(normalizedName, normalizedScope, operations, description);
 
                 customRoleRepo
                     .findByName(normalizedName)
@@ -1455,7 +1504,7 @@ public class AdminApiResource {
         Map<String, Object> payload = fromJson(cr.getPayloadJson());
         String action = cr.getAction();
         String rawName = Objects.toString(payload.get("name"), cr.getResourceId());
-        String normalizedName = rawName == null ? null : rawName.toUpperCase(Locale.ROOT);
+        String normalizedName = stripRolePrefix(rawName);
         String auditAction = "ROLE_CUSTOM_" + action.toUpperCase(Locale.ROOT) + "_EXECUTE";
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("payload", payload);
@@ -1482,7 +1531,7 @@ public class AdminApiResource {
                 String authority = normalizeRoleAuthority(role.getName());
                 portalMenuService.synchronizeRoleMenuVisibility(authority, role.getScope(), ops);
                 try {
-                    adminUserService.syncRealmRole(role.getName(), role.getScope(), ops);
+                    adminUserService.syncRealmRole(role.getName(), role.getScope(), ops, role.getDescription());
                 } catch (Exception ex) {
                     // 同步失败不阻塞审批，通过审计日志追踪
                 }

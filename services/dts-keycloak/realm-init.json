@@ -60,7 +60,7 @@
       },
       {
         "id": "1607f329-2142-40a4-9b60-95131bc061c8",
-        "name": "DATA_INTERNA",
+        "name": "DATA_INTERNAL",
         "description": "数据密级-内部",
         "composite": false,
         "clientRole": false,

@@ -1,0 +1,27 @@
+Title: 修复员工/角色审批后变更未生效问题 - 代码变更记录
+When: $(date -Iseconds)
+
+变更要点
+1) 读取改为服务账号
+- /api/keycloak/users、/api/keycloak/users/search、/api/keycloak/users/{id}、/api/keycloak/users/{id}/roles 使用 Client Credentials 令牌读取，避免回退内存缓存。
+- 新增 adminAccessToken() 从 dts.keycloak.admin-client-* 获取管理令牌。
+
+2) 角色写入使用 role-mappings API
+- 新增 KeycloakAdminClient.addRealmRolesToUser / removeRealmRolesFromUser / listUserRealmRoles
+- RestClient 实现：POST/DELETE /admin/realms/{realm}/users/{id}/role-mappings/realm；GET 同路径取用户当前角色。
+- 审批执行路径（applyGrantRoles/applyRevokeRoles/applyUpdate）改为使用 role-mappings 并在完成后查询实际角色名更新快照。
+
+3) 用户详情角色获取
+- getUserRoles 改为直接从 Keycloak 读取用户 realm 角色，再映射为 DTO，确保审批后立即可见。
+
+受影响文件（关键位置）
+- source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/KeycloakApiResource.java:82,93,149,185,192,230,265,586
+- source/dts-admin/src/main/java/com/yuzhi/dts/admin/service/keycloak/KeycloakAdminClient.java:43-52
+- source/dts-admin/src/main/java/com/yuzhi/dts/admin/service/keycloak/KeycloakAdminRestClient.java:696-736, +listUserRealmRoles
+- source/dts-admin/src/main/java/com/yuzhi/dts/admin/service/user/AdminUserService.java:1041-1056,1095-1104,1120-1129
+
+验证建议
+- 提交用户属性更新审批并批准 → 详情接口立即反映变更。
+- 提交角色分配/撤销审批并批准 → /keycloak/users/{id}/roles 返回与 Keycloak 一致。
+- 列表显示的角色（若依赖 realmRoles）仍可能为空（Keycloak用户列表不返回角色）；详情页显示以新接口为准。
+
