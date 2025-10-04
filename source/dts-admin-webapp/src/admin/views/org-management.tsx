@@ -185,7 +185,7 @@ export default function OrgManagementView() {
                 closeForm();
                 setSelectedId(parentId);
                 await refreshOrganizations();
-                toast.success("部门已创建并同步 Keycloak");
+                toast.success("部门已创建并同步 服务端");
             } catch (error) {
                 console.error(error);
             }
@@ -202,7 +202,7 @@ export default function OrgManagementView() {
                 await updateMutation.mutateAsync({ id: formState.target.id, payload });
                 closeForm();
                 await refreshOrganizations();
-                toast.success("部门信息已更新并同步 Keycloak");
+                toast.success("部门信息已更新并同步 服务端");
             } catch (error) {
                 console.error(error);
             }
@@ -222,7 +222,7 @@ export default function OrgManagementView() {
                 return current;
             });
             await refreshOrganizations();
-            toast.success("部门已删除并同步 Keycloak");
+            toast.success("部门已删除并同步 服务端");
         } catch (error) {
             console.error(error);
         }
@@ -361,7 +361,7 @@ export default function OrgManagementView() {
 								) : null}
 								<div className="grid gap-3 sm:grid-cols-2">
 									<div>
-										<p className="text-xs text-muted-foreground">Keycloak 组 ID</p>
+										<p className="text-xs text-muted-foreground">服务端 组 ID</p>
 										<p className="text-sm font-medium text-foreground">{selected.keycloakGroupId ?? "--"}</p>
 									</div>
 									<div>

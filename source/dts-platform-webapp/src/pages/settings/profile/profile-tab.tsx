@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { KeycloakUser } from "#/keycloak";
+import type { KeycloakUser } from "#/服务端";
 import { useUserInfo } from "@/store/userStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";

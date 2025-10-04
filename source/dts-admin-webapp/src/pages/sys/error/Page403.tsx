@@ -1,8 +1,10 @@
 import Character from "@/assets/images/characters/character_2.png";
 import { themeVars } from "@/theme/theme.css";
 import ErrorLayout from "./components/ErrorLayout";
+import { useTranslation } from "react-i18next";
 
 export default function Page403() {
+	const { t } = useTranslation();
 	const svg = (
 		<svg viewBox="0 0 480 360" xmlns="http://www.w3.org/2000/svg" width={400} height={400} className="w-full">
 			<title>403</title>
@@ -67,9 +69,9 @@ export default function Page403() {
 	);
 	return (
 		<ErrorLayout
-			title="Access Denied"
-			helmetTitle="403 Access Denied!"
-			desc="You do not have permission to access this resource."
+			title={t("sys.errorPage.403.title")}
+			helmetTitle={t("sys.errorPage.403.helmetTitle")}
+			desc={t("sys.errorPage.403.description")}
 			svg={svg}
 		/>
 	);

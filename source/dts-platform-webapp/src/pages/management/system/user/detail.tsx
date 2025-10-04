@@ -3,7 +3,7 @@ import { CUSTOM_USER_ATTRIBUTE_KEYS } from "@/constants/user";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
-import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } from "#/keycloak";
+import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } from "#/服务端";
 import { KeycloakGroupService, KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
 import { Icon } from "@/components/icon";
 import { useParams, useRouter } from "@/routes/hooks";
@@ -233,7 +233,7 @@ export default function UserDetail() {
 						<p className="text-muted-foreground">用户详情</p>
 					</div>
 				</div>
-				<div className="flex items-center space-x-2">
+				{/* <div className="flex items-center space-x-2">
 					<Button variant="outline" onClick={() => setEditModal(true)}>
 						<Icon icon="solar:pen-bold-duotone" size={16} className="mr-2" />
 						编辑
@@ -242,7 +242,7 @@ export default function UserDetail() {
 						<Icon icon="mdi:key-variant" size={16} className="mr-2" />
 						重置密码
 					</Button>
-				</div>
+				</div> */}
 			</div>
 
 			{/* 用户基本信息 */}
@@ -373,13 +373,13 @@ export default function UserDetail() {
 			/>
 
 			{/* 重置密码Modal */}
-			<ResetPasswordModal
+			{/* <ResetPasswordModal
 				open={resetPasswordModal}
 				userId={user?.id || ""}
 				username={user?.username || ""}
 				onCancel={() => setResetPasswordModal(false)}
 				onSuccess={() => {}}
-			/>
+			/> */}
 		</div>
 	);
 }

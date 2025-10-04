@@ -2,7 +2,7 @@ import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { KeycloakUser, PaginationParams, UserProfileConfig, UserTableRow } from "#/keycloak";
+import type { KeycloakUser, PaginationParams, UserProfileConfig, UserTableRow } from "#/服务端";
 import { KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
 import type { CustomUserAttributeKey } from "@/constants/user";
 import { Icon } from "@/components/icon";
@@ -250,7 +250,7 @@ export default function UserPage() {
 					>
 						<Icon icon="solar:pen-bold-duotone" size={16} />
 					</Button>
-					<Button
+					{/* <Button
 						variant="ghost"
 						size="sm"
 						title="重置密码"
@@ -263,7 +263,7 @@ export default function UserPage() {
 						}
 					>
 						<Icon icon="mdi:key-variant" size={16} />
-					</Button>
+					</Button> */}
 				</div>
 			),
 		},

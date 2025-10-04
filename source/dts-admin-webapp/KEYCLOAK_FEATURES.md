@@ -1,5 +1,8 @@
 # Keycloak管理UI功能说明
 
+> 迁移说明：原版 A 页面目录 `src/pages/management/system/*` 已废弃并迁移至新版 B 视图 `src/admin/views/*`。
+> 左侧导航已指向 `/admin/*` 路由，旧路径 `/management/system/*` 仍可访问，但会直接渲染新版视图以保持兼容。
+
 ## 概述
 
 本项目为Keycloak身份认证系统提供了完整的Web管理界面，包含用户、角色、组的完整CRUD操作功能。
@@ -50,63 +53,24 @@
 - `removeUserFromGroup()` - 从组移除用户
 - `getUserGroups()` - 获取用户所属组
 
-### 3. 用户管理界面
+### 3. 用户管理界面（新版 B）
 
-#### 用户列表页面 (`src/pages/management/system/user/index.tsx`)
-- 分页展示用户列表
-- 用户搜索功能
-- 查看用户详情
-- 编辑用户信息
-- 重置用户密码
-- 启用/禁用用户
-- 删除用户
+#### 用户管理视图 (`src/admin/views/user-management.tsx`)
+- 用户总览、搜索、角色与状态筛选
+- 基于变更单的新增/修改/禁用/角色调整申请（右侧表单 `ChangeRequestForm`）
+- 兼容后端数组或容器结构（items/list/records/data）
 
-#### 用户详情页面 (`src/pages/management/system/user/detail.tsx`)
-- 展示用户完整信息
-- 用户角色管理
-- 用户所属组展示
-- 快速操作按钮
+### 4. 角色管理界面（新版 B）
 
-#### 用户编辑弹框 (`src/pages/management/system/user/user-modal.tsx`)
-- 创建/编辑用户基本信息
-- 角色分配管理（编辑模式）
-- 表单验证
+#### 角色管理视图 (`src/admin/views/role-management.tsx`)
+- 角色列表、搜索与明细
+- 角色新增/编辑/删除（以变更单驱动）
 
-#### 密码重置弹框 (`src/pages/management/system/user/reset-password-modal.tsx`)
-- 重置用户密码
-- 临时密码设置
-- 密码强度验证
+### 5. 组织（组）管理界面（新版 B）
 
-### 4. 角色管理界面
-
-#### 角色列表页面 (`src/pages/management/system/role/index.tsx`)
-- 角色列表展示
-- 角色搜索功能
-- 创建/编辑/删除角色
-
-#### 角色编辑弹框 (`src/pages/management/system/role/role-modal.tsx`)
-- 创建/编辑角色
-- 复合角色设置
-- 客户端角色配置
-
-### 5. 组管理界面
-
-#### 组列表页面 (`src/pages/management/system/group/index.tsx`)
-- 组列表展示
-- 成员数量统计
-- 子组数量统计
-- 创建/编辑/删除组
-
-#### 组编辑弹框 (`src/pages/management/system/group/group-modal.tsx`)
-- 创建/编辑组信息
-- 组路径设置
-- 组描述管理
-
-#### 组成员管理弹框 (`src/pages/management/system/group/group-members-modal.tsx`)
-- 查看组成员
-- 添加用户到组
-- 从组移除用户
-- 成员搜索功能
+#### 组织管理视图 (`src/admin/views/org-management.tsx`)
+- 组织树/组的管理与成员查看
+- 组织结构调整通过变更单审批
 
 ### 6. UI组件补充
 
@@ -136,7 +100,7 @@
 - 完整的TypeScript类型定义
 - 编译时类型检查
 
-## 文件结构
+## 文件结构（已迁移）
 
 ```
 src/
@@ -144,31 +108,22 @@ src/
 │   └── keycloak.ts                 # Keycloak类型定义
 ├── api/
 │   └── services/
-│       └── keycloakService.ts      # API服务层
-├── pages/management/system/
-│   ├── user/
-│   │   ├── index.tsx               # 用户列表页面
-│   │   ├── detail.tsx              # 用户详情页面
-│   │   ├── user-modal.tsx          # 用户编辑弹框
-│   │   └── reset-password-modal.tsx # 密码重置弹框
-│   ├── role/
-│   │   ├── index.tsx               # 角色列表页面
-│   │   └── role-modal.tsx          # 角色编辑弹框
-│   └── group/
-│       ├── index.tsx               # 组列表页面
-│       ├── group-modal.tsx         # 组编辑弹框
-│       └── group-members-modal.tsx # 组成员管理弹框
+│       └── keycloakService.ts      # 兼容服务（保留）
+├── admin/views/
+│   ├── user-management.tsx         # 用户管理（新版）
+│   ├── role-management.tsx         # 角色管理（新版）
+│   ├── org-management.tsx          # 组织/组管理（新版）
+│   ├── approval-center.tsx         # 任务审批
+│   ├── audit-center.tsx            # 日志审计
+│   └── portal-menus.tsx            # 门户菜单管理
 └── ui/
     └── alert.tsx                   # Alert组件
 ```
 
 ## 使用说明
 
-1. **用户管理**：在系统管理 -> 用户管理中进行用户的增删改查
-2. **角色管理**：在系统管理 -> 角色管理中管理系统角色
-3. **组管理**：在系统管理 -> 组管理中管理用户组
-4. **权限分配**：在用户详情页面可以为用户分配角色
-5. **组成员管理**：在组管理页面可以管理组成员
+1. 在左侧导航进入 管理 -> 用户/角色/组织，或直接访问 `/admin/users`、`/admin/roles`、`/admin/orgs`。
+2. 所有新增/编辑/禁用等敏感变更通过变更单发起并由审批中心处理。
 
 ## 后端API对接
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { TreeSelect } from "antd";
-import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest } from "#/keycloak";
+import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest } from "#/服务端";
 import { KeycloakRoleService, KeycloakUserService } from "@/api/services/keycloakService";
 import { adminApi } from "@/admin/api/adminApi";
 import { POSITION_SUGGESTIONS } from "@/constants/user";
@@ -410,7 +410,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		setError("");
 
         try {
-            // 恢复使用 Keycloak 接口，由后端生成审批请求并内嵌 changeRequestId，避免“审批请求不存在”
+            // 恢复使用 服务端 接口，由后端生成审批请求并内嵌 changeRequestId，避免“审批请求不存在”
             if (mode === "create") {
                 const createData: CreateUserRequest = {
                     username,
@@ -476,7 +476,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                 }
             }
 
-            // 刷新“我发起的变更”和“审批中心”列表
+            // 刷新“我的申请”和“审批中心”列表
             try { await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests", "mine", "dashboard"] }); } catch {}
             try { await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests"] }); } catch {}
             onSuccess();

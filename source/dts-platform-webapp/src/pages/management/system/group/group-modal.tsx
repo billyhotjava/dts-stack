@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { CreateGroupRequest, KeycloakGroup, UpdateGroupRequest } from "#/keycloak";
+import type { CreateGroupRequest, KeycloakGroup, UpdateGroupRequest } from "#/服务端";
 import { KeycloakGroupService } from "@/api/services/keycloakService";
 import { Alert, AlertDescription } from "@/ui/alert";
 import { Button } from "@/ui/button";

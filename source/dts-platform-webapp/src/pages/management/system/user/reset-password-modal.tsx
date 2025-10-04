@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import type { ResetPasswordRequest } from "#/keycloak";
+import type { ResetPasswordRequest } from "#/服务端";
 import { KeycloakUserService } from "@/api/services/keycloakService";
 import { Alert, AlertDescription } from "@/ui/alert";
 import { Button } from "@/ui/button";

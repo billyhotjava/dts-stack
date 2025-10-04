@@ -7,11 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Skeleton } from "@/ui/skeleton";
 import { Text } from "@/ui/typography";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
-import type { KeycloakUser } from "#/keycloak";
+import type { KeycloakUser } from "#/服务端";
 
 export default function ConnectionsTab() {
 	const { data, isLoading, isError, error } = useQuery({
-		queryKey: ["keycloak", "recent-users"],
+		queryKey: ["服务端", "recent-users"],
 		queryFn: async () => {
 			const users = await KeycloakUserService.getAllUsers({ max: 30 });
 			return users;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { KeycloakUserService } from "@/api/services/keycloakService";
-import type { KeycloakUser } from "#/keycloak";
+import type { KeycloakUser } from "#/服务端";
 import { useUserInfo } from "@/store/userStore";
 import { Avatar, AvatarImage } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
@@ -44,7 +44,7 @@ function PersonalProfilePage() {
 					setDetail(remote);
 				}
 			} catch (err) {
-				console.warn("Failed to load Keycloak user detail:", err);
+				console.warn("Failed to load 服务端 user detail:", err);
 				if (active) {
 					setDetail(null);
 				}

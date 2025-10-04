@@ -2,7 +2,7 @@ import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { KeycloakUser } from "#/keycloak";
+import type { KeycloakUser } from "#/服务端";
 import { KeycloakGroupService, KeycloakUserService } from "@/api/services/keycloakService";
 import { Icon } from "@/components/icon";
 import { Alert, AlertDescription } from "@/ui/alert";

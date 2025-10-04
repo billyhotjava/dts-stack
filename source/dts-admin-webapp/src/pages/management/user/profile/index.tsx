@@ -8,7 +8,7 @@ import { Avatar, AvatarImage } from "@/ui/avatar";
 import { Text, Title } from "@/ui/typography";
 import ProfileTab from "./profile-tab";
 import { KeycloakUserService } from "@/api/services/keycloakService";
-import type { KeycloakUser } from "#/keycloak";
+import type { KeycloakUser } from "#/服务端";
 
 const ROLE_LABEL_MAP: Record<string, string> = {
 	SYSADMIN: "系统管理员",
@@ -87,7 +87,7 @@ function UserProfile() {
 					setDetail(remote);
 				}
 			} catch (err) {
-				console.warn("Failed to load Keycloak user detail:", err);
+				console.warn("Failed to load 服务端 user detail:", err);
 				if (active) {
 					setDetail(null);
 				}

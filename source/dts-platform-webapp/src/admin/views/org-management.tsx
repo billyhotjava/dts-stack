@@ -249,7 +249,7 @@ export default function OrgManagementView() {
 						</Button>
 					</div>
 					<Text variant="body3" className="text-xs text-muted-foreground">
-						所有新增、编辑、删除都会生成审批单，审批通过后系统才会同步至 Keycloak。
+						所有新增、编辑、删除都会生成审批单，审批通过后系统才会同步至 服务端。
 					</Text>
 					<Input
 						placeholder="搜索部门 / 联系人 / 数据密级"

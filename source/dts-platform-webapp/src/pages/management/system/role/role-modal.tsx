@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { CreateRoleRequest, KeycloakRole, UpdateRoleRequest } from "#/keycloak";
+import type { CreateRoleRequest, KeycloakRole, UpdateRoleRequest } from "#/服务端";
 import { KeycloakRoleService } from "@/api/services/keycloakService";
 import { Alert, AlertDescription } from "@/ui/alert";
 import { Button } from "@/ui/button";

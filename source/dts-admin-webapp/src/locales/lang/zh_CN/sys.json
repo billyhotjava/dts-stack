@@ -104,7 +104,7 @@
           "role": "角色管理",
           "permission": "菜单管理",
           "approval": "审批管理",
-          "my_changes": "我发起的变更",
+          "my_changes": "我的申请",
           "audit_log": "日志审计"
         }
       },
@@ -132,7 +132,7 @@
       "system": {
         "group": "组织机构",
         "index": "系统管理",
-        "my_changes": "我发起的变更"
+        "my_changes": "我的申请"
       },
       "menulevel": {
         "index": "多级菜单",
@@ -169,6 +169,26 @@
     "error": {
       "unexpected": "应用发生未预期错误",
       "unknown": "未知错误"
+    },
+    "errorPage": {
+      "403": {
+        "title": "无访问权限",
+        "helmetTitle": "403 无访问权限",
+        "description": "您没有权限访问该资源。"
+      },
+      "404": {
+        "title": "糟糕！页面不存在",
+        "helmetTitle": "404 页面不存在",
+        "description": "您访问的页面不存在或已被移动。"
+      },
+      "500": {
+        "title": "服务器内部错误",
+        "helmetTitle": "500 服务器内部错误",
+        "description": "给您带来不便，敬请谅解。"
+      },
+      "actions": {
+        "goHome": "返回首页"
+      }
     },
     "docs": "文档",
     "workbench": {

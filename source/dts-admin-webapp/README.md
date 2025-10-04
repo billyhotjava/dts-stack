@@ -21,6 +21,21 @@
 
 **English** | [中文](./README.zh-CN.md)
 
+## Admin Views Migration (A → B)
+
+This DTS integration replaces legacy pages under `src/pages/management/system/*` (version A)
+with unified admin views under `src/admin/views/*` (version B). Navigation now points to
+`/admin/*` routes, while old `/management/system/*` URLs render the new views for compatibility.
+
+- Users → `/admin/users`
+- Roles → `/admin/roles`
+- Orgs → `/admin/orgs`
+- Approval → `/admin/approval`
+- Audit → `/admin/audit`
+- Portal Menus → `/admin/portal-menus`
+
+Details and verification steps: `docs/MIGRATION-ADMIN-VIEWS.md`.
+
 ##  Sponsor
 <div style="display: flex; gap: 50px"> 
   <img style="width:300px" src="https://d3george.github.io/github-static/pay/weixin.jpg" >
@@ -84,6 +99,17 @@ Run the following command to build the production version:
 ```bash
 pnpm build
 ```
+
+### Build & Run in DTS stack
+
+From repo root:
+
+```
+./dev-up.sh --mode local
+docker compose -f docker-compose.yml -f docker-compose-app.yml up -d
+```
+
+Access the admin UI at `https://admin.${BASE_DOMAIN}`.
 
 ## Git Contribution submission specification
 - `feat` new features

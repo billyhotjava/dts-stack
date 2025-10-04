@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnsType } from "antd/es/table";
 import { Table } from "antd";
@@ -39,7 +39,7 @@ function resolveCategory(request: ChangeRequest): CategoryKey | null {
   return null;
 }
 
-export default function MyChangeRequestsPage() {
+export default function MyChangesView() {
   const queryClient = useQueryClient();
   const { translateAction, translateResource, translateStatus } = useAdminLocale();
   const { data, isLoading } = useQuery({
@@ -62,7 +62,7 @@ export default function MyChangeRequestsPage() {
     return Array.from(counts.entries())
       .map(([status, count]) => ({ status, count }))
       .sort((a, b) => b.count - a.count);
-  }, [data]);
+  }, [normalized]);
 
   const categories = useMemo(() => {
     const present = new Set<CategoryKey>();
@@ -130,7 +130,7 @@ export default function MyChangeRequestsPage() {
     <div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
-        <Text variant="body1" className="text-lg font-semibold">我发起的变更</Text>
+        <Text variant="body1" className="text-lg font-semibold">我的申请</Text>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -178,14 +178,11 @@ export default function MyChangeRequestsPage() {
                   <SelectValue placeholder="按类别筛选" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((option) => {
-                    const label = option.label;
-                    return (
-                      <SelectItem key={option.key} value={option.key} disabled={option.disabled}>
-                        {label}
-                      </SelectItem>
-                    );
-                  })}
+                  {categories.map((option) => (
+                    <SelectItem key={option.key} value={option.key} disabled={option.disabled}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               {categoryFilter ? (
@@ -193,7 +190,6 @@ export default function MyChangeRequestsPage() {
               ) : null}
             </div>
           </div>
-          <Text variant="body3" className="text-muted-foreground">查看我发起的变更记录</Text>
         </CardHeader>
         <CardContent>
           <Table
@@ -220,3 +216,4 @@ function byRequestedAtDesc(a: ChangeRequest, b: ChangeRequest) {
   const tb = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
   return tb - ta;
 }
+

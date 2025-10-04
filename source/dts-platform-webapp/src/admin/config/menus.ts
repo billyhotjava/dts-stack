@@ -14,7 +14,7 @@ const makeSysadminMenus = (): AdminMenuItem[] => {
         { key: "users", label: "用户管理", path: "/admin/users", icon: "solar:users-group-outline" },
         { key: "roles", label: "角色管理", path: "/admin/roles", icon: "solar:shield-user-bold" },
         { key: "ops", label: "系统运维", path: "/admin/ops", icon: "solar:settings-outline" },
-        { key: "mine", label: "我发起的变更", path: "/admin/drafts", icon: "solar:inbox-outline" },
+        { key: "mine", label: "我的申请", path: "/admin/my-changes", icon: "solar:change-square-outline" },
     ];
     if (GLOBAL_CONFIG.enablePortalMenuMgmt) {
         base.splice(4, 0, { key: "portal-menus", label: "菜单管理", path: "/admin/portal-menus", icon: "solar:list-bold" });

@@ -1,251 +1,185 @@
-import { useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { adminApi } from "@/admin/api/adminApi";
-import type { AdminUser } from "@/admin/types";
-import { useAdminLocale } from "@/admin/lib/locale";
-import { ChangeRequestForm } from "@/admin/components/change-request-form";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ColumnsType } from "antd/es/table";
+import { Table } from "antd";
+import type { KeycloakUser } from "#/服务端";
+import { KeycloakUserService } from "@/api/services/keycloakService";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
-import { ScrollArea } from "@/ui/scroll-area";
 import { Text } from "@/ui/typography";
+import { Icon } from "@/components/icon";
+import UserModal from "./user-management.modal";
 import { toast } from "sonner";
+import { useRouter } from "@/routes/hooks";
 
-const STATUS_COLORS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-	ACTIVE: "secondary",
-	PENDING: "outline",
-	DISABLED: "destructive",
-};
+function collectRoleNames(user: KeycloakUser): string[] {
+  const names = new Set<string>();
+  (user.realmRoles || []).forEach((r) => r && names.add(r));
+  if (user.clientRoles) {
+    Object.values(user.clientRoles).forEach((arr) => arr?.forEach((r) => r && names.add(r)));
+  }
+  return Array.from(names);
+}
 
 export default function UserManagementView() {
-	// 兼容不同返回结构：数组或 {items|list|records|data}
-	const { data: usersResp, isLoading } = useQuery({
-		queryKey: ["admin", "users"],
-		queryFn: adminApi.getAdminUsers,
-	});
-	const warnedRef = useRef(false);
-	const users: AdminUser[] = useMemo(() => {
-		const warnOnce = (msg: string) => {
-			if (!isLoading && !warnedRef.current) {
-				toast.error(msg, { position: "top-center" });
-				warnedRef.current = true;
-			}
-		};
+  const { push } = useRouter();
+  const [list, setList] = useState<KeycloakUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const [modalState, setModalState] = useState<{
+    open: boolean;
+    mode: "create" | "edit";
+    target?: KeycloakUser;
+  }>({ open: false, mode: "create" });
+  // no external toggling action here; enable/停用统一放入编辑弹窗
 
-		const container: any = usersResp;
-		const arr = toArray(container);
-		if (!arr) {
-			warnOnce("用户数据格式异常，无法解析");
-			return [];
-		}
-		const coerced = arr.map(coerceAdminUser).filter((x): x is AdminUser => x != null);
-		if (!isLoading && coerced.length !== arr.length) {
-			warnOnce("部分用户数据字段缺失，已忽略异常项");
-		}
-		return coerced;
-	}, [usersResp, isLoading]);
-	const { translateRole, translateStatus } = useAdminLocale();
-	const [keyword, setKeyword] = useState("");
-	const [roleFilter, setRoleFilter] = useState("");
-	const [statusFilter, setStatusFilter] = useState("");
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = searchValue.trim()
+        ? await KeycloakUserService.searchUsers(searchValue.trim())
+        : await KeycloakUserService.getAllUsers({ first: 0, max: 100 });
+      setList(data || []);
+    } catch (e: any) {
+      toast.error(e?.message || "加载用户失败");
+    } finally {
+      setLoading(false);
+    }
+  }, [searchValue]);
 
-	const filtered = useMemo(() => {
-		return users.filter((user) => {
-			const matchKeyword = keyword
-				? [user.username, user.displayName, user.email, user.orgPath?.join("/")]
-					.filter(Boolean)
-					.some((field) => field?.toLowerCase().includes(keyword.toLowerCase()))
-				: true;
-			const matchRole = roleFilter ? user.roles.includes(roleFilter) : true;
-			const matchStatus = statusFilter ? user.status === statusFilter : true;
-			return matchKeyword && matchRole && matchStatus;
-		});
-	}, [keyword, roleFilter, statusFilter, users]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-	const roleOptions = useMemo(() => {
-		const set = new Set<string>();
-		for (const user of users) {
-			user.roles.forEach((role) => set.add(role));
-		}
-		return Array.from(set);
-	}, [users]);
+  const toggleEnabled = useCallback(async () => {}, []);
 
-	const notifyChangeRequest = (action: string, user: AdminUser) => {
-		toast.info("请在右侧表单补充详情后提交", {
-			description: `${action} · ${user.username}`,
-			position: "top-center",
-		});
-	};
+  const columns: ColumnsType<KeycloakUser> = useMemo(
+    () => [
+      { title: "用户名", dataIndex: "username", key: "username", width: 180 },
+      { title: "姓名", dataIndex: "fullName", key: "fullName", width: 180 },
+      { title: "邮箱", dataIndex: "email", key: "email", width: 220 },
+      {
+        title: "角色",
+        key: "roles",
+        render: (_, record) => {
+          const roles = collectRoleNames(record);
+          return roles.length ? (
+            <div className="flex flex-wrap gap-1">
+              {roles.slice(0, 5).map((r) => (
+                <Badge key={r} variant="outline">{r}</Badge>
+              ))}
+              {roles.length > 5 ? <Badge variant="secondary">+{roles.length - 5}</Badge> : null}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">--</span>
+          );
+        },
+      },
+      {
+        title: "状态",
+        dataIndex: "enabled",
+        key: "enabled",
+        width: 140,
+        render: (val?: boolean) => (
+          <div className="flex items-center gap-2">
+            <span className={val ? "h-2 w-2 rounded-full bg-emerald-500" : "h-2 w-2 rounded-full bg-red-500"} />
+            <span className={val ? "text-emerald-600" : "text-red-600"}>{val ? "已启用" : "已停用"}</span>
+          </div>
+        ),
+      },
+      {
+        title: "操作",
+        key: "actions",
+        width: 180,
+        render: (_, record) => (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setModalState({ open: true, mode: "edit", target: record })}
+            >
+              编辑
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const id = record.id || record.username;
+                if (!id) return;
+                push(`/admin/users/${id}`);
+              }}
+            >
+              详情
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [toggleEnabled],
+  );
 
-	return (
-		<div className="grid gap-6 xl:grid-cols-[minmax(0,0.65fr)_minmax(0,1fr)]">
-			<Card>
-				<CardHeader className="space-y-3">
-					<CardTitle>用户总览</CardTitle>
-					<div className="grid gap-3 md:grid-cols-2">
-						<Input placeholder="搜索用户名/姓名/邮箱" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
-						<div className="flex gap-2">
-							<select
-								className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
-								value={roleFilter}
-								onChange={(event) => setRoleFilter(event.target.value)}
-							>
-								<option value="">全部角色</option>
-								{roleOptions.map((role) => (
-									<option key={role} value={role}>
-										{translateRole(role, role)}
-									</option>
-								))}
-							</select>
-							<select
-								className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
-								value={statusFilter}
-								onChange={(event) => setStatusFilter(event.target.value)}
-							>
-								<option value="">全部状态</option>
-								<option value="ACTIVE">已启用</option>
-								<option value="PENDING">待审核</option>
-								<option value="DISABLED">已禁用</option>
-							</select>
-						</div>
-					</div>
-					<div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-						<span>总用户：{users.length}</span>
-						<span>筛选后：{filtered.length}</span>
-						<span>待审批：{users.filter((user) => user.status === "PENDING").length}</span>
-					</div>
-				</CardHeader>
-				<CardContent className="h-[560px] p-0">
-					{isLoading ? (
-						<Text variant="body3" className="p-4">
-							加载中...
-						</Text>
-					) : (
-						<ScrollArea className="h-full">
-							<table className="min-w-full table-fixed text-sm">
-								<thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur">
-									<tr className="text-left">
-										<th className="px-4 py-3 font-medium">用户</th>
-										<th className="px-4 py-3 font-medium">角色</th>
-										<th className="px-4 py-3 font-medium">组织</th>
-										<th className="px-4 py-3 font-medium">安全级别</th>
-										<th className="px-4 py-3 font-medium">状态</th>
-										<th className="px-4 py-3 font-medium">最近登录</th>
-									</tr>
-								</thead>
-								<tbody>
-									{filtered.map((user) => (
-										<tr key={user.id} className="border-b last:border-b-0">
-											<td className="px-4 py-3">
-												<div className="flex flex-col">
-													<span className="font-medium">{user.displayName || user.username}</span>
-													<Text variant="body3" className="text-muted-foreground">
-														{user.email}
-													</Text>
-												</div>
-											</td>
-											<td className="px-4 py-3">
-												<div className="flex flex-wrap gap-1">
-													{user.roles.map((role) => (
-														<Badge key={role} variant="outline">
-															{translateRole(role, role)}
-														</Badge>
-													))}
-												</div>
-											</td>
-											<td className="px-4 py-3">
-												<Text variant="body3" className="text-muted-foreground">
-													{user.orgPath?.join(" / ") || "--"}
-												</Text>
-											</td>
-											<td className="px-4 py-3">
-												<Badge variant="outline">{user.securityLevel}</Badge>
-											</td>
-											<td className="px-4 py-3">
-												<Badge variant={STATUS_COLORS[user.status] ?? "default"}>
-													{translateStatus(user.status, statusText(user.status))}
-												</Badge>
-											</td>
-											<td className="px-4 py-3">
-												<Text variant="body3" className="text-muted-foreground">
-													{user.lastLoginAt || "--"}
-												</Text>
-												<div className="mt-2 flex gap-2">
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => notifyChangeRequest("BIND_ROLE", user)}
-													>
-														角色调整
-													</Button>
-													<Button
-														variant="ghost"
-														size="sm"
-														onClick={() => notifyChangeRequest("DISABLE", user)}
-													>
-														停用申请
-													</Button>
-												</div>
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</ScrollArea>
-					)}
-				</CardContent>
-			</Card>
+  return (
+    <div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
+      {/* 页面标题与操作区：老布局形态 */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Text variant="body1" className="text-lg font-semibold">
+          用户管理
+        </Text>
+        <div className="ml-auto flex items-center gap-2">
+          <Input
+            placeholder="按用户名搜索"
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") load();
+            }}
+            className="w-[240px]"
+          />
+          <Button variant="outline" onClick={load}>
+            <Icon icon="solar:magnifer-linear" className="mr-1 h-4 w-4" />
+            搜索
+          </Button>
+          <Button onClick={() => setModalState({ open: true, mode: "create" })}>
+            <Icon icon="solar:add-circle-bold" className="mr-1 h-4 w-4" />
+            新建用户
+          </Button>
+        </div>
+      </div>
 
-			<Card>
-				<CardHeader>
-					<CardTitle>发起用户变更</CardTitle>
-				</CardHeader>
-				<CardContent className="space-y-4">
-					<Text variant="body3" className="text-muted-foreground">
-						可通过表单提交新增/修改/禁用用户、角色绑定等请求。
-					</Text>
-					<ChangeRequestForm initialTab="user" />
-				</CardContent>
-			</Card>
-		</div>
-	);
-}
+      {/* 列表区：保持老的“表格主体”布局，但采用新样式卡片包裹 */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>用户列表</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table
+            rowKey={(r) => r.id || r.username}
+            columns={columns}
+            dataSource={list}
+            loading={loading}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 20, 50, 100],
+              showQuickJumper: true,
+              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+            }}
+          />
+        </CardContent>
+      </Card>
 
-function statusText(status: string) {
-	switch (status) {
-		case "ACTIVE":
-			return "已启用";
-		case "PENDING":
-			return "待审批";
-		case "DISABLED":
-			return "已禁用";
-		default:
-			return status;
-	}
-}
-
-// ---- Type guards & coercion helpers ----
-function toArray(value: any): any[] | null {
-    if (Array.isArray(value)) return value;
-    if (Array.isArray(value?.items)) return value.items;
-    if (Array.isArray(value?.list)) return value.list;
-    if (Array.isArray(value?.records)) return value.records;
-    if (Array.isArray(value?.data)) return value.data;
-    return null;
-}
-
-function coerceAdminUser(raw: any): AdminUser | null {
-    if (!raw || typeof raw !== "object") return null;
-    const id = typeof raw.id === "number" ? raw.id : Number(raw.id);
-    const username = typeof raw.username === "string" ? raw.username : undefined;
-    if (!Number.isFinite(id) || !username) return null;
-    const roles = Array.isArray(raw.roles) ? raw.roles.filter((r: any) => typeof r === "string") : [];
-    const orgPath = Array.isArray(raw.orgPath) ? raw.orgPath.filter((s: any) => typeof s === "string") : undefined;
-    const displayName = typeof raw.displayName === "string" ? raw.displayName : undefined;
-    const email = typeof raw.email === "string" ? raw.email : undefined;
-    const securityLevel = typeof raw.securityLevel === "string" ? raw.securityLevel : String(raw.securityLevel ?? "");
-    const status = typeof raw.status === "string" ? raw.status : String(raw.status ?? "");
-    const lastLoginAt = typeof raw.lastLoginAt === "string" ? raw.lastLoginAt : undefined;
-    return { id, username, displayName, email, orgPath, roles, securityLevel, status, lastLoginAt };
+      {/* 创建/编辑弹窗：复用旧页面Modal但使用新样式组件 */}
+      <UserModal
+        open={modalState.open}
+        mode={modalState.mode}
+        user={modalState.target}
+        onCancel={() => setModalState((s) => ({ ...s, open: false, target: undefined }))}
+        onSuccess={() => {
+          setModalState((s) => ({ ...s, open: false, target: undefined }));
+          load();
+        }}
+      />
+    </div>
+  );
 }

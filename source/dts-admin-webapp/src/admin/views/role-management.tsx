@@ -35,7 +35,7 @@ const SCOPE_LABELS: Record<"DEPARTMENT" | "INSTITUTE", string> = {
 
 const SOURCE_LABELS: Record<string, string> = {
     builtin: "预置",
-    keycloak: "Keycloak",
+    服务端: "服务端",
     custom: "自定义",
 };
 
@@ -196,7 +196,7 @@ export default function RoleManagementView() {
         map.forEach((entry, canonical) => {
             entry.assignments = assignmentMap.get(canonical) ?? [];
             if (!entry.source) {
-                entry.source = "keycloak";
+                entry.source = "服务端";
             }
             if (!entry.operations.length) {
                 entry.operations = ["read"];

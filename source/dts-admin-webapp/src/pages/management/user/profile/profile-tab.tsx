@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useUserInfo } from "@/store/userStore";
-import type { KeycloakUser } from "#/keycloak";
+import type { KeycloakUser } from "#/服务端";
 
 const USERNAME_FALLBACK_NAME: Record<string, string> = {
 	sysadmin: "系统管理员",

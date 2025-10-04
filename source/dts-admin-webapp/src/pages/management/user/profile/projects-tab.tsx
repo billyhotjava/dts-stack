@@ -7,13 +7,13 @@ import { Badge } from "@/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Skeleton } from "@/ui/skeleton";
 import { Text } from "@/ui/typography";
-import type { KeycloakRole } from "#/keycloak";
+import type { KeycloakRole } from "#/服务端";
 
 export default function ProjectsTab() {
 	const { id: userId, username } = useUserInfo();
 
 	const { data, isLoading, isError, error } = useQuery({
-		queryKey: ["keycloak", "user-roles", userId],
+		queryKey: ["服务端", "user-roles", userId],
 		queryFn: async () => {
 			if (!userId) {
 				return [] as KeycloakRole[];

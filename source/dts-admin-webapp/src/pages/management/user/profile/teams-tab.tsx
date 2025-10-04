@@ -12,7 +12,7 @@ export default function TeamsTab() {
 	const { id: userId, username } = useUserInfo();
 
 	const { data, isLoading, isError, error } = useQuery({
-		queryKey: ["keycloak", "user-groups", userId],
+		queryKey: ["服务端", "user-groups", userId],
 		queryFn: async () => {
 			if (!userId) {
 				return [];
@@ -70,7 +70,7 @@ export default function TeamsTab() {
 			<Alert>
 				<AlertTitle>没有关联的团队</AlertTitle>
 				<AlertDescription>
-					{username ? `${username} 当前未加入任何 Keycloak 组。` : "当前用户未加入任何 Keycloak 组。"}
+					{username ? `${username} 当前未加入任何 服务端 组。` : "当前用户未加入任何 服务端 组。"}
 				</AlertDescription>
 			</Alert>
 		);

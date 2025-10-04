@@ -21,6 +21,21 @@
 
 **中文** | [English](./README.md)
 
+## 管理端视图迁移（A → B）
+
+在 DTS 集成中，原有 `src/pages/management/system/*`（版本 A）已迁移为统一的
+`src/admin/views/*`（版本 B）。左侧导航统一指向 `/admin/*` 路由，旧的
+`/management/system/*` 路径仍可访问但会渲染新版视图，兼容外链与书签。
+
+- 用户 → `/admin/users`
+- 角色 → `/admin/roles`
+- 组织 → `/admin/orgs`
+- 审批 → `/admin/approval`
+- 审计 → `/admin/audit`
+- 门户菜单 → `/admin/portal-menus`
+
+详细迁移与验证步骤见：`docs/MIGRATION-ADMIN-VIEWS.md`。
+
 ## 赞助 
 <div style="display: flex; gap: 50px"> 
   <img style="width:300px" src="https://d3george.github.io/github-static/pay/weixin.jpg" >
@@ -84,6 +99,17 @@ pnpm dev
 ```bash
 pnpm build
 ```
+
+### 在 DTS 栈内构建与运行
+
+在仓库根目录执行：
+
+```
+./dev-up.sh --mode local
+docker compose -f docker-compose.yml -f docker-compose-app.yml up -d
+```
+
+访问管理端 UI：`https://admin.${BASE_DOMAIN}`。
 
 ## Git贡献提交规范
 

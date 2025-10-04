@@ -1,13 +1,24 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/ui/collapsible";
 import type { NavListProps } from "../types";
 import { NavItem } from "./nav-item";
 
 export function NavList({ data, depth = 1 }: NavListProps) {
-	const location = useLocation();
-	const isActive = location.pathname.includes(data.path);
-	const [open, setOpen] = useState(isActive);
+    const location = useLocation();
+    const isActive = useMemo(() => {
+        const selfActive = data.path ? location.pathname.startsWith(data.path) : false;
+        const childActive = Array.isArray(data.children)
+            ? data.children.some((c) => c.path && location.pathname.startsWith(c.path))
+            : false;
+        return selfActive || childActive;
+    }, [location.pathname, data.path, data.children]);
+
+    const [open, setOpen] = useState(isActive);
+    useEffect(() => {
+        // Keep parent open when a descendant path is active
+        if (isActive) setOpen(true);
+    }, [isActive]);
 	const hasChild = data.children && data.children.length > 0;
 
 	const handleClick = () => {

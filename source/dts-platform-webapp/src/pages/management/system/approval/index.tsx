@@ -3,7 +3,7 @@ import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import type { ApprovalRequest, ApprovalRequestDetail, KeycloakUser } from "#/keycloak";
+import type { ApprovalRequest, ApprovalRequestDetail, KeycloakUser } from "#/服务端";
 import { KeycloakApprovalService } from "@/api/services/approvalService";
 import useUserStore from "@/store/userStore";
 import { Badge } from "@/ui/badge";

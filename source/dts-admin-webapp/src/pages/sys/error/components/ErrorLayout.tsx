@@ -7,6 +7,7 @@ import { varBounce } from "@/components/animate/variants/bounce";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { Button } from "@/ui/button";
 import { Text, Title } from "@/ui/typography";
+import { useTranslation } from "react-i18next";
 
 interface ErrorLayoutProps {
 	title: string;
@@ -26,9 +27,12 @@ export default function ErrorLayout({
 	svg,
 	helmetTitle,
 	homePath = GLOBAL_CONFIG.defaultRoute,
-	buttonText = "Go to Home",
+	buttonText,
 	slots = {},
 }: ErrorLayoutProps) {
+	const { t } = useTranslation();
+	const buttonLabel = buttonText ?? t("sys.errorPage.actions.goHome");
+
 	return (
 		<>
 			{helmetTitle && (
@@ -58,7 +62,7 @@ export default function ErrorLayout({
 					) : (
 						<NavLink to={homePath} className="mt-4 w-full flex justify-center">
 							<Button size="lg" variant="contrast">
-								{buttonText}
+								{buttonLabel}
 							</Button>
 						</NavLink>
 					)}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest } from "#/keycloak";
+import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest } from "#/服务端";
 import { KeycloakRoleService, KeycloakUserService } from "@/api/services/keycloakService";
 import { DEPARTMENT_SUGGESTIONS, POSITION_SUGGESTIONS } from "@/constants/user";
 import { Icon } from "@/components/icon";
