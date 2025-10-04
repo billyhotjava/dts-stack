@@ -17,7 +17,7 @@ import { useChart } from "@/components/chart/useChart";
 import SensitiveNotice from "@/components/security/SensitiveNotice";
 
 
-function LevelBadge({ level }: { level: string }) {
+function LevelBadge({ level }: { level?: string }) {
 	const color =
 		level === "机密"
 			? "bg-rose-100 text-rose-700 border-rose-300"

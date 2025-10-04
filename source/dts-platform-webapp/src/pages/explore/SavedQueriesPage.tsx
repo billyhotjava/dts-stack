@@ -138,7 +138,7 @@ export default function SavedQueriesPage() {
   const [editDatasetId, setEditDatasetId] = useState<string | undefined>();
 
   const datasetMap = useMemo(() => {
-    return datasets.reduce<Record<string, Dataset>>((acc, item) => {
+    return datasets.reduce<Record<string, Dataset>>((acc, item: Dataset) => {
       acc[item.id] = item;
       return acc;
     }, {});
@@ -180,7 +180,7 @@ export default function SavedQueriesPage() {
         : Array.isArray(datasetResp)
           ? datasetResp
           : [];
-      const datasetList = datasetListRaw.map(toUiDataset).filter((item: Dataset) => item.id);
+      const datasetList: Dataset[] = (datasetListRaw as any[]).map(toUiDataset).filter((item: Dataset) => Boolean(item.id));
       const datasetMapLocal = datasetList.reduce<Record<string, Dataset>>((acc, entry) => {
         acc[entry.id] = entry;
         return acc;

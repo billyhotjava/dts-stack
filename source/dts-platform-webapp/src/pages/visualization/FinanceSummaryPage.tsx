@@ -34,7 +34,7 @@ export default function FinanceSummaryPage() {
 		[data],
 	);
 
-	const renderMetric = (label: string, metric?: Metric) => {
+    const renderMetric = (_label: string, metric?: Metric) => {
 		if (!metric) {
 			return "-";
 		}

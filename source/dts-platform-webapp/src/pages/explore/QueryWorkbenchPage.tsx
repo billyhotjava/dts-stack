@@ -340,9 +340,9 @@ function VisualQueryBuilder({
 										value={filter.operator}
 										onValueChange={(value) => onFilterChange(filter.id, { operator: value as FilterOperator })}
 									>
-										<SelectTrigger>
-											<SelectValue placeholder={tables.length ? "选择表" : "暂无可选表"} />
-										</SelectTrigger>
+                            <SelectTrigger>
+                                <SelectValue placeholder="选择运算符" />
+                            </SelectTrigger>
 										<SelectContent>
 											{["=", "<>", ">", ">=", "<", "<=", "LIKE"].map((operator) => (
 												<SelectItem key={operator} value={operator}>
@@ -387,9 +387,9 @@ function VisualQueryBuilder({
 										value={sorter.direction}
 										onValueChange={(value) => onSortChange(sorter.id, { direction: value as "ASC" | "DESC" })}
 									>
-										<SelectTrigger>
-											<SelectValue placeholder={tables.length ? "选择表" : "暂无可选表"} />
-										</SelectTrigger>
+                            <SelectTrigger>
+                                <SelectValue placeholder="选择方向" />
+                            </SelectTrigger>
 										<SelectContent>
 											<SelectItem value="ASC">升序</SelectItem>
 											<SelectItem value="DESC">降序</SelectItem>
@@ -469,7 +469,7 @@ export default function QueryWorkbenchPage() {
 		try {
 			const resp: any = await listDatasets({ page: 0, size: 100 });
 			const list = Array.isArray(resp?.content) ? resp.content : [];
-			const ui = list.map(toUiDataset);
+            const ui: Dataset[] = list.map(toUiDataset);
 			setRemoteDatasets(ui);
 			if (ui.length) {
 				const existingSource =
@@ -477,10 +477,10 @@ export default function QueryWorkbenchPage() {
 						? selectedSource
 						: ui[0].source;
 				setSelectedSource(existingSource);
-				const candidates = ui.filter((item) => !existingSource || item.source === existingSource);
-				const matchedDataset = ui.find(
-					(item) => item.id === selectedDatasetId && (!existingSource || item.source === existingSource),
-				);
+            const candidates = ui.filter((item: Dataset) => !existingSource || item.source === existingSource);
+            const matchedDataset = ui.find(
+                (item: Dataset) => item.id === selectedDatasetId && (!existingSource || item.source === existingSource),
+            );
 				const nextDatasetId = matchedDataset?.id ?? candidates[0]?.id ?? ui[0].id;
 				setSelectedDatasetId(nextDatasetId ?? "");
 			} else {
@@ -876,9 +876,9 @@ export default function QueryWorkbenchPage() {
 										onValueChange={setSelectedTableId}
 										disabled={isDatasetsLoading || !tables.length}
 									>
-										<SelectTrigger>
-											<SelectValue placeholder={tables.length ? "选择表" : "暂无可选表"} />
-										</SelectTrigger>
+                            <SelectTrigger>
+                                <SelectValue placeholder={tables.length ? "选择表" : "暂无可选表"} />
+                            </SelectTrigger>
 										<SelectContent>
 											{tables.map((t) => (
 												<SelectItem key={t.id} value={t.id}>

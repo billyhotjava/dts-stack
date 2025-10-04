@@ -175,7 +175,7 @@ const DataStandardsPage = () => {
             if (filters.domain !== "ALL") params.domain = filters.domain;
             if (filters.status !== "ALL") params.status = filters.status;
             if (filters.security !== "ALL") params.securityLevel = filters.security;
-            const data = await listStandards(params);
+            const data: any = await listStandards(params);
             setStandards(data?.content ?? []);
             setTotal(data?.total ?? 0);
         } catch (error: any) {
@@ -189,14 +189,14 @@ const DataStandardsPage = () => {
     const loadDetail = useCallback(
         async (id: string) => {
             try {
-                const [detail, versionList, attachmentList] = await Promise.all([
+                const [detail, versionList, attachmentList] = (await Promise.all([
                     getStandard(id),
                     listStandardVersions(id),
                     listStandardAttachments(id),
-                ]);
-                setSelectedDetail(detail);
-                setVersions(versionList ?? []);
-                setAttachments(attachmentList ?? []);
+                ])) as [any, any[], any[]];
+                setSelectedDetail(detail as any);
+                setVersions((versionList as any[]) ?? []);
+                setAttachments((attachmentList as any[]) ?? []);
             } catch (error: any) {
                 console.error(error);
                 toast.error(error?.message ?? "加载数据标准详情失败");
@@ -267,7 +267,7 @@ const DataStandardsPage = () => {
         };
         try {
             if (formMode === "create") {
-                const saved = await createStandard(payload);
+                const saved: any = await createStandard(payload);
                 toast.success("已新增数据标准");
                 setSelectedId(saved?.id ?? null);
             } else if (selectedId) {

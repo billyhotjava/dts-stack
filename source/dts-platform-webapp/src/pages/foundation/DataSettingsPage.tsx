@@ -17,7 +17,7 @@ export default function DataSettingsPage() {
         const load = async () => {
             setLoading(true);
             try {
-                const data = await getStandardSettings();
+                const data: any = await getStandardSettings();
                 if (data?.maxFileSize) {
                     setMaxSizeMb(Math.round(data.maxFileSize / (1024 * 1024)) || 1);
                 }

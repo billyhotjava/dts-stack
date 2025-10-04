@@ -20,16 +20,18 @@ export interface KeycloakTranslations {
  * Keycloak用户信息
  */
 export interface KeycloakUser {
-	id?: string;
-	username: string;
-	email?: string;
-	firstName?: string;
-	lastName?: string;
-	enabled?: boolean;
-	emailVerified?: boolean;
-	attributes?: Record<string, string[]>;
-	groups?: string[];
-	realmRoles?: string[];
+    id?: string;
+    username: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    // Some UIs expect a combined fullName; keep optional for compatibility
+    fullName?: string;
+    enabled?: boolean;
+    emailVerified?: boolean;
+    attributes?: Record<string, string[]>;
+    groups?: string[];
+    realmRoles?: string[];
 	clientRoles?: Record<string, string[]>;
 	createdTimestamp?: number;
 }
@@ -270,17 +272,19 @@ export interface UserProfileTestResponse {
  * 审批请求信息（列表用，不包含items字段）
  */
 export interface ApprovalRequest {
-	id: number;
-	requester: string;
-	type: string;
-	reason: string;
-	createdAt: string;
-	decidedAt?: string;
-	status: string;
-	approver?: string;
-	decisionNote?: string;
-	errorMessage?: string;
-	// 注意：列表接口不返回items字段
+    id: number;
+    requester: string;
+    type: string;
+    reason: string;
+    category?: string;
+    createdAt: string;
+    decidedAt?: string;
+    status: string;
+    approver?: string;
+    decisionNote?: string;
+    errorMessage?: string;
+    retryCount?: number;
+    // 注意：列表接口不返回items字段
 }
 
 /**

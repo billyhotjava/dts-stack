@@ -1,4 +1,4 @@
-import { Navigate, type RouteObject } from "react-router";
+import { type RouteObject } from "react-router";
 import { useEffect, useMemo } from "react";
 import { useMenuStore } from "@/store/menuStore";
 import useUserStore from "@/store/userStore";

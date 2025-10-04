@@ -3,7 +3,7 @@ import { CUSTOM_USER_ATTRIBUTE_KEYS } from "@/constants/user";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
-import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } from "#/服务端";
+import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } from "#/keycloak";
 import { KeycloakGroupService, KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
 import { Icon } from "@/components/icon";
 import { useParams, useRouter } from "@/routes/hooks";
@@ -13,7 +13,7 @@ import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 
 import { getAttributeDisplayName } from "@/utils/translation";
-import ResetPasswordModal from "./reset-password-modal";
+// import ResetPasswordModal from "./reset-password-modal";
 import UserModal from "./user-modal";
 import { ApprovalStatus } from "./approval-status";
 
@@ -53,7 +53,7 @@ export default function UserDetail() {
 
 	// Modal状态
 	const [editModal, setEditModal] = useState(false);
-	const [resetPasswordModal, setResetPasswordModal] = useState(false);
+    // const [resetPasswordModal, setResetPasswordModal] = useState(false);
 
 	// 加载UserProfile配置
 	const loadUserProfileConfig = useCallback(async () => {

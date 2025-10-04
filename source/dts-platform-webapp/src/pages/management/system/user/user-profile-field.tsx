@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { UserProfileAttribute } from "#/服务端";
+import type { UserProfileAttribute } from "#/keycloak";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";

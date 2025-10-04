@@ -4,9 +4,8 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { SignInReq } from "@/api/services/userService";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
-import useUserStore, { useSignIn } from "@/store/userStore";
+import { useSignIn } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { Checkbox } from "@/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
@@ -45,7 +44,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
             try {
                 await signIn({ ...values, username: trimmedUsername });
                 // 登录成功后统一进入欢迎页（工作台）
-                navigate("/dashboard/workbench", { replace: true });
+                navigate("dashboard/workbench", { replace: true });
                 toast.success(bilingual("sys.login.loginSuccessTitle"), {
                     closeButton: true,
                 });

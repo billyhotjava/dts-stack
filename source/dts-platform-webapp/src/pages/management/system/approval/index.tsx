@@ -3,7 +3,7 @@ import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import type { ApprovalRequest, ApprovalRequestDetail, KeycloakUser } from "#/服务端";
+import type { ApprovalRequest, ApprovalRequestDetail, KeycloakUser } from "#/keycloak";
 import { KeycloakApprovalService } from "@/api/services/approvalService";
 import useUserStore from "@/store/userStore";
 import { Badge } from "@/ui/badge";
@@ -397,13 +397,13 @@ export default function ApprovalPage() {
 								<DetailSection title="审批项" columns={1} description="审批执行时提交的具体事项">
 									{selectedRequest.items && selectedRequest.items.length > 0 ? (
 										<div className="space-y-3">
-											{selectedRequest.items.map((item, index) => (
-												<ApprovalItemCard
-													key={item.id ?? `${item.targetKind}-${item.targetId}-${index}`}
-													item={item}
-													index={index}
-												/>
-											))}
+                                    {selectedRequest.items.map((item: any, index: number) => (
+                                        <ApprovalItemCard
+                                            key={item.id ?? `${item.targetKind}-${item.targetId}-${index}`}
+                                            item={item}
+                                            index={index}
+                                        />
+                                    ))}
 										</div>
 									) : (
 										<div className="rounded-md bg-muted/60 px-3 py-6 text-center text-sm text-muted-foreground">

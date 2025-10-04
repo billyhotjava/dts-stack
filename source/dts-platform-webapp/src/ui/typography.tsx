@@ -36,11 +36,11 @@ const titleVariants = cva("scroll-m-20 tracking-tight", {
 });
 
 const textVariants = cva("", {
-	variants: {
-		variant: {
-			// 副标题
-			subTitle1: "text-base font-semibold",
-			subTitle2: "text-sm font-normal",
+    variants: {
+        variant: {
+            // 副标题
+            subTitle1: "text-base font-semibold",
+            subTitle2: "text-sm font-normal",
 
 			// 正文
 			body1: "text-base font-normal",
@@ -50,9 +50,11 @@ const textVariants = cva("", {
 			// 说明文字
 			caption: "text-xs font-normal",
 
-			// 代码
-			code: "text-sm font-normal font-mono bg-muted relative rounded px-[0.3rem] py-[0.2rem]",
-		},
+            // 代码
+            code: "text-sm font-normal font-mono bg-muted relative rounded px-[0.3rem] py-[0.2rem]",
+            // 兼容：部分调用使用了 `variant="h4"` 作为标题样式，做一个向后兼容映射
+            h4: "text-xl font-bold",
+        },
 		color: {
 			default: "text-text-primary",
 			secondary: "text-text-secondary",

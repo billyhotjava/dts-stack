@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { ScrollArea } from "@/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/ui/tabs";
 import SensitiveNotice from "@/components/security/SensitiveNotice";
 
 function StatusBadge({ status }: { status?: string }) {

@@ -2,7 +2,7 @@ import { Modal, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { GroupTableRow, KeycloakGroup } from "#/服务端";
+import type { GroupTableRow, KeycloakGroup } from "#/keycloak";
 import { KeycloakGroupService } from "@/api/services/keycloakService";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";

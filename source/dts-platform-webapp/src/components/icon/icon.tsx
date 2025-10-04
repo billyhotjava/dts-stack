@@ -3,14 +3,16 @@ import { Icon as IconifyIcon } from "@iconify/react";
 import type { CSSProperties } from "react";
 import { cn } from "@/utils";
 
-interface IconProps extends IconifyIconProps {
+interface IconProps extends Omit<IconifyIconProps, "icon"> {
 	/**
 	 * Icon name or path
 	 * - Local SVG: local:icon-name
 	 * - URL SVG: url:https://example.com/icon.svg
 	 * - Third-party icon library: iconify-icon-name
 	 */
-	icon: string;
+	icon?: string;
+	// Backward compatibility: allow `name` as alias for `icon`
+	name?: string;
 	size?: string | number;
 	color?: string;
 	className?: string;
@@ -19,20 +21,23 @@ interface IconProps extends IconifyIconProps {
 
 export default function Icon({
 	icon,
+	name,
 	size = "1em",
 	color = "currentColor",
 	className = "",
 	style = {},
 	...props
 }: IconProps) {
+	// Normalize icon from either `icon` or legacy `name`
+	const normalized = (icon || name || "").toString();
 	// Defensive guard: some call sites may provide an undefined or empty icon key
-	if (!icon || typeof icon !== "string") {
+	if (!normalized) {
 		return null;
 	}
 
 	// Handle URL SVG
-	if (icon.startsWith("url:")) {
-		const url = icon.replace("url:", "");
+	if (normalized.startsWith("url:")) {
+		const url = normalized.replace("url:", "");
 		return (
 			<img
 				src={url}
@@ -51,7 +56,7 @@ export default function Icon({
 	// Handle local and third-party icon libraries
 	return (
 		<IconifyIcon
-			icon={icon}
+			icon={normalized}
 			width={size}
 			height={size}
 			className={cn("inline-block", className)}

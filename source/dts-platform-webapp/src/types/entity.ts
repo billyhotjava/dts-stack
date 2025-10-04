@@ -7,18 +7,22 @@ export interface UserToken {
 }
 
 export interface UserInfo {
-	id: string;
-	email: string;
-	username: string;
-	password?: string;
-	avatar?: string;
-	firstName?: string;
-	lastName?: string;
-	enabled?: boolean;
-	roles?: Role[] | string[]; // 支持两种格式：对象数组或字符串数组
-	status?: BasicStatus;
-	permissions?: Permission[] | string[]; // 支持两种格式：对象数组或字符串数组
-	menu?: MenuTree[];
+    id: string;
+    email: string;
+    username: string;
+    password?: string;
+    avatar?: string;
+    firstName?: string;
+    lastName?: string;
+    // Optional computed full name used by profile pages
+    fullName?: string;
+    // Optional Keycloak-style attributes map
+    attributes?: Record<string, string[]>;
+    enabled?: boolean;
+    roles?: Role[] | string[]; // 支持两种格式：对象数组或字符串数组
+    status?: BasicStatus;
+    permissions?: Permission[] | string[]; // 支持两种格式：对象数组或字符串数组
+    menu?: MenuTree[];
 }
 
 export interface Permission_Old {
@@ -77,13 +81,15 @@ export interface Permission extends CommonOptions {
 }
 
 export interface Menu extends CommonOptions, MenuMetaInfo {
-	id: string; // uuid
-	parentId: string;
-	name: string;
-	code: string;
-	order?: number;
-	type: PermissionType;
-	metadata?: string;
+    id: string; // uuid
+    parentId: string;
+    name: string;
+    // Optional display name if provided by backend menus
+    displayName?: string;
+    code: string;
+    order?: number;
+    type: PermissionType;
+    metadata?: string;
 }
 
 export type MenuMetaInfo = Partial<

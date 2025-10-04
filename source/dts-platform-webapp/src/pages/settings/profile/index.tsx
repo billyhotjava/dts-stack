@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { KeycloakUserService } from "@/api/services/keycloakService";
-import type { KeycloakUser } from "#/服务端";
+import type { KeycloakUser } from "#/keycloak";
 import { useUserInfo } from "@/store/userStore";
 import { Avatar, AvatarImage } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
@@ -26,7 +26,7 @@ const pickAttributeValue = (attributes: AttributeMap, keys: string[]) => {
 };
 
 function PersonalProfilePage() {
-	const { avatar, fullName, firstName, username, email, roles, attributes } = useUserInfo();
+    const { avatar, fullName, firstName, username, email, roles, attributes } = useUserInfo();
 	const [detail, setDetail] = useState<KeycloakUser | null>(null);
 
 	useEffect(() => {
