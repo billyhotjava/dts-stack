@@ -63,7 +63,7 @@ public class AssetResource {
      * MVP: if dataset has no tables, create one using hiveTable/name and a few example columns.
      */
     @PostMapping("/datasets/{id}/sync-schema")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> syncSchema(@PathVariable UUID id, @RequestBody(required = false) Map<String, Object> body) {
         try {
             CatalogDatasetJob job = datasetJobService.submitSchemaSync(id, body != null ? body : Map.of(), SecurityUtils.getCurrentUserLogin().orElse("anonymous"));

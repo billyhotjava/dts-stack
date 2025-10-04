@@ -57,6 +57,10 @@ export default defineConfig(({ mode }) => {
       open: true,
       host: true,
       port: 3001,
+      // Decouple from other workspaces; do not traverse outside project root
+      fs: { strict: true, allow: [rootDir] },
+      // Ignore any sibling mounts like /workspace/dts-platform-webapp/**
+      watch: { ignored: ["**/dts-platform-webapp/**"] },
       proxy: {
         "/api": {
           target: apiProxyTarget,
@@ -91,10 +95,20 @@ export default defineConfig(({ mode }) => {
 			exclude: ["@iconify/react", "@vanilla-extract/css"],
 		},
 
-		esbuild: {
-			drop: isProduction ? ["console", "debugger"] : [],
-			legalComments: "none",
-			target: "esnext",
-		},
-	};
+  		esbuild: {
+  			drop: isProduction ? ["console", "debugger"] : [],
+  			legalComments: "none",
+  			target: "esnext",
+  		},
+      // Prevent Vite CSS analyzer from touching absolute container paths
+      // that don't belong to this project (e.g., /workspace/dts-platform-webapp/...)
+      css: {
+        url: {
+          filter: (url) => {
+            if (url.startsWith("/workspace/")) return false;
+            return true;
+          },
+        },
+      },
+  	};
 });

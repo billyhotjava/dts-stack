@@ -61,6 +61,10 @@ export default defineConfig(({ mode }) => {
 			open: true,
 			host: true,
 			port: 3001,
+      // Restrict file serving to this project only
+      fs: { strict: true, allow: [rootDir] },
+      // Ignore sibling workspace mounts to avoid cross-project file watching
+      watch: { ignored: ["**/dts-admin-webapp/**"] },
 			proxy: {
 				"/api": {
 					target: apiProxyTarget,
@@ -102,5 +106,15 @@ export default defineConfig(({ mode }) => {
 			legalComments: "none",
 			target: "esnext",
 		},
+
+    // Do not attempt to resolve absolute container paths in CSS urls
+    css: {
+      url: {
+        filter: (url) => {
+          if (url.startsWith("/workspace/")) return false;
+          return true;
+        },
+      },
+    },
 	};
 });

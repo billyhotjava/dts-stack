@@ -46,7 +46,7 @@ public class IamResource {
     }
 
     @PostMapping("/classifications")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<IamClassification> createClassification(@RequestBody IamClassification item) {
         var saved = classificationRepo.save(item);
         audit.audit("CREATE", "iam.classification", saved.getId().toString());
@@ -54,7 +54,7 @@ public class IamResource {
     }
 
     @PutMapping("/classifications/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<IamClassification> updateClassification(@PathVariable UUID id, @RequestBody IamClassification patch) {
         var existing = classificationRepo.findById(id).orElseThrow();
         existing.setCode(patch.getCode());
@@ -65,7 +65,7 @@ public class IamResource {
     }
 
     @DeleteMapping("/classifications/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Boolean> deleteClassification(@PathVariable UUID id) {
         classificationRepo.deleteById(id);
         audit.audit("DELETE", "iam.classification", id.toString());
@@ -81,7 +81,7 @@ public class IamResource {
     }
 
     @PostMapping("/permissions")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<IamPermission> createPermission(@RequestBody IamPermission item) {
         var saved = permissionRepo.save(item);
         audit.audit("CREATE", "iam.permission", saved.getId().toString());
@@ -89,7 +89,7 @@ public class IamResource {
     }
 
     @PutMapping("/permissions/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<IamPermission> updatePermission(@PathVariable UUID id, @RequestBody IamPermission patch) {
         var existing = permissionRepo.findById(id).orElseThrow();
         existing.setResource(patch.getResource());
@@ -101,7 +101,7 @@ public class IamResource {
     }
 
     @DeleteMapping("/permissions/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.IAM_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Boolean> deletePermission(@PathVariable UUID id) {
         permissionRepo.deleteById(id);
         audit.audit("DELETE", "iam.permission", id.toString());

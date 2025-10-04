@@ -35,7 +35,16 @@ const SCOPE_LABELS: Record<"DEPARTMENT" | "INSTITUTE", string> = {
 
 // SOURCE_LABELS unused; removed to satisfy TS noUnusedLocals
 
-const RESERVED_ROLE_CODES = new Set(["SYSADMIN", "AUTHADMIN", "AUDITADMIN", "OPADMIN"]);
+// Hide internal/administrative roles from role management UI.
+// Use canonical codes (strip ROLE_ and underscores) for matching.
+const RESERVED_ROLE_CODES = new Set([
+    "SYSADMIN",
+    "AUTHADMIN",
+    "OPADMIN",
+    // Auditor variants: our realm uses ROLE_AUDITOR_ADMIN; some envs may label it ROLE_SECURITY_AUDITOR
+    "AUDITORADMIN",
+    "SECURITYAUDITOR",
+]);
 
 interface RoleRow {
     id?: number;

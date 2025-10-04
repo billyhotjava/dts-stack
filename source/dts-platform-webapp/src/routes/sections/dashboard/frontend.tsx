@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router";
 import { Navigate } from "react-router";
 import type { ReactElement } from "react";
+import Workbench from "@/pages/dashboard/workbench";
 import { PORTAL_NAV_SECTIONS } from "@/constants/portal-navigation";
 import DatasetsPage from "@/pages/catalog/DatasetsPage";
 import AccessPolicyPage from "@/pages/catalog/AccessPolicyPage";
@@ -31,7 +32,7 @@ import DataStoragePage from "@/pages/foundation/DataStoragePage";
 import TaskSchedulingPage from "@/pages/foundation/TaskSchedulingPage";
 
 export function getFrontendDashboardRoutes(): RouteObject[] {
-	const sectionRoutes = PORTAL_NAV_SECTIONS.map((section) => {
+    const sectionRoutes = PORTAL_NAV_SECTIONS.map((section) => {
 		const childRoutes = section.children.map<RouteObject>((child) => {
 			const FEATURE_COMPONENTS: Record<string, Record<string, () => ReactElement>> = {
 				catalog: {
@@ -112,5 +113,14 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		};
 	});
 
-	return sectionRoutes;
+    // Add a static dashboard/workbench welcome route available regardless of menus
+    sectionRoutes.push({
+        path: "dashboard",
+        children: [
+            { index: true, element: <Navigate to="workbench" replace /> },
+            { path: "workbench", element: <Workbench /> },
+        ],
+    });
+
+    return sectionRoutes;
 }

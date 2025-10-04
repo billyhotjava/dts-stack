@@ -40,9 +40,41 @@
             <column name="elapsed_ms" type="int"/>
             <column name="created_by" type="varchar(50)"/>
             <column name="created_date" type="timestamp"/>
+            <!-- Align with AbstractAuditingEntity: include last_modified_* to match entity mapping -->
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
         </createTable>
         <createIndex indexName="idx_infra_conn_log_datasource" tableName="infra_connection_test_log">
             <column name="data_source_id"/>
         </createIndex>
+    </changeSet>
+
+    <!-- Safety net for environments where the table might already exist without last_modified_* columns -->
+    <changeSet id="20251009-01-infra-conn-log-add-last-modified-by" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="infra_connection_test_log"/>
+                <not>
+                    <columnExists tableName="infra_connection_test_log" columnName="last_modified_by"/>
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="infra_connection_test_log">
+            <column name="last_modified_by" type="varchar(50)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20251009-02-infra-conn-log-add-last-modified-date" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="infra_connection_test_log"/>
+                <not>
+                    <columnExists tableName="infra_connection_test_log" columnName="last_modified_date"/>
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="infra_connection_test_log">
+            <column name="last_modified_date" type="timestamp"/>
+        </addColumn>
     </changeSet>
 </databaseChangeLog>

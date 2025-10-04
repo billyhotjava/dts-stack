@@ -6,6 +6,8 @@ package com.yuzhi.dts.platform.security;
 public final class AuthoritiesConstants {
 
     public static final String ADMIN = "ROLE_ADMIN";
+    // Business administrator (OP admin) — should have full platform access
+    public static final String OP_ADMIN = "ROLE_OP_ADMIN";
 
     public static final String USER = "ROLE_USER";
 

@@ -1,8 +1,10 @@
 import Character from "@/assets/images/characters/character_6.png";
 import { themeVars } from "@/theme/theme.css";
 import ErrorLayout from "./components/ErrorLayout";
+import { useTranslation } from "react-i18next";
 
 export default function Page500() {
+	const { t } = useTranslation();
 	const svg = (
 		<svg viewBox="0 0 480 360" xmlns="http://www.w3.org/2000/svg" width={400} height={400} className="w-full">
 			<title>500</title>
@@ -107,9 +109,9 @@ export default function Page500() {
 	);
 	return (
 		<ErrorLayout
-			title="Internal Server Error!"
-			helmetTitle="500 Internal Server Error!"
-			desc="Sorry for the inconvenience."
+			title={t("sys.errorPage.500.title")}
+			helmetTitle={t("sys.errorPage.500.helmetTitle")}
+			desc={t("sys.errorPage.500.description")}
 			svg={svg}
 		/>
 	);

@@ -108,13 +108,20 @@ public class InfraManagementService {
     }
 
     public List<ConnectionTestLogDto> recentTestLogs(UUID dataSourceId) {
-        List<InfraConnectionTestLog> logs = dataSourceId != null
-            ? testLogRepository.findTop20ByDataSourceIdOrderByCreatedDateDesc(dataSourceId)
-            : testLogRepository.findTop20ByOrderByCreatedDateDesc();
-        return logs
-            .stream()
-            .map(log -> new ConnectionTestLogDto(log.getId(), log.getDataSourceId(), log.getResult(), log.getMessage(), log.getElapsedMs(), log.getCreatedDate()))
-            .collect(Collectors.toList());
+        try {
+            List<InfraConnectionTestLog> logs = dataSourceId != null
+                ? testLogRepository.findTop20ByDataSourceIdOrderByCreatedDateDesc(dataSourceId)
+                : testLogRepository.findTop20ByOrderByCreatedDateDesc();
+            return logs
+                .stream()
+                .map(log -> new ConnectionTestLogDto(log.getId(), log.getDataSourceId(), log.getResult(), log.getMessage(), log.getElapsedMs(), log.getCreatedDate()))
+                .collect(Collectors.toList());
+        } catch (RuntimeException ex) {
+            // If the infra_connection_test_log table doesn't exist yet (older DB before migration),
+            // do not fail the whole request. Log and return an empty list.
+            LOG.warn("recentTestLogs failed (likely missing table). Returning empty list. cause={}", ex.getMessage());
+            return List.of();
+        }
     }
 
     @Transactional

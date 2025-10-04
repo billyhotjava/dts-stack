@@ -41,7 +41,7 @@ public class DataStandardSettingsResource {
     }
 
     @PutMapping("/standards/settings")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<DataStandardSettingsDto> updateSettings(@Valid @RequestBody DataStandardSettingsDto dto) {
         if (dto.getMaxFileSize() > 512L * 1024 * 1024) {
             throw new IllegalArgumentException("文件大小上限不得超过 512MB");
@@ -64,4 +64,3 @@ public class DataStandardSettingsResource {
         return ApiResponses.ok(response);
     }
 }
-

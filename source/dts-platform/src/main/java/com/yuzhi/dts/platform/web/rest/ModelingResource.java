@@ -96,7 +96,7 @@ public class ModelingResource {
     }
 
     @PostMapping("/standards")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<DataStandardDto> create(@Valid @RequestBody DataStandardUpsertRequest request) {
         try {
             DataStandardDto saved = standards.create(request);
@@ -109,7 +109,7 @@ public class ModelingResource {
     }
 
     @PutMapping("/standards/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<DataStandardDto> update(@PathVariable UUID id, @Valid @RequestBody DataStandardUpsertRequest request) {
         try {
             DataStandardDto saved = standards.update(id, request);
@@ -122,7 +122,7 @@ public class ModelingResource {
     }
 
     @DeleteMapping("/standards/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Boolean> delete(@PathVariable UUID id) {
         standards.delete(id);
         audit.audit("DELETE", "modeling.standard", id.toString());
@@ -144,7 +144,7 @@ public class ModelingResource {
     }
 
     @PostMapping(value = "/standards/{id}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<DataStandardAttachmentDto> uploadAttachment(
         @PathVariable UUID id,
         @RequestPart("file") MultipartFile file,
@@ -177,7 +177,7 @@ public class ModelingResource {
     }
 
     @DeleteMapping("/standards/{id}/attachments/{attachmentId}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Boolean> deleteAttachment(@PathVariable UUID id, @PathVariable UUID attachmentId) {
         attachments.delete(id, attachmentId);
         audit.audit("DELETE", "modeling.standard.attachment", id + ":" + attachmentId);

@@ -23,6 +23,7 @@ import {
 	isDataRole,
 	isGovernanceRole,
 } from "@/constants/governance";
+import { isKeycloakBuiltInRole, isReservedBusinessRoleName, shouldHideRole } from "@/constants/keycloak-roles";
 
 type OrgTreeOption = {
 	value: string;
@@ -708,9 +709,9 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 
 								<div className="space-y-2">
 									<Label>用户角色</Label>
-									<div className="flex flex-wrap gap-2 mb-4">
-										{userRoles.map((role) => {
-											const allowRemoval = !isDataRole(role.name);
+            <div className="flex flex-wrap gap-2 mb-4">
+                            {userRoles.map((role) => {
+                                const allowRemoval = !isDataRole(role.name) && !isReservedBusinessRoleName(role.name) && !isKeycloakBuiltInRole(role);
 											return (
 												<Badge key={role.id ?? role.name} variant={resolveRoleBadgeVariant(role.name)}>
 													{role.name}
@@ -732,10 +733,11 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 
 									<Label>可用角色</Label>
 									<div className="flex flex-wrap gap-2">
-										{roles
-											.filter((role) => !userRoles.some((ur) => ur.id === role.id))
-											.filter((role) => !isDataRole(role.name))
-											.map((role) => (
+                            {roles
+                                .filter((role) => !userRoles.some((ur) => ur.id === role.id))
+                                .filter((role) => !isDataRole(role.name))
+                                .filter((role) => !shouldHideRole(role))
+                                .map((role) => (
 												<Badge
 													key={role.id ?? role.name}
 													variant={resolveRoleBadgeVariant(role.name)}

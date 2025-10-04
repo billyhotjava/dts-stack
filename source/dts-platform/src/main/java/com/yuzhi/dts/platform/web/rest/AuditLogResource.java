@@ -19,6 +19,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,6 +42,7 @@ public class AuditLogResource {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_OP_ADMIN')")
     public ApiResponse<Map<String, Object>> list(
         @RequestParam(value = "page", defaultValue = "0") int page,
         @RequestParam(value = "size", defaultValue = "20") int size,
@@ -59,6 +61,7 @@ public class AuditLogResource {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_OP_ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> get(@PathVariable Long id) {
         return auditService
             .findById(id)
@@ -69,6 +72,7 @@ public class AuditLogResource {
     }
 
     @GetMapping(value = "/export", produces = MediaType.TEXT_PLAIN_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_OP_ADMIN')")
     public ResponseEntity<byte[]> export() {
         List<AuditEvent> events = auditService.findAll(Sort.by(Sort.Direction.DESC, "occurredAt"));
         StringBuilder sb = new StringBuilder();
@@ -93,6 +97,7 @@ public class AuditLogResource {
     }
 
     @DeleteMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_OP_ADMIN')")
     public ApiResponse<Map<String, Object>> purge() {
         long removed = auditService.purgeAll();
         String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");

@@ -87,7 +87,7 @@ public class PolicyResource {
      * Generate/refresh secure view entities based on SecurityViewService preview.
      */
     @PostMapping("/policy/{datasetId}/apply")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> apply(@PathVariable UUID datasetId, @RequestBody(required = false) Map<String, Object> body) {
         Map<String, Object> requestBody = body != null ? body : Map.of();
         String refresh = Objects.toString(requestBody.getOrDefault("refresh", "NONE"));
@@ -106,7 +106,7 @@ public class PolicyResource {
      * Rebuild a single secure view using current policy (returns DDL for operators to apply).
      */
     @PostMapping("/secure-views/{id}/rebuild")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> rebuild(@PathVariable UUID id) {
         CatalogSecureView v = viewRepo.findById(id).orElseThrow();
         CatalogDataset ds = v.getDataset();

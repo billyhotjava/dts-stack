@@ -103,6 +103,7 @@ public class KeycloakAuthResource {
 
         if ("opadmin".equalsIgnoreCase(normalizedUsername)) {
             roles.add(AuthoritiesConstants.ADMIN);
+            roles.add(AuthoritiesConstants.OP_ADMIN);
             roles.add(AuthoritiesConstants.CATALOG_ADMIN);
             roles.add(AuthoritiesConstants.GOV_ADMIN);
             roles.add(AuthoritiesConstants.IAM_ADMIN);

@@ -111,7 +111,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/domains")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<CatalogDomain> createDomain(@Valid @RequestBody CatalogDomain domain) {
         // support parentId mapping if provided
         if (domain.getParent() != null && domain.getParent().getId() != null) {
@@ -124,7 +124,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/domains/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<CatalogDomain> updateDomain(@PathVariable UUID id, @Valid @RequestBody CatalogDomain patch) {
         CatalogDomain existing = domainRepo.findById(id).orElseThrow();
         existing.setName(patch.getName());
@@ -143,7 +143,7 @@ public class CatalogResource {
     }
 
     @DeleteMapping("/domains/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Boolean> deleteDomain(@PathVariable UUID id) {
         domainRepo.deleteById(id);
         audit.audit("DELETE", "catalog.domain", id.toString());
@@ -181,7 +181,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/domains/{id}/move")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<CatalogDomain> moveDomain(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
         CatalogDomain d = domainRepo.findById(id).orElseThrow();
         Object newParentId = body.get("newParentId");
@@ -262,7 +262,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/access-policies/{datasetId}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> upsertPolicy(@PathVariable UUID datasetId, @RequestBody Map<String, Object> body) {
         CatalogDataset ds = datasetRepo.findById(datasetId).orElseThrow();
         var p = policyRepo.findByDataset(ds).orElseGet(() -> {
@@ -324,7 +324,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/security-views/{datasetId}/generate")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> generateSecurityViews(@PathVariable UUID datasetId, @RequestBody(required = false) Map<String, Object> body) {
         var ds = datasetRepo.findById(datasetId).orElseThrow();
         var policy = policyRepo.findByDataset(ds).orElse(null);
@@ -347,7 +347,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/security-views/{datasetId}/rebuild")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> rebuildSecurityViews(@PathVariable UUID datasetId) {
         var ds = datasetRepo.findById(datasetId).orElseThrow();
         secureViewRepo.findByDataset(ds).forEach(v -> secureViewRepo.deleteById(v.getId()));
@@ -356,7 +356,7 @@ public class CatalogResource {
     }
 
     @DeleteMapping("/security-views/{datasetId}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Boolean> rollbackSecurityViews(@PathVariable UUID datasetId) {
         var ds = datasetRepo.findById(datasetId).orElseThrow();
         secureViewRepo.findByDataset(ds).forEach(v -> secureViewRepo.deleteById(v.getId()));
@@ -382,7 +382,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/datasets")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<CatalogDataset> createDataset(@Valid @RequestBody CatalogDataset dataset) {
         applySourcePolicy(dataset);
         ensurePrimarySourceIfRequired(dataset);
@@ -392,7 +392,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/datasets/import")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> importDatasets(@RequestBody List<CatalogDataset> items) {
         List<CatalogDataset> prepared = new ArrayList<>(items.size());
         for (CatalogDataset item : items) {
@@ -406,7 +406,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/datasets/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<CatalogDataset> updateDataset(@PathVariable UUID id, @Valid @RequestBody CatalogDataset patch) {
         CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
         existing.setName(patch.getName());
@@ -427,7 +427,7 @@ public class CatalogResource {
     }
 
     @DeleteMapping("/datasets/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Boolean> deleteDataset(@PathVariable UUID id) {
         datasetRepo.deleteById(id);
         audit.audit("DELETE", "catalog.dataset", id.toString());
@@ -488,7 +488,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/masking-rules")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<CatalogMaskingRule> createMasking(@Valid @RequestBody CatalogMaskingRule rule) {
         CatalogMaskingRule saved = maskingRepo.save(rule);
         audit.audit("CREATE", "catalog.masking", saved.getId().toString());
@@ -496,7 +496,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/masking-rules/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<CatalogMaskingRule> updateMasking(@PathVariable UUID id, @Valid @RequestBody CatalogMaskingRule patch) {
         CatalogMaskingRule existing = maskingRepo.findById(id).orElseThrow();
         existing.setColumn(patch.getColumn());
@@ -508,7 +508,7 @@ public class CatalogResource {
     }
 
     @DeleteMapping("/masking-rules/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Boolean> deleteMasking(@PathVariable UUID id) {
         maskingRepo.deleteById(id);
         audit.audit("DELETE", "catalog.masking", id.toString());
@@ -539,7 +539,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/classification-mapping")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<List<CatalogClassificationMapping>> replaceMapping(
         @RequestBody List<CatalogClassificationMapping> items
     ) {
@@ -550,7 +550,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/classification-mapping/import")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> importMapping(@RequestBody List<CatalogClassificationMapping> items) {
         List<CatalogClassificationMapping> saved = mappingRepo.saveAll(items);
         audit.audit("CREATE", "catalog.classificationMapping", "import:" + saved.size());

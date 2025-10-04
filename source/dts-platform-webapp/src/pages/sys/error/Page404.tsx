@@ -1,8 +1,10 @@
 import Character from "@/assets/images/characters/character_1.png";
 import { themeVars } from "@/theme/theme.css";
 import ErrorLayout from "./components/ErrorLayout";
+import { useTranslation } from "react-i18next";
 
 export default function Page404() {
+	const { t } = useTranslation();
 	const svg = (
 		<svg viewBox="0 0 480 360" xmlns="http://www.w3.org/2000/svg" width={400} height={400} className="w-full">
 			<title>404</title>
@@ -58,9 +60,9 @@ export default function Page404() {
 	);
 	return (
 		<ErrorLayout
-			title="Oops! Page not found!"
-			helmetTitle="404 Page Not Found!"
-			desc="The page you’re looking for doesn’t exist or has been moved."
+			title={t("sys.errorPage.404.title")}
+			helmetTitle={t("sys.errorPage.404.helmetTitle")}
+			desc={t("sys.errorPage.404.description")}
 			svg={svg}
 		/>
 	);

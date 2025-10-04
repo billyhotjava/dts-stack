@@ -132,13 +132,21 @@ const buildAdminManagementRoutes = (): RouteObject[] => [
 ];
 
 export function getBackendDashboardRoutes() {
-	const menus = getMenus();
-	const tree = hasChildren(menus) ? menus : convertFlatToTree(menus);
-	const backendDashboardRoutes = convertToRoute(tree);
-	if (hasAdminPrivileges()) {
-		backendDashboardRoutes.push(...buildAdminManagementRoutes());
-	}
-	return backendDashboardRoutes;
+    const menus = getMenus();
+    const tree = hasChildren(menus) ? menus : convertFlatToTree(menus);
+    const backendDashboardRoutes = convertToRoute(tree);
+    if (hasAdminPrivileges()) {
+        backendDashboardRoutes.push(...buildAdminManagementRoutes());
+    }
+    // Always provide a static dashboard/workbench welcome route
+    backendDashboardRoutes.push({
+        path: "dashboard",
+        children: [
+            { index: true, element: <Navigate to="workbench" replace /> },
+            { path: "workbench", element: Component("/pages/dashboard/workbench") },
+        ],
+    });
+    return backendDashboardRoutes;
 }
 
 const hasChildren = (items: MenuTree[]): boolean => items.some((item) => Array.isArray(item.children) && item.children.length > 0);

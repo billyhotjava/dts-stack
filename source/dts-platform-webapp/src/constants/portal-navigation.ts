@@ -132,7 +132,5 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 	},
 ];
 
-const firstSection = PORTAL_NAV_SECTIONS[0];
-const firstChild = firstSection.children[0];
-
-export const DEFAULT_PORTAL_ROUTE = `/${firstSection.path}/${firstChild.path}`;
+// Use a unified welcome route for all users
+export const DEFAULT_PORTAL_ROUTE = "/dashboard/workbench";
