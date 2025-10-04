@@ -48,10 +48,7 @@ services:
       # - "traefik.http.routers.default-secure.tls=true"
       # - "traefik.http.routers.default-secure.entrypoints=websecure"
       # - "traefik.http.routers.default-secure.rule=HostRegexp(`{any:.*}`)"
-      - "traefik.tls.certificates[0].certFile=/certs/server.crt"
-      - "traefik.tls.certificates[0].keyFile=/certs/server.key"
-      - "traefik.tls.stores.default.defaultCertificate.certFile=/certs/server.crt"
-      - "traefik.tls.stores.default.defaultCertificate.keyFile=/certs/server.key"
+      # Default TLS store and certificates are defined via file provider (dynamic/traefik-dynamic.yml)
     restart: unless-stopped
     networks:
       - dts-core
