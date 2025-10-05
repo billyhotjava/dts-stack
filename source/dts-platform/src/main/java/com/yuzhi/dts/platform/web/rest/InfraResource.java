@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.service.infra.InfraManagementService;
 import com.yuzhi.dts.platform.service.infra.dto.ConnectionTestLogDto;
 import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
 import com.yuzhi.dts.platform.service.infra.dto.DataStorageRequest;
+import com.yuzhi.dts.platform.service.infra.dto.HiveConnectionPersistRequest;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataStorageDto;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
@@ -72,6 +73,15 @@ public class InfraResource {
         var user = SecurityUtils.getCurrentUserLogin().orElse("system");
         var saved = managementService.createDataSource(request, user);
         audit.audit("CREATE", "infra.dataSource", String.valueOf(saved.id()));
+        return ApiResponses.ok(saved);
+    }
+
+    @PostMapping("/data-sources/inceptor/publish")
+    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
+    public ApiResponse<InfraDataSourceDto> publishInceptorDataSource(@Valid @RequestBody HiveConnectionPersistRequest request) {
+        var user = SecurityUtils.getCurrentUserLogin().orElse("system");
+        var saved = managementService.publishInceptorDataSource(request, user);
+        audit.audit("PUBLISH", "infra.dataSource.inceptor", String.valueOf(saved.id()));
         return ApiResponses.ok(saved);
     }
 

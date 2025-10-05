@@ -13,5 +13,7 @@ public record InfraDataSourceDto(
     String description,
     Map<String, Object> props,
     Instant createdAt,
+    Instant lastVerifiedAt,
+    String status,
     boolean hasSecrets
 ) {}

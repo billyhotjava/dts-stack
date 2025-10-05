@@ -240,6 +240,15 @@ dts:
     # Directory to search for external JDBC drivers (jar files) at runtime.
     # Place vendor-provided drivers here (e.g., TDS/Inceptor client jars).
     drivers-dir: /opt/dts/drivers
+    # Whether to enable loading JDBC drivers from the external directory above.
+    # Enabled by default now to use vendor driver and avoid Hadoop conflicts.
+    load-external-drivers: true
+    # Optional: specify a concrete driver class to load/register (e.g., org.apache.hive.jdbc.HiveDriver).
+    # If unset, the loader will try ServiceLoader and known fallback classes.
+    driver-class: 
+    # Optional: specify a particular jar file name or absolute path to load, instead of scanning the directory.
+    # Example: inceptor-driver-8.37.3.jar or /opt/dts/drivers/inceptor-driver-8.37.3.jar
+    driver-jar: 
 
 # ===================================================================
 # JHipster specific properties

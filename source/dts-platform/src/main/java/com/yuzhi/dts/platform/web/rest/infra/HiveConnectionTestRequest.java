@@ -23,16 +23,7 @@ public class HiveConnectionTestRequest {
     @NotBlank
     private String loginPrincipal;
 
-    /** Optional short username used for JDBC property `user` or proxy. */
-    private String loginUser;
-
-    /** Kerberos realm, required when krb5Conf is not provided. */
-    private String realm;
-
-    /** List of KDC host[:port] declarations. */
-    private List<String> kdcs;
-
-    /** Full krb5.conf content (optional, overrides realm/kdc). */
+    /** Full krb5.conf content (required). */
     private String krb5Conf;
 
     @NotNull
@@ -67,32 +58,7 @@ public class HiveConnectionTestRequest {
     public String getLoginPrincipal() { return loginPrincipal; }
     public void setLoginPrincipal(String loginPrincipal) { this.loginPrincipal = loginPrincipal; }
 
-    public String getLoginUser() { return loginUser; }
-    public void setLoginUser(String loginUser) { this.loginUser = blankToNull(loginUser); }
-
-    public String getRealm() { return realm; }
-    public void setRealm(String realm) { this.realm = blankToNull(realm); }
-
-    public List<String> getKdcs() {
-        if (kdcs == null) {
-            return Collections.emptyList();
-        }
-        return kdcs;
-    }
-
-    public void setKdcs(List<String> kdcs) {
-        if (kdcs == null) {
-            this.kdcs = null;
-        } else {
-            var trimmed = new ArrayList<String>(kdcs.size());
-            for (String item : kdcs) {
-                if (item != null && !item.isBlank()) {
-                    trimmed.add(item.trim());
-                }
-            }
-            this.kdcs = trimmed.isEmpty() ? null : trimmed;
-        }
-    }
+    // realm/kdcs removed; krb5.conf must be provided via upload
 
     public String getKrb5Conf() { return krb5Conf; }
     public void setKrb5Conf(String krb5Conf) { this.krb5Conf = blankToNull(krb5Conf); }
@@ -122,9 +88,9 @@ public class HiveConnectionTestRequest {
     public void setRemarks(String remarks) { this.remarks = blankToNull(remarks); }
 
     @JsonIgnore
-    @AssertTrue(message = "必须提供 krb5.conf 或 realm/kdc 信息")
+    @AssertTrue(message = "必须上传 krb5.conf 文件")
     public boolean isKrb5Available() {
-        return (krb5Conf != null && !krb5Conf.isBlank()) || (realm != null && !realm.isBlank());
+        return krb5Conf != null && !krb5Conf.isBlank();
     }
 
     @JsonIgnore
@@ -154,9 +120,6 @@ public class HiveConnectionTestRequest {
         return "HiveConnectionTestRequest{" +
             "jdbcUrl='" + jdbcUrl + '\'' +
             ", loginPrincipal='" + loginPrincipal + '\'' +
-            ", loginUser='" + loginUser + '\'' +
-            ", realm='" + realm + '\'' +
-            ", kdcs=" + getKdcs() +
             ", authMethod=" + authMethod +
             ", proxyUser='" + proxyUser + '\'' +
             ", testQuery='" + testQuery + '\'' +
@@ -165,7 +128,6 @@ public class HiveConnectionTestRequest {
 
     @Override
     public int hashCode() {
-        return Objects.hash(jdbcUrl, loginPrincipal, loginUser, realm, getKdcs(), authMethod, proxyUser, testQuery);
+        return Objects.hash(jdbcUrl, loginPrincipal, authMethod, proxyUser, testQuery);
     }
 }
-

@@ -77,4 +77,16 @@
             <column name="last_modified_date" type="timestamp"/>
         </addColumn>
     </changeSet>
+
+    <changeSet id="20251010-01-infra-datasource-status" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="infra_data_source"/>
+        </preConditions>
+        <addColumn tableName="infra_data_source">
+            <column name="status" type="varchar(32)" defaultValue="INACTIVE"/>
+        </addColumn>
+        <addColumn tableName="infra_data_source">
+            <column name="last_verified_at" type="timestamp"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

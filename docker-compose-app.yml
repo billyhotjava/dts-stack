@@ -27,6 +27,7 @@ services:
       SPRING_CLOUD_CONFIG_ENABLED: "false"
       EUREKA_CLIENT_ENABLED: "false"
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
+      
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
     extra_hosts:
@@ -74,10 +75,14 @@ services:
       SPRING_CLOUD_CONFIG_ENABLED: "false"
       EUREKA_CLIENT_ENABLED: "false"
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
+      # Prefer loading vendor JDBC driver from mounted drivers folder
+      DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
+      DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
+      DTS_JDBC_DRIVER_JAR: "inceptor-jdbc-8.37.3.jar"
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
-      # Mount vendor JDBC drivers (TDS/Inceptor) into the container for dynamic loading
-      - ./services/tds-platform/init:/opt/dts/drivers:ro
+      # Mount vendor JDBC driver(s) for Hive to avoid Hadoop conflicts
+      - ./services/dts-platform/drivers:/opt/dts/drivers:ro
     extra_hosts:
       - "${HOST_SSO}:host-gateway"
     networks:
@@ -118,7 +123,6 @@ services:
       API_PROXY_TARGET: http://dts-platform:8081
     networks:
       - dts-core
-    labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
       - "traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`)"

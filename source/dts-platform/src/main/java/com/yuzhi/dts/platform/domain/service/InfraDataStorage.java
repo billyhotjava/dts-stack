@@ -31,12 +31,10 @@ public class InfraDataStorage extends AbstractAuditingEntity<UUID> implements Se
     @Column(name = "description", length = 512)
     private String description;
 
-    @Lob
-    @Column(name = "secure_props")
+    @Column(name = "secure_props", columnDefinition = "bytea")
     private byte[] secureProps;
 
-    @Lob
-    @Column(name = "secure_iv")
+    @Column(name = "secure_iv", columnDefinition = "bytea")
     private byte[] secureIv;
 
     @Column(name = "secure_key_version", length = 32)

@@ -99,6 +99,10 @@ services:
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
       SPRINGDOC_API_DOCS_ENABLED: "true"
       SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+      DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
+      DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
+      DTS_JDBC_DRIVER_JAR: "inceptor-jdbc-8.37.3.jar"
+      DTS_PLATFORM_HIVE_TEST_PRESERVE_ARTIFACTS: "true"
     command:
       - bash
       - -lc
@@ -119,9 +123,11 @@ services:
       - ./source:/workspace-src
       - maven-cache:/root/.m2
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+      - ./services/dts-platform/drivers:/opt/dts/drivers:ro
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro
     extra_hosts:
       - "${HOST_SSO}:host-gateway"
+      - "tdh01:172.16.0.154"
     healthcheck:
       test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8081/v3/api-docs >/dev/null || wget -qO- http://127.0.0.1:8081/v3/api-docs >/dev/null"]
       interval: 10s
@@ -202,6 +208,14 @@ services:
       - /workspace/node_modules
     networks:
       - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.platform-ui.rule=Host(`${HOST_PLATFORM_UI}`)"
+      - "traefik.http.routers.platform-ui.entrypoints=websecure"
+      - "traefik.http.routers.platform-ui.tls=true"
+      - "traefik.http.services.platform-ui.loadbalancer.server.port=${PORT:-3001}"
+      - "traefik.http.routers.platform-ui.middlewares=security-headers@file"
     healthcheck:
       test: ["CMD-SHELL","curl -fsS http://127.0.0.1:$${PORT:-3001} >/dev/null || wget -qO- http://127.0.0.1:$${PORT:-3001} >/dev/null"]
       interval: 10s

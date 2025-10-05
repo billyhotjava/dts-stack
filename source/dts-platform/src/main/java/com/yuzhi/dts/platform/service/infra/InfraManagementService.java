@@ -9,21 +9,28 @@ import com.yuzhi.dts.platform.domain.service.InfraDataStorage;
 import com.yuzhi.dts.platform.repository.service.InfraConnectionTestLogRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataStorageRepository;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
+import com.yuzhi.dts.platform.service.infra.dto.HiveConnectionPersistRequest;
 import com.yuzhi.dts.platform.service.infra.dto.ConnectionTestLogDto;
 import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
 import com.yuzhi.dts.platform.service.infra.dto.DataStorageRequest;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataStorageDto;
+import com.yuzhi.dts.platform.service.infra.event.InceptorDataSourcePublishedEvent;
+import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -40,6 +47,10 @@ public class InfraManagementService {
     private final InfraSecretService secretService;
     private final InfraSecurityProperties securityProperties;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
+
+    private static final String TYPE_INCEPTOR = "INCEPTOR";
+    private static final String STATUS_ACTIVE = "ACTIVE";
 
     public InfraManagementService(
         InfraDataSourceRepository dataSourceRepository,
@@ -47,7 +58,8 @@ public class InfraManagementService {
         InfraConnectionTestLogRepository testLogRepository,
         InfraSecretService secretService,
         InfraSecurityProperties securityProperties,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        ApplicationEventPublisher eventPublisher
     ) {
         this.dataSourceRepository = dataSourceRepository;
         this.storageRepository = storageRepository;
@@ -55,14 +67,19 @@ public class InfraManagementService {
         this.secretService = secretService;
         this.securityProperties = securityProperties;
         this.objectMapper = objectMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     public List<InfraDataSourceDto> listDataSources() {
-        return dataSourceRepository
-            .findAll()
-            .stream()
-            .map(this::toDto)
-            .collect(Collectors.toList());
+        boolean canViewAll = SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.ADMIN,
+            AuthoritiesConstants.CATALOG_ADMIN,
+            AuthoritiesConstants.OP_ADMIN
+        );
+        List<InfraDataSource> sources = canViewAll
+            ? dataSourceRepository.findAll()
+            : dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
+        return sources.stream().map(this::toDto).collect(Collectors.toList());
     }
 
     @Transactional
@@ -70,6 +87,25 @@ public class InfraManagementService {
         InfraDataSource entity = new InfraDataSource();
         applyDataSource(entity, request, username);
         return toDto(dataSourceRepository.save(entity));
+    }
+
+    @Transactional
+    public InfraDataSourceDto publishInceptorDataSource(HiveConnectionPersistRequest request, String username) {
+        InfraDataSource entity = dataSourceRepository.findFirstByTypeIgnoreCase(TYPE_INCEPTOR).orElseGet(InfraDataSource::new);
+        applyInceptorDataSource(entity, request, username);
+        InfraDataSource saved = dataSourceRepository.save(entity);
+        long elapsed = request.getLastTestElapsedMillis() != null ? request.getLastTestElapsedMillis() : 0L;
+        HiveConnectionTestResult auditResult = HiveConnectionTestResult.success(
+            "连接已发布",
+            elapsed,
+            request.getEngineVersion(),
+            request.getDriverVersion(),
+            List.of()
+        );
+        recordConnectionTest(saved.getId(), request, auditResult, username);
+        InfraDataSourceDto dto = toDto(saved);
+        eventPublisher.publishEvent(new InceptorDataSourcePublishedEvent(dto));
+        return dto;
     }
 
     @Transactional
@@ -155,6 +191,77 @@ public class InfraManagementService {
         secretService.applySecrets(entity, request.secrets());
         entity.setLastModifiedBy(username);
         entity.setCreatedBy(entity.getCreatedBy() == null ? username : entity.getCreatedBy());
+        if (!StringUtils.hasText(entity.getStatus())) {
+            entity.setStatus(STATUS_ACTIVE);
+        }
+    }
+
+    private void applyInceptorDataSource(InfraDataSource entity, HiveConnectionPersistRequest request, String username) {
+        entity.setName(request.getName());
+        entity.setDescription(request.getDescription());
+        entity.setType(TYPE_INCEPTOR);
+        entity.setJdbcUrl(request.getJdbcUrl());
+        entity.setUsername(request.getLoginPrincipal());
+        entity.setLastModifiedBy(username);
+        entity.setCreatedBy(entity.getCreatedBy() == null ? username : entity.getCreatedBy());
+        entity.setLastVerifiedAt(Instant.now());
+        entity.setStatus(STATUS_ACTIVE);
+        entity.setProps(writeProps(buildInceptorProps(request)));
+        secretService.applySecrets(entity, buildInceptorSecrets(request));
+    }
+
+    private Map<String, Object> buildInceptorProps(HiveConnectionPersistRequest request) {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("servicePrincipal", request.getServicePrincipal());
+        props.put("host", request.getHost());
+        props.put("port", request.getPort());
+        props.put("database", request.getDatabase());
+        props.put("useHttpTransport", Boolean.TRUE.equals(request.getUseHttpTransport()));
+        if (StringUtils.hasText(request.getHttpPath())) {
+            props.put("httpPath", request.getHttpPath());
+        }
+        props.put("useSsl", Boolean.TRUE.equals(request.getUseSsl()));
+        props.put("useCustomJdbc", Boolean.TRUE.equals(request.getUseCustomJdbc()));
+        if (StringUtils.hasText(request.getCustomJdbcUrl())) {
+            props.put("customJdbcUrl", request.getCustomJdbcUrl());
+        }
+        if (StringUtils.hasText(request.getProxyUser())) {
+            props.put("proxyUser", request.getProxyUser());
+        }
+        if (StringUtils.hasText(request.getTestQuery())) {
+            props.put("testQuery", request.getTestQuery());
+        }
+        if (request.getJdbcProperties() != null && !request.getJdbcProperties().isEmpty()) {
+            props.put("jdbcProperties", request.getJdbcProperties());
+        }
+        props.put("authMethod", request.getAuthMethod().name());
+        props.put("loginPrincipal", request.getLoginPrincipal());
+        if (request.getLastTestElapsedMillis() != null && request.getLastTestElapsedMillis() > 0) {
+            props.put("lastTestElapsedMillis", request.getLastTestElapsedMillis());
+        }
+        if (StringUtils.hasText(request.getEngineVersion())) {
+            props.put("engineVersion", request.getEngineVersion());
+        }
+        if (StringUtils.hasText(request.getDriverVersion())) {
+            props.put("driverVersion", request.getDriverVersion());
+        }
+        return props;
+    }
+
+    private Map<String, Object> buildInceptorSecrets(HiveConnectionPersistRequest request) {
+        Map<String, Object> secrets = new LinkedHashMap<>();
+        secrets.put("authMethod", request.getAuthMethod().name());
+        if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB) {
+            secrets.put("keytabBase64", request.getKeytabBase64());
+            secrets.put("keytabFileName", request.getKeytabFileName());
+        }
+        if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD && StringUtils.hasText(request.getPassword())) {
+            secrets.put("password", request.getPassword());
+        }
+        if (StringUtils.hasText(request.getKrb5Conf())) {
+            secrets.put("krb5Conf", request.getKrb5Conf());
+        }
+        return secrets;
     }
 
     private void applyDataStorage(InfraDataStorage entity, DataStorageRequest request, String username) {
@@ -179,6 +286,8 @@ public class InfraManagementService {
             entity.getDescription(),
             props,
             entity.getCreatedDate(),
+            entity.getLastVerifiedAt(),
+            entity.getStatus(),
             entity.getSecureProps() != null
         );
     }

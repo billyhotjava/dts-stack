@@ -1,5 +1,5 @@
 import api from "@/api/apiClient";
-import type { HiveConnectionTestRequest, HiveConnectionTestResult } from "#/infra";
+import type { HiveConnectionPersistRequest, HiveConnectionTestRequest, HiveConnectionTestResult } from "#/infra";
 
 export interface InfraDataSource {
 	id: string;
@@ -10,6 +10,8 @@ export interface InfraDataSource {
 	description?: string;
 	props: Record<string, any>;
 	createdAt?: string;
+	lastVerifiedAt?: string;
+	status?: string;
 	hasSecrets: boolean;
 }
 
@@ -48,3 +50,6 @@ export const listConnectionTestLogs = (dataSourceId?: string) =>
 
 export const testHiveConnection = (data: HiveConnectionTestRequest) =>
 	api.post<HiveConnectionTestResult>({ url: "/infra/data-sources/test-connection", data });
+
+export const publishInceptorDataSource = (data: HiveConnectionPersistRequest) =>
+	api.post<InfraDataSource>({ url: "/infra/data-sources/inceptor/publish", data });

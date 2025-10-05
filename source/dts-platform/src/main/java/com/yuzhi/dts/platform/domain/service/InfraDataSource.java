@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.domain.AbstractAuditingEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -34,16 +35,20 @@ public class InfraDataSource extends AbstractAuditingEntity<UUID> implements Ser
     @Column(name = "description", length = 512)
     private String description;
 
-    @Lob
-    @Column(name = "secure_props")
+    @Column(name = "secure_props", columnDefinition = "bytea")
     private byte[] secureProps;
 
-    @Lob
-    @Column(name = "secure_iv")
+    @Column(name = "secure_iv", columnDefinition = "bytea")
     private byte[] secureIv;
 
     @Column(name = "secure_key_version", length = 32)
     private String secureKeyVersion;
+
+    @Column(name = "status", length = 32)
+    private String status;
+
+    @Column(name = "last_verified_at")
+    private Instant lastVerifiedAt;
 
     @Override
     public UUID getId() { return id; }
@@ -66,4 +71,8 @@ public class InfraDataSource extends AbstractAuditingEntity<UUID> implements Ser
     public void setSecureIv(byte[] secureIv) { this.secureIv = secureIv; }
     public String getSecureKeyVersion() { return secureKeyVersion; }
     public void setSecureKeyVersion(String secureKeyVersion) { this.secureKeyVersion = secureKeyVersion; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public Instant getLastVerifiedAt() { return lastVerifiedAt; }
+    public void setLastVerifiedAt(Instant lastVerifiedAt) { this.lastVerifiedAt = lastVerifiedAt; }
 }

@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Properties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.yuzhi.dts.platform.service.infra.HiveConnectionService;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -25,9 +26,11 @@ public class HiveStatementExecutor {
     private static final String HIVE_DRIVER = "org.apache.hive.jdbc.HiveDriver";
 
     private final HiveExecutionProperties properties;
+    private final HiveConnectionService driverSource;
 
-    public HiveStatementExecutor(HiveExecutionProperties properties) {
+    public HiveStatementExecutor(HiveExecutionProperties properties, HiveConnectionService driverSource) {
         this.properties = properties;
+        this.driverSource = driverSource;
     }
 
     public List<StatementExecutionResult> execute(Map<String, String> statements, String schemaHint) {
@@ -48,19 +51,9 @@ public class HiveStatementExecutor {
         try {
             Class.forName(HIVE_DRIVER);
         } catch (ClassNotFoundException e) {
-            log.warn("Hive JDBC driver not present: {}", e.getMessage());
-            for (var entry : entries) {
-                results.add(
-                    new StatementExecutionResult(
-                        entry.getKey(),
-                        entry.getValue(),
-                        StatementExecutionResult.Status.FAILED,
-                        "Hive driver missing",
-                        "DRIVER_MISSING"
-                    )
-                );
-            }
-            return results;
+            // When using vendor driver loaded externally, the class won't be on the app classpath;
+            // rely on DriverManager's registered drivers from external loader.
+            log.debug("Hive JDBC driver not on classpath; relying on externally loaded driver");
         }
 
         Properties props = new Properties();
@@ -77,6 +70,11 @@ public class HiveStatementExecutor {
             jdbcUrl = jdbcUrl + "/" + schemaHint;
         }
 
+        ClassLoader previousCl = Thread.currentThread().getContextClassLoader();
+        ClassLoader ext = (driverSource == null) ? null : driverSource.getJdbcDriverLoader();
+        if (ext != null) {
+            Thread.currentThread().setContextClassLoader(ext);
+        }
         try (Connection connection = props.isEmpty() ? DriverManager.getConnection(jdbcUrl) : DriverManager.getConnection(jdbcUrl, props)) {
             try (Statement stmt = connection.createStatement()) {
                 for (var entry : entries) {
@@ -107,6 +105,8 @@ public class HiveStatementExecutor {
                 String code = resolveErrorCode(ex);
                 results.replaceAll(res -> res.status() == StatementExecutionResult.Status.SUCCEEDED ? res : new StatementExecutionResult(res.key(), res.sql(), StatementExecutionResult.Status.FAILED, reason, code));
             }
+        } finally {
+            Thread.currentThread().setContextClassLoader(previousCl);
         }
         return results;
     }
