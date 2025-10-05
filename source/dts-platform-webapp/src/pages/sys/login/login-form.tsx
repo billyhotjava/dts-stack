@@ -44,7 +44,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
             try {
                 await signIn({ ...values, username: trimmedUsername });
                 // 登录成功后统一进入欢迎页（工作台）
-                navigate("dashboard/workbench", { replace: true });
+                navigate("/dashboard/workbench", { replace: true });
                 toast.success(bilingual("sys.login.loginSuccessTitle"), {
                     closeButton: true,
                 });

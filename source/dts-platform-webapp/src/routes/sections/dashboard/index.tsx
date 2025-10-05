@@ -41,10 +41,10 @@ function FallbackDashboardIndex() {
 
     useEffect(() => {
         if (Array.isArray(menus) && menus.length > 0) {
-            router.replace("dashboard/workbench");
+            router.replace("/dashboard/workbench");
         } else if (hasAdmin) {
             // Admins also land on welcome page
-            router.replace("dashboard/workbench");
+            router.replace("/dashboard/workbench");
         }
     }, [menus, hasAdmin, router]);
 
