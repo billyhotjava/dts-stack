@@ -6,6 +6,7 @@ import MotionContainer from "@/components/animate/motion-container";
 import { varBounce } from "@/components/animate/variants/bounce";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { Button } from "@/ui/button";
+import { urlJoin } from "@/utils";
 import { Text, Title } from "@/ui/typography";
 
 interface ErrorLayoutProps {
@@ -53,15 +54,15 @@ export default function ErrorLayout({
 					{svg && <m.div variants={varBounce().in}>{svg}</m.div>}
 
 					{/* Slots: footer */}
-					{slots.footer ? (
-						slots.footer
-					) : (
-						<NavLink to={homePath} className="mt-4 w-full flex justify-center">
-							<Button size="lg" variant="contrast">
-								{buttonText}
-							</Button>
-						</NavLink>
-					)}
+            {slots.footer ? (
+                slots.footer
+            ) : (
+                <NavLink to={urlJoin(GLOBAL_CONFIG.publicPath || "/", homePath)} className="mt-4 w-full flex justify-center">
+                    <Button size="lg" variant="contrast">
+                        {buttonText}
+                    </Button>
+                </NavLink>
+            )}
 				</MotionContainer>
 			</div>
 		</>

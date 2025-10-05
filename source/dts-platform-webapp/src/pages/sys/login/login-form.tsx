@@ -10,7 +10,8 @@ import { Button } from "@/ui/button";
 import { Checkbox } from "@/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
-import { cn } from "@/utils";
+import { cn, urlJoin } from "@/utils";
+import { GLOBAL_CONFIG } from "@/global-config";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
@@ -43,8 +44,14 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		setLoading(true);
             try {
                 await signIn({ ...values, username: trimmedUsername });
-                // 登录成功后统一进入欢迎页（工作台）
-                navigate("/dashboard/workbench", { replace: true });
+                // 登录成功后先尝试加载菜单，再进入工作台，避免偶发 404
+                try {
+                    const svc = await import("@/api/services/menuService");
+                    await svc.default.getMenuTree().catch(() => undefined);
+                } catch {}
+                // 统一进入欢迎页（工作台），带上 publicPath 以兼容非根路径部署
+                const target = urlJoin(GLOBAL_CONFIG.publicPath || "/", "/dashboard/workbench");
+                navigate(target, { replace: true });
                 toast.success(bilingual("sys.login.loginSuccessTitle"), {
                     closeButton: true,
                 });
