@@ -123,6 +123,7 @@ services:
       API_PROXY_TARGET: http://dts-platform:8081
     networks:
       - dts-core
+    labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
       - "traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`)"

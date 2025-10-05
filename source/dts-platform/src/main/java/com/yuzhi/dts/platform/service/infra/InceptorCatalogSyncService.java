@@ -62,7 +62,7 @@ public class InceptorCatalogSyncService {
             LOG.warn("Skipping Inceptor catalog sync: no active data source in registry");
             return CatalogSyncResult.inactive();
         }
-        InceptorDataSourceState state = stateOpt.get();
+        InceptorDataSourceState state = stateOpt.orElseThrow();
         String database = sanitizeDatabase(state.database());
 
         Map<String, List<ColumnMeta>> metadata;
