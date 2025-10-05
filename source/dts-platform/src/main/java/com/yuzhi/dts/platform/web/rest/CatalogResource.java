@@ -24,6 +24,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional
 public class CatalogResource {
 
+    private static final String TYPE_INCEPTOR = "INCEPTOR";
+
     private final CatalogDomainRepository domainRepo;
     private final CatalogDatasetRepository datasetRepo;
     private final CatalogMaskingRuleRepository maskingRepo;
@@ -458,13 +460,21 @@ public class CatalogResource {
         if (isDefaultSource(dataset) && !hasPrimarySourceConfigured()) {
             throw new ResponseStatusException(
                 HttpStatus.PRECONDITION_FAILED,
-                "未检测到星环 Hive 数据源，请先在“基础管理-数据源”中完成配置"
+                "未检测到 Hive 数据源，请先在“基础管理-数据源”中完成配置"
             );
         }
     }
 
     private boolean hasPrimarySourceConfigured() {
-        return infraDataSourceRepository.countByTypeIgnoreCase(defaultSourceType()) > 0;
+        String defaultSource = defaultSourceType();
+        long matches = infraDataSourceRepository.countByTypeIgnoreCase(defaultSource);
+        if (matches > 0) {
+            return true;
+        }
+        if (TYPE_INCEPTOR.equals(defaultSource)) {
+            return infraDataSourceRepository.countByTypeIgnoreCase("HIVE") > 0;
+        }
+        return false;
     }
 
     private boolean isDefaultSource(CatalogDataset dataset) {
@@ -472,11 +482,16 @@ public class CatalogResource {
     }
 
     private String defaultSourceType() {
-        String configured = Optional.ofNullable(catalogFeatures.getDefaultSourceType()).map(String::trim).orElse("HIVE");
-        if (configured.isBlank()) {
-            return "HIVE";
+        String configured = Optional
+            .ofNullable(catalogFeatures.getDefaultSourceType())
+            .map(String::trim)
+            .map(String::toUpperCase)
+            .filter(s -> !s.isBlank())
+            .orElse(TYPE_INCEPTOR);
+        if ("HIVE".equals(configured) || TYPE_INCEPTOR.equals(configured)) {
+            return TYPE_INCEPTOR;
         }
-        return configured.toUpperCase(Locale.ROOT);
+        return configured;
     }
 
     // Masking rules CRUD

@@ -15,6 +15,7 @@ import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.explore.dto.CreateSavedQueryRequest;
 import com.yuzhi.dts.platform.service.explore.dto.UpdateSavedQueryRequest;
+import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.validation.Valid;
 import java.time.Instant;
@@ -31,6 +32,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +50,8 @@ public class ExploreResource {
     private static final int HISTORY_LIMIT = 50;
     private static final int PREVIEW_ROW_LIMIT = 50;
 
+    private static final Logger LOG = LoggerFactory.getLogger(ExploreResource.class);
+
     private final ExploreSavedQueryRepository savedRepo;
     private final QueryExecutionRepository executionRepo;
     private final ResultSetRepository resultSetRepo;
@@ -54,6 +59,7 @@ public class ExploreResource {
     private final AccessChecker accessChecker;
     private final AuditService audit;
     private final ObjectMapper objectMapper;
+    private final QueryGateway queryGateway;
 
     public ExploreResource(
         ExploreSavedQueryRepository savedRepo,
@@ -62,7 +68,8 @@ public class ExploreResource {
         CatalogDatasetRepository datasetRepo,
         AccessChecker accessChecker,
         AuditService audit,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        QueryGateway queryGateway
     ) {
         this.savedRepo = savedRepo;
         this.executionRepo = executionRepo;
@@ -71,6 +78,7 @@ public class ExploreResource {
         this.accessChecker = accessChecker;
         this.audit = audit;
         this.objectMapper = objectMapper;
+        this.queryGateway = queryGateway;
     }
 
     @PostMapping("/query/preview")
@@ -80,9 +88,19 @@ public class ExploreResource {
             audit.audit("DENY", "explore.preview", Objects.toString(body.get("datasetId"), "unknown"));
             return ApiResponses.error("Access denied for dataset");
         }
-        Map<String, Object> payload = generateResult(dataset, extractSql(body), false);
-        audit.audit("EXECUTE", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
-        return ApiResponses.ok(payload);
+        try {
+            Map<String, Object> payload = generateResult(dataset, extractSql(body), false);
+            audit.audit("EXECUTE", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
+            return ApiResponses.ok(payload);
+        } catch (IllegalStateException ex) {
+            LOG.warn("Explore preview failed: {}", ex.getMessage());
+            audit.audit("ERROR", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
+            return ApiResponses.error(ex.getMessage());
+        } catch (Exception ex) {
+            LOG.error("Explore preview unexpected failure", ex);
+            audit.audit("ERROR", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
+            return ApiResponses.error("查询预览失败: " + ex.getMessage());
+        }
     }
 
     @PostMapping("/execute")
@@ -92,9 +110,19 @@ public class ExploreResource {
             audit.audit("DENY", "explore.execute", Objects.toString(body.get("datasetId"), "unknown"));
             return ApiResponses.error("Access denied for dataset");
         }
-        Map<String, Object> payload = generateResult(dataset, extractSql(body), true);
-        audit.audit("EXECUTE", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
-        return ApiResponses.ok(payload);
+        try {
+            Map<String, Object> payload = generateResult(dataset, extractSql(body), true);
+            audit.audit("EXECUTE", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
+            return ApiResponses.ok(payload);
+        } catch (IllegalStateException ex) {
+            LOG.warn("Explore execute failed: {}", ex.getMessage());
+            audit.audit("ERROR", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
+            return ApiResponses.error(ex.getMessage());
+        } catch (Exception ex) {
+            LOG.error("Explore execute unexpected failure", ex);
+            audit.audit("ERROR", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
+            return ApiResponses.error("查询执行失败: " + ex.getMessage());
+        }
     }
 
     @PostMapping("/explain")
@@ -365,9 +393,19 @@ public class ExploreResource {
                 return ApiResponses.error("Access denied for dataset");
             }
         }
-        Map<String, Object> payload = generateResult(dataset, Optional.ofNullable(q.getSqlText()).orElse(""), true);
-        audit.audit("EXECUTE", "explore.savedQuery.run", id.toString());
-        return ApiResponses.ok(payload);
+        try {
+            Map<String, Object> payload = generateResult(dataset, Optional.ofNullable(q.getSqlText()).orElse(""), true);
+            audit.audit("EXECUTE", "explore.savedQuery.run", id.toString());
+            return ApiResponses.ok(payload);
+        } catch (IllegalStateException ex) {
+            LOG.warn("Saved query run failed: {}", ex.getMessage());
+            audit.audit("ERROR", "explore.savedQuery.run", id.toString());
+            return ApiResponses.error(ex.getMessage());
+        } catch (Exception ex) {
+            LOG.error("Saved query run unexpected failure", ex);
+            audit.audit("ERROR", "explore.savedQuery.run", id.toString());
+            return ApiResponses.error("查询执行失败: " + ex.getMessage());
+        }
     }
 
     private DatasetAssociationResult validateDatasetAssociation(String datasetIdRaw) {
@@ -407,24 +445,119 @@ public class ExploreResource {
     }
 
     private Map<String, Object> generateResult(CatalogDataset dataset, String sqlText, boolean persist) {
-        List<String> headers = buildHeaders(dataset);
-        List<Map<String, Object>> rows = buildRows(headers);
-        Map<String, Object> masking = buildMasking(headers);
-        ThreadLocalRandom tlr = ThreadLocalRandom.current();
-        long durationMs = tlr.nextLong(180, 950);
-        long rowCount = rows.size() * tlr.nextInt(10, 40);
+        String effectiveSql = prepareSql(sqlText, dataset);
+        Map<String, Object> queryResult = queryGateway.execute(effectiveSql);
 
-        Map<String, Object> payload = new LinkedHashMap<>();
+        List<String> headers = extractHeaders(queryResult);
+        List<Map<String, Object>> rows = extractRows(queryResult.get("rows"));
+        if (headers.isEmpty() && !rows.isEmpty()) {
+            headers = new ArrayList<>(rows.get(0).keySet());
+        }
+        if (headers.isEmpty()) {
+            headers = buildHeaders(dataset);
+        }
+
+        Map<String, Object> masking = buildMasking(headers);
+        long connectMillis = numberOrDefault(queryResult.get("connectMillis"), -1L);
+        long queryMillis = numberOrDefault(queryResult.get("queryMillis"), -1L);
+        long durationMs = numberOrDefault(queryResult.get("durationMs"), -1L);
+        if (durationMs < 0) {
+            if (connectMillis >= 0 && queryMillis >= 0) {
+                durationMs = connectMillis + queryMillis;
+            } else if (queryMillis >= 0) {
+                durationMs = queryMillis;
+            } else if (connectMillis >= 0) {
+                durationMs = connectMillis;
+            } else {
+                durationMs = rows.isEmpty() ? 0 : 200;
+            }
+        }
+
+        long rowCount = numberOrDefault(queryResult.get("rowCount"), rows.size());
+
+        Map<String, Object> payload = new LinkedHashMap<>(queryResult);
+        payload.put("effectiveSql", effectiveSql);
         payload.put("headers", headers);
         payload.put("rows", cloneRows(rows));
-        payload.put("durationMs", durationMs);
+        payload.put("masking", masking);
         payload.put("rowCount", rowCount);
+        payload.put("durationMs", durationMs);
+        if (connectMillis >= 0) {
+            payload.put("connectMillis", connectMillis);
+        }
+        if (queryMillis >= 0) {
+            payload.put("queryMillis", queryMillis);
+        }
 
         if (persist) {
-            UUID executionId = persistExecution(dataset, sqlText, headers, rows, masking, durationMs, rowCount);
+            UUID executionId = persistExecution(dataset, effectiveSql, headers, rows, masking, durationMs, rowCount);
             payload.put("executionId", executionId.toString());
         }
         return payload;
+    }
+
+    private String prepareSql(String sqlText, CatalogDataset dataset) {
+        String candidate = sqlText != null ? sqlText.trim() : "";
+        if (!candidate.isEmpty()) {
+            return candidate;
+        }
+        if (dataset != null && StringUtils.hasText(dataset.getHiveDatabase()) && StringUtils.hasText(dataset.getHiveTable())) {
+            return "SELECT * FROM " + dataset.getHiveDatabase() + "." + dataset.getHiveTable() + " LIMIT 100";
+        }
+        return "SELECT 1";
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> extractHeaders(Map<String, Object> queryResult) {
+        if (queryResult == null) {
+            return new ArrayList<>();
+        }
+        Object headersObj = queryResult.get("headers");
+        if (headersObj instanceof List<?> list) {
+            List<String> headers = new ArrayList<>(list.size());
+            for (Object item : list) {
+                if (item != null) {
+                    headers.add(String.valueOf(item));
+                }
+            }
+            headers.removeIf(String::isBlank);
+            if (!headers.isEmpty()) {
+                return headers;
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractRows(Object rowsObj) {
+        if (!(rowsObj instanceof List<?> list)) {
+            return new ArrayList<>();
+        }
+        List<Map<String, Object>> rows = new ArrayList<>(list.size());
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : ((Map<?, ?>) map).entrySet()) {
+                    if (entry.getKey() != null) {
+                        row.put(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                }
+                rows.add(row);
+            }
+        }
+        return rows;
+    }
+
+    private long numberOrDefault(Object value, long defaultValue) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text) {
+            try {
+                return Long.parseLong(text.trim());
+            } catch (NumberFormatException ignored) {}
+        }
+        return defaultValue;
     }
 
     private UUID persistExecution(

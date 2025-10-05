@@ -13,4 +13,6 @@ public interface CatalogColumnSchemaRepository extends JpaRepository<CatalogColu
     List<CatalogColumnSchema> findByTable(CatalogTableSchema table);
 
     List<CatalogColumnSchema> findByTableIn(Collection<CatalogTableSchema> tables);
+
+    void deleteByTable(CatalogTableSchema table);
 }

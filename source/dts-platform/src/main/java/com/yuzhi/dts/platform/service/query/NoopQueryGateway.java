@@ -4,11 +4,11 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Primary;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.stereotype.Service;
 
 @Service
-@Primary
+@ConditionalOnMissingBean(QueryGateway.class)
 public class NoopQueryGateway implements QueryGateway {
 
     private static final Logger log = LoggerFactory.getLogger(NoopQueryGateway.class);
@@ -36,4 +36,3 @@ public class NoopQueryGateway implements QueryGateway {
         return result;
     }
 }
-

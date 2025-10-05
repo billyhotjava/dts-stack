@@ -10,6 +10,8 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.io.Serializable;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.time.Instant;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -46,8 +48,10 @@ public class AuditEvent implements Serializable {
     @Column(name = "resource_id", length = 256)
     private String resourceId;
 
+    @JdbcTypeCode(SqlTypes.INET)
     @Column(name = "client_ip")
-    private String clientIp;
+    @JsonIgnore
+    private InetAddress clientIp;
 
     @Column(name = "client_agent", length = 256)
     private String clientAgent;
@@ -162,12 +166,29 @@ public class AuditEvent implements Serializable {
         this.resourceId = resourceId;
     }
 
-    public String getClientIp() {
+    @JsonIgnore
+    public InetAddress getClientIpAddress() {
         return clientIp;
     }
 
-    public void setClientIp(String clientIp) {
+    public String getClientIp() {
+        return clientIp != null ? clientIp.getHostAddress() : null;
+    }
+
+    public void setClientIp(InetAddress clientIp) {
         this.clientIp = clientIp;
+    }
+
+    public void setClientIp(String clientIp) {
+        if (clientIp == null || clientIp.isBlank()) {
+            this.clientIp = null;
+            return;
+        }
+        try {
+            this.clientIp = InetAddress.getByName(clientIp.trim());
+        } catch (UnknownHostException ignored) {
+            this.clientIp = null;
+        }
     }
 
     public String getClientAgent() {

@@ -108,6 +108,12 @@ public class ExploreExecResource {
             exec.setRowCount((long) rows.size());
             exec.setBytesProcessed(Long.valueOf(Math.max(0, rows.size() * 10)));
             exec.setStatus(ExecEnums.ExecStatus.SUCCESS);
+        } catch (IllegalStateException ex) {
+            exec.setStatus(ExecEnums.ExecStatus.FAILED);
+            exec.setErrorMessage(ex.getMessage());
+            executionRepository.save(exec);
+            audit.audit("ERROR", "explore.execute", exec.getId().toString());
+            return ApiResponses.error(ex.getMessage());
         } catch (Exception e) {
             exec.setStatus(ExecEnums.ExecStatus.FAILED);
             exec.setErrorMessage(e.getMessage());

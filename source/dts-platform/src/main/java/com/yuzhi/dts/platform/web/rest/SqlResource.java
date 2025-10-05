@@ -59,9 +59,14 @@ public class SqlResource {
             effectiveSql = "SELECT * FROM (" + sql + ") t WHERE (" + policy.getRowFilter() + ")";
         }
 
-        Map<String, Object> result = queryGateway.execute(effectiveSql);
-        audit.audit("EXECUTE", "sql.query", String.valueOf(datasetId));
-        return ApiResponses.ok(result);
+        try {
+            Map<String, Object> result = queryGateway.execute(effectiveSql);
+            audit.audit("EXECUTE", "sql.query", String.valueOf(datasetId));
+            return ApiResponses.ok(result);
+        } catch (IllegalStateException ex) {
+            audit.audit("ERROR", "sql.query", String.valueOf(datasetId));
+            return ApiResponses.error(ex.getMessage());
+        }
     }
 
     private UUID parseUuid(Object value) {
@@ -72,4 +77,3 @@ public class SqlResource {
         }
     }
 }
-

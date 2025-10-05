@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import java.io.Serializable;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "infra_data_storage")
@@ -31,9 +33,11 @@ public class InfraDataStorage extends AbstractAuditingEntity<UUID> implements Se
     @Column(name = "description", length = 512)
     private String description;
 
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "secure_props", columnDefinition = "bytea")
     private byte[] secureProps;
 
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "secure_iv", columnDefinition = "bytea")
     private byte[] secureIv;
 

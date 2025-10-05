@@ -7,6 +7,10 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionService;
+import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry;
+import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
+import com.yuzhi.dts.platform.service.infra.InceptorIntegrationCoordinator;
+import com.yuzhi.dts.platform.service.infra.InceptorIntegrationCoordinator.IntegrationStatus;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
 import com.yuzhi.dts.platform.service.infra.InfraManagementService;
 import com.yuzhi.dts.platform.service.infra.dto.ConnectionTestLogDto;
@@ -17,7 +21,10 @@ import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataStorageDto;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.validation.Valid;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,19 +41,25 @@ public class InfraResource {
     private final InfraManagementService managementService;
     private final HiveConnectionService hiveConnectionService;
     private final HiveExecutionProperties hiveProps;
+    private final InceptorDataSourceRegistry inceptorRegistry;
+    private final InceptorIntegrationCoordinator integrationCoordinator;
 
     public InfraResource(
         InfraTaskScheduleRepository schedRepo,
         AuditService audit,
         InfraManagementService managementService,
         HiveConnectionService hiveConnectionService,
-        HiveExecutionProperties hiveProps
+        HiveExecutionProperties hiveProps,
+        InceptorDataSourceRegistry inceptorRegistry,
+        InceptorIntegrationCoordinator integrationCoordinator
     ) {
         this.schedRepo = schedRepo;
         this.audit = audit;
         this.managementService = managementService;
         this.hiveConnectionService = hiveConnectionService;
         this.hiveProps = hiveProps;
+        this.inceptorRegistry = inceptorRegistry;
+        this.integrationCoordinator = integrationCoordinator;
     }
 
     // Data sources
@@ -145,10 +158,16 @@ public class InfraResource {
 
     @GetMapping("/features")
     public ApiResponse<Map<String, Object>> features() {
-        return ApiResponses.ok(Map.of(
-            "multiSourceEnabled", managementService.isMultiSourceEnabled(),
-            "defaultJdbcUrl", hiveProps.getJdbcUrl()
-        ));
+        return ApiResponses.ok(buildFeaturesPayload());
+    }
+
+    @PostMapping("/data-sources/inceptor/refresh")
+    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
+    public ApiResponse<Map<String, Object>> refreshInceptorDataSource() {
+        inceptorRegistry.refresh();
+        integrationCoordinator.synchronize("manual-refresh");
+        audit.audit("REFRESH", "infra.dataSource.inceptor", "manual");
+        return ApiResponses.ok(buildFeaturesPayload());
     }
 
     // Task schedules
@@ -187,5 +206,84 @@ public class InfraResource {
         schedRepo.deleteById(id);
         audit.audit("DELETE", "infra.schedule", String.valueOf(id));
         return ApiResponses.ok(Boolean.TRUE);
+    }
+
+    private Map<String, Object> buildFeaturesPayload() {
+        InceptorDataSourceState state = inceptorRegistry.getActive().orElse(null);
+        IntegrationStatus status = integrationCoordinator.currentStatus();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("multiSourceEnabled", managementService.isMultiSourceEnabled());
+        payload.put("hasActiveInceptor", state != null);
+        payload.put("inceptorStatus", state != null ? "ACTIVE" : "NONE");
+        payload.put("defaultJdbcUrl", state != null ? state.jdbcUrl() : hiveProps.getJdbcUrl());
+        payload.put("loginPrincipal", state != null ? state.loginPrincipal() : null);
+        payload.put("lastVerifiedAt", state != null ? state.lastVerifiedAt() : null);
+        payload.put("lastUpdatedAt", state != null ? state.lastUpdatedAt() : null);
+        if (state != null) {
+            payload.put("dataSourceName", state.name());
+            payload.put("description", state.description());
+            payload.put("authMethod", state.authMethod().name());
+            payload.put("database", state.database());
+            payload.put("proxyUser", state.proxyUser());
+            payload.put("engineVersion", state.engineVersion());
+            payload.put("driverVersion", state.driverVersion());
+            payload.put("lastTestElapsedMillis", state.lastTestElapsedMillis());
+        }
+        payload.put("moduleStatuses", buildModuleStatuses(state, status));
+        payload.put("integrationStatus", buildIntegrationStatus(status));
+        return payload;
+    }
+
+    private List<Map<String, Object>> buildModuleStatuses(InceptorDataSourceState state, IntegrationStatus status) {
+        List<Map<String, Object>> modules = new ArrayList<>();
+        boolean active = state != null;
+        Instant updatedAt = status != null ? status.timestamp() : null;
+        long datasetCount = status != null ? status.catalogDatasetCount() : 0L;
+
+        boolean catalogReady = active && datasetCount > 0;
+        String catalogMessage;
+        if (!active) {
+            catalogMessage = "未配置 Inceptor 数据源";
+        } else if (datasetCount == 0) {
+            catalogMessage = "未发现 Hive 表，请在 Inceptor 中建表后点击重新同步";
+        } else {
+            catalogMessage = "已同步 " + datasetCount + " 个 Hive 表";
+        }
+
+        modules.add(moduleStatus("catalog", catalogReady, updatedAt, catalogMessage));
+        modules.add(moduleStatus("governance", active, updatedAt, active ? "数据治理可执行 Hive 规则" : "无法执行质量规则"));
+        modules.add(moduleStatus("development", active, updatedAt, active ? "SQL 工具将直接连接 Inceptor" : "SQL 工具不可用"));
+        return modules;
+    }
+
+    private Map<String, Object> moduleStatus(String module, boolean active, Instant updatedAt, String message) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("module", module);
+        map.put("status", active ? "READY" : "BLOCKED");
+        map.put("message", message);
+        if (updatedAt != null) {
+            map.put("updatedAt", updatedAt);
+        }
+        return map;
+    }
+
+    private Map<String, Object> buildIntegrationStatus(IntegrationStatus status) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        if (status != null) {
+            map.put("lastSyncAt", status.timestamp());
+            map.put("reason", status.reason());
+            map.put("actions", status.actions());
+            map.put("catalogDatasetCount", status.catalogDatasetCount());
+            map.put("database", status.database());
+            map.put("tablesDiscovered", status.tablesDiscovered());
+            map.put("datasetsCreated", status.datasetsCreated());
+            map.put("tablesCreated", status.tablesCreated());
+            map.put("columnsImported", status.columnsImported());
+            if (status.error() != null) {
+                map.put("error", status.error());
+            }
+        }
+        return map;
     }
 }

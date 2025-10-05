@@ -6,13 +6,16 @@ import { z } from "zod";
 import type { HiveConnectionPersistRequest, HiveConnectionTestResult } from "#/infra";
 import {
 	type ConnectionTestLog,
+	deleteInfraDataSource,
 	fetchInfraFeatures,
 	type InfraDataSource,
 	type InfraFeatureFlags,
 	listConnectionTestLogs,
 	listInfraDataSources,
 	publishInceptorDataSource,
+	refreshInceptorRegistry,
 	testHiveConnection,
+	type ModuleStatus,
 } from "@/api/services/infraService";
 import { Icon } from "@/components/icon";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
@@ -137,6 +140,21 @@ export default function DataSourcesPage() {
 	const [testResult, setTestResult] = useState<HiveConnectionTestResult | null>(null);
 	const [connectionAdvancedOpen, setConnectionAdvancedOpen] = useState(false);
 	const [kerberosAdvancedOpen, setKerberosAdvancedOpen] = useState(false);
+	const [refreshing, setRefreshing] = useState(false);
+	const [deletingId, setDeletingId] = useState<string | null>(null);
+
+	const resolveModuleLabel = (module: string) => {
+		switch (module) {
+			case "catalog":
+				return "数据资产";
+			case "governance":
+				return "数据治理";
+			case "development":
+				return "数据开发";
+			default:
+				return module;
+		}
+	};
 
 	const loadFeatures = async () => {
 		setLoadingFeatures(true);
@@ -148,11 +166,43 @@ export default function DataSourcesPage() {
 		}
 	};
 
+	const hasInceptor = features?.hasActiveInceptor ?? false;
+	const inceptorStatusLabel = hasInceptor ? "Inceptor 数据源已就绪" : "Inceptor 数据源未配置";
+	const activeInceptor = useMemo(
+		() => sources.find((item) => (item.type || "").toUpperCase() === "INCEPTOR"),
+		[sources],
+	);
+	const lastVerifiedDisplay = features?.lastVerifiedAt ? new Date(features.lastVerifiedAt).toLocaleString() : undefined;
+	const lastUpdatedDisplay = features?.lastUpdatedAt ? new Date(features.lastUpdatedAt).toLocaleString() : undefined;
+	const moduleStatuses: ModuleStatus[] = features?.moduleStatuses ?? [];
+	const integrationStatus = features?.integrationStatus;
+	const lastSyncedDisplay = integrationStatus?.lastSyncAt ? new Date(integrationStatus.lastSyncAt).toLocaleString() : undefined;
+	const integrationActions = integrationStatus?.actions?.length ? integrationStatus.actions.join("，") : undefined;
+
 	const loadSources = async () => {
 		setLoadingSources(true);
 		try {
 			const data = await listInfraDataSources();
-			setSources(data);
+			const map = new Map<string, InfraDataSource>();
+			for (const item of data) {
+				const key = (item.type || "").toUpperCase();
+				if (!key) {
+					const fallbackKey = item.id ? String(item.id) : `__ANON_${Math.random()}`;
+					map.set(fallbackKey, item);
+					continue;
+				}
+				const existing = map.get(key);
+				if (!existing) {
+					map.set(key, item);
+					continue;
+				}
+				const existingTs = existing.lastVerifiedAt ? Date.parse(existing.lastVerifiedAt) : 0;
+				const currentTs = item.lastVerifiedAt ? Date.parse(item.lastVerifiedAt) : 0;
+				if (currentTs >= existingTs) {
+					map.set(key, item);
+				}
+			}
+			setSources(Array.from(map.values()));
 		} finally {
 			setLoadingSources(false);
 		}
@@ -165,6 +215,38 @@ export default function DataSourcesPage() {
 			setLogs(data);
 		} finally {
 			setLoadingLogs(false);
+		}
+	};
+
+	const handleRegistryRefresh = async () => {
+		setRefreshing(true);
+		try {
+			const data = await refreshInceptorRegistry();
+			setFeatures(data);
+			await loadSources();
+			toast.success("Inceptor 状态已重新同步");
+		} catch (error: any) {
+			toast.error(error?.message || "刷新失败");
+		} finally {
+			setRefreshing(false);
+		}
+	};
+
+	const handleDeleteSource = async (item: InfraDataSource) => {
+		if (!item?.id) return;
+		const confirmed = window.confirm(`确定删除数据源 “${item.name}” 吗？该操作不可撤销。`);
+		if (!confirmed) {
+			return;
+		}
+		setDeletingId(item.id);
+		try {
+			await deleteInfraDataSource(item.id);
+			await Promise.all([loadSources(), loadFeatures(), loadLogs()]);
+			toast.success("数据源已删除");
+		} catch (error: any) {
+			toast.error(error?.message || "删除失败");
+		} finally {
+			setDeletingId(null);
 		}
 	};
 
@@ -278,7 +360,7 @@ export default function DataSourcesPage() {
 				driverVersion: result.driverVersion ?? undefined,
 			};
 			await publishInceptorDataSource(persistPayload);
-			await loadSources();
+			await Promise.all([loadSources(), loadFeatures()]);
 			toast.success(`连接成功并已保存，用时 ${result.elapsedMillis} ms`);
 		} catch (error: any) {
 			const message = error?.message || "保存数据源失败";
@@ -673,6 +755,15 @@ export default function DataSourcesPage() {
 								)}
 							/>
 
+							{activeInceptor && (
+								<Alert>
+									<AlertTitle>当前已绑定星环 Inceptor</AlertTitle>
+									<AlertDescription className="text-xs text-muted-foreground">
+										平台仅维护一个 Inceptor 数据库连接。再次“测试并覆盖”会复用并更新现有配置，如需全新连接请先删除列表中的数据源。
+									</AlertDescription>
+								</Alert>
+							)}
+
 							<div className="rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 p-4 text-sm text-muted-foreground">
 								<ul className="list-disc space-y-2 pl-5">
 									<li>启动测试会在后端临时写入 keytab/krb5 文件并登录，再执行验证 SQL。</li>
@@ -687,7 +778,7 @@ export default function DataSourcesPage() {
 										icon={testing ? "eos-icons:three-dots-loading" : "solar:wifi-router-bold"}
 										className="mr-1 h-4 w-4"
 									/>
-									{testing ? "执行中..." : "测试并发布"}
+									{testing ? "执行中..." : activeInceptor ? "测试并覆盖" : "测试并发布"}
 								</Button>
 								<Button type="button" variant="outline" onClick={handleReset} disabled={testing}>
 									<Icon icon="solar:refresh-bold" className="mr-1 h-4 w-4" /> 重置示例
@@ -725,16 +816,70 @@ export default function DataSourcesPage() {
 						<CardTitle className="text-base">基础能力开关</CardTitle>
 						<CardDescription>多源支持等基础能力状态来自后端配置。</CardDescription>
 					</div>
-					<Button type="button" variant="outline" size="sm" onClick={loadFeatures} disabled={loadingFeatures}>
-						<Icon icon="solar:refresh-bold" className="mr-1 h-4 w-4" /> 刷新
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={handleRegistryRefresh}
+						disabled={loadingFeatures || refreshing}
+					>
+						<Icon
+							icon="solar:refresh-bold"
+							className={cn("mr-1 h-4 w-4", refreshing ? "animate-spin" : "")}
+						/>
+						{refreshing ? "同步中…" : "重新同步"}
 					</Button>
 				</CardHeader>
-				<CardContent className="flex flex-wrap items-center gap-4 text-sm">
-					<div className="flex items-center gap-2">
+				<CardContent className="space-y-3 text-sm">
+					<div className="flex flex-wrap items-center gap-2">
 						<Badge variant={features?.multiSourceEnabled ? "default" : "secondary"}>
 							多数据源 {features?.multiSourceEnabled ? "已启用" : "未启用"}
 						</Badge>
+						<Badge variant={hasInceptor ? "default" : "secondary"}>{inceptorStatusLabel}</Badge>
 					</div>
+					<div className="space-y-1 text-xs text-muted-foreground">
+						<p>
+							默认 JDBC：{features?.defaultJdbcUrl ? (
+								<span className="font-mono text-[11px]">{features.defaultJdbcUrl}</span>
+							) : (
+								<span>未配置</span>
+							)}
+						</p>
+						{features?.loginPrincipal && <p>登录主体：{features.loginPrincipal}</p>}
+						{features?.dataSourceName && <p>数据源名称：{features.dataSourceName}</p>}
+						{features?.description && <p>描述：{features.description}</p>}
+						{features?.authMethod && <p>认证方式：{features.authMethod}</p>}
+						{features?.engineVersion && <p>引擎版本：{features.engineVersion}</p>}
+						{features?.driverVersion && <p>驱动版本：{features.driverVersion}</p>}
+						{features?.lastTestElapsedMillis && <p>最近连通耗时：{features.lastTestElapsedMillis} ms</p>}
+						{features?.database && <p>默认库：{features.database}</p>}
+						{features?.proxyUser?.trim() && <p>Proxy User：{features.proxyUser}</p>}
+						{lastVerifiedDisplay && <p>最近校验：{lastVerifiedDisplay}</p>}
+						{lastUpdatedDisplay && <p>最近更新：{lastUpdatedDisplay}</p>}
+						{lastSyncedDisplay && <p>最近联动：{lastSyncedDisplay}</p>}
+						{integrationActions && <p>联动动作：{integrationActions}</p>}
+					</div>
+					{moduleStatuses.length > 0 && (
+						<div className="rounded-md border border-dashed bg-muted/20 p-3">
+							<div className="mb-2 text-xs font-medium text-muted-foreground">模块联动状态</div>
+							<div className="space-y-2">
+								{moduleStatuses.map((item) => (
+									<div key={item.module} className="flex items-start justify-between gap-3 text-xs">
+										<div className="space-y-1">
+											<div className="font-medium text-foreground">{resolveModuleLabel(item.module)}</div>
+											<div className="text-muted-foreground">{item.message}</div>
+											{item.updatedAt && (
+												<div className="text-[10px] text-muted-foreground">
+													{new Date(item.updatedAt).toLocaleString()}
+												</div>
+											)}
+										</div>
+										<Badge variant={item.status === "READY" ? "default" : "destructive"}>{item.status}</Badge>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
 					<p className="text-xs text-muted-foreground">
 						如需支持多个外部 Hive 集群，请联系运维开启多源能力并补充密钥。
 					</p>
@@ -762,6 +907,7 @@ export default function DataSourcesPage() {
 										<th className="px-3 py-2 font-medium">类型</th>
 										<th className="px-3 py-2 font-medium">连接串</th>
 										<th className="px-3 py-2 font-medium">密钥</th>
+										<th className="px-3 py-2 font-medium text-right">操作</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -781,11 +927,23 @@ export default function DataSourcesPage() {
 											<td className="px-3 py-2">
 												<Badge variant="outline">{item.hasSecrets ? "已加密" : "未配置"}</Badge>
 											</td>
+											<td className="px-3 py-2 text-right">
+												<Button
+													type="button"
+													variant="ghost"
+													size="sm"
+													onClick={() => handleDeleteSource(item)}
+													disabled={deletingId === item.id || refreshing}
+												>
+													<Icon icon="solar:trash-bin-trash-bold" className="mr-1 h-4 w-4" />
+													{deletingId === item.id ? "删除中" : "删除"}
+												</Button>
+											</td>
 										</tr>
 									))}
 									{!sources.length && (
 										<tr>
-											<td colSpan={5} className="px-3 py-6 text-center text-xs text-muted-foreground">
+											<td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">
 												{loadingSources ? "加载中…" : "暂无已登记数据源"}
 											</td>
 										</tr>

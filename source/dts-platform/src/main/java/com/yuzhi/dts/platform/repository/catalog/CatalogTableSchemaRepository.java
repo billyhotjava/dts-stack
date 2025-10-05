@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -13,4 +14,6 @@ public interface CatalogTableSchemaRepository extends JpaRepository<CatalogTable
     List<CatalogTableSchema> findByDataset(CatalogDataset dataset);
 
     List<CatalogTableSchema> findByDatasetIn(Collection<CatalogDataset> datasets);
+
+    Optional<CatalogTableSchema> findFirstByDatasetAndNameIgnoreCase(CatalogDataset dataset, String name);
 }

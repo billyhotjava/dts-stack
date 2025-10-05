@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.infra;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.util.StringUtils;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -26,6 +27,7 @@ import java.util.Base64;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -66,6 +68,11 @@ public class HiveConnectionService {
     private static final String KRB5_CONF_KEY = "java.security.krb5.conf";
     private static final String USE_SUBJECT_CREDS_ONLY_KEY = "javax.security.auth.useSubjectCredsOnly";
     private static final Set<String> REGISTERED_EXTERNAL_DRIVERS = ConcurrentHashMap.newKeySet();
+
+    @FunctionalInterface
+    public interface HiveConnectionCallback<T> {
+        T doWithConnection(Connection connection, long connectStart) throws Exception;
+    }
 
     private final ReentrantLock kerberosLock = new ReentrantLock();
     private volatile ClassLoader jdbcDriverLoader;
@@ -109,6 +116,105 @@ public class HiveConnectionService {
     /** Exposes the classloader that loaded external JDBC drivers, if any. */
     public ClassLoader getJdbcDriverLoader() {
         return jdbcDriverLoader;
+    }
+
+    private <T> T executeWithinDriver(HiveConnectionTestRequest request, HiveConnectionCallback<T> callback) throws Exception {
+        ClassLoader previousCl = Thread.currentThread().getContextClassLoader();
+        if (jdbcDriverLoader != null) {
+            Thread.currentThread().setContextClassLoader(jdbcDriverLoader);
+        }
+        try {
+            prepareDriverClasses();
+            String url = resolveJdbcUrl(request);
+            java.util.Properties props = buildConnectionProperties(request);
+            long connectStart = System.nanoTime();
+            log.info(
+                "Attempting JDBC connect. url={}, authMethod={}, propsKeys={}",
+                url,
+                request.getAuthMethod(),
+                props.keySet()
+            );
+            try (Connection connection = openConnection(url, props)) {
+                return callback.doWithConnection(connection, connectStart);
+            }
+        } finally {
+            Thread.currentThread().setContextClassLoader(previousCl);
+        }
+    }
+
+    public <T> T executeWithConnection(HiveConnectionTestRequest request, HiveConnectionCallback<T> callback) throws Exception {
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(callback, "callback");
+
+        kerberosLock.lock();
+        Path tempDir = null;
+        Path keytabPath = null;
+        Path krb5Path = null;
+        String previousKrb5 = System.getProperty(KRB5_CONF_KEY);
+        String previousUseSubject = System.getProperty(USE_SUBJECT_CREDS_ONLY_KEY);
+        try {
+            tempDir = Files.createTempDirectory("dts-hive-exec-");
+            if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB) {
+                keytabPath = writeKeytab(tempDir, request);
+            }
+            krb5Path = prepareKrb5Conf(tempDir, request);
+            System.setProperty(KRB5_CONF_KEY, krb5Path.toAbsolutePath().toString());
+            System.setProperty(USE_SUBJECT_CREDS_ONLY_KEY, "false");
+            log.info(
+                "Kerberos system properties set: {}={}, {}={}",
+                KRB5_CONF_KEY,
+                krb5Path.toAbsolutePath(),
+                USE_SUBJECT_CREDS_ONLY_KEY,
+                System.getProperty(USE_SUBJECT_CREDS_ONLY_KEY)
+            );
+
+            PrivilegedExceptionAction<T> action = () -> executeWithinDriver(request, callback);
+
+            if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB) {
+                UserGroupInformation ugi = loginWithKeytab(request, keytabPath);
+                bridgeKerberosSubjectToVendor(ugi);
+                try {
+                    return ugi.doAs(action);
+                } finally {
+                    try {
+                        ugi.logoutUserFromKeytab();
+                    } catch (IOException e) {
+                        log.debug("UGI logout failure: {}", e.getMessage());
+                    }
+                }
+            }
+
+            LoginContext loginContext = buildLoginContext(request, keytabPath);
+            loginContext.login();
+            try {
+                return Subject.doAs(loginContext.getSubject(), action);
+            } finally {
+                try {
+                    loginContext.logout();
+                } catch (LoginException e) {
+                    log.debug("Kerberos logout failure: {}", e.getMessage());
+                }
+            }
+        } catch (PrivilegedActionException pae) {
+            Throwable cause = pae.getException();
+            if (cause instanceof Exception ex) {
+                throw ex;
+            }
+            throw new IOException(cause);
+        } finally {
+            restoreProperty(KRB5_CONF_KEY, previousKrb5);
+            restoreProperty(USE_SUBJECT_CREDS_ONLY_KEY, previousUseSubject);
+            if (preserveArtifacts) {
+                if (tempDir != null) {
+                    log.warn("Preserving Kerberos artifacts for debugging under {}. Remember to clean up manually.", tempDir.toAbsolutePath());
+                }
+            } else {
+                deleteQuietly(keytabPath);
+                deleteQuietly(krb5Path);
+                deleteQuietly(tempDir);
+            }
+            kerberosLock.unlock();
+        }
     }
 
     private void tryLoadExternalDrivers() {
@@ -230,6 +336,49 @@ public class HiveConnectionService {
         }
     }
 
+    private void prepareDriverClasses() {
+        try {
+            var e = DriverManager.getDrivers();
+            while (e.hasMoreElements()) {
+                var d = e.nextElement();
+                log.info("Driver available before connect: {} via {}", d.getClass().getName(), d.getClass().getClassLoader());
+            }
+        } catch (Throwable ignored) {}
+        try {
+            if (jdbcDriverLoader != null) {
+                Class.forName(HIVE_DRIVER, true, jdbcDriverLoader);
+            } else {
+                Class.forName(HIVE_DRIVER);
+            }
+        } catch (ClassNotFoundException ignored) {
+            // Driver may have been registered via ServiceLoader from external JARs
+        }
+    }
+
+    private String resolveJdbcUrl(HiveConnectionTestRequest request) {
+        String url = request.getJdbcUrl();
+        if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB && StringUtils.hasText(url)) {
+            String lower = url.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("jdbc:hive2:") && !lower.contains(";authentication=")) {
+                url = url + (url.endsWith(";") ? "" : ";") + "authentication=kerberos";
+                log.info("Kerberos auth detected; appended authentication=kerberos to JDBC URL");
+            }
+        }
+        return url;
+    }
+
+    private java.util.Properties buildConnectionProperties(HiveConnectionTestRequest request) {
+        java.util.Properties props = new java.util.Properties();
+        if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD && StringUtils.hasText(request.getPassword())) {
+            props.setProperty("password", request.getPassword());
+        }
+        if (StringUtils.hasText(request.getProxyUser())) {
+            props.setProperty("hive.server2.proxy.user", request.getProxyUser());
+        }
+        request.getJdbcProperties().forEach(props::setProperty);
+        return props;
+    }
+
     private static ClassLoader getPlatformOrSystemClassLoader() {
         try {
             return ClassLoader.getPlatformClassLoader();
@@ -240,147 +389,34 @@ public class HiveConnectionService {
 
     public HiveConnectionTestResult testConnection(HiveConnectionTestRequest request) {
         Objects.requireNonNull(request, "request");
-        long start = System.nanoTime();
-        kerberosLock.lock();
+        long invocationStart = System.nanoTime();
         try {
-            Path tempDir = Files.createTempDirectory("dts-hive-test-");
-            Path keytabPath = null;
-            Path krb5Path = null;
-            var previousKrb5 = System.getProperty(KRB5_CONF_KEY);
-            var previousUseSubject = System.getProperty(USE_SUBJECT_CREDS_ONLY_KEY);
-            try {
-                if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB) {
-                    keytabPath = writeKeytab(tempDir, request);
-                }
-                krb5Path = prepareKrb5Conf(tempDir, request);
-                System.setProperty(KRB5_CONF_KEY, krb5Path.toAbsolutePath().toString());
-                System.setProperty(USE_SUBJECT_CREDS_ONLY_KEY, "false");
-                log.info("Kerberos system properties set: {}={}, {}={}",
-                    KRB5_CONF_KEY, krb5Path.toAbsolutePath(),
-                    USE_SUBJECT_CREDS_ONLY_KEY, System.getProperty(USE_SUBJECT_CREDS_ONLY_KEY));
-
-                HiveConnectionTestResult result;
-                if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB) {
-                    var ugi = loginWithKeytab(request, keytabPath);
-                    bridgeKerberosSubjectToVendor(ugi);
-                    try {
-                        result = ugi.doAs((PrivilegedExceptionAction<HiveConnectionTestResult>) () -> connectAndProbe(request));
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new IOException("UGI doAs interrupted", ie);
-                    } finally {
-                        try {
-                            ugi.logoutUserFromKeytab();
-                        } catch (IOException e) {
-                            log.debug("UGI logout failure: {}", e.getMessage());
-                        }
-                    }
-                } else {
-                    var loginContext = buildLoginContext(request, null);
-                    loginContext.login();
-                    try {
-                        result = Subject.doAs(loginContext.getSubject(), (PrivilegedExceptionAction<HiveConnectionTestResult>) () -> connectAndProbe(request));
-                    } catch (PrivilegedActionException pae) {
-                        throw pae.getException();
-                    } finally {
-                        try {
-                            loginContext.logout();
-                        } catch (LoginException e) {
-                            log.debug("Kerberos logout failure: {}", e.getMessage());
-                        }
-                    }
-                }
-                return result;
-            } catch (Exception ex) {
-                long elapsed = elapsedMillis(start);
-                log.warn("Hive connection test failed: {}", ex.getMessage());
-                log.debug("Hive connection test stacktrace", ex);
-                return HiveConnectionTestResult.failure(sanitizeMessage(ex), elapsed);
-            } finally {
-                restoreProperty(KRB5_CONF_KEY, previousKrb5);
-                restoreProperty(USE_SUBJECT_CREDS_ONLY_KEY, previousUseSubject);
-                if (preserveArtifacts) {
-                    log.warn("Preserving Kerberos artifacts for debugging under {}. Remember to clean up manually.", tempDir.toAbsolutePath());
-                } else {
-                    deleteQuietly(keytabPath);
-                    deleteQuietly(krb5Path);
-                    deleteQuietly(tempDir);
-                }
-            }
-        } catch (IOException ioException) {
-            long elapsed = elapsedMillis(start);
-            log.warn("Failed to prepare Kerberos artifacts: {}", ioException.getMessage());
-            log.debug("Kerberos artifacts preparation stacktrace", ioException);
-            return HiveConnectionTestResult.failure(sanitizeMessage(ioException), elapsed);
-        } finally {
-            kerberosLock.unlock();
-        }
-    }
-
-    private HiveConnectionTestResult connectAndProbe(HiveConnectionTestRequest request) throws SQLException, ClassNotFoundException {
-        ClassLoader previousCl = Thread.currentThread().getContextClassLoader();
-        if (jdbcDriverLoader != null) {
-            Thread.currentThread().setContextClassLoader(jdbcDriverLoader);
-        }
-        try {
-            // Log currently registered drivers
-            try {
-                var e = DriverManager.getDrivers();
-                while (e.hasMoreElements()) {
-                    var d = e.nextElement();
-                    log.info("Driver available before connect: {} via {}", d.getClass().getName(), d.getClass().getClassLoader());
-                }
-            } catch (Throwable ignored) {}
-            if (jdbcDriverLoader != null) {
-                Class.forName(HIVE_DRIVER, true, jdbcDriverLoader);
-            } else {
-                Class.forName(HIVE_DRIVER);
-            }
-        } catch (ClassNotFoundException ignored) {
-            // Driver may have been registered via ServiceLoader from external JARs (alternative vendor driver)
-        }
-        long connectStart = System.nanoTime();
-        var url = request.getJdbcUrl();
-        if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB) {
-            String lower = url == null ? "" : url.toLowerCase();
-            if (url != null && lower.startsWith("jdbc:hive2:") && !lower.contains(";authentication=")) {
-                url = url + (url.endsWith(";") ? "" : ";") + "authentication=kerberos";
-                log.info("Kerberos auth detected; appended authentication=kerberos to JDBC URL");
-            }
-        }
-        var props = new java.util.Properties();
-        if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD && request.getPassword() != null) {
-            props.setProperty("password", request.getPassword());
-        }
-        if (request.getProxyUser() != null) {
-            props.setProperty("hive.server2.proxy.user", request.getProxyUser());
-        }
-        request.getJdbcProperties().forEach(props::setProperty);
-        log.info("Attempting JDBC connect. url={}, authMethod={}, propsKeys={}",
-            url,
-            request.getAuthMethod(),
-            props.keySet());
-
-        try (Connection connection = openConnection(url, props)) {
-            var elapsed = elapsedMillis(connectStart);
-            DatabaseMetaData metaData = connection.getMetaData();
-            try {
-                log.info("JDBC connected in {} ms. driver={}, dbProduct={} {}",
+            return executeWithConnection(request, (connection, connectStart) -> {
+                long elapsed = elapsedMillis(connectStart);
+                DatabaseMetaData metaData = connection.getMetaData();
+                try {
+                    log.info(
+                        "JDBC connected in {} ms. driver={}, dbProduct={} {}",
+                        elapsed,
+                        safe(metaData::getDriverVersion),
+                        safe(metaData::getDatabaseProductName),
+                        safe(metaData::getDatabaseProductVersion)
+                    );
+                } catch (Exception ignored) {}
+                runValidationQuery(connection, request.getTestQuery());
+                return HiveConnectionTestResult.success(
+                    "连接成功",
                     elapsed,
+                    safe(metaData::getDatabaseProductVersion),
                     safe(metaData::getDriverVersion),
-                    safe(metaData::getDatabaseProductName),
-                    safe(metaData::getDatabaseProductVersion));
-            } catch (Exception ignored) {}
-            runValidationQuery(connection, request.getTestQuery());
-            return HiveConnectionTestResult.success(
-                "连接成功",
-                elapsed,
-                safe(metaData::getDatabaseProductVersion),
-                safe(metaData::getDriverVersion),
-                collectWarnings(connection.getWarnings())
-            );
-        } finally {
-            Thread.currentThread().setContextClassLoader(previousCl);
+                    collectWarnings(connection.getWarnings())
+                );
+            });
+        } catch (Exception ex) {
+            long elapsed = elapsedMillis(invocationStart);
+            log.warn("Hive connection test failed: {}", ex.getMessage());
+            log.debug("Hive connection test stacktrace", ex);
+            return HiveConnectionTestResult.failure(sanitizeMessage(ex), elapsed);
         }
     }
 

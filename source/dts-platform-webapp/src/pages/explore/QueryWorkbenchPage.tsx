@@ -98,14 +98,17 @@ type VisualQueryState = {
 	limit: number;
 };
 
-type ResultRow = Record<string, string | number | null>;
+type ResultRow = Record<string, string | number | boolean | null>;
 
 type RunResult = {
 	timestamp: Date;
 	durationMs: number;
-	estimatedScan: string;
-	estimatedConcurrency: string;
+	connectMillis?: number;
+	queryMillis?: number;
+	rowCount: number;
+	headers: string[];
 	rows: ResultRow[];
+	effectiveSql?: string;
 	executionId?: string;
 };
 
@@ -164,8 +167,19 @@ function formatSQL(query: string) {
 		.trim();
 }
 
+function buildTableReference(dataset: Dataset) {
+	const segments = [dataset.database, dataset.schema, dataset.name]
+		.map((segment) => (segment ?? "").trim())
+		.filter((segment) => segment.length > 0);
+	if (segments.length === 0) {
+		return "";
+	}
+	return segments.join(".");
+}
+
 function generateSQLFromVisual(state: VisualQueryState, dataset?: Dataset) {
 	if (!dataset) return "";
+	const tableRef = buildTableReference(dataset) || dataset.name || dataset.schema || "";
 	const selectFragments = state.fields.length ? state.fields : ["*"];
 	const aggFragments = state.aggregations.map(
 		(aggregation) => `${aggregation.fn}(${aggregation.field}) AS ${aggregation.fn.toLowerCase()}_${aggregation.field}`,
@@ -173,9 +187,12 @@ function generateSQLFromVisual(state: VisualQueryState, dataset?: Dataset) {
 	const selectClause = [...selectFragments, ...aggFragments].join(", \n    ");
 	const filters = state.filters.map((filter) => `${filter.field} ${filter.operator} '${filter.value}'`).join(" AND ");
 	const orderClause = state.sorters.map((sorter) => `${sorter.field} ${sorter.direction}`).join(", ");
+	if (!tableRef) {
+		return "SELECT 1";
+	}
 	return [
 		`SELECT\n    ${selectClause || "*"}`,
-		`FROM ${dataset.database}.${dataset.schema}.${dataset.name}`,
+		`FROM ${tableRef}`,
 		filters ? `WHERE ${filters}` : null,
 		orderClause ? `ORDER BY ${orderClause}` : null,
 		`LIMIT ${state.limit}`,
@@ -184,23 +201,46 @@ function generateSQLFromVisual(state: VisualQueryState, dataset?: Dataset) {
 		.join("\n");
 }
 
-function buildSampleRows(dataset?: Dataset): ResultRow[] {
-	if (!dataset) return [];
-	return Array.from({ length: 25 }).map((_, rowIndex) => {
-		const row: ResultRow = {};
-		dataset.fields.forEach((field) => {
-			if (field.type === "decimal") {
-				row[field.name] = Number((Math.random() * 10000).toFixed(2));
-			} else if (field.type === "int") {
-				row[field.name] = Math.floor(Math.random() * 1000);
-			} else if (field.type === "date") {
-				row[field.name] = `2024-12-${String((rowIndex % 28) + 1).padStart(2, "0")}`;
-			} else {
-				row[field.name] = `${field.name}_值_${rowIndex + 1}`;
-			}
-		});
-		return row;
+function normalizeValue(value: unknown): string | number | boolean | null {
+	if (value === null || value === undefined) return null;
+	if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+		return value;
+	}
+	if (value instanceof Date) {
+		return value.toISOString();
+	}
+	if (typeof value === "object") {
+		try {
+			return JSON.stringify(value);
+		} catch {
+			return String(value);
+		}
+	}
+	return String(value);
+}
+
+function normalizeRow(row: any): ResultRow {
+	const normalized: ResultRow = {};
+	if (!row || typeof row !== "object") {
+		return normalized;
+	}
+	Object.entries(row as Record<string, unknown>).forEach(([column, value]) => {
+		normalized[column] = normalizeValue(value);
 	});
+	return normalized;
+}
+
+function toNumber(value: unknown): number | undefined {
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return value;
+	}
+	if (typeof value === "string") {
+		const parsed = Number(value);
+		if (!Number.isNaN(parsed)) {
+			return parsed;
+		}
+	}
+	return undefined;
 }
 
 type VisualBuilderProps = {
@@ -438,6 +478,10 @@ export default function QueryWorkbenchPage() {
 		() => datasets.find((dataset) => dataset.id === selectedDatasetId),
 		[datasets, selectedDatasetId],
 	);
+	const selectedTableReference = useMemo(
+		() => (selectedDataset ? buildTableReference(selectedDataset) : ""),
+		[selectedDataset],
+	);
 	const [tables, setTables] = useState<TableItem[]>([]);
 	const [selectedTableId, setSelectedTableId] = useState<string>("");
 	const [columns, setColumns] = useState<DatasetField[]>([]);
@@ -610,6 +654,14 @@ export default function QueryWorkbenchPage() {
 		return runResult.rows.slice(start, start + pageSize);
 	}, [runResult, pageIndex, pageSize]);
 
+	const columnOrder = useMemo(() => {
+		if (!runResult) return [];
+		if (runResult.headers.length) {
+			return runResult.headers;
+		}
+		return Object.keys(runResult.rows[0] ?? {});
+	}, [runResult]);
+
 	const detectedParameters = useMemo(() => {
 		const matches = sqlText.match(/:[a-zA-Z_][a-zA-Z0-9_]*/g) ?? [];
 		return Array.from(new Set(matches.map((match) => match.slice(1))));
@@ -714,18 +766,30 @@ export default function QueryWorkbenchPage() {
 		try {
 			setIsRunning(true);
 			const payload = { datasetId: selectedDataset.id, sqlText: sqlText };
-			const resp = await executeExplore(payload as any);
-			const rows = (resp as any)?.rows as ResultRow[] | undefined;
-			const duration = (resp as any)?.durationMs as number | undefined;
-			const executionId = (resp as any)?.executionId as string | undefined;
+			const resp: any = await executeExplore(payload as any);
+			const rawHeaders = Array.isArray(resp?.headers) ? resp.headers : [];
+			const headers = rawHeaders.map((item: any) => String(item));
+			const rawRows = Array.isArray(resp?.rows) ? resp.rows : [];
+			const rows = rawRows.map((row: any) => normalizeRow(row));
+			const resolvedHeaders = headers.length ? headers : rows.length ? Object.keys(rows[0]) : [];
+			const duration = toNumber(resp?.durationMs);
+			const connectMillis = toNumber(resp?.connectMillis);
+			const queryMillis = toNumber(resp?.queryMillis);
+			const executionId = typeof resp?.executionId === "string" ? resp.executionId : undefined;
+			const rowCount = toNumber(resp?.rowCount) ?? rows.length;
+			const effectiveSql = typeof resp?.effectiveSql === "string" ? resp.effectiveSql : sqlText;
 			setRunResult({
 				timestamp: new Date(),
-				durationMs: typeof duration === "number" ? duration : Math.floor(Math.random() * 800) + 200,
-				estimatedScan: `${(Math.random() * 2 + 0.3).toFixed(2)} GB`,
-				estimatedConcurrency: `${Math.ceil(Math.random() * 3)}/10`,
-				rows: Array.isArray(rows) && rows.length ? rows : buildSampleRows(selectedDataset),
+				durationMs: duration ?? connectMillis ?? queryMillis ?? 0,
+				connectMillis: connectMillis ?? undefined,
+				queryMillis: queryMillis ?? undefined,
+				rowCount,
+				headers: resolvedHeaders,
+				rows,
+				effectiveSql,
 				executionId,
 			});
+			setPageIndex(0);
 			setLastExecId(executionId);
 			toast.success("查询成功");
 			// refresh history lazily
@@ -866,7 +930,7 @@ export default function QueryWorkbenchPage() {
 								</Select>
 								{selectedDataset ? (
 									<p className="text-xs text-muted-foreground">
-										库表：{selectedDataset.database}.{selectedDataset.schema}.{selectedDataset.name}
+										库表：{selectedTableReference || "未登记"}
 									</p>
 								) : null}
 								<div className="space-y-1">
@@ -1001,15 +1065,26 @@ export default function QueryWorkbenchPage() {
 									<span>
 										执行时间：{runResult.timestamp.toLocaleString()} · 耗时 {runResult.durationMs} ms
 									</span>
-									<span>扫描估算：{runResult.estimatedScan}</span>
-									<span>并发：{runResult.estimatedConcurrency}</span>
-									<span>结果行数：{runResult.rows.length}</span>
+									<span>
+										连接耗时：
+										{runResult.connectMillis !== undefined ? `${runResult.connectMillis} ms` : "--"}
+									</span>
+									<span>
+										查询耗时：
+										{runResult.queryMillis !== undefined ? `${runResult.queryMillis} ms` : "--"}
+									</span>
+									<span>
+										结果行数：{runResult.rowCount}
+										{runResult.rowCount !== runResult.rows.length
+											? `（已加载 ${runResult.rows.length}）`
+											: ""}
+									</span>
 								</div>
 								<div className="overflow-hidden rounded-md border">
 									<table className="w-full border-collapse text-sm">
 										<thead className="bg-muted/50">
 											<tr>
-												{Object.keys(runResult.rows[0] ?? {}).map((column) => (
+												{columnOrder.map((column) => (
 													<th key={column} className="border-b px-3 py-2 text-left font-medium">
 														<Tooltip>
 															<TooltipTrigger className="cursor-help">{column}</TooltipTrigger>
@@ -1034,11 +1109,19 @@ export default function QueryWorkbenchPage() {
 										<tbody>
 											{currentPageRows.map((row, rowIndex) => (
 												<tr key={`row-${rowIndex}`} className="border-b last:border-b-0">
-													{Object.entries(row).map(([column, value]) => (
-														<td key={column} className="px-3 py-2 text-xs text-text-secondary">
-															{typeof value === "number" ? value.toLocaleString() : value}
-														</td>
-													))}
+													{columnOrder.map((column) => {
+														const value = row[column];
+														return (
+															<td key={`${rowIndex}-${column}`} className="px-3 py-2 text-xs text-text-secondary">
+																{value === null || value === undefined
+																	? ""
+																	: typeof value === "number"
+																	?
+																		value.toLocaleString()
+																	: String(value)}
+															</td>
+														);
+													})}
 												</tr>
 											))}
 										</tbody>

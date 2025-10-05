@@ -14,7 +14,7 @@ public class CatalogFeatureProperties {
     /**
      * Default source type used when multi-source is disabled.
      */
-    private String defaultSourceType = "HIVE";
+    private String defaultSourceType = "INCEPTOR";
 
     public boolean isMultiSourceEnabled() {
         return multiSourceEnabled;

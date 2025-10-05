@@ -26,8 +26,38 @@ export interface InfraDataStorage {
 	hasSecrets: boolean;
 }
 
+export interface ModuleStatus {
+	module: string;
+	status: string;
+	message?: string;
+	updatedAt?: string;
+}
+
+export interface IntegrationStatus {
+	lastSyncAt?: string;
+	reason?: string;
+	actions?: string[];
+	catalogDatasetCount?: number;
+}
+
 export interface InfraFeatureFlags {
 	multiSourceEnabled: boolean;
+	hasActiveInceptor: boolean;
+	inceptorStatus: string;
+	defaultJdbcUrl?: string;
+	loginPrincipal?: string;
+	lastVerifiedAt?: string;
+	lastUpdatedAt?: string;
+	dataSourceName?: string;
+	description?: string;
+	authMethod?: string;
+	database?: string;
+	proxyUser?: string;
+	engineVersion?: string;
+	driverVersion?: string;
+	lastTestElapsedMillis?: number;
+	moduleStatuses?: ModuleStatus[];
+	integrationStatus?: IntegrationStatus;
 }
 
 export interface ConnectionTestLog {
@@ -45,6 +75,9 @@ export const listInfraDataStorages = () => api.get<InfraDataStorage[]>({ url: "/
 
 export const fetchInfraFeatures = () => api.get<InfraFeatureFlags>({ url: "/infra/features" });
 
+export const refreshInceptorRegistry = () =>
+	api.post<InfraFeatureFlags>({ url: "/infra/data-sources/inceptor/refresh" });
+
 export const listConnectionTestLogs = (dataSourceId?: string) =>
 	api.get<ConnectionTestLog[]>({ url: "/infra/data-sources/test-logs", params: dataSourceId ? { dataSourceId } : undefined });
 
@@ -53,3 +86,6 @@ export const testHiveConnection = (data: HiveConnectionTestRequest) =>
 
 export const publishInceptorDataSource = (data: HiveConnectionPersistRequest) =>
 	api.post<InfraDataSource>({ url: "/infra/data-sources/inceptor/publish", data });
+
+export const deleteInfraDataSource = (id: string) =>
+	api.delete<boolean>({ url: `/infra/data-sources/${id}` });

@@ -78,7 +78,7 @@ services:
       # Prefer loading vendor JDBC driver from mounted drivers folder
       DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
       DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
-      DTS_JDBC_DRIVER_JAR: "inceptor-jdbc-8.37.3.jar"
+      DTS_JDBC_DRIVER_JAR: "quark-driver-8.37.3.jar"
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
       # Mount vendor JDBC driver(s) for Hive to avoid Hadoop conflicts

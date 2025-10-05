@@ -27,6 +27,7 @@ public class InfraSecretService {
     private static final Logger LOG = LoggerFactory.getLogger(InfraSecretService.class);
     private static final String CIPHER_ALGORITHM = "AES/GCM/NoPadding";
     private static final int TAG_LENGTH = 128;
+    private static final String PLAINTEXT_KEY_VERSION = "PLAINTEXT";
 
     private final InfraSecurityProperties properties;
     private final ObjectMapper objectMapper;
@@ -52,16 +53,21 @@ public class InfraSecretService {
     }
 
     public void applySecrets(InfraDataSource entity, Map<String, Object> secrets) {
-        if (CollectionUtils.isEmpty(secrets) || secretKey == null) {
-            if (!CollectionUtils.isEmpty(secrets)) {
-                LOG.warn("Secrets provided for data source {} but encryption is disabled", entity.getName());
-            }
+        if (CollectionUtils.isEmpty(secrets)) {
             entity.setSecureProps(null);
             entity.setSecureIv(null);
+            entity.setSecureKeyVersion(null);
             return;
         }
         try {
             byte[] plain = objectMapper.writeValueAsString(secrets).getBytes(StandardCharsets.UTF_8);
+            if (secretKey == null) {
+                LOG.warn("Encryption key not configured. Persisting data source {} secrets as plaintext", entity.getName());
+                entity.setSecureProps(plain);
+                entity.setSecureIv(null);
+                entity.setSecureKeyVersion(PLAINTEXT_KEY_VERSION);
+                return;
+            }
             byte[] iv = randomIv();
             byte[] cipher = encrypt(plain, iv);
             entity.setSecureProps(cipher);
@@ -73,11 +79,16 @@ public class InfraSecretService {
     }
 
     public Map<String, Object> readSecrets(InfraDataSource entity) {
-        if (entity.getSecureProps() == null || secretKey == null) {
+        if (entity.getSecureProps() == null) {
             return Collections.emptyMap();
         }
         try {
-            byte[] plain = decrypt(entity.getSecureProps(), entity.getSecureIv());
+            byte[] plain;
+            if (PLAINTEXT_KEY_VERSION.equals(entity.getSecureKeyVersion()) || secretKey == null) {
+                plain = entity.getSecureProps();
+            } else {
+                plain = decrypt(entity.getSecureProps(), entity.getSecureIv());
+            }
             return objectMapper.readValue(new String(plain, StandardCharsets.UTF_8), Map.class);
         } catch (Exception e) {
             LOG.warn("Failed to decrypt secrets for data source {}: {}", entity.getId(), e.getMessage());
@@ -86,16 +97,21 @@ public class InfraSecretService {
     }
 
     public void applySecrets(InfraDataStorage entity, Map<String, Object> secrets) {
-        if (CollectionUtils.isEmpty(secrets) || secretKey == null) {
-            if (!CollectionUtils.isEmpty(secrets)) {
-                LOG.warn("Secrets provided for storage {} but encryption is disabled", entity.getName());
-            }
+        if (CollectionUtils.isEmpty(secrets)) {
             entity.setSecureProps(null);
             entity.setSecureIv(null);
+            entity.setSecureKeyVersion(null);
             return;
         }
         try {
             byte[] plain = objectMapper.writeValueAsString(secrets).getBytes(StandardCharsets.UTF_8);
+            if (secretKey == null) {
+                LOG.warn("Encryption key not configured. Persisting storage {} secrets as plaintext", entity.getName());
+                entity.setSecureProps(plain);
+                entity.setSecureIv(null);
+                entity.setSecureKeyVersion(PLAINTEXT_KEY_VERSION);
+                return;
+            }
             byte[] iv = randomIv();
             byte[] cipher = encrypt(plain, iv);
             entity.setSecureProps(cipher);

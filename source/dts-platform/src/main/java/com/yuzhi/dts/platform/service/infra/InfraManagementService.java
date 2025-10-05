@@ -26,14 +26,17 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @Transactional(readOnly = true)
@@ -84,6 +87,7 @@ public class InfraManagementService {
 
     @Transactional
     public InfraDataSourceDto createDataSource(DataSourceRequest request, String username) {
+        ensureNotInceptorManaged(request.type());
         InfraDataSource entity = new InfraDataSource();
         applyDataSource(entity, request, username);
         return toDto(dataSourceRepository.save(entity));
@@ -94,6 +98,7 @@ public class InfraManagementService {
         InfraDataSource entity = dataSourceRepository.findFirstByTypeIgnoreCase(TYPE_INCEPTOR).orElseGet(InfraDataSource::new);
         applyInceptorDataSource(entity, request, username);
         InfraDataSource saved = dataSourceRepository.save(entity);
+        purgeDuplicateInceptorRows(saved.getId());
         long elapsed = request.getLastTestElapsedMillis() != null ? request.getLastTestElapsedMillis() : 0L;
         HiveConnectionTestResult auditResult = HiveConnectionTestResult.success(
             "连接已发布",
@@ -111,6 +116,8 @@ public class InfraManagementService {
     @Transactional
     public InfraDataSourceDto updateDataSource(UUID id, DataSourceRequest request, String username) {
         InfraDataSource entity = dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureNotInceptorManaged(request.type());
+        ensureNotInceptorManaged(entity.getType());
         applyDataSource(entity, request, username);
         return toDto(dataSourceRepository.save(entity));
     }
@@ -208,6 +215,26 @@ public class InfraManagementService {
         entity.setStatus(STATUS_ACTIVE);
         entity.setProps(writeProps(buildInceptorProps(request)));
         secretService.applySecrets(entity, buildInceptorSecrets(request));
+    }
+
+    private void purgeDuplicateInceptorRows(UUID keepId) {
+        dataSourceRepository
+            .findByTypeIgnoreCase(TYPE_INCEPTOR)
+            .stream()
+            .filter(ds -> !Objects.equals(ds.getId(), keepId))
+            .forEach(dataSourceRepository::delete);
+    }
+
+    private void ensureNotInceptorManaged(String type) {
+        if (!StringUtils.hasText(type)) {
+            return;
+        }
+        if (TYPE_INCEPTOR.equalsIgnoreCase(type)) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Inceptor 数据源由专用流程管理，请使用 Hive 测试与发布功能"
+            );
+        }
     }
 
     private Map<String, Object> buildInceptorProps(HiveConnectionPersistRequest request) {

@@ -48,52 +48,58 @@ export default function DatasetsPage() {
 		classification: "INTERNAL" as SecurityLevel,
 		tags: "",
 		description: "",
-		sourceType: "HIVE",
+		sourceType: "INCEPTOR",
 		hiveDatabase: "",
 		hiveTable: "",
 	});
 	const [catalogConfig, setCatalogConfig] = useState({
 		multiSourceEnabled: false,
-		defaultSourceType: "HIVE",
+		defaultSourceType: "INCEPTOR",
 		hasPrimarySource: true,
-		primarySourceType: "HIVE",
+		primarySourceType: "INCEPTOR",
 	});
 	const [dataSources, setDataSources] = useState<any[]>([]);
 	const [multiSourceUnlocked, setMultiSourceUnlocked] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-	const levels = SECURITY_LEVELS;
-	const resolvedDefaultSource = useMemo(
-		() => (catalogConfig.defaultSourceType || "HIVE").toUpperCase(),
-		[catalogConfig.defaultSourceType],
-	);
-	const primarySourceLabel = useMemo(
-		() => (catalogConfig.primarySourceType || resolvedDefaultSource).toUpperCase(),
-		[catalogConfig.primarySourceType, resolvedDefaultSource],
-	);
-	const multiSourceAllowed = catalogConfig.multiSourceEnabled || multiSourceUnlocked;
-	const hasPrimarySource = useMemo(() => {
-		if (catalogConfig.hasPrimarySource) return true;
-		return dataSources.some((ds) => String(ds?.type || "").toUpperCase() === resolvedDefaultSource);
-	}, [catalogConfig.hasPrimarySource, dataSources, resolvedDefaultSource]);
+const levels = SECURITY_LEVELS;
+const normalizeSourceType = useCallback((value: string) => {
+	const upper = (value || "").toString().toUpperCase();
+	if (upper === "HIVE") return "INCEPTOR";
+	return upper;
+}, []);
+const resolvedDefaultSource = useMemo(
+	() => normalizeSourceType(catalogConfig.defaultSourceType || "INCEPTOR"),
+	[catalogConfig.defaultSourceType, normalizeSourceType],
+);
+const primarySourceLabel = useMemo(
+	() => normalizeSourceType(catalogConfig.primarySourceType || resolvedDefaultSource),
+	[catalogConfig.primarySourceType, resolvedDefaultSource, normalizeSourceType],
+);
+const multiSourceAllowed = catalogConfig.multiSourceEnabled || multiSourceUnlocked;
+const hasPrimarySource = useMemo(() => {
+	if (catalogConfig.hasPrimarySource) return true;
+	return dataSources.some((ds) => normalizeSourceType(String(ds?.type || "")) === resolvedDefaultSource);
+}, [catalogConfig.hasPrimarySource, dataSources, resolvedDefaultSource, normalizeSourceType]);
 
-	const sources = useMemo(() => {
-		const set = new Set<string>();
-		items.forEach((it) => {
-			const t = String(it.type || "").toUpperCase();
-			if (t) set.add(t);
-		});
-		set.add(resolvedDefaultSource);
-		return Array.from(set);
-	}, [items, resolvedDefaultSource]);
+const sources = useMemo(() => {
+	const set = new Set<string>();
+	items.forEach((it) => {
+		const t = normalizeSourceType(String(it.type || ""));
+		if (t) set.add(t);
+	});
+	set.add(resolvedDefaultSource);
+	return Array.from(set);
+}, [items, resolvedDefaultSource, normalizeSourceType]);
 
-	const renderSourceLabel = (value: string) => {
-		const upper = (value || "").toString().toUpperCase();
-		switch (upper) {
-			case "HIVE":
-				return "星环 Hive (Inceptor)";
-			case "TRINO":
-				return "Trino Catalog";
+const renderSourceLabel = (value: string) => {
+	const upper = normalizeSourceType(value);
+	switch (upper) {
+		case "INCEPTOR":
+		case "HIVE":
+			return "TDS Inceptor";
+		case "TRINO":
+			return "Trino Catalog";
 			case "API":
 				return "API 服务";
 			case "EXTERNAL":
@@ -137,7 +143,7 @@ export default function DatasetsPage() {
 					owner: it.owner || "",
 					classification: (it.classification || "INTERNAL") as SecurityLevel,
 					domainId: String(it.domainId || ""),
-					type: rawType || resolvedDefaultSource,
+					type: normalizeSourceType(rawType || resolvedDefaultSource),
 					tags,
 				};
 			});
@@ -201,11 +207,11 @@ export default function DatasetsPage() {
 	const filtered = useMemo(() => {
 		return items.filter((it) => {
 			if (levelFilter !== "all" && it.classification !== levelFilter) return false;
-			if (sourceFilter !== "all" && it.type.toUpperCase() !== sourceFilter) return false;
+			if (sourceFilter !== "all" && normalizeSourceType(it.type) !== sourceFilter) return false;
 			if (keyword && !it.name.toLowerCase().includes(keyword.toLowerCase())) return false;
 			return true;
 		});
-	}, [items, levelFilter, sourceFilter, keyword]);
+	}, [items, levelFilter, sourceFilter, keyword, normalizeSourceType]);
 
 	const totalPages = useMemo(() => Math.max(1, Math.ceil(total / size)), [total, size]);
 
@@ -219,27 +225,29 @@ export default function DatasetsPage() {
 			return;
 		}
 		try {
-			const selectedSourceType = (multiSourceAllowed ? form.sourceType : resolvedDefaultSource) || resolvedDefaultSource;
+			const selectedSourceType = normalizeSourceType(
+				(multiSourceAllowed ? form.sourceType : resolvedDefaultSource) || resolvedDefaultSource,
+			);
 			const tagsList = form.tags
 				.split(",")
 				.map((s) => s.trim())
 				.filter(Boolean);
 			const hiveDatabase = form.hiveDatabase.trim();
 			const hiveTable = form.hiveTable.trim();
-			const payload = {
-				name: form.name.trim(),
-				owner: form.owner.trim(),
-				classification: form.classification,
-				tags: tagsList,
-				description: form.description.trim(),
-				type: selectedSourceType,
-				hiveDatabase: selectedSourceType === "HIVE" ? hiveDatabase || undefined : undefined,
-				hiveTable: selectedSourceType === "HIVE" ? hiveTable || undefined : undefined,
-				source: {
-					sourceType: selectedSourceType,
-					hiveDatabase: selectedSourceType === "HIVE" ? hiveDatabase || undefined : undefined,
-					hiveTable: selectedSourceType === "HIVE" ? hiveTable || undefined : undefined,
-				},
+				const payload = {
+					name: form.name.trim(),
+					owner: form.owner.trim(),
+					classification: form.classification,
+					tags: tagsList,
+					description: form.description.trim(),
+					type: selectedSourceType,
+					hiveDatabase: selectedSourceType === "INCEPTOR" ? hiveDatabase || undefined : undefined,
+					hiveTable: selectedSourceType === "INCEPTOR" ? hiveTable || undefined : undefined,
+					source: {
+						sourceType: selectedSourceType,
+						hiveDatabase: selectedSourceType === "INCEPTOR" ? hiveDatabase || undefined : undefined,
+						hiveTable: selectedSourceType === "INCEPTOR" ? hiveTable || undefined : undefined,
+					},
 				exposure: ["VIEW"],
 			};
 			const created = (await createDataset(payload)) as any;
@@ -294,24 +302,24 @@ export default function DatasetsPage() {
 		for (const r of rows) {
 			try {
 				const candidate = String((r.sourceType || "").toString().trim() || "").toUpperCase();
-				const sourceType = multiSourceAllowed && candidate ? candidate : resolvedDefaultSource;
-				await createDataset({
-					name: r.name,
-					owner: r.owner || "",
-					classification: (r.classification || "INTERNAL") as SecurityLevel,
-					tags:
-						typeof r.tags === "string"
-							? r.tags
-									.split(";")
-									.map((s: string) => s.trim())
-									.filter(Boolean)
-							: [],
-					type: sourceType,
-					hiveDatabase: sourceType === "HIVE" ? r.hiveDatabase || undefined : undefined,
-					hiveTable: sourceType === "HIVE" ? r.hiveTable || undefined : undefined,
-					source: { sourceType },
-					exposure: ["VIEW"],
-				});
+				const sourceType = normalizeSourceType(multiSourceAllowed && candidate ? candidate : resolvedDefaultSource);
+					await createDataset({
+						name: r.name,
+						owner: r.owner || "",
+						classification: (r.classification || "INTERNAL") as SecurityLevel,
+						tags:
+							typeof r.tags === "string"
+								? r.tags
+										.split(";")
+										.map((s: string) => s.trim())
+										.filter(Boolean)
+								: [],
+						type: sourceType,
+						hiveDatabase: sourceType === "INCEPTOR" ? r.hiveDatabase || undefined : undefined,
+						hiveTable: sourceType === "INCEPTOR" ? r.hiveTable || undefined : undefined,
+						source: { sourceType },
+						exposure: ["VIEW"],
+					});
 				ok += 1;
 			} catch {}
 		}
@@ -523,7 +531,7 @@ export default function DatasetsPage() {
 							</Label>
 							{!multiSourceAllowed && (
 								<p className="text-xs text-muted-foreground">
-									当前版本默认接入 {renderSourceLabel(primarySourceLabel)}。如需多数据源，请联系商务升级。
+									当前版本默认接入 {renderSourceLabel(primarySourceLabel)}。如需多数据源，请关注版本升级信息。
 								</p>
 							)}
 							<Select

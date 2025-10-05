@@ -101,7 +101,7 @@ services:
       SPRINGDOC_SWAGGER_UI_ENABLED: "true"
       DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
       DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
-      DTS_JDBC_DRIVER_JAR: "inceptor-jdbc-8.37.3.jar"
+      DTS_JDBC_DRIVER_JAR: "quark-driver-8.37.3.jar"
       DTS_PLATFORM_HIVE_TEST_PRESERVE_ARTIFACTS: "true"
     command:
       - bash

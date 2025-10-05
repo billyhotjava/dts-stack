@@ -13,6 +13,8 @@ public interface InfraDataSourceRepository extends JpaRepository<InfraDataSource
 
     Optional<InfraDataSource> findFirstByTypeIgnoreCase(String type);
 
+    List<InfraDataSource> findByTypeIgnoreCase(String type);
+
     Optional<InfraDataSource> findFirstByTypeIgnoreCaseAndStatusIgnoreCase(String type, String status);
 
     List<InfraDataSource> findByStatusIgnoreCase(String status);

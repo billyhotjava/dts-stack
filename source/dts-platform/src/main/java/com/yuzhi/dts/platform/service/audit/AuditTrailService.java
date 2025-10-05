@@ -7,6 +7,8 @@ import com.yuzhi.dts.platform.domain.audit.AuditEvent;
 import com.yuzhi.dts.platform.repository.audit.AuditEventRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -267,7 +269,11 @@ public class AuditTrailService {
         entity.setAction(defaultString(pending.action, "UNKNOWN"));
         entity.setResourceType(pending.resourceType);
         entity.setResourceId(pending.resourceId);
-        entity.setClientIp(pending.clientIp);
+        InetAddress clientIp = parseClientIp(pending.clientIp);
+        if (clientIp == null && StringUtils.hasText(pending.clientIp)) {
+            log.debug("Discarding invalid client IP {} for audit action {}", pending.clientIp, pending.action);
+        }
+        entity.setClientIp(clientIp);
         entity.setClientAgent(pending.clientAgent);
         entity.setRequestUri(pending.requestUri);
         entity.setHttpMethod(pending.httpMethod);
@@ -337,6 +343,17 @@ public class AuditTrailService {
                 log.warn("Failed to serialize extraTags payload as JSON string, discarding", secondary);
                 return null;
             }
+        }
+    }
+
+    private InetAddress parseClientIp(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            return InetAddress.getByName(raw.trim());
+        } catch (UnknownHostException ignored) {
+            return null;
         }
     }
 }
