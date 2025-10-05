@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.audit.AuditEvent;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditTrailService;
+import org.springframework.beans.factory.ObjectProvider;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
@@ -33,11 +34,11 @@ public class AuditLogResource {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogResource.class);
 
-    private final AuditTrailService auditService;
+    private final ObjectProvider<AuditTrailService> auditServiceProvider;
     private final ObjectMapper objectMapper;
 
-    public AuditLogResource(AuditTrailService auditService, ObjectMapper objectMapper) {
-        this.auditService = auditService;
+    public AuditLogResource(ObjectProvider<AuditTrailService> auditServiceProvider, ObjectMapper objectMapper) {
+        this.auditServiceProvider = auditServiceProvider;
         this.objectMapper = objectMapper;
     }
 
@@ -48,8 +49,9 @@ public class AuditLogResource {
         @RequestParam(value = "size", defaultValue = "20") int size,
         @RequestParam(value = "sort", defaultValue = "occurredAt,desc") String sort
     ) {
+        AuditTrailService auditService = auditServiceProvider.getIfAvailable();
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(size, 200), parseSort(sort));
-        Page<AuditEvent> eventPage = auditService.find(pageable);
+        Page<AuditEvent> eventPage = auditService != null ? auditService.find(pageable) : Page.empty(pageable);
         List<Map<String, Object>> content = eventPage.getContent().stream().map(this::toView).toList();
         Map<String, Object> payload = new HashMap<>();
         payload.put("content", content);
@@ -63,6 +65,10 @@ public class AuditLogResource {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_OP_ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> get(@PathVariable Long id) {
+        AuditTrailService auditService = auditServiceProvider.getIfAvailable();
+        if (auditService == null) {
+            return ResponseEntity.notFound().build();
+        }
         return auditService
             .findById(id)
             .map(this::toView)
@@ -74,7 +80,8 @@ public class AuditLogResource {
     @GetMapping(value = "/export", produces = MediaType.TEXT_PLAIN_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_OP_ADMIN')")
     public ResponseEntity<byte[]> export() {
-        List<AuditEvent> events = auditService.findAll(Sort.by(Sort.Direction.DESC, "occurredAt"));
+        AuditTrailService auditService = auditServiceProvider.getIfAvailable();
+        List<AuditEvent> events = auditService != null ? auditService.findAll(Sort.by(Sort.Direction.DESC, "occurredAt")) : List.of();
         StringBuilder sb = new StringBuilder();
         sb.append("id,timestamp,module,action,actor,result,resource,clientIp\n");
         for (AuditEvent event : events) {
@@ -99,9 +106,12 @@ public class AuditLogResource {
     @DeleteMapping
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_OP_ADMIN')")
     public ApiResponse<Map<String, Object>> purge() {
-        long removed = auditService.purgeAll();
+        AuditTrailService auditService = auditServiceProvider.getIfAvailable();
+        long removed = auditService != null ? auditService.purgeAll() : 0L;
         String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        auditService.record("AUDIT_PURGE", "audit", "audit", "ALL", "SUCCESS", Map.of("removed", removed, "actor", actor));
+        if (auditService != null) {
+            auditService.record("AUDIT_PURGE", "audit", "audit", "ALL", "SUCCESS", Map.of("removed", removed, "actor", actor));
+        }
         return ApiResponses.ok(Map.of("removed", removed));
     }
 
@@ -127,6 +137,10 @@ public class AuditLogResource {
     }
 
     private String decodePayloadPreview(AuditEvent event) {
+        AuditTrailService auditService = auditServiceProvider.getIfAvailable();
+        if (auditService == null) {
+            return null;
+        }
         try {
             byte[] decrypted = auditService.decryptPayload(event);
             if (decrypted.length == 0) {

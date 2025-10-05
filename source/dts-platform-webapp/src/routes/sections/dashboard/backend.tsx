@@ -5,7 +5,7 @@ import { PermissionType } from "@/types/enum";
 import { convertFlatToTree } from "@/utils/tree";
 import { Component } from "./utils";
 import { getMenus } from "@/store/menuStore";
-import useUserStore from "@/store/userStore";
+import { DynamicMenuResolver } from "./dynamic-resolver";
 
 /**
  * get route path from menu path and parent path
@@ -92,60 +92,32 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 	return routes;
 };
 
-const ADMIN_ROLE_CODES = new Set(["ROLE_OP_ADMIN", "ROLE_SYS_ADMIN"]);
-
-const hasAdminPrivileges = () => {
-	const roles = useUserStore.getState().userInfo.roles || [];
-	return roles.some((role: any) => {
-		const value = typeof role === "string" ? role : role?.code;
-		return value ? ADMIN_ROLE_CODES.has(value.toString().toUpperCase()) : false;
-	});
-};
-
-const buildAdminManagementRoutes = (): RouteObject[] => [
-	{
-		path: "management",
-		children: [
-			{ index: true, element: <Navigate to="system/user" replace /> },
-			{
-				path: "system",
-				children: [
-					{ index: true, element: <Navigate to="user" replace /> },
-					{ path: "permission", element: Component("/pages/management/system/permission") },
-					{ path: "role", element: Component("/pages/management/system/role") },
-					{ path: "group", element: Component("/pages/management/system/group") },
-					{ path: "user", element: Component("/pages/management/system/user") },
-					{ path: "user/:id", element: Component("/pages/management/system/user/detail") },
-					{ path: "approval", element: Component("/pages/management/system/approval") },
-					{ path: "auditlog", element: Component("/pages/management/system/auditlog") },
-				],
-			},
-			{
-				path: "user",
-				children: [
-					{ index: true, element: <Navigate to="profile" replace /> },
-					{ path: "profile", element: Component("/pages/management/user/profile") },
-				],
-			},
-		],
-	},
+// Provide dynamic fallback routes for key sections so menu-driven paths resolve before menus are baked into routes.
+const buildDynamicFallbackRoutes = (): RouteObject[] => [
+    { path: "catalog", children: [{ path: "*", element: <DynamicMenuResolver base="/catalog" /> }] },
+    { path: "modeling", children: [{ path: "*", element: <DynamicMenuResolver base="/modeling" /> }] },
+    { path: "governance", children: [{ path: "*", element: <DynamicMenuResolver base="/governance" /> }] },
+    { path: "explore", children: [{ path: "*", element: <DynamicMenuResolver base="/explore" /> }] },
+    { path: "visualization", children: [{ path: "*", element: <DynamicMenuResolver base="/visualization" /> }] },
+    { path: "services", children: [{ path: "*", element: <DynamicMenuResolver base="/services" /> }] },
+    { path: "iam", children: [{ path: "*", element: <DynamicMenuResolver base="/iam" /> }] },
+    { path: "foundation", children: [{ path: "*", element: <DynamicMenuResolver base="/foundation" /> }] },
 ];
 
 export function getBackendDashboardRoutes() {
     const menus = getMenus();
     const tree = hasChildren(menus) ? menus : convertFlatToTree(menus);
     const backendDashboardRoutes = convertToRoute(tree);
-    if (hasAdminPrivileges()) {
-        backendDashboardRoutes.push(...buildAdminManagementRoutes());
-    }
-    // Always provide a static dashboard/workbench welcome route
-    backendDashboardRoutes.push({
+    // Always provide a static dashboard/workbench welcome route first, so it wins over wildcards
+    backendDashboardRoutes.unshift({
         path: "dashboard",
         children: [
             { index: true, element: <Navigate to="workbench" replace /> },
             { path: "workbench", element: Component("/pages/dashboard/workbench") },
         ],
     });
+    // Add dynamic fallbacks for other sections so routes resolve even before menus are loaded
+    backendDashboardRoutes.push(...buildDynamicFallbackRoutes());
     return backendDashboardRoutes;
 }
 

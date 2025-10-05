@@ -4,6 +4,9 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
     <changeSet id="20251007-01-audit-event-table" author="codex">
+        <!-- Accept both original and modified checksums for this changeset -->
+        <validCheckSum>9:5d3ee32de5196730926c9c9dfd7366e9</validCheckSum>
+        <validCheckSum>9:a4d49649cedb8875853a9a60c29ee8b9</validCheckSum>
         <preConditions onFail="MARK_RAN">
             <not>
                 <tableExists tableName="audit_event"/>

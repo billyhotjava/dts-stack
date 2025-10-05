@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,10 +15,10 @@ import org.springframework.stereotype.Service;
 public class AuditService {
     private static final Logger log = LoggerFactory.getLogger(AuditService.class);
 
-    private final AuditTrailService auditTrailService;
+    private final ObjectProvider<AuditTrailService> auditTrailServiceProvider;
 
-    public AuditService(AuditTrailService auditTrailService) {
-        this.auditTrailService = auditTrailService;
+    public AuditService(ObjectProvider<AuditTrailService> auditTrailServiceProvider) {
+        this.auditTrailServiceProvider = auditTrailServiceProvider;
     }
 
     public void audit(String action, String targetKind, String targetRef) {
@@ -56,7 +57,14 @@ public class AuditService {
         event.resourceId = resourceId;
         event.result = result;
         event.payload = payload;
-        auditTrailService.record(event);
+        AuditTrailService svc = auditTrailServiceProvider.getIfAvailable();
+        if (svc != null) {
+            svc.record(event);
+        } else {
+            if (log.isDebugEnabled()) {
+                log.debug("AuditTrailService not available; skipping audit record action={} module={} resourceId={}", action, module, resourceId);
+            }
+        }
     }
 
     private String resolvePrimaryAuthority() {

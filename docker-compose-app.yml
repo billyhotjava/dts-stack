@@ -76,6 +76,8 @@ services:
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
+      # Mount vendor JDBC drivers (TDS/Inceptor) into the container for dynamic loading
+      - ./services/tds-platform/init:/opt/dts/drivers:ro
     extra_hosts:
       - "${HOST_SSO}:host-gateway"
     networks:

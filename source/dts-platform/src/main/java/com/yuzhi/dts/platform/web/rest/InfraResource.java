@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.domain.service.InfraTaskSchedule;
+import com.yuzhi.dts.platform.config.HiveExecutionProperties;
 import com.yuzhi.dts.platform.repository.service.InfraTaskScheduleRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
@@ -31,17 +32,20 @@ public class InfraResource {
     private final AuditService audit;
     private final InfraManagementService managementService;
     private final HiveConnectionService hiveConnectionService;
+    private final HiveExecutionProperties hiveProps;
 
     public InfraResource(
         InfraTaskScheduleRepository schedRepo,
         AuditService audit,
         InfraManagementService managementService,
-        HiveConnectionService hiveConnectionService
+        HiveConnectionService hiveConnectionService,
+        HiveExecutionProperties hiveProps
     ) {
         this.schedRepo = schedRepo;
         this.audit = audit;
         this.managementService = managementService;
         this.hiveConnectionService = hiveConnectionService;
+        this.hiveProps = hiveProps;
     }
 
     // Data sources
@@ -131,7 +135,10 @@ public class InfraResource {
 
     @GetMapping("/features")
     public ApiResponse<Map<String, Object>> features() {
-        return ApiResponses.ok(Map.of("multiSourceEnabled", managementService.isMultiSourceEnabled()));
+        return ApiResponses.ok(Map.of(
+            "multiSourceEnabled", managementService.isMultiSourceEnabled(),
+            "defaultJdbcUrl", hiveProps.getJdbcUrl()
+        ));
     }
 
     // Task schedules

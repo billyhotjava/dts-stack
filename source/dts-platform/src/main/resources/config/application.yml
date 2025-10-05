@@ -236,6 +236,10 @@ dts:
       password: ""
       tolerant: true
       properties: {}
+  jdbc:
+    # Directory to search for external JDBC drivers (jar files) at runtime.
+    # Place vendor-provided drivers here (e.g., TDS/Inceptor client jars).
+    drivers-dir: /opt/dts/drivers
 
 # ===================================================================
 # JHipster specific properties

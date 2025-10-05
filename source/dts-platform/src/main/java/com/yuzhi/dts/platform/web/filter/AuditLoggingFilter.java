@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.web.filter;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditTrailService;
 import com.yuzhi.dts.platform.service.audit.AuditTrailService.PendingAuditEvent;
+import org.springframework.beans.factory.ObjectProvider;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,10 +35,10 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         "/error"
     };
 
-    private final AuditTrailService auditService;
+    private final ObjectProvider<AuditTrailService> auditServiceProvider;
 
-    public AuditLoggingFilter(AuditTrailService auditService) {
-        this.auditService = auditService;
+    public AuditLoggingFilter(ObjectProvider<AuditTrailService> auditServiceProvider) {
+        this.auditServiceProvider = auditServiceProvider;
     }
 
     @Override
@@ -66,7 +67,14 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             responseWrapper.flushBuffer();
             try {
                 PendingAuditEvent event = buildEvent(wrapper, responseWrapper, System.nanoTime() - start);
-                auditService.record(event);
+                AuditTrailService svc = auditServiceProvider.getIfAvailable();
+                if (svc != null) {
+                    svc.record(event);
+                } else {
+                    if (log.isDebugEnabled()) {
+                        log.debug("AuditTrailService not available; skipping audit record for {} {}", request.getMethod(), request.getRequestURI());
+                    }
+                }
             } catch (Exception ex) {
                 log.warn("Failed to record audit trail for {} {}", request.getMethod(), request.getRequestURI(), ex);
             }
