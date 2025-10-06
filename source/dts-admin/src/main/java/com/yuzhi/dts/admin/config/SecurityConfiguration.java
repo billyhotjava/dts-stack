@@ -59,23 +59,59 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
                     // Admin service is governance-only: restrict all API endpoints to the triad roles
                     .requestMatchers(mvc.pattern("/api/admin/**"))
-                        .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN)
+                        .hasAnyAuthority(
+                            AuthoritiesConstants.SYS_ADMIN,
+                            AuthoritiesConstants.AUTH_ADMIN,
+                            AuthoritiesConstants.AUDITOR_ADMIN,
+                            // Backward-compatible aliases observed in legacy realms/tokens
+                            "ROLE_AUDITOR_ADMIN",
+                            "ROLE_AUDIT_ADMIN",
+                            "ROLE_AUDITADMIN"
+                        )
                     .requestMatchers(mvc.pattern("/api/keycloak/approvals/**"))
                         .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN)
                     .requestMatchers(mvc.pattern("/api/keycloak/**"))
                         .hasAuthority(AuthoritiesConstants.SYS_ADMIN)
                     .requestMatchers(mvc.pattern("/admin/**"))
-                        .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN)
+                        .hasAnyAuthority(
+                            AuthoritiesConstants.SYS_ADMIN,
+                            AuthoritiesConstants.AUTH_ADMIN,
+                            AuthoritiesConstants.AUDITOR_ADMIN,
+                            "ROLE_AUDITOR_ADMIN",
+                            "ROLE_AUDIT_ADMIN",
+                            "ROLE_AUDITADMIN"
+                        )
                     .requestMatchers(mvc.pattern("/api/**"))
-                        .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN)
+                        .hasAnyAuthority(
+                            AuthoritiesConstants.SYS_ADMIN,
+                            AuthoritiesConstants.AUTH_ADMIN,
+                            AuthoritiesConstants.AUDITOR_ADMIN,
+                            "ROLE_AUDITOR_ADMIN",
+                            "ROLE_AUDIT_ADMIN",
+                            "ROLE_AUDITADMIN"
+                        )
                     .requestMatchers(mvc.pattern("/v3/api-docs/**"))
-                        .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN)
+                        .hasAnyAuthority(
+                            AuthoritiesConstants.SYS_ADMIN,
+                            AuthoritiesConstants.AUTH_ADMIN,
+                            AuthoritiesConstants.AUDITOR_ADMIN,
+                            "ROLE_AUDITOR_ADMIN",
+                            "ROLE_AUDIT_ADMIN",
+                            "ROLE_AUDITADMIN"
+                        )
                     .requestMatchers(mvc.pattern("/management/health")).permitAll()
                     .requestMatchers(mvc.pattern("/management/health/**")).permitAll()
                     .requestMatchers(mvc.pattern("/management/info")).permitAll()
                     .requestMatchers(mvc.pattern("/management/prometheus")).permitAll()
                     .requestMatchers(mvc.pattern("/management/**"))
-                        .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN)
+                        .hasAnyAuthority(
+                            AuthoritiesConstants.SYS_ADMIN,
+                            AuthoritiesConstants.AUTH_ADMIN,
+                            AuthoritiesConstants.AUDITOR_ADMIN,
+                            "ROLE_AUDITOR_ADMIN",
+                            "ROLE_AUDIT_ADMIN",
+                            "ROLE_AUDITADMIN"
+                        )
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter())))

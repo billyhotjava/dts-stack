@@ -167,15 +167,28 @@ public final class SecurityUtils {
             .collect(Collectors.toList());
     }
 
-    private static final Map<String, String> ROLE_ALIASES = Map.of(
-        "SYSADMIN",
-        AuthoritiesConstants.SYS_ADMIN,
-        "AUTHADMIN",
-        AuthoritiesConstants.AUTH_ADMIN,
-        "AUDITADMIN",
-        AuthoritiesConstants.AUDITOR_ADMIN,
-        "OPADMIN",
-        AuthoritiesConstants.OP_ADMIN
+    private static final Map<String, String> ROLE_ALIASES = Map.ofEntries(
+        // Canonical triad (no prefix aliases)
+        Map.entry("SYSADMIN", AuthoritiesConstants.SYS_ADMIN),
+        Map.entry("AUTHADMIN", AuthoritiesConstants.AUTH_ADMIN),
+        Map.entry("AUDITADMIN", AuthoritiesConstants.AUDITOR_ADMIN),
+        Map.entry("SECURITYAUDITOR", AuthoritiesConstants.AUDITOR_ADMIN),
+        Map.entry("OPADMIN", AuthoritiesConstants.OP_ADMIN),
+
+        // Canonical triad (prefixed variants commonly seen in legacy realms)
+        Map.entry("ROLE_SYSADMIN", AuthoritiesConstants.SYS_ADMIN),
+        Map.entry("ROLE_SYSTEM_ADMIN", AuthoritiesConstants.SYS_ADMIN),
+        Map.entry("ROLE_AUTHADMIN", AuthoritiesConstants.AUTH_ADMIN),
+        Map.entry("ROLE_IAM_ADMIN", AuthoritiesConstants.AUTH_ADMIN),
+        Map.entry("ROLE_AUDITOR_ADMIN", AuthoritiesConstants.AUDITOR_ADMIN),
+        Map.entry("ROLE_AUDIT_ADMIN", AuthoritiesConstants.AUDITOR_ADMIN),
+        Map.entry("ROLE_SECURITYAUDITOR", AuthoritiesConstants.AUDITOR_ADMIN),
+
+        // Already-canonical names map to themselves (idempotent)
+        Map.entry(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.SYS_ADMIN),
+        Map.entry(AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUTH_ADMIN),
+        Map.entry(AuthoritiesConstants.AUDITOR_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN),
+        Map.entry(AuthoritiesConstants.OP_ADMIN, AuthoritiesConstants.OP_ADMIN)
     );
 
     private static String normalizeRole(String role) {
@@ -186,14 +199,20 @@ public final class SecurityUtils {
         if (trimmed.isEmpty()) {
             return null;
         }
-        if (trimmed.startsWith("ROLE_")) {
-            return trimmed;
-        }
         String upper = trimmed.toUpperCase(Locale.ROOT);
+        // First, try exact alias match (handles both prefixed and non-prefixed forms)
         String alias = ROLE_ALIASES.get(upper);
-        if (alias != null) {
-            return alias;
+        if (alias != null) return alias;
+
+        // If it's already prefixed, normalize common underscores and retry alias map
+        if (upper.startsWith("ROLE_")) {
+            String noPrefix = upper.substring(5);
+            String aliasNoPrefix = ROLE_ALIASES.get(noPrefix);
+            if (aliasNoPrefix != null) return aliasNoPrefix;
+            return upper; // keep as-is
         }
+
+        // As a last resort, prefix unknown role names
         return "ROLE_" + upper;
     }
 }

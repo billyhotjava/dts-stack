@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
+import type { KeycloakUser } from "#/keycloak";
+import { KeycloakUserService } from "@/api/services/keycloakService";
 import bannerImage from "@/assets/images/background/banner-1.png";
 import { Icon } from "@/components/icon";
 import { useUserInfo } from "@/store/userStore";
@@ -7,8 +9,6 @@ import { themeVars } from "@/theme/theme.css";
 import { Avatar, AvatarImage } from "@/ui/avatar";
 import { Text, Title } from "@/ui/typography";
 import ProfileTab from "./profile-tab";
-import { KeycloakUserService } from "@/api/services/keycloakService";
-import type { KeycloakUser } from "#/keycloak";
 
 const ROLE_LABEL_MAP: Record<string, string> = {
 	SYSADMIN: "系统管理员",
@@ -50,7 +50,7 @@ const USERNAME_FALLBACK_NAME: Record<string, string> = {
 	sysadmin: "系统管理员",
 	authadmin: "授权管理员",
 	auditadmin: "安全审计员",
-	opadmin: "运维管理员",
+	opadmin: "业务运维管理员",
 };
 
 const PROTECTED_USERNAMES = new Set(Object.keys(USERNAME_FALLBACK_NAME));
@@ -101,9 +101,13 @@ function UserProfile() {
 	const detailAttributes = detail?.attributes as Record<string, string[]> | undefined;
 	const storeAttributes = attributes as Record<string, string[]> | undefined;
 
-	const attributeFullName = pickAttributeValue(detailAttributes, ["fullName", "fullname"]) || pickAttributeValue(storeAttributes, ["fullName", "fullname"]);
-	const normalizedAttributeFullName = attributeFullName && attributeFullName.toLowerCase() !== username?.toLowerCase() ? attributeFullName : "";
-	const normalizedDetailFullName = detail?.fullName && detail.fullName.toLowerCase() !== username?.toLowerCase() ? detail.fullName : "";
+	const attributeFullName =
+		pickAttributeValue(detailAttributes, ["fullName", "fullname"]) ||
+		pickAttributeValue(storeAttributes, ["fullName", "fullname"]);
+	const normalizedAttributeFullName =
+		attributeFullName && attributeFullName.toLowerCase() !== username?.toLowerCase() ? attributeFullName : "";
+	const normalizedDetailFullName =
+		detail?.fullName && detail.fullName.toLowerCase() !== username?.toLowerCase() ? detail.fullName : "";
 	const normalizedStoreFullName = fullName && fullName.toLowerCase() !== username?.toLowerCase() ? fullName : "";
 	const normalizedStoreFirstName = firstName && firstName.toLowerCase() !== username?.toLowerCase() ? firstName : "";
 	const fallbackName = USERNAME_FALLBACK_NAME[username?.toLowerCase() ?? ""] || "";

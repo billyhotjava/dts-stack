@@ -29,7 +29,6 @@ export function getMenusByRole(role: AdminRole | string | null | undefined): Adm
 	const normalized = normalizeAdminRole(role);
 	switch (normalized) {
 		case "SYSADMIN":
-		case "OPADMIN":
 			return sysadminMenus;
 		case "AUTHADMIN":
 			return authadminMenus;

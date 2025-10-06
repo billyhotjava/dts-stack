@@ -16,7 +16,7 @@ const USERNAME_FALLBACK_NAME: Record<string, string> = {
 	sysadmin: "系统管理员",
 	authadmin: "授权管理员",
 	auditadmin: "安全审计员",
-	opadmin: "运维管理员",
+	opadmin: "业务运维管理员",
 };
 
 /**

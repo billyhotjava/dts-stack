@@ -1,13 +1,14 @@
 import { useMemo } from "react";
-import { useUserInfo } from "@/store/userStore";
 import type { KeycloakUser } from "#/keycloak";
+import { useUserInfo } from "@/store/userStore";
 
 const USERNAME_FALLBACK_NAME: Record<string, string> = {
 	sysadmin: "系统管理员",
 	authadmin: "授权管理员",
 	auditadmin: "安全审计员",
-	opadmin: "运维管理员",
+	opadmin: "业务运维管理员",
 };
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
 
@@ -57,7 +58,9 @@ export default function ProfileTab({ detail, resolveAttributeValue }: ProfileTab
 	const detailAttributes = detail?.attributes as Record<string, string[]> | undefined;
 	const storeAttributes = attributes as Record<string, string[]> | undefined;
 
-	const attributeFullName = resolveAttributeValue(detailAttributes, ["fullName", "fullname"]) || resolveAttributeValue(storeAttributes, ["fullName", "fullname"]);
+	const attributeFullName =
+		resolveAttributeValue(detailAttributes, ["fullName", "fullname"]) ||
+		resolveAttributeValue(storeAttributes, ["fullName", "fullname"]);
 	const resolvedUsername = detail?.username || username || "-";
 	const resolvedEmail = detail?.email || email || "-";
 	const roleLabels = useMemo(() => {
@@ -71,18 +74,20 @@ export default function ProfileTab({ detail, resolveAttributeValue }: ProfileTab
 	const accountStatus = detail?.enabled ?? enabled;
 	const accountId = detail?.id || id || "-";
 	const fallbackName = USERNAME_FALLBACK_NAME[resolvedUsername?.toLowerCase() ?? ""] || "";
-	const normalizedAttributeFullName = attributeFullName && attributeFullName.toLowerCase() !== resolvedUsername.toLowerCase() ? attributeFullName : "";
-	const normalizedDetailFullName = detail?.fullName && detail.fullName.toLowerCase() !== resolvedUsername.toLowerCase() ? detail.fullName : "";
+	const normalizedAttributeFullName =
+		attributeFullName && attributeFullName.toLowerCase() !== resolvedUsername.toLowerCase() ? attributeFullName : "";
+	const normalizedDetailFullName =
+		detail?.fullName && detail.fullName.toLowerCase() !== resolvedUsername.toLowerCase() ? detail.fullName : "";
 	const normalizedStoreFullName = fullName && fullName.toLowerCase() !== resolvedUsername.toLowerCase() ? fullName : "";
-	const normalizedStoreFirstName = firstName && firstName.toLowerCase() !== resolvedUsername.toLowerCase() ? firstName : "";
-	const resolvedName = (
+	const normalizedStoreFirstName =
+		firstName && firstName.toLowerCase() !== resolvedUsername.toLowerCase() ? firstName : "";
+	const resolvedName =
 		normalizedAttributeFullName ||
 		normalizedDetailFullName?.trim() ||
 		normalizedStoreFullName?.trim() ||
 		normalizedStoreFirstName?.trim() ||
 		fallbackName ||
-		resolvedUsername
-	);
+		resolvedUsername;
 
 	const basicInfo = [
 		{ label: "姓名", value: resolvedName },

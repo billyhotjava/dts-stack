@@ -91,21 +91,62 @@ public class AdminApiResource {
     @GetMapping("/whoami")
     public ResponseEntity<ApiResponse<WhoAmI>> whoami(Principal principal) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        boolean allowed = auth != null && hasAny(auth.getAuthorities(), AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN);
-        String role = auth
-            .getAuthorities()
-            .stream()
-            .map(GrantedAuthority::getAuthority)
-            .filter(r ->
+        // Be tolerant to legacy/alias role names to avoid false 403 in prod tokens
+        boolean allowed = auth != null && auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).map(AdminApiResource::toCanonicalTriadRole).anyMatch(
+            r -> r != null && (
                 r.equals(AuthoritiesConstants.SYS_ADMIN) ||
                 r.equals(AuthoritiesConstants.AUTH_ADMIN) ||
                 r.equals(AuthoritiesConstants.AUDITOR_ADMIN)
             )
-            .findFirst()
-            .orElse(null);
+        );
+        String role = auth == null
+            ? null
+            : auth
+                .getAuthorities()
+                .stream()
+                .map(GrantedAuthority::getAuthority)
+                .map(AdminApiResource::toCanonicalTriadRole)
+                .filter(Objects::nonNull)
+                .filter(r ->
+                    r.equals(AuthoritiesConstants.SYS_ADMIN) ||
+                    r.equals(AuthoritiesConstants.AUTH_ADMIN) ||
+                    r.equals(AuthoritiesConstants.AUDITOR_ADMIN)
+                )
+                .findFirst()
+                .orElse(null);
         WhoAmI payload = new WhoAmI(allowed, role, principal != null ? principal.getName() : null, null);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "WHOAMI", "ADMIN", "self", "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(payload));
+    }
+
+    private static String toCanonicalTriadRole(String authority) {
+        if (authority == null || authority.isBlank()) return null;
+        String a = authority.trim().toUpperCase(Locale.ROOT);
+        // Already canonical
+        if (
+            a.equals(AuthoritiesConstants.SYS_ADMIN) ||
+            a.equals(AuthoritiesConstants.AUTH_ADMIN) ||
+            a.equals(AuthoritiesConstants.AUDITOR_ADMIN)
+        ) {
+            return a;
+        }
+        // Common alias variants observed in legacy realms/tokens
+        if (a.equals("ROLE_SYSADMIN") || a.equals("ROLE_SYSTEM_ADMIN") || a.equals("SYSADMIN") || a.equals("SYSTEM_ADMIN")) {
+            return AuthoritiesConstants.SYS_ADMIN;
+        }
+        if (a.equals("ROLE_AUTHADMIN") || a.equals("ROLE_IAM_ADMIN") || a.equals("AUTHADMIN") || a.equals("IAM_ADMIN")) {
+            return AuthoritiesConstants.AUTH_ADMIN;
+        }
+        if (
+            a.equals("ROLE_AUDITOR_ADMIN") ||
+            a.equals("ROLE_AUDIT_ADMIN") ||
+            a.equals("ROLE_AUDITADMIN") ||
+            a.equals("AUDITADMIN") ||
+            a.equals("SECURITYAUDITOR")
+        ) {
+            return AuthoritiesConstants.AUDITOR_ADMIN;
+        }
+        return null;
     }
 
     // --- Minimal audit endpoints ---
