@@ -11,24 +11,33 @@ const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig(({ mode }) => {
 	const rawEnv = loadEnv(mode, process.cwd(), "");
-	const env = { ...process.env, ...rawEnv };
+	const env = { ...rawEnv, ...process.env } as Record<string, string | undefined>;
 	const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
 	const isProduction = mode === "production";
-	// Prefer explicit proxy target via env, fallback to local dev backend
-	// JHipster dev profile runs on 8081 by default (see application-dev.yml)
-  // Default to host-mapped platform backend port when running on host
-  const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:18082";
-	// Optional prefix for reverse proxy (e.g., Traefik exposes platform under /platform)
-	// If not provided, auto-add '/platform' when targeting HTTPS (Traefik) to reduce manual switching
+
+	const rawProxyTarget = rawEnv.VITE_API_PROXY_TARGET;
+	const runtimeProxyTarget = env.VITE_API_PROXY_TARGET || rawProxyTarget || "http://localhost:18082";
+
+	let explicitProxyPrefix = process.env.VITE_API_PROXY_PREFIX;
+	if (explicitProxyPrefix === undefined) {
+		const rawProxyPrefix = rawEnv.VITE_API_PROXY_PREFIX;
+		if (rawProxyPrefix && rawProxyTarget && rawProxyTarget === runtimeProxyTarget) {
+			explicitProxyPrefix = rawProxyPrefix;
+		}
+	}
+
 	const autoPrefix = (() => {
-		if (env.VITE_API_PROXY_PREFIX) return ""; // explicit beats auto
+		if (explicitProxyPrefix !== undefined) {
+			return "";
+		}
 		try {
-			const u = new URL(apiProxyTarget);
+			const u = new URL(runtimeProxyTarget);
 			if (u.protocol === "https:") return "/platform";
-		} catch { }
+		} catch {}
 		return "";
 	})();
-	const apiProxyPrefix = env.VITE_API_PROXY_PREFIX || autoPrefix || "";
+
+	const apiProxyPrefix = explicitProxyPrefix !== undefined ? explicitProxyPrefix : autoPrefix;
 
 	return {
 		base,
@@ -67,12 +76,13 @@ export default defineConfig(({ mode }) => {
       watch: { ignored: ["**/dts-admin-webapp/**"] },
 			proxy: {
 				"/api": {
-					target: apiProxyTarget,
+					target: runtimeProxyTarget,
 					changeOrigin: true,
 					// Auto rewrite when targeting Traefik (HTTPS): /api -> /platform/api
-					rewrite: apiProxyPrefix
-						? (path) => path.replace(/^\/api/, `${apiProxyPrefix}/api`)
-						: undefined,
+					rewrite:
+						typeof apiProxyPrefix === "string" && apiProxyPrefix.length > 0
+							? (path: string) => path.replace(/^\/api/, `${apiProxyPrefix}/api`)
+							: undefined,
 					secure: false,
 				},
 			},

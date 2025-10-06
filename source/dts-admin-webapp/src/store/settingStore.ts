@@ -26,8 +26,8 @@ type SettingStore = {
 };
 
 const useSettingStore = create<SettingStore>()(
-	persist(
-		(set) => ({
+    persist(
+        (set) => ({
 			settings: {
 				themeColorPresets: ThemeColorPresets.Default,
 				themeMode: ThemeMode.Light,
@@ -49,13 +49,37 @@ const useSettingStore = create<SettingStore>()(
 					useSettingStore.persist.clearStorage();
 				},
 			},
-		}),
-		{
-			name: StorageEnum.Settings, // name of the item in the storage (must be unique)
-			storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
-			partialize: (state) => ({ [StorageEnum.Settings]: state.settings }),
-		},
-	),
+        }),
+        {
+            name: StorageEnum.Settings, // name of the item in the storage (must be unique)
+            storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
+            partialize: (state) => ({ [StorageEnum.Settings]: state.settings }),
+            version: 2,
+            migrate: (persistedState: any, version) => {
+                try {
+                    // mark version as used to satisfy noUnusedParameters
+                    void version;
+                    const key = (StorageEnum as any).Settings || "settings";
+                    const settings = (persistedState && (persistedState[key] || persistedState.settings)) || {};
+                    const raw = settings.fontSize;
+                    let next = typeof raw === "string" ? parseFloat(raw) : raw;
+                    if (!Number.isFinite(next)) {
+                        next = Number(typographyTokens.fontSize.sm);
+                    }
+                    if (next < 12) next = 12;
+                    if (next > 24) next = 24;
+                    settings.fontSize = Math.round(next);
+                    if (!settings.fontFamily || typeof settings.fontFamily !== "string") {
+                        settings.fontFamily = FontFamilyPreset.openSans;
+                    }
+                    persistedState[key] = { ...settings };
+                } catch {
+                    // ignore migration errors
+                }
+                return persistedState;
+            },
+        },
+    ),
 );
 
 export const useSettings = () => useSettingStore((state) => state.settings);

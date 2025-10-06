@@ -7,7 +7,89 @@ import type { KeycloakTranslations } from "#/keycloak";
 import { StorageEnum } from "#/enum";
 import userService, { type SignInReq } from "@/api/services/userService";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
+import { GLOBAL_CONFIG } from "@/global-config";
 import { updateLocalTranslations } from "@/utils/translation";
+
+// Normalize possibly mixed arrays (objects or strings) to string[] by picking
+// common identity fields such as `code` or `name` when present.
+const normalizeToStringArray = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    const out: string[] = [];
+    for (const item of value) {
+        if (typeof item === "string") {
+            if (item) out.push(item);
+            continue;
+        }
+        if (item && typeof item === "object") {
+            const obj = item as Record<string, unknown>;
+            const candidate = obj.code ?? obj.name ?? obj.value ?? "";
+            if (typeof candidate === "string" && candidate) {
+                out.push(candidate);
+                continue;
+            }
+        }
+        // Fallback stringification (rare)
+        const s = String(item ?? "");
+        if (s) out.push(s);
+    }
+    return out;
+};
+
+const DEFAULT_AVATAR = "/assets/icons/ic-user.svg";
+const resolveAvatar = (raw: unknown): string => {
+    const s = typeof raw === "string" ? raw.trim() : "";
+    if (!s) return DEFAULT_AVATAR;
+    if (s.startsWith("/src/assets/")) return s.replace("/src/assets/", "/assets/");
+    return s;
+};
+
+// Decode JWT payload (best-effort) and extract roles from common Keycloak/OIDC claims
+const decodeJwtPayload = (token?: string): Record<string, unknown> | null => {
+    if (!token) return null;
+    try {
+        const parts = token.split(".");
+        if (parts.length < 2) return null;
+        let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        while (payload.length % 4 !== 0) payload += "=";
+        const json = atob(payload);
+        return JSON.parse(json) as Record<string, unknown>;
+    } catch {
+        return null;
+    }
+};
+
+const extractRolesFromClaims = (claims: Record<string, unknown> | null | undefined): string[] => {
+    if (!claims || typeof claims !== "object") return [];
+    const roles = new Set<string>();
+    const pushAll = (arr: unknown) => {
+        if (Array.isArray(arr)) {
+            for (const item of arr) {
+                const s = String(item || "").trim();
+                if (s) roles.add(s);
+            }
+        }
+    };
+    // Keycloak realm roles
+    const realm = (claims as any)?.realm_access;
+    if (realm && typeof realm === "object") {
+        pushAll((realm as any).roles);
+    }
+    // Keycloak resource (client) roles
+    const resource = (claims as any)?.resource_access;
+    if (resource && typeof resource === "object") {
+        for (const key of Object.keys(resource as Record<string, unknown>)) {
+            const entry = (resource as any)[key];
+            if (entry && typeof entry === "object") {
+                pushAll((entry as any).roles);
+            }
+        }
+    }
+    // Spring Security authorities (if present)
+    pushAll((claims as any)?.authorities);
+    // Flat roles claim (rare)
+    pushAll((claims as any)?.roles);
+    return Array.from(roles);
+};
 
 type UserStore = {
 	userInfo: Partial<UserInfo>;
@@ -63,7 +145,6 @@ export const useSignIn = () => {
 
 	const USERNAME_FALLBACK_NAME: Record<string, string> = {
 		sysadmin: "系统管理员",
-		syadmin: "系统管理员",
 		authadmin: "授权管理员",
 		auditadmin: "安全审计员",
 		opadmin: "运维管理员",
@@ -90,25 +171,83 @@ export const useSignIn = () => {
 			const fallbackName = USERNAME_FALLBACK_NAME[usernameLower] || "";
 			const resolvedFullName = attributeFullName || user.fullName || user.firstName || fallbackName || user.lastName || user.username || "";
 
-			const adaptedUser = {
-				...user,
-				attributes: (user.attributes as Record<string, string[]>) || {},
-				// 处理角色信息 - 保持字符串数组格式
-				roles: Array.isArray(user.roles) ? user.roles : [],
-				// 处理权限信息 - 保持字符串数组格式
-				permissions: Array.isArray(user.permissions) ? user.permissions : [],
-				// 为用户设置默认头像
-				avatar: user.avatar || "/src/assets/icons/ic-user.svg",
-				// 确保必要的字段存在
-				firstName: user.firstName || attributeFullName || resolvedFullName,
-				fullName: resolvedFullName,
-				lastName: user.lastName || "",
-				email: user.email || "",
-				enabled: user.enabled !== undefined ? user.enabled : true,
-			};
+            const adaptedUser = {
+                ...user,
+                attributes: (user.attributes as Record<string, string[]>) || {},
+                // 处理角色/权限信息 - 统一为字符串数组
+                roles: normalizeToStringArray(user.roles),
+                permissions: normalizeToStringArray(user.permissions),
+                // 为用户设置默认头像（使用 public 目录下的静态资源路径，兼容生产环境）
+                avatar: resolveAvatar(user.avatar),
+                // 确保必要的字段存在
+                firstName: user.firstName || attributeFullName || resolvedFullName,
+                fullName: resolvedFullName,
+                lastName: user.lastName || "",
+                email: user.email || "",
+                enabled: user.enabled !== undefined ? user.enabled : true,
+            };
 
-			setUserToken({ accessToken, refreshToken });
-			setUserInfo(adaptedUser);
+            // Augment roles from access token claims when backend user lacks explicit roles
+            try {
+                const claims = decodeJwtPayload(accessToken);
+                const tokenRoles = extractRolesFromClaims(claims);
+                if (Array.isArray(adaptedUser.roles) && tokenRoles.length > 0) {
+                    const merged = new Set<string>([
+                        ...adaptedUser.roles.map((r: any) => String(r || "")),
+                        ...tokenRoles,
+                    ]);
+                    adaptedUser.roles = Array.from(merged);
+                } else if (tokenRoles.length > 0) {
+                    adaptedUser.roles = tokenRoles;
+                }
+            } catch {
+                // ignore token parsing errors
+            }
+
+            // Helper to expand role synonyms and normalize naming
+            const expandSynonyms = (roles: string[]): Set<string> => {
+                const set = new Set<string>((roles || []).map((r) => String(r || "").toUpperCase()));
+                if (set.has("SYSADMIN")) set.add("ROLE_SYS_ADMIN");
+                if (set.has("AUTHADMIN")) set.add("ROLE_AUTH_ADMIN");
+                if (set.has("AUDITADMIN")) set.add("ROLE_SECURITY_AUDITOR");
+                if (set.has("SECURITYAUDITOR")) set.add("ROLE_SECURITY_AUDITOR");
+                if (set.has("OPADMIN")) set.add("ROLE_OP_ADMIN");
+                return set;
+            };
+
+            const canonicalizeRoles = (roles: string[]): string[] => {
+                const set = expandSynonyms(roles);
+                // preserve originals + ensure canonical role codes exist
+                const originals = (roles || []).map((r) => String(r || ""));
+                const canonicals = [
+                    "ROLE_SYS_ADMIN",
+                    "ROLE_AUTH_ADMIN",
+                    "ROLE_SECURITY_AUDITOR",
+                    "ROLE_OP_ADMIN",
+                ].filter((r) => set.has(r));
+                return Array.from(new Set([...originals, ...canonicals]));
+            };
+
+            // Normalize user roles canonically for downstream guards/menu auth
+            adaptedUser.roles = canonicalizeRoles(Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : []);
+
+            const allowed = Array.isArray(GLOBAL_CONFIG.allowedLoginRoles) ? GLOBAL_CONFIG.allowedLoginRoles : [];
+            const allowedSet = expandSynonyms(allowed);
+            const userRoles: string[] = Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : [];
+            const userSet = expandSynonyms(userRoles);
+            if (allowedSet.size > 0) {
+                const hasAllowed = Array.from(userSet).some((r) => allowedSet.has(r));
+                if (!hasAllowed) {
+                    throw new Error("您无权登录该系统");
+                }
+            }
+            // Defense-in-depth: explicitly forbid platform-only role on admin console
+            if (userSet.has("ROLE_OP_ADMIN")) {
+                throw new Error("您无权登录该系统");
+            }
+
+            setUserToken({ accessToken, refreshToken });
+            setUserInfo(adaptedUser);
 
 			// 登录成功后获取并更新Keycloak翻译词条
 			try {

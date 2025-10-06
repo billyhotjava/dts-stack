@@ -65,7 +65,7 @@ public class KeycloakApiResource {
         Map.entry("TOP_SECRET", "DATA_TOP_SECRET"),
         Map.entry("DATA_TOP_SECRET", "DATA_TOP_SECRET")
     );
-    private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin", "syadmin", "authadmin", "auditadmin", "opadmin");
+    private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin",  "authadmin", "auditadmin", "opadmin");
 
     public KeycloakApiResource(
         InMemoryStores stores,

@@ -26,18 +26,25 @@ public class InMemoryStores {
 
     @PostConstruct
     public void seed() {
-        // Seed some roles
-        for (String r : List.of("SYSADMIN", "OPADMIN", "AUTHADMIN", "AUDITADMIN", "DATA_STEWARD", "DATA_ANALYST")) {
+        // Seed some roles (use canonical ROLE_* names)
+        for (String r : List.of(
+            "ROLE_SYS_ADMIN",
+            "ROLE_OP_ADMIN",
+            "ROLE_AUTH_ADMIN",
+            "ROLE_SECURITY_AUDITOR",
+            "DATA_STEWARD",
+            "DATA_ANALYST"
+        )) {
             KeycloakRoleDTO role = new KeycloakRoleDTO();
             role.setId(uid());
             role.setName(r);
             roles.put(role.getName(), role);
         }
 
-        // Seed triad users
-        addUser("sysadmin", "sysadmin@example.com", List.of("SYSADMIN"));
-        addUser("authadmin", "authadmin@example.com", List.of("AUTHADMIN"));
-        addUser("auditadmin", "auditadmin@example.com", List.of("AUDITADMIN"));
+        // Seed triad users (realm roles use canonical ROLE_* names)
+        addUser("sysadmin", "sysadmin@example.com", List.of("ROLE_SYS_ADMIN"));
+        addUser("authadmin", "authadmin@example.com", List.of("ROLE_AUTH_ADMIN"));
+        addUser("auditadmin", "auditadmin@example.com", List.of("ROLE_SECURITY_AUDITOR"));
 
         // Seed example approval
         ApprovalDTOs.ApprovalRequestDetail ar = new ApprovalDTOs.ApprovalRequestDetail();

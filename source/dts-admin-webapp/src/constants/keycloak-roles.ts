@@ -1,15 +1,14 @@
 import type { KeycloakRole } from "#/keycloak";
 
-// Reserved business roles to hide from assignment UIs
+// Reserved business roles to hide from assignment UIs (canonical names only)
 const RESERVED_ROLE_NAMES = new Set<string>([
   "ROLE_SYS_ADMIN",
   "ROLE_AUTH_ADMIN",
   "ROLE_OP_ADMIN",
-  // Auditor variants across environments
   "ROLE_SECURITY_AUDITOR",
-  "ROLE_AUDITOR_ADMIN",
 ]);
 
+// Legacy code aliases kept only for filtering compatibility; UI will display canonical names.
 const RESERVED_ROLE_CODES = new Set<string>([
   "SYSADMIN",
   "AUTHADMIN",
@@ -48,4 +47,3 @@ export function isKeycloakBuiltInRole(role: Pick<KeycloakRole, "name" | "clientR
 export function shouldHideRole(role: KeycloakRole): boolean {
   return isReservedBusinessRoleName(role.name) || isKeycloakBuiltInRole(role);
 }
-

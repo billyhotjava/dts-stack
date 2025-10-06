@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
 import { useLoginStateContext } from "@/pages/sys/login/providers/login-provider";
+import { LOGIN_ROUTE } from "@/routes/constants";
 import { useRouter } from "@/routes/hooks";
 import { useSignOut, useUserInfo } from "@/store/userStore";
 import { Button } from "@/ui/button";
@@ -29,7 +30,7 @@ export default function AccountDropdown() {
 		} catch (error) {
 			console.log(error);
 		} finally {
-			replace("/auth/login");
+			replace(LOGIN_ROUTE);
 		}
 	};
 

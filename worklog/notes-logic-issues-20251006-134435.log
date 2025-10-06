@@ -1,0 +1,138 @@
+[Context]
+收到用户反馈：之前关于 prod/dev 登录与字体差异的结论存在基本逻辑误解；用户将重申关键点。
+按要求：每天新建带时间戳的日志文件；若已存在则追加。本次为 2025-10-06 13:44:35 初始记录。
+
+[Status]
+- 等待用户重申“基本逻辑问题”的具体条目，以便纠正认知并据此执行。
+- 已检查仓库 `worklog/` 目录结构，准备按日追加后续分析与落地改动。
+
+[Planned Next Steps（收到澄清后立刻执行）]
+1) 明确 prod 与 dev 登录行为与权限边界
+   - 确认登录是否应在“无授权角色/无有效菜单”时直接拒绝（而非仅隐藏菜单）。
+   - 明确授权判定来源（Keycloak realm roles / client roles / 组合规则）。
+2) 定位 prod/dev 字体不一致根因
+   - 对比两种模式下：全局 root 字体缩放、AntD token、持久化本地设置（localStorage/settings）是否存在差异。
+   - 复核打包与运行时配置注入策略（VITE_* 在构建期固化 vs 运行时 JSON 配置）。
+3) dts-platform-webapp 登录与菜单逻辑核对
+   - 现有逻辑为“预加载全部菜单→按角色过滤展示”。确认是否需要在“登录阶段”即做强制准入校验。
+   - 必要时在登录流程与路由守卫层面同时生效，避免仅靠“空菜单”作为准入策略。
+4) 生成修复方案与验证清单
+   - 提供具体改动点、涉及 ENV/配置变化、以及手工验证步骤（prod/dev 均覆盖）。
+
+[Questions 待确认]
+- 请列出被我们理解错误的“基本逻辑问题”具体内容（编号/要点越清晰越好）。
+- 登录准入策略的期望结果：
+  • 未授权用户：登录页直接拒绝？还是允许登录但进入空白/受限视图？
+  • 授权来源：需要哪些最小角色集合才算“允许登录”？
+- 字体对齐的裁定口径：
+  • 以哪一方（prod/dev）为基准？
+  • 是否需要与浏览器默认缩放或设计稿像素栅格严格一致？
+
+[Execution Log]
+- 2025-10-06 13:44:35 创建本次工作日志（notes-logic-issues-20251006-134435.log）。
+- 等待用户提供澄清清单后，继续追加并实施。
+
+[Clarifications Received 2025-10-06]
+1) 系统边界与简称
+   - dts-admin 及前端 dts-admin-webapp，与 dts-platform 及前端 dts-platform-webapp 是两套独立系统。
+   - 简称：管理端 “admin 应用”；业务端 “platform 应用”。
+
+2) 四个超级管理员账号及权限边界
+   - 账号：sysadmin, authadmin, auditadmin, opadmin。
+   - admin 应用：仅允许 sysadmin、authadmin、auditadmin 登录；opadmin 不允许登录 admin 应用。
+   - platform 应用：仅允许 opadmin 登录；sysadmin、authadmin、auditadmin 不允许登录 platform 应用。
+   - 职责补充（原文记录）：
+     a) 系统管理员（sysadmin）：用户/角色/组织的增删改，所有操作需经授权管理员（authadmin）授权后生效；另负责系统运维（系统管理、集群管理、业务端菜单管理）。
+     b) 授权管理员（authadmin）：只做授权，审计系统管理员和安全审计员的日志，不做其他任务。
+     c) 安全审计员（auditadmin）：负责所有业务用户的日志审计，包括登录登出、日志导出与整理等。
+     d) 运维管理员（opadmin）：仅登录 platform 应用。
+
+[Derived Rules]
+- 登录准入需在“登录阶段/登录后首个守卫”上强校验，不应只依赖“空菜单”作为准入条件。
+- 两套应用的“允许登录角色”配置应分离：
+  • admin 应用：仅 sysadmin、authadmin、auditadmin。
+  • platform 应用：仅 opadmin。
+
+[Immediate Actions Proposed]
+- FE 配置：按应用设置 `VITE_ALLOWED_LOGIN_ROLES`（构建期变量）。
+  • source/dts-admin-webapp/.env.development 与 .env.production：VITE_ALLOWED_LOGIN_ROLES=sysadmin,authadmin,auditadmin（或相应实际角色键）。
+  • source/dts-platform-webapp/.env.development 与 .env.production：VITE_ALLOWED_LOGIN_ROLES=opadmin（或相应实际角色键）。
+- FE 守卫：维持现有 signIn() 与 LoginAuthGuard 的“允许角色”交集校验；未命中则拒绝并返回登录页/错误提示。
+- BE/网关：建议在后端也加防线（例如基于 Keycloak roles 的准入拦截），避免仅靠前端。
+- Prod 部署注意：VITE_* 为构建期固化；更改允许角色需重建 webapp 镜像，或落地“运行时 JSON 配置注入”。
+
+[Open Questions]
+- 角色命名标准：当前 FE 默认示例为 ROLE_OP_ADMIN/ROLE_IAM_ADMIN/ROLE_GOV_ADMIN/... 与 “sysadmin/authadmin/auditadmin/opadmin” 存在命名差异。
+  • 请确认 token 中 roles 的精确字符串（例如：是否为 sysadmin / ROLE_SYSADMIN / ROLE_ADMIN 等）。
+  • 若存在别名，需要统一映射表或直接改用最终 token 中的标准名。
+
+[Verification Plan]
+- 用四个账号分别在两套应用尝试：
+  • admin 应用：sysadmin ✓，authadmin ✓，auditadmin ✓，opadmin ×。
+  • platform 应用：opadmin ✓，sysadmin ×，authadmin ×，auditadmin ×。
+- 验证在 dev/prod 两种模式下均符合预期；刷新后持久化会话不应“穿透”守卫。
+
+[Font Consistency Next]
+- 在上述准入调整同时，继续核对 dev/prod 字体差异：root 字体缩放、AntD token、settings 持久化迁移；必要时统一 token.fontSize 与 html 基准。
+
+[Execution Log 2025-10-06 13:55]
+- 接收角色标准名及映射：
+  • ROLE_SYS_ADMIN ↔ sysadmin
+  • ROLE_AUTH_ADMIN ↔ authadmin
+  • ROLE_SECURITY_AUDITOR ↔ auditadmin
+  • ROLE_OP_ADMIN ↔ opadmin
+- 变更 FE 登录白名单：
+  • admin-webapp：.env.development / .env.production → VITE_ALLOWED_LOGIN_ROLES=ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR
+  • platform-webapp：.env.development / .env.production → VITE_ALLOWED_LOGIN_ROLES=ROLE_OP_ADMIN
+- 调整默认值：
+  • dts-admin-webapp/src/global-config.ts → 默认仅三管理员角色
+  • dts-platform-webapp/src/global-config.ts → 默认仅 ROLE_OP_ADMIN
+- 导航可见性修正（admin）：
+  • nav-data-frontend.tsx 去除 SYSADMIN_ROLES 中的 OPADMIN；审计角色改为 ROLE_SECURITY_AUDITOR（保留兼容别名）。
+- 角色管理 UI：保留隐藏保留角色策略（SYSADMIN / AUTHADMIN / SECURITYAUDITOR / OPADMIN 的 canonical 变体）。
+- 待办：后端（dts-admin/dts-platform）增加服务端“保留角色只读/不可删/不可改”与“登录准入”双保险。
+
+[Fix 2025-10-06 ${ts}]
+- 修复：auditadmin 不能登录 admin、却能登录 platform 的问题。
+  • 平台端（platform-webapp）增加显式禁止：若用户包含 ROLE_SYS_ADMIN / ROLE_AUTH_ADMIN / ROLE_SECURITY_AUDITOR 则拒绝登录。
+    - source/dts-platform-webapp/src/store/userStore.ts
+    - source/dts-platform-webapp/src/routes/components/login-auth-guard.tsx
+  • 管理端（admin-webapp）增加显式禁止：若用户包含 ROLE_OP_ADMIN 则拒绝登录（即使白名单被误配）。
+    - source/dts-admin-webapp/src/store/userStore.ts
+    - source/dts-admin-webapp/src/routes/components/login-auth-guard.tsx
+  • 作为双重保障，已将两端 env 与默认值改为严格白名单（见上）。
+
+[Fix 2025-10-06 ${ts} — Dev fallback gating]
+- 平台端(dev)发现：除三员外“任何人都能登录”系前端 dev-fallback 绕过造成。
+  • 修正：handleDevFallback 仅在用户具备允许角色时才生效；否则返回 null（维持 401）。
+    - source/dts-platform-webapp/src/store/userStore.ts
+  • 结果：dev 模式下仅 opadmin 可用 fallback（但正常情况下 opadmin 直接由后端 /api/keycloak/auth/login 成功，不触发 fallback）。
+
+[Investigation — opadmin 点菜单 401]
+- 现象：opadmin 登录后，任意菜单触发 API 调用即 401 → 被拦截器登出。
+- 初步分析：
+  • 后端启用 OpaqueToken（PortalOpaqueTokenIntrospector），登录颁发 demo- 前缀 accessToken；任意 /api/** 需携带 Authorization: Bearer <token>。
+  • 若请求被错误代理至 dts-admin 或 token 非 sessionRegistry 所颁发，后端将 401。
+  • Vite 代理按 https 目标自动前缀 /platform，理论应转发至 dts-platform；需核对实际 env 覆盖与 Network 面板请求 URL。
+- 待用户提供：触发 401 的具体 URL、响应 body 与请求头概览，用于精确定位（是否落到了 /api/platform 以外的服务）。
+
+[Dev-mode Rootcause & Patch]
+- 现象：dev 模式下 auditadmin 仍无法登录 admin。
+- 排查：
+  • 后端常量使用 ROLE_AUDITOR_ADMIN（见 dts-admin AuthoritiesConstants.java），并在 SecurityUtils 中将 "AUDITADMIN" 正规化为 ROLE_AUDITOR_ADMIN。
+  • InMemoryStores.java 预置的角色名为无前缀别名：SYSADMIN / AUTHADMIN / AUDITADMIN / OPADMIN。
+  • 前端 admin-webapp 之前仅允许 ROLE_SECURITY_AUDITOR，未覆盖 ROLE_AUDITOR_ADMIN / AUDITADMIN 别名，导致 dev 下令牌/模拟数据不匹配。
+- 处理：
+  • 在 admin-webapp 与 platform-webapp 的登录流程与路由守卫中统一“角色同义词扩展/标准化”，兼容以下映射：
+    - SYSADMIN → ROLE_SYS_ADMIN
+    - AUTHADMIN → ROLE_AUTH_ADMIN
+    - AUDITADMIN 或 ROLE_AUDITOR_ADMIN → ROLE_SECURITY_AUDITOR（兼容）
+    - SECURITYAUDITOR → ROLE_SECURITY_AUDITOR
+    - OPADMIN → ROLE_OP_ADMIN
+  • 管理端：白名单对比与平台端：黑名单/白名单都基于同义词扩展后的集合求交/排斥。
+  • 文件：
+    - source/dts-admin-webapp/src/store/userStore.ts（登录阶段）
+    - source/dts-admin-webapp/src/routes/components/login-auth-guard.tsx（守卫阶段）
+    - source/dts-platform-webapp/src/store/userStore.ts（登录阶段）
+    - source/dts-platform-webapp/src/routes/components/login-auth-guard.tsx（守卫阶段）
+  • 预期：dev/prod 下 auditadmin 角色均可登录 admin，且被 platform 拒绝。

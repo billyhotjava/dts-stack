@@ -42,19 +42,22 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		}
 
 		setLoading(true);
-            try {
-                await signIn({ ...values, username: trimmedUsername });
-                // 登录成功后先尝试加载菜单，再进入工作台，避免偶发 404
-                try {
-                    const svc = await import("@/api/services/menuService");
-                    await svc.default.getMenuTree().catch(() => undefined);
-                } catch {}
-                // 统一进入欢迎页（工作台），带上 publicPath 以兼容非根路径部署
-                const target = urlJoin(GLOBAL_CONFIG.publicPath || "/", "/dashboard/workbench");
-                navigate(target, { replace: true });
-                toast.success(bilingual("sys.login.loginSuccessTitle"), {
-                    closeButton: true,
-                });
+		try {
+			const signInResult = await signIn({ ...values, username: trimmedUsername });
+			// 登录成功后先尝试加载菜单，再进入工作台，避免偶发 404
+			const usedFallback = signInResult.mode === "fallback";
+			if (!usedFallback) {
+				try {
+					const svc = await import("@/api/services/menuService");
+					await svc.default.getMenuTree().catch(() => undefined);
+				} catch {}
+			}
+			// 统一进入欢迎页（工作台），带上 publicPath 以兼容非根路径部署
+			const target = urlJoin(GLOBAL_CONFIG.publicPath || "/", "/dashboard/workbench");
+			navigate(target, { replace: true });
+			toast.success(bilingual("sys.login.loginSuccessTitle"), {
+				closeButton: true,
+			});
 		} catch (error) {
 			// 错误已在signIn中处理，这里不需要额外处理
 			console.error("Login failed:", error);

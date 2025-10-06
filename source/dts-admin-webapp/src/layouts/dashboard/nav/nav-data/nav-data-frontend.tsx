@@ -1,9 +1,10 @@
 import { Icon } from "@/components/icon";
 import type { NavProps } from "@/components/nav";
 
-const SYSADMIN_ROLES = ["ROLE_SYS_ADMIN", "SYSADMIN", "OPADMIN"];
-const AUTHADMIN_ROLES = ["ROLE_AUTH_ADMIN", "AUTHADMIN"];
-const AUDITADMIN_ROLES = ["ROLE_AUDITOR_ADMIN", "AUDITADMIN"];
+const SYSADMIN_ROLES = ["ROLE_SYS_ADMIN", "SYSADMIN"];
+const AUTHADMIN_ROLES = ["ROLE_AUTH_ADMIN"];
+// Auditor role naming is canonical: ROLE_SECURITY_AUDITOR.
+const AUDITADMIN_ROLES = ["ROLE_SECURITY_AUDITOR"];
 
 export const frontendNavData: NavProps["data"] = [
 	{

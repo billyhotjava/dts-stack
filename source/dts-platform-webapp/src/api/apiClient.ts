@@ -4,8 +4,8 @@ import type { Result } from "#/api";
 import { ResultStatus } from "#/enum";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
+import { isLoginRouteActive, resolveLoginHref } from "@/routes/constants";
 import userStore from "@/store/userStore";
-import { urlJoin } from "@/utils";
 
 const axiosInstance = axios.create({
 	baseURL: GLOBAL_CONFIG.apiBaseUrl,
@@ -14,27 +14,25 @@ const axiosInstance = axios.create({
 });
 
 axiosInstance.interceptors.request.use(
-    (config) => {
-        // 从userStore获取访问令牌
-        const { userToken } = userStore.getState();
-        const url = config.url || "";
-        const isAuthPath = url.includes("/keycloak/auth/");
-        if (userToken.accessToken && !isAuthPath) {
-            const raw = String(userToken.accessToken).trim();
-            const token = raw.startsWith("Bearer ") ? raw.slice(7).trim() : raw;
-            if (token) {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
-        }
+	(config) => {
+		const { userToken } = userStore.getState();
+		const url = config.url || "";
+		const isAuthPath = url.includes("/keycloak/auth/");
+		if (userToken.accessToken && !isAuthPath) {
+			const raw = String(userToken.accessToken).trim();
+			const token = raw.startsWith("Bearer ") ? raw.slice(7).trim() : raw;
+			if (token) {
+				config.headers.Authorization = `Bearer ${token}`;
+			}
+		}
 
-		// 添加请求日志
 		console.log("API Request:", config.method?.toUpperCase(), config.baseURL, config.url, config);
 		return config;
 	},
-    (error) => {
-        console.error("API Request Error:", error);
-        return Promise.reject(error);
-    },
+	(error) => {
+		console.error("API Request Error:", error);
+		return Promise.reject(error);
+	},
 );
 
 axiosInstance.interceptors.response.use(
@@ -67,23 +65,30 @@ axiosInstance.interceptors.response.use(
 		throw new Error(message || t("sys.api.apiRequestFailed"));
 	},
     (error: AxiosError<Result>) => {
-		console.error("API Response Error:", error.response?.status, error.response?.data, error.message);
-
 		const { response, message } = error || {};
 		const requestUrl = response?.config?.url ?? "";
-		const shouldSuppressAuthHandling = typeof requestUrl === "string" && requestUrl.includes("/keycloak/localization/");
+		const isLoginRequest = typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/login");
+		const shouldSuppressAuthHandling =
+			typeof requestUrl === "string" && requestUrl.includes("/keycloak/localization/");
+		if (!(isLoginRequest && response?.status === 401)) {
+			console.error("API Response Error:", response?.status, response?.data, error.message);
+		}
 		const errMsg = response?.data?.message || message || t("sys.api.errorMessage");
-		if (!shouldSuppressAuthHandling) {
+		if (!shouldSuppressAuthHandling && !isLoginRequest) {
 			toast.error(errMsg, { position: "top-center" });
 		}
-		if (response?.status === 401 && !shouldSuppressAuthHandling) {
-			userStore.getState().actions.clearUserInfoAndToken();
-			try {
-				localStorage.setItem("dts.session.logoutTs", String(Date.now()));
-			} catch {}
-			const loginUrl = urlJoin((GLOBAL_CONFIG as any).publicPath || "/", "/auth/login");
-			if (!location.pathname.endsWith("/auth/login")) {
-				location.replace(loginUrl);
+		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest) {
+			// In development, relax auto-logout to ease debugging
+			if (import.meta.env?.DEV) {
+				console.warn("[DEV] 401 received; skipping auto logout & redirect");
+			} else {
+				userStore.getState().actions.clearUserInfoAndToken();
+				try {
+					localStorage.setItem("dts.session.logoutTs", String(Date.now()));
+				} catch {}
+				if (typeof window !== "undefined" && !isLoginRouteActive()) {
+					location.replace(resolveLoginHref());
+				}
 			}
 		}
         return Promise.reject(error);

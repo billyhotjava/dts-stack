@@ -1,11 +1,10 @@
-import { Icon } from "@/components/icon";
+import { useEffect } from "react";
 import Logo from "@/components/logo";
-import { NavMini, NavVertical } from "@/components/nav";
+import { NavVertical } from "@/components/nav";
 import type { NavProps } from "@/components/nav/types";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useSettingActions, useSettings } from "@/store/settingStore";
 import { ThemeLayout } from "@/types/enum";
-import { Button } from "@/ui/button";
 import { Badge } from "@/ui/badge";
 import { ScrollArea } from "@/ui/scroll-area";
 import { cn } from "@/utils";
@@ -16,17 +15,14 @@ type Props = {
 };
 
 export function NavVerticalLayout({ data, className }: Props) {
-	const settings = useSettings();
-	const { themeLayout } = settings;
-	const { setSettings } = useSettingActions();
+	const { themeLayout } = useSettings();
+	const { setThemeLayout } = useSettingActions();
 
-	const navWidth = themeLayout === ThemeLayout.Vertical ? "var(--layout-nav-width)" : "var(--layout-nav-width-mini)";
-	const handleToggle = () => {
-		setSettings({
-			...settings,
-			themeLayout: themeLayout === ThemeLayout.Mini ? ThemeLayout.Vertical : ThemeLayout.Mini,
-		});
-	};
+	useEffect(() => {
+		if (themeLayout === ThemeLayout.Mini) {
+			setThemeLayout(ThemeLayout.Vertical);
+		}
+	}, [themeLayout, setThemeLayout]);
 	return (
 		<nav
 			data-slot="slash-layout-nav"
@@ -35,25 +31,13 @@ export function NavVerticalLayout({ data, className }: Props) {
 				className,
 			)}
 			style={{
-				width: navWidth,
+				width: "var(--layout-nav-width)",
 			}}
 		>
-			<div
-				className={cn("relative flex items-center py-4 px-2 h-[var(--layout-header-height)] ", {
-					"justify-center": themeLayout === ThemeLayout.Mini,
-				})}
-			>
+			<div className="relative flex items-center py-4 px-2 h-[var(--layout-header-height)]">
 				<div className="flex items-center justify-center">
 					<Logo />
-					<div
-						className="flex flex-col transition-all duration-300 ease-in-out"
-						style={{
-							opacity: themeLayout === ThemeLayout.Mini ? 0 : 1,
-							maxWidth: themeLayout === ThemeLayout.Mini ? 0 : "auto",
-							whiteSpace: "nowrap",
-							marginLeft: themeLayout === ThemeLayout.Mini ? 0 : "8px",
-						}}
-					>
+					<div className="flex flex-col ml-2 whitespace-nowrap">
 						<span className="inline-flex items-center gap-2 text-xl font-bold">
 							<span aria-hidden className="text-red-500 text-2xl">
 								★
@@ -61,27 +45,14 @@ export function NavVerticalLayout({ data, className }: Props) {
 							{GLOBAL_CONFIG.appName}
 						</span>
 						<Badge variant="destructive" className="mt-1 !text-[13.2px] leading-none">
-							机密级
+							密级
 						</Badge>
 					</div>
 				</div>
-
-				<Button
-					variant="outline"
-					size="icon"
-					onClick={handleToggle}
-					className="h-7 w-7 absolute right-0 translate-x-1/2"
-				>
-					{themeLayout === ThemeLayout.Mini ? (
-						<Icon icon="lucide:arrow-right-to-line" size={12} />
-					) : (
-						<Icon icon="lucide:arrow-left-to-line" size={12} />
-					)}
-				</Button>
 			</div>
 
 			<ScrollArea className={cn("h-[calc(100vh-var(--layout-header-height))] px-2 bg-background")}>
-				{themeLayout === ThemeLayout.Mini ? <NavMini data={data} /> : <NavVertical data={data} />}
+				<NavVertical data={data} />
 			</ScrollArea>
 		</nav>
 	);

@@ -79,10 +79,36 @@ axiosInstance.interceptors.response.use(
 		console.error("API Response Error:", error.response?.status, error.response?.data, error.message);
 
 		const { response, message } = error || {};
+		const requestUrl = response?.config?.url ?? "";
+		const isLoginRequest = typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/login");
+		const isRefreshRequest = typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/refresh");
+		const shouldSuppressAuthHandling =
+			typeof requestUrl === "string" && requestUrl.includes("/keycloak/localization/");
+		const isKeycloakAdminEndpoint =
+			typeof requestUrl === "string" && requestUrl.includes("/keycloak/") &&
+			!requestUrl.includes("/keycloak/auth/") && !requestUrl.includes("/keycloak/localization/");
+
 		const errMsg = response?.data?.message || message || t("sys.api.errorMessage");
-		toast.error(errMsg, { position: "top-center" });
+		if (!shouldSuppressAuthHandling) {
+			toast.error(errMsg, { position: "top-center" });
+		}
+
 		if (response?.status === 401) {
-			userStore.getState().actions.clearUserInfoAndToken();
+			// In development, relax auto-logout to ease debugging
+			if (import.meta.env?.DEV) {
+				console.warn("[DEV] 401 received; skipping auto logout");
+			} else {
+				// Only force logout for definite auth failures (refresh failure)
+				// Do NOT auto-logout for login failures or Keycloak admin endpoints that may 401/403 by design
+				if (isRefreshRequest) {
+					userStore.getState().actions.clearUserInfoAndToken();
+				} else if (isLoginRequest || isKeycloakAdminEndpoint || shouldSuppressAuthHandling) {
+					// keep session; allow user to continue with permitted features
+					console.warn("[PROD] 401 on non-auth admin endpoint; session preserved");
+				} else {
+					userStore.getState().actions.clearUserInfoAndToken();
+				}
+			}
 		}
 		return Promise.reject(error);
 	},

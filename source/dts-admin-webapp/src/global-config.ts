@@ -12,10 +12,12 @@ export type GlobalConfig = {
 	defaultRoute: string;
 	/** Public path for static assets */
 	publicPath: string;
-	/** Base URL for API endpoints */
-	apiBaseUrl: string;
-	/** Routing mode: frontend routing or backend routing */
-	routerMode: "frontend" | "backend";
+    /** Base URL for API endpoints */
+    apiBaseUrl: string;
+    /** Routing mode: frontend routing or backend routing */
+    routerMode: "frontend" | "backend";
+    /** Allowed roles to sign in; empty means allow all authenticated users */
+    allowedLoginRoles: string[];
 };
 
 /**
@@ -53,11 +55,22 @@ const resolveApiBaseUrl = () => {
 	return ensureLeadingSlash(normalized, "/api");
 };
 
+const resolveAllowedLoginRoles = (): string[] => {
+    const raw = (import.meta.env.VITE_ALLOWED_LOGIN_ROLES ||
+        // default to admin-console super roles only
+        "ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR") as string;
+    return String(raw)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+};
+
 export const GLOBAL_CONFIG: GlobalConfig = {
 	appName: import.meta.env.VITE_APP_NAME || "数据管理平台",
 	appVersion: packageJson.version,
 	defaultRoute: resolveDefaultRoute(),
 	publicPath: import.meta.env.VITE_PUBLIC_PATH || "/",
-	apiBaseUrl: resolveApiBaseUrl(),
-	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
+    apiBaseUrl: resolveApiBaseUrl(),
+    routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
+    allowedLoginRoles: resolveAllowedLoginRoles(),
 };

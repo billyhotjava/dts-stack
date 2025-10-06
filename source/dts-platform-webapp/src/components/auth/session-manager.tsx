@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { LOGIN_ROUTE } from "@/routes/constants";
 import { useRouter } from "@/routes/hooks";
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import userService from "@/api/services/userService";
@@ -78,13 +79,13 @@ export default function SessionManager() {
           toast.error("当前账号已在其他页面登录，已强制退出");
           clearUserInfoAndToken();
           localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-          router.replace("/auth/login");
+          router.replace(LOGIN_ROUTE);
         }
       }
       if (e.key === STORAGE_KEYS.LOGOUT_TS && e.newValue) {
         if (isLoggedIn) {
           clearUserInfoAndToken();
-          router.replace("/auth/login");
+          router.replace(LOGIN_ROUTE);
         }
       }
     };
@@ -119,7 +120,7 @@ export default function SessionManager() {
         toast.error("会话已过期，请重新登录");
         clearUserInfoAndToken();
         localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-        router.replace("/auth/login");
+        router.replace(LOGIN_ROUTE);
       }
     };
 

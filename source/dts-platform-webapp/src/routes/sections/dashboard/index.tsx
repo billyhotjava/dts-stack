@@ -7,15 +7,9 @@ import { GLOBAL_CONFIG } from "@/global-config";
 import { urlJoin } from "@/utils";
 import DashboardLayout from "@/layouts/dashboard";
 import LoginAuthGuard from "@/routes/components/login-auth-guard";
-import { getBackendDashboardRoutes } from "./backend";
 import { getFrontendDashboardRoutes } from "./frontend";
 
-const getRoutes = (): RouteObject[] => {
-	if (GLOBAL_CONFIG.routerMode === "frontend") {
-		return getFrontendDashboardRoutes();
-	}
-	return getBackendDashboardRoutes();
-};
+const DASHBOARD_CHILD_ROUTES = getFrontendDashboardRoutes();
 
 export const dashboardRoutes: RouteObject[] = [
     {
@@ -24,7 +18,7 @@ export const dashboardRoutes: RouteObject[] = [
                 <DashboardLayout />
             </LoginAuthGuard>
         ),
-        children: [{ index: true, element: <FallbackDashboardIndex /> }, ...getRoutes()],
+        children: [{ index: true, element: <FallbackDashboardIndex /> }, ...DASHBOARD_CHILD_ROUTES],
     },
 ];
 

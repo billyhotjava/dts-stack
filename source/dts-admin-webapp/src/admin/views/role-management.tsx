@@ -41,7 +41,7 @@ const RESERVED_ROLE_CODES = new Set([
     "SYSADMIN",
     "AUTHADMIN",
     "OPADMIN",
-    // Auditor variants: our realm uses ROLE_AUDITOR_ADMIN; some envs may label it ROLE_SECURITY_AUDITOR
+    // Auditor (canonical: ROLE_SECURITY_AUDITOR). Keep code aliases for backwards compatibility in filtering only.
     "AUDITORADMIN",
     "SECURITYAUDITOR",
 ]);

@@ -38,7 +38,7 @@ public class PortalMenuService {
     private static final List<String> DEFAULT_MENU_ROLES = List.of(
         "ROLE_SYS_ADMIN",
         "ROLE_AUTH_ADMIN",
-        "ROLE_AUDITOR_ADMIN",
+        "ROLE_SECURITY_AUDITOR",
         "ROLE_OP_ADMIN",
         "ROLE_USER"
     );

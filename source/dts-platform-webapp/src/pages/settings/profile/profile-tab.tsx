@@ -27,7 +27,6 @@ export const ROLE_LABEL_MAP: Record<string, string> = {
 
 export const USERNAME_FALLBACK_NAME: Record<string, string> = {
 	sysadmin: "系统管理员",
-	syadmin: "系统管理员",
 	authadmin: "授权管理员",
 	auditadmin: "安全审计员",
 	opadmin: "运维管理员",

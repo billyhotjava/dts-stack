@@ -2,7 +2,7 @@
 
 This folder contains the default Keycloak realm export (`jhipster-realm.json`). To enable ABAC claims in tokens:
 
-- Add realm roles used by this project: `ROLE_SYS_ADMIN`, `ROLE_AUTH_ADMIN`, `ROLE_AUDITOR_ADMIN`, `ROLE_OP_ADMIN`.
+- Add realm roles used by this project: `ROLE_SYS_ADMIN`, `ROLE_AUTH_ADMIN`, `ROLE_SECURITY_AUDITOR`, `ROLE_OP_ADMIN`.
 - Ensure users carry a user attribute `person_level` (NON_SECRET|GENERAL|IMPORTANT|CORE).
 - Add a protocol mapper that derives `data_levels` array claim from `person_level`.
 

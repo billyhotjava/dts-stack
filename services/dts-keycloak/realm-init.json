@@ -78,7 +78,7 @@
       },
       {
         "id": "aa02532a-973e-44d0-94c7-5f21018dc02e",
-        "name": "ROLE_AUDITOR_ADMIN",
+        "name": "ROLE_SECURITY_AUDITOR",
         "description": "安全审计员",
         "composite": false,
         "clientRole": false,

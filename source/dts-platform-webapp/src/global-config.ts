@@ -21,8 +21,10 @@ export type GlobalConfig = {
 	routerHistory: "browser" | "hash";
 	/** Enable admin UI for managing portal (client) menus */
 	enablePortalMenuMgmt: boolean;
-	/** Enable experimental SQL workbench experience */
-	enableSqlWorkbench: boolean;
+    /** Enable experimental SQL workbench experience */
+    enableSqlWorkbench: boolean;
+    /** Allowed roles to sign in; empty means allow all authenticated users */
+    allowedLoginRoles: string[];
 };
 
 /**
@@ -56,7 +58,7 @@ const removeTrailingSlash = (path: string) => {
 
 const resolveDefaultRoute = () => {
 	const env = import.meta.env as Record<string, string | undefined>;
-	const routerMode = (env.VITE_APP_ROUTER_MODE || "backend").trim();
+	const routerMode = (env.VITE_APP_ROUTER_MODE || "backend").trim().toLowerCase();
 	const backendFallback = DEFAULT_PORTAL_ROUTE;
 	const frontendFallback = DEFAULT_PORTAL_ROUTE;
 
@@ -98,14 +100,30 @@ const resolveApiBaseUrl = () => {
 	return ensureLeadingSlash(normalized, "/api");
 };
 
+const resolveAllowedLoginRoles = (): string[] => {
+    const raw = (import.meta.env.VITE_ALLOWED_LOGIN_ROLES ||
+        // default to platform op admin only
+        "ROLE_OP_ADMIN") as string;
+    return String(raw)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+};
+
+
 export const GLOBAL_CONFIG: GlobalConfig = {
 	appName: import.meta.env.VITE_APP_NAME || "数据管理平台",
 	appVersion: packageJson.version,
 	defaultRoute: resolveDefaultRoute(),
 	publicPath: resolvePublicPath(),
 	apiBaseUrl: resolveApiBaseUrl(),
-	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "backend",
-	routerHistory: (import.meta.env.VITE_APP_ROUTER_HISTORY || "browser") as "browser" | "hash",
-	enablePortalMenuMgmt: String(import.meta.env.VITE_ENABLE_PORTAL_MENU_MGMT || "true").toLowerCase() === "true",
-	enableSqlWorkbench: String(import.meta.env.VITE_ENABLE_SQL_WORKBENCH || "false").toLowerCase() === "true",
+	routerMode: ((import.meta.env.VITE_APP_ROUTER_MODE || "backend") as string).trim().toLowerCase() as
+		| "frontend"
+		| "backend",
+	routerHistory: ((import.meta.env.VITE_APP_ROUTER_HISTORY || "browser") as string).trim().toLowerCase() as
+		| "browser"
+		| "hash",
+    enablePortalMenuMgmt: String(import.meta.env.VITE_ENABLE_PORTAL_MENU_MGMT || "true").toLowerCase() === "true",
+    enableSqlWorkbench: String(import.meta.env.VITE_ENABLE_SQL_WORKBENCH || "false").toLowerCase() === "true",
+    allowedLoginRoles: resolveAllowedLoginRoles(),
 };
