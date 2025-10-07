@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { SignInReq } from "@/api/services/userService";
+import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import { useSignIn } from "@/store/userStore";
 import { Button } from "@/ui/button";
@@ -11,7 +12,6 @@ import { Checkbox } from "@/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
 import { cn, urlJoin } from "@/utils";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
@@ -72,7 +72,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				<form onSubmit={form.handleSubmit(handleFinish)} className="space-y-4">
 					<div className="flex flex-col items-center gap-2 text-center">
 						<h1 className="text-2xl font-bold">{bilingual("sys.login.signInFormTitle")}</h1>
-						<p className="text-balance text-sm text-muted-foreground">{bilingual("sys.login.signInFormDescription")}</p>
+						{/* <p className="text-balance text-sm text-muted-foreground">{bilingual("sys.login.signInFormDescription")}</p> */}
 					</div>
 
 					<FormField

@@ -198,6 +198,8 @@ services:
       PORT: "3001"
       # Vite dev proxy target for platform webapp: call dts-platform directly
       VITE_API_PROXY_TARGET: http://dts-platform:8081
+      # Allow normal users to sign in during local development
+      VITE_ALLOWED_LOGIN_ROLES: "ROLE_USER,ROLE_OP_ADMIN"
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18012:3001"

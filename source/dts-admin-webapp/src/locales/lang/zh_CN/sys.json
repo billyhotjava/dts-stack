@@ -24,7 +24,7 @@
       "errMsg505": "http版本不支持该请求!"
     },
     "login": {
-      "brandName": "数据管理平台",
+      "brandName": "数据管理平台(管理端)",
       "brandIllustrationAlt": "科技氛围大数据平台插画",
       "backSignIn": "返回",
       "signInFormTitle": "登录到您的账户",

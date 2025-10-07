@@ -101,9 +101,12 @@ const resolveApiBaseUrl = () => {
 };
 
 const resolveAllowedLoginRoles = (): string[] => {
-    const raw = (import.meta.env.VITE_ALLOWED_LOGIN_ROLES ||
-        // default to platform op admin only
-        "ROLE_OP_ADMIN") as string;
+    // In dev, allow normal users to sign in by default while still permitting OP_ADMIN.
+    // In prod, keep the default strict to OP_ADMIN unless explicitly overridden via env.
+    const devDefault = "ROLE_USER,ROLE_OP_ADMIN";
+    const prodDefault = "ROLE_OP_ADMIN";
+    const defaultValue = (import.meta.env.DEV ? devDefault : prodDefault) as string;
+    const raw = (import.meta.env.VITE_ALLOWED_LOGIN_ROLES || defaultValue) as string;
     return String(raw)
         .split(",")
         .map((s) => s.trim())

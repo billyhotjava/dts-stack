@@ -1,3 +1,4 @@
+import { Star } from "lucide-react";
 import { Navigate } from "react-router";
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
 import LocalePicker from "@/components/locale-picker";
@@ -9,7 +10,6 @@ import LoginForm from "./login-form";
 import { LoginProvider } from "./providers/login-provider";
 import RegisterForm from "./register-form";
 import ResetForm from "./reset-form";
-import { Star } from "lucide-react";
 
 function LoginPage() {
 	const token = useUserToken();
@@ -27,8 +27,8 @@ function LoginPage() {
 			<div className="flex flex-col gap-4 p-6 md:p-10">
 				<div className="flex justify-center gap-2 md:justify-start">
 					<div className="flex items-center gap-3 font-medium cursor-default">
-						<Star className="h-8 w-8 text-primary" fill="currentColor" strokeWidth={1.5} />
-						<span className="text-lg font-semibold leading-tight text-foreground">{brandLabel}</span>
+						<Star className="h-8 w-8 text-red-600" fill="currentColor" strokeWidth={1.5} />
+						<span className="text-2xl font-semibold leading-tight text-foreground">{brandLabel}</span>
 					</div>
 				</div>
 				<div className="flex flex-1 items-center justify-center">

@@ -28,7 +28,7 @@ function LoginPage() {
 				<div className="flex justify-center gap-2 md:justify-start">
 					<div className="flex items-center gap-3 font-medium cursor-default">
 						<Star className="h-8 w-8 text-red-600" fill="currentColor" strokeWidth={1.5} />
-						<span className="text-lg font-semibold leading-tight text-foreground">{brandLabel}</span>
+						<span className="text-2xl font-semibold leading-tight text-foreground">{brandLabel}</span>
 					</div>
 				</div>
 				<div className="flex flex-1 items-center justify-center">
