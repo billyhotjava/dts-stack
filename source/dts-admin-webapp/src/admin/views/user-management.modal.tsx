@@ -395,6 +395,36 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		setRoleError("");
 	}, [open, mode, user, loadUserRoles, normalizeAttributesForState]);
 
+    // Ensure organization selection is pre-filled after org tree loads
+    useEffect(() => {
+        if (!open || mode !== "edit" || !user) return;
+        if (selectedGroupPaths.length > 0) return;
+        // Prefer groups from user payload
+        let existingGroups = Array.isArray(user.groups)
+            ? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
+            : [];
+        if (existingGroups.length > 0) {
+            setSelectedGroupPaths(existingGroups);
+            return;
+        }
+        // Fallback: map by dept_code -> dts_org_id once orgIndex has data
+        if (Object.keys(orgIndex).length > 0) {
+            const deptCode = (user.attributes?.dept_code?.[0] || '').trim();
+            if (deptCode) {
+                let matchedPath: string | undefined;
+                for (const [path, node] of Object.entries(orgIndex)) {
+                    if (String(node?.id ?? '') === deptCode) { matchedPath = path; break; }
+                }
+                if (!matchedPath) {
+                    matchedPath = Object.keys(orgIndex).find((p) => p.endsWith(`/${deptCode}`) || p.split('/').includes(deptCode));
+                }
+                if (matchedPath) {
+                    setSelectedGroupPaths([normalizeGroupPath(matchedPath)]);
+                }
+            }
+        }
+    }, [open, mode, user, orgIndex, selectedGroupPaths.length]);
+
 	useEffect(() => {
 		if (!open) {
 			return;

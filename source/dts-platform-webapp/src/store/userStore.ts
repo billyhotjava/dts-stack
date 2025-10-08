@@ -156,7 +156,7 @@ export const useSignIn = () => {
 				return set;
 			};
 
-            const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD || "false").toLowerCase() === "true";
+            const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD ?? "true").toLowerCase() === "true";
             if (FE_GUARD_ENABLED) {
                 const allowed = Array.isArray(GLOBAL_CONFIG.allowedLoginRoles) ? GLOBAL_CONFIG.allowedLoginRoles : [];
                 const allowedSet = expandSynonyms(allowed);

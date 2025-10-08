@@ -246,8 +246,8 @@ dts:
       portal-menu:
         # 强约束字段（可见性/授权）变更是否必须走审批：visibilityRules/allowedRoles/allowedPermissions/maxDataLevel
         visibility: ${DTS_REQUIRE_APPROVAL_PORTAL_MENU_VISIBILITY:true}
-        # 结构/展示类变更（name/icon/sortOrder/path/component/parent/deleted）是否需要审批（默认直改留痕）
-        structure: ${DTS_REQUIRE_APPROVAL_PORTAL_MENU_STRUCTURE:false}
+        # 结构/展示类变更（name/icon/sortOrder/path/component/parent/deleted）是否需要审批（默认开启）
+        structure: ${DTS_REQUIRE_APPROVAL_PORTAL_MENU_STRUCTURE:true}
 
 # ===================================================================
 # JHipster specific properties

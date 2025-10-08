@@ -189,6 +189,15 @@ public class PortalMenuService {
     }
 
     private boolean isMenuVisible(PortalMenu menu, Set<String> roleCodes, Set<String> permissionCodes, String maxDataLevel) {
+        // 强约束：基础数据功能（foundation）仅对 OP_ADMIN 开放
+        try {
+            String section = extractSectionKey(menu);
+            if ("foundation".equalsIgnoreCase(section)) {
+                if (roleCodes == null || !roleCodes.contains(AuthoritiesConstants.OP_ADMIN)) {
+                    return false;
+                }
+            }
+        } catch (Exception ignore) {}
         List<PortalMenuVisibility> visibilities = menu.getVisibilities();
         if (visibilities == null || visibilities.isEmpty()) {
             if (CollectionUtils.isEmpty(roleCodes)) {
@@ -509,7 +518,15 @@ public class PortalMenuService {
 
     private List<PortalMenuVisibility> defaultVisibilities(PortalMenu menu) {
         List<PortalMenuVisibility> defaults = new ArrayList<>();
+        String section = null;
+        try {
+            section = extractSectionKey(menu);
+        } catch (Exception ignore) {}
         for (String role : DEFAULT_MENU_ROLES) {
+            // 基础数据功能仅默认授予 OP_ADMIN，其它任何默认角色不应拥有
+            if ("foundation".equalsIgnoreCase(section) && !AuthoritiesConstants.OP_ADMIN.equals(role)) {
+                continue;
+            }
             PortalMenuVisibility visibility = new PortalMenuVisibility();
             visibility.setMenu(menu);
             visibility.setRoleCode(role);

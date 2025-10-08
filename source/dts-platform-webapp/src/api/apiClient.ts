@@ -98,11 +98,17 @@ axiosInstance.interceptors.response.use(
         // Friendly hints for security codes
         let hint = "";
         switch (String(errCode || "")) {
+          case "dts-sec-0001":
+            hint = "动作权限不足，请联系管理员申请更高权限";
+            break;
           case "dts-sec-0002":
             hint = "作用域/部门不匹配，请在右上角切换上下文后重试";
             break;
           case "dts-sec-0003":
             hint = "人员密级低于数据密级，无法访问该资源";
+            break;
+          case "dts-sec-0007":
+            hint = "资源不存在或不可见";
             break;
           case "dts-sec-0005":
           case "dts-sec-0006":

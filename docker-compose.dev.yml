@@ -204,9 +204,9 @@ services:
       VITE_API_PROXY_TARGET: http://dts-platform:8081
       # Ensure no prefix rewrite in dev; backend already serves at /api
       VITE_API_PROXY_PREFIX: ""
-      # Allow normal users and op admin during integration testing
-      VITE_ALLOWED_LOGIN_ROLES: "ROLE_USER,ROLE_OP_ADMIN"
-      # Disable dev fallback to ensure real backend auth during integration
+      # Enforce FE guard consistently (dev == prod)
+      VITE_ENABLE_FE_GUARD: "true"
+      VITE_ALLOWED_LOGIN_ROLES: "ROLE_OP_ADMIN"
       VITE_DEV_LOGIN_FALLBACK: "false"
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:

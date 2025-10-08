@@ -448,7 +448,7 @@ export default function DatasetDetailPage() {
 					<div className="grid gap-2">
 						<Label>标签（逗号分隔）</Label>
 						<Input
-							value={dataset.tags.join(",")}
+							value={(dataset.tags || []).join(",")}
 							onChange={(e) =>
 								setDataset({
 									...(dataset as DatasetAsset),

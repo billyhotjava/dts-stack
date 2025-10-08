@@ -3119,4 +3119,9 @@ dts-platform-1  | [2m2025-10-08T01:19:28.605Z[0;39m [33m WARN[0;39m [35m256
 
 --- CALL /api/departments ---
 
-503
+503[2025-10-08 15:40:12] Admin portal-menus API filtered 'foundation' for non-OP_ADMIN verified (by code review)
+[2025-10-08 15:40:12] Menu structure approval gating enabled by default; update/create routed to CR when touching structure fields
+[2025-10-08 15:40:12] Visibility updates still require approval; BATCH_UPDATE flows unchanged
+[2025-10-08 15:40:12] Notify push 'portal_menu_updated' added on create/update/disable
+[2025-10-08 15:40:12] Admin service default visibilities restrict foundation to OP_ADMIN; role binding attempts for foundation pruned server-side
+[2025-10-08 15:40:12] Platform fetches menu via admin BasicApiResource with audience filtering; foundation enforced by admin service

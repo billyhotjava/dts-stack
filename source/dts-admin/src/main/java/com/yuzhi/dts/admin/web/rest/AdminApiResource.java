@@ -299,6 +299,10 @@ public class AdminApiResource {
     @GetMapping("/portal/menus")
     public ResponseEntity<ApiResponse<Map<String, Object>>> portalMenus() {
         Map<String, Object> payload = buildPortalMenuCollection();
+        // 非 OP_ADMIN 隐藏“基础数据功能”区（foundation）
+        if (SecurityUtils.hasCurrentUserNoneOfAuthorities(AuthoritiesConstants.OP_ADMIN)) {
+            payload = filterFoundationForNonOpAdmin(payload);
+        }
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "PORTAL_MENU_LIST", "MENU", "admin", "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(payload));
     }
@@ -311,7 +315,8 @@ public class AdminApiResource {
         auditDetail.put("request", payload);
         try {
             boolean visibilityTouched = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
-            if (requireMenuVisibilityApproval && visibilityTouched) {
+            boolean structureTouched = payload.containsKey("name") || payload.containsKey("path") || payload.containsKey("component") || payload.containsKey("icon") || payload.containsKey("sortOrder") || payload.containsKey("parentId");
+            if ((requireMenuVisibilityApproval && visibilityTouched) || (requireMenuStructureApproval && structureTouched)) {
                 ChangeRequest cr = changeRequestService.draft(
                     "PORTAL_MENU",
                     "CREATE",
@@ -375,6 +380,9 @@ public class AdminApiResource {
             PortalMenu persisted = portalMenuRepo.findById(menu.getId()).orElse(menu);
             auditDetail.put("created", toPortalMenuPayload(persisted));
             auditService.record(actor, "PORTAL_MENU_CREATE", "PORTAL_MENU", String.valueOf(persisted.getId()), "SUCCESS", auditDetail);
+            try {
+                notifyClient.trySend("portal_menu_updated", Map.of("action", "create", "id", String.valueOf(persisted.getId())));
+            } catch (Exception ignored) {}
             return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
         } catch (IllegalArgumentException ex) {
             auditDetail.put("error", ex.getMessage());
@@ -407,7 +415,8 @@ public class AdminApiResource {
         String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
         try {
             boolean visibilityTouchedGate = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
-            if (requireMenuVisibilityApproval && visibilityTouchedGate) {
+            boolean structureTouchedGate = payload.containsKey("name") || payload.containsKey("path") || payload.containsKey("component") || payload.containsKey("icon") || payload.containsKey("sortOrder") || payload.containsKey("parentId") || payload.containsKey("deleted");
+            if ((requireMenuVisibilityApproval && visibilityTouchedGate) || (requireMenuStructureApproval && structureTouchedGate)) {
                 ChangeRequest cr = changeRequestService.draft(
                     "PORTAL_MENU",
                     "UPDATE",
@@ -447,6 +456,9 @@ public class AdminApiResource {
             detail.put("before", before);
             detail.put("after", toPortalMenuPayload(persisted));
             auditService.record(actor, "PORTAL_MENU_UPDATE", "PORTAL_MENU", id, "SUCCESS", detail);
+            try {
+                notifyClient.trySend("portal_menu_updated", Map.of("action", "update", "id", String.valueOf(persisted.getId())));
+            } catch (Exception ignored) {}
             return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
         } catch (IllegalArgumentException ex) {
             Map<String, Object> detail = new LinkedHashMap<>();
@@ -507,6 +519,9 @@ public class AdminApiResource {
             detail.put("before", before);
             detail.put("after", toPortalMenuPayload(entity));
             auditService.record(actor, "PORTAL_MENU_DELETE", "PORTAL_MENU", id, "SUCCESS", detail);
+            try {
+                notifyClient.trySend("portal_menu_updated", Map.of("action", "disable", "id", String.valueOf(entity.getId())));
+            } catch (Exception ignored) {}
             return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
         } catch (Exception ex) {
             Map<String, Object> detail = new LinkedHashMap<>();
@@ -1157,6 +1172,41 @@ public class AdminApiResource {
         return payload;
     }
 
+    private Map<String, Object> filterFoundationForNonOpAdmin(Map<String, Object> payload) {
+        try {
+            Object all = payload.get("allMenus");
+            if (all instanceof java.util.Collection<?> col) {
+                java.util.List<Map<String, Object>> filtered = new java.util.ArrayList<>();
+                for (Object o : col) {
+                    if (!(o instanceof java.util.Map<?, ?> m)) continue;
+                    if (!isFoundationNode((java.util.Map<String, Object>) m)) filtered.add((java.util.Map<String, Object>) m);
+                }
+                payload.put("allMenus", filtered);
+            }
+            Object act = payload.get("menus");
+            if (act instanceof java.util.Collection<?> col2) {
+                java.util.List<Map<String, Object>> filtered2 = new java.util.ArrayList<>();
+                for (Object o : col2) {
+                    if (!(o instanceof java.util.Map<?, ?> m)) continue;
+                    if (!isFoundationNode((java.util.Map<String, Object>) m)) filtered2.add((java.util.Map<String, Object>) m);
+                }
+                payload.put("menus", filtered2);
+            }
+        } catch (Exception ignore) {}
+        return payload;
+    }
+
+    private boolean isFoundationNode(Map<String, Object> node) {
+        Object meta = node.get("metadata");
+        if (meta instanceof String s) {
+            String lower = s.toLowerCase(java.util.Locale.ROOT);
+            if (lower.contains("\"sectionkey\":\"foundation\"")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void applyMenuUpdates(PortalMenu target, Map<String, Object> payload) {
         if (payload.containsKey("name")) {
             String name = trimToNull(payload.get("name"));
@@ -1391,6 +1441,10 @@ public class AdminApiResource {
                 }
                 String permission = rule.get("permission") == null ? null : rule.get("permission").toString().trim();
                 String level = normalizeDataLevelForVisibility(rule.get("dataLevel"));
+                if (isFoundationMenu(menu) && !AuthoritiesConstants.OP_ADMIN.equals(role)) {
+                    // 基础数据功能仅允许 OP_ADMIN 绑定
+                    continue;
+                }
                 visibilities.add(newVisibility(menu, role, permission, level));
             }
         } else {
@@ -1400,12 +1454,20 @@ public class AdminApiResource {
             if (!allowedRoles.isEmpty()) {
                 if (allowedPermissions.isEmpty()) {
                     for (String role : allowedRoles) {
-                        visibilities.add(newVisibility(menu, normalizeRoleCode(role), null, level));
+                        String normalized = normalizeRoleCode(role);
+                        if (isFoundationMenu(menu) && !AuthoritiesConstants.OP_ADMIN.equals(normalized)) {
+                            continue;
+                        }
+                        visibilities.add(newVisibility(menu, normalized, null, level));
                     }
                 } else {
                     for (String role : allowedRoles) {
                         for (String permission : allowedPermissions) {
-                            visibilities.add(newVisibility(menu, normalizeRoleCode(role), permission, level));
+                            String normalized = normalizeRoleCode(role);
+                            if (isFoundationMenu(menu) && !AuthoritiesConstants.OP_ADMIN.equals(normalized)) {
+                                continue;
+                            }
+                            visibilities.add(newVisibility(menu, normalized, permission, level));
                         }
                     }
                 }
@@ -1414,15 +1476,39 @@ public class AdminApiResource {
         if (visibilities.isEmpty()) {
             visibilities = defaultVisibilities(menu);
         }
+        // 基础数据功能：强制包含 OP_ADMIN 可见性，且忽略其它角色
+        if (isFoundationMenu(menu)) {
+            boolean hasOp = visibilities.stream().anyMatch(v -> AuthoritiesConstants.OP_ADMIN.equals(v.getRoleCode()));
+            if (!hasOp) {
+                visibilities.add(newVisibility(menu, AuthoritiesConstants.OP_ADMIN, null, "INTERNAL"));
+            }
+            // 仅保留 OP_ADMIN 规则
+            visibilities = visibilities.stream().filter(v -> AuthoritiesConstants.OP_ADMIN.equals(v.getRoleCode())).toList();
+        }
         return visibilities;
     }
 
     private List<PortalMenuVisibility> defaultVisibilities(PortalMenu menu) {
         List<PortalMenuVisibility> defaults = new ArrayList<>();
+        boolean foundation = isFoundationMenu(menu);
         for (String role : DEFAULT_PORTAL_ROLES) {
+            if (foundation && !AuthoritiesConstants.OP_ADMIN.equals(role)) {
+                continue; // 基础数据功能仅 OP_ADMIN 默认可见
+            }
             defaults.add(newVisibility(menu, role, null, "INTERNAL"));
         }
         return defaults;
+    }
+
+    private boolean isFoundationMenu(PortalMenu menu) {
+        if (menu == null || menu.getMetadata() == null) return false;
+        try {
+            String meta = menu.getMetadata();
+            String lc = meta.toLowerCase(java.util.Locale.ROOT);
+            return lc.contains("\"sectionkey\":\"foundation\"");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private PortalMenuVisibility newVisibility(PortalMenu menu, String role, String permission, String dataLevel) {
@@ -1783,7 +1869,9 @@ public class AdminApiResource {
                 cr.setResourceId(String.valueOf(role.getId()));
 
                 String authority = normalizeRoleAuthority(role.getName());
-                portalMenuService.synchronizeRoleMenuVisibility(authority, role.getScope(), ops);
+                // 注意：不再在创建自定义角色时批量同步“默认菜单可见性”，
+                // 以免覆盖前端在同一流程中提交的“自定义菜单绑定(BATCH_UPDATE)”。
+                // 若需要默认可见性，应通过单独的变更单或在无自定义绑定时由运维手工触发。
                 try {
                     adminUserService.syncRealmRole(role.getName(), role.getScope(), ops, role.getDescription());
                 } catch (Exception ex) {

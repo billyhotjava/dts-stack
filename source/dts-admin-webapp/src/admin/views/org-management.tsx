@@ -5,6 +5,7 @@ import { type Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { adminApi } from "@/admin/api/adminApi";
+import { KeycloakGroupService } from "@/api/services/keycloakService";
 import { useAdminLocale } from "@/admin/lib/locale";
 import type {
     OrganizationNode,
@@ -99,6 +100,31 @@ export default function OrgManagementView() {
 		if (!selectedId) return null;
 		return flattened.find((item) => item.id === selectedId) ?? null;
 	}, [flattened, selectedId]);
+
+    // Group members for the selected organization (by Keycloak group id)
+    const [members, setMembers] = useState<string[]>([]);
+    const [membersLoading, setMembersLoading] = useState(false);
+    useEffect(() => {
+        let cancelled = false;
+        async function loadMembers() {
+            if (!selected?.keycloakGroupId) {
+                if (!cancelled) setMembers([]);
+                return;
+            }
+            setMembersLoading(true);
+            try {
+                const list = await KeycloakGroupService.getGroupMembers(selected.keycloakGroupId);
+                if (!cancelled) setMembers(Array.isArray(list) ? list : []);
+            } catch (e) {
+                console.warn("Failed to load group members", e);
+                if (!cancelled) setMembers([]);
+            } finally {
+                if (!cancelled) setMembersLoading(false);
+            }
+        }
+        loadMembers();
+        return () => { cancelled = true; };
+    }, [selected?.keycloakGroupId]);
 
 	const stats = useMemo(() => {
 		const totalOrg = flattened.length;
@@ -377,6 +403,34 @@ export default function OrgManagementView() {
 						)}
 					</CardContent>
 				</Card>
+
+                <Card>
+                    <CardHeader className="flex items-center justify-between gap-3">
+                        <CardTitle>员工列表</CardTitle>
+                        {selected && (
+                            <Badge variant="outline">{members.length}</Badge>
+                        )}
+                    </CardHeader>
+                    <CardContent className="min-h-[120px]">
+                        {!selected ? (
+                            <Text variant="body3" className="text-muted-foreground">请选择左侧组织查看成员。</Text>
+                        ) : membersLoading ? (
+                            <Text variant="body3" className="text-muted-foreground">加载成员中…</Text>
+                        ) : members.length === 0 ? (
+                            <Text variant="body3" className="text-muted-foreground">暂无成员</Text>
+                        ) : (
+                            <ScrollArea className="max-h-64">
+                                <div className="grid gap-2">
+                                    {members.map((u) => (
+                                        <div key={u} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
+                                            <span className="truncate" title={u}>{u}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        )}
+                    </CardContent>
+                </Card>
 
 			</div>
 

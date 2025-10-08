@@ -12,15 +12,9 @@ import { toast } from "sonner";
 import { createDataset, deleteDataset, getCatalogConfig, listDatasets } from "@/api/platformApi";
 import { listInfraDataSources } from "@/api/services/infraService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
+import { useActiveDept, useActiveScope } from "@/store/contextStore";
 
-const SECURITY_LEVELS = [
-	{ value: "PUBLIC", label: "公开" },
-	{ value: "INTERNAL", label: "内部" },
-	{ value: "SECRET", label: "秘密" },
-	{ value: "TOP_SECRET", label: "机密" },
-] as const;
-
-type SecurityLevel = (typeof SECURITY_LEVELS)[number]["value"];
+// Legacy display classification removed in favor of DATA_* levels
 
 const DATA_LEVELS = [
   { value: "DATA_PUBLIC", label: "公开 (DATA_PUBLIC)" },
@@ -36,7 +30,6 @@ type ListItem = {
 	id: string;
 	name: string;
 	owner: string;
-	classification: SecurityLevel;
 	dataLevel?: string;
 	scope?: string;
 	ownerDept?: string;
@@ -48,13 +41,14 @@ type ListItem = {
 
 export default function DatasetsPage() {
 	const router = useRouter();
+	const activeScope = useActiveScope();
+	const activeDept = useActiveDept();
 	const [items, setItems] = useState<ListItem[]>([]);
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(false);
 	const [page, setPage] = useState(0);
 	const [size] = useState(10);
 	const [keyword, setKeyword] = useState("");
-	const [levelFilter, setLevelFilter] = useState<string>("all");
 	const [dataLevelFilter, setDataLevelFilter] = useState<string>("all");
 	const [scopeFilter, setScopeFilter] = useState<string>("all");
 	const [deptFilter, setDeptFilter] = useState<string>("");
@@ -63,7 +57,6 @@ export default function DatasetsPage() {
 	const [form, setForm] = useState({
 		name: "",
 		owner: "",
-		classification: "INTERNAL" as SecurityLevel,
 		dataLevel: "DATA_INTERNAL" as DataLevel,
 		scope: "DEPT" as Scope,
 		ownerDept: "",
@@ -86,7 +79,7 @@ export default function DatasetsPage() {
 	const [multiSourceUnlocked, setMultiSourceUnlocked] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-const levels = SECURITY_LEVELS;
+// const levels = SECURITY_LEVELS; // removed
 const normalizeSourceType = useCallback((value: string) => {
 	const upper = (value || "").toString().toUpperCase();
 	if (upper === "HIVE") return "INCEPTOR";
@@ -149,7 +142,6 @@ const renderSourceLabel = (value: string) => {
 		setLoading(true);
 		try {
 				const params: any = { page, size, keyword };
-				if (levelFilter !== "all") params.classification = levelFilter;
 				if (dataLevelFilter !== "all") params.dataLevel = dataLevelFilter;
 				if (scopeFilter !== "all") params.scope = scopeFilter;
 				if (deptFilter.trim()) params.ownerDept = deptFilter.trim();
@@ -170,7 +162,6 @@ const renderSourceLabel = (value: string) => {
 						id: String(it.id),
 						name: it.name,
 						owner: it.owner || "",
-						classification: (it.classification || "INTERNAL") as SecurityLevel,
 						dataLevel: it.dataLevel || undefined,
 						scope: it.scope || undefined,
 						ownerDept: it.ownerDept || undefined,
@@ -202,7 +193,11 @@ const renderSourceLabel = (value: string) => {
 		return () => {
 			mounted = false;
 		};
-	}, [form.scope]);
+		// Policy: when scope is INST, avoid non-share option; auto fix if encountered
+		if (form.scope === "INST" && form.shareScope === "PRIVATE_DEPT") {
+			setForm((f) => ({ ...f, shareScope: "SHARE_INST" }));
+		}
+	}, [form.scope, setForm]);
 
 	useEffect(() => {
 		const loadBasics = async () => {
@@ -233,7 +228,7 @@ const renderSourceLabel = (value: string) => {
 
 	useEffect(() => {
 		void fetchList();
-	}, [page, size, resolvedDefaultSource, levelFilter, dataLevelFilter, scopeFilter, deptFilter, keyword]);
+	}, [page, size, resolvedDefaultSource, dataLevelFilter, scopeFilter, deptFilter, keyword, activeScope, activeDept]);
 
 	useEffect(() => {
 		const handler = (event: KeyboardEvent) => {
@@ -253,12 +248,11 @@ const renderSourceLabel = (value: string) => {
 
 	const filtered = useMemo(() => {
 		return items.filter((it) => {
-			if (levelFilter !== "all" && it.classification !== levelFilter) return false;
 			if (sourceFilter !== "all" && normalizeSourceType(it.type) !== sourceFilter) return false;
 			if (keyword && !it.name.toLowerCase().includes(keyword.toLowerCase())) return false;
 			return true;
 		});
-	}, [items, levelFilter, sourceFilter, keyword, normalizeSourceType]);
+	}, [items, sourceFilter, keyword, normalizeSourceType]);
 
 	const totalPages = useMemo(() => Math.max(1, Math.ceil(total / size)), [total, size]);
 
@@ -281,10 +275,21 @@ const renderSourceLabel = (value: string) => {
 				.filter(Boolean);
 			const hiveDatabase = form.hiveDatabase.trim();
 			const hiveTable = form.hiveTable.trim();
+				// 兼容后端旧字段：按 DATA_* 推导 legacy classification（仅用于兼容，UI 不再展示）
+				const legacyClassification = (
+					form.dataLevel === "DATA_PUBLIC"
+						? "PUBLIC"
+						: form.dataLevel === "DATA_INTERNAL"
+						? "INTERNAL"
+						: form.dataLevel === "DATA_SECRET"
+						? "SECRET"
+						: "TOP_SECRET"
+				) as string;
+
 				const payload = {
 					name: form.name.trim(),
 					owner: form.owner.trim(),
-					classification: form.classification,
+					classification: legacyClassification,
 					dataLevel: form.dataLevel,
 					scope: form.scope,
 					ownerDept: form.scope === "DEPT" ? (form.ownerDept || undefined) : undefined,
@@ -354,10 +359,20 @@ const renderSourceLabel = (value: string) => {
 			try {
 				const candidate = String((r.sourceType || "").toString().trim() || "").toUpperCase();
 				const sourceType = normalizeSourceType(multiSourceAllowed && candidate ? candidate : resolvedDefaultSource);
+					// 兼容：尝试以数据密级推导 legacy classification；若无则回退
+					const legacyClassification = r.dataLevel
+						? (String(r.dataLevel).toUpperCase() === "DATA_PUBLIC"
+							? "PUBLIC"
+							: String(r.dataLevel).toUpperCase() === "DATA_INTERNAL"
+							? "INTERNAL"
+							: String(r.dataLevel).toUpperCase() === "DATA_SECRET"
+							? "SECRET"
+							: "TOP_SECRET")
+						: (r.classification || "INTERNAL");
 					await createDataset({
 						name: r.name,
 						owner: r.owner || "",
-						classification: (r.classification || "INTERNAL") as SecurityLevel,
+						classification: legacyClassification,
 						tags:
 							typeof r.tags === "string"
 								? r.tags
@@ -396,19 +411,7 @@ const renderSourceLabel = (value: string) => {
 							onKeyDown={(e) => e.key === "Enter" && fetchList()}
 							className="w-[200px]"
 						/>
-						<Select value={levelFilter} onValueChange={setLevelFilter}>
-							<SelectTrigger className="w-[140px]">
-								<SelectValue placeholder="密级" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">全部密级</SelectItem>
-								{levels.map((l) => (
-									<SelectItem key={l.value} value={l.value}>
-										{l.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+						{/* 统一为 DATA_* 过滤，移除 legacy 密级过滤 */}
 						<Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v)}>
 							<SelectTrigger className="w-[140px]">
 								<SelectValue placeholder="来源" />
@@ -501,9 +504,8 @@ const renderSourceLabel = (value: string) => {
 									<th className="px-3 py-2 w-[32px]">#</th>
 									<th className="px-3 py-2">名称</th>
 									<th className="px-3 py-2">负责人</th>
-									<th className="px-3 py-2">密级</th>
-										<th className="px-3 py-2">来源</th>
-										<th className="px-3 py-2">DATA_密级</th>
+									<th className="px-3 py-2">来源</th>
+									<th className="px-3 py-2">DATA_密级</th>
 										<th className="px-3 py-2">Scope</th>
 										<th className="px-3 py-2">Dept/Share</th>
 									<th className="px-3 py-2">操作</th>
@@ -515,9 +517,6 @@ const renderSourceLabel = (value: string) => {
 										<td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
 										<td className="px-3 py-2 font-medium">{d.name}</td>
 										<td className="px-3 py-2">{d.owner || "-"}</td>
-										<td className="px-3 py-2 text-xs">
-											{SECURITY_LEVELS.find((l) => l.value === d.classification)?.label}
-										</td>
 										<td className="px-3 py-2 text-xs">{renderSourceLabel(d.type)}</td>
 										<td className="px-3 py-2 text-xs">{d.dataLevel || "-"}</td>
 										<td className="px-3 py-2 text-xs">{d.scope || "-"}</td>
@@ -582,24 +581,7 @@ const renderSourceLabel = (value: string) => {
 							<Label>负责人</Label>
 							<Input value={form.owner} onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))} />
 						</div>
-							<div className="grid gap-2">
-								<Label>密级</Label>
-								<Select
-									value={form.classification}
-									onValueChange={(v: SecurityLevel) => setForm((f) => ({ ...f, classification: v }))}
-								>
-									<SelectTrigger>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{SECURITY_LEVELS.map((l) => (
-											<SelectItem key={l.value} value={l.value}>
-												{l.label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
+							{/* 统一显示与提交 DATA_*，不再展示 legacy 密级 */}
 							<div className="grid gap-2">
 								<Label>数据密级（DATA_*）</Label>
 								<Select
@@ -659,7 +641,6 @@ const renderSourceLabel = (value: string) => {
 										<SelectContent>
 											<SelectItem value="SHARE_INST">SHARE_INST（所内共享）</SelectItem>
 											<SelectItem value="PUBLIC_INST">PUBLIC_INST（所内公开）</SelectItem>
-											<SelectItem value="PRIVATE_DEPT">PRIVATE_DEPT（不共享）</SelectItem>
 										</SelectContent>
 									</Select>
 								</div>
