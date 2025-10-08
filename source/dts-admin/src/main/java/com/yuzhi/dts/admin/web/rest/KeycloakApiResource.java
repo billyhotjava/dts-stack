@@ -115,8 +115,40 @@ public class KeycloakApiResource {
 
     @GetMapping("/keycloak/users/{id}")
     public ResponseEntity<?> getUser(@PathVariable String id) {
-        KeycloakUserDTO u = keycloakAdminClient.findById(id, adminAccessToken()).orElse(stores.findUserById(id));
-        if (u != null) cacheUser(u);
+        String token = adminAccessToken();
+        KeycloakUserDTO u = keycloakAdminClient.findById(id, token).orElse(stores.findUserById(id));
+        if (u != null) {
+            try {
+                // Enrich with current group memberships as full paths for UI pre-selection
+                List<com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO> groups = keycloakAdminClient.listUserGroups(u.getId(), token);
+                if (groups != null && !groups.isEmpty()) {
+                    List<String> paths = new java.util.ArrayList<>();
+                    for (var g : groups) {
+                        if (g.getPath() != null && !g.getPath().isBlank()) paths.add(g.getPath());
+                    }
+                    if (!paths.isEmpty()) {
+                        u.setGroups(paths);
+                    }
+                }
+                // Fallback: if groups are empty but dept_code attribute exists, map by dts_org_id -> group path
+                if ((u.getGroups() == null || u.getGroups().isEmpty()) && u.getAttributes() != null) {
+                    String deptCode = null;
+                    java.util.List<String> vals = u.getAttributes().get("dept_code");
+                    if (vals != null && !vals.isEmpty()) deptCode = vals.get(0);
+                    if (deptCode != null && !deptCode.isBlank()) {
+                        for (var root : keycloakAdminClient.listGroups(token)) {
+                            java.util.Optional<String> matchPath = findGroupPathByOrgId(root, deptCode);
+                            if (matchPath.isPresent()) {
+                                // Avoid Optional.get(); prefer orElseThrow per modernizer rule
+                                u.setGroups(java.util.List.of(matchPath.orElseThrow()));
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+            cacheUser(u);
+        }
         if (u == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "KC_USER_DETAIL", "KC_USER", id, "SUCCESS", null);
         return ResponseEntity.ok(u);
@@ -644,6 +676,29 @@ public class KeycloakApiResource {
         return dto;
     }
 
+    private java.util.Optional<String> findGroupPathByOrgId(com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO node, String orgId) {
+        if (node == null) return java.util.Optional.empty();
+        try {
+            if (node.getAttributes() != null) {
+                java.util.List<String> orgIds = node.getAttributes().get("dts_org_id");
+                if (orgIds != null) {
+                    for (String v : orgIds) {
+                        if (v != null && v.equals(orgId)) {
+                            return java.util.Optional.ofNullable(node.getPath());
+                        }
+                    }
+                }
+            }
+            if (node.getSubGroups() != null) {
+                for (var child : node.getSubGroups()) {
+                    var m = findGroupPathByOrgId(child, orgId);
+                    if (m.isPresent()) return m;
+                }
+            }
+        } catch (Exception ignored) {}
+        return java.util.Optional.empty();
+    }
+
     @PostMapping("/keycloak/users/{id}/roles")
     public ResponseEntity<ApiResponse<Map<String, Object>>> assignRoles(
         @PathVariable String id,
@@ -732,6 +787,22 @@ public class KeycloakApiResource {
         if (role == null) return ResponseEntity.status(404).body(ApiResponse.error("角色不存在"));
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "KC_ROLE_DETAIL", "KC_ROLE", name, "SUCCESS", null);
         return ResponseEntity.ok(role);
+    }
+
+    @GetMapping("/keycloak/roles/{name}/users")
+    public ResponseEntity<List<Map<String, Object>>> getRoleUsers(@PathVariable String name) {
+        String token = adminAccessToken();
+        List<com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO> users = keycloakAdminClient.listUsersByRealmRole(name, token);
+        List<Map<String, Object>> results = new java.util.ArrayList<>();
+        for (var u : users) {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", u.getId());
+            m.put("username", u.getUsername());
+            m.put("fullName", u.getFullName());
+            results.add(m);
+        }
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "KC_ROLE_USERS_LIST", "KC_ROLE", name, "SUCCESS", null);
+        return ResponseEntity.ok(results);
     }
 
     @PostMapping("/keycloak/roles")
@@ -926,8 +997,8 @@ public class KeycloakApiResource {
         try {
             return switch (normalized) {
                 case "approve" -> {
-                    // Use service account token inside service; current user is already authorized by Spring Security
-                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.approve(id, approver, note, null);
+                    // Provide caller token for best effort; service falls back to service-account if needed
+                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.approve(id, approver, note, currentAccessToken());
                     yield ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 case "reject" -> {
@@ -975,8 +1046,23 @@ public class KeycloakApiResource {
         }
         try {
             KeycloakAuthService.LoginResult loginResult = keycloakAuthService.login(username, password);
+            // Enforce triad-only for admin console
+            Map<String, Object> user = loginResult.user();
+            @SuppressWarnings("unchecked")
+            java.util.List<String> roles = user == null ? java.util.List.of() : (java.util.List<String>) user.getOrDefault("roles", java.util.List.of());
+            java.util.Set<String> set = new java.util.HashSet<>();
+            for (String r : roles) if (r != null) set.add(r.toUpperCase());
+            boolean triad = set.contains("ROLE_SYS_ADMIN") || set.contains("SYS_ADMIN") ||
+                            set.contains("ROLE_AUTH_ADMIN") || set.contains("AUTH_ADMIN") ||
+                            set.contains("ROLE_SECURITY_AUDITOR") || set.contains("SECURITY_AUDITOR") ||
+                            set.contains("ROLE_AUDITOR_ADMIN") || set.contains("AUDITOR_ADMIN") ||
+                            set.contains("ROLE_AUDIT_ADMIN") || set.contains("AUDIT_ADMIN") ||
+                            set.contains("ROLE_AUDITADMIN") || set.contains("AUDITADMIN");
+            if (!triad) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("仅系统管理角色可登录系统端"));
+            }
             Map<String, Object> data = new HashMap<>();
-            data.put("user", loginResult.user());
+            data.put("user", user);
             data.put("accessToken", loginResult.tokens().accessToken());
             data.put("refreshToken", loginResult.tokens().refreshToken());
             if (loginResult.tokens().idToken() != null) {

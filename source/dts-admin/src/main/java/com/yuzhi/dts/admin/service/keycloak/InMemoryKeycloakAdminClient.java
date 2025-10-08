@@ -194,6 +194,78 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
         return stores.listRoles();
     }
 
+    @Override
+    public Optional<KeycloakGroupDTO> findGroupByPath(String path, String accessToken) {
+        if (StringUtils.isBlank(path)) return Optional.empty();
+        for (KeycloakGroupDTO g : stores.groups.values()) {
+            if (path.equalsIgnoreCase(g.getPath())) return Optional.of(copyGroupTree(g));
+        }
+        // Fallback: match by last segment name
+        String name = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
+        for (KeycloakGroupDTO g : stores.groups.values()) {
+            if (name.equalsIgnoreCase(g.getName())) return Optional.of(copyGroupTree(g));
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public List<KeycloakGroupDTO> listUserGroups(String userId, String accessToken) {
+        // In-memory stub does not track membership; return empty list
+        return List.of();
+    }
+
+    @Override
+    public void addUserToGroup(String userId, String groupId, String accessToken) {
+        // no-op in memory
+    }
+
+    @Override
+    public void removeUserFromGroup(String userId, String groupId, String accessToken) {
+        // no-op in memory
+    }
+
+    @Override
+    public void addRealmRolesToUser(String userId, List<String> roleNames, String accessToken) {
+        KeycloakUserDTO user = stores.findUserById(userId);
+        if (user == null) throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        List<String> roles = user.getRealmRoles() == null ? new ArrayList<>() : new ArrayList<>(user.getRealmRoles());
+        if (roleNames != null) {
+            for (String r : roleNames) if (r != null && !roles.contains(r)) roles.add(r);
+        }
+        user.setRealmRoles(roles);
+        stores.users.put(user.getId(), user);
+    }
+
+    @Override
+    public void removeRealmRolesFromUser(String userId, List<String> roleNames, String accessToken) {
+        KeycloakUserDTO user = stores.findUserById(userId);
+        if (user == null) throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        List<String> roles = user.getRealmRoles() == null ? new ArrayList<>() : new ArrayList<>(user.getRealmRoles());
+        if (roleNames != null) {
+            roles.removeIf(r -> roleNames.stream().anyMatch(x -> x != null && x.equalsIgnoreCase(r)));
+        }
+        user.setRealmRoles(roles);
+        stores.users.put(user.getId(), user);
+    }
+
+    @Override
+    public List<String> listUserRealmRoles(String userId, String accessToken) {
+        KeycloakUserDTO user = stores.findUserById(userId);
+        if (user == null || user.getRealmRoles() == null) return List.of();
+        return new ArrayList<>(user.getRealmRoles());
+    }
+
+    @Override
+    public List<KeycloakUserDTO> listUsersByRealmRole(String roleName, String accessToken) {
+        return List.of();
+    }
+
+    @Override
+    public void deleteRealmRole(String roleName, String accessToken) {
+        if (StringUtils.isBlank(roleName)) return;
+        stores.roles.remove(roleName);
+    }
+
     private void ensureUniqueUsername(String username) {
         if (username == null) {
             return;
@@ -268,22 +340,5 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
         }
         copy.setSubGroups(children);
         return copy;
-    }
-
-    @Override
-    public void addRealmRolesToUser(String userId, List<String> roleNames, String accessToken) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'addRealmRolesToUser'");
-    }
-
-    @Override
-    public void removeRealmRolesFromUser(String userId, List<String> roleNames, String accessToken) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'removeRealmRolesFromUser'");
-    }
-
-    @Override
-    public List<String> listUserRealmRoles(String userId, String accessToken) {
-        return List.of();
     }
 }

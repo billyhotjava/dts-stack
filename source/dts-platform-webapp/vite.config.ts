@@ -39,6 +39,13 @@ export default defineConfig(({ mode }) => {
 
 	const apiProxyPrefix = explicitProxyPrefix !== undefined ? explicitProxyPrefix : autoPrefix;
 
+	if (mode !== "production") {
+		// Helpful runtime log for diagnosing 401 during login in dev
+		console.info(
+			`[dev-proxy] target=${runtimeProxyTarget} prefix=${apiProxyPrefix || ""} base=${base}`,
+		);
+	}
+
 	return {
 		base,
 		plugins: [

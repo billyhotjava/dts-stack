@@ -237,6 +237,17 @@ dts:
   keycloak:
     admin-client-id: "${DTS_KEYCLOAK_ADMIN_CLIENT_ID:${OAUTH2_ADMIN_CLIENT_ID:${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID:}}}"
     admin-client-secret: "${DTS_KEYCLOAK_ADMIN_CLIENT_SECRET:${OAUTH2_ADMIN_CLIENT_SECRET:${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET:}}}"
+    # Controls whether dts-admin will auto-provision/sync Keycloak groups for organizations.
+    # Default false to avoid startup failures when the client lacks admin privileges.
+    # Enable by default; disable explicitly with DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED=false if KC admin perms not granted
+    group-provisioning-enabled: ${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:true}
+  admin:
+    require-approval:
+      portal-menu:
+        # 强约束字段（可见性/授权）变更是否必须走审批：visibilityRules/allowedRoles/allowedPermissions/maxDataLevel
+        visibility: ${DTS_REQUIRE_APPROVAL_PORTAL_MENU_VISIBILITY:true}
+        # 结构/展示类变更（name/icon/sortOrder/path/component/parent/deleted）是否需要审批（默认直改留痕）
+        structure: ${DTS_REQUIRE_APPROVAL_PORTAL_MENU_STRUCTURE:false}
 
 # ===================================================================
 # JHipster specific properties
@@ -272,6 +283,8 @@ jhipster:
   security:
     oauth2:
       audience:
+        # Accept tokens minted for the configured admin OIDC client (single-client mode)
+        - ${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID:${OAUTH2_ADMIN_CLIENT_ID:dts-system}}
         - account
         - api://default
 

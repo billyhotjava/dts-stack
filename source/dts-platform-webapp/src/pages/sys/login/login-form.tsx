@@ -52,9 +52,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					await svc.default.getMenuTree().catch(() => undefined);
 				} catch {}
 			}
-			// 统一进入欢迎页（工作台），带上 publicPath 以兼容非根路径部署
-			const target = urlJoin(GLOBAL_CONFIG.publicPath || "/", "/dashboard/workbench");
-			navigate(target, { replace: true });
+			// 统一进入欢迎页（工作台）。注意：Router 已配置 basename=publicPath，
+			// 这里必须传入“路由内路径”，不要再拼 publicPath，否则会出现 404。
+			navigate("/dashboard/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});

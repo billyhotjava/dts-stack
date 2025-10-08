@@ -6,6 +6,7 @@ import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
 import { isLoginRouteActive, resolveLoginHref } from "@/routes/constants";
 import userStore from "@/store/userStore";
+import useContextStore from "@/store/contextStore";
 
 const axiosInstance = axios.create({
 	baseURL: GLOBAL_CONFIG.apiBaseUrl,
@@ -13,7 +14,7 @@ const axiosInstance = axios.create({
 	headers: { "Content-Type": "application/json;charset=utf-8" },
 });
 
-axiosInstance.interceptors.request.use(
+	axiosInstance.interceptors.request.use(
 	(config) => {
 		const { userToken } = userStore.getState();
 		const url = config.url || "";
@@ -23,6 +24,24 @@ axiosInstance.interceptors.request.use(
 			const token = raw.startsWith("Bearer ") ? raw.slice(7).trim() : raw;
 			if (token) {
 				config.headers.Authorization = `Bearer ${token}`;
+			}
+		}
+
+
+		// Inject active scope/department headers for ABAC gates (non-auth endpoints)
+		if (!isAuthPath) {
+			try {
+				const ctx = useContextStore.getState();
+				// Initialize defaults from user profile once
+				ctx.actions.initDefaults();
+				if (ctx.activeScope) {
+					(config.headers as any)["X-Active-Scope"] = ctx.activeScope;
+				}
+				if (ctx.activeDept) {
+					(config.headers as any)["X-Active-Dept"] = ctx.activeDept;
+				}
+			} catch (e) {
+				console.warn("Failed to inject active context headers", e);
 			}
 		}
 
@@ -73,10 +92,28 @@ axiosInstance.interceptors.response.use(
 		if (!(isLoginRequest && response?.status === 401)) {
 			console.error("API Response Error:", response?.status, response?.data, error.message);
 		}
-		const errMsg = response?.data?.message || message || t("sys.api.errorMessage");
-		if (!shouldSuppressAuthHandling && !isLoginRequest) {
-			toast.error(errMsg, { position: "top-center" });
-		}
+        const apiBody: any = response?.data || {};
+        const errCode: string | undefined = (apiBody && (apiBody as any).code) || undefined;
+        const errMsg = apiBody?.message || message || t("sys.api.errorMessage");
+        // Friendly hints for security codes
+        let hint = "";
+        switch (String(errCode || "")) {
+          case "dts-sec-0002":
+            hint = "作用域/部门不匹配，请在右上角切换上下文后重试";
+            break;
+          case "dts-sec-0003":
+            hint = "人员密级低于数据密级，无法访问该资源";
+            break;
+          case "dts-sec-0005":
+          case "dts-sec-0006":
+            hint = "缺少或非法上下文，请设置作用域/部门后重试";
+            break;
+          default:
+            break;
+        }
+        if (!shouldSuppressAuthHandling && !isLoginRequest) {
+            toast.error(hint ? `${errMsg}（${hint}）` : errMsg, { position: "top-center" });
+        }
 		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest) {
 			// In development, relax auto-logout to ease debugging
 			if (import.meta.env?.DEV) {

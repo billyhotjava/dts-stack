@@ -9,7 +9,10 @@ public final class ApiResponses {
     }
 
     public static <T> ApiResponse<T> error(String message) {
-        return new ApiResponse<>(ResultStatus.ERROR.getCode(), message, null);
+        return new ApiResponse<>(ResultStatus.ERROR.getCode(), message, (String) null, null);
+    }
+
+    public static <T> ApiResponse<T> error(String code, String message) {
+        return new ApiResponse<>(ResultStatus.ERROR.getCode(), message, code, null);
     }
 }
-

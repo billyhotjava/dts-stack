@@ -28,18 +28,20 @@ const axiosInstance = axios.create({
 });
 
 axiosInstance.interceptors.request.use(
-	(config) => {
-		// 从 userStore 获取访问令牌，但对无需鉴权的端点（如 Keycloak 本地化）不附带令牌，避免无谓的鉴权失败
-		const { userToken } = userStore.getState();
-		const skipAuth = typeof config.url === "string" && config.url.includes("/keycloak/localization/");
-		if (!skipAuth && userToken.accessToken) {
-			config.headers.Authorization = `Bearer ${userToken.accessToken}`;
-		}
+    (config) => {
+        // 从 userStore 获取访问令牌，但对无需鉴权或认证端点不附带令牌，避免无谓的鉴权失败
+        const { userToken } = userStore.getState();
+        const url = typeof config.url === "string" ? config.url : "";
+        const isAuthPath = url.includes("/keycloak/auth/");
+        const skipAuth = url.includes("/keycloak/localization/") || isAuthPath;
+        if (!skipAuth && userToken.accessToken) {
+            config.headers.Authorization = `Bearer ${userToken.accessToken}`;
+        }
 
-		// 添加请求日志
-		console.log("API Request:", config.method?.toUpperCase(), config.baseURL, config.url, config);
-		return config;
-	},
+        // 添加请求日志
+        console.log("API Request:", config.method?.toUpperCase(), config.baseURL, config.url, config);
+        return config;
+    },
 	(error) => {
 		console.error("API Request Error:", error);
 		return Promise.reject(error);

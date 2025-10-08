@@ -22,7 +22,8 @@ import {
     latestQuality,
     triggerQuality,
 } from "@/api/platformApi";
-import type { DatasetAsset, DatasetJob, DatasetJobStatus, SecurityLevel } from "@/types/catalog";
+import type { DatasetAsset, DatasetJob, DatasetJobStatus, SecurityLevel, DataLevel, Scope, ShareScope } from "@/types/catalog";
+import deptService, { type DeptDto } from "@/api/services/deptService";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -31,6 +32,12 @@ const SECURITY_LEVELS = [
 	{ value: "INTERNAL", label: "内部" },
 	{ value: "SECRET", label: "秘密" },
 	{ value: "TOP_SECRET", label: "机密" },
+] as const;
+const DATA_LEVELS = [
+  { value: "DATA_PUBLIC", label: "公开 (DATA_PUBLIC)" },
+  { value: "DATA_INTERNAL", label: "内部 (DATA_INTERNAL)" },
+  { value: "DATA_SECRET", label: "秘密 (DATA_SECRET)" },
+  { value: "DATA_TOP_SECRET", label: "机密 (DATA_TOP_SECRET)" },
 ] as const;
 
 export default function DatasetDetailPage() {
@@ -50,7 +57,9 @@ export default function DatasetDetailPage() {
     const [lastJob, setLastJob] = useState<DatasetJob | null>(null);
     const [qualitySummary, setQualitySummary] = useState<any | null>(null);
     const [qualityLoading, setQualityLoading] = useState(false);
-    const [qualityRunning, setQualityRunning] = useState(false);
+	const [qualityRunning, setQualityRunning] = useState(false);
+    const [deptOptions, setDeptOptions] = useState<DeptDto[]>([]);
+    const [deptLoading, setDeptLoading] = useState(false);
 
     const loadDataset = async (withSpinner = false) => {
         if (withSpinner) setLoading(true);
@@ -172,6 +181,20 @@ export default function DatasetDetailPage() {
 		void loadDataset(true);
 		void loadQualitySummary();
 	}, [id]);
+
+    useEffect(() => {
+        let mounted = true;
+        if (dataset?.scope === "DEPT") {
+            setDeptLoading(true);
+            deptService
+                .listDepartments()
+                .then((list) => mounted && setDeptOptions(list || []))
+                .finally(() => mounted && setDeptLoading(false));
+        }
+        return () => {
+            mounted = false;
+        };
+    }, [dataset?.scope]);
 
 	const onAddColumn = () => {
 		if (!dataset) return;
@@ -349,6 +372,79 @@ export default function DatasetDetailPage() {
 							</SelectContent>
 						</Select>
 					</div>
+
+					<div className="grid gap-2">
+						<Label>数据密级（DATA_*）</Label>
+						<Select
+							value={(dataset.dataLevel as DataLevel) || "DATA_INTERNAL"}
+							onValueChange={(v: DataLevel) => setDataset({ ...(dataset as DatasetAsset), dataLevel: v })}
+						>
+							<SelectTrigger>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{DATA_LEVELS.map((l) => (
+									<SelectItem key={l.value} value={l.value}>
+										{l.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+
+					<div className="grid gap-2">
+						<Label>作用域</Label>
+						<Select
+							value={(dataset.scope as Scope) || "DEPT"}
+							onValueChange={(v: Scope) => setDataset({ ...(dataset as DatasetAsset), scope: v })}
+						>
+							<SelectTrigger>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="DEPT">DEPT（部门）</SelectItem>
+								<SelectItem value="INST">INST（研究所）</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+
+					{((dataset.scope as Scope) || "DEPT") === "DEPT" ? (
+						<div className="grid gap-2">
+							<Label>所属部门</Label>
+							<Select
+								value={dataset.ownerDept || undefined}
+								onValueChange={(v) => setDataset({ ...(dataset as DatasetAsset), ownerDept: v })}
+							>
+								<SelectTrigger>
+									<SelectValue placeholder={deptLoading ? "加载中…" : "选择部门…"} />
+								</SelectTrigger>
+								<SelectContent>
+									{deptOptions.map((d) => (
+										<SelectItem key={d.code} value={d.code}>
+											{d.nameZh || d.nameEn || d.code}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+					) : (
+						<div className="grid gap-2">
+							<Label>共享范围（INST）</Label>
+							<Select
+								value={(dataset.shareScope as ShareScope) || "SHARE_INST"}
+								onValueChange={(v: ShareScope) => setDataset({ ...(dataset as DatasetAsset), shareScope: v })}
+							>
+								<SelectTrigger>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="SHARE_INST">SHARE_INST（所内共享）</SelectItem>
+									<SelectItem value="PUBLIC_INST">PUBLIC_INST（所内公开）</SelectItem>
+									<SelectItem value="PRIVATE_DEPT">PRIVATE_DEPT（不共享）</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+					)}
 					<div className="grid gap-2">
 						<Label>标签（逗号分隔）</Label>
 						<Input

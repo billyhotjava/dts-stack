@@ -23,6 +23,8 @@ services:
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
       DTS_KEYCLOAK_ADMIN_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
       DTS_KEYCLOAK_ADMIN_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
+      # Enable org<->Keycloak group provisioning in dev; requires KC admin privileges on the client above
+      DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED: "${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:-true}"
       JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011"
       JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
       JHIPSTER_CORS_ALLOWED_HEADERS: "*"
@@ -103,6 +105,8 @@ services:
       DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
       DTS_JDBC_DRIVER_JAR: "quark-driver-8.37.3.jar"
       DTS_PLATFORM_HIVE_TEST_PRESERVE_ARTIFACTS: "true"
+      # Enable lightweight HTTP access logging in dev to diagnose 401s and routing
+      DTS_HTTP_ACCESS_LOG: "true"
     command:
       - bash
       - -lc
@@ -198,8 +202,12 @@ services:
       PORT: "3001"
       # Vite dev proxy target for platform webapp: call dts-platform directly
       VITE_API_PROXY_TARGET: http://dts-platform:8081
-      # Allow normal users to sign in during local development
+      # Ensure no prefix rewrite in dev; backend already serves at /api
+      VITE_API_PROXY_PREFIX: ""
+      # Allow normal users and op admin during integration testing
       VITE_ALLOWED_LOGIN_ROLES: "ROLE_USER,ROLE_OP_ADMIN"
+      # Disable dev fallback to ensure real backend auth during integration
+      VITE_DEV_LOGIN_FALLBACK: "false"
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18012:3001"

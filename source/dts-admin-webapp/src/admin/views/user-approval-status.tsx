@@ -17,9 +17,14 @@ export function ApprovalStatus({ userId }: ApprovalStatusProps) {
     setLoading(true);
     try {
       const data = await KeycloakApprovalService.getApprovalRequests();
-      const userApprovals = data.filter(
-        (req) => req.reason.includes(userId) || (req as any).items?.some((item: any) => item.targetId === userId),
-      );
+      const lowerId = String(userId || "").toLowerCase();
+      const userApprovals = data.filter((req: any) => {
+        const reason = typeof req?.reason === "string" ? req.reason : "";
+        const reasonHit = reason.toLowerCase().includes(lowerId);
+        const items = Array.isArray(req?.items) ? req.items : [];
+        const itemHit = items.some((it: any) => String(it?.targetId || "").toLowerCase() === lowerId);
+        return reasonHit || itemHit;
+      });
       setApprovals(userApprovals);
     } catch (error: any) {
       console.error("Error loading approvals:", error);

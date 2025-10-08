@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251008-05-dataset-abac-fields" author="platform">
+        <comment>Add ABAC fields to catalog_dataset: data_level/scope/owner_dept/share_scope and backfill from legacy classification</comment>
+        <addColumn tableName="catalog_dataset">
+            <column name="data_level" type="varchar(32)"/>
+            <column name="scope" type="varchar(16)"/>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="share_scope" type="varchar(16)"/>
+        </addColumn>
+
+        <!-- Backfill data_level from legacy classification values when present -->
+        <update tableName="catalog_dataset">
+            <column name="data_level" value="DATA_PUBLIC"/>
+            <where>UPPER(classification) = 'PUBLIC' AND (data_level IS NULL OR data_level = '')</where>
+        </update>
+        <update tableName="catalog_dataset">
+            <column name="data_level" value="DATA_INTERNAL"/>
+            <where>UPPER(classification) = 'INTERNAL' AND (data_level IS NULL OR data_level = '')</where>
+        </update>
+        <update tableName="catalog_dataset">
+            <column name="data_level" value="DATA_SECRET"/>
+            <where>UPPER(classification) = 'SECRET' AND (data_level IS NULL OR data_level = '')</where>
+        </update>
+        <update tableName="catalog_dataset">
+            <column name="data_level" value="DATA_TOP_SECRET"/>
+            <where>UPPER(classification) = 'TOP_SECRET' AND (data_level IS NULL OR data_level = '')</where>
+        </update>
+
+        <createIndex tableName="catalog_dataset" indexName="idx_catalog_dataset_owner_dept">
+            <column name="owner_dept"/>
+        </createIndex>
+        <createIndex tableName="catalog_dataset" indexName="idx_catalog_dataset_scope">
+            <column name="scope"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

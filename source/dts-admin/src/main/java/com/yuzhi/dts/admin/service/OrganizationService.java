@@ -34,19 +34,22 @@ public class OrganizationService {
     private final KeycloakAuthService keycloakAuthService;
     private final String managementClientId;
     private final String managementClientSecret;
+    private final boolean groupProvisioningEnabled;
 
     public OrganizationService(
         OrganizationRepository repository,
         KeycloakAdminClient keycloakAdminClient,
         KeycloakAuthService keycloakAuthService,
         @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}") String managementClientId,
-        @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}") String managementClientSecret
+        @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}") String managementClientSecret,
+        @Value("${dts.keycloak.group-provisioning-enabled:false}") boolean groupProvisioningEnabled
     ) {
         this.repository = repository;
         this.keycloakAdminClient = keycloakAdminClient;
         this.keycloakAuthService = keycloakAuthService;
         this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
         this.managementClientSecret = managementClientSecret == null ? "" : managementClientSecret.trim();
+        this.groupProvisioningEnabled = groupProvisioningEnabled;
     }
 
     public List<OrganizationNode> findTree() {
@@ -125,9 +128,17 @@ public class OrganizationService {
     }
 
     public OrganizationNode ensureUnassignedRoot() {
+        // Ensure the single root named "S10" exists
+        OrganizationNode root = repository.findFirstByNameAndParentIsNull("S10").orElse(null);
+        if (root == null) {
+            root = create("S10", null, null);
+        }
+        // Ensure child "待分配" under root "S10"
+        OrganizationNode finalRoot = root;
         OrganizationNode node = repository
-            .findFirstByNameAndParentIsNull(UNASSIGNED_ORG_NAME)
-            .orElseGet(() -> create(UNASSIGNED_ORG_NAME, null, UNASSIGNED_DESCRIPTION));
+            .findFirstByParentIdAndName(root.getId(), UNASSIGNED_ORG_NAME)
+            .orElseGet(() -> create(UNASSIGNED_ORG_NAME, finalRoot.getId(), UNASSIGNED_DESCRIPTION));
+
         boolean dirty = false;
         if (!Objects.equals(node.getDataLevel(), UNASSIGNED_DATA_LEVEL)) {
             node.setDataLevel(UNASSIGNED_DATA_LEVEL);
@@ -142,7 +153,9 @@ public class OrganizationService {
         }
         if (isKeycloakSyncEnabled()) {
             String token = resolveManagementToken();
-            ensureGroupSynced(node, token, null);
+            ensureGroupSynced(root, token, null);
+            synchronizeGroup(root, token);
+            ensureGroupSynced(node, token, root);
             synchronizeGroup(node, token);
         }
         return node;
@@ -222,7 +235,8 @@ public class OrganizationService {
     }
 
     private boolean isKeycloakSyncEnabled() {
-        return StringUtils.isNotBlank(managementClientId) && StringUtils.isNotBlank(managementClientSecret);
+        // Only sync/provision groups when both admin credentials are present and explicitly enabled.
+        return groupProvisioningEnabled && StringUtils.isNotBlank(managementClientId) && StringUtils.isNotBlank(managementClientSecret);
     }
 
     private String resolveManagementToken() {

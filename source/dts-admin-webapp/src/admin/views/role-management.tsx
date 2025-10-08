@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Text } from "@/ui/typography";
 import { Textarea } from "@/ui/textarea";
 import { toast } from "sonner";
+import { GLOBAL_CONFIG } from "@/global-config";
 
 const OPERATION_LABELS: Record<DataOperation, string> = {
     read: "读取",
@@ -64,6 +65,7 @@ interface RoleRow {
     menuLabels: string[];
     assignments: AdminRoleAssignment[];
     source?: string;
+    kcMemberCount?: number;
 }
 
 interface MenuOption {
@@ -121,6 +123,8 @@ export default function RoleManagementView() {
     const menuOptions = menuCatalog.options;
     const menuRoleMap = menuCatalog.menuRoleMap;
     const roleMenuIndex = menuCatalog.roleToMenuIds;
+    const menuParentMap = menuCatalog.parentMap;
+    const menuChildrenMap = menuCatalog.childrenMap;
     const menuLabelMap = useMemo(() => {
         const map = new Map<number, string>();
         menuOptions.forEach((option) => {
@@ -135,9 +139,19 @@ export default function RoleManagementView() {
         const extra = customRoles ?? [];
         const assignmentMap = groupAssignments(assignments);
 
+        const hideDefaultRoles = GLOBAL_CONFIG.hideDefaultRoles;
+        const isDefaultRoles = (name?: string) => {
+            if (!name) return false;
+            const lower = name.trim().toLowerCase();
+            return lower.startsWith("default-roles-");
+        };
+
         roles.forEach((role) => {
             const canonical = canonicalRole(role.name);
             if (!canonical || RESERVED_ROLE_CODES.has(canonical)) {
+                return;
+            }
+            if (hideDefaultRoles && isDefaultRoles(role.name)) {
                 return;
             }
             const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
@@ -159,6 +173,7 @@ export default function RoleManagementView() {
                 menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
                 assignments: assignmentMap.get(canonical) ?? [],
                 source: role.source ?? undefined,
+                kcMemberCount: (role as any).memberCount ?? 0,
             };
             map.set(canonical, entry);
         });
@@ -166,6 +181,9 @@ export default function RoleManagementView() {
         extra.forEach((role) => {
             const canonical = canonicalRole(role.name);
             if (!canonical || RESERVED_ROLE_CODES.has(canonical)) {
+                return;
+            }
+            if (hideDefaultRoles && isDefaultRoles(role.name)) {
                 return;
             }
             const existing = map.get(canonical);
@@ -196,6 +214,7 @@ export default function RoleManagementView() {
                     menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
                     assignments: assignmentMap.get(canonical) ?? [],
                     source: "custom",
+                    kcMemberCount: (rolesData || []).find((r) => toRoleName(r.name) === canonical || toRoleName(r.code || "") === canonical)?.memberCount ?? 0,
                 });
             }
         });
@@ -311,32 +330,31 @@ export default function RoleManagementView() {
                 key: "members",
                 width: 220,
                 onCell: () => ({ style: { verticalAlign: "middle" } }),
-                render: (_value, record) =>
-                    record.assignments.length ? (
-                        <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
+                render: (_value, record) => {
+                    const total = Math.max(record.kcMemberCount ?? 0, record.assignments.length);
+                    return (
+                        <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
+                            <Badge variant="secondary">{total} 人</Badge>
                             {record.assignments.slice(0, 2).map((assignment) => (
                                 <Badge key={assignment.id} variant="outline">
                                     {assignment.displayName || assignment.username}
                                 </Badge>
                             ))}
-                            {record.assignments.length > 2 ? (
-                                <Badge variant="secondary">+{record.assignments.length - 2}</Badge>
-                            ) : null}
                         </div>
-                    ) : (
-                        <Text variant="body3" className="text-muted-foreground">未绑定用户</Text>
-                    ),
+                    );
+                },
             },
             {
                 title: "操作",
                 key: "actions",
                 width: 200,
                 fixed: "right",
+                align: "right" as const,
                 onCell: () => ({ style: { verticalAlign: "middle" } }),
                 render: (_value, record) => {
                     const immutable = record.source === "builtin";
                     return (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 justify-end">
                             <Button size="sm" variant="outline" onClick={() => setMemberTarget(record)}>
                                 成员
                             </Button>
@@ -395,6 +413,8 @@ export default function RoleManagementView() {
                                 showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
                             }}
                             size="small"
+                            className="text-sm"
+                            rowClassName={() => "text-sm"}
                             tableLayout="fixed"
                             scroll={{ x: 1400 }}
                         />
@@ -408,6 +428,8 @@ export default function RoleManagementView() {
                 onSubmitted={handleCreateSubmitted}
                 menuOptions={menuOptions}
                 menuRoleMap={menuRoleMap}
+                menuParentMap={menuParentMap}
+                menuChildrenMap={menuChildrenMap}
             />
             <UpdateRoleDialog
                 target={editTarget}
@@ -415,6 +437,8 @@ export default function RoleManagementView() {
                 onSubmitted={handleUpdateSubmitted}
                 menuOptions={menuOptions}
                 menuRoleMap={menuRoleMap}
+                menuParentMap={menuParentMap}
+                menuChildrenMap={menuChildrenMap}
             />
             <DeleteRoleDialog
                 target={deleteTarget}
@@ -433,9 +457,11 @@ interface CreateRoleDialogProps {
     onSubmitted: () => void;
     menuOptions: MenuOption[];
     menuRoleMap: Map<number, MenuOption>;
+    menuParentMap: Map<number, number | null>;
+    menuChildrenMap: Map<number, number[]>;
 }
 
-function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRoleMap }: CreateRoleDialogProps) {
+function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRoleMap, menuParentMap, menuChildrenMap }: CreateRoleDialogProps) {
     const [name, setName] = useState("");
     const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
     const [allowDesensitize, setAllowDesensitize] = useState(true);
@@ -454,13 +480,50 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
         setSubmitting(false);
     }, []);
 
+    const getDescendants = (startId: number): number[] => {
+        const acc: number[] = [];
+        const stack: number[] = [startId];
+        const visited = new Set<number>();
+        while (stack.length) {
+            const cur = stack.pop()!;
+            if (visited.has(cur)) continue;
+            visited.add(cur);
+            const children = menuChildrenMap.get(cur) || [];
+            for (const c of children) {
+                acc.push(c);
+                stack.push(c);
+            }
+        }
+        return acc;
+    };
+
+    const getAncestors = (startId: number): number[] => {
+        const list: number[] = [];
+        let cur: number | null | undefined = menuParentMap.get(startId) ?? null;
+        while (cur != null) {
+            list.push(cur);
+            cur = menuParentMap.get(cur) ?? null;
+        }
+        return list;
+    };
+
     const toggleMenu = (id: number, checked: boolean) => {
         setSelectedMenus((prev) => {
             const next = new Set(prev);
+            const descendants = getDescendants(id);
             if (checked) {
                 next.add(id);
+                descendants.forEach((d) => next.add(d));
             } else {
                 next.delete(id);
+                descendants.forEach((d) => next.delete(d));
+                // if no child selected for any ancestor, uncheck that ancestor
+                const ancestors = getAncestors(id);
+                for (const p of ancestors) {
+                    const desc = getDescendants(p);
+                    const anySelected = desc.some((d) => next.has(d));
+                    if (!anySelected) next.delete(p);
+                }
             }
             return next;
         });
@@ -650,9 +713,11 @@ interface UpdateRoleDialogProps {
     onSubmitted: () => void;
     menuOptions: MenuOption[];
     menuRoleMap: Map<number, MenuOption>;
+    menuParentMap: Map<number, number | null>;
+    menuChildrenMap: Map<number, number[]>;
 }
 
-function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleMap }: UpdateRoleDialogProps) {
+function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleMap, menuParentMap, menuChildrenMap }: UpdateRoleDialogProps) {
     const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
     const [description, setDescription] = useState("");
     const [reason, setReason] = useState("");
@@ -670,13 +735,49 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
         setSubmitting(false);
     }, [target]);
 
+    const getDescendants = (startId: number): number[] => {
+        const acc: number[] = [];
+        const stack: number[] = [startId];
+        const visited = new Set<number>();
+        while (stack.length) {
+            const cur = stack.pop()!;
+            if (visited.has(cur)) continue;
+            visited.add(cur);
+            const children = menuChildrenMap.get(cur) || [];
+            for (const c of children) {
+                acc.push(c);
+                stack.push(c);
+            }
+        }
+        return acc;
+    };
+
+    const getAncestors = (startId: number): number[] => {
+        const list: number[] = [];
+        let cur: number | null | undefined = menuParentMap.get(startId) ?? null;
+        while (cur != null) {
+            list.push(cur);
+            cur = menuParentMap.get(cur) ?? null;
+        }
+        return list;
+    };
+
     const toggleMenu = (id: number, checked: boolean) => {
         setSelectedMenus((prev) => {
             const next = new Set(prev);
+            const descendants = getDescendants(id);
             if (checked) {
                 next.add(id);
+                descendants.forEach((d) => next.add(d));
             } else {
                 next.delete(id);
+                descendants.forEach((d) => next.delete(d));
+                const ancestors = getAncestors(id);
+                for (const p of ancestors) {
+                    const desc = getDescendants(p);
+                    const anySelected = desc.some((d) => next.has(d));
+                    if (!anySelected) next.delete(p);
+                }
             }
             return next;
         });
@@ -870,11 +971,36 @@ interface DeleteRoleDialogProps {
 function DeleteRoleDialog({ target, onClose, onSubmitted, menuRoleMap }: DeleteRoleDialogProps) {
     const [reason, setReason] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [checking, setChecking] = useState(false);
+    const [precheck, setPrecheck] = useState<Record<string, any> | null>(null);
 
     useEffect(() => {
         setReason("");
         setSubmitting(false);
+        setPrecheck(null);
+        setChecking(false);
     }, [target]);
+
+    useEffect(() => {
+        let cancelled = false;
+        async function load() {
+            const name = target?.authority ? toRoleName(target.authority) : "";
+            if (!name) return;
+            setChecking(true);
+            try {
+                const data = await adminApi.getRolePreDeleteCheck(name);
+                if (!cancelled) setPrecheck(data || null);
+            } catch (e) {
+                if (!cancelled) setPrecheck(null);
+            } finally {
+                if (!cancelled) setChecking(false);
+            }
+        }
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [target?.authority]);
 
     const handleSubmit = async () => {
         if (!target) {
@@ -920,9 +1046,25 @@ function DeleteRoleDialog({ target, onClose, onSubmitted, menuRoleMap }: DeleteR
                 </DialogHeader>
                 {target ? (
                     <div className="space-y-4 text-sm">
-                        <Text variant="body3">
-                            即将提交删除角色 <span className="font-semibold">{target.authority}</span> 的审批请求。该操作将在审批通过后由授权管理员执行。
-                        </Text>
+                        <div className="space-y-1">
+                            <Text variant="body3">
+                                即将提交删除角色 <span className="font-semibold">{target.authority}</span> 的审批请求。该操作将在审批通过后由授权管理员执行。
+                            </Text>
+                            {checking ? (
+                                <Text variant="body3" className="text-muted-foreground">预检中…</Text>
+                            ) : (
+                                <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                                    <Badge variant={precheck?.reserved ? "destructive" : "secondary"}>
+                                        {precheck?.reserved ? "内置角色（不可删除）" : "可删除"}
+                                    </Badge>
+                                    <Badge variant="secondary">Keycloak成员 {precheck?.kcMemberCount ?? 0}</Badge>
+                                    <Badge variant="secondary">菜单绑定 {precheck?.menuBindings ?? 0}</Badge>
+                                    {typeof precheck?.assignments === 'number' ? (
+                                        <Badge variant="secondary">业务授权 {precheck?.assignments}</Badge>
+                                    ) : null}
+                                </div>
+                            )}
+                        </div>
                         <div className="space-y-2">
                             <label htmlFor="delete-reason" className="font-medium">
                                 审批备注（可选）
@@ -941,7 +1083,7 @@ function DeleteRoleDialog({ target, onClose, onSubmitted, menuRoleMap }: DeleteR
                     <Button variant="outline" onClick={onClose} disabled={submitting}>
                         取消
                     </Button>
-                    <Button variant="destructive" onClick={handleSubmit} disabled={submitting || !target}>
+                    <Button variant="destructive" onClick={handleSubmit} disabled={submitting || !target || precheck?.reserved === true}>
                         提交审批
                     </Button>
                 </DialogFooter>
@@ -956,6 +1098,51 @@ interface MembersDialogProps {
 }
 
 function MembersDialog({ target, onClose }: MembersDialogProps) {
+    const [kcMembers, setKcMembers] = useState<Array<{ id: string; username: string; fullName?: string }>>([]);
+    const [loading, setLoading] = useState(false);
+    useEffect(() => {
+        let cancelled = false;
+        async function load() {
+            if (!target) return;
+            setLoading(true);
+            try {
+                // Fetch Keycloak realm role members on demand
+                const authority = target.authority || target.displayName;
+                if (authority) {
+                    const users = await (await import("@/api/services/keycloakService")).default.role.getRoleUsers(authority);
+                    if (!cancelled) setKcMembers(users);
+                }
+            } catch (e) {
+                console.warn("Failed to load role users from Keycloak", e);
+                if (!cancelled) setKcMembers([]);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [target?.authority, target?.displayName]);
+
+    // Merge AdminRoleAssignments (data assignments) and Keycloak realm role members
+    const merged: Array<{ id?: number; username: string; displayName?: string; source: string }> = useMemo(() => {
+        const list: Array<{ id?: number; username: string; displayName?: string; source: string }> = [];
+        const seen = new Set<string>();
+        (target?.assignments ?? []).forEach((a) => {
+            list.push({ id: a.id, username: a.username, displayName: a.displayName, source: "assignment" });
+            seen.add(a.username);
+        });
+        kcMembers.forEach((u) => {
+            const uname = u.username || u.id;
+            if (!seen.has(uname)) {
+                list.push({ username: uname, displayName: u.fullName || u.username, source: "keycloak" });
+            }
+        });
+        return list;
+    }, [target?.assignments, kcMembers]);
+
+    const total = merged.length;
     return (
         <Dialog open={Boolean(target)} onOpenChange={(open) => (!open ? onClose() : null)}>
             <DialogContent className="max-w-lg">
@@ -963,34 +1150,29 @@ function MembersDialog({ target, onClose }: MembersDialogProps) {
                     <DialogTitle>角色成员</DialogTitle>
                     {target ? (
                         <Text variant="body3" className="text-muted-foreground">
-                            角色 {target.displayName} 当前共 {target.assignments.length} 名成员。
+                            角色 {target.displayName} 当前共 {total}{loading ? "…" : ""} 名成员。
                         </Text>
                     ) : null}
                 </DialogHeader>
                 <div className="max-h-[360px] space-y-3 overflow-y-auto">
-                    {target && target.assignments.length === 0 ? (
+                    {target && !loading && total === 0 ? (
                         <Text variant="body3" className="text-muted-foreground">
-                            尚未绑定用户，可通过“新增角色授权”审批流程维护成员。
+                            尚未绑定用户。可通过“新增角色授权”或为用户分配该系统角色维护成员。
                         </Text>
                     ) : null}
-                    {target?.assignments.map((assignment) => (
-                        <div key={assignment.id} className="rounded-lg border px-4 py-3 text-sm">
+                    {loading ? (
+                        <Text variant="body3" className="text-muted-foreground">加载中…</Text>
+                    ) : null}
+                    {merged.map((m, idx) => (
+                        <div key={`${m.source}-${m.id ?? m.username}-${idx}`} className="rounded-lg border px-4 py-3 text-sm">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex flex-col">
-                                    <span className="font-medium">{assignment.displayName || assignment.username}</span>
-                                    <Text variant="body3" className="text-muted-foreground">
-                                        {assignment.username}
-                                    </Text>
+                                    <span className="font-medium">{m.displayName || m.username}</span>
+                                    <Text variant="body3" className="text-muted-foreground">{m.username}</Text>
                                 </div>
-                                <Badge variant="outline">{assignment.scopeOrgName || "全所共享区"}</Badge>
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                                <Badge variant="secondary">{assignment.userSecurityLevel}</Badge>
-                                {assignment.operations.map((operation) => (
-                                    <Badge key={`${assignment.id}-${operation}`} variant="outline">
-                                        {OPERATION_LABELS[operation]}
-                                    </Badge>
-                                ))}
+                                <Badge variant={m.source === "assignment" ? "outline" : "secondary"}>
+                                    {m.source === "assignment" ? "授权记录" : (GLOBAL_CONFIG.hideKeycloakBranding ? "系统角色" : "Keycloak 角色")}
+                                </Badge>
                             </div>
                         </div>
                     ))}
@@ -1029,12 +1211,23 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
     options: MenuOption[];
     roleToMenuIds: Map<string, number[]>;
     menuRoleMap: Map<number, MenuOption>;
+    parentMap: Map<number, number | null>;
+    childrenMap: Map<number, number[]>;
 } {
     const options: MenuOption[] = [];
     const roleToMenuIds = new Map<string, number[]>();
     const menuRoleMap = new Map<number, MenuOption>();
+    const parentMap = new Map<number, number | null>();
+    const childrenMap = new Map<number, number[]>();
 
-    const visit = (items: PortalMenuItem[] | undefined, depth: number, ancestors: string[]) => {
+    const ensureChild = (parentId: number | null, childId: number) => {
+        if (parentId == null) return;
+        const list = childrenMap.get(parentId) ?? [];
+        list.push(childId);
+        childrenMap.set(parentId, list);
+    };
+
+    const visit = (items: PortalMenuItem[] | undefined, depth: number, ancestors: string[], parentId: number | null) => {
         if (!items) {
             return;
         }
@@ -1056,6 +1249,8 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
                 };
                 options.push(option);
                 menuRoleMap.set(option.id, option);
+                parentMap.set(option.id, parentId);
+                ensureChild(parentId, option.id);
                 canonicalRoles.forEach((role) => {
                     const list = roleToMenuIds.get(role) ?? [];
                     list.push(option.id);
@@ -1064,12 +1259,12 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
             }
 
             if (item.children?.length) {
-                visit(item.children, depth + 1, chain);
+                visit(item.children, depth + 1, chain, item.id ?? parentId);
             }
         });
     };
 
-    visit(collection?.allMenus ?? collection?.menus, 0, []);
+    visit(collection?.allMenus ?? collection?.menus, 0, [], null);
 
     roleToMenuIds.forEach((ids, role) => {
         const unique = Array.from(new Set(ids));
@@ -1077,7 +1272,15 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
         roleToMenuIds.set(role, unique);
     });
 
-    return { options, roleToMenuIds, menuRoleMap };
+    // Normalize children lists
+    Array.from(childrenMap.keys()).forEach((pid) => {
+        const arr = childrenMap.get(pid) ?? [];
+        const unique = Array.from(new Set(arr));
+        unique.sort((a, b) => a - b);
+        childrenMap.set(pid, unique);
+    });
+
+    return { options, roleToMenuIds, menuRoleMap, parentMap, childrenMap };
 }
 
 async function submitMenuChangeRequests(params: {

@@ -26,7 +26,13 @@ public class PortalOpaqueTokenIntrospector implements OpaqueTokenIntrospector {
 
     @Override
     public DefaultOAuth2AuthenticatedPrincipal introspect(String token) {
-        var session = sessionRegistry.findByAccessToken(token).orElseThrow(this::invalidToken);
+        var session = sessionRegistry.findByAccessToken(token).orElse(null);
+        if (session == null) {
+            // Avoid leaking token; only log last 6 chars for troubleshooting
+            String suffix = token == null ? "" : token.substring(Math.max(0, token.length() - 6));
+            org.slf4j.LoggerFactory.getLogger(getClass()).warn("[auth] invalid or expired token suffix=...{}", suffix);
+            throw invalidToken();
+        }
 
         Map<String, Object> attributes = new HashMap<>();
         attributes.put(OAuth2TokenIntrospectionClaimNames.ACTIVE, Boolean.TRUE);

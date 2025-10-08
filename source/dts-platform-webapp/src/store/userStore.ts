@@ -156,20 +156,23 @@ export const useSignIn = () => {
 				return set;
 			};
 
-			const allowed = Array.isArray(GLOBAL_CONFIG.allowedLoginRoles) ? GLOBAL_CONFIG.allowedLoginRoles : [];
-			const allowedSet = expandSynonyms(allowed);
-			const userRoles: string[] = Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : [];
-			const userSet = expandSynonyms(userRoles);
-			if (allowedSet.size > 0) {
-				const hasAllowed = Array.from(userSet).some((r) => allowedSet.has(r));
-				if (!hasAllowed) {
-					throw new Error("您无权登录该系统");
-				}
-			}
-			// Defense-in-depth: explicitly forbid admin-console roles on platform
-			if (userSet.has("ROLE_SYS_ADMIN") || userSet.has("ROLE_AUTH_ADMIN") || userSet.has("ROLE_SECURITY_AUDITOR")) {
-				throw new Error("您无权登录该系统");
-			}
+            const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD || "false").toLowerCase() === "true";
+            if (FE_GUARD_ENABLED) {
+                const allowed = Array.isArray(GLOBAL_CONFIG.allowedLoginRoles) ? GLOBAL_CONFIG.allowedLoginRoles : [];
+                const allowedSet = expandSynonyms(allowed);
+                const userRoles: string[] = Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : [];
+                const userSet = expandSynonyms(userRoles);
+                if (allowedSet.size > 0) {
+                    const hasAllowed = Array.from(userSet).some((r) => allowedSet.has(r));
+                    if (!hasAllowed) {
+                        throw new Error("您无权登录该系统");
+                    }
+                }
+                // Defense-in-depth: explicitly forbid admin-console roles on platform
+                if (userSet.has("ROLE_SYS_ADMIN") || userSet.has("ROLE_AUTH_ADMIN") || userSet.has("ROLE_SECURITY_AUDITOR")) {
+                    throw new Error("您无权登录该系统");
+                }
+            }
 
 			setUserToken({ accessToken, refreshToken });
 			setUserInfo(adaptedUser);
@@ -212,9 +215,13 @@ type DevFallbackContext = {
 };
 
 const handleDevFallback = ({ error, payload, setUserToken, setUserInfo }: DevFallbackContext): SignInResult | null => {
-	if (!(import.meta.env.DEV && isAxiosError(error) && error.response?.status === 401)) {
-		return null;
-	}
+    const enabled = String(import.meta.env.VITE_DEV_LOGIN_FALLBACK || "false").toLowerCase() === "true";
+    if (!enabled) {
+        return null;
+    }
+    if (!(import.meta.env.DEV && isAxiosError(error) && error.response?.status === 401)) {
+        return null;
+    }
 	const username = (payload.username || "").trim();
 	if (!username) {
 		return null;

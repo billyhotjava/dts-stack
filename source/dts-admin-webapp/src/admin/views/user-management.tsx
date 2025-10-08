@@ -22,6 +22,17 @@ function collectRoleNames(user: KeycloakUser): string[] {
   return Array.from(names);
 }
 
+function resolveFullName(user: KeycloakUser): string {
+  const n = (
+    user.fullName ||
+    user.firstName ||
+    user.lastName ||
+    (Array.isArray(user.attributes?.fullname) ? user.attributes?.fullname?.[0] : undefined) ||
+    ""
+  ).toString().trim();
+  return n;
+}
+
 export default function UserManagementView() {
   const { push } = useRouter();
   const [list, setList] = useState<KeycloakUser[]>([]);
@@ -56,12 +67,22 @@ export default function UserManagementView() {
 
   const columns: ColumnsType<KeycloakUser> = useMemo(
     () => [
-      { title: "用户名", dataIndex: "username", key: "username", width: 180 },
-      { title: "姓名", dataIndex: "fullName", key: "fullName", width: 180 },
-      { title: "邮箱", dataIndex: "email", key: "email", width: 220 },
+      { title: "用户名", dataIndex: "username", key: "username", width: 180, onCell: () => ({ style: { verticalAlign: "middle" } }) },
+      {
+        title: "姓名",
+        key: "fullName",
+        width: 180,
+        onCell: () => ({ style: { verticalAlign: "middle" } }),
+        render: (_, record) => {
+          const name = resolveFullName(record);
+          return name ? name : <span className="text-muted-foreground">-</span>;
+        },
+      },
+      { title: "邮箱", dataIndex: "email", key: "email", width: 220, onCell: () => ({ style: { verticalAlign: "middle" } }) },
       {
         title: "角色",
         key: "roles",
+        onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => {
           const roles = collectRoleNames(record);
           return roles.length ? (
@@ -81,6 +102,7 @@ export default function UserManagementView() {
         dataIndex: "enabled",
         key: "enabled",
         width: 140,
+        onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (val?: boolean) => (
           <div className="flex items-center gap-2">
             <span className={val ? "h-2 w-2 rounded-full bg-emerald-500" : "h-2 w-2 rounded-full bg-red-500"} />
@@ -93,8 +115,10 @@ export default function UserManagementView() {
         key: "actions",
         width: 180,
         fixed: "right" as const,
+        align: "right" as const,
+        onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 justify-end">
             <Button
               size="sm"
               variant="outline"
@@ -166,7 +190,11 @@ export default function UserManagementView() {
               showQuickJumper: true,
               showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
             }}
-            scroll={{ x: 1200 }}
+            size="small"
+            className="text-sm"
+            rowClassName={() => "text-sm"}
+            tableLayout="fixed"
+            scroll={{ x: 1400 }}
           />
         </CardContent>
       </Card>

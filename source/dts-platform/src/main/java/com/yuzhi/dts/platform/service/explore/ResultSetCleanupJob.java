@@ -24,14 +24,18 @@ public class ResultSetCleanupJob {
     @Scheduled(cron = "0 0 * * * *")
     @Transactional
     public void cleanupExpired() {
-        var now = Instant.now();
-        var expired = resultSetRepository.findByExpiresAtBefore(now);
-        if (expired.isEmpty()) return;
-        log.info("Cleaning up {} expired result sets", expired.size());
-        expired.forEach(rs -> {
-            executionRepository.clearResultSetReferences(rs.getId());
-            resultSetRepository.deleteById(rs.getId());
-        });
+        try {
+            var now = Instant.now();
+            var expired = resultSetRepository.findByExpiresAtBefore(now);
+            if (expired.isEmpty()) return;
+            log.info("Cleaning up {} expired result sets", expired.size());
+            expired.forEach(rs -> {
+                executionRepository.clearResultSetReferences(rs.getId());
+                resultSetRepository.deleteById(rs.getId());
+            });
+        } catch (RuntimeException ex) {
+            // If the table is not ready (Liquibase not yet applied), log once per schedule and continue.
+            log.warn("ResultSetCleanupJob skipped (table not ready?): {}", ex.getMessage());
+        }
     }
 }
-

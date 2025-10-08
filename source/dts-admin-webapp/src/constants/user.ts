@@ -4,7 +4,14 @@ export const DEPARTMENT_SUGGESTIONS = ["研究所", "财务", "二级部门A"] a
 
 export const POSITION_SUGGESTIONS = ["所长", "副所长", "财务主管", "部门领导", "业务骨干"] as const;
 
-export const CUSTOM_USER_ATTRIBUTE_KEYS = ["personnel_security_level", "department", "position"] as const;
+// Reserve custom user attributes that should not appear in the generic attributes list
+// Include dept_code so it’s treated as a system field (mapped from Keycloak group dts_org_id)
+export const CUSTOM_USER_ATTRIBUTE_KEYS = [
+  "personnel_security_level",
+  "department",
+  "position",
+  "dept_code",
+] as const;
 
 export const CUSTOM_USER_ATTRIBUTE_KEY_SET = new Set<string>(CUSTOM_USER_ATTRIBUTE_KEYS);
 

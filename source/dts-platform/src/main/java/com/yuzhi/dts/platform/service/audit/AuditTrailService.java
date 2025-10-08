@@ -36,7 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 @Service
-@DependsOn("entityManagerFactory")
+@DependsOn({"entityManagerFactory", "liquibase"})
 @Transactional
 public class AuditTrailService {
 
@@ -118,7 +118,13 @@ public class AuditTrailService {
         this.workerPool = Executors.newScheduledThreadPool(1, factory);
         this.encryptionKey = AuditCrypto.buildKey(resolveEncryptionKey());
         this.hmacKey = AuditCrypto.buildMacKey(resolveHmacKey());
-        this.lastChainSignature.set(repository.findTopByOrderByIdDesc().map(AuditEvent::getChainSignature).orElse(""));
+        try {
+            this.lastChainSignature.set(repository.findTopByOrderByIdDesc().map(AuditEvent::getChainSignature).orElse(""));
+        } catch (Exception ex) {
+            // In case Liquibase hasn't created the table yet or DB is not ready, degrade gracefully.
+            log.warn("AuditTrailService could not fetch last chain signature (will retry later)", ex);
+            this.lastChainSignature.set("");
+        }
         running.set(true);
         workerPool.scheduleWithFixedDelay(this::drainQueue, 0, 500, TimeUnit.MILLISECONDS);
         Long existingCount = null;

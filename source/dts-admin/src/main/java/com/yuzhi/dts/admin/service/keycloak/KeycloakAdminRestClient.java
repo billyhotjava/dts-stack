@@ -92,7 +92,12 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         if (username == null || username.isBlank()) {
             return Optional.empty();
         }
-        URI uri = UriComponentsBuilder.fromUri(usersEndpoint).queryParam("username", username).build(true).toUri();
+        URI uri = UriComponentsBuilder
+            .fromUri(usersEndpoint)
+            .queryParam("username", username)
+            .queryParam("exact", true)
+            .build(true)
+            .toUri();
         try {
             ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
@@ -140,7 +145,9 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     @Override
     public List<KeycloakGroupDTO> listGroups(String accessToken) {
         try {
-            ResponseEntity<String> response = exchange(groupsEndpoint, HttpMethod.GET, accessToken, null);
+            // Need full representations so that 'path' and 'attributes' (e.g., dts_org_id) are present
+            URI uri = UriComponentsBuilder.fromUri(groupsEndpoint).queryParam("briefRepresentation", false).build(true).toUri();
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
                 return List.of();
             }
@@ -316,6 +323,75 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             }
         }
         return Optional.empty();
+    }
+
+    @Override
+    public Optional<KeycloakGroupDTO> findGroupByPath(String path, String accessToken) {
+        if (!StringUtils.hasText(path)) {
+            return Optional.empty();
+        }
+        for (KeycloakGroupDTO root : listGroups(accessToken)) {
+            Optional<KeycloakGroupDTO> match = findGroupByPath(root, path);
+            if (match.isPresent()) return match;
+        }
+        return Optional.empty();
+    }
+
+    private Optional<KeycloakGroupDTO> findGroupByPath(KeycloakGroupDTO node, String path) {
+        if (node == null) return Optional.empty();
+        if (path.equalsIgnoreCase(node.getPath())) {
+            return Optional.of(copyGroup(node));
+        }
+        if (node.getSubGroups() != null) {
+            for (KeycloakGroupDTO child : node.getSubGroups()) {
+                Optional<KeycloakGroupDTO> match = findGroupByPath(child, path);
+                if (match.isPresent()) return match;
+            }
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public List<KeycloakGroupDTO> listUserGroups(String userId, String accessToken) {
+        if (!StringUtils.hasText(userId)) return List.of();
+        URI uri = UriComponentsBuilder.fromUri(userUri(userId, "groups")).queryParam("briefRepresentation", false).build(true).toUri();
+        try {
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
+                return List.of();
+            }
+            List<Map<String, Object>> body = objectMapper.readValue(response.getBody(), LIST_OF_MAP);
+            List<KeycloakGroupDTO> out = new ArrayList<>();
+            for (Map<String, Object> it : body) {
+                try {
+                    out.add(toGroupDto(it));
+                } catch (Exception ignore) {}
+            }
+            return out;
+        } catch (Exception ex) {
+            LOG.warn("Failed to list groups for user {}: {}", userId, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
+    public void addUserToGroup(String userId, String groupId, String accessToken) {
+        if (!StringUtils.hasText(userId) || !StringUtils.hasText(groupId)) return;
+        URI uri = userUri(userId, "groups", groupId);
+        ResponseEntity<String> response = exchange(uri, HttpMethod.PUT, accessToken, null);
+        if (!response.getStatusCode().is2xxSuccessful() && response.getStatusCode().value() != 204) {
+            throw toRuntime("加入 Keycloak 组失败", response);
+        }
+    }
+
+    @Override
+    public void removeUserFromGroup(String userId, String groupId, String accessToken) {
+        if (!StringUtils.hasText(userId) || !StringUtils.hasText(groupId)) return;
+        URI uri = userUri(userId, "groups", groupId);
+        ResponseEntity<String> response = exchange(uri, HttpMethod.DELETE, accessToken, null);
+        if (!response.getStatusCode().is2xxSuccessful() && response.getStatusCode().value() != 204) {
+            throw toRuntime("移除 Keycloak 组失败", response);
+        }
     }
 
     private Optional<KeycloakGroupDTO> findGroupByName(KeycloakGroupDTO node, String name) {
@@ -553,9 +629,10 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             attributes.put("fullname", List.of(dto.getFullName()));
         }
         if (!attributes.isEmpty()) rep.put("attributes", attributes);
-        if (dto.getRealmRoles() != null && !dto.getRealmRoles().isEmpty()) rep.put("realmRoles", dto.getRealmRoles());
-        if (dto.getGroups() != null && !dto.getGroups().isEmpty()) rep.put("groups", dto.getGroups());
-        if (dto.getClientRoles() != null && !dto.getClientRoles().isEmpty()) rep.put("clientRoles", dto.getClientRoles());
+        // Important: Do NOT include role/group assignments in the user representation payload.
+        // Keycloak expects realm/client role mappings and group memberships to be managed via dedicated endpoints
+        // (role-mappings and group membership APIs). Including these fields here can cause 4xx/5xx errors during
+        // create/update in some Keycloak versions and configurations.
 
         return rep;
     }
@@ -723,6 +800,23 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         if (userId == null || userId.isBlank() || roleNames == null || roleNames.isEmpty()) {
             return;
         }
+        // Ensure roles exist prior to assignment to avoid Keycloak 404/409
+        for (String name : roleNames) {
+            if (name == null || name.isBlank()) continue;
+            try {
+                if (findRealmRole(name, accessToken).isEmpty()) {
+                    KeycloakRoleDTO dto = new KeycloakRoleDTO();
+                    dto.setName(name);
+                    try {
+                        upsertRealmRole(dto, accessToken);
+                    } catch (RuntimeException ex) {
+                        LOG.warn("Upsert realm role '{}' before assignment failed: {}", name, ex.getMessage());
+                    }
+                }
+            } catch (Exception ex) {
+                LOG.warn("Role existence check failed for '{}': {}", name, ex.getMessage());
+            }
+        }
         URI uri = userUri(userId, "role-mappings", "realm");
         List<Map<String, Object>> payload = toRealmRoleRepresentations(roleNames, accessToken);
         if (payload.isEmpty()) return;
@@ -740,7 +834,19 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             return;
         }
         URI uri = userUri(userId, "role-mappings", "realm");
-        List<Map<String, Object>> payload = toRealmRoleRepresentations(roleNames, accessToken);
+        // Only include roles that actually exist to avoid 404 on removal
+        List<String> existingNames = new ArrayList<>();
+        for (String name : roleNames) {
+            if (name == null || name.isBlank()) continue;
+            try {
+                if (findRealmRole(name, accessToken).isPresent()) {
+                    existingNames.add(name);
+                }
+            } catch (Exception ex) {
+                LOG.warn("Role existence check failed for '{}' during removal: {}", name, ex.getMessage());
+            }
+        }
+        List<Map<String, Object>> payload = toRealmRoleRepresentations(existingNames, accessToken);
         if (payload.isEmpty()) return;
         LOG.info("KC ADMIN remove roles from user: userId={}, roles={}", userId, roleNames);
         ResponseEntity<String> response = exchange(uri, HttpMethod.DELETE, accessToken, payload);
@@ -772,6 +878,46 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         } catch (Exception ex) {
             LOG.warn("Failed to list realm roles for user {}: {}", userId, ex.getMessage());
             return List.of();
+        }
+    }
+
+    @Override
+    public List<KeycloakUserDTO> listUsersByRealmRole(String roleName, String accessToken) {
+        if (roleName == null || roleName.isBlank()) {
+            return List.of();
+        }
+        URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(roleName, "users").queryParam("briefRepresentation", true).build(true).toUri();
+        try {
+            LOG.debug("KC ADMIN list users by realm role: {}", roleName);
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
+                return List.of();
+            }
+            List<Map<String, Object>> body = objectMapper.readValue(response.getBody(), LIST_OF_MAP);
+            List<KeycloakUserDTO> out = new ArrayList<>();
+            for (Map<String, Object> it : body) {
+                try {
+                    out.add(toUserDto(it));
+                } catch (Exception ignore) {}
+            }
+            return out;
+        } catch (Exception ex) {
+            LOG.warn("Failed to list users by realm role {}: {}", roleName, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
+    public void deleteRealmRole(String roleName, String accessToken) {
+        if (!org.springframework.util.StringUtils.hasText(roleName)) {
+            return;
+        }
+        URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(roleName).build(true).toUri();
+        LOG.info("KC ADMIN delete realm role: {}", roleName);
+        ResponseEntity<String> response = exchange(uri, HttpMethod.DELETE, accessToken, null);
+        int status = response.getStatusCode().value();
+        if (status != 200 && status != 204) {
+            throw toRuntime("删除 Keycloak 角色失败", response);
         }
     }
 

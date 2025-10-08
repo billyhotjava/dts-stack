@@ -2,6 +2,9 @@
 // Keep colocated with usage. Used by pages and mocks.
 
 export type SecurityLevel = "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET";
+export type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
+export type Scope = "DEPT" | "INST";
+export type ShareScope = "PRIVATE_DEPT" | "SHARE_INST" | "PUBLIC_INST";
 
 export type SourceType = "HIVE" | "TRINO" | "EXTERNAL" | "API";
 
@@ -37,6 +40,11 @@ export interface DatasetAsset {
 	owner: string;
 	bizDomainId: string; // domain id
 	classification: SecurityLevel;
+	// ABAC fields (optional during transition)
+	dataLevel?: DataLevel;
+	scope?: Scope;
+	ownerDept?: string;
+	shareScope?: ShareScope;
 	tags: string[];
 	description?: string;
 	source: DatasetSource;

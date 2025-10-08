@@ -35,7 +35,8 @@ function FallbackDashboardIndex() {
     }, [roles]);
 
     useEffect(() => {
-        const target = urlJoin(GLOBAL_CONFIG.publicPath || "/", "/dashboard/workbench");
+        // Router 已设置 basename，这里必须用“路由内路径”
+        const target = "/dashboard/workbench";
         if (Array.isArray(menus) && menus.length > 0) {
             router.replace(target);
         } else if (hasAdmin) {

@@ -289,8 +289,19 @@ public class KeycloakAuthService {
             user.put("groups", groups);
         }
 
+        // Collect well-known custom attributes from claims into nested attributes for FE/UX
+        Map<String, List<String>> attrs = new HashMap<>();
+        String dept = firstNonBlank(claims.get("dept_code"));
+        if (!dept.isBlank()) attrs.put("dept_code", List.of(dept));
+        String plevel = firstNonBlank(claims.get("person_security_level"), claims.get("personnel_level"));
+        if (!plevel.isBlank()) attrs.put("person_security_level", List.of(plevel));
+        if (!attrs.isEmpty()) {
+            user.put("attributes", attrs);
+        } else {
+            user.putIfAbsent("attributes", Collections.emptyMap());
+        }
+
         user.putIfAbsent("permissions", Collections.emptyList());
-        user.putIfAbsent("attributes", Collections.emptyMap());
 
         return user;
     }
@@ -318,11 +329,18 @@ public class KeycloakAuthService {
         }
         Set<String> roles = new LinkedHashSet<>();
 
+        // 1) Keycloak "roles" top-level claim (from the built-in "roles" client scope)
+        //    Many realms expose realm roles here rather than realm_access.roles
+        Object topLevelRoles = claims.get("roles");
+        roles.addAll(toStringList(topLevelRoles));
+
+        // 2) realm_access.roles (canonical place for realm roles in Keycloak)
         Object realmAccess = claims.get("realm_access");
         if (realmAccess instanceof Map<?, ?> realmMap) {
             roles.addAll(toStringList(realmMap.get("roles")));
         }
 
+        // 3) resource_access.{client}.roles (client roles)
         Object resourceAccess = claims.get("resource_access");
         if (resourceAccess instanceof Map<?, ?> resourceMap) {
             for (Object value : resourceMap.values()) {

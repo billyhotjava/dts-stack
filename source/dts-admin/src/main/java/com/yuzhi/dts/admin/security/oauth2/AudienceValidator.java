@@ -23,11 +23,27 @@ public class AudienceValidator implements OAuth2TokenValidator<Jwt> {
 
     public OAuth2TokenValidatorResult validate(Jwt jwt) {
         List<String> audience = jwt.getAudience();
-        if (audience.stream().anyMatch(allowedAudience::contains)) {
+
+        // Null-safe: some IdPs omit the aud claim for access tokens
+        if (audience != null && audience.stream().anyMatch(allowedAudience::contains)) {
             return OAuth2TokenValidatorResult.success();
-        } else {
-            LOG.warn("Invalid audience: {}", audience);
-            return OAuth2TokenValidatorResult.failure(error);
         }
+
+        // Fallback to authorized party (azp) when audience is missing
+        try {
+            String azp = jwt.getClaimAsString("azp");
+            if (azp != null && allowedAudience.contains(azp)) {
+                return OAuth2TokenValidatorResult.success();
+            }
+        } catch (Exception ignore) {
+            // ignore
+        }
+
+        LOG.warn("Invalid or missing audience: aud={} azp={}", audience, safeClaim(jwt, "azp"));
+        return OAuth2TokenValidatorResult.failure(error);
+    }
+
+    private String safeClaim(Jwt jwt, String name) {
+        try { return String.valueOf(jwt.getClaims().get(name)); } catch (Exception e) { return ""; }
     }
 }

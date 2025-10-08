@@ -275,7 +275,7 @@ export interface ApprovalRequest {
     id: number;
     requester: string;
     type: string;
-    reason: string;
+    reason?: string;
     category?: string;
     createdAt: string;
     decidedAt?: string;

@@ -18,10 +18,15 @@ export function ApprovalStatus({ userId }: ApprovalStatusProps) {
 		try {
 			// 这里应该根据用户ID过滤审批请求
 			const data = await KeycloakApprovalService.getApprovalRequests();
-			// 过滤与当前用户相关的审批请求
-			const userApprovals = data.filter(
-				(req) => req.reason.includes(userId) || (req as any).items?.some((item: any) => item.targetId === userId),
-			);
+			// 过滤与当前用户相关的审批请求（容错null/undefined字段）
+			const lowerId = String(userId || "").toLowerCase();
+			const userApprovals = data.filter((req: any) => {
+				const reason = typeof req?.reason === "string" ? req.reason : "";
+				const reasonHit = reason.toLowerCase().includes(lowerId);
+				const items = Array.isArray(req?.items) ? req.items : [];
+				const itemHit = items.some((it: any) => String(it?.targetId || "").toLowerCase() === lowerId);
+				return reasonHit || itemHit;
+			});
 			setApprovals(userApprovals);
 		} catch (error: any) {
 			console.error("Error loading approvals:", error);

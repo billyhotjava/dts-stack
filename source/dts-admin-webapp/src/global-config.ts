@@ -18,6 +18,12 @@ export type GlobalConfig = {
     routerMode: "frontend" | "backend";
     /** Allowed roles to sign in; empty means allow all authenticated users */
     allowedLoginRoles: string[];
+    /** Hide vendor branding in UI texts */
+    hideKeycloakBranding: boolean;
+    /** Hide built-in IAM roles (default-roles-*, offline_access, uma_authorization, realm-management, etc.) in selectors */
+    hideBuiltinRoles: boolean;
+    /** Hide default-roles-* from role catalogs/tables */
+    hideDefaultRoles: boolean;
 };
 
 /**
@@ -73,4 +79,7 @@ export const GLOBAL_CONFIG: GlobalConfig = {
     apiBaseUrl: resolveApiBaseUrl(),
     routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
     allowedLoginRoles: resolveAllowedLoginRoles(),
+    hideKeycloakBranding: String(import.meta.env.VITE_HIDE_KEYCLOAK_BRANDING ?? "true").toLowerCase() === "true",
+    hideBuiltinRoles: String(import.meta.env.VITE_HIDE_BUILTIN_ROLES ?? "true").toLowerCase() === "true",
+    hideDefaultRoles: String(import.meta.env.VITE_HIDE_DEFAULT_ROLES ?? "true").toLowerCase() === "true",
 };

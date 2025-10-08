@@ -208,6 +208,10 @@ public class CatalogResource {
         @RequestParam(required = false) UUID domainId,
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String classification,
+        @RequestParam(required = false) String dataLevel,
+        @RequestParam(required = false) String scope,
+        @RequestParam(required = false) String ownerDept,
+        @RequestParam(required = false) String shareScope,
         @RequestParam(required = false) String type,
         @RequestParam(required = false) String exposedBy,
         @RequestParam(required = false) String owner,
@@ -228,6 +232,11 @@ public class CatalogResource {
             )
             .filter(ds -> classification == null || (ds.getClassification() != null && ds.getClassification().equalsIgnoreCase(classification)))
             .filter(ds -> type == null || (ds.getType() != null && ds.getType().equalsIgnoreCase(type)))
+            // ABAC filters (optional)
+            .filter(ds -> dataLevel == null || (ds.getDataLevel() != null && ds.getDataLevel().equalsIgnoreCase(dataLevel)))
+            .filter(ds -> scope == null || (ds.getScope() != null && ds.getScope().equalsIgnoreCase(scope)))
+            .filter(ds -> ownerDept == null || (ds.getOwnerDept() != null && ds.getOwnerDept().equalsIgnoreCase(ownerDept)))
+            .filter(ds -> shareScope == null || (ds.getShareScope() != null && ds.getShareScope().equalsIgnoreCase(shareScope)))
             .filter(ds -> exposedBy == null || (ds.getExposedBy() != null && ds.getExposedBy().equalsIgnoreCase(exposedBy)))
             .filter(ds -> owner == null || (ds.getOwner() != null && ds.getOwner().toLowerCase().contains(owner.toLowerCase())))
             .filter(ds -> tag == null || (ds.getTags() != null && ds.getTags().toLowerCase().contains(tag.toLowerCase())))
@@ -374,6 +383,11 @@ public class CatalogResource {
         m.put("domainId", domainId);
         m.put("type", d.getType());
         m.put("classification", d.getClassification());
+        // ABAC fields (optional for backward compatibility)
+        m.put("dataLevel", d.getDataLevel());
+        m.put("scope", d.getScope());
+        m.put("ownerDept", d.getOwnerDept());
+        m.put("shareScope", d.getShareScope());
         m.put("owner", d.getOwner());
         m.put("hiveDatabase", d.getHiveDatabase());
         m.put("hiveTable", d.getHiveTable());
@@ -387,6 +401,7 @@ public class CatalogResource {
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<CatalogDataset> createDataset(@Valid @RequestBody CatalogDataset dataset) {
         applySourcePolicy(dataset);
+        validateAbacFields(dataset);
         ensurePrimarySourceIfRequired(dataset);
         CatalogDataset saved = datasetRepo.save(dataset);
         audit.audit("CREATE", "catalog.dataset", saved.getId().toString());
@@ -416,6 +431,12 @@ public class CatalogResource {
         applySourcePolicy(existing);
         ensurePrimarySourceIfRequired(existing);
         existing.setClassification(patch.getClassification());
+        // ABAC fields
+        existing.setDataLevel(patch.getDataLevel());
+        existing.setScope(patch.getScope());
+        existing.setOwnerDept(patch.getOwnerDept());
+        existing.setShareScope(patch.getShareScope());
+        validateAbacFields(existing);
         existing.setOwner(patch.getOwner());
         existing.setDomain(patch.getDomain());
         existing.setHiveDatabase(patch.getHiveDatabase());
@@ -426,6 +447,26 @@ public class CatalogResource {
         CatalogDataset saved = datasetRepo.save(existing);
         audit.audit("UPDATE", "catalog.dataset", id.toString());
         return ApiResponses.ok(saved);
+    }
+
+    private void validateAbacFields(CatalogDataset d) {
+        String scope = Optional.ofNullable(d.getScope()).map(String::trim).map(String::toUpperCase).orElse("");
+        if (scope.isEmpty()) return; // backward compatible
+        switch (scope) {
+            case "DEPT" -> {
+                String dept = Optional.ofNullable(d.getOwnerDept()).map(String::trim).orElse("");
+                if (dept.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当 scope=DEPT 时，ownerDept 不能为空");
+                }
+            }
+            case "INST" -> {
+                String share = Optional.ofNullable(d.getShareScope()).map(String::trim).map(String::toUpperCase).orElse("");
+                if (share.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当 scope=INST 时，shareScope 不能为空");
+                }
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非法作用域: " + scope);
+        }
     }
 
     @DeleteMapping("/datasets/{id}")

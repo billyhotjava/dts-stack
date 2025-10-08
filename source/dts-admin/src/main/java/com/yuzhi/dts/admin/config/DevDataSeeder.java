@@ -81,13 +81,9 @@ public class DevDataSeeder {
     }
 
     private void seedOrganizations() {
-        if (!organizationRepository.findAll().isEmpty()) {
-            return;
-        }
-        OrganizationNode root = orgService.create("总部", null, "集团总部");
-        orgService.create("生产中心", root.getId(), "生产业务条线");
-        orgService.create("研究院", root.getId(), "数据产品研发");
-        log.info("Seeded default organizations");
+        // Only ensure a single root "S10" and its child "待分配"
+        orgService.ensureUnassignedRoot();
+        log.info("Ensured minimal organizations: S10 -> 待分配");
     }
 
     private void seedDatasets() {

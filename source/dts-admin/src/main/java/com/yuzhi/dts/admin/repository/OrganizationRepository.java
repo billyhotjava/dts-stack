@@ -13,4 +13,6 @@ public interface OrganizationRepository extends JpaRepository<OrganizationNode, 
     Optional<OrganizationNode> findByKeycloakGroupId(String keycloakGroupId);
 
     Optional<OrganizationNode> findFirstByNameAndParentIsNull(String name);
+
+    Optional<OrganizationNode> findFirstByParentIdAndName(Long parentId, String name);
 }

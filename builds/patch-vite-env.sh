@@ -10,7 +10,7 @@ for f in vite.config.ts vite.config.js; do
   if [ -f "$ROOT/$f" ]; then CFG="$ROOT/$f"; break; fi
 done
 
-[ -n "$CFG" ] || exit 0
+[ -n "$CFG" ] || exit 2xl0
 
 # If it already merges process.env, skip
 if grep -q '\.\.\.process\.env' "$CFG" 2>/dev/null; then

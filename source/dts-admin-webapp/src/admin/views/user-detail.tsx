@@ -3,6 +3,8 @@ import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } from "#/keycloak";
+import type { OrganizationNode } from "@/admin/types";
+import { adminApi } from "@/admin/api/adminApi";
 import { KeycloakGroupService, KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
 import { Icon } from "@/components/icon";
 import { useParams, useRouter } from "@/routes/hooks";
@@ -34,6 +36,12 @@ const getSingleAttributeValue = (attributes: Record<string, string[]> | undefine
   return nonEmpty ?? values[0] ?? "";
 };
 
+const leafOfPath = (path?: string) => {
+  if (!path) return "";
+  const idx = path.lastIndexOf("/");
+  return idx >= 0 && idx + 1 < path.length ? path.substring(idx + 1) : path;
+};
+
 export default function UserDetailView() {
   const { id } = useParams();
   const { back } = useRouter();
@@ -43,6 +51,10 @@ export default function UserDetailView() {
   const [userGroups, setUserGroups] = useState<KeycloakGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  // Role catalog for richer descriptions (fallback when KC role lacks one)
+  const [roleCatalog, setRoleCatalog] = useState<Record<string, string>>({});
+  const [departmentName, setDepartmentName] = useState<string>("");
+  const [orgIndexById, setOrgIndexById] = useState<Record<string, OrganizationNode>>({});
 
   // UserProfile相关状态
   const [, setUserProfileConfig] = useState<UserProfileConfig | null>(null);
@@ -95,10 +107,85 @@ export default function UserDetailView() {
     loadUserProfileConfig();
   }, [loadUserDetail, loadUserProfileConfig]);
 
+  // Load admin role catalog once to enrich role descriptions
+  useEffect(() => {
+    (async () => {
+      try {
+        const roles = await adminApi.getAdminRoles();
+        const map: Record<string, string> = {};
+        (roles || []).forEach((r: any) => {
+          const name = (r?.name || "").toString().trim().toUpperCase();
+          const desc = (r?.description || "").toString();
+          if (name) map[name] = desc;
+        });
+        setRoleCatalog(map);
+      } catch (e) {
+        // best-effort only
+      }
+    })();
+  }, []);
+
+  // Build organization index when needed for mapping dept_code -> name
+  const ensureOrgIndex = useCallback(async () => {
+    if (Object.keys(orgIndexById).length > 0) return;
+    try {
+      const tree = await adminApi.getOrganizations();
+      const index: Record<string, OrganizationNode> = {};
+      const visit = (nodes?: OrganizationNode[]) => {
+        if (!nodes) return;
+        for (const n of nodes) {
+          index[String(n.id)] = n;
+          if (n.children && n.children.length) visit(n.children);
+        }
+      };
+      visit(tree);
+      setOrgIndexById(index);
+    } catch (e) {
+      // best-effort; ignore failures so page still renders
+    }
+  }, [orgIndexById]);
+
+  // Derive department display name
+  useEffect(() => {
+    const compute = async () => {
+      // 1) Prefer group path leaf from detailed groups
+      const pathFromUserGroups = userGroups && userGroups.length > 0 ? userGroups[0]?.path : undefined;
+      const pathFromUser = user?.groups && user.groups.length > 0 ? user.groups[0] : undefined;
+      const chosenPath = pathFromUserGroups || pathFromUser || "";
+      const leaf = leafOfPath(chosenPath);
+      if (leaf) {
+        setDepartmentName(leaf);
+        return;
+      }
+      // 2) Fallback to dept_code attribute: try map id -> org name; else show raw value
+      const dc = getSingleAttributeValue(user?.attributes, "dept_code");
+      if (dc) {
+        // Try to map to organization name if looks like id
+        if (!orgIndexById[dc]) {
+          await ensureOrgIndex();
+        }
+        const node = orgIndexById[dc];
+        setDepartmentName(node?.name || dc);
+        return;
+      }
+      setDepartmentName("");
+    };
+    compute();
+  }, [user, userGroups, orgIndexById, ensureOrgIndex]);
+
   // 角色表格列定义
   const roleColumns: ColumnsType<KeycloakRole> = [
     { title: "角色名称", dataIndex: "name", key: "name" },
-    { title: "描述", dataIndex: "description", key: "description", render: (desc: string) => desc || "-" },
+    {
+      title: "描述",
+      dataIndex: "description",
+      key: "description",
+      render: (desc: string, record) => {
+        const fallback = roleCatalog[(record?.name || "").toString().trim().toUpperCase()] || "";
+        const text = (desc || fallback || "").toString().trim();
+        return text ? text : "-";
+      },
+    },
     {
       title: "类型",
       dataIndex: "clientRole",
@@ -115,7 +202,7 @@ export default function UserDetailView() {
   ];
 
   const personnelSecurityLevel = getSingleAttributeValue(user?.attributes, "person_level");
-  const department = getSingleAttributeValue(user?.attributes, "department");
+  // departmentName is derived from groups or dept_code
   const position = getSingleAttributeValue(user?.attributes, "position");
   const fullName = user?.firstName || user?.lastName || user?.attributes?.fullname?.[0] || "";
   const email = user?.email || "";
@@ -204,7 +291,7 @@ export default function UserDetailView() {
             </div>
             <div>
               <span className="text-sm font-medium text-muted-foreground">部门</span>
-              <p className={`mt-1 text-sm ${department ? "" : "text-muted-foreground"}`}>{department || "-"}</p>
+              <p className={`mt-1 text-sm ${departmentName ? "" : "text-muted-foreground"}`}>{departmentName || "-"}</p>
             </div>
             <div>
               <span className="text-sm font-medium text-muted-foreground">职位</span>

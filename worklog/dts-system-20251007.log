@@ -1,0 +1,307 @@
+RBAC + ABAC 融合骨架（草案）
+—— 面向“单研究所、多部门”的数据密级与角色模型
+（仅结构与要点清单，暂不含方案与实现细节）
+
+# 1. 范围与前提
+- 组织：单研究所（INST）下设多个部门（DEPT）。
+- 作用域 × 能力：将权限拆分为“作用域（scope）”与“能力（role）”两个维度。
+  - 作用域：DEPT（部门私域）、INST（研究所共享域）。
+  - 能力：OWNER / EDITOR / VIEWER。
+- 互斥规则：同一作用域内互斥；跨作用域不互斥；多部门可并存但同一部门内能力互斥。
+- 活跃上下文：登录后须显式选择 active_scope / active_dept（若 scope=DEPT）。
+
+# 2. 枚举与序关系（用于判定，仅定义不实现）
+- 人员密级（personnel_level，低→高）：GENERAL < IMPORTANT < CORE
+- 数据密级（data_level，低→高）：PUBLIC < INTERNAL < SECRET < TOP_SECRET
+- 作用域（scope）：DEPT / INST
+- 共享范围（share_scope）：PRIVATE_DEPT / SHARE_INST / PUBLIC_INST（可按需裁剪）
+
+# 3. 身份模型（运行时会话/令牌应携带的关键字段）
+- roles_scoped：带作用域/部门的能力角色列表（例如：DEPT_OWNER:D001、DEPT_VIEWER:D002、INST_EDITOR）。
+- dept_list：用户所属部门列表（例如：[D001, D002]）。
+- active_scope：当前活跃作用域（DEPT 或 INST）。
+- active_dept：当 active_scope=DEPT 时必填（例如：D001）。
+- personnel_level：GENERAL / IMPORTANT / CORE。
+（说明：本节仅列出所需字段，不规定实现方式与位置。）
+
+# 4. 资源模型（元数据需要具备的关键属性）
+- scope：DEPT 或 INST（资源归属域）。
+- owner_dept：资源所属部门（DEPT 域资源必填）。
+- share_scope：PRIVATE_DEPT / SHARE_INST / PUBLIC_INST（资源发布范围标记）。
+- data_level：PUBLIC / INTERNAL / SECRET / TOP_SECRET（资源密级）。
+（说明：本节仅列出元数据字段，不规定存储与服务形态。）
+
+# 5. 统一判定流程（动作许可骨架）
+目标：判断“某用户能否对某资源执行某动作（READ / WRITE / MANAGE）”。
+步骤（仅流程定义，不含实现）：
+1) 动作上限（RBAC Gate）：
+   - MANAGE 需 OWNER；WRITE 需 EDITOR 及以上；READ 需 VIEWER 及以上。
+2) 域一致性（Scope Gate）：
+   - 当 active_scope=DEPT：资源须为 DEPT 域；
+     - READ：资源 owner_dept == active_dept（原则为本部门私域）；
+     - WRITE/MANAGE：资源 owner_dept == active_dept。
+   - 当 active_scope=INST：资源须为 INST 域，且 share_scope 为共享/公开类。
+3) 密级约束（Level Gate）：
+   - personnel_level_rank >= data_level_rank（密级不超）。
+4) 例外/白名单（可选）：
+   - 存在临时授权或白名单时，覆盖部分拒绝判定（需审计）。
+
+# 6. 常见情景（示例化口径，不含实现）
+- 同部门私域 + 密级不超 → 可读（VIEWER 及以上）。
+- 非本部门资源（DEPT 域） → 不可写/管。
+- INST 共享域 + 密级满足 → 可读（INST_VIEWER 及以上）。
+- 写入/管理均需具备对应能力且满足域与密级条件。
+
+# 7. 互斥与多部门切换
+- 同一“scope+dept”内能力互斥（OWNER/EDITOR/VIEWER 三者只能其一）。
+- 跨作用域/跨部门可叠加（例如 DEPT_EDITOR@D001 + INST_VIEWER）。
+- 前端提供作用域/部门切换；请求需显式携带 active_scope / active_dept。
+
+# 8. 脱敏与细粒度（可选项，仅占位说明）
+- 当密级不足或跨域只允许降级查看时，可采用：
+  - 行级过滤（按 owner_dept / share_scope 等）。
+  - 列级脱敏（对敏感列按档位掩码）。
+- 脱敏档位与人员密级的映射关系由策略定义，暂不落实现。
+
+# 9. 引擎衔接（占位）
+- 查询类（Hive/Inceptor、Trino、Doris 等）：统一策略后置于网关/中间层或引擎本地策略接口，具体实现待定。
+- 文件类（MinIO 等）：以目录/前缀/代理层方式执行域与密级控制，具体实现待定。
+
+# 10. 令牌与目录（占位）
+- 令牌中仅需承载第 3 节所列关键字段的最小集合；
+- 目录/元数据仅需承载第 4 节所列关键属性；
+- 过滤系统默认角色与 claim 规范由后续方案明确（此处不展开）。
+
+# 11. 审计与合规（范围清单）
+- 强制审计：登录、作用域切换、角色变更、查询/导出、密级变更、授权/审批、发布/下线等。
+- 对象定位：资源唯一标识（库/表/路径/数据集ID等）。
+- 报表口径：按人/部门/所/资源/密级的多维统计与异常识别（仅列需求，不含实现）。
+
+# 12. 生命周期与默认策略（范围清单）
+- 默认角色：新用户默认最低读权限（示例：按主部门 DEPT_VIEWER），具体规则待定。
+- 高权限定期复核与时效管理（季度/半年度），过期自动降级（仅要求，不给实现）。
+- 临时授权需绑定时效与用途说明，到期回收（仅要求，不给实现）。
+
+# 13. 待澄清/待补充（问题清单）
+- 共享范围是否细分为更多层次（例如跨部门共享的精细化规则）。
+- 不同资源类型（表/视图/文件/任务/数据产品等）的统一口径与差异化点。
+- 读操作的导出/订阅是否纳入单独审批或配额管理。
+- 临时授权的触发条件、审批链与审计字段最小集。
+- 角色赋权流程中的互斥校验位置（目录层/IdP/管理端）与告警策略。
+- 前端活跃上下文与后端判定的边界（Header vs Token 的最小化携带）。
+
+# 14. 决策与约定（2025-10-07 补充）
+
+- Keycloak 客户端与角色
+  - 客户端：dts-system（采用 client roles）。
+  - 角色集合：DEPT_OWNER（部门领导/部门数据管理员）、DEPT_EDITOR（部门数据开发员）、DEPT_VIEWER（部门数据查看，浏览本部门且密级不超的数据）、INST_OWNER（所领导/所层级数据管理员）、INST_EDITOR（所层级数据开发员）、INST_VIEWER（所层级数据查看，浏览本所共享且密级不超的数据）。
+  - 部门组织：Keycloak Group 仅保留根节点 S10，其余部门在 dts-admin 模块维护。
+
+- 活跃上下文默认值与主部门
+  - 默认：按用户所属部门登记 active_dept；可选指定“主部门”，用户可在个人设置中编辑。
+  - 简化约定：若实现复杂，阶段性按“一个人只能属于一个部门”处理；后续再扩展多部门与互斥校验。
+
+- 例外/白名单与审批
+  - 最小数据模型建议：target_id（资源唯一标识）、action（READ/WRITE/MANAGE）、expire_at、ticket_no（审批单号）、owner（责任人）、reason（原因）。
+  - 审批链由 admin 承担；全流程纳入审计（创建/审批/撤销/到期回收）。
+
+- 策略执行与最小行级过滤（MVP）
+  - 判定链：RBAC Gate → Scope Gate → Level Gate → 例外覆盖（审计记录）。
+  - 行级过滤：
+    • 当 active_scope=DEPT：仅允许 owner_dept == active_dept 的资源；
+    • 当 active_scope=INST：仅允许 share_scope ∈ {SHARE_INST, PUBLIC_INST} 的资源；
+    • 密级：personnel_level_rank >= data_level_rank 不通过则拒绝；
+    • SQL 查询在执行前拼接上述 where 条件；文件/对象存储策略留待后续。
+  - 请求头约定（前后端契约）：`X-Active-Scope`、`X-Active-Dept`；缺失或非法时返回标准错误码（见下）。
+  - 覆盖资源：阶段一仅覆盖“数据集/表/视图”；文件（MinIO）、任务、数据产品延后。
+
+- 错误码规范（前缀 dts-sec-****，建议 HTTP 状态与语义）
+  - dts-sec-0001 RBAC_DENY（403）：动作权限不足（需更高能力，例如 WRITE/MANAGE）。
+  - dts-sec-0002 SCOPE_MISMATCH（403）：作用域/部门不匹配，请切换活跃上下文。
+  - dts-sec-0003 LEVEL_TOO_LOW（403）：人员密级低于数据密级，拒绝访问。
+  - dts-sec-0004 TEMP_PERMIT_REQUIRED（403）：需临时授权或白名单批准。
+  - dts-sec-0005 CONTEXT_REQUIRED（400）：缺少活跃上下文头（X-Active-Scope/Dept）。
+  - dts-sec-0006 INVALID_CONTEXT（400）：非法活跃上下文或 active_dept 不在用户所属部门列表。
+  - dts-sec-0007 RESOURCE_NOT_VISIBLE（404）：资源不存在或不可见（推荐 404 以防信息泄露；网关可按需转 403）。
+  - dts-sec-0008 ENGINE_FILTER_ERROR（500）：行级过滤拼接/执行失败。
+  - dts-sec-0009 POLICY_CONFIG_MISSING（500）：资源缺失必需策略属性（scope/owner_dept/share_scope/data_level）。
+  - dts-sec-0010 TOKEN_CLAIMS_MISSING（401）：会话令牌缺少必要 claims（roles_scoped/dept_list/personnel_level）。
+
+- 落地与对接（阶段建议）
+  - M1：dts-common 建模与判定引擎、上下文接口与审计；平台后端接入注解式准入；错误码统一返回体。
+- M2：SQL 查询接入 Gate 判定与最小行级过滤；例外/白名单最小模型与审计；前端上下文选择器与请求头注入。
+
+# 15. 任务清单（Keycloak 与落地）
+
+- Keycloak 用户模型
+  - 启用 User Profile 配置，新增/启用属性：
+    - fullname → 映射到 claim `name`（用户可编辑）。
+    - phone → `phone_number`（用户可编辑，手机格式校验）。
+    - person_security_level：枚举 `GENERAL|IMPORTANT|CORE`（仅管理员可编辑，必填）。
+    - dept_code：部门代码（仅管理员可编辑，必填，单选）。
+  - 字段权限：用户可改 `fullname/phone`；`email` 可选只读；`person_security_level/dept_code` 管理员改。
+  - 校验约束：`dept_code` 正则 `^[A-Z0-9_-]{1,16}$`；`person_security_level` 枚举校验。
+
+- 客户端与角色
+  - 客户端统一：`dts-system`（6 个 client role：DEPT_OWNER/EDITOR/VIEWER、INST_OWNER/EDITOR/VIEWER）。
+  - Client Scope：`dts-system-profile`，附加到 `dts-system`，承载以下协议映射：
+    - User Attribute mappers：`name`(from `fullname`)、`email`、`phone_number`(from `phone`)、`person_security_level`、`dept_code`。
+    - Role mappers：启用标准 `resource_access`（client roles）；可选数组 `dts_roles`（便于后端直取）。
+  - Token 携带范围：以上 claims 出现在 Access Token 与 UserInfo（ID Token 视需求）。
+
+- 部门与默认上下文
+  - Keycloak Group：仅保留根节点 `S10`，其余部门在 dts-admin 维护。
+  - 单部门 MVP：每个用户仅属于一个部门；`dept_code` 存于用户属性。
+  - 默认活跃上下文：后端以 `dept_code` 作为默认 `active_dept`；用户可在个人设置中编辑“主部门”（dts-admin 落库并回写 KC 属性）。
+
+- dts-admin 对接与同步
+  - 管理端页面：支持编辑用户 `dept_code`、`person_security_level`（字典选择）。
+  - 同步机制：调用 Keycloak Admin API 更新用户属性；提供全量对账任务（定时/手工）。
+  - 审批/审计：变更 `person_security_level/dept_code` 走 admin 审批链，记录审计（操作者、前后值、时间）。
+
+- 后端策略接入（MVP）
+  - 解析 Token claims：`dept_code`、`person_security_level`、`roles`/`dts_roles`。
+  - 组装 `PolicyContext`：`active_scope/active_dept`（优先读 `X-Active-Scope`/`X-Active-Dept`，缺失用默认），`personnel_level`。
+  - 判定链：RBAC → Scope → Level → 例外；按 `dts-sec-0001..0010` 返回统一错误码。
+  - 最小行级过滤（SQL 前置）：
+    - `DEPT`：`owner_dept = :active_dept`。
+    - `INST`：`share_scope IN ('SHARE_INST','PUBLIC_INST')`。
+    - 密级：`personnel_level_rank >= data_level_rank`。
+  - 覆盖范围：先“数据集/表/视图”，文件/任务/产品延后。
+
+- 前端改造
+  - 登录后拉取并缓存 `dept_code`、`person_security_level`；顶部提供作用域切换（MVP 单部门仅切换作用域）。
+  - 请求头：所有请求注入 `X-Active-Scope`、`X-Active-Dept`；缺失时后端返回 `dts-sec-0005/0006`。
+  - 错误提示：按错误码指引切换作用域或申请权限/临时白名单。
+
+- 例外/白名单（admin 承担审批）
+  - 最小模型：`target_id`、`action`、`expire_at`、`ticket_no`、`owner`、`reason`。
+  - 接口：创建/审批/撤销/到期回收；全链路审计。
+
+- 迁移与回填
+  - 用户盘点：导出用户并补齐 `dept_code`、`person_security_level`、`fullname`、`phone`。
+  - 批量回填：Keycloak Admin API 脚本更新属性；抽样核对 token claims。
+  - 兜底：缺失关键属性的用户禁止登录业务端（`dts-sec-0010`）。
+
+- 校验与审计
+  - 用例矩阵：DEPT/INST × OWNER/EDITOR/VIEWER × `GENERAL/IMPORTANT/CORE`。
+  - 审计事件：登录、上下文切换、策略拒绝、例外创建/审批、属性变更。
+  - 验证：抓取 Access Token 解码核对 `dept_code/person_security_level/dts_roles`。
+
+- 里程碑
+  - M1：Keycloak 用户模型与 mappers、生效 token、dts-admin 同步接口、后端错误码。
+  - M2：后端策略接入与最小行级过滤、前端上下文头、典型 IT 测试。
+  - M3：例外/白名单审批闭环与审计、前端提示与申请入口。
+
+# 16. 数据密级枚举规范化与迁移（2025-10-07 新）
+
+- 枚举与序（更新）
+  - 人员密级（personnel_level，低→高）：GENERAL < IMPORTANT < CORE。
+  - 数据密级（data_level，低→高）：
+    • DATA_PUBLIC < DATA_INTERNAL < DATA_SECRET < DATA_TOP_SECRET（对应：公开 < 内部 < 秘密 < 机密）。
+  - 作用域（scope）：DEPT / INST；共享范围（share_scope）：PRIVATE_DEPT / SHARE_INST / PUBLIC_INST。
+
+- 资源关键属性（更新口径）
+  - scope：DEPT 或 INST；owner_dept：DEPT 域必填；share_scope：PRIVATE_DEPT/SHARE_INST/PUBLIC_INST；
+  - data_level：DATA_PUBLIC / DATA_INTERNAL / DATA_SECRET / DATA_TOP_SECRET。
+
+- 判定流程（Level Gate 更新）
+  - personnel_level_rank >= data_level_rank（按新的 DATA_* 序关系比较）。
+
+- 兼容与别名映射（过渡期）
+  - 存量值兼容：将旧值 PUBLIC/INTERNAL/SECRET/TOP_SECRET 映射为新值 DATA_PUBLIC/DATA_INTERNAL/DATA_SECRET/DATA_TOP_SECRET；
+  - 策略引擎在解析资源/请求上下文时做容错转换，并在审计中记录“旧→新”规范化结果。
+
+- 实施清单（增量）
+  1) 后端（dts-platform）
+     - 策略模块：新增 DataLevel 常量与 rank 映射；引入 normalizeDataLevel(oldOrNew) → DATA_*；
+     - 行级过滤：使用规范化后的 DATA_* 参与 rank 比较；
+     - 错误码：无需变更；在错误详情中返回规范化后的 data_level；
+     - API 契约：对外仍接受旧/新枚举，响应返回新枚举。
+  2) 领域与存储
+     - JDL/实体：评估将 SecurityLevel → DataLevel（可保留字段名 classification，但枚举值切换为 DATA_*）；
+     - Liquibase（可选迁移）：将表中 PUBLIC/INTERNAL/SECRET/TOP_SECRET 逐步替换为 DATA_*；如暂不迁移，策略层做兼容转换。
+  3) 前端（dts-platform-webapp）
+     - 类型与字典：新增 `type DataLevel = 'DATA_PUBLIC'|'DATA_INTERNAL'|'DATA_SECRET'|'DATA_TOP_SECRET'`；
+     - i18n：沿用现有 DATA_PUBLIC/INTERNAL/SECRET/TOP_SECRET 文案；组件兼容旧值展示但提交新值；
+     - 资产/策略页面：过滤与徽章显示基于新枚举。
+  4) 管理端（dts-admin）
+     - 可视化展示与字典同步；审批/下发时落地 DATA_*；
+     - 种子/导入脚本调整，避免回写旧枚举。
+  5) 验证
+     - 回归 Explore/AccessPolicy 场景：用 DATA_TOP_SECRET 资源与 GENERAL/IMPORTANT/CORE 人员的组合校验允许/拒绝；
+  - 审计快照中包含原始值与规范化值，便于追溯。
+
+# 17. Explore 行级过滤与 UI 上下文切换（2025-10-07 新）
+
+- 后端改造（Explore）
+  - 接口：POST /api/explore/query/preview、POST /api/explore/execute 支持请求头 X-Active-Scope、X-Active-Dept。
+  - 准入：在 AccessChecker 上执行 Level Gate（person_security_level vs DATA_*）+ Scope Gate（DEPT/INST）。
+  - 行级过滤（最小实现）：
+    • DEPT：包裹 SQL → SELECT * FROM (<SQL>) t WHERE owner_dept = :active_dept；
+    • INST：包裹 SQL → SELECT * FROM (<SQL>) t WHERE share_scope IN ('SHARE_INST','PUBLIC_INST')；
+    • 数据集缺少 ABAC 元字段（scope/owner_dept/share_scope）时：兼容旧逻辑，不改写 SQL。
+  - 默认值：未提供请求头时，active_scope 默认 DEPT；active_dept 默认读取令牌 dept_code claim。
+
+- 数据模型与迁移
+  - catalog_dataset 新增字段：data_level、scope、owner_dept、share_scope；
+  - 通过 Liquibase 回填 data_level（从旧 classification 映射到 DATA_*），并为 owner_dept 与 scope 建索引。
+
+  - Web 前端（UI+）
+  - 新增“上下文”切换控件（Header）：
+    • 切换作用域（DEPT/INST）；
+    • 作用域为 DEPT 时可编辑 activeDept（默认从用户属性 attributes.dept_code[0] 初始化）；
+    • 全局 Axios 拦截器自动注入 X-Active-Scope/X-Active-Dept 请求头。
+  - 兼容性：未登录或缺少属性时不阻塞请求；后端按默认策略处理。
+
+  - 验证清单（手工）
+  - 用 CORE 用户访问 DATA_TOP_SECRET 数据集：DEPT/INST 两种作用域分别验证；
+  - 用 GENERAL 用户访问 DATA_SECRET/INTERNAL/PUBLIC 数据集：验证允许/拒绝；
+  - 切换 activeDept 后再次请求，确认 DEPT 作用域过滤生效；
+  - 数据集未设置 ABAC 字段时，保持旧行为，且 Explore 返回有效结果。
+
+# 18. 部门目录 API 与 UI 集成（2025-10-07 新）
+
+- 后端（dts-platform）
+  - 实体：`iam_dept(code, name_zh, name_en, parent_code, path)`。
+  - 接口：`GET /api/departments?keyword=` → 返回 `{code,nameZh,nameEn}` 列表（最多 100 条，支持按 code/nameZh 模糊）。
+  - 变更：Liquibase 新建表与索引；默认不强灌数据（保留后续由 dts-admin 同步或脚本导入）。
+
+- 前端（dts-platform-webapp）
+  - 新增服务：`deptService.listDepartments(keyword?)`。
+  - Header “上下文”控件：
+    • 作用域=DEPT 时显示部门下拉（远程搜索，初始化拉取）；
+    • 选择后即写入 activeDept，并随请求注入到 `X-Active-Dept` 头。
+
+  - 后续对接（规划）
+  - 与 dts-admin 的部门目录对齐：提供同步/代理模式；
+  - 在数据集编辑页引入部门选择器（owner_dept），以便配置 DEPT 作用域资源。
+
+# 19. 本次落地进展（2025-10-07 夜间）
+
+- Explore 保存查询运行路径补齐 Gate（重要）
+  - POST /api/explore/saved-queries/{id}/run 支持 X-Active-Scope/X-Active-Dept，并在执行前执行 canRead + scopeAllowed 判定；
+  - 拒绝时返回统一错误码（dts-sec-0001/0002）。
+  - 运行时 applyRowFilter 继续按活跃上下文包裹 SQL（无头时默认 DEPT + dept_code）。
+
+- 部门目录 seed（便于 UI/联调）
+  - Liquibase 新增 20251008_07_iam_dept_seed.xml，缺表或已有数据则跳过；默认灌入 S10、D001、D002 三个样例节点。
+
+- 集成测试（最小覆盖）
+  - Explore（新增 ExploreAbacIT）：
+    - DEPT 作用域跨部门拒绝，断言 code=dts-sec-0002；
+    - 同部门允许且有效 SQL 被包装包含 owner_dept 过滤；
+    - Saved Query 在 INST+PRIVATE_DEPT 场景下拒绝，断言 code=dts-sec-0002。
+  - Catalog（新增 CatalogResourceIT）：
+    - scope=DEPT 缺 ownerDept → 400；scope=INST 缺 shareScope → 400（启用多源以规避默认数据源前置检查）。
+
+- UI 现状梳理
+  - 数据集列表与详情均已支持 DATA_*、scope、ownerDept、shareScope 的查看与编辑；
+  - 顶部上下文切换注入 X-Active-* 请求头已生效；未设置时后端按默认处理。
+
+- 待办清单（Must-do Next）
+  - Explore 更细的 Level Gate 用例：模拟 JWT claims(person_security_level) 的场景测试；
+  - 前端清理：分类（旧）与数据密级（新）并存页面的展示一致性（是否隐藏旧“密级”列由产品确认）；
+  - Active Context API（/api/me/active-context GET/PUT）持久化活跃上下文（可选，短期内由前端本地存储兜底）；
+  - iam_dept 同步：与 dts-admin 的正式对接/同步入口；
+  - Explore 保存查询运行路径的审计补充：在拒绝时落更多上下文（active_scope/active_dept）。

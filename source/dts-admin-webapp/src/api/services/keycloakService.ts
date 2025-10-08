@@ -182,11 +182,20 @@ export class KeycloakRoleService {
 	/**
 	 * 删除角色
 	 */
-	static deleteRole(roleName: string): Promise<KeycloakApiResponse> {
-		return apiClient.delete<KeycloakApiResponse>({
-			url: `${KeycloakRoleService.BASE_URL}/${roleName}`,
-		});
-	}
+    static deleteRole(roleName: string): Promise<KeycloakApiResponse> {
+        return apiClient.delete<KeycloakApiResponse>({
+            url: `${KeycloakRoleService.BASE_URL}/${roleName}`,
+        });
+    }
+
+    /**
+     * 列出拥有指定Realm角色的用户（返回精简信息）
+     */
+    static getRoleUsers(roleName: string): Promise<Array<{ id: string; username: string; fullName?: string }>> {
+        return apiClient.get<Array<{ id: string; username: string; fullName?: string }>>({
+            url: `${KeycloakRoleService.BASE_URL}/${roleName}/users`,
+        });
+    }
 }
 
 /**

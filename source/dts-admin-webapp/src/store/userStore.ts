@@ -236,19 +236,22 @@ export const useSignIn = () => {
 			// Normalize user roles canonically for downstream guards/menu auth
 			adaptedUser.roles = canonicalizeRoles(Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : []);
 
-			const allowed = Array.isArray(GLOBAL_CONFIG.allowedLoginRoles) ? GLOBAL_CONFIG.allowedLoginRoles : [];
-			const allowedSet = expandSynonyms(allowed);
-			const userRoles: string[] = Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : [];
-			const userSet = expandSynonyms(userRoles);
-			if (allowedSet.size > 0) {
-				const hasAllowed = Array.from(userSet).some((r) => allowedSet.has(r));
-				if (!hasAllowed) {
+			const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD || "false").toLowerCase() === "true";
+			if (FE_GUARD_ENABLED) {
+				const allowed = Array.isArray(GLOBAL_CONFIG.allowedLoginRoles) ? GLOBAL_CONFIG.allowedLoginRoles : [];
+				const allowedSet = expandSynonyms(allowed);
+				const userRoles: string[] = Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : [];
+				const userSet = expandSynonyms(userRoles);
+				if (allowedSet.size > 0) {
+					const hasAllowed = Array.from(userSet).some((r) => allowedSet.has(r));
+					if (!hasAllowed) {
+						throw new Error("您无权登录该系统");
+					}
+				}
+				// Defense-in-depth: explicitly forbid platform-only role on admin console
+				if (userSet.has("ROLE_OP_ADMIN")) {
 					throw new Error("您无权登录该系统");
 				}
-			}
-			// Defense-in-depth: explicitly forbid platform-only role on admin console
-			if (userSet.has("ROLE_OP_ADMIN")) {
-				throw new Error("您无权登录该系统");
 			}
 
 			setUserToken({ accessToken, refreshToken });

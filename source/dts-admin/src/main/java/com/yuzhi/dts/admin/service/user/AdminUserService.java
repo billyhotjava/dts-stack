@@ -640,10 +640,35 @@ public class AdminUserService {
         Set<Long> changeRequestIds = extractChangeRequestIds(approval);
         Instant now = Instant.now();
         try {
-            // Always use service account for reliability (caller token may lack admin privileges)
-            String tokenToUse = resolveManagementToken();
-            LOG.info("Applying approval id={} type={} items={} by approver={}", id, approval.getType(), approval.getItems().size(), approver);
-            applyApproval(approval, tokenToUse, approver);
+            // Prefer caller token when provided; fall back to service account for reliability
+            List<String> candidateTokens = new ArrayList<>();
+            if (accessToken != null && !accessToken.isBlank()) {
+                candidateTokens.add(accessToken);
+            }
+            candidateTokens.add(resolveManagementToken());
+
+            Exception last = null;
+            for (String token : candidateTokens) {
+                try {
+                    LOG.info(
+                        "Applying approval id={} type={} items={} by approver={} using {} token",
+                        id,
+                        approval.getType(),
+                        approval.getItems().size(),
+                        approver,
+                        token == accessToken ? "caller" : "service-account"
+                    );
+                    applyApproval(approval, token, approver);
+                    last = null;
+                    break;
+                } catch (Exception exInner) {
+                    last = exInner;
+                    LOG.warn("Approval apply attempt failed with current token: {}", exInner.getMessage());
+                }
+            }
+            if (last != null) {
+                throw last;
+            }
             approval.setStatus(ApprovalStatus.APPLIED.name());
             approval.setDecidedAt(now);
             approval.setApprover(approver);
@@ -984,6 +1009,73 @@ public class AdminUserService {
         }
     }
 
+    /**
+     * Count users who currently have the given Keycloak realm role.
+     * Returns 0 if the role does not exist or on any error.
+     */
+    public int countUsersByRealmRole(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return 0;
+        }
+        try {
+            String token = resolveManagementToken();
+            return keycloakAdminClient.listUsersByRealmRole(roleName.trim(), token).size();
+        } catch (Exception ex) {
+            LOG.warn("Failed to count users by realm role {}: {}", roleName, ex.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Check if a Keycloak realm role exists.
+     */
+    public boolean realmRoleExists(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return false;
+        }
+        try {
+            String token = resolveManagementToken();
+            return keycloakAdminClient.findRealmRole(roleName.trim(), token).isPresent();
+        } catch (Exception ex) {
+            LOG.warn("Failed to check realm role exists {}: {}", roleName, ex.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Remove a Keycloak realm role from all users and delete the role.
+     * Safe no-op if the role does not exist.
+     */
+    public void deleteRealmRoleAndRemoveFromUsers(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return;
+        }
+        String name = roleName.trim();
+        try {
+            String token = resolveManagementToken();
+            List<com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO> users = keycloakAdminClient.listUsersByRealmRole(name, token);
+            if (users != null && !users.isEmpty()) {
+                List<String> single = java.util.List.of(name);
+                for (var u : users) {
+                    try {
+                        if (u.getId() != null) {
+                            keycloakAdminClient.removeRealmRolesFromUser(u.getId(), single, token);
+                        }
+                    } catch (Exception ex) {
+                        LOG.warn("Failed to remove role {} from user {}: {}", name, u.getUsername(), ex.getMessage());
+                    }
+                }
+            }
+            try {
+                keycloakAdminClient.deleteRealmRole(name, token);
+            } catch (Exception ex) {
+                LOG.warn("Failed to delete realm role {}: {}", name, ex.getMessage());
+            }
+        } catch (Exception ex) {
+            LOG.warn("deleteRealmRoleAndRemoveFromUsers failed for {}: {}", name, ex.getMessage());
+        }
+    }
+
     private String buildRoleDescription(String scope, Set<String> operations) {
         StringBuilder builder = new StringBuilder();
         if (StringUtils.isNotBlank(scope)) {
@@ -1017,6 +1109,30 @@ public class AdminUserService {
                 String keycloakId = current.getId();
                 if (keycloakId != null && !keycloakId.isBlank()) {
                     dto.setId(keycloakId);
+                    // Ensure dept_code aligns with Keycloak group dts_org_id if groups are provided
+                    try {
+                        List<String> groupPaths = stringList(payload.get("groupPaths"));
+                        if (groupPaths != null && !groupPaths.isEmpty()) {
+                            String firstPath = groupPaths.get(0);
+                            if (firstPath != null && !firstPath.isBlank()) {
+                                keycloakAdminClient
+                                    .findGroupByPath(firstPath.trim(), accessToken)
+                                    .ifPresent(grp -> {
+                                        Map<String, List<String>> attrs = dto.getAttributes();
+                                        if (attrs == null) attrs = new java.util.LinkedHashMap<>();
+                                        String deptCode = null;
+                                        if (grp.getAttributes() != null) {
+                                            List<String> vals = grp.getAttributes().get("dts_org_id");
+                                            if (vals != null && !vals.isEmpty()) deptCode = stringValue(vals.get(0));
+                                        }
+                                        if (deptCode != null && !deptCode.isBlank()) {
+                                            attrs.put("dept_code", java.util.List.of(deptCode));
+                                            dto.setAttributes(attrs);
+                                        }
+                                    });
+                            }
+                        }
+                    } catch (Exception ignored) {}
                     try {
                         target = keycloakAdminClient.updateUser(keycloakId, dto, accessToken);
                         LOG.info("Keycloak user {} already existed; attributes updated", dto.getUsername());
@@ -1027,9 +1143,57 @@ public class AdminUserService {
                     }
                 } else {
                     dto.setId(null);
+                    // Ensure dept_code aligns with Keycloak group dts_org_id if groups are provided
+                    try {
+                        List<String> groupPaths = stringList(payload.get("groupPaths"));
+                        if (groupPaths != null && !groupPaths.isEmpty()) {
+                            String firstPath = groupPaths.get(0);
+                            if (firstPath != null && !firstPath.isBlank()) {
+                                keycloakAdminClient
+                                    .findGroupByPath(firstPath.trim(), accessToken)
+                                    .ifPresent(grp -> {
+                                        Map<String, List<String>> attrs = dto.getAttributes();
+                                        if (attrs == null) attrs = new java.util.LinkedHashMap<>();
+                                        String deptCode = null;
+                                        if (grp.getAttributes() != null) {
+                                            List<String> vals = grp.getAttributes().get("dts_org_id");
+                                            if (vals != null && !vals.isEmpty()) deptCode = stringValue(vals.get(0));
+                                        }
+                                        if (deptCode != null && !deptCode.isBlank()) {
+                                            attrs.put("dept_code", java.util.List.of(deptCode));
+                                            dto.setAttributes(attrs);
+                                        }
+                                    });
+                            }
+                        }
+                    } catch (Exception ignored) {}
                     target = keycloakAdminClient.createUser(dto, accessToken);
                 }
             } else {
+                // Ensure dept_code aligns with Keycloak group dts_org_id if groups are provided
+                try {
+                    List<String> groupPaths = stringList(payload.get("groupPaths"));
+                    if (groupPaths != null && !groupPaths.isEmpty()) {
+                        String firstPath = groupPaths.get(0);
+                        if (firstPath != null && !firstPath.isBlank()) {
+                            keycloakAdminClient
+                                .findGroupByPath(firstPath.trim(), accessToken)
+                                .ifPresent(grp -> {
+                                    Map<String, List<String>> attrs = dto.getAttributes();
+                                    if (attrs == null) attrs = new java.util.LinkedHashMap<>();
+                                    String deptCode = null;
+                                    if (grp.getAttributes() != null) {
+                                        List<String> vals = grp.getAttributes().get("dts_org_id");
+                                        if (vals != null && !vals.isEmpty()) deptCode = stringValue(vals.get(0));
+                                    }
+                                    if (deptCode != null && !deptCode.isBlank()) {
+                                        attrs.put("dept_code", java.util.List.of(deptCode));
+                                        dto.setAttributes(attrs);
+                                    }
+                                });
+                        }
+                    }
+                } catch (Exception ignored) {}
                 target = keycloakAdminClient.createUser(dto, accessToken);
             }
             // Apply realm roles via role-mappings if provided in payload
@@ -1037,6 +1201,14 @@ public class AdminUserService {
             if (requestedRoles != null && !requestedRoles.isEmpty()) {
                 LOG.info("Approval applyCreate assign roles username={}, id={}, roles={}", target.getUsername(), target.getId(), requestedRoles);
                 try {
+                    // Ensure realm roles exist in Keycloak before assignment
+                    for (String r : requestedRoles) {
+                        if (r != null && !r.isBlank()) {
+                            com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO roleDto = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO();
+                            roleDto.setName(r);
+                            keycloakAdminClient.upsertRealmRole(roleDto, accessToken);
+                        }
+                    }
                     keycloakAdminClient.addRealmRolesToUser(target.getId(), requestedRoles, accessToken);
                     // Refresh assigned role names from Keycloak
                     List<String> names = keycloakAdminClient.listUserRealmRoles(target.getId(), accessToken);
@@ -1046,6 +1218,21 @@ public class AdminUserService {
                 } catch (Exception e) {
                     LOG.warn("Failed to assign realm roles on create for user {}: {}", target.getUsername(), e.getMessage());
                 }
+            }
+            // Apply group memberships if provided (resolve by group path)
+            try {
+                List<String> groupPaths = stringList(payload.get("groupPaths"));
+                if (groupPaths != null && !groupPaths.isEmpty()) {
+                    for (String p : groupPaths) {
+                        if (p == null || p.isBlank()) continue;
+                        KeycloakUserDTO finalTarget = target;
+                        keycloakAdminClient.findGroupByPath(p.trim(), accessToken).ifPresent(grp -> {
+                            keycloakAdminClient.addUserToGroup(finalTarget.getId(), grp.getId(), accessToken);
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to assign groups on create for {}: {}", target.getUsername(), e.getMessage());
             }
             syncSnapshot(target);
             detail.put("keycloakId", target.getId());
@@ -1068,9 +1255,31 @@ public class AdminUserService {
             String keycloakId = stringValue(payload.get("keycloakId"));
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
             KeycloakUserDTO update = toUserDto(payload);
+            // Ensure dept_code aligns with Keycloak group dts_org_id when group selection provided
+            try {
+                List<String> requestedGroupPaths = stringList(payload.get("groupPaths"));
+                if (requestedGroupPaths != null && !requestedGroupPaths.isEmpty()) {
+                    String firstPath = requestedGroupPaths.get(0);
+                    if (firstPath != null && !firstPath.isBlank()) {
+                        keycloakAdminClient.findGroupByPath(firstPath.trim(), accessToken).ifPresent(grp -> {
+                            Map<String, List<String>> attrs = update.getAttributes();
+                            if (attrs == null) attrs = new java.util.LinkedHashMap<>();
+                            String deptCode = null;
+                            if (grp.getAttributes() != null) {
+                                List<String> vals = grp.getAttributes().get("dts_org_id");
+                                if (vals != null && !vals.isEmpty()) deptCode = stringValue(vals.get(0));
+                            }
+                            if (deptCode != null && !deptCode.isBlank()) {
+                                attrs.put("dept_code", java.util.List.of(deptCode));
+                                update.setAttributes(attrs);
+                            }
+                        });
+                    }
+                }
+            } catch (Exception ignored) {}
             ensureAllowedSecurityLevel(extractPersonLevel(update), "人员密级不允许为非密");
             update.setId(existing.getId());
-            // If realmRoles present in payload, apply via role-mappings API instead of user PUT
+            // If realmRoles present in payload, ensure roles exist and apply via role-mappings API instead of user PUT
             List<String> requestedRoles = stringList(payload.get("realmRoles"));
             if (requestedRoles != null && !requestedRoles.isEmpty()) {
                 List<String> currentRoles = existing.getRealmRoles() == null ? List.of() : existing.getRealmRoles();
@@ -1080,6 +1289,13 @@ public class AdminUserService {
                 List<String> toRemove = cur.stream().filter(r -> !req.contains(r)).toList();
                 LOG.info("Approval applyUpdate roles delta for user username={}, id={}: toAdd={}, toRemove={}", existing.getUsername(), existing.getId(), toAdd, toRemove);
                 if (!toAdd.isEmpty()) {
+                    for (String r : toAdd) {
+                        if (r != null && !r.isBlank()) {
+                            com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO dto = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO();
+                            dto.setName(r);
+                            keycloakAdminClient.upsertRealmRole(dto, accessToken);
+                        }
+                    }
                     keycloakAdminClient.addRealmRolesToUser(existing.getId(), toAdd, accessToken);
                 }
                 if (!toRemove.isEmpty()) {
@@ -1087,6 +1303,36 @@ public class AdminUserService {
                 }
                 // Avoid including roles in representation update
                 update.setRealmRoles(new ArrayList<>());
+            }
+            // Handle group membership delta separately (Keycloak expects user-group endpoints)
+            try {
+                List<String> requestedGroupPaths = stringList(payload.get("groupPaths"));
+                if (requestedGroupPaths != null) {
+                    List<com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO> currentGroups = keycloakAdminClient.listUserGroups(existing.getId(), accessToken);
+                    java.util.Set<String> currentPaths = new java.util.HashSet<>();
+                    java.util.Map<String, String> currentPathToId = new java.util.HashMap<>();
+                    for (var g : currentGroups) {
+                        if (g.getPath() != null) {
+                            currentPaths.add(g.getPath());
+                            currentPathToId.put(g.getPath(), g.getId());
+                        }
+                    }
+                    java.util.Set<String> requestedPaths = new java.util.HashSet<>();
+                    for (String p : requestedGroupPaths) if (p != null && !p.isBlank()) requestedPaths.add(p.trim());
+                    for (String p : requestedPaths) {
+                        if (!currentPaths.contains(p)) {
+                            keycloakAdminClient.findGroupByPath(p, accessToken).ifPresent(grp -> keycloakAdminClient.addUserToGroup(existing.getId(), grp.getId(), accessToken));
+                        }
+                    }
+                    for (String p : currentPaths) {
+                        if (!requestedPaths.contains(p)) {
+                            String gid = currentPathToId.get(p);
+                            if (gid != null) keycloakAdminClient.removeUserFromGroup(existing.getId(), gid, accessToken);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to apply group membership delta for {}: {}", existing.getUsername(), e.getMessage());
             }
             KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), update, accessToken);
             // refresh role names from role-mappings to keep snapshot accurate
@@ -1142,6 +1388,18 @@ public class AdminUserService {
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
             LOG.info("Approval applyGrantRoles username={}, id={}, roles={}", existing.getUsername(), existing.getId(), rolesToAdd);
             if (!rolesToAdd.isEmpty()) {
+                // Ensure realm roles exist before assigning to user to avoid 404/409 errors
+                for (String r : rolesToAdd) {
+                    if (r != null && !r.isBlank()) {
+                        com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO dto = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO();
+                        dto.setName(r);
+                        try {
+                            keycloakAdminClient.upsertRealmRole(dto, accessToken);
+                        } catch (RuntimeException ex) {
+                            LOG.warn("Upsert realm role '{}' failed before assignment: {}", r, ex.getMessage());
+                        }
+                    }
+                }
                 keycloakAdminClient.addRealmRolesToUser(existing.getId(), rolesToAdd, accessToken);
             }
             KeycloakUserDTO updated = keycloakAdminClient.findById(existing.getId(), accessToken).orElse(existing);
@@ -1314,7 +1572,19 @@ public class AdminUserService {
         }
         String personLevel = stringValue(payload.get("personSecurityLevel"));
         if (personLevel != null && !personLevel.isBlank()) {
+            // Keep both keys for compatibility with realm mappers and local extraction logic
             attributes.put("person_level", List.of(personLevel));
+            attributes.put("person_security_level", List.of(personLevel));
+        }
+        // Ensure dept_code present when department is selected; prefer explicit value.
+        // Do NOT derive from group path leaf (legacy behavior) to avoid persisting names.
+        if (!attributes.containsKey("dept_code")) {
+            String explicitDept = stringValue(payload.get("deptCode"));
+            if (explicitDept != null && !explicitDept.isBlank()) {
+                attributes.put("dept_code", List.of(explicitDept));
+            }
+            // If explicit value not provided, leave unset here. applyCreate/applyUpdate will
+            // derive dept_code from the selected group (dts_org_id) using Keycloak metadata.
         }
         List<String> dataLevels = toKeycloakDataLevels(stringList(payload.get("dataLevels")));
         if (!dataLevels.isEmpty()) {

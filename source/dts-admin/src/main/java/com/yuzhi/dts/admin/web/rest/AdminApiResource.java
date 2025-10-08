@@ -39,6 +39,7 @@ import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import com.yuzhi.dts.admin.domain.SystemConfig;
 import com.yuzhi.dts.admin.repository.PortalMenuRepository;
+import com.yuzhi.dts.admin.repository.PortalMenuVisibilityRepository;
 import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
@@ -162,6 +163,7 @@ public class AdminApiResource {
     private final AdminRoleAssignmentRepository roleAssignRepo;
     private final SystemConfigRepository sysCfgRepo;
     private final PortalMenuRepository portalMenuRepo;
+    private final PortalMenuVisibilityRepository visibilityRepo;
     private final DtsCommonNotifyClient notifyClient;
     private final OrganizationRepository organizationRepository;
     private final AdminUserService adminUserService;
@@ -233,6 +235,7 @@ public class AdminApiResource {
         AdminRoleAssignmentRepository roleAssignRepo,
         SystemConfigRepository sysCfgRepo,
         PortalMenuRepository portalMenuRepo,
+        PortalMenuVisibilityRepository visibilityRepo,
         DtsCommonNotifyClient notifyClient,
         OrganizationRepository organizationRepository,
         AdminUserService adminUserService
@@ -249,10 +252,17 @@ public class AdminApiResource {
         this.roleAssignRepo = roleAssignRepo;
         this.sysCfgRepo = sysCfgRepo;
         this.portalMenuRepo = portalMenuRepo;
+        this.visibilityRepo = visibilityRepo;
         this.notifyClient = notifyClient;
         this.organizationRepository = organizationRepository;
         this.adminUserService = adminUserService;
     }
+
+    @org.springframework.beans.factory.annotation.Value("${dts.admin.require-approval.portal-menu.visibility:true}")
+    private boolean requireMenuVisibilityApproval;
+
+    @org.springframework.beans.factory.annotation.Value("${dts.admin.require-approval.portal-menu.structure:false}")
+    private boolean requireMenuStructureApproval;
 
     // --- Placeholders to align with adminApi ---
     @GetMapping("/system/config")
@@ -300,6 +310,34 @@ public class AdminApiResource {
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("request", payload);
         try {
+            boolean visibilityTouched = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
+            if (requireMenuVisibilityApproval && visibilityTouched) {
+                ChangeRequest cr = changeRequestService.draft(
+                    "PORTAL_MENU",
+                    "CREATE",
+                    null,
+                    payload,
+                    null,
+                    Objects.toString(body.get("reason"), null)
+                );
+                try {
+                    notifyClient.trySend(
+                        "approval_pending",
+                        Map.of(
+                            "id",
+                            String.valueOf(cr.getId()),
+                            "type",
+                            cr.getResourceType(),
+                            "category",
+                            cr.getCategory(),
+                            "requestedBy",
+                            cr.getRequestedBy()
+                        )
+                    );
+                } catch (Exception ignored) {}
+                auditService.record(actor, "PORTAL_MENU_CREATE_REQUEST", "PORTAL_MENU", Objects.toString(payload.get("name"), "menu"), "SUCCESS", auditDetail);
+                return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
+            }
             String name = trimToNull(payload.get("name"));
             String path = trimToNull(payload.get("path"));
             if (!StringUtils.hasText(name) || !StringUtils.hasText(path)) {
@@ -368,6 +406,34 @@ public class AdminApiResource {
         Map<String, Object> before = toPortalMenuPayload(beforeEntity);
         String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
         try {
+            boolean visibilityTouchedGate = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
+            if (requireMenuVisibilityApproval && visibilityTouchedGate) {
+                ChangeRequest cr = changeRequestService.draft(
+                    "PORTAL_MENU",
+                    "UPDATE",
+                    id,
+                    payload,
+                    before,
+                    Objects.toString(body.get("reason"), null)
+                );
+                try {
+                    notifyClient.trySend(
+                        "approval_pending",
+                        Map.of(
+                            "id",
+                            String.valueOf(cr.getId()),
+                            "type",
+                            cr.getResourceType(),
+                            "category",
+                            cr.getCategory(),
+                            "requestedBy",
+                            cr.getRequestedBy()
+                        )
+                    );
+                } catch (Exception ignored) {}
+                auditService.record(actor, "PORTAL_MENU_UPDATE_REQUEST", "PORTAL_MENU", id, "SUCCESS", Map.of("before", before, "payload", payload));
+                return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
+            }
             applyMenuUpdates(beforeEntity, payload);
             boolean visibilityTouched = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
             if (visibilityTouched) {
@@ -407,6 +473,33 @@ public class AdminApiResource {
         }
         Map<String, Object> before = toPortalMenuPayload(entity);
         String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        if (requireMenuStructureApproval) {
+            ChangeRequest cr = changeRequestService.draft(
+                "PORTAL_MENU",
+                "DELETE",
+                id,
+                Map.of("id", menuId),
+                before,
+                null
+            );
+            try {
+                notifyClient.trySend(
+                    "approval_pending",
+                    Map.of(
+                        "id",
+                        String.valueOf(cr.getId()),
+                        "type",
+                        cr.getResourceType(),
+                        "category",
+                        cr.getCategory(),
+                        "requestedBy",
+                        cr.getRequestedBy()
+                    )
+                );
+            } catch (Exception ignored) {}
+            auditService.record(actor, "PORTAL_MENU_DELETE_REQUEST", "PORTAL_MENU", id, "SUCCESS", before);
+            return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
+        }
         try {
             markMenuDeleted(entity);
             portalMenuRepo.save(entity);
@@ -720,9 +813,45 @@ public class AdminApiResource {
         long crid = Long.parseLong(id);
         ChangeRequest cr = crRepo.findById(crid).orElse(null);
         if (cr == null) return ResponseEntity.status(404).body(ApiResponse.error("变更不存在"));
+        // Normalize category if client didn't set it explicitly
+        if (cr.getCategory() == null || cr.getCategory().isBlank()) {
+            String type = cr.getResourceType();
+            String category = changeRequestService
+                .getClass() // no-op to keep bean reference
+                .getSimpleName() // avoid unused warning
+                .isEmpty() ? null : null; // noop
+            // Reuse resolver logic by mirroring ChangeRequestService behavior
+            String resolved = switch (type == null ? "" : type.toUpperCase(java.util.Locale.ROOT)) {
+                case "USER" -> "USER_MANAGEMENT";
+                case "ROLE" -> "ROLE_MANAGEMENT";
+                case "PORTAL_MENU" -> "ROLE_MANAGEMENT";
+                case "CONFIG" -> "SYSTEM_CONFIG";
+                case "ORG" -> "ORGANIZATION";
+                case "CUSTOM_ROLE" -> "CUSTOM_ROLE";
+                case "ROLE_ASSIGNMENT" -> "ROLE_ASSIGNMENT";
+                default -> "GENERAL";
+            };
+            cr.setCategory(resolved);
+        }
         cr.setStatus("PENDING");
         crRepo.save(cr);
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "CHANGE_REQUEST_SUBMIT", "CHANGE_REQUEST", id, "SUCCESS", null);
+        try {
+            // Notify approvers (e.g., AUTH_ADMIN) that a new request arrived
+            notifyClient.trySend(
+                "approval_pending",
+                Map.of(
+                    "id",
+                    id,
+                    "type",
+                    cr.getResourceType(),
+                    "category",
+                    cr.getCategory(),
+                    "requestedBy",
+                    cr.getRequestedBy()
+                )
+            );
+        } catch (Exception ignored) {}
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
@@ -775,6 +904,11 @@ public class AdminApiResource {
             String normalized = name.trim().toUpperCase(Locale.ROOT);
             BuiltinRoleSpec builtin = BUILTIN_DATA_ROLES.get(normalized);
             Map<String, Object> summary = toRoleSummary(role, normalized, builtin, now);
+            // Enrich with Keycloak member count (realm role membership)
+            try {
+                int kcMembers = adminUserService.countUsersByRealmRole(normalized);
+                summary.put("memberCount", kcMembers);
+            } catch (Exception ignored) {}
             list.add(summary);
             emitted.add(normalized);
         }
@@ -783,13 +917,64 @@ public class AdminApiResource {
             if (emitted.contains(entry.getKey())) {
                 continue;
             }
-            list.add(toRoleSummary(null, entry.getKey(), entry.getValue(), now));
+            Map<String, Object> summary = toRoleSummary(null, entry.getKey(), entry.getValue(), now);
+            // Builtin roles may not exist in Keycloak; memberCount stays 0
+            list.add(summary);
         }
 
         list.sort(Comparator.comparing(o -> Objects.toString(o.get("name"), "")));
 
         auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ADMIN_ROLES_LIST", "ADMIN", "roles", "SUCCESS", null);
         return ResponseEntity.ok(ApiResponse.ok(list));
+    }
+
+    /**
+     * 角色删除前的影响面预检：返回是否保留、Keycloak 成员数、菜单绑定数量、是否为自定义角色以及业务授权计数。
+     */
+    @GetMapping("/roles/{name}/pre-delete-check")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> preDeleteRole(@PathVariable String name) {
+        String raw = Objects.toString(name, "");
+        String normalized = stripRolePrefix(raw);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("role", normalized);
+        boolean reserved = isReservedRealmRoleName(normalized);
+        out.put("reserved", reserved);
+        out.put("deletable", !reserved);
+        try {
+            boolean existsInKeycloak = adminUserService.realmRoleExists(normalized);
+            out.put("existsInKeycloak", existsInKeycloak);
+        } catch (Exception ex) {
+            out.put("existsInKeycloak", false);
+            out.put("kcCheckError", ex.getMessage());
+        }
+        try {
+            int kcMembers = adminUserService.countUsersByRealmRole(normalized);
+            out.put("kcMemberCount", kcMembers);
+        } catch (Exception ex) {
+            out.put("kcMemberCount", 0);
+        }
+        try {
+            String authority = normalizeRoleAuthority(normalized);
+            int menuBindings = visibilityRepo.findByRoleCode(authority).size();
+            out.put("menuBindings", menuBindings);
+        } catch (Exception ex) {
+            out.put("menuBindings", 0);
+        }
+        try {
+            boolean custom = customRoleRepo.findByName(normalized).isPresent();
+            out.put("customRole", custom);
+            out.put("customRoleId", custom ? customRoleRepo.findByName(normalized).map(AdminCustomRole::getId).orElse(null) : null);
+        } catch (Exception ex) {
+            out.put("customRole", false);
+        }
+        try {
+            int assignmentCount = (int) roleAssignRepo.findAll().stream().filter(a -> normalized.equalsIgnoreCase(Objects.toString(a.getRole(), ""))).count();
+            out.put("assignments", assignmentCount);
+        } catch (Exception ex) {
+            out.put("assignments", 0);
+        }
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ROLE_PRE_DELETE_CHECK", "ROLE", normalized, "SUCCESS", out);
+        return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
     @GetMapping("/permissions/catalog")
@@ -1529,6 +1714,34 @@ public class AdminApiResource {
                         customRoleRepo.save(role);
                     });
 
+                cr.setStatus("APPLIED");
+                auditService.record(actor, auditAction, "ROLE", normalizedName, "SUCCESS", detail);
+            } else if ("DELETE".equalsIgnoreCase(action)) {
+                if (!StringUtils.hasText(normalizedName)) {
+                    throw new IllegalArgumentException("角色名称不能为空");
+                }
+                if (isReservedRealmRoleName(normalizedName)) {
+                    throw new IllegalArgumentException("内置角色不可删除");
+                }
+                String authority = normalizeRoleAuthority(normalizedName);
+                // 1) 清理菜单可见性
+                try {
+                    visibilityRepo.deleteByRoleCode(authority);
+                } catch (Exception ex) {
+                    detail.put("menuVisibilityCleanupError", ex.getMessage());
+                }
+                // 2) 从所有用户移除该 Keycloak 角色并删除角色
+                try {
+                    adminUserService.deleteRealmRoleAndRemoveFromUsers(normalizedName);
+                } catch (Exception ex) {
+                    detail.put("keycloakCleanupError", ex.getMessage());
+                }
+                // 3) 删除自定义角色记录（如果存在）
+                try {
+                    customRoleRepo.findByName(normalizedName).ifPresent(customRoleRepo::delete);
+                } catch (Exception ex) {
+                    detail.put("customRoleCleanupError", ex.getMessage());
+                }
                 cr.setStatus("APPLIED");
                 auditService.record(actor, auditAction, "ROLE", normalizedName, "SUCCESS", detail);
             } else {

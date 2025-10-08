@@ -112,6 +112,7 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- No dependency on dts-common here to keep dts-platform self-contained for policy enums -->
         <dependency>
             <groupId>tech.jhipster</groupId>
             <artifactId>jhipster-framework</artifactId>

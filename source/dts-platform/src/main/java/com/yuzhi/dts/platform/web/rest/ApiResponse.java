@@ -4,6 +4,8 @@ public class ApiResponse<T> {
 
     private int status;
     private String message;
+    // Optional machine-readable error code, e.g., dts-sec-0002
+    private String code;
     private T data;
 
     public ApiResponse() {}
@@ -11,6 +13,13 @@ public class ApiResponse<T> {
     public ApiResponse(int status, String message, T data) {
         this.status = status;
         this.message = message;
+        this.data = data;
+    }
+
+    public ApiResponse(int status, String message, String code, T data) {
+        this.status = status;
+        this.message = message;
+        this.code = code;
         this.data = data;
     }
 
@@ -30,6 +39,14 @@ public class ApiResponse<T> {
         this.message = message;
     }
 
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
+    }
+
     public T getData() {
         return data;
     }
@@ -38,4 +55,3 @@ public class ApiResponse<T> {
         this.data = data;
     }
 }
-

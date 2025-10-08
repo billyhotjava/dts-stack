@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251008-06-iam-dept" author="platform">
+        <comment>Create iam_dept table for department directory</comment>
+        <createTable tableName="iam_dept">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="code" type="varchar(32)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="name_zh" type="varchar(128)"/>
+            <column name="name_en" type="varchar(128)"/>
+            <column name="parent_code" type="varchar(32)"/>
+            <column name="path" type="varchar(512)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex tableName="iam_dept" indexName="idx_iam_dept_code">
+            <column name="code"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

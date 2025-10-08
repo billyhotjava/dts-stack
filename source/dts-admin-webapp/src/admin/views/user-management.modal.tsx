@@ -24,6 +24,7 @@ import {
 	isGovernanceRole,
 } from "@/constants/governance";
 import { isKeycloakBuiltInRole, isReservedBusinessRoleName, shouldHideRole } from "@/constants/keycloak-roles";
+import { GLOBAL_CONFIG } from "@/global-config";
 
 type OrgTreeOption = {
 	value: string;
@@ -128,6 +129,11 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [orgLoading, setOrgLoading] = useState(false);
 	const [selectedGroupPaths, setSelectedGroupPaths] = useState<string[]>([]);
 
+	const roleKey = (r: KeycloakRole | undefined | null): string => {
+		if (!r) return "";
+		return (r.id ?? r.name ?? "").toString();
+	};
+
 	const loadOrganizations = useCallback(async () => {
 		setOrgLoading(true);
 		try {
@@ -217,10 +223,32 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		});
 	};
 
+
 	const loadRoles = useCallback(async () => {
 		try {
-			const rolesData = await KeycloakRoleService.getAllRealmRoles();
-			setRoles(rolesData);
+			// Fetch from both sources: Keycloak realm roles + Admin catalog
+			const [kc, admin] = await Promise.allSettled([
+				KeycloakRoleService.getAllRealmRoles(),
+				adminApi.getAdminRoles(),
+			]);
+			const list: KeycloakRole[] = [];
+			const byName = new Map<string, KeycloakRole>();
+			const add = (r?: KeycloakRole) => {
+				if (!r || !r.name) return;
+				const key = r.name.trim().toUpperCase();
+				if (!byName.has(key)) {
+					byName.set(key, r);
+					list.push(r);
+				}
+			};
+			if (kc.status === "fulfilled" && Array.isArray(kc.value)) {
+				kc.value.forEach((r) => add(r));
+			}
+			if (admin.status === "fulfilled" && Array.isArray(admin.value)) {
+				// Map AdminRoleDetail -> KeycloakRole shape (name + description)
+				(admin.value as any[]).forEach((ar: any) => add({ name: ar?.name, description: ar?.description } as KeycloakRole));
+			}
+			setRoles(list);
 		} catch (err) {
 			setRoleError("加载角色列表失败");
 			console.error("Error loading roles:", err);
@@ -250,18 +278,22 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		[normalizeAttributesForState],
 	);
 
-	const handleOrganizationChange = (value: string | string[] | null) => {
-		const nextValue = Array.isArray(value) ? value[0] : value;
-		if (!nextValue) {
-			setSelectedGroupPaths([]);
-			updateSingleValueAttribute("department", "");
-			return;
-		}
-		const normalized = normalizeGroupPath(nextValue);
-		setSelectedGroupPaths([normalized]);
-		const node = orgIndex[normalized];
-		updateSingleValueAttribute("department", node?.name ?? "");
-	};
+    const handleOrganizationChange = (value: string | string[] | null) => {
+        const nextValue = Array.isArray(value) ? value[0] : value;
+        if (!nextValue) {
+            setSelectedGroupPaths([]);
+            // Clear dept_code when no organization is selected
+            updateSingleValueAttribute("dept_code", "");
+            return;
+        }
+        const normalized = normalizeGroupPath(nextValue);
+        setSelectedGroupPaths([normalized]);
+        const node = orgIndex[normalized];
+        // Persist selected organization id as dept_code (aligns with Keycloak group's dts_org_id)
+        if (node?.id != null) {
+            updateSingleValueAttribute("dept_code", String(node.id));
+        }
+    };
 
 	useEffect(() => {
 		if (!open) {
@@ -279,9 +311,26 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			const resolvedLevel = PERSON_SECURITY_LEVELS.some((option) => option.value === candidateLevel)
 				? candidateLevel
 				: "NON_SECRET";
-    const existingGroups = Array.isArray(user.groups)
-					? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
-					: [];
+    let existingGroups = Array.isArray(user.groups)
+                    ? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
+                    : [];
+            // Fallback: if no groups returned but dept_code attribute exists, match by organization id (dts_org_id)
+            if (existingGroups.length === 0) {
+                const deptCode = (user.attributes?.dept_code?.[0] || '').trim();
+                if (deptCode && Object.keys(orgIndex).length > 0) {
+                    let matchedPath: string | undefined;
+                    for (const [path, node] of Object.entries(orgIndex)) {
+                        if (String(node?.id ?? '') === deptCode) { matchedPath = path; break; }
+                    }
+                    // Last resort: try matching by leaf segment for legacy data
+                    if (!matchedPath) {
+                        matchedPath = Object.keys(orgIndex).find((p) => p.endsWith(`/${deptCode}`) || p.split('/').includes(deptCode));
+                    }
+                    if (matchedPath) {
+                        existingGroups = [normalizeGroupPath(matchedPath)];
+                    }
+                }
+            }
             const normalizedAttributes = normalizeAttributesForState(user.attributes || {}, resolvedLevel);
             const initialFormData: FormData = {
                 username: user.username || "",
@@ -422,6 +471,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                     emailVerified: formData.emailVerified,
                     attributes: attributesPayload,
                     groups: groupPathsPayload.length > 0 ? groupPathsPayload : undefined,
+                    // Persist deptCode as organization id (dts_org_id) to align with Keycloak group attribute
+                    deptCode: (() => { const p = groupPathsPayload[0]; const node = p ? orgIndex[normalizeGroupPath(p)] : undefined; return node ? String(node.id) : (attributesPayload.dept_code?.[0] || undefined); })(),
                 };
 
                 const response = await KeycloakUserService.createUser(createData);
@@ -444,6 +495,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                         emailVerified: formData.emailVerified,
                         attributes: attributesPayload,
                         groups: groupPathsPayload.length > 0 ? groupPathsPayload : [],
+                        deptCode: (() => { const p = groupPathsPayload[0]; const node = p ? orgIndex[normalizeGroupPath(p)] : undefined; return node ? String(node.id) : (attributesPayload.dept_code?.[0] || undefined); })(),
                     };
 
                     const response = await KeycloakUserService.updateUser(user.id, updateData);
@@ -479,9 +531,11 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                 }
             }
 
-            // 刷新“我的申请”和“审批中心”列表
+            // 刷新“我的申请”和“审批中心”列表，并联动刷新角色/菜单缓存
             try { await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests", "mine", "dashboard"] }); } catch {}
             try { await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests"] }); } catch {}
+            try { await queryClient.invalidateQueries({ queryKey: ["admin", "roles"] }); } catch {}
+            try { await queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] }); } catch {}
             onSuccess();
 		} catch (err: any) {
 			setError(err.message || "操作失败");
@@ -501,7 +555,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	};
 
 	const handleRoleToggle = (role: KeycloakRole) => {
-		const hasRole = userRoles.some((r) => r.id === role.id);
+		const hasRole = userRoles.some((r) => roleKey(r) === roleKey(role));
 		const roleName = role.name;
 
 		if (isDataRole(roleName)) {
@@ -521,11 +575,11 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 
 		if (hasRole) {
-			setUserRoles((prev) => prev.filter((r) => r.id !== role.id));
+			setUserRoles((prev) => prev.filter((r) => roleKey(r) !== roleKey(role)));
 			setFormState((prev) => ({
 				...prev,
 				roleChanges: [
-					...prev.roleChanges.filter((rc) => rc.role.id !== role.id || rc.action !== "add"),
+					...prev.roleChanges.filter((rc) => roleKey(rc.role) !== roleKey(role) || rc.action !== "add"),
 					{ role, action: "remove" },
 				],
 			}));
@@ -534,7 +588,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			setFormState((prev) => ({
 				...prev,
 				roleChanges: [
-					...prev.roleChanges.filter((rc) => rc.role.id !== role.id || rc.action !== "remove"),
+					...prev.roleChanges.filter((rc) => roleKey(rc.role) !== roleKey(role) || rc.action !== "remove"),
 					{ role, action: "add" },
 				],
 			}));
@@ -713,7 +767,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                             {userRoles.map((role) => {
                                 const allowRemoval = !isDataRole(role.name) && !isReservedBusinessRoleName(role.name) && !isKeycloakBuiltInRole(role);
 											return (
-												<Badge key={role.id ?? role.name} variant={resolveRoleBadgeVariant(role.name)}>
+												<Badge key={roleKey(role)} variant={resolveRoleBadgeVariant(role.name)}>
 													{role.name}
 													{allowRemoval && (
 														<Button
@@ -734,12 +788,12 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									<Label>可用角色</Label>
 									<div className="flex flex-wrap gap-2">
                             {roles
-                                .filter((role) => !userRoles.some((ur) => ur.id === role.id))
+                                .filter((role) => !userRoles.some((ur) => roleKey(ur) === roleKey(role)))
                                 .filter((role) => !isDataRole(role.name))
-                                .filter((role) => !shouldHideRole(role))
+                                .filter((role) => (GLOBAL_CONFIG.hideBuiltinRoles ? !shouldHideRole(role) : true))
                                 .map((role) => (
 												<Badge
-													key={role.id ?? role.name}
+													key={roleKey(role)}
 													variant={resolveRoleBadgeVariant(role.name)}
 													className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
 													onClick={() => handleRoleToggle(role)}

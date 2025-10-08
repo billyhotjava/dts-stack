@@ -21,6 +21,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
+import org.springframework.beans.factory.annotation.Value;
 
 @Component
 public class AuditLoggingFilter extends OncePerRequestFilter {
@@ -36,9 +37,14 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
     };
 
     private final ObjectProvider<AuditTrailService> auditServiceProvider;
+    private final boolean accessLogEnabled;
 
-    public AuditLoggingFilter(ObjectProvider<AuditTrailService> auditServiceProvider) {
+    public AuditLoggingFilter(
+        ObjectProvider<AuditTrailService> auditServiceProvider,
+        @Value("${dts.http-access-log:false}") boolean accessLogEnabled
+    ) {
         this.auditServiceProvider = auditServiceProvider;
+        this.accessLogEnabled = accessLogEnabled;
     }
 
     @Override
@@ -74,6 +80,21 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                     if (log.isDebugEnabled()) {
                         log.debug("AuditTrailService not available; skipping audit record for {} {}", request.getMethod(), request.getRequestURI());
                     }
+                }
+                // Lightweight access log for quick dev troubleshooting
+                if (accessLogEnabled && log.isInfoEnabled()) {
+                    String user = event.actor == null || event.actor.isBlank() ? "anonymous" : event.actor;
+                    String uri = event.requestUri == null ? wrapper.getRequestURI() : event.requestUri;
+                    log.info(
+                        "[access] {} {} status={} user={} ua=\"{}\" ip={} dur={}ms",
+                        wrapper.getMethod(),
+                        uri,
+                        responseWrapper.getStatus(),
+                        user,
+                        safeHeader(wrapper, "User-Agent"),
+                        event.clientIp,
+                        event.latencyMs
+                    );
                 }
             } catch (Exception ex) {
                 log.warn("Failed to record audit trail for {} {}", request.getMethod(), request.getRequestURI(), ex);
@@ -130,5 +151,14 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             .findFirst()
             .map(GrantedAuthority::getAuthority)
             .orElse(null);
+    }
+
+    private String safeHeader(HttpServletRequest req, String name) {
+        try {
+            String v = req.getHeader(name);
+            return v == null ? "" : v;
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 }

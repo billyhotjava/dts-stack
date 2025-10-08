@@ -3,23 +3,30 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.PortalSession;
+import com.yuzhi.dts.platform.service.keycloak.KeycloakAuthService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/keycloak/auth")
 public class KeycloakAuthResource {
 
+    private static final Logger log = LoggerFactory.getLogger(KeycloakAuthResource.class);
     private final PortalSessionRegistry sessionRegistry;
+    private final KeycloakAuthService keycloakAuthService;
 
-    public KeycloakAuthResource(PortalSessionRegistry sessionRegistry) {
+    public KeycloakAuthResource(PortalSessionRegistry sessionRegistry, KeycloakAuthService keycloakAuthService) {
         this.sessionRegistry = sessionRegistry;
+        this.keycloakAuthService = keycloakAuthService;
     }
 
     public record LoginPayload(String username, String password) {}
@@ -28,48 +35,80 @@ public class KeycloakAuthResource {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody LoginPayload payload) {
         String username = payload.username() == null ? "" : payload.username().trim();
+        String password = payload.password() == null ? "" : payload.password();
+        if (!StringUtils.hasText(username) || !StringUtils.hasText(password)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponses.error("用户名或密码不能为空"));
+        }
+
         String norm = username.toLowerCase(Locale.ROOT);
         if (List.of("sysadmin", "authadmin", "auditadmin").contains(norm)) {
-            return ResponseEntity.status(401).body(ApiResponses.error("系统管理角色用户不能登录业务平台"));
-        }
-        if (!StringUtils.hasText(username)) {
-            return ResponseEntity.status(401).body(ApiResponses.error("用户名或密码错误"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error("系统管理角色用户不能登录业务平台"));
         }
 
-        PortalAuthProfile profile = resolveProfile(norm);
-        PortalSession session = sessionRegistry.createSession(username, profile.roles(), profile.permissions());
+        try {
+            if (log.isInfoEnabled()) {
+                log.info("[login] attempt username={}", username);
+            }
+            var result = keycloakAuthService.login(username, password);
+            Map<String, Object> user = result.user();
+            // Normalize and map roles from Keycloak into platform authorities
+            List<String> mappedRoles = mapRoles(toStringList(user.get("roles")));
 
-        Map<String, Object> user = Map.of(
-            "id",
-            UUID.nameUUIDFromBytes(username.getBytes()).toString(),
-            "email",
-            username + "@example.com",
-            "username",
-            username,
-            "firstName",
-            username,
-            "enabled",
-            Boolean.TRUE,
-            "roles",
-            profile.roles(),
-            "permissions",
-            profile.permissions()
-        );
+            // Forbid admin-console triad on the platform even if Keycloak returns them
+            if (containsTriad(mappedRoles)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error("系统管理角色用户不能登录业务平台"));
+            }
 
-        Map<String, Object> data = Map.of(
-            "user",
-            user,
-            "accessToken",
-            session.accessToken(),
-            "refreshToken",
-            session.refreshToken()
-        );
-        return ResponseEntity.ok(ApiResponses.ok(data));
+            // Derive basic permissions
+            List<String> permissions = new ArrayList<>();
+            permissions.add("portal.view");
+            if (mappedRoles.contains(AuthoritiesConstants.OP_ADMIN)) {
+                permissions.add("portal.manage");
+                permissions.add("catalog.manage");
+                permissions.add("governance.manage");
+                permissions.add("iam.manage");
+            }
+
+            // Issue a portal session (opaque tokens) for platform API access
+            PortalSession session = sessionRegistry.createSession(username, mappedRoles, permissions);
+
+            // Build user payload (override roles/permissions with mapped ones)
+            Map<String, Object> userOut = new java.util.HashMap<>(user);
+            userOut.put("roles", mappedRoles);
+            userOut.put("permissions", permissions);
+            userOut.putIfAbsent("enabled", Boolean.TRUE);
+            userOut.putIfAbsent("id", UUID.nameUUIDFromBytes(username.getBytes()).toString());
+
+            Map<String, Object> data = Map.of(
+                "user",
+                userOut,
+                "accessToken",
+                session.accessToken(),
+                "refreshToken",
+                session.refreshToken()
+            );
+            if (log.isInfoEnabled()) {
+                log.info("[login] success username={} roles={} perms={}", username, mappedRoles, permissions);
+            }
+            return ResponseEntity.ok(ApiResponses.ok(data));
+        } catch (org.springframework.security.authentication.BadCredentialsException ex) {
+            log.warn("[login] unauthorized username={} reason={}", username, ex.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error(ex.getMessage()));
+        } catch (Exception ex) {
+            String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
+            log.error("[login] error username={} msg={}", username, msg);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
+        }
     }
 
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) RefreshPayload payload) {
         if (payload != null && StringUtils.hasText(payload.refreshToken())) {
+            try {
+                keycloakAuthService.logout(payload.refreshToken());
+            } catch (Exception ignore) {
+                // best-effort
+            }
             sessionRegistry.invalidateByRefreshToken(payload.refreshToken());
         }
         return ResponseEntity.ok(ApiResponses.ok(null));
@@ -93,37 +132,43 @@ public class KeycloakAuthResource {
         }
     }
 
-    private PortalAuthProfile resolveProfile(String normalizedUsername) {
-        List<String> roles = new ArrayList<>();
-        List<String> permissions = new ArrayList<>();
-
-        // Default viewer permissions
-        permissions.add("portal.view");
-        roles.add(AuthoritiesConstants.USER);
-
-        if ("opadmin".equalsIgnoreCase(normalizedUsername)) {
-            roles.add(AuthoritiesConstants.ADMIN);
-            roles.add(AuthoritiesConstants.OP_ADMIN);
-            roles.add(AuthoritiesConstants.CATALOG_ADMIN);
-            roles.add(AuthoritiesConstants.GOV_ADMIN);
-            roles.add(AuthoritiesConstants.IAM_ADMIN);
-            permissions.add("portal.manage");
-            permissions.add("catalog.manage");
-            permissions.add("governance.manage");
-            permissions.add("iam.manage");
-        } else if (normalizedUsername.endsWith("catalog")) {
-            roles.add(AuthoritiesConstants.CATALOG_ADMIN);
-            permissions.add("catalog.manage");
-        } else if (normalizedUsername.endsWith("governance")) {
-            roles.add(AuthoritiesConstants.GOV_ADMIN);
-            permissions.add("governance.manage");
-        } else if (normalizedUsername.endsWith("iam")) {
-            roles.add(AuthoritiesConstants.IAM_ADMIN);
-            permissions.add("iam.manage");
+    private List<String> toStringList(Object value) {
+        if (value instanceof java.util.Collection<?> c) {
+            java.util.List<String> out = new java.util.ArrayList<>();
+            for (Object o : c) if (o != null) out.add(o.toString());
+            return out;
         }
-
-        return new PortalAuthProfile(roles.stream().distinct().toList(), permissions.stream().distinct().toList());
+        if (value instanceof String s) return java.util.List.of(s);
+        return java.util.List.of();
     }
 
-    private record PortalAuthProfile(List<String> roles, List<String> permissions) {}
+    private boolean containsTriad(List<String> roles) {
+        java.util.Set<String> set = new java.util.HashSet<>();
+        for (String r : roles) set.add(r.toUpperCase());
+        return set.contains("ROLE_SYS_ADMIN") || set.contains("ROLE_AUTH_ADMIN") || set.contains("ROLE_SECURITY_AUDITOR");
+    }
+
+    private List<String> mapRoles(List<String> kcRoles) {
+        java.util.Set<String> mapped = new java.util.LinkedHashSet<>();
+        mapped.add(AuthoritiesConstants.USER);
+        for (String raw : kcRoles) {
+            if (raw == null || raw.isBlank()) continue;
+            String up = raw.toUpperCase(Locale.ROOT);
+            if (up.startsWith("ROLE_")) up = up.substring(5);
+            switch (up) {
+                case "OP_ADMIN", "OPADMIN" -> mapped.add(AuthoritiesConstants.OP_ADMIN);
+                case "CATALOG_ADMIN", "CATALOGADMIN" -> mapped.add(AuthoritiesConstants.CATALOG_ADMIN);
+                case "GOV_ADMIN", "GOVERNANCE_ADMIN", "GOVADMIN" -> mapped.add(AuthoritiesConstants.GOV_ADMIN);
+                case "IAM_ADMIN", "IAMADMIN" -> mapped.add(AuthoritiesConstants.IAM_ADMIN);
+                case "ADMIN" -> mapped.add(AuthoritiesConstants.ADMIN);
+                case "SYS_ADMIN", "SYSADMIN", "AUTH_ADMIN", "AUTHADMIN", "SECURITY_AUDITOR", "SECURITYAUDITOR", "AUDIT_ADMIN", "AUDITADMIN", "AUDITOR_ADMIN" -> {
+                    // triad roles handled in containsTriad(); do not map into platform authorities
+                }
+                default -> {
+                    // ignore other roles for platform authorities
+                }
+            }
+        }
+        return java.util.List.copyOf(mapped);
+    }
 }

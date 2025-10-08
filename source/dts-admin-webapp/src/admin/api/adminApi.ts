@@ -96,6 +96,12 @@ export const adminApi = {
 			url: `/admin/portal/menus/${id}`,
 		}),
 
+	// 角色删除前预检
+	getRolePreDeleteCheck: (name: string) =>
+		apiClient.get<Record<string, unknown>>({
+			url: `/admin/roles/${encodeURIComponent(name)}/pre-delete-check`,
+		}),
+
 	resetPortalMenus: () =>
 		apiClient.post<PortalMenuCollection>({
 			url: "/admin/portal/menus/reset",

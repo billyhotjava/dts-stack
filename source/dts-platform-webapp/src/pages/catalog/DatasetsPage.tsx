@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { toast } from "sonner";
 import { createDataset, deleteDataset, getCatalogConfig, listDatasets } from "@/api/platformApi";
 import { listInfraDataSources } from "@/api/services/infraService";
+import deptService, { type DeptDto } from "@/api/services/deptService";
 
 const SECURITY_LEVELS = [
 	{ value: "PUBLIC", label: "公开" },
@@ -21,11 +22,25 @@ const SECURITY_LEVELS = [
 
 type SecurityLevel = (typeof SECURITY_LEVELS)[number]["value"];
 
+const DATA_LEVELS = [
+  { value: "DATA_PUBLIC", label: "公开 (DATA_PUBLIC)" },
+  { value: "DATA_INTERNAL", label: "内部 (DATA_INTERNAL)" },
+  { value: "DATA_SECRET", label: "秘密 (DATA_SECRET)" },
+  { value: "DATA_TOP_SECRET", label: "机密 (DATA_TOP_SECRET)" },
+] as const;
+type DataLevel = (typeof DATA_LEVELS)[number]["value"];
+type Scope = "DEPT" | "INST";
+type ShareScope = "PRIVATE_DEPT" | "SHARE_INST" | "PUBLIC_INST";
+
 type ListItem = {
 	id: string;
 	name: string;
 	owner: string;
 	classification: SecurityLevel;
+	dataLevel?: string;
+	scope?: string;
+	ownerDept?: string;
+	shareScope?: string;
 	domainId: string;
 	type: string;
 	tags?: string[];
@@ -40,18 +55,27 @@ export default function DatasetsPage() {
 	const [size] = useState(10);
 	const [keyword, setKeyword] = useState("");
 	const [levelFilter, setLevelFilter] = useState<string>("all");
+	const [dataLevelFilter, setDataLevelFilter] = useState<string>("all");
+	const [scopeFilter, setScopeFilter] = useState<string>("all");
+	const [deptFilter, setDeptFilter] = useState<string>("");
 	const [sourceFilter, setSourceFilter] = useState<string>("all");
 	const [open, setOpen] = useState(false);
 	const [form, setForm] = useState({
 		name: "",
 		owner: "",
 		classification: "INTERNAL" as SecurityLevel,
+		dataLevel: "DATA_INTERNAL" as DataLevel,
+		scope: "DEPT" as Scope,
+		ownerDept: "",
+		shareScope: "SHARE_INST" as ShareScope,
 		tags: "",
 		description: "",
 		sourceType: "INCEPTOR",
 		hiveDatabase: "",
 		hiveTable: "",
 	});
+	const [deptOptions, setDeptOptions] = useState<DeptDto[]>([]);
+	const [deptLoading, setDeptLoading] = useState(false);
 	const [catalogConfig, setCatalogConfig] = useState({
 		multiSourceEnabled: false,
 		defaultSourceType: "INCEPTOR",
@@ -124,7 +148,12 @@ const renderSourceLabel = (value: string) => {
 	const fetchList = async () => {
 		setLoading(true);
 		try {
-			const resp = (await listDatasets({ page, size, keyword })) as any;
+				const params: any = { page, size, keyword };
+				if (levelFilter !== "all") params.classification = levelFilter;
+				if (dataLevelFilter !== "all") params.dataLevel = dataLevelFilter;
+				if (scopeFilter !== "all") params.scope = scopeFilter;
+				if (deptFilter.trim()) params.ownerDept = deptFilter.trim();
+				const resp = (await listDatasets(params)) as any;
 			const content = (resp && resp.content) || [];
 			const mapped: ListItem[] = content.map((it: any) => {
 				const rawType = String(it.type || "").trim().toUpperCase();
@@ -137,16 +166,20 @@ const renderSourceLabel = (value: string) => {
 							.map((s: string) => s.trim())
 							.filter(Boolean)
 					: [];
-				return {
-					id: String(it.id),
-					name: it.name,
-					owner: it.owner || "",
-					classification: (it.classification || "INTERNAL") as SecurityLevel,
-					domainId: String(it.domainId || ""),
-					type: normalizeSourceType(rawType || resolvedDefaultSource),
-					tags,
-				};
-			});
+					return {
+						id: String(it.id),
+						name: it.name,
+						owner: it.owner || "",
+						classification: (it.classification || "INTERNAL") as SecurityLevel,
+						dataLevel: it.dataLevel || undefined,
+						scope: it.scope || undefined,
+						ownerDept: it.ownerDept || undefined,
+						shareScope: it.shareScope || undefined,
+						domainId: String(it.domainId || ""),
+						type: normalizeSourceType(rawType || resolvedDefaultSource),
+						tags,
+					};
+				});
 			setItems(mapped);
 			setTotal(Number(resp?.total || mapped.length));
 		} catch (e) {
@@ -156,6 +189,20 @@ const renderSourceLabel = (value: string) => {
 			setLoading(false);
 		}
 	};
+
+	useEffect(() => {
+		let mounted = true;
+		if (form.scope === "DEPT") {
+			setDeptLoading(true);
+			deptService
+				.listDepartments()
+				.then((list) => mounted && setDeptOptions(list || []))
+				.finally(() => mounted && setDeptLoading(false));
+		}
+		return () => {
+			mounted = false;
+		};
+	}, [form.scope]);
 
 	useEffect(() => {
 		const loadBasics = async () => {
@@ -186,7 +233,7 @@ const renderSourceLabel = (value: string) => {
 
 	useEffect(() => {
 		void fetchList();
-	}, [page, size, resolvedDefaultSource]);
+	}, [page, size, resolvedDefaultSource, levelFilter, dataLevelFilter, scopeFilter, deptFilter, keyword]);
 
 	useEffect(() => {
 		const handler = (event: KeyboardEvent) => {
@@ -238,6 +285,10 @@ const renderSourceLabel = (value: string) => {
 					name: form.name.trim(),
 					owner: form.owner.trim(),
 					classification: form.classification,
+					dataLevel: form.dataLevel,
+					scope: form.scope,
+					ownerDept: form.scope === "DEPT" ? (form.ownerDept || undefined) : undefined,
+					shareScope: form.scope === "INST" ? form.shareScope : undefined,
 					tags: tagsList,
 					description: form.description.trim(),
 					type: selectedSourceType,
@@ -401,7 +452,40 @@ const renderSourceLabel = (value: string) => {
 						</Button>
 					</div>
 				</CardHeader>
-				<CardContent className="space-y-3">
+					<CardContent className="space-y-3">
+						<div className="grid gap-2 md:grid-cols-4">
+							<div>
+								<Label>数据密级（DATA_*）</Label>
+								<Select value={dataLevelFilter} onValueChange={setDataLevelFilter}>
+									<SelectTrigger>
+										<SelectValue placeholder="全部" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="all">全部</SelectItem>
+										{DATA_LEVELS.map((l) => (
+											<SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+							<div>
+								<Label>作用域</Label>
+								<Select value={scopeFilter} onValueChange={setScopeFilter}>
+									<SelectTrigger>
+										<SelectValue placeholder="全部" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="all">全部</SelectItem>
+										<SelectItem value="DEPT">DEPT</SelectItem>
+										<SelectItem value="INST">INST</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+							<div>
+								<Label>部门（owner_dept）</Label>
+								<Input value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} placeholder="如 D001" />
+							</div>
+						</div>
 					{!hasPrimarySource && (
 						<Alert variant="destructive">
 							<AlertTitle>缺少默认数据源</AlertTitle>
@@ -418,7 +502,10 @@ const renderSourceLabel = (value: string) => {
 									<th className="px-3 py-2">名称</th>
 									<th className="px-3 py-2">负责人</th>
 									<th className="px-3 py-2">密级</th>
-									<th className="px-3 py-2">来源</th>
+										<th className="px-3 py-2">来源</th>
+										<th className="px-3 py-2">DATA_密级</th>
+										<th className="px-3 py-2">Scope</th>
+										<th className="px-3 py-2">Dept/Share</th>
 									<th className="px-3 py-2">操作</th>
 								</tr>
 							</thead>
@@ -431,7 +518,10 @@ const renderSourceLabel = (value: string) => {
 										<td className="px-3 py-2 text-xs">
 											{SECURITY_LEVELS.find((l) => l.value === d.classification)?.label}
 										</td>
-									<td className="px-3 py-2 text-xs">{renderSourceLabel(d.type)}</td>
+										<td className="px-3 py-2 text-xs">{renderSourceLabel(d.type)}</td>
+										<td className="px-3 py-2 text-xs">{d.dataLevel || "-"}</td>
+										<td className="px-3 py-2 text-xs">{d.scope || "-"}</td>
+										<td className="px-3 py-2 text-xs">{d.scope === "DEPT" ? (d.ownerDept || "-") : (d.shareScope || "-")}</td>
 										<td className="px-3 py-2 space-x-1">
 											<Button variant="ghost" size="sm" onClick={() => router.push(`/catalog/datasets/${d.id}`)}>
 												编辑
@@ -479,7 +569,7 @@ const renderSourceLabel = (value: string) => {
 			</Card>
 
 			<Dialog open={open} onOpenChange={setOpen}>
-				<DialogContent className="max-w-xl">
+					<DialogContent className="max-w-xl">
 					<DialogHeader>
 						<DialogTitle>新建数据集</DialogTitle>
 					</DialogHeader>
@@ -492,24 +582,88 @@ const renderSourceLabel = (value: string) => {
 							<Label>负责人</Label>
 							<Input value={form.owner} onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))} />
 						</div>
-						<div className="grid gap-2">
-							<Label>密级</Label>
-							<Select
-								value={form.classification}
-								onValueChange={(v: SecurityLevel) => setForm((f) => ({ ...f, classification: v }))}
-							>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{SECURITY_LEVELS.map((l) => (
-										<SelectItem key={l.value} value={l.value}>
-											{l.label}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
+							<div className="grid gap-2">
+								<Label>密级</Label>
+								<Select
+									value={form.classification}
+									onValueChange={(v: SecurityLevel) => setForm((f) => ({ ...f, classification: v }))}
+								>
+									<SelectTrigger>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{SECURITY_LEVELS.map((l) => (
+											<SelectItem key={l.value} value={l.value}>
+												{l.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+							<div className="grid gap-2">
+								<Label>数据密级（DATA_*）</Label>
+								<Select
+									value={form.dataLevel}
+									onValueChange={(v: DataLevel) => setForm((f) => ({ ...f, dataLevel: v }))}
+								>
+									<SelectTrigger>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{DATA_LEVELS.map((l) => (
+											<SelectItem key={l.value} value={l.value}>
+												{l.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+							<div className="grid gap-2">
+								<Label>作用域</Label>
+								<Select value={form.scope} onValueChange={(v: Scope) => setForm((f) => ({ ...f, scope: v }))}>
+									<SelectTrigger>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="DEPT">DEPT（部门）</SelectItem>
+										<SelectItem value="INST">INST（研究所）</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+							{form.scope === "DEPT" ? (
+								<div className="grid gap-2">
+									<Label>所属部门</Label>
+									<Select
+										value={form.ownerDept || undefined}
+										onValueChange={(v) => setForm((f) => ({ ...f, ownerDept: v }))}
+									>
+										<SelectTrigger>
+											<SelectValue placeholder={deptLoading ? "加载中…" : "选择部门…"} />
+										</SelectTrigger>
+										<SelectContent>
+											{deptOptions.map((d) => (
+												<SelectItem key={d.code} value={d.code}>
+													{d.nameZh || d.nameEn || d.code}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
+							) : (
+								<div className="grid gap-2">
+									<Label>共享范围（INST）</Label>
+									<Select value={form.shareScope} onValueChange={(v: ShareScope) => setForm((f) => ({ ...f, shareScope: v }))}>
+										<SelectTrigger>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="SHARE_INST">SHARE_INST（所内共享）</SelectItem>
+											<SelectItem value="PUBLIC_INST">PUBLIC_INST（所内公开）</SelectItem>
+											<SelectItem value="PRIVATE_DEPT">PRIVATE_DEPT（不共享）</SelectItem>
+										</SelectContent>
+									</Select>
+								</div>
+							)}
 						<div className="grid gap-2">
 							<Label>标签（用逗号分隔）</Label>
 							<Input value={form.tags} onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} />

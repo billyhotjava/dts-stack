@@ -26,6 +26,11 @@ public interface KeycloakAdminClient {
 
     Optional<KeycloakGroupDTO> findGroup(String groupId, String accessToken);
 
+    /**
+     * Resolve a group by its full path (e.g., "/S10/部门A/科室B").
+     */
+    Optional<KeycloakGroupDTO> findGroupByPath(String path, String accessToken);
+
     KeycloakGroupDTO createGroup(KeycloakGroupDTO payload, String parentGroupId, String accessToken);
 
     KeycloakGroupDTO updateGroup(String groupId, KeycloakGroupDTO payload, String accessToken);
@@ -33,6 +38,17 @@ public interface KeycloakAdminClient {
     void moveGroup(String groupId, String groupName, String parentGroupId, String accessToken);
 
     void deleteGroup(String groupId, String accessToken);
+
+    /**
+     * List groups the user currently belongs to.
+     */
+    List<KeycloakGroupDTO> listUserGroups(String userId, String accessToken);
+
+    /**
+     * Add/remove user to/from a group.
+     */
+    void addUserToGroup(String userId, String groupId, String accessToken);
+    void removeUserFromGroup(String userId, String groupId, String accessToken);
 
     Optional<KeycloakRoleDTO> findRealmRole(String roleName, String accessToken);
 
@@ -54,4 +70,14 @@ public interface KeycloakAdminClient {
      * List realm role names mapped to a user.
      */
     List<String> listUserRealmRoles(String userId, String accessToken);
+
+    /**
+     * List users who have the specified realm role.
+     */
+    List<KeycloakUserDTO> listUsersByRealmRole(String roleName, String accessToken);
+
+    /**
+     * Delete a realm role by name.
+     */
+    void deleteRealmRole(String roleName, String accessToken);
 }

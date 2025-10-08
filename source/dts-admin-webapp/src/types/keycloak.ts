@@ -76,6 +76,8 @@ export interface CreateUserRequest {
     emailVerified?: boolean;
     attributes?: Record<string, string[]>;
     groups?: string[];
+    // Optional explicit department code to persist on user attributes (dept_code)
+    deptCode?: string;
 }
 
 /**
@@ -92,6 +94,8 @@ export interface UpdateUserRequest {
     emailVerified?: boolean;
     attributes?: Record<string, string[]>;
     groups?: string[];
+    // Optional explicit department code to persist on user attributes (dept_code)
+    deptCode?: string;
 }
 
 /**
@@ -281,7 +285,7 @@ export interface ApprovalRequest {
 	id: number;
 	requester: string;
 	type: string;
-	reason: string;
+	reason?: string;
 	createdAt: string;
 	decidedAt?: string;
 	status: string;

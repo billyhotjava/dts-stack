@@ -554,8 +554,14 @@ export default function ApprovalCenterView() {
                 },
             }));
             toast.success(status === "APPROVED" ? "已批准该变更请求" : status === "REJECTED" ? "已拒绝该变更请求" : "已将该请求标记为待定");
-            // 刷新后端变更请求列表
+            // 刷新变更请求列表
             await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests"] });
+            // 若为菜单/角色相关的本地可见性更新，联动刷新菜单与角色面板缓存
+            try {
+                await queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
+                await queryClient.invalidateQueries({ queryKey: ["admin", "role-assignments"] });
+                await queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
+            } catch {}
         } catch (e: any) {
             toast.error(e?.message || "审批操作失败");
         } finally {

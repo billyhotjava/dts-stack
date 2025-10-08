@@ -74,15 +74,21 @@ public class InfraManagementService {
     }
 
     public List<InfraDataSourceDto> listDataSources() {
-        boolean canViewAll = SecurityUtils.hasCurrentUserAnyOfAuthorities(
-            AuthoritiesConstants.ADMIN,
-            AuthoritiesConstants.CATALOG_ADMIN,
-            AuthoritiesConstants.OP_ADMIN
-        );
-        List<InfraDataSource> sources = canViewAll
-            ? dataSourceRepository.findAll()
-            : dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
-        return sources.stream().map(this::toDto).collect(Collectors.toList());
+        try {
+            boolean canViewAll = SecurityUtils.hasCurrentUserAnyOfAuthorities(
+                AuthoritiesConstants.ADMIN,
+                AuthoritiesConstants.CATALOG_ADMIN,
+                AuthoritiesConstants.OP_ADMIN
+            );
+            List<InfraDataSource> sources = canViewAll
+                ? dataSourceRepository.findAll()
+                : dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
+            return sources.stream().map(this::toDto).collect(Collectors.toList());
+        } catch (RuntimeException ex) {
+            // If Liquibase hasn’t created infra tables yet, return empty to keep UI usable
+            LOG.warn("listDataSources failed (likely missing table). Returning empty list. cause={}", ex.getMessage());
+            return List.of();
+        }
     }
 
     @Transactional
