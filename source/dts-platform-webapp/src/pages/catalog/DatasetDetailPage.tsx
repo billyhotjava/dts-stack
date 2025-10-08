@@ -383,7 +383,7 @@ export default function DatasetDetailPage() {
 					{/* 统一为 DATA_*，不再展示 legacy 密级 */}
 
 					<div className="grid gap-2">
-						<Label>数据密级（DATA_*）</Label>
+						<Label>数据密级</Label>
 						<Select
 							value={(dataset.dataLevel as DataLevel) || "DATA_INTERNAL"}
 							onValueChange={(v: DataLevel) => setDataset({ ...(dataset as DatasetAsset), dataLevel: v })}

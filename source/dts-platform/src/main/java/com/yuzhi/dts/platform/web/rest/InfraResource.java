@@ -158,6 +158,20 @@ public class InfraResource {
 
     @GetMapping("/features")
     public ApiResponse<Map<String, Object>> features() {
+        // Auto-kick catalog sync when active Inceptor is present but datasets are not yet imported
+        try {
+            var active = inceptorRegistry.getActive().isPresent();
+            var status = integrationCoordinator.currentStatus();
+            if (active && (status == null || status.catalogDatasetCount() <= 0)) {
+                Thread t = new Thread(() -> {
+                    try {
+                        integrationCoordinator.synchronize("features-auto");
+                    } catch (Exception ignore) {}
+                }, "inceptor-features-auto-sync");
+                t.setDaemon(true);
+                t.start();
+            }
+        } catch (Exception ignore) {}
         return ApiResponses.ok(buildFeaturesPayload());
     }
 
@@ -213,6 +227,7 @@ public class InfraResource {
         IntegrationStatus status = integrationCoordinator.currentStatus();
 
         Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("syncInProgress", integrationCoordinator.isSyncInProgress());
         payload.put("multiSourceEnabled", managementService.isMultiSourceEnabled());
         payload.put("hasActiveInceptor", state != null);
         payload.put("inceptorStatus", state != null ? "ACTIVE" : "NONE");

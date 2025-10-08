@@ -106,13 +106,15 @@ public class PortalSessionRegistry {
 
     private List<String> normalizeRoles(List<String> roles) {
         List<String> merged = new ArrayList<>();
-        merged.add(AuthoritiesConstants.USER);
         if (roles != null) {
             for (String role : roles) {
                 if (StringUtils.hasText(role)) {
                     merged.add(role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase());
                 }
             }
+        }
+        if (merged.isEmpty()) {
+            merged.add(AuthoritiesConstants.USER);
         }
         return merged.stream().distinct().toList();
     }
@@ -147,4 +149,3 @@ public class PortalSessionRegistry {
         }
     }
 }
-

@@ -3,7 +3,7 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.PortalSession;
-import com.yuzhi.dts.platform.service.keycloak.KeycloakAuthService;
+import com.yuzhi.dts.platform.service.admin.AdminAuthClient;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -22,11 +22,11 @@ public class KeycloakAuthResource {
 
     private static final Logger log = LoggerFactory.getLogger(KeycloakAuthResource.class);
     private final PortalSessionRegistry sessionRegistry;
-    private final KeycloakAuthService keycloakAuthService;
+    private final AdminAuthClient adminAuthClient;
 
-    public KeycloakAuthResource(PortalSessionRegistry sessionRegistry, KeycloakAuthService keycloakAuthService) {
+    public KeycloakAuthResource(PortalSessionRegistry sessionRegistry, AdminAuthClient adminAuthClient) {
         this.sessionRegistry = sessionRegistry;
-        this.keycloakAuthService = keycloakAuthService;
+        this.adminAuthClient = adminAuthClient;
     }
 
     public record LoginPayload(String username, String password) {}
@@ -49,10 +49,9 @@ public class KeycloakAuthResource {
             if (log.isInfoEnabled()) {
                 log.info("[login] attempt username={}", username);
             }
-            var result = keycloakAuthService.login(username, password);
+            var result = adminAuthClient.login(username, password);
             Map<String, Object> user = result.user();
-            // Forbid admin-console triad (SYS_ADMIN / AUTH_ADMIN / SECURITY_AUDITOR) on platform
-            // Check BEFORE mapping to platform authorities, using raw Keycloak roles
+            // Strengthen triad rejection: check raw Keycloak roles BEFORE mapping
             List<String> rawRoles = toStringList(user.get("roles"));
             if (containsTriadOriginal(rawRoles)) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error("系统管理角色用户不能登录业务平台"));
@@ -106,7 +105,7 @@ public class KeycloakAuthResource {
     public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) RefreshPayload payload) {
         if (payload != null && StringUtils.hasText(payload.refreshToken())) {
             try {
-                keycloakAuthService.logout(payload.refreshToken());
+                adminAuthClient.logout(payload.refreshToken());
             } catch (Exception ignore) {
                 // best-effort
             }
@@ -161,9 +160,10 @@ public class KeycloakAuthResource {
                set.contains("ROLE_AUDITADMIN") || set.contains("AUDITADMIN");
     }
 
+    
+
     private List<String> mapRoles(List<String> kcRoles) {
         java.util.Set<String> mapped = new java.util.LinkedHashSet<>();
-        mapped.add(AuthoritiesConstants.USER);
         for (String raw : kcRoles) {
             if (raw == null || raw.isBlank()) continue;
             String up = raw.toUpperCase(Locale.ROOT);
@@ -188,6 +188,10 @@ public class KeycloakAuthResource {
                     // ignore other roles for platform authorities
                 }
             }
+        }
+        // Only assign ROLE_USER when no specific roles were mapped
+        if (mapped.isEmpty()) {
+            mapped.add(AuthoritiesConstants.USER);
         }
         return java.util.List.copyOf(mapped);
     }

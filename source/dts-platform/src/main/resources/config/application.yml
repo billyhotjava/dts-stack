@@ -229,6 +229,13 @@ dts:
     api-path: /api
     admin-api-path: /api/admin
   platform:
+    features:
+      # Feature flags for legacy admin-like endpoints inside platform
+      # Default OFF to disable duplicate admin capabilities; can be re-enabled via env if needed
+      keycloak-admin: ${DTS_FEATURE_PLATFORM_KEYCLOAK_ADMIN:false}
+      platform-admin-demo: ${DTS_FEATURE_PLATFORM_ADMIN_DEMO:false}
+      # Serve Keycloak localization resources from platform to avoid browser TLS trust issues to admin domain in dev
+      kc-localization: ${DTS_FEATURE_PLATFORM_KC_LOCALIZATION:true}
     hive:
       enabled: false
       jdbc-url: jdbc:hive2://dts-hive:10000/default

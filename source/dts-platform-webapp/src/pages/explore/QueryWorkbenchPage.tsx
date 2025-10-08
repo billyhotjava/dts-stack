@@ -870,7 +870,7 @@ export default function QueryWorkbenchPage() {
 					<span aria-hidden className="text-red-500">
 						★
 					</span>
-					此功能涉及数据密级（DATA_*）数据，请注意保密！
+					此功能涉及数据密级数据，请注意保密！
 				</div>
 
 				<Card>

@@ -1037,6 +1037,37 @@ public class KeycloakApiResource {
     }
 
     // ---- Auth endpoints (minimal, for UI bootstrap; real auth via Keycloak SSO) ----
+    @PostMapping("/keycloak/auth/platform/login")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> platformLogin(@RequestBody Map<String, String> body) {
+        String username = Optional.ofNullable(body).map(b -> b.getOrDefault("username", "")).map(String::trim).orElse("");
+        String password = Optional.ofNullable(body).map(b -> b.getOrDefault("password", "")).orElse("");
+        if (username.isBlank() || password.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("用户名或密码不能为空"));
+        }
+        try {
+            // Note: Do NOT enforce triad-only here. This endpoint serves the business platform audience.
+            KeycloakAuthService.LoginResult loginResult = keycloakAuthService.login(username, password);
+            Map<String, Object> data = new HashMap<>();
+            data.put("user", loginResult.user());
+            data.put("accessToken", loginResult.tokens().accessToken());
+            if (loginResult.tokens().refreshToken() != null) data.put("refreshToken", loginResult.tokens().refreshToken());
+            if (loginResult.tokens().idToken() != null) data.put("idToken", loginResult.tokens().idToken());
+            if (loginResult.tokens().tokenType() != null) data.put("tokenType", loginResult.tokens().tokenType());
+            if (loginResult.tokens().scope() != null) data.put("scope", loginResult.tokens().scope());
+            if (loginResult.tokens().sessionState() != null) data.put("sessionState", loginResult.tokens().sessionState());
+            if (loginResult.tokens().expiresIn() != null) data.put("expiresIn", loginResult.tokens().expiresIn());
+            if (loginResult.tokens().refreshExpiresIn() != null) data.put("refreshExpiresIn", loginResult.tokens().refreshExpiresIn());
+            auditService.record(username, "KC_AUTH_LOGIN_PLATFORM", "KC_AUTH", username, "SUCCESS", null);
+            return ResponseEntity.ok(ApiResponse.ok(data));
+        } catch (org.springframework.security.authentication.BadCredentialsException ex) {
+            auditService.record(username, "KC_AUTH_LOGIN_PLATFORM", "KC_AUTH", username, "FAILURE", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
+        } catch (Exception ex) {
+            String message = Optional.ofNullable(ex.getMessage()).filter(m -> !m.isBlank()).orElse("登录失败，请稍后重试");
+            auditService.record(username, "KC_AUTH_LOGIN_PLATFORM", "KC_AUTH", username, "FAILURE", message);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(message));
+        }
+    }
     @PostMapping("/keycloak/auth/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody Map<String, String> body) {
         String username = Optional.ofNullable(body).map(b -> b.getOrDefault("username", "")).map(String::trim).orElse("");
@@ -1152,5 +1183,25 @@ public class KeycloakApiResource {
             auditService.record(currentUser(), "KC_AUTH_REFRESH", "KC_AUTH", "self", "FAILURE", message);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(message));
         }
+    }
+
+    // ---- PKI login (placeholder, disabled by default) ----
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.yuzhi.dts.admin.config.PkiAuthProperties pkiProps;
+
+    public record PkiLoginPayload(String assertion, String username) {}
+
+    @PostMapping("/keycloak/auth/pki-login")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> pkiLogin(
+        @RequestBody(required = false) PkiLoginPayload payload,
+        jakarta.servlet.http.HttpServletRequest request
+    ) {
+        boolean enabled = pkiProps != null && pkiProps.isEnabled();
+        if (!enabled) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).body(ApiResponse.error("PKI 登录未启用"));
+        }
+
+        // Placeholder implementation: return 501 until PKI integration is configured.
+        return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_IMPLEMENTED).body(ApiResponse.error("PKI 登录尚未集成，请稍后再试"));
     }
 }

@@ -398,7 +398,7 @@ const DataStandardsPage = () => {
                 <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                         <CardTitle>数据标准台账</CardTitle>
-                        <p className="text-sm text-muted-foreground">快速维护数据标准基本信息与数据密级（DATA_*）、版本情况</p>
+                        <p className="text-sm text-muted-foreground">快速维护数据标准基本信息与数据密级、版本情况</p>
                     </div>
                     <div className="flex gap-2">
                         <Button onClick={openCreate}>新建标准</Button>
@@ -466,7 +466,7 @@ const DataStandardsPage = () => {
                             }}
                         >
                             <SelectTrigger>
-                                <SelectValue placeholder="数据密级（DATA_*）" />
+                                <SelectValue placeholder="数据密级" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="ALL">全部数据密级</SelectItem>
@@ -487,7 +487,7 @@ const DataStandardsPage = () => {
                                     <th className="w-28 px-3 py-3 text-left">所属域</th>
                                     <th className="w-32 px-3 py-3 text-left">负责人</th>
                                     <th className="w-28 px-3 py-3 text-left">状态</th>
-                                    <th className="w-28 px-3 py-3 text-left">数据密级（DATA_*）</th>
+                                    <th className="w-28 px-3 py-3 text-left">数据密级</th>
                                     <th className="w-24 px-3 py-3 text-left">当前版本</th>
                                     <th className="w-32 px-3 py-3 text-left">更新时间</th>
                                     <th className="px-3 py-3 text-right">操作</th>
@@ -589,7 +589,7 @@ const DataStandardsPage = () => {
                                     <span>{selectedDetail.domain ?? "-"}</span>
                                     <span className="text-muted-foreground">负责人</span>
                                     <span>{selectedDetail.owner ?? "-"}</span>
-                                    <span className="text-muted-foreground">数据密级（DATA_*）</span>
+                                    <span className="text-muted-foreground">数据密级</span>
                                     <span>{securityLabel(selectedDetail.securityLevel)}</span>
                                     <span className="text-muted-foreground">当前版本</span>
                                     <span>{selectedDetail.currentVersion}</span>
@@ -760,7 +760,7 @@ const DataStandardsPage = () => {
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-sm">数据密级（DATA_*）</Label>
+                                    <Label className="text-sm">数据密级</Label>
                                     <Select
                                         value={formState.securityLevel}
                                         onValueChange={(value: DataLevel) =>

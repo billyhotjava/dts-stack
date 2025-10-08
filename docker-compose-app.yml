@@ -81,6 +81,10 @@ services:
       DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
       DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
       DTS_JDBC_DRIVER_JAR: "quark-driver-8.37.3.jar"
+      # Disable duplicate admin-like endpoints in platform backend (Stage 1)
+      DTS_FEATURE_PLATFORM_KEYCLOAK_ADMIN: "false"
+      DTS_FEATURE_PLATFORM_ADMIN_DEMO: "false"
+      DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
       # Mount vendor JDBC driver(s) for Hive to avoid Hadoop conflicts
@@ -123,6 +127,8 @@ services:
     ports: []
     environment:
       API_PROXY_TARGET: http://dts-platform:8081
+      # Admin API base URL for Keycloak localization and other admin-proxied calls
+      VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
     networks:
       - dts-core
     labels:

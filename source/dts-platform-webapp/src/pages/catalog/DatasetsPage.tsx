@@ -458,7 +458,7 @@ const renderSourceLabel = (value: string) => {
 					<CardContent className="space-y-3">
 						<div className="grid gap-2 md:grid-cols-4">
 							<div>
-								<Label>数据密级（DATA_*）</Label>
+								<Label>数据密级</Label>
 								<Select value={dataLevelFilter} onValueChange={setDataLevelFilter}>
 									<SelectTrigger>
 										<SelectValue placeholder="全部" />
@@ -505,7 +505,7 @@ const renderSourceLabel = (value: string) => {
 									<th className="px-3 py-2">名称</th>
 									<th className="px-3 py-2">负责人</th>
 									<th className="px-3 py-2">来源</th>
-									<th className="px-3 py-2">数据密级（DATA_*）</th>
+									<th className="px-3 py-2">数据密级</th>
 										<th className="px-3 py-2">Scope</th>
 										<th className="px-3 py-2">Dept/Share</th>
 									<th className="px-3 py-2">操作</th>
@@ -583,7 +583,7 @@ const renderSourceLabel = (value: string) => {
 						</div>
 							{/* 统一显示与提交 DATA_*，不再展示 legacy 密级 */}
 							<div className="grid gap-2">
-								<Label>数据密级（DATA_*）</Label>
+								<Label>数据密级</Label>
 								<Select
 									value={form.dataLevel}
 									onValueChange={(v: DataLevel) => setForm((f) => ({ ...f, dataLevel: v }))}

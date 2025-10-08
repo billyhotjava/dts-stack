@@ -508,7 +508,7 @@ const QualityRulesPage = () => {
             <div className="grid grid-cols-[2fr,1.2fr,1fr,1fr,1fr,160px] items-center gap-2 border-b pb-2 text-xs uppercase text-muted-foreground">
               <span>名称 / 编码</span>
               <span>数据集</span>
-              <span>数据密级（DATA_*）</span>
+              <span>数据密级</span>
               <span>责任人</span>
               <span>频率</span>
               <span className="text-right">操作</span>
@@ -623,7 +623,7 @@ const QualityRulesPage = () => {
               <h3 className="text-sm font-semibold text-muted-foreground">基础信息</h3>
               <div className="space-y-2 text-sm">
                 <InfoRow label="责任人" value={detailRule?.owner || "-"} />
-                <InfoRow label="数据密级（DATA_*）" value={detailRule ? LEVEL_LABELS[detailRule.dataLevel || "DATA_INTERNAL"] : "-"} />
+                <InfoRow label="数据密级" value={detailRule ? LEVEL_LABELS[detailRule.dataLevel || "DATA_INTERNAL"] : "-"} />
                 <InfoRow
                   label="严重程度"
                   value={detailRule?.severity ? SEVERITY_LABELS[detailRule.severity] : "-"}
@@ -714,7 +714,7 @@ const QualityRulesPage = () => {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>数据密级（DATA_*）</Label>
+              <Label>数据密级</Label>
               <Select
                 value={form.dataLevel}
                 onValueChange={(value: DataLevel) => setForm((prev) => ({ ...prev, dataLevel: value }))}

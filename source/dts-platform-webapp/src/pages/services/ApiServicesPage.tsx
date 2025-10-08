@@ -145,7 +145,7 @@ export default function ApiServicesPage() {
 								<th className="px-3 py-2 font-medium">绑定数据集/视图</th>
 								<th className="px-3 py-2 font-medium w-[90px]">方法</th>
 								<th className="px-3 py-2 font-medium">路径</th>
-                        <th className="px-3 py-2 font-medium w-[140px]">最低数据密级（DATA_*）</th>
+                        <th className="px-3 py-2 font-medium w-[140px]">最低数据密级</th>
 								<th className="px-3 py-2 font-medium w-[140px]">QPS 配额</th>
 								<th className="px-3 py-2 font-medium w-[160px]">最近调用量</th>
 								<th className="px-3 py-2 font-medium w-[90px]">状态</th>

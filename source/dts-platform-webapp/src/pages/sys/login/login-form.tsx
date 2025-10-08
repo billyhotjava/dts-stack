@@ -25,10 +25,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	const bilingual = useBilingualText();
 
 	const form = useForm<SignInReq>({
-		defaultValues: {
-			username: "opadmin",
-			password: "Devops123@",
-		},
+		// defaultValues: {
+		// 	username: "opadmin",
+		// 	password: "Devops123@",
+		// },
 	});
 
 	if (loginState !== LoginStateEnum.LOGIN) return null;

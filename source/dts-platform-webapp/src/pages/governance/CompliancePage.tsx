@@ -559,7 +559,7 @@ export default function CompliancePage() {
                             <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                                 <tr>
                                     <th className="px-3 py-2 font-medium">批次名称</th>
-                <th className="px-3 py-2 font-medium">数据密级（DATA_*）</th>
+                <th className="px-3 py-2 font-medium">数据密级</th>
                                     <th className="px-3 py-2 font-medium">进度</th>
                                     <th className="px-3 py-2 font-medium">统计</th>
                                     <th className="px-3 py-2 font-medium">触发</th>
@@ -653,7 +653,7 @@ export default function CompliancePage() {
                                     <Badge variant={selectedBatchStatus(detailBatch.status).variant}>
                                         {selectedBatchStatus(detailBatch.status).label}
                                     </Badge>
-                        <Badge variant="outline">数据密级（DATA_*） {LEVEL_LABELS[detailBatch.dataLevel] ?? detailBatch.dataLevel}</Badge>
+                        <Badge variant="outline">数据密级{LEVEL_LABELS[detailBatch.dataLevel] ?? detailBatch.dataLevel}</Badge>
                                     {detailBatch.evidenceRequired ? (
                                         <Badge variant="secondary">需提交证据</Badge>
                                     ) : (
@@ -943,7 +943,7 @@ export default function CompliancePage() {
                                     }
                                 >
                                     <SelectTrigger>
-                                    <SelectValue placeholder="选择数据密级（DATA_*）" />
+                                    <SelectValue placeholder="选择数据密级" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {(Object.keys(LEVEL_LABELS) as DataLevel[]).map((level) => (

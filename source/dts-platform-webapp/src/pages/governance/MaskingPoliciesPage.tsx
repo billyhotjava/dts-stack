@@ -253,7 +253,7 @@ export default function MaskingPoliciesPage() {
 			<SensitiveNotice />
 			<div className="flex flex-wrap items-center gap-2 rounded-md border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700">
 				<Icon icon="solar:shield-bold" size={18} />
-				治理策略落地列级/行级访问控制，可按数据密级（DATA_*）、角色、组织叠加覆盖并提供模拟验证。
+				治理策略落地列级/行级访问控制，可按数据密级、角色、组织叠加覆盖并提供模拟验证。
 			</div>
 
 			<div className="grid gap-4 2xl:grid-cols-[400px,1fr]">
@@ -285,7 +285,7 @@ export default function MaskingPoliciesPage() {
 									<tr>
 										<th className="px-4 py-2">字段名</th>
 										<th className="px-4 py-2">类型</th>
-										<th className="px-4 py-2">数据密级（DATA_*）</th>
+										<th className="px-4 py-2">数据密级</th>
 										<th className="px-4 py-2">当前策略</th>
 									</tr>
 								</thead>
@@ -416,10 +416,10 @@ export default function MaskingPoliciesPage() {
 								/>
 							</div>
 							<div className="space-y-2">
-								<Label className="text-xs text-muted-foreground">数据密级（DATA_*）</Label>
+								<Label className="text-xs text-muted-foreground">数据密级</Label>
 								<Select value="multi" onValueChange={() => undefined} open={false}>
 									<SelectTrigger className="justify-start">
-									<SelectValue placeholder="选择数据密级（DATA_*）" />
+									<SelectValue placeholder="选择数据密级" />
 									</SelectTrigger>
 								</Select>
 								<div className="flex flex-wrap gap-2">
@@ -473,7 +473,7 @@ export default function MaskingPoliciesPage() {
 								/>
 							</div>
 							<p className="text-xs text-muted-foreground">
-								策略叠加遵循：优先级 &lt; 数据密级（DATA_*） &lt; 角色/组织，覆盖冲突时按照优先级较小者生效。
+								策略叠加遵循：优先级 &lt; 数据密级 &lt; 角色/组织，覆盖冲突时按照优先级较小者生效。
 							</p>
 						</CardContent>
 					</Card>
@@ -516,7 +516,7 @@ export default function MaskingPoliciesPage() {
 									onValueChange={(value) => setSimulation((prev) => ({ ...prev, classification: value }))}
 								>
 									<SelectTrigger>
-										<SelectValue placeholder="数据密级（DATA_*）" />
+										<SelectValue placeholder="数据密级" />
 									</SelectTrigger>
 									<SelectContent>
 										{CLASSIFICATION_LEVELS.map((level) => (

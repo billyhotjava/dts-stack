@@ -656,7 +656,7 @@ const levels = DATA_LEVELS.map((item) => item);
 	};
 
 	const handleTemplateDownload = () => {
-const headers = ["名称", "负责人", "默认密级（DATA_*）", "来源系统", "父节点路径"];
+const headers = ["名称", "负责人", "默认密级", "来源系统", "父节点路径"];
 		const csv = `${headers.join(",")}`;
 		const blob = new Blob([`${csv}\n`], { type: "text/csv;charset=utf-8;" });
 		const url = URL.createObjectURL(blob);
@@ -681,7 +681,7 @@ const headers = ["名称", "负责人", "默认密级（DATA_*）", "来源系�
 				<span aria-hidden className="text-red-500">
 					★
 				</span>
-				此功能涉及数据密级（DATA_*）数据，请注意保密！
+				此功能涉及数据密级数据，请注意保密！
 			</div>
 			<div className="grid gap-4 xl:grid-cols-[320px,1fr]">
 				<Card className="h-[calc(100vh-220px)]">
@@ -800,10 +800,10 @@ const headers = ["名称", "负责人", "默认密级（DATA_*）", "来源系�
 							</Select>
 							<Select value={levelFilter} onValueChange={setLevelFilter}>
 								<SelectTrigger>
-									<SelectValue placeholder="数据密级（DATA_*）" />
+									<SelectValue placeholder="数据密级" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="all">数据密级（DATA_*）筛选</SelectItem>
+									<SelectItem value="all">数据密级筛选</SelectItem>
 									{levels.map((item) => (
 										<SelectItem key={item.value} value={item.value}>
 											{item.label}
@@ -840,7 +840,7 @@ const headers = ["名称", "负责人", "默认密级（DATA_*）", "来源系�
 										<th className="border-b px-3 py-2">数据集</th>
 										<th className="border-b px-3 py-2">所属域/主题</th>
 										<th className="border-b px-3 py-2">负责人</th>
-									<th className="border-b px-3 py-2">数据密级（DATA_*）</th>
+									<th className="border-b px-3 py-2">数据密级</th>
 										<th className="border-b px-3 py-2">来源系统</th>
 										<th className="border-b px-3 py-2">最近更新</th>
 										<th className="border-b px-3 py-2">策略</th>
@@ -939,7 +939,7 @@ const headers = ["名称", "负责人", "默认密级（DATA_*）", "来源系�
 							/>
 						</div>
 						<div className="grid gap-2">
-							<Label>默认密级（DATA_*）</Label>
+							<Label>默认密级</Label>
 							<Select
 								value={formState.classification}
 								onValueChange={(value: DataLevel) => setFormState((prev) => ({ ...prev, classification: value }))}
@@ -949,7 +949,7 @@ const headers = ["名称", "负责人", "默认密级（DATA_*）", "来源系�
 								</SelectTrigger>
 								<SelectContent>
 									<SelectGroup>
-										<SelectLabel>数据密级（DATA_*）</SelectLabel>
+										<SelectLabel>数据密级</SelectLabel>
 										{DATA_LEVELS.map((item) => (
 											<SelectItem key={item.value} value={item.value}>
 												{item.label}

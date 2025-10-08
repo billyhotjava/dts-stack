@@ -3,10 +3,12 @@ package com.yuzhi.dts.platform.web.rest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
+@ConditionalOnProperty(prefix = "dts.platform.features", name = "keycloak-admin", havingValue = "true", matchIfMissing = true)
 @RequestMapping("/api/keycloak")
 public class KeycloakAdminResource {
 
@@ -250,4 +252,3 @@ public class KeycloakAdminResource {
     private Map<String, Object> ok(String message) { return Map.of("status", 200, "message", message, "data", null); }
     private Map<String, Object> error(String message) { return Map.of("status", -1, "message", message, "data", null); }
 }
-

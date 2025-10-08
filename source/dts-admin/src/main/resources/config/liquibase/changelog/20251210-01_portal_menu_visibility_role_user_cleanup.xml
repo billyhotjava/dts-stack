@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251210-01-portal-menu-role-user-cleanup" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="portal_menu_visibility"/>
+            <columnExists tableName="portal_menu_visibility" columnName="role_code"/>
+        </preConditions>
+        <comment>Remove legacy ROLE_USER visibilities; ROLE_USER is non-binding now.</comment>
+        <sql dbms="postgresql">
+            DELETE FROM portal_menu_visibility WHERE UPPER(role_code) = 'ROLE_USER';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

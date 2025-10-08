@@ -1,4 +1,5 @@
 import apiClient from "../apiClient";
+import { GLOBAL_CONFIG } from "@/global-config";
 
 /**
  * Keycloak本地化翻译服务
@@ -19,14 +20,15 @@ export interface KeycloakTranslations {
  * Keycloak本地化翻译API服务
  */
 export class KeycloakLocalizationService {
-	private static readonly BASE_URL = "/keycloak/localization";
+    // Use relative path because apiClient already prefixes with GLOBAL_CONFIG.apiBaseUrl
+    private static readonly BASE_URL = `/keycloak/localization`;
 
 	/**
 	 * 获取Keycloak中文翻译词表
 	 */
 	static getChineseTranslations(): Promise<KeycloakTranslations> {
 		return apiClient.get<KeycloakTranslations>({
-			url: `${KeycloakLocalizationService.BASE_URL}/zh-CN`,
+            url: `${KeycloakLocalizationService.BASE_URL}/zh-CN`,
 		});
 	}
 }

@@ -107,6 +107,10 @@ services:
       DTS_PLATFORM_HIVE_TEST_PRESERVE_ARTIFACTS: "true"
       # Enable lightweight HTTP access logging in dev to diagnose 401s and routing
       DTS_HTTP_ACCESS_LOG: "true"
+      # Disable duplicate admin-like endpoints in platform backend (Stage 1)
+      DTS_FEATURE_PLATFORM_KEYCLOAK_ADMIN: "false"
+      DTS_FEATURE_PLATFORM_ADMIN_DEMO: "false"
+      DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
     command:
       - bash
       - -lc
@@ -206,9 +210,11 @@ services:
       VITE_API_PROXY_PREFIX: ""
       # Enforce FE guard consistently (dev == prod)
       VITE_ENABLE_FE_GUARD: "true"
-      # Allow all non-triad users (leave empty). Triad is blocked by backend and FE logic.
+      # Allow all authenticated users to sign in (empty → allow all; triad still governed by backend policy)
       VITE_ALLOWED_LOGIN_ROLES: ""
       VITE_DEV_LOGIN_FALLBACK: "false"
+      # Admin API base URL for Keycloak localization and other admin-proxied calls
+      VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18012:3001"

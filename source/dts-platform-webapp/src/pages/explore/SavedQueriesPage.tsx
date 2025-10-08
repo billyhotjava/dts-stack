@@ -515,7 +515,7 @@ export default function SavedQueriesPage() {
                     <th className="border-b px-3 py-2 text-left font-medium">所属数据集</th>
                     <th className="border-b px-3 py-2 text-left font-medium">列</th>
                     <th className="border-b px-3 py-2 text-left font-medium">行数</th>
-                    <th className="border-b px-3 py-2 text-left font-medium">数据密级（DATA_*）</th>
+                    <th className="border-b px-3 py-2 text-left font-medium">数据密级</th>
                     <th className="border-b px-3 py-2 text-left font-medium">过期时间</th>
                     <th className="border-b px-3 py-2 text-left font-medium">操作</th>
                   </tr>

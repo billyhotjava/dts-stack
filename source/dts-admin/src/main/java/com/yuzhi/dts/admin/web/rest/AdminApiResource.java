@@ -176,7 +176,8 @@ public class AdminApiResource {
         "IMPORTANT", "SECRET",
         "CORE", "TOP_SECRET"
     );
-    private static final List<String> DEFAULT_PORTAL_ROLES = List.of(AuthoritiesConstants.OP_ADMIN, AuthoritiesConstants.USER);
+    // Tighten default visibility: ROLE_USER is non-binding and should not be added by default
+    private static final List<String> DEFAULT_PORTAL_ROLES = List.of(AuthoritiesConstants.OP_ADMIN);
     private static final Set<String> RESERVED_REALM_ROLES = Set.of("SYSADMIN", "OPADMIN", "AUTHADMIN", "AUDITADMIN");
 
     private static final List<String> OPERATION_ORDER = List.of("read", "write", "export");

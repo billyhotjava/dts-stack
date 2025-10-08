@@ -35,12 +35,10 @@ public class PortalMenuService {
 
     private static final Logger log = LoggerFactory.getLogger(PortalMenuService.class);
 
+    // Default roles that can see menus when no explicit visibility is defined.
+    // Note: Do NOT include ROLE_USER here; otherwise all authenticated users would see all menus.
     private static final List<String> DEFAULT_MENU_ROLES = List.of(
-        "ROLE_SYS_ADMIN",
-        "ROLE_AUTH_ADMIN",
-        "ROLE_SECURITY_AUDITOR",
-        "ROLE_OP_ADMIN",
-        "ROLE_USER"
+        "ROLE_OP_ADMIN"
     );
     private static final Set<String> BASE_READ_SECTIONS = Set.of("catalog", "explore", "visualization");
     private static final Set<String> WRITE_SECTIONS = Set.of("modeling", "governance", "services");
@@ -233,6 +231,10 @@ public class PortalMenuService {
             return false;
         }
         if (roleCodes.contains(visibility.getRoleCode())) {
+            // New rule: ROLE_USER is non-binding (does not grant any menu)
+            if (AuthoritiesConstants.USER.equals(visibility.getRoleCode())) {
+                return false;
+            }
             return true;
         }
         // Governance triad are also allowed to bypass explicit constraints
@@ -522,17 +524,13 @@ public class PortalMenuService {
         try {
             section = extractSectionKey(menu);
         } catch (Exception ignore) {}
-        for (String role : DEFAULT_MENU_ROLES) {
-            // 基础数据功能仅默认授予 OP_ADMIN，其它任何默认角色不应拥有
-            if ("foundation".equalsIgnoreCase(section) && !AuthoritiesConstants.OP_ADMIN.equals(role)) {
-                continue;
-            }
-            PortalMenuVisibility visibility = new PortalMenuVisibility();
-            visibility.setMenu(menu);
-            visibility.setRoleCode(role);
-            visibility.setDataLevel("INTERNAL");
-            defaults.add(visibility);
-        }
+        // By default, only grant OP_ADMIN; end-users see menus only when their roles are explicitly bound.
+        // Foundation section remains OP_ADMIN-only by policy.
+        PortalMenuVisibility op = new PortalMenuVisibility();
+        op.setMenu(menu);
+        op.setRoleCode(AuthoritiesConstants.OP_ADMIN);
+        op.setDataLevel("INTERNAL");
+        defaults.add(op);
         return defaults;
     }
 

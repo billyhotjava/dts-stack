@@ -90,6 +90,34 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 			{ key: "tokens", path: "tokens", titleKey: "sys.nav.portal.servicesTokens" },
 		],
 	},
+	{
+		key: "iam",
+		path: "iam",
+		icon: "solar:key-minimalistic-bold-duotone",
+		titleKey: "sys.nav.portal.iam",
+		children: [
+			{
+				key: "classification",
+				path: "classification",
+				titleKey: "sys.nav.portal.iamClassification",
+			},
+			{
+				key: "authorization",
+				path: "authorization",
+				titleKey: "sys.nav.portal.iamAuthorization",
+			},
+			{
+				key: "simulation",
+				path: "simulation",
+				titleKey: "sys.nav.portal.iamSimulation",
+			},
+			{
+				key: "requests",
+				path: "requests",
+				titleKey: "sys.nav.portal.iamRequests",
+			},
+		],
+	},
 	// 基础数据维护
 	{
 		key: "foundation",

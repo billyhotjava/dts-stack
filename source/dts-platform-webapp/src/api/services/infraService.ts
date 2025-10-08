@@ -44,6 +44,7 @@ export interface InfraFeatureFlags {
 	multiSourceEnabled: boolean;
 	hasActiveInceptor: boolean;
 	inceptorStatus: string;
+	syncInProgress?: boolean;
 	defaultJdbcUrl?: string;
 	loginPrincipal?: string;
 	lastVerifiedAt?: string;

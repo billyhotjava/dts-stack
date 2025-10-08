@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
  * Only implements read of portal menus for now, backed by in-memory data.
  */
 @RestController
+@ConditionalOnProperty(prefix = "dts.platform.features", name = "platform-admin-demo", havingValue = "true", matchIfMissing = true)
 @RequestMapping("/api/admin")
 public class PlatformAdminResource {
 

@@ -142,6 +142,7 @@ export default function DataSourcesPage() {
 	const [kerberosAdvancedOpen, setKerberosAdvancedOpen] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const [deletingId, setDeletingId] = useState<string | null>(null);
+	const [featurePolls, setFeaturePolls] = useState(0);
 
 	const resolveModuleLabel = (module: string) => {
 		switch (module) {
@@ -174,10 +175,21 @@ export default function DataSourcesPage() {
 	);
 	const lastVerifiedDisplay = features?.lastVerifiedAt ? new Date(features.lastVerifiedAt).toLocaleString() : undefined;
 	const lastUpdatedDisplay = features?.lastUpdatedAt ? new Date(features.lastUpdatedAt).toLocaleString() : undefined;
-	const moduleStatuses: ModuleStatus[] = features?.moduleStatuses ?? [];
+	let moduleStatuses: ModuleStatus[] = features?.moduleStatuses ?? [];
 	const integrationStatus = features?.integrationStatus;
 	const lastSyncedDisplay = integrationStatus?.lastSyncAt ? new Date(integrationStatus.lastSyncAt).toLocaleString() : undefined;
 	const integrationActions = integrationStatus?.actions?.length ? integrationStatus.actions.join("，") : undefined;
+
+	// Derive a transient SYNCING state for the catalog module
+	const datasetCount = integrationStatus?.catalogDatasetCount ?? 0;
+	const showSyncing = (features?.hasActiveInceptor ?? false) && datasetCount === 0 && (features?.syncInProgress || featurePolls > 0);
+	if (showSyncing && moduleStatuses.length > 0) {
+		moduleStatuses = moduleStatuses.map((m) =>
+			m.module === "catalog"
+				? { ...m, status: "SYNCING", message: m.message || "首次加载，正在同步 Hive 元数据…" }
+				: m,
+		);
+	}
 
 	const loadSources = async () => {
 		setLoadingSources(true);
@@ -255,6 +267,20 @@ export default function DataSourcesPage() {
 		void loadSources();
 		void loadLogs();
 	}, []);
+
+	// Auto-refresh features shortly after mount when active Inceptor exists but catalog is still empty.
+	useEffect(() => {
+		const active = features?.hasActiveInceptor ?? false;
+		const datasetCount = features?.integrationStatus?.catalogDatasetCount ?? 0;
+		if (active && datasetCount === 0 && featurePolls < 5) {
+			const timer = setTimeout(async () => {
+				await loadFeatures();
+				setFeaturePolls((n) => n + 1);
+			}, 3000);
+			return () => clearTimeout(timer);
+		}
+		return;
+	}, [features, featurePolls]);
 
 	const handleKeytabUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
@@ -874,7 +900,11 @@ export default function DataSourcesPage() {
 												</div>
 											)}
 										</div>
-										<Badge variant={item.status === "READY" ? "default" : "destructive"}>{item.status}</Badge>
+										<Badge
+											variant={item.status === "READY" ? "default" : item.status === "SYNCING" ? "secondary" : "destructive"}
+										>
+											{item.status}
+										</Badge>
 									</div>
 								))}
 							</div>

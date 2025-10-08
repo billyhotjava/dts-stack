@@ -8,11 +8,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.event.EventListener;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +28,7 @@ public class InceptorIntegrationCoordinator {
     private final CatalogDatasetRepository datasetRepository;
     private final InceptorCatalogSyncService catalogSyncService;
     private final AtomicReference<IntegrationStatus> lastStatus = new AtomicReference<>(IntegrationStatus.empty());
+    private final AtomicBoolean syncing = new AtomicBoolean(false);
 
     public InceptorIntegrationCoordinator(
         @Nullable CacheManager cacheManager,
@@ -38,6 +41,7 @@ public class InceptorIntegrationCoordinator {
     }
 
     public IntegrationStatus synchronize(String reason) {
+        syncing.set(true);
         List<String> actions = new ArrayList<>();
         if (cacheManager != null) {
             Cache cache = cacheManager.getCache(SQL_CATALOG_CACHE);
@@ -83,6 +87,7 @@ public class InceptorIntegrationCoordinator {
         );
         lastStatus.set(status);
         LOG.info("Inceptor integration synchronized. reason={}, actions={}, datasets={}", reason, actions, datasetCount);
+        syncing.set(false);
         return status;
     }
 
@@ -93,6 +98,27 @@ public class InceptorIntegrationCoordinator {
 
     public IntegrationStatus currentStatus() {
         return lastStatus.get();
+    }
+
+    public boolean isSyncInProgress() {
+        return syncing.get();
+    }
+
+    /**
+     * Trigger a best-effort catalog synchronization once the application is ready.
+     * Runs asynchronously to avoid blocking startup, and safely no-ops when no active data source.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        Thread t = new Thread(() -> {
+            try {
+                synchronize("startup-auto");
+            } catch (Exception ex) {
+                LOG.warn("Startup auto-sync failed: {}", ex.getMessage());
+            }
+        }, "inceptor-startup-sync");
+        t.setDaemon(true);
+        t.start();
     }
 
     private long safeDatasetCount() {

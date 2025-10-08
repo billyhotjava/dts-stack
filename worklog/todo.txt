@@ -1,0 +1,24 @@
+# 工作日志 / TODO
+
+日期: 2025-10-08
+
+已完成
+- [done] 在 admin 增加 PKI 登录占位接口：POST /api/keycloak/auth/pki-login（默认关闭；开启但未集成时返回 501），不影响现有用户名/密码登录。
+- [done] 新增配置类 PkiAuthProperties 并在应用启动中注册，使 dts.pki.* 配置可用。
+- [done] 在 application.yml 增加 dts.pki.* 配置段；在 .env 增加 DTS_PKI_* 环境变量（全部默认禁用）。
+- [done] 增加 docs/pki-auth.md 并在 README 补充说明，标注“默认关闭且零侵入”。
+- [done] 补充 docs/pki-auth.md 的 Traefik mTLS 路由示例（file provider tls.options + dts-admin 额外路由 labels）。
+
+验证记录（占位自检）
+- 默认配置：访问 /api/keycloak/auth/pki-login 返回 404（未启用）。
+- 设置 DTS_PKI_ENABLED=true 后：返回 501（占位，提示尚未集成）。
+
+ 待办（按优先级）
+- [todo] 设计并评审 PKI 对接方案（mtls / assertion 两种模式的详细流程、安全校验、失败回退）。
+- [todo] 在 admin 实现 PkiAuthService（证书解析/断言验签、用户映射 Keycloak、令牌签发与审计）。
+- [todo] 平台前端增加“证书登录”入口开关与失败回退口令登录的策略。
+- [todo] 审计扩展：记录证书指纹/主体散列、来源 IP/UA；补充安全自测清单。
+- [todo] 与甲方确认 Excel 用户导入模板的 PKI 绑定字段（subject_dn/serial/employee_id）。
+
+备注
+- 当前改动均为可配置占位，默认关闭，不影响现有登录链路。

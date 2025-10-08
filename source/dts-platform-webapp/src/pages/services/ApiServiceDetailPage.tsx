@@ -217,7 +217,7 @@ export default function ApiServiceDetailPage() {
 								</CardHeader>
 							<CardContent className="space-y-2 text-sm">
                         <div className="flex items-center gap-2">
-                            <span>最低数据密级（DATA_*）：</span>
+                            <span>最低数据密级：</span>
                             <LevelBadge level={detail.policy?.minLevel} />
                         </div>
 								<div>
@@ -442,7 +442,7 @@ export default function ApiServiceDetailPage() {
 						</Card>
 						<Card>
 							<CardHeader>
-                            <CardTitle className="text-base">不同数据密级（DATA_*）用户调用占比</CardTitle>
+                            <CardTitle className="text-base">不同数据密级用户调用占比</CardTitle>
 							</CardHeader>
 							<CardContent>
 								{metrics ? (
@@ -468,7 +468,7 @@ export default function ApiServiceDetailPage() {
 									<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
 										<tr>
 											<th className="px-3 py-2 font-medium">用户</th>
-                                    <th className="px-3 py-2 font-medium">数据密级（DATA_*）</th>
+                                    <th className="px-3 py-2 font-medium">数据密级</th>
 											<th className="px-3 py-2 font-medium">出行数</th>
 											<th className="px-3 py-2 font-medium">策略命中</th>
 										</tr>

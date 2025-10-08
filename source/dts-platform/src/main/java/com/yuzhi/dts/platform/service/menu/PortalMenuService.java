@@ -26,8 +26,8 @@ public class PortalMenuService {
     }
 
     public List<PortalMenuTreeItem> getMenuTree() {
-        // Try to forward current user's roles/permissions to dts-admin so it can filter menus.
-        List<String> roles = currentAuthorities();
+        // Forward the current user's roles (sanitized) so dts-admin can filter precisely.
+        List<String> roles = sanitizeAudienceRoles(currentAuthorities());
         List<RemoteMenuNode> remote;
         if (roles != null && !roles.isEmpty()) {
             remote = client.fetchMenuTreeForAudience(roles, List.of(), null);
@@ -53,11 +53,41 @@ public class PortalMenuService {
                 .getContext()
                 .getAuthentication();
             if (auth == null || auth.getAuthorities() == null) return List.of();
-            return auth.getAuthorities().stream().map(org.springframework.security.core.GrantedAuthority::getAuthority).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+            return auth
+                .getAuthorities()
+                .stream()
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
         } catch (Exception ex) {
             log.debug("No authorities found in SecurityContext: {}", ex.getMessage());
             return List.of();
         }
+    }
+
+    /**
+     * Sanitize audience roles before forwarding to dts-admin:
+     * - Normalize to upper-case with ROLE_ prefix
+     * - If user has any specific roles in addition to ROLE_USER, drop ROLE_USER to avoid broad default menus
+     */
+    private List<String> sanitizeAudienceRoles(List<String> authorities) {
+        if (authorities == null || authorities.isEmpty()) return List.of();
+        List<String> normalized = authorities
+            .stream()
+            .filter(Objects::nonNull)
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .map(s -> s.toUpperCase(java.util.Locale.ROOT))
+            .map(s -> s.startsWith("ROLE_") ? s : "ROLE_" + s)
+            .distinct()
+            .collect(Collectors.toCollection(ArrayList::new));
+        boolean hasSpecific = normalized.stream().anyMatch(r -> !"ROLE_USER".equals(r));
+        if (hasSpecific) {
+            normalized.remove("ROLE_USER");
+        }
+        return normalized;
     }
 
     public List<PortalMenuTreeNode> getMenuTreeView() {

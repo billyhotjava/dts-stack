@@ -317,3 +317,19 @@ dts:
   dev:
     seed:
       enabled: true
+  pki:
+    # Feature flag: enable PKI login endpoints in admin service
+    enabled: ${DTS_PKI_ENABLED:false}
+    # Modes: mtls | assertion | disabled
+    mode: ${DTS_PKI_MODE:disabled}
+    # When using reverse proxy to terminate TLS, accept forwarded client cert header (use with caution)
+    accept-forwarded-client-cert: ${DTS_PKI_ACCEPT_FORWARDED_CERT:false}
+    client-cert-header-name: ${DTS_PKI_CLIENT_CERT_HEADER:X-Forwarded-Tls-Client-Cert}
+    # Optional PKI issuer common name filter for additional validation
+    issuer-cn: ${DTS_PKI_ISSUER_CN:}
+    # For assertion mode: PKI verification API base and token
+    api-base-url: ${DTS_PKI_API_BASE:}
+    api-token: ${DTS_PKI_API_TOKEN:}
+    api-timeout-ms: ${DTS_PKI_API_TIMEOUT:3000}
+    # Dev-only: allow mock username during integration testing
+    allow-mock: ${DTS_PKI_ALLOW_MOCK:false}
