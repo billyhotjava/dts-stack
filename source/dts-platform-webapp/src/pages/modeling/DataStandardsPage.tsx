@@ -69,7 +69,7 @@ interface DataStandardAttachmentDto {
 }
 
 type DataStandardStatus = "DRAFT" | "IN_REVIEW" | "ACTIVE" | "DEPRECATED" | "RETIRED";
-type DataSecurityLevel = "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET";
+type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
 
 type FormState = {
     code: string;
@@ -79,7 +79,7 @@ type FormState = {
     owner: string;
     tagsText: string;
     status: DataStandardStatus;
-    securityLevel: DataSecurityLevel;
+    securityLevel: DataLevel;
     version: string;
     versionNotes: string;
     changeSummary: string;
@@ -94,11 +94,11 @@ const STATUS_OPTIONS: { value: DataStandardStatus; label: string }[] = [
     { value: "RETIRED", label: "已销毁" },
 ];
 
-const SECURITY_OPTIONS: { value: DataSecurityLevel; label: string }[] = [
-    { value: "PUBLIC", label: "公开" },
-    { value: "INTERNAL", label: "内部" },
-    { value: "SECRET", label: "秘密" },
-    { value: "TOP_SECRET", label: "机密" },
+const DATA_LEVELS: { value: DataLevel; label: string }[] = [
+    { value: "DATA_PUBLIC", label: "公开 (DATA_PUBLIC)" },
+    { value: "DATA_INTERNAL", label: "内部 (DATA_INTERNAL)" },
+    { value: "DATA_SECRET", label: "秘密 (DATA_SECRET)" },
+    { value: "DATA_TOP_SECRET", label: "机密 (DATA_TOP_SECRET)" },
 ];
 
 const DOMAIN_OPTIONS = ["主数据域", "共享域", "核心域", "分析域"];
@@ -111,7 +111,7 @@ const DEFAULT_FORM: FormState = {
     owner: "",
     tagsText: "",
     status: "DRAFT",
-    securityLevel: "INTERNAL",
+    securityLevel: "DATA_INTERNAL",
     version: "v1",
     versionNotes: "",
     changeSummary: "",
@@ -137,8 +137,17 @@ const humanFileSize = (size: number) => {
     return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
 };
 
-const securityLabel = (level: DataSecurityLevel) =>
-    SECURITY_OPTIONS.find((item) => item.value === level)?.label ?? level;
+const toLegacyLevel = (v: DataLevel): "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET" =>
+    v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
+const fromLegacyLevel = (v: string): DataLevel => {
+    const u = String(v || "").toUpperCase();
+    if (u === "PUBLIC") return "DATA_PUBLIC";
+    if (u === "INTERNAL") return "DATA_INTERNAL";
+    if (u === "SECRET") return "DATA_SECRET";
+    if (u === "TOP_SECRET") return "DATA_TOP_SECRET";
+    return "DATA_INTERNAL";
+};
+const securityLabel = (level: DataLevel) => DATA_LEVELS.find((item) => item.value === level)?.label ?? level;
 
 const statusLabel = (status: DataStandardStatus) =>
     STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
@@ -174,7 +183,10 @@ const DataStandardsPage = () => {
             if (filters.keyword.trim()) params.keyword = filters.keyword.trim();
             if (filters.domain !== "ALL") params.domain = filters.domain;
             if (filters.status !== "ALL") params.status = filters.status;
-            if (filters.security !== "ALL") params.securityLevel = filters.security;
+            if (filters.security !== "ALL") {
+                // backend expects legacy; convert DATA_* → legacy
+                params.securityLevel = toLegacyLevel(filters.security as DataLevel);
+            }
             const data: any = await listStandards(params);
             setStandards(data?.content ?? []);
             setTotal(data?.total ?? 0);
@@ -236,7 +248,7 @@ const DataStandardsPage = () => {
             owner: selectedDetail.owner ?? "",
             tagsText: fromTagList(selectedDetail.tags),
             status: selectedDetail.status,
-            securityLevel: selectedDetail.securityLevel,
+            securityLevel: fromLegacyLevel(selectedDetail.securityLevel),
             version: selectedDetail.currentVersion ?? "v1",
             versionNotes: selectedDetail.versionNotes ?? "",
             changeSummary: "",
@@ -259,7 +271,7 @@ const DataStandardsPage = () => {
             owner: formState.owner || undefined,
             tags: toTagList(formState.tagsText),
             status: formState.status,
-            securityLevel: formState.securityLevel,
+            securityLevel: toLegacyLevel(formState.securityLevel),
             version: formState.version.trim() || "v1",
             versionNotes: formState.versionNotes || undefined,
             changeSummary: formState.changeSummary || undefined,
@@ -380,7 +392,7 @@ const DataStandardsPage = () => {
                 <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                         <CardTitle>数据标准台账</CardTitle>
-                        <p className="text-sm text-muted-foreground">快速维护数据标准基本信息与密级、版本情况</p>
+                        <p className="text-sm text-muted-foreground">快速维护数据标准基本信息与数据密级（DATA_*）、版本情况</p>
                     </div>
                     <div className="flex gap-2">
                         <Button onClick={openCreate}>新建标准</Button>
@@ -448,10 +460,10 @@ const DataStandardsPage = () => {
                             }}
                         >
                             <SelectTrigger>
-                                <SelectValue placeholder="安全密级" />
+                                <SelectValue placeholder="数据密级（DATA_*）" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="ALL">全部密级</SelectItem>
+                                <SelectItem value="ALL">全部数据密级</SelectItem>
                                 {SECURITY_OPTIONS.map((item) => (
                                     <SelectItem key={item.value} value={item.value}>
                                         {item.label}
@@ -469,7 +481,7 @@ const DataStandardsPage = () => {
                                     <th className="w-28 px-3 py-3 text-left">所属域</th>
                                     <th className="w-32 px-3 py-3 text-left">负责人</th>
                                     <th className="w-28 px-3 py-3 text-left">状态</th>
-                                    <th className="w-28 px-3 py-3 text-left">安全密级</th>
+                                    <th className="w-28 px-3 py-3 text-left">数据密级（DATA_*）</th>
                                     <th className="w-24 px-3 py-3 text-left">当前版本</th>
                                     <th className="w-32 px-3 py-3 text-left">更新时间</th>
                                     <th className="px-3 py-3 text-right">操作</th>
@@ -571,7 +583,7 @@ const DataStandardsPage = () => {
                                     <span>{selectedDetail.domain ?? "-"}</span>
                                     <span className="text-muted-foreground">负责人</span>
                                     <span>{selectedDetail.owner ?? "-"}</span>
-                                    <span className="text-muted-foreground">安全密级</span>
+                                    <span className="text-muted-foreground">数据密级（DATA_*）</span>
                                     <span>{securityLabel(selectedDetail.securityLevel)}</span>
                                     <span className="text-muted-foreground">当前版本</span>
                                     <span>{selectedDetail.currentVersion}</span>
@@ -742,10 +754,10 @@ const DataStandardsPage = () => {
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label className="text-sm">安全密级</Label>
+                                    <Label className="text-sm">数据密级（DATA_*）</Label>
                                     <Select
                                         value={formState.securityLevel}
-                                        onValueChange={(value: DataSecurityLevel) =>
+                                        onValueChange={(value: DataLevel) =>
                                             setFormState((prev) => ({ ...prev, securityLevel: value }))
                                         }
                                     >
@@ -753,7 +765,7 @@ const DataStandardsPage = () => {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {SECURITY_OPTIONS.map((item) => (
+                                            {DATA_LEVELS.map((item) => (
                                                 <SelectItem key={item.value} value={item.value}>
                                                     {item.label}
                                                 </SelectItem>

@@ -5,7 +5,8 @@ import { type Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { adminApi } from "@/admin/api/adminApi";
-import { KeycloakGroupService } from "@/api/services/keycloakService";
+import { KeycloakGroupService, KeycloakUserService } from "@/api/services/keycloakService";
+import type { KeycloakUser } from "#/keycloak";
 import { useAdminLocale } from "@/admin/lib/locale";
 import type {
     OrganizationNode,
@@ -102,7 +103,7 @@ export default function OrgManagementView() {
 	}, [flattened, selectedId]);
 
     // Group members for the selected organization (by Keycloak group id)
-    const [members, setMembers] = useState<string[]>([]);
+    const [members, setMembers] = useState<Array<{ username: string; fullName?: string }>>([]);
     const [membersLoading, setMembersLoading] = useState(false);
     useEffect(() => {
         let cancelled = false;
@@ -114,7 +115,51 @@ export default function OrgManagementView() {
             setMembersLoading(true);
             try {
                 const list = await KeycloakGroupService.getGroupMembers(selected.keycloakGroupId);
-                if (!cancelled) setMembers(Array.isArray(list) ? list : []);
+                // Load all users once to enrich with full names
+                let allUsers: KeycloakUser[] = [];
+                try {
+                    allUsers = await KeycloakUserService.getAllUsers({ first: 0, max: 1000 });
+                } catch (e) {
+                    console.warn("load all users failed", e);
+                }
+                const byUsername = new Map<string, KeycloakUser>();
+                allUsers.forEach((u) => {
+                    const key = (u.username || u.id || "").toString();
+                    if (key) byUsername.set(key, u);
+                });
+
+                let result: Array<{ username: string; fullName?: string }> = [];
+                if (Array.isArray(list) && list.length > 0) {
+                    result = list
+                        .map((uname) => {
+                            const u = byUsername.get(uname);
+                            return {
+                                username: uname,
+                                fullName: (u?.fullName || u?.firstName || u?.lastName || u?.attributes?.fullname?.[0]) as string | undefined,
+                            };
+                        })
+                        .filter((x) => x.username);
+                } else {
+                    // Fallback: dev store may return empty; derive by scanning users
+                    try {
+                        const normalizedPath = (selected.groupPath || "").startsWith("/") ? selected.groupPath! : `/${selected.groupPath || ""}`;
+                        const orgIdText = String(selected.id);
+                        const matched = allUsers.filter((u) => {
+                            const groups = Array.isArray(u.groups) ? u.groups.map((p: string) => (p && p.startsWith("/") ? p : `/${p}`)) : [];
+                            const inGroup = groups.includes(normalizedPath);
+                            if (inGroup) return true;
+                            const deptCode = (u.attributes?.dept_code?.[0] || '').toString().trim();
+                            return deptCode && deptCode === orgIdText;
+                        });
+                        result = matched.map((u) => ({
+                            username: u.username || (u.id as string),
+                            fullName: (u.fullName || u.firstName || u.lastName || u.attributes?.fullname?.[0]) as string | undefined,
+                        }));
+                    } catch (scanErr) {
+                        console.warn("fallback scan users failed", scanErr);
+                    }
+                }
+                if (!cancelled) setMembers(result || []);
             } catch (e) {
                 console.warn("Failed to load group members", e);
                 if (!cancelled) setMembers([]);
@@ -420,13 +465,24 @@ export default function OrgManagementView() {
                             <Text variant="body3" className="text-muted-foreground">暂无成员</Text>
                         ) : (
                             <ScrollArea className="max-h-64">
-                                <div className="grid gap-2">
-                                    {members.map((u) => (
-                                        <div key={u} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
-                                            <span className="truncate" title={u}>{u}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                                <table className="w-full min-w-[560px] table-fixed text-sm">
+                                    <thead className="sticky top-0 bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+                                        <tr>
+                                            <th className="px-3 py-2 w-[48px]">#</th>
+                                            <th className="px-3 py-2">用户名</th>
+                                            <th className="px-3 py-2">姓名</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {members.map((m, idx) => (
+                                            <tr key={m.username} className="border-b last:border-b-0">
+                                                <td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
+                                                <td className="px-3 py-2 truncate" title={m.username}>{m.username}</td>
+                                                <td className="px-3 py-2 truncate" title={m.fullName || "-"}>{m.fullName || "-"}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </ScrollArea>
                         )}
                     </CardContent>

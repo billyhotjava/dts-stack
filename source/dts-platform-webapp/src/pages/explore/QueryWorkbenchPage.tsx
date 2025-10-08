@@ -21,6 +21,7 @@ import {
 	listColumnsByTable,
 } from "@/api/platformApi";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { useActiveDept, useActiveScope } from "@/store/contextStore";
 import { SqlWorkbenchExperimental } from "@/components/sql/SqlWorkbenchExperimental";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/ui/drawer";
@@ -44,29 +45,40 @@ type DatasetField = {
 };
 
 type Dataset = {
-	id: string;
-	name: string;
-	source: string;
-	database: string;
-	schema: string;
-	classification: Classification;
-	rowCount: number;
-	description?: string;
-	fields: DatasetField[];
+    id: string;
+    name: string;
+    source: string;
+    database: string;
+    schema: string;
+    classification: Classification;
+    rowCount: number;
+    description?: string;
+    fields: DatasetField[];
 };
 
 function toUiDataset(apiItem: any): Dataset {
-	return {
-		id: String(apiItem.id),
-		name: String(apiItem.hiveTable || apiItem.name || apiItem.id),
-		source: String(apiItem.trinoCatalog || "default"),
-		database: String(apiItem.trinoCatalog || ""),
-		schema: String(apiItem.hiveDatabase || ""),
-		classification: (String(apiItem.classification || "INTERNAL").toUpperCase() as Classification) || "INTERNAL",
-		rowCount: 0,
-		description: undefined,
-		fields: [],
-	};
+    const dataLevel: string = String(apiItem.dataLevel || "").toUpperCase();
+    const derived: Classification =
+        dataLevel === "DATA_TOP_SECRET"
+            ? "TOP_SECRET"
+            : dataLevel === "DATA_SECRET"
+            ? "SECRET"
+            : dataLevel === "DATA_INTERNAL"
+            ? "INTERNAL"
+            : dataLevel === "DATA_PUBLIC"
+            ? "PUBLIC"
+            : (String(apiItem.classification || "INTERNAL").toUpperCase() as Classification);
+    return {
+        id: String(apiItem.id),
+        name: String(apiItem.hiveTable || apiItem.name || apiItem.id),
+        source: String(apiItem.trinoCatalog || "default"),
+        database: String(apiItem.trinoCatalog || ""),
+        schema: String(apiItem.hiveDatabase || ""),
+        classification: derived,
+        rowCount: 0,
+        description: undefined,
+        fields: [],
+    };
 }
 
 type Aggregation = {
@@ -507,14 +519,17 @@ export default function QueryWorkbenchPage() {
 		setSelectedDatasetId(defaultDataset);
 	}, [defaultDataset]);
 
-	const reloadDatasets = useCallback(async () => {
-		setDatasetsLoading(true);
-		setDatasetsError(null);
-		try {
-			const resp: any = await listDatasets({ page: 0, size: 100 });
-			const list = Array.isArray(resp?.content) ? resp.content : [];
+    const activeScope = useActiveScope();
+    const activeDept = useActiveDept();
+
+    const reloadDatasets = useCallback(async () => {
+        setDatasetsLoading(true);
+        setDatasetsError(null);
+        try {
+            const resp: any = await listDatasets({ page: 0, size: 100 });
+            const list = Array.isArray(resp?.content) ? resp.content : [];
             const ui: Dataset[] = list.map(toUiDataset);
-			setRemoteDatasets(ui);
+            setRemoteDatasets(ui);
 			if (ui.length) {
 				const existingSource =
 					selectedSource && ui.some((item) => item.source === selectedSource)
@@ -537,8 +552,8 @@ export default function QueryWorkbenchPage() {
 			setDatasetsError(message);
 		} finally {
 			setDatasetsLoading(false);
-		}
-	}, [selectedDatasetId, selectedSource]);
+        }
+    }, [selectedDatasetId, selectedSource, activeScope, activeDept]);
 
 	useEffect(() => {
 		reloadDatasets();
@@ -855,7 +870,7 @@ export default function QueryWorkbenchPage() {
 					<span aria-hidden className="text-red-500">
 						★
 					</span>
-					此功能涉及密级数据，请注意保密！
+					此功能涉及数据密级（DATA_*）数据，请注意保密！
 				</div>
 
 				<Card>

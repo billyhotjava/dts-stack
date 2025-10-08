@@ -114,7 +114,7 @@ export default function ClassificationMappingPage() {
 		<div className="space-y-4">
 			<SensitiveNotice />
 			<div className="flex flex-col gap-2">
-				<h2 className="text-lg font-semibold">密级模型映射</h2>
+				<h2 className="text-lg font-semibold">数据密级（DATA_*）模型映射</h2>
 				<p className="text-sm text-muted-foreground">
 					用户密级来自 dts-admin，数据集密级来自 Catalog；本页为只读总览与同步状态。
 				</p>
@@ -225,11 +225,11 @@ export default function ClassificationMappingPage() {
 					</CardContent>
 				</Card>
 
-				{/* 数据集密级总览 */}
+				{/* 数据密级（DATA_*）总览 */}
 				<Card>
 					<CardHeader className="space-y-3">
 						<CardTitle className="text-base flex items-center gap-2">
-							<Icon icon="solar:database-bold-duotone" className="text-primary" /> 数据集密级总览（只读）
+							<Icon icon="solar:database-bold-duotone" className="text-primary" /> 数据密级（DATA_*）总览（只读）
 						</CardTitle>
 						<div className="flex items-center gap-2">
 							<Input
@@ -250,7 +250,7 @@ export default function ClassificationMappingPage() {
 							<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
 								<tr>
 									<th className="px-3 py-2 font-medium">数据集</th>
-									<th className="px-3 py-2 font-medium">密级</th>
+									<th className="px-3 py-2 font-medium">数据密级（DATA_*）</th>
 									<th className="px-3 py-2 font-medium">来源域</th>
 									<th className="px-3 py-2 font-medium">负责人</th>
 								</tr>

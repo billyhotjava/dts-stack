@@ -505,7 +505,7 @@ const renderSourceLabel = (value: string) => {
 									<th className="px-3 py-2">名称</th>
 									<th className="px-3 py-2">负责人</th>
 									<th className="px-3 py-2">来源</th>
-									<th className="px-3 py-2">DATA_密级</th>
+									<th className="px-3 py-2">数据密级（DATA_*）</th>
 										<th className="px-3 py-2">Scope</th>
 										<th className="px-3 py-2">Dept/Share</th>
 									<th className="px-3 py-2">操作</th>

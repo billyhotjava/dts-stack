@@ -27,20 +27,30 @@ import {
 	updateDataset as apiUpdateDataset,
 } from "@/api/platformApi";
 
-const SECURITY_LEVELS = [
-	{ value: "PUBLIC", label: "公开" },
-	{ value: "INTERNAL", label: "内部" },
-	{ value: "SECRET", label: "秘密" },
-	{ value: "TOP_SECRET", label: "机密" },
+type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
+const DATA_LEVELS = [
+	{ value: "DATA_PUBLIC" as DataLevel, label: "公开 (DATA_PUBLIC)" },
+	{ value: "DATA_INTERNAL" as DataLevel, label: "内部 (DATA_INTERNAL)" },
+	{ value: "DATA_SECRET" as DataLevel, label: "秘密 (DATA_SECRET)" },
+	{ value: "DATA_TOP_SECRET" as DataLevel, label: "机密 (DATA_TOP_SECRET)" },
 ] as const;
 
-type SecurityLevel = (typeof SECURITY_LEVELS)[number]["value"];
+const toLegacy = (v: DataLevel): "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET" =>
+	v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
+const fromLegacy = (v: string): DataLevel => {
+	const u = String(v || "").toUpperCase();
+	if (u === "PUBLIC") return "DATA_PUBLIC";
+	if (u === "INTERNAL") return "DATA_INTERNAL";
+	if (u === "SECRET") return "DATA_SECRET";
+	if (u === "TOP_SECRET") return "DATA_TOP_SECRET";
+	return "DATA_INTERNAL";
+};
 
 type DomainNode = {
 	key: string;
 	name: string;
 	owner: string;
-	classification: SecurityLevel;
+	classification: DataLevel;
 	sourceSystem: string;
 	description?: string;
 	children?: DomainNode[];
@@ -51,7 +61,7 @@ type Dataset = {
 	name: string;
 	domainKey: string;
 	owner: string;
-	classification: SecurityLevel;
+	classification: DataLevel;
 	sourceSystem: string;
 	lastUpdated: string;
 	tags: string[];
@@ -68,7 +78,7 @@ const INITIAL_DOMAINS: DomainNode[] = [
 		key: "domain-core",
 		name: "企业核心域",
 		owner: "陈伟",
-		classification: "TOP_SECRET",
+		classification: "DATA_TOP_SECRET",
 		sourceSystem: "CDP",
 		description: "覆盖企业战略与核心经营指标",
 		children: [
@@ -76,21 +86,21 @@ const INITIAL_DOMAINS: DomainNode[] = [
 				key: "domain-core-ops",
 				name: "经营分析主题",
 				owner: "陈伟",
-				classification: "SECRET",
+				classification: "DATA_SECRET",
 				sourceSystem: "CDP",
 				children: [
 					{
 						key: "domain-core-ops-sales",
 						name: "销售运营",
 						owner: "周丽",
-						classification: "SECRET",
+						classification: "DATA_SECRET",
 						sourceSystem: "Salesforce",
 					},
 					{
 						key: "domain-core-ops-supply",
 						name: "供应链管理",
 						owner: "张强",
-						classification: "INTERNAL",
+						classification: "DATA_INTERNAL",
 						sourceSystem: "SAP",
 					},
 				],
@@ -99,7 +109,7 @@ const INITIAL_DOMAINS: DomainNode[] = [
 				key: "domain-core-risk",
 				name: "风控主题",
 				owner: "李云",
-				classification: "SECRET",
+				classification: "DATA_SECRET",
 				sourceSystem: "RiskHub",
 			},
 		],
@@ -108,14 +118,14 @@ const INITIAL_DOMAINS: DomainNode[] = [
 		key: "domain-shared",
 		name: "共享域",
 		owner: "刘敏",
-		classification: "INTERNAL",
+		classification: "DATA_INTERNAL",
 		sourceSystem: "ODS",
 		children: [
 			{
 				key: "domain-shared-master",
 				name: "主数据主题",
 				owner: "刘敏",
-				classification: "INTERNAL",
+				classification: "DATA_INTERNAL",
 				sourceSystem: "MDM",
 			},
 			{
@@ -135,7 +145,7 @@ const INITIAL_DATASETS: Dataset[] = [
 		name: "销售收入日报",
 		domainKey: "domain-core-ops-sales",
 		owner: "周丽",
-		classification: "SECRET",
+		classification: "DATA_SECRET",
 		sourceSystem: "Salesforce",
 		lastUpdated: "2024-12-08",
 		tags: ["销售", "日报"],
@@ -145,7 +155,7 @@ const INITIAL_DATASETS: Dataset[] = [
 		name: "渠道目标完成情况",
 		domainKey: "domain-core-ops-sales",
 		owner: "周丽",
-		classification: "SECRET",
+		classification: "DATA_SECRET",
 		sourceSystem: "Salesforce",
 		lastUpdated: "2024-12-06",
 		tags: ["渠道", "KPI"],
@@ -155,7 +165,7 @@ const INITIAL_DATASETS: Dataset[] = [
 		name: "供应商准入记录",
 		domainKey: "domain-core-ops-supply",
 		owner: "张强",
-		classification: "INTERNAL",
+		classification: "DATA_INTERNAL",
 		sourceSystem: "SAP",
 		lastUpdated: "2024-12-07",
 		tags: ["供应链"],
@@ -165,7 +175,7 @@ const INITIAL_DATASETS: Dataset[] = [
 		name: "风控案件清单",
 		domainKey: "domain-core-risk",
 		owner: "李云",
-		classification: "SECRET",
+		classification: "DATA_SECRET",
 		sourceSystem: "RiskHub",
 		lastUpdated: "2024-12-05",
 		tags: ["风控"],
@@ -175,7 +185,7 @@ const INITIAL_DATASETS: Dataset[] = [
 		name: "客户主数据",
 		domainKey: "domain-shared-master",
 		owner: "刘敏",
-		classification: "INTERNAL",
+		classification: "DATA_INTERNAL",
 		sourceSystem: "MDM",
 		lastUpdated: "2024-12-02",
 		tags: ["主数据"],
@@ -299,15 +309,16 @@ function countDatasetsByDomain(domains: DomainNode[], datasets: Dataset[]): Reco
 	return counts;
 }
 
-function DomainBadge({ level }: { level: SecurityLevel }) {
-	const meta = SECURITY_LEVELS.find((item) => item.value === level);
+
+function DomainBadge({ level }: { level: DataLevel }) {
+	const meta = DATA_LEVELS.find((item) => item.value === level);
 	if (!meta) return null;
 	const tone =
-		level === "TOP_SECRET"
+		level === "DATA_TOP_SECRET"
 			? "bg-rose-500/10 text-rose-500"
-			: level === "SECRET"
+			: level === "DATA_SECRET"
 				? "bg-amber-500/10 text-amber-500"
-				: level === "INTERNAL"
+				: level === "DATA_INTERNAL"
 					? "bg-sky-500/10 text-sky-500"
 					: "bg-emerald-500/10 text-emerald-600";
 	return (
@@ -340,7 +351,7 @@ export default function DataDomainManagementPage() {
 	const [formState, setFormState] = useState({
 		name: "",
 		owner: "",
-		classification: "INTERNAL" as SecurityLevel,
+		classification: "DATA_INTERNAL" as DataLevel,
 		sourceSystem: "",
 		description: "",
 	});
@@ -364,7 +375,7 @@ export default function DataDomainManagementPage() {
 						key: String(n.id),
 						name: n.name,
 						owner: n.owner || "",
-						classification: "INTERNAL",
+						classification: fromLegacy(n.classification || "INTERNAL"),
 						sourceSystem: "",
 						description: n.description || "",
 						children: Array.isArray(n.children) ? n.children.map(mapNode) : undefined,
@@ -392,7 +403,7 @@ export default function DataDomainManagementPage() {
 						name: it.name,
 						domainKey: String(it.domainId || ""),
 						owner: it.owner || "",
-						classification: (it.classification || "INTERNAL") as SecurityLevel,
+						classification: it.dataLevel ? (String(it.dataLevel).toUpperCase() as DataLevel) : fromLegacy(it.classification || "INTERNAL"),
 						sourceSystem: it.type || "",
 						lastUpdated: new Date().toISOString().slice(0, 10),
 						tags: [],
@@ -432,7 +443,7 @@ export default function DataDomainManagementPage() {
 	}, [domains, datasetCounts, searchKeyword]);
 
 	const owners = useMemo(() => Array.from(new Set(datasets.map((item) => item.owner))), [datasets]);
-	const levels = SECURITY_LEVELS.map((item) => item);
+const levels = DATA_LEVELS.map((item) => item);
 	const sources = useMemo(() => Array.from(new Set(datasets.map((item) => item.sourceSystem))), [datasets]);
 
 	const selectedDomainMeta = selectedDomainKey ? domainMeta[selectedDomainKey] : undefined;
@@ -445,7 +456,7 @@ export default function DataDomainManagementPage() {
 			if (!belongsToDomain) return false;
 			if (datasetKeyword && !dataset.name.toLowerCase().includes(datasetKeyword.toLowerCase())) return false;
 			if (ownerFilter !== "all" && dataset.owner !== ownerFilter) return false;
-			if (levelFilter !== "all" && dataset.classification !== levelFilter) return false;
+			if (levelFilter !== "all" && dataset.classification !== (levelFilter as DataLevel)) return false;
 			if (sourceFilter !== "all" && dataset.sourceSystem !== sourceFilter) return false;
 			return true;
 		});
@@ -517,7 +528,7 @@ export default function DataDomainManagementPage() {
 		setFormState({
 			name: "",
 			owner: selectedDomainMeta?.node.owner ?? "",
-			classification: selectedDomainMeta?.node.classification ?? "INTERNAL",
+						classification: selectedDomainMeta?.node.classification ?? "DATA_INTERNAL",
 			sourceSystem: selectedDomainMeta?.node.sourceSystem ?? "",
 			description: "",
 		});
@@ -534,7 +545,7 @@ export default function DataDomainManagementPage() {
 		setFormState({
 			name: selectedDomainMeta.node.name,
 			owner: selectedDomainMeta.node.owner,
-			classification: selectedDomainMeta.node.classification,
+						classification: selectedDomainMeta.node.classification,
 			sourceSystem: selectedDomainMeta.node.sourceSystem,
 			description: selectedDomainMeta.node.description ?? "",
 		});
@@ -559,7 +570,7 @@ export default function DataDomainManagementPage() {
 					key: String(saved.id || generateKey("domain")),
 					name: saved.name || formState.name.trim(),
 					owner: saved.owner || formState.owner.trim() || "暂未指定",
-					classification: formState.classification,
+					classification: toLegacy(formState.classification),
 					sourceSystem: formState.sourceSystem.trim() || "未配置",
 					description: saved.description || formState.description.trim() || undefined,
 				};
@@ -583,7 +594,7 @@ export default function DataDomainManagementPage() {
 						...node,
 						name: formState.name.trim(),
 						owner: formState.owner.trim() || "暂未指定",
-						classification: formState.classification,
+						classification: toLegacy(formState.classification),
 						sourceSystem: formState.sourceSystem.trim() || "未配置",
 						description: formState.description.trim() || undefined,
 					} as DomainNode;
@@ -645,7 +656,7 @@ export default function DataDomainManagementPage() {
 	};
 
 	const handleTemplateDownload = () => {
-		const headers = ["名称", "负责人", "默认密级", "来源系统", "父节点路径"];
+const headers = ["名称", "负责人", "默认密级（DATA_*）", "来源系统", "父节点路径"];
 		const csv = `${headers.join(",")}`;
 		const blob = new Blob([`${csv}\n`], { type: "text/csv;charset=utf-8;" });
 		const url = URL.createObjectURL(blob);
@@ -670,7 +681,7 @@ export default function DataDomainManagementPage() {
 				<span aria-hidden className="text-red-500">
 					★
 				</span>
-				此功能涉及密级数据，请注意保密！
+				此功能涉及数据密级（DATA_*）数据，请注意保密！
 			</div>
 			<div className="grid gap-4 xl:grid-cols-[320px,1fr]">
 				<Card className="h-[calc(100vh-220px)]">
@@ -789,10 +800,10 @@ export default function DataDomainManagementPage() {
 							</Select>
 							<Select value={levelFilter} onValueChange={setLevelFilter}>
 								<SelectTrigger>
-									<SelectValue placeholder="密级" />
+									<SelectValue placeholder="数据密级（DATA_*）" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="all">密级筛选</SelectItem>
+									<SelectItem value="all">数据密级（DATA_*）筛选</SelectItem>
 									{levels.map((item) => (
 										<SelectItem key={item.value} value={item.value}>
 											{item.label}
@@ -829,7 +840,7 @@ export default function DataDomainManagementPage() {
 										<th className="border-b px-3 py-2">数据集</th>
 										<th className="border-b px-3 py-2">所属域/主题</th>
 										<th className="border-b px-3 py-2">负责人</th>
-										<th className="border-b px-3 py-2">密级</th>
+									<th className="border-b px-3 py-2">数据密级（DATA_*）</th>
 										<th className="border-b px-3 py-2">来源系统</th>
 										<th className="border-b px-3 py-2">最近更新</th>
 										<th className="border-b px-3 py-2">策略</th>
@@ -928,18 +939,18 @@ export default function DataDomainManagementPage() {
 							/>
 						</div>
 						<div className="grid gap-2">
-							<Label>默认密级</Label>
+							<Label>默认密级（DATA_*）</Label>
 							<Select
 								value={formState.classification}
-								onValueChange={(value: SecurityLevel) => setFormState((prev) => ({ ...prev, classification: value }))}
+								onValueChange={(value: DataLevel) => setFormState((prev) => ({ ...prev, classification: value }))}
 							>
 								<SelectTrigger>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
 									<SelectGroup>
-										<SelectLabel>密级</SelectLabel>
-										{SECURITY_LEVELS.map((item) => (
+										<SelectLabel>数据密级（DATA_*）</SelectLabel>
+										{DATA_LEVELS.map((item) => (
 											<SelectItem key={item.value} value={item.value}>
 												{item.label}
 											</SelectItem>

@@ -39,6 +39,9 @@
   应用由 `docker-compose-app.yml` 管理；开发联调由 `docker-compose.dev.yml` 管理。
 - 如需变更域名，修改 `.env` 的 `BASE_DOMAIN` 后可重跑 `./init.sh`。
 
+【安全与权限矩阵】
+- 角色登录准入、菜单可见性、RBAC×ABAC 判定与错误码说明，见 `worklog/permissions-matrix.md`。
+
 【变更请求优化：角色菜单批量申请】
 - 在“角色管理”页面，针对同一角色一次性勾选/取消多个菜单后，系统将合并为一条变更请求（`PORTAL_MENU`/`BATCH_UPDATE`），审批一次即可全部生效。
 - 审批中心会显示每个菜单的前后差异（allowedRoles before/after）。

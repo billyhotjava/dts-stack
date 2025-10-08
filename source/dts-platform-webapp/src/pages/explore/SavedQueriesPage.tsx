@@ -20,6 +20,7 @@ import {
   type SavedQueryUpdatePayload,
 } from "@/api/platformApi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/ui/dialog";
+import { useActiveDept, useActiveScope } from "@/store/contextStore";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 
 const NONE_DATASET_VALUE = "__NONE__";
@@ -69,7 +70,17 @@ type Dataset = {
 };
 
 function toUiDataset(input: any): Dataset {
-  const classification = String(input?.classification || "INTERNAL").toUpperCase();
+  const dl = String(input?.dataLevel || "").toUpperCase();
+  const classification =
+    dl === "DATA_TOP_SECRET"
+      ? "TOP_SECRET"
+      : dl === "DATA_SECRET"
+      ? "SECRET"
+      : dl === "DATA_INTERNAL"
+      ? "INTERNAL"
+      : dl === "DATA_PUBLIC"
+      ? "PUBLIC"
+      : String(input?.classification || "INTERNAL").toUpperCase();
   return {
     id: String(input?.id ?? ""),
     name: String(input?.name || input?.hiveTable || input?.id || "未知数据集"),
@@ -118,6 +129,8 @@ function formatDateTime(value?: string) {
 }
 
 export default function SavedQueriesPage() {
+  const activeScope = useActiveScope();
+  const activeDept = useActiveDept();
   const [items, setItems] = useState<SavedQuery[]>([]);
   const [resultSets, setResultSets] = useState<ResultSet[]>([]);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
@@ -227,7 +240,7 @@ export default function SavedQueriesPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [activeScope, activeDept]);
 
   const handleCreate = async () => {
     if (!title.trim() || !sql.trim()) {
@@ -502,7 +515,7 @@ export default function SavedQueriesPage() {
                     <th className="border-b px-3 py-2 text-left font-medium">所属数据集</th>
                     <th className="border-b px-3 py-2 text-left font-medium">列</th>
                     <th className="border-b px-3 py-2 text-left font-medium">行数</th>
-                    <th className="border-b px-3 py-2 text-left font-medium">密级</th>
+                    <th className="border-b px-3 py-2 text-left font-medium">数据密级（DATA_*）</th>
                     <th className="border-b px-3 py-2 text-left font-medium">过期时间</th>
                     <th className="border-b px-3 py-2 text-left font-medium">操作</th>
                   </tr>

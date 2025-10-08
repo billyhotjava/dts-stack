@@ -45,7 +45,7 @@ export function NavVerticalLayout({ data, className }: Props) {
 							{GLOBAL_CONFIG.appName}
 						</span>
 						<Badge variant="destructive" className="mt-1 !text-[13.2px] leading-none">
-							密级
+							数据密级（DATA_*）
 						</Badge>
 					</div>
 				</div>

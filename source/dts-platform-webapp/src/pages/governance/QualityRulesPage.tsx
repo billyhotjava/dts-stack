@@ -32,7 +32,7 @@ import {
 } from "@/api/platformApi";
 
 
-type DataSecurityLevel = "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET";
+type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
 type SeverityLevel = "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 interface DatasetOption {
@@ -58,7 +58,7 @@ interface RuleRow {
   type?: string;
   owner?: string;
   severity?: SeverityLevel;
-  dataLevel?: DataSecurityLevel;
+  dataLevel?: DataLevel;
   frequencyCron?: string;
   frequencyLabel?: string;
   enabled: boolean;
@@ -89,7 +89,7 @@ interface RuleForm {
   datasetId: string;
   owner: string;
   severity: SeverityLevel;
-  dataLevel: DataSecurityLevel;
+  dataLevel: DataLevel;
   frequencyPreset: "HOURLY" | "DAILY" | "CUSTOM";
   customCron: string;
   enabled: boolean;
@@ -97,11 +97,21 @@ interface RuleForm {
   description?: string;
 }
 
-const LEVEL_LABELS: Record<DataSecurityLevel, string> = {
-  PUBLIC: "公开",
-  INTERNAL: "内部",
-  SECRET: "秘密",
-  TOP_SECRET: "机密",
+const LEVEL_LABELS: Record<DataLevel, string> = {
+  DATA_PUBLIC: "公开 (DATA_PUBLIC)",
+  DATA_INTERNAL: "内部 (DATA_INTERNAL)",
+  DATA_SECRET: "秘密 (DATA_SECRET)",
+  DATA_TOP_SECRET: "机密 (DATA_TOP_SECRET)",
+};
+const toLegacy = (v: DataLevel): "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET" =>
+  v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
+const fromLegacy = (v: string): DataLevel => {
+  const u = String(v || "").toUpperCase();
+  if (u === "PUBLIC") return "DATA_PUBLIC";
+  if (u === "INTERNAL") return "DATA_INTERNAL";
+  if (u === "SECRET") return "DATA_SECRET";
+  if (u === "TOP_SECRET") return "DATA_TOP_SECRET";
+  return "DATA_INTERNAL";
 };
 
 const SEVERITY_LABELS: Record<SeverityLevel, string> = {
@@ -146,7 +156,7 @@ const INITIAL_FORM: RuleForm = {
   datasetId: "",
   owner: "",
   severity: "MEDIUM",
-  dataLevel: "INTERNAL",
+  dataLevel: "DATA_INTERNAL",
   frequencyPreset: "DAILY",
   customCron: "0 0 2 * * ?",
   enabled: true,
@@ -218,7 +228,7 @@ const QualityRulesPage = () => {
       type: raw.type || def?.type || "自定义SQL",
       owner: raw.owner || raw.createdBy,
       severity: (raw.severity || "MEDIUM").toUpperCase() as SeverityLevel,
-      dataLevel: (raw.dataLevel || "INTERNAL").toUpperCase() as DataSecurityLevel,
+      dataLevel: fromLegacy(raw.dataLevel || "INTERNAL"),
       frequencyCron: cron,
       frequencyLabel: toFrequencyLabel(cron),
       enabled: raw.enabled !== false,
@@ -346,7 +356,7 @@ const QualityRulesPage = () => {
       description: form.description?.trim(),
       owner: form.owner.trim(),
       severity: form.severity,
-      dataLevel: form.dataLevel,
+      dataLevel: toLegacy(form.dataLevel),
       frequencyCron: cron,
       enabled: form.enabled,
       datasetId: form.datasetId,
@@ -498,7 +508,7 @@ const QualityRulesPage = () => {
             <div className="grid grid-cols-[2fr,1.2fr,1fr,1fr,1fr,160px] items-center gap-2 border-b pb-2 text-xs uppercase text-muted-foreground">
               <span>名称 / 编码</span>
               <span>数据集</span>
-              <span>密级</span>
+              <span>数据密级（DATA_*）</span>
               <span>责任人</span>
               <span>频率</span>
               <span className="text-right">操作</span>
@@ -613,7 +623,7 @@ const QualityRulesPage = () => {
               <h3 className="text-sm font-semibold text-muted-foreground">基础信息</h3>
               <div className="space-y-2 text-sm">
                 <InfoRow label="责任人" value={detailRule?.owner || "-"} />
-                <InfoRow label="密级" value={detailRule ? LEVEL_LABELS[detailRule.dataLevel || "INTERNAL"] : "-"} />
+                <InfoRow label="数据密级（DATA_*）" value={detailRule ? LEVEL_LABELS[detailRule.dataLevel || "DATA_INTERNAL"] : "-"} />
                 <InfoRow
                   label="严重程度"
                   value={detailRule?.severity ? SEVERITY_LABELS[detailRule.severity] : "-"}
@@ -704,7 +714,7 @@ const QualityRulesPage = () => {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>密级</Label>
+              <Label>数据密级（DATA_*）</Label>
               <Select
                 value={form.dataLevel}
                 onValueChange={(value: DataSecurityLevel) => setForm((prev) => ({ ...prev, dataLevel: value }))}

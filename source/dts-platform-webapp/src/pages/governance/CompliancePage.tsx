@@ -32,13 +32,23 @@ import {
 } from "@/api/platformApi";
 import { cn } from "@/utils";
 
-type DataSecurityLevel = "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET";
+type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
 
-const LEVEL_LABELS: Record<DataSecurityLevel, string> = {
-    PUBLIC: "公开",
-    INTERNAL: "内部",
-    SECRET: "秘密",
-    TOP_SECRET: "机密",
+const LEVEL_LABELS: Record<DataLevel, string> = {
+    DATA_PUBLIC: "公开 (DATA_PUBLIC)",
+    DATA_INTERNAL: "内部 (DATA_INTERNAL)",
+    DATA_SECRET: "秘密 (DATA_SECRET)",
+    DATA_TOP_SECRET: "机密 (DATA_TOP_SECRET)",
+};
+const toLegacy = (v: DataLevel): "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET" =>
+    v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
+const fromLegacy = (v: string): DataLevel => {
+    const u = String(v || "").toUpperCase();
+    if (u === "PUBLIC") return "DATA_PUBLIC";
+    if (u === "INTERNAL") return "DATA_INTERNAL";
+    if (u === "SECRET") return "DATA_SECRET";
+    if (u === "TOP_SECRET") return "DATA_TOP_SECRET";
+    return "DATA_INTERNAL";
 };
 
 const SEVERITY_LABELS: Record<string, string> = {
@@ -113,7 +123,7 @@ interface RuleOption {
     name: string;
     code?: string;
     severity: string;
-    dataLevel: DataSecurityLevel;
+    dataLevel: DataLevel;
     bindings: RuleBindingView[];
 }
 
@@ -148,7 +158,7 @@ interface ComplianceBatch {
     status: string;
     progressPct: number;
     evidenceRequired: boolean;
-    dataLevel: DataSecurityLevel;
+    dataLevel: DataLevel;
     scheduledAt?: string | null;
     startedAt?: string | null;
     finishedAt?: string | null;
@@ -171,7 +181,7 @@ interface ComplianceBatch {
 interface BatchForm {
     name: string;
     templateCode: string;
-    dataLevel: DataSecurityLevel;
+    dataLevel: DataLevel;
     evidenceRequired: boolean;
     metadata: string;
     ruleIds: string[];
@@ -189,7 +199,7 @@ interface ItemDialogState {
 const INITIAL_BATCH_FORM: BatchForm = {
     name: "",
     templateCode: "",
-    dataLevel: "INTERNAL",
+    dataLevel: "DATA_INTERNAL",
     evidenceRequired: true,
     metadata: "",
     ruleIds: [],
@@ -208,7 +218,7 @@ const severityOrder = { CRITICAL: 5, HIGH: 4, MEDIUM: 3, LOW: 2, INFO: 1 } as co
 
 function normalizeBatch(raw: any, includeItems: boolean): ComplianceBatch {
     const status = String(raw?.status ?? "RUNNING").toUpperCase();
-    const dataLevel = (String(raw?.dataLevel ?? "INTERNAL").toUpperCase() as DataSecurityLevel) || "INTERNAL";
+    const dataLevel = fromLegacy(String(raw?.dataLevel ?? "INTERNAL"));
     const items = includeItems && Array.isArray(raw?.items) ? raw.items.map(normalizeItem) : [];
     return {
         id: String(raw?.id ?? ""),
@@ -333,7 +343,7 @@ export default function CompliancePage() {
                 .filter((rule) => rule?.enabled !== false)
                 .map((rule) => {
                     const severity = String(rule?.severity ?? "MEDIUM").toUpperCase();
-                    const dataLevel = (String(rule?.dataLevel ?? "INTERNAL").toUpperCase() as DataSecurityLevel) || "INTERNAL";
+                    const dataLevel = fromLegacy(String(rule?.dataLevel ?? "INTERNAL"));
                     const bindings: RuleBindingView[] = Array.isArray(rule?.bindings)
                         ? rule.bindings.map((binding: any) => ({
                               datasetId: binding?.datasetId ? String(binding.datasetId) : undefined,
@@ -457,7 +467,7 @@ export default function CompliancePage() {
             await createComplianceBatch({
                 name: batchForm.name.trim(),
                 templateCode: batchForm.templateCode.trim() || undefined,
-                dataLevel: batchForm.dataLevel,
+                dataLevel: toLegacy(batchForm.dataLevel),
                 evidenceRequired: batchForm.evidenceRequired,
                 metadata: metadataPayload,
                 ruleIds: batchForm.ruleIds,
@@ -549,7 +559,7 @@ export default function CompliancePage() {
                             <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                                 <tr>
                                     <th className="px-3 py-2 font-medium">批次名称</th>
-                                    <th className="px-3 py-2 font-medium">密级</th>
+                <th className="px-3 py-2 font-medium">数据密级（DATA_*）</th>
                                     <th className="px-3 py-2 font-medium">进度</th>
                                     <th className="px-3 py-2 font-medium">统计</th>
                                     <th className="px-3 py-2 font-medium">触发</th>
@@ -643,7 +653,7 @@ export default function CompliancePage() {
                                     <Badge variant={selectedBatchStatus(detailBatch.status).variant}>
                                         {selectedBatchStatus(detailBatch.status).label}
                                     </Badge>
-                                    <Badge variant="outline">密级 {LEVEL_LABELS[detailBatch.dataLevel] ?? detailBatch.dataLevel}</Badge>
+                        <Badge variant="outline">数据密级（DATA_*） {LEVEL_LABELS[detailBatch.dataLevel] ?? detailBatch.dataLevel}</Badge>
                                     {detailBatch.evidenceRequired ? (
                                         <Badge variant="secondary">需提交证据</Badge>
                                     ) : (
@@ -929,14 +939,14 @@ export default function CompliancePage() {
                                 <Select
                                     value={batchForm.dataLevel}
                                     onValueChange={(value) =>
-                                        setBatchForm((prev) => ({ ...prev, dataLevel: value as DataSecurityLevel }))
+                                        setBatchForm((prev) => ({ ...prev, dataLevel: value as DataLevel }))
                                     }
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="选择密级" />
+                                    <SelectValue placeholder="选择数据密级（DATA_*）" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {(Object.keys(LEVEL_LABELS) as DataSecurityLevel[]).map((level) => (
+                                        {(Object.keys(LEVEL_LABELS) as DataLevel[]).map((level) => (
                                             <SelectItem key={level} value={level}>
                                                 {LEVEL_LABELS[level]}
                                             </SelectItem>

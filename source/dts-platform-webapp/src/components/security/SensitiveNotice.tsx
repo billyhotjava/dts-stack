@@ -13,7 +13,7 @@ export default function SensitiveNotice(props: HTMLAttributes<HTMLDivElement>) {
 			<span aria-hidden className="text-red-500 text-lg">
 				★
 			</span>
-			<span className="font-semibold">此功能涉及密级数据，请注意保密！</span>
+            <span className="font-semibold">此功能涉及数据密级（DATA_*）数据，请注意保密！</span>
 			<Badge variant="secondary" className="bg-red-100 text-red-700">
 				最小权限原则
 			</Badge>

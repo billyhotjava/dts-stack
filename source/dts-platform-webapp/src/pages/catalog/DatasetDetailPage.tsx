@@ -22,17 +22,11 @@ import {
     latestQuality,
     triggerQuality,
 } from "@/api/platformApi";
-import type { DatasetAsset, DatasetJob, DatasetJobStatus, SecurityLevel, DataLevel, Scope, ShareScope } from "@/types/catalog";
+import type { DatasetAsset, DatasetJob, DatasetJobStatus, DataLevel, Scope, ShareScope } from "@/types/catalog";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const SECURITY_LEVELS = [
-	{ value: "PUBLIC", label: "公开" },
-	{ value: "INTERNAL", label: "内部" },
-	{ value: "SECRET", label: "秘密" },
-	{ value: "TOP_SECRET", label: "机密" },
-] as const;
 const DATA_LEVELS = [
   { value: "DATA_PUBLIC", label: "公开 (DATA_PUBLIC)" },
   { value: "DATA_INTERNAL", label: "内部 (DATA_INTERNAL)" },
@@ -191,6 +185,10 @@ export default function DatasetDetailPage() {
                 .then((list) => mounted && setDeptOptions(list || []))
                 .finally(() => mounted && setDeptLoading(false));
         }
+        // Enforce INST scope cannot use PRIVATE_DEPT; auto-correct if necessary
+        if (dataset?.scope === "INST" && dataset?.shareScope === "PRIVATE_DEPT") {
+            setDataset({ ...(dataset as any), shareScope: "SHARE_INST" });
+        }
         return () => {
             mounted = false;
         };
@@ -227,7 +225,7 @@ export default function DatasetDetailPage() {
 		}
 	};
 
-	const levelOptions = SECURITY_LEVELS;
+    // Legacy classification UI removed; only DATA_* is used going forward
 
 	const hasHive = dataset?.source?.sourceType === "HIVE";
 
@@ -354,24 +352,7 @@ export default function DatasetDetailPage() {
 							onChange={(e) => setDataset({ ...(dataset as DatasetAsset), owner: e.target.value })}
 						/>
 					</div>
-					<div className="grid gap-2">
-						<Label>密级</Label>
-						<Select
-							value={dataset.classification}
-							onValueChange={(v: SecurityLevel) => setDataset({ ...(dataset as DatasetAsset), classification: v })}
-						>
-							<SelectTrigger>
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{levelOptions.map((l) => (
-									<SelectItem key={l.value} value={l.value}>
-										{l.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
+					{/* 统一为 DATA_*，不再展示 legacy 密级 */}
 
 					<div className="grid gap-2">
 						<Label>数据密级（DATA_*）</Label>
@@ -440,7 +421,6 @@ export default function DatasetDetailPage() {
 								<SelectContent>
 									<SelectItem value="SHARE_INST">SHARE_INST（所内共享）</SelectItem>
 									<SelectItem value="PUBLIC_INST">PUBLIC_INST（所内公开）</SelectItem>
-									<SelectItem value="PRIVATE_DEPT">PRIVATE_DEPT（不共享）</SelectItem>
 								</SelectContent>
 							</Select>
 						</div>

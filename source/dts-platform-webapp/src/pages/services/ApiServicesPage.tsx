@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useActiveDept, useActiveScope } from "@/store/contextStore";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -46,7 +47,9 @@ function StatusBadge({ status }: { status: ApiServiceStatus }) {
 }
 
 export default function ApiServicesPage() {
-	const router = useRouter();
+    const router = useRouter();
+    const activeScope = useActiveScope();
+    const activeDept = useActiveDept();
 	const [list, setList] = useState<ApiServiceSummary[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [keyword, setKeyword] = useState("");
@@ -68,9 +71,9 @@ export default function ApiServicesPage() {
 		router.push(`/services/apis/${id}${q}`);
 	};
 
-	useEffect(() => {
-		void fetchList();
-	}, []);
+    useEffect(() => {
+        void fetchList();
+    }, [activeScope, activeDept]);
 
 	const filtered = useMemo(() => {
 		const kw = keyword.trim().toLowerCase();
@@ -142,7 +145,7 @@ export default function ApiServicesPage() {
 								<th className="px-3 py-2 font-medium">绑定数据集/视图</th>
 								<th className="px-3 py-2 font-medium w-[90px]">方法</th>
 								<th className="px-3 py-2 font-medium">路径</th>
-								<th className="px-3 py-2 font-medium w-[110px]">最低密级</th>
+                        <th className="px-3 py-2 font-medium w-[140px]">最低数据密级（DATA_*）</th>
 								<th className="px-3 py-2 font-medium w-[140px]">QPS 配额</th>
 								<th className="px-3 py-2 font-medium w-[160px]">最近调用量</th>
 								<th className="px-3 py-2 font-medium w-[90px]">状态</th>

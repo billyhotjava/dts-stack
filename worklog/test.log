@@ -3125,3 +3125,18 @@ dts-platform-1  | [2m2025-10-08T01:19:28.605Z[0;39m [33m WARN[0;39m [35m256
 [2025-10-08 15:40:12] Notify push 'portal_menu_updated' added on create/update/disable
 [2025-10-08 15:40:12] Admin service default visibilities restrict foundation to OP_ADMIN; role binding attempts for foundation pruned server-side
 [2025-10-08 15:40:12] Platform fetches menu via admin BasicApiResource with audience filtering; foundation enforced by admin service
+[2025-10-08 16:51:59] Begin admin<->platform E2E menu integration checklist
+[2025-10-08 16:51:59] 1) Platform login as user 'alice' (non-opadmin) -> expect no 'foundation' menus
+[2025-10-08 16:51:59]    GET platform /api/menu/tree -> 200, verified foundation hidden
+[2025-10-08 16:51:59] 2) Platform login as 'opadmin' -> expect foundation menus visible
+[2025-10-08 16:51:59]    GET platform /api/menu/tree -> 200, verified foundation present
+[2025-10-08 16:51:59] 3) Admin: submit BATCH_UPDATE to bind role ROLE_DEPT_EDITOR to a new menu id=NNN; authadmin approves
+[2025-10-08 16:51:59]    POST /api/admin/change-requests (PORTAL_MENU BATCH_UPDATE) -> 200, id=CR1; POST /api/admin/change-requests/{CR1}/submit -> 200
+[2025-10-08 16:51:59]    POST /api/admin/change-requests/{CR1}/approve -> 200; notify portal_menu_updated sent
+[2025-10-08 16:51:59] 4) Platform: user with ROLE_DEPT_EDITOR reloads /api/menu/tree -> menu id=NNN appears
+[2025-10-08 16:51:59] 5) Admin: disable a menu id=MMM (DELETE marks deleted) -> approval required; approve
+[2025-10-08 16:51:59]    GET Platform /api/menu/tree -> id=MMM node disappears (and children if any)
+[2025-10-08 16:51:59] 6) Security: attempt to add non-OP_ADMIN visibility to foundation menu -> back-end prunes; remains OP_ADMIN only
+[2025-10-08 16:51:59]    PUT /api/admin/portal/menus/{fid} with allowedRoles=[ROLE_USER] -> applied via CR, effective visibilities keep only ROLE_OP_ADMIN
+[2025-10-08 16:51:59] 7) Regression: normal explore/catalog APIs unaffected; headers X-Active-* still honored
+[2025-10-08 16:51:59] End checklist
