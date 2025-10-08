@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { KeycloakUserService } from "@/api/services/keycloakService";
-import type { KeycloakUser } from "#/keycloak";
 import { useUserInfo } from "@/store/userStore";
 import { Avatar, AvatarImage } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
@@ -27,44 +25,15 @@ const pickAttributeValue = (attributes: AttributeMap, keys: string[]) => {
 
 function PersonalProfilePage() {
     const { avatar, fullName, firstName, username, email, roles, attributes } = useUserInfo();
-	const [detail, setDetail] = useState<KeycloakUser | null>(null);
-
-	useEffect(() => {
-		let active = true;
-
-		const fetchDetail = async () => {
-			if (!username || PROTECTED_USERNAMES.has(username.toLowerCase())) {
-				setDetail(null);
-				return;
-			}
-			try {
-				const list = await KeycloakUserService.searchUsers(username);
-				const remote = list.find((user) => user.username?.toLowerCase() === username.toLowerCase()) || list[0] || null;
-				if (active) {
-					setDetail(remote);
-				}
-			} catch (err) {
-				console.warn("Failed to load 服务端 user detail:", err);
-				if (active) {
-					setDetail(null);
-				}
-			}
-		};
-
-		fetchDetail();
-		return () => {
-			active = false;
-		};
-	}, [username]);
-
-	const detailAttributes = detail?.attributes as AttributeMap;
+	// 远端 Keycloak 查询已移除；仅使用本地登录态信息
+	const detailAttributes = undefined as AttributeMap;
 	const storeAttributes = attributes as AttributeMap;
 
 	const attributeFullName =
 		pickAttributeValue(detailAttributes, ["fullName", "fullname"]) || pickAttributeValue(storeAttributes, ["fullName", "fullname"]);
 	const normalizedAttributeFullName =
 		attributeFullName && attributeFullName.toLowerCase() !== username?.toLowerCase() ? attributeFullName : "";
-	const normalizedDetailFullName = detail?.fullName && detail.fullName.toLowerCase() !== username?.toLowerCase() ? detail.fullName : "";
+	const normalizedDetailFullName = "";
 	const normalizedStoreFullName = fullName && fullName.toLowerCase() !== username?.toLowerCase() ? fullName : "";
 	const normalizedStoreFirstName = firstName && firstName.toLowerCase() !== username?.toLowerCase() ? firstName : "";
 	const fallbackName = username ? USERNAME_FALLBACK_NAME[username.toLowerCase()] : "";
@@ -78,15 +47,14 @@ function PersonalProfilePage() {
 		""
 	).trim();
 
-	const displayEmail = detail?.email || email || "";
+	const displayEmail = email || "";
 	const roleLabels = useMemo(() => {
-		const remoteRoles = detail?.realmRoles;
-		const labels = resolveRoleLabels(remoteRoles && remoteRoles.length ? remoteRoles : roles);
+		const labels = resolveRoleLabels(roles);
 		if (labels.length > 0) {
 			return Array.from(new Set(labels));
 		}
 		return [];
-	}, [detail?.realmRoles, roles]);
+	}, [roles]);
 
 	const summaryItems = [
 		{ key: "username", label: "登录账号", value: username || "-" },
@@ -126,7 +94,7 @@ function PersonalProfilePage() {
 				</CardContent>
 			</Card>
 
-			<ProfileTab detail={detail} pickAttributeValue={pickAttributeValue} />
+			<ProfileTab detail={null} pickAttributeValue={pickAttributeValue} />
 		</div>
 	);
 }

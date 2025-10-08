@@ -38,8 +38,7 @@
 ## 3. 接口权限（后端 RBAC）
 - Platform 后端 `SecurityConfiguration`：
   - 放行：`/api/menu**`，`/api/keycloak/auth/**`，`/api/keycloak/localization/**`
-  - 管理接口：`/api/admin/**` 需 `ROLE_ADMIN` 或 `ROLE_OP_ADMIN`
-  - 其余 `/api/**` 需已认证
+  - 平台不再提供 `/api/admin/**` 管理接口；其余 `/api/**` 需已认证
   - 参考：`source/dts-platform/src/main/java/com/yuzhi/dts/platform/config/SecurityConfiguration.java`
 
 ## 4. 数据访问（RBAC×ABAC 判定骨架）

@@ -68,6 +68,9 @@ export interface ConflictItem {
 	next: string;
 }
 
+import { listDepartments } from "@/api/services/deptService";
+import roleService from "@/api/services/roleService";
+
 export default {
 	getDomainDatasetTree(): Promise<DomainNode[]> {
 		return apiClient.get({ url: "/iam/policies/domains-with-datasets" });
@@ -78,9 +81,26 @@ export default {
 	getSubjectVisible(type: SubjectType, id: string): Promise<SubjectVisibleResponse> {
 		return apiClient.get({ url: `/iam/policies/subject/${type}/${id}/visible` });
 	},
-	searchSubjects(type: SubjectType, keyword: string): Promise<{ id: string; name: string }[]> {
-		return apiClient.get({ url: "/iam/policies/subjects", params: { type, keyword } });
-	},
+    async searchSubjects(type: SubjectType, keyword: string): Promise<{ id: string; name: string }[]> {
+        const kw = (keyword || "").trim().toLowerCase();
+        if (type === "org") {
+            const list = await listDepartments(keyword);
+            return list.map((d) => ({ id: d.code, name: d.nameZh || d.nameEn || d.code }));
+        }
+        if (type === "role") {
+            try {
+                const roles = await roleService.listRealmRoles();
+                const filtered = roles.filter((r) => {
+                    const name = (r.name || "").trim();
+                    return kw ? name.toLowerCase().includes(kw) : true;
+                });
+                return filtered.map((r) => ({ id: r.name, name: r.name }));
+            } catch (e) {
+                // Fall back to platform endpoint if admin is unreachable
+            }
+        }
+        return apiClient.get({ url: "/iam/policies/subjects", params: { type, keyword } });
+    },
 	previewConflicts(input: BatchAuthorizationInput): Promise<{ conflicts: ConflictItem[] }> {
 		return apiClient.post({ url: "/iam/policies/preview", data: input });
 	},

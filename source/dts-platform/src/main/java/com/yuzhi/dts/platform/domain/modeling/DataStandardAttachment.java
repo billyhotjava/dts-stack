@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.domain.modeling;
 
 import com.yuzhi.dts.platform.domain.AbstractAuditingEntity;
+import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -47,8 +48,8 @@ public class DataStandardAttachment extends AbstractAuditingEntity<UUID> impleme
     @Column(name = "iv", columnDefinition = "bytea")
     private byte[] iv;
 
-    @Lob
-    @Column(name = "cipher_blob")
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "cipher_blob", columnDefinition = "bytea")
     private byte[] cipherBlob;
 
     public UUID getId() {
@@ -131,4 +132,3 @@ public class DataStandardAttachment extends AbstractAuditingEntity<UUID> impleme
         this.cipherBlob = cipherBlob;
     }
 }
-

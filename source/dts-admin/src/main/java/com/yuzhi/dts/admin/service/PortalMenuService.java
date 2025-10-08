@@ -545,7 +545,11 @@ public class PortalMenuService {
         }
 
         List<PortalMenu> allMenus = menuRepo.findAll();
-        Map<Long, PortalMenu> menuIndex = allMenus.stream().collect(Collectors.toMap(PortalMenu::getId, m -> m));
+        // Guard against malformed rows (shouldn't happen, but avoid hard failure)
+        Map<Long, PortalMenu> menuIndex = allMenus
+            .stream()
+            .filter(m -> m != null && m.getId() != null)
+            .collect(Collectors.toMap(PortalMenu::getId, m -> m));
         Set<Long> targetMenuIds = resolveMenuIdsForSections(allMenus, sections);
 
         List<PortalMenuVisibility> existing = visibilityRepo.findByRoleCode(normalizedRole);

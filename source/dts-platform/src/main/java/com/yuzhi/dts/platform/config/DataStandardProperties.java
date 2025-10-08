@@ -38,6 +38,7 @@ public class DataStandardProperties {
             Set.of("docx", "wps", "pdf", "xlsx", "xls", "md", "txt")
         );
         private String storageStrategy = "database";
+        private String storageDir = "/opt/dts/upload";
 
         public long getMaxFileSize() {
             return maxFileSize;
@@ -61,6 +62,14 @@ public class DataStandardProperties {
 
         public void setStorageStrategy(String storageStrategy) {
             this.storageStrategy = storageStrategy;
+        }
+
+        public String getStorageDir() {
+            return storageDir;
+        }
+
+        public void setStorageDir(String storageDir) {
+            this.storageDir = storageDir;
         }
     }
 }

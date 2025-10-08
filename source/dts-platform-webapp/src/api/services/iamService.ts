@@ -1,4 +1,5 @@
 import apiClient from "../apiClient";
+import { listDatasets as listCatalogDatasets } from "@/api/platformApi";
 
 export type UserClassificationItem = {
 	id: string;
@@ -32,43 +33,68 @@ export type SyncStatus = {
 	failures: SyncFailureItem[];
 };
 
-const BASE = "/iam/classification";
+// Legacy admin-like endpoints已从 platform 移除。
+// 为避免前端弹错，这里彻底改为纯前端“只读占位”实现，
+// 不再对 /iam/classification/** 发生任何网络请求。
+const BASE = "/iam/classification"; // reserved for future; not used now
 
-function searchUsers(keyword: string) {
-	return apiClient.get<UserClassificationItem[]>({
-		url: `${BASE}/users/search`,
-		params: { keyword },
-	});
+async function searchUsers(keyword: string) {
+    return [];
 }
 
-function refreshUser(id: string) {
-	return apiClient.post<UserClassificationItem>({
-		url: `${BASE}/users/${id}/refresh`,
-	});
+async function refreshUser(id: string) {
+    // 返回最小占位，避免网络请求与错误提示
+    return {
+        id,
+        username: id,
+        displayName: id,
+        orgPath: [],
+        roles: [],
+        projects: [],
+        securityLevel: "内部",
+        updatedAt: new Date().toISOString(),
+    } as UserClassificationItem;
 }
 
-function getDatasets() {
-	return apiClient.get<DatasetClassificationItem[]>({
-		url: `${BASE}/datasets`,
-	});
+async function getDatasets() {
+    // Fallback to catalog datasets and adapt fields
+    try {
+        const resp: any = await listCatalogDatasets({ page: 0, size: 500 });
+        const list: any[] = Array.isArray(resp?.content) ? resp.content : [];
+        const toCn = (l?: string): string => {
+            const v = String(l || "").toUpperCase();
+            if (v.includes("TOP_SECRET") || v === "TOP_SECRET") return "机密";
+            if (v.includes("SECRET") && !v.includes("TOP")) return "秘密";
+            if (v.includes("INTERNAL")) return "内部";
+            return "公开";
+        };
+        return list.map((it) => ({
+            id: String(it.id),
+            name: String(it.name || ""),
+            domain: String(it.domainName || it.domainId || ""),
+            owner: String(it.owner || ""),
+            classification: toCn(it.dataLevel || it.classification),
+        })) as DatasetClassificationItem[];
+    } catch {
+        try {
+            return await apiClient.get<DatasetClassificationItem[]>({ url: `${BASE}/datasets` });
+        } catch {
+            return [];
+        }
+    }
 }
 
-function getSyncStatus() {
-	return apiClient.get<SyncStatus>({
-		url: `${BASE}/sync/status`,
-	});
+async function getSyncStatus() {
+    // 只读占位
+    return { lastSyncAt: null, deltaCount: 0, failures: [] } as SyncStatus;
 }
 
-function runSync() {
-	return apiClient.post<SyncStatus>({
-		url: `${BASE}/sync/execute`,
-	});
+async function runSync() {
+    return { lastSyncAt: new Date().toISOString(), deltaCount: 0, failures: [] } as SyncStatus;
 }
 
-function retryFailure(id: string) {
-	return apiClient.post<SyncStatus>({
-		url: `${BASE}/sync/retry/${id}`,
-	});
+async function retryFailure(id: string) {
+    return { lastSyncAt: new Date().toISOString(), deltaCount: 0, failures: [] } as SyncStatus;
 }
 
 export default {

@@ -81,14 +81,18 @@ services:
       DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
       DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
       DTS_JDBC_DRIVER_JAR: "quark-driver-8.37.3.jar"
-      # Disable duplicate admin-like endpoints in platform backend (Stage 1)
-      DTS_FEATURE_PLATFORM_KEYCLOAK_ADMIN: "false"
-      DTS_FEATURE_PLATFORM_ADMIN_DEMO: "false"
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
+      # Data Standard attachments: encrypted filesystem storage
+      DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY: "filesystem"
+      DATA_STANDARD_STORAGE_DIR: "/opt/dts/upload"
+      # Base64 key for AES-GCM (16 bytes here for demo; replace in production)
+      DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
     volumes:
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
       # Mount vendor JDBC driver(s) for Hive to avoid Hadoop conflicts
       - ./services/dts-platform/drivers:/opt/dts/drivers:ro
+      # Encrypted attachments storage (host-bound)
+      - ./services/dts-platform/upload:/opt/dts/upload
     extra_hosts:
       - "${HOST_SSO}:host-gateway"
     networks:

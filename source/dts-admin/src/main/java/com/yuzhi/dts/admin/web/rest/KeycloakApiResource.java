@@ -774,6 +774,14 @@ public class KeycloakApiResource {
     }
 
     // ---- Roles ----
+    @GetMapping("/keycloak/platform/roles")
+    public ResponseEntity<List<KeycloakRoleDTO>> listRolesForPlatform() {
+        // Return realm roles via admin service; no triad token required (permitted in security)
+        var list = adminUserService.listRealmRoles();
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "KC_ROLES_LIST_PLATFORM", "KC_ROLE", "list", "SUCCESS", null);
+        return ResponseEntity.ok(list);
+    }
+
     @GetMapping("/keycloak/roles")
     public ResponseEntity<List<KeycloakRoleDTO>> listRoles() {
         var list = stores.listRoles();

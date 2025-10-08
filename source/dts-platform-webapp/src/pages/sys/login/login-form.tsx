@@ -5,6 +5,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { SignInReq } from "@/api/services/userService";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { useContextActions } from "@/store/contextStore";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import { useSignIn } from "@/store/userStore";
 import { Button } from "@/ui/button";
@@ -25,10 +26,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	const bilingual = useBilingualText();
 
 	const form = useForm<SignInReq>({
-		// defaultValues: {
-		// 	username: "opadmin",
-		// 	password: "Devops123@",
-		// },
+		defaultValues: {
+			username: "opadmin",
+			password: "sa",
+		},
 	});
 
 	if (loginState !== LoginStateEnum.LOGIN) return null;
@@ -44,6 +45,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		setLoading(true);
 		try {
 			const signInResult = await signIn({ ...values, username: trimmedUsername });
+			// 初始化作用域/部门上下文，避免首次请求缺少 X-Active-Dept 导致 403
+			try {
+				useContextActions().initDefaults();
+			} catch {}
 			// 登录成功后先尝试加载菜单，再进入工作台，避免偶发 404
 			const usedFallback = signInResult.mode === "fallback";
 			if (!usedFallback) {

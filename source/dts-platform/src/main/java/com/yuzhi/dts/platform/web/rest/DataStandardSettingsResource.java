@@ -4,6 +4,10 @@ import com.yuzhi.dts.platform.config.DataStandardProperties;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.web.rest.dto.DataStandardSettingsDto;
+import com.yuzhi.dts.platform.web.rest.dto.DataStandardHealthDto;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
 import jakarta.validation.Valid;
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -62,5 +66,67 @@ public class DataStandardSettingsResource {
         response.setAllowedExtensions(properties.getAttachment().getAllowedExtensions().stream().toList());
         audit.audit("UPDATE", "modeling.standard.settings", "attachment" );
         return ApiResponses.ok(response);
+    }
+
+    /**
+     * Health endpoint for administrators. Validates encryption key format and storage settings so
+     * the UI can surface friendly configuration errors before users attempt uploads.
+     */
+    @GetMapping("/standards/health")
+    public ApiResponse<DataStandardHealthDto> health() {
+        DataStandardHealthDto dto = new DataStandardHealthDto();
+        String key = properties.getEncryptionKey();
+        boolean keyConfigured = StringUtils.hasText(key);
+        boolean keyValid = false;
+        int keyBytes = 0;
+        String msg = null;
+        if (!keyConfigured) {
+            msg = "未配置数据标准附件加密密钥 (DATA_STANDARD_ENCRYPTION_KEY)";
+        } else {
+            try {
+                byte[] decoded = Base64.getDecoder().decode(key.trim());
+                keyBytes = decoded.length;
+                keyValid = (keyBytes == 16 || keyBytes == 32);
+                if (!keyValid) {
+                    msg = "密钥长度必须为 16 或 32 字节 (Base64)";
+                }
+            } catch (IllegalArgumentException ex) {
+                msg = "密钥不是有效的 Base64 字符串";
+            }
+        }
+
+        String strategy = String.valueOf(properties.getAttachment().getStorageStrategy());
+        String storageDir = properties.getAttachment().getStorageDir();
+        Boolean writable = null;
+        if ("filesystem".equalsIgnoreCase(strategy)) {
+            try {
+                if (StringUtils.hasText(storageDir)) {
+                    Path p = Path.of(storageDir);
+                    // best-effort: do not create; only check existence and writability of parent
+                    Path check = Files.exists(p) ? p : p.getParent();
+                    writable = (check != null) && Files.isWritable(check);
+                    if (writable == null || !writable) {
+                        msg = (msg == null ? "上传目录不可写: " + storageDir : msg + "；上传目录不可写: " + storageDir);
+                    }
+                } else {
+                    msg = (msg == null ? "未配置上传目录" : msg + "；未配置上传目录");
+                }
+            } catch (Exception ex) {
+                writable = Boolean.FALSE;
+                String reason = ex.getMessage() == null ? "未知错误" : ex.getMessage();
+                msg = (msg == null ? "检查上传目录失败: " + reason : msg + "；检查上传目录失败: " + reason);
+            }
+        }
+
+        boolean ok = keyConfigured && keyValid && ("filesystem".equalsIgnoreCase(strategy) ? Boolean.TRUE.equals(writable) : true);
+        dto.setOk(ok);
+        dto.setMessage(ok ? "OK" : (msg == null ? "配置不正确" : msg));
+        dto.setKeyConfigured(keyConfigured);
+        dto.setKeyValid(keyValid);
+        dto.setKeyBytes(keyBytes);
+        dto.setStorageStrategy(strategy);
+        dto.setStorageDir(storageDir);
+        dto.setStorageDirWritable(writable);
+        return ApiResponses.ok(dto);
     }
 }

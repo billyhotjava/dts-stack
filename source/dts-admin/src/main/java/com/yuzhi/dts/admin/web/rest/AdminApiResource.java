@@ -541,6 +541,26 @@ public class AdminApiResource {
         return ResponseEntity.ok(ApiResponse.ok(tree));
     }
 
+    // Platform-friendly orgs endpoint (no triad token required; see SecurityConfiguration)
+    @GetMapping("/platform/orgs")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> orgsForPlatform() {
+        List<Map<String, Object>> tree = buildOrgTree();
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ORG_LIST_PLATFORM", "ORG", "tree", "SUCCESS", null);
+        return ResponseEntity.ok(ApiResponse.ok(tree));
+    }
+
+    @PostMapping("/platform/orgs/sync")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> syncOrgsForPlatform() {
+        try {
+            organizationSyncService.ensureUnassignedRoot();
+        } catch (RuntimeException ex) {
+            log.warn("ensureUnassignedRoot failed: {}", ex.getMessage());
+        }
+        List<Map<String, Object>> tree = buildOrgTree();
+        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ORG_SYNC_PLATFORM", "ORG", "tree", "SUCCESS", null);
+        return ResponseEntity.ok(ApiResponse.ok(tree));
+    }
+
     @PostMapping("/orgs")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> createOrg(@RequestBody Map<String, Object> payload) {
         String name = trimToNull(payload.get("name"));

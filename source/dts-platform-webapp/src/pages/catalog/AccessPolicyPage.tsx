@@ -91,8 +91,33 @@ export default function AccessPolicyPage() {
 
   const onPreviewMask = async () => {
     try {
-      const r = (await previewMasking({ value: previewValue, function: previewStrategy })) as any;
-      setPreviewMasked(String(r?.output ?? r?.masked ?? ""));
+      // Map UI strategy to backend preview function names
+      const resolveFn = (strategy: MaskingType, val: string): string | null => {
+        const v = String(val || "");
+        const lower = strategy.toUpperCase() as MaskingType;
+        if (lower === "NONE") return null; // no-op
+        if (lower === "HASH") return "hash";
+        if (lower === "PARTIAL") {
+          if (v.includes("@")) return "mask_email";
+          // treat number-like strings as phone
+          const digits = v.replace(/\D/g, "");
+          if (digits.length >= 10) return "mask_phone";
+          return "mask_phone";
+        }
+        if (lower === "TOKENIZE" || lower === "CUSTOM") {
+          // Use hash as a simple preview stand-in
+          return "hash";
+        }
+        return null;
+      };
+
+      const fn = resolveFn(previewStrategy, previewValue);
+      if (!fn) {
+        setPreviewMasked(previewValue);
+        return;
+      }
+      const r = (await previewMasking({ value: previewValue, function: fn })) as any;
+      setPreviewMasked(String(r?.output ?? r?.masked ?? previewValue));
     } catch (e) {
       console.error(e);
       toast.error("预览失败");

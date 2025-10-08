@@ -1,0 +1,130 @@
+白盒测试用例（使用者视角）——分级保护 × 访问策略（RBAC×ABAC）
+
+一、目的
+- 验证“谁能看/不能看”是否与权限矩阵一致：登录准入、菜单可见、接口权限、数据访问（作用域+密级）。
+- 验证前端友好提示与统一错误码（dts-sec-****）。
+
+二、准备工作
+1) 启动方式
+   - 挂载开发：./dev-up.sh --mode local
+   - 打包镜像：docker compose -f docker-compose.yml -f docker-compose-app.yml up -d
+
+2) 账号与角色（最少）
+   - platform：opadmin（允许登录）
+   - triad：sysadmin/authadmin/auditadmin（平台应被拒绝登录，仅 admin 可登录）
+
+3) 浏览器与上下文
+   - 打开 http://localhost:18012（platform 前端）
+   - 右上角切换“作用域/部门”（X-Active-Scope / X-Active-Dept 由前端自动注入）
+
+三、测试数据（以 Inceptor/default 数据库为例）
+用“数据资产”后端接口创建 4 个数据集（可用 Postman/curl）：
+
+1) DEPT/D001/INTERNAL（同部门私域，基线）
+POST /api/catalog/datasets
+{"name":"dept_a","type":"INCEPTOR","dataLevel":"DATA_INTERNAL","scope":"DEPT","ownerDept":"D001","hiveDatabase":"default","hiveTable":"dept_a"}
+
+2) DEPT/D001/SECRET（同部门更高密级）
+POST /api/catalog/datasets
+{"name":"dept_b","type":"INCEPTOR","dataLevel":"DATA_SECRET","scope":"DEPT","ownerDept":"D001","hiveDatabase":"default","hiveTable":"dept_b"}
+
+3) DEPT/D002/INTERNAL（跨部门）
+POST /api/catalog/datasets
+{"name":"dept_c","type":"INCEPTOR","dataLevel":"DATA_INTERNAL","scope":"DEPT","ownerDept":"D002","hiveDatabase":"default","hiveTable":"dept_c"}
+
+4) INST/SHARE_INST/INTERNAL（研究所共享域）
+POST /api/catalog/datasets
+{"name":"inst_s","type":"INCEPTOR","dataLevel":"DATA_INTERNAL","scope":"INST","shareScope":"SHARE_INST","hiveDatabase":"default","hiveTable":"inst_s"}
+
+说明：scope=DEPT 必需 ownerDept；scope=INST 必需 shareScope，否则接口会 400 提示。
+
+四、接口验证（读取判定为主）
+目标端点：POST /api/explore/query/preview（或 /execute）
+Headers（如 DEPT 场景）：
+  X-Active-Scope: DEPT
+  X-Active-Dept: D001
+Body：{"datasetId":"<数据集UUID>","sql":"SELECT 1"}
+
+预期与错误码（和权限矩阵映射）：
+A. 同部门私域 + 密级不超（DEPT/D001/INTERNAL）→ 200 OK
+B. 同部门私域 + 数据 SECRET，人员密级不足 → 403，当前实现为 dts-sec-0001（RBAC_DENY）
+   - 说明：若需要严格区分为 dts-sec-0003（LEVEL_TOO_LOW），可后续增强判定码映射。
+C. 跨部门（DEPT/D001 访问 DEPT/D002/...）→ 403 + dts-sec-0002（SCOPE_MISMATCH）
+D. INST 共享域（切换到 INST）→ 200 OK（人员密级满足）
+E. INST 共享域 + 人员密级不足 → 403（当前为 dts-sec-0001）
+F. 跨域并存：具备 INST_VIEWER 等角色，切到 INST 访问 INST/SHARE_INST → 200 OK
+
+备注：缺失/非法上下文（X-Active-*）在当前版本由前端兜底，一般不出现 dts-sec-0005/0006；如需严格测这两类，可临时用 curl 去掉相应头部再测。
+
+五、登录准入与菜单可见（抽查）
+1) 登录准入
+   - 平台（platform）：opadmin 能登录；sysadmin/authadmin/auditadmin 应被前后端共同拒绝。
+2) 菜单可见
+   - 菜单来自 admin 端受众过滤；平台已在受众清洗中移除 ROLE_USER（避免默认只读菜单叠加）。
+   - 以 opadmin 登录，仅显示绑定到其角色的菜单板块。
+
+六、策略可视化与安全视图（选做）
+1) 查看策略生效面：
+   GET /api/policy/effective?datasetId=<id>
+   - 返回 allowRoles、rowFilters、maskingRules，用于核对行列级策略配置。
+2) 应用/重建安全视图（需要 CATALOG_ADMIN/OP_ADMIN 权限）：
+   POST /api/policy/{datasetId}/apply   或   POST /api/secure-views/{id}/rebuild
+   - 预期：返回 DDL 或作业信息，便于将策略固化到引擎侧。
+
+七、前端提示与审计
+1) 前端 toast
+   - 403 dts-sec-0002：提示“作用域/部门不匹配，请切换上下文后重试”。
+   - 403 dts-sec-0001：提示“权限不足/密级不足”（当前统一为 RBAC_DENY）。
+2) 审计
+   - 后端记录执行/拒绝动作（模块、资源、结果），可在日志或审计页面检索。
+
+八、附加：人员密级与角色的关系（用于触发“密级不足”场景）
+1) 首选来自 Token claims（person_security_level/personnel_level）。
+2) 无 claims 时按角色近似：ROLE_TOP_SECRET > ROLE_SECRET > ROLE_INTERNAL > ROLE_PUBLIC；若均无，默认 INTERNAL。
+   - 可临时给用户加 ROLE_SECRET 或 ROLE_TOP_SECRET 角色，用于覆盖“等级不足”场景。
+
+九、curl 示例（快速脚本化）
+令 $TOKEN 为平台门户 accessToken，$ID 为数据集 UUID。
+
+例：跨部门拒绝（预期 0002）
+curl -sS -X POST http://localhost:18082/api/explore/query/preview \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -H "X-Active-Scope: DEPT" -H "X-Active-Dept: D001" \
+  -d '{"datasetId":"'$ID'","sql":"SELECT 1"}' | jq
+
+十、常见问题与定位
+- 401：检查前端是否正确携带平台门户令牌（demo- 前缀），以及接口是否走到了 /api/platform 对应服务。
+- 403：结合返回 code（0001/0002）与提示文案判断是 RBAC 或作用域门失败。
+- 菜单过多：确认平台已在受众传参中移除了 ROLE_USER；受众仅应包含具体角色（如 ROLE_DEPT_VIEWER）。
+
+—— 完 ——
+
+
+基本概念：
+默认兜底策略
+
+含义：当某个字段没有配置更精细的“列级脱敏规则”，或调用方不具备查看明文的权限时，系统对该字段统一采用的默认脱敏方式。
+触发前提：用户已通过“允许访问的角色”校验、RLS 行级过滤也放行，但该字段需要脱敏且没有更具体的规则时才生效。
+作用范围：仅影响脱敏（字段值如何展示），不改变是否能访问数据；拒绝访问（403/空集）由角色与RLS决定。
+典型取值：如 NONE（不脱敏）、PARTIAL（部分打码）、HASH/FULL（全脱敏/不可逆）等；具体以你们系统下拉项为准。列上若单独配置了规则，会覆盖兜底策略。
+接口层校验 vs 视图层校验
+
+接口层校验：在数据服务/网关返回前查看脱敏结果，常用于单值或样例值的快速预览（例如输入手机号“13812345678”，选择策略“PARTIAL”后预览成“138****5678”）。只验证“接口返回如何被脱敏”，不关心底层 SQL 视图。
+视图层校验：验证按策略生成的“四档安全视图”（公开/内部/受限/机密等）的实际 SQL 与查询结果，包含行级过滤（RLS）与列级脱敏两部分。适合从 BI/SQL 的角度确认：查询到的是哪些行、哪些列被如何处理。
+行级过滤表达式（RLS）如何生效
+
+写法：在“行级过滤表达式（RLS）”中使用数据集字段 + 用户属性占位符，例如 org_id = :orgId AND data_level <= :level；冒号开头的是从登录态/令牌中取的用户属性。
+下发步骤：
+点击“保存”仅写入配置；
+点击“策略生效”才会把规则编译/下发到数据网关与仓库（用于接口重写与安全视图生成）。
+“查看有效策略”可核对当前正在生效的版本。
+生效位置：
+接口查询：网关会在生成/转发 SQL 时自动追加 RLS 的 WHERE 子句；
+视图查询：系统会按密级生成对应安全视图，并把 RLS 条件固化在视图定义中。
+校验方法：
+用“视图层校验”看四档视图是否按组织与级别正确过滤；
+用“接口层校验”确认同样条件下字段脱敏是否正确。
+常见注意：
+占位符（如 :orgId, :level）须在用户令牌/会话中存在并与平台字段做了映射，否则可能命中空值导致行集被过滤掉；
+表达式需是布尔条件，尽量避免子查询与复杂函数，保持可被安全地注入/下推。
+如果你愿意，我可以帮你对当前数据集跑一次“视图层校验”，或检查你们的占位符和用户属性映射是否齐全。

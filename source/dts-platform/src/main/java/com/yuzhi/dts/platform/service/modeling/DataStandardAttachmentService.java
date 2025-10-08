@@ -10,6 +10,9 @@ import com.yuzhi.dts.platform.service.modeling.dto.DataStandardAttachmentDto;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -46,6 +49,7 @@ public class DataStandardAttachmentService {
         byte[] iv = DataStandardCrypto.randomIv();
         byte[] cipher = DataStandardCrypto.encrypt(bytes, secretKey, iv);
 
+        String strategy = String.valueOf(properties.getAttachment().getStorageStrategy());
         DataStandardAttachment attachment = new DataStandardAttachment();
         attachment.setStandard(standard);
         attachment.setVersion(StringUtils.hasText(version) ? version : standard.getCurrentVersion());
@@ -55,9 +59,19 @@ public class DataStandardAttachmentService {
         attachment.setSha256(DataStandardCrypto.sha256(bytes));
         attachment.setKeyVersion(properties.getKeyVersion());
         attachment.setIv(iv);
-        attachment.setCipherBlob(cipher);
-        attachmentRepository.save(attachment);
-        return DataStandardMapper.toDto(attachment);
+
+        if ("filesystem".equalsIgnoreCase(strategy)) {
+            // Persist metadata first to obtain attachment id
+            attachment.setCipherBlob(null);
+            attachment = attachmentRepository.save(attachment);
+            writeEncryptedToFilesystem(standard.getId(), attachment.getId(), cipher);
+            return DataStandardMapper.toDto(attachment);
+        } else {
+            // Default to database storage
+            attachment.setCipherBlob(cipher);
+            attachmentRepository.save(attachment);
+            return DataStandardMapper.toDto(attachment);
+        }
     }
 
     public List<DataStandardAttachmentDto> list(UUID standardId) {
@@ -75,7 +89,14 @@ public class DataStandardAttachmentService {
             .findByIdAndStandard(attachmentId, standard)
             .orElseThrow(() -> new EntityNotFoundException("附件不存在"));
         SecretKey secretKey = resolveKey();
-        byte[] data = DataStandardCrypto.decrypt(attachment.getCipherBlob(), secretKey, attachment.getIv());
+        byte[] cipher;
+        String strategy = String.valueOf(properties.getAttachment().getStorageStrategy());
+        if ("filesystem".equalsIgnoreCase(strategy)) {
+            cipher = readEncryptedFromFilesystem(standardId, attachmentId);
+        } else {
+            cipher = attachment.getCipherBlob();
+        }
+        byte[] data = DataStandardCrypto.decrypt(cipher, secretKey, attachment.getIv());
         return new DataStandardAttachmentContent(data, attachment.getFileName(), attachment.getContentType());
     }
 
@@ -85,6 +106,14 @@ public class DataStandardAttachmentService {
             .findByIdAndStandard(attachmentId, standard)
             .orElseThrow(() -> new EntityNotFoundException("附件不存在"));
         attachmentRepository.delete(attachment);
+        // Best-effort delete filesystem blob if strategy is filesystem
+        try {
+            String strategy = String.valueOf(properties.getAttachment().getStorageStrategy());
+            if ("filesystem".equalsIgnoreCase(strategy)) {
+                Path p = buildFsPath(standardId, attachmentId);
+                Files.deleteIfExists(p);
+            }
+        } catch (Exception ignore) {}
     }
 
     private void validateFile(MultipartFile file) {
@@ -127,6 +156,35 @@ public class DataStandardAttachmentService {
             throw new IllegalStateException("未配置数据标准附件加密密钥");
         }
         return DataStandardCrypto.buildKey(encodedKey);
+    }
+
+    private void writeEncryptedToFilesystem(UUID standardId, UUID attachmentId, byte[] cipher) {
+        try {
+            Path path = buildFsPath(standardId, attachmentId);
+            Files.createDirectories(path.getParent());
+            Files.write(path, cipher, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new IllegalStateException("写入附件文件失败", e);
+        }
+    }
+
+    private byte[] readEncryptedFromFilesystem(UUID standardId, UUID attachmentId) {
+        try {
+            Path path = buildFsPath(standardId, attachmentId);
+            return Files.readAllBytes(path);
+        } catch (IOException e) {
+            throw new IllegalStateException("读取附件文件失败", e);
+        }
+    }
+
+    private Path buildFsPath(UUID standardId, UUID attachmentId) {
+        String base = properties.getAttachment().getStorageDir();
+        if (!StringUtils.hasText(base)) {
+            base = "/opt/dts/upload";
+        }
+        // Use a deterministic layout so we don't need to store file path in DB
+        String dir = base.replaceAll("/+$", "") + "/data-standard/" + standardId;
+        return Path.of(dir, attachmentId.toString() + ".enc");
     }
 
     private DataStandard loadStandard(UUID id) {

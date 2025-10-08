@@ -25,7 +25,7 @@ services:
       DTS_KEYCLOAK_ADMIN_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
       # Enable org<->Keycloak group provisioning in dev; requires KC admin privileges on the client above
       DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED: "${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:-true}"
-      JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011"
+      JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011,http://localhost:18012,http://127.0.0.1:18012"
       JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
       JHIPSTER_CORS_ALLOWED_HEADERS: "*"
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
@@ -107,10 +107,13 @@ services:
       DTS_PLATFORM_HIVE_TEST_PRESERVE_ARTIFACTS: "true"
       # Enable lightweight HTTP access logging in dev to diagnose 401s and routing
       DTS_HTTP_ACCESS_LOG: "true"
-      # Disable duplicate admin-like endpoints in platform backend (Stage 1)
-      DTS_FEATURE_PLATFORM_KEYCLOAK_ADMIN: "false"
-      DTS_FEATURE_PLATFORM_ADMIN_DEMO: "false"
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
+      # Encrypted filesystem storage for Data Standard attachments
+      DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY: "filesystem"
+      DATA_STANDARD_STORAGE_DIR: "/opt/dts/upload"
+      # Base64 key for AES-GCM (16 bytes here for dev; replace in prod)
+      # Decodes to ASCII: 0123456789abcdef (16 bytes)
+      DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
     command:
       - bash
       - -lc
@@ -132,6 +135,7 @@ services:
       - maven-cache:/root/.m2
       - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
       - ./services/dts-platform/drivers:/opt/dts/drivers:ro
+      - ./services/dts-platform/upload:/opt/dts/upload
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro
     extra_hosts:
       - "${HOST_SSO}:host-gateway"
@@ -213,8 +217,12 @@ services:
       # Allow all authenticated users to sign in (empty → allow all; triad still governed by backend policy)
       VITE_ALLOWED_LOGIN_ROLES: ""
       VITE_DEV_LOGIN_FALLBACK: "false"
-      # Admin API base URL for Keycloak localization and other admin-proxied calls
-      VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
+      # Admin API base URL used by the frontend code. Use same-origin path to avoid browser CORS in dev,
+      # and let Vite proxy '/admin/api' to the real admin service (see VITE_ADMIN_PROXY_TARGET below).
+      VITE_ADMIN_API_BASE_URL: "/admin/api"
+      # Vite dev proxy target for admin API; use direct container address in dev to avoid TLS and Traefik
+      # Note: vite.config rewrites '/admin/api' -> '/api' for the target, so do NOT include '/api' suffix here.
+      VITE_ADMIN_PROXY_TARGET: "http://dts-admin:8081"
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18012:3001"

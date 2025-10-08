@@ -9,6 +9,7 @@ import {
     listStandardAttachments,
     uploadStandardAttachment,
     deleteStandardAttachment,
+    getStandardHealth,
 } from "@/api/platformApi";
 import { GLOBAL_CONFIG } from "@/global-config";
 import userStore from "@/store/userStore";
@@ -175,6 +176,7 @@ const DataStandardsPage = () => {
     const [formState, setFormState] = useState<FormState>(DEFAULT_FORM);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [health, setHealth] = useState<any | null>(null);
 
     const loadStandards = useCallback(async () => {
         setLoading(true);
@@ -228,6 +230,15 @@ const DataStandardsPage = () => {
     }, [loadStandards]);
 
     useEffect(() => {
+        // load admin health once upon mounting page to guard uploads
+        (async () => {
+            try {
+                const h = await getStandardHealth();
+                setHealth(h);
+            } catch (e) {
+                // ignore; keep health null
+            }
+        })();
         if (selectedId) {
             loadDetail(selectedId);
         }
@@ -329,6 +340,16 @@ const DataStandardsPage = () => {
     const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file || !selectedId) {
+            return;
+        }
+        // Frontend pre-check for allowed extensions to provide immediate, friendly feedback
+        const allowed = ["docx", "wps", "pdf", "xlsx", "xls", "md", "txt"]; // keep in sync with backend config
+        const name = file.name || "";
+        const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
+        if (ext && !allowed.includes(ext)) {
+            toast.error(`不支持的文件类型: ${ext}，请上传 ${allowed.join(", ")} 文件`);
+            // reset value so the same file can be re-picked after change
+            try { (event.target as HTMLInputElement).value = ""; } catch {}
             return;
         }
         const formData = new FormData();
@@ -644,13 +665,25 @@ const DataStandardsPage = () => {
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-sm font-semibold text-muted-foreground">附件（加密存储）</h3>
+                                    {health && health.ok === false && (
+                                        <div className="mr-4 rounded-md border border-dashed bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                            附件上传配置存在问题：{health.message}
+                                        </div>
+                                    )}
                                     <Input
                                         type="file"
                                         accept=".docx,.wps,.pdf,.xlsx,.xls,.md,.txt"
+                                        onClick={(e) => {
+                                            // ensure selecting the same file twice still triggers onChange
+                                            try { (e.target as HTMLInputElement).value = ""; } catch {}
+                                        }}
                                         onChange={handleUpload}
-                                        disabled={uploading}
+                                        disabled={uploading || (health && health.ok === false)}
                                         className="max-w-xs cursor-pointer"
                                     />
+                                </div>
+                                <div className="text-[11px] text-muted-foreground">
+                                    仅支持：docx, wps, pdf, xlsx, xls, md, txt（最大 200MB）。
                                 </div>
                                 <Separator />
                                 <ScrollArea className="h-48 rounded-md border">

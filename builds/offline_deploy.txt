@@ -1,0 +1,72 @@
+DTS Stack — 离线部署说明（Offline Deploy Guide）
+
+一、目标
+- 在无外网的客户环境中完成部署，避免运行时访问互联网。
+- 通过“离线包”一次性携带：源码快照 + 运行所需 Docker 镜像。
+
+二、准备（在线打包机）
+1) 锁定镜像标签（已完成）
+   - 本仓库已将原本的 latest 标签改为固定版本：
+     * MinIO: quay.io/minio/minio:RELEASE.2024-09-22T00-33-43Z
+     * MinIO Client: quay.io/minio/mc:RELEASE.2024-09-22T00-33-43Z
+     * Trino: trinodb/trino:451
+     * OpenMetadata: openmetadata/server:1.5.1
+     * Ollama: ollama/ollama:0.3.12
+
+2) 生成离线包（需外网可访问镜像仓库）
+   - 执行：
+     $ bash builds/make-offline-bundle.sh
+   - 产物目录：builds/offline/dts-stack-offline-YYYYmmdd-HHMMSS/
+     * images/ 目录：包含 *.tar 镜像归档与 image-manifest.txt、一致性 checksums.txt
+     * repo/    目录：仓库快照（去除 .git、node_modules、target、data）
+
+3) 可选：二次打包便于传输
+   - 执行：
+     $ tar -C builds/offline -czf dts-stack-offline.tgz dts-stack-offline-YYYYmmdd-HHMMSS
+
+三、离线环境导入与部署
+1) 传输与解压
+   - 将 dts-stack-offline.tgz 拷贝至目标机并解压：
+     $ tar -xzf dts-stack-offline.tgz -C /opt/
+     $ cd /opt/dts-stack-offline-YYYYmmdd-HHMMSS
+
+2) 导入镜像
+   - 执行：
+     $ bash builds/load-offline-bundle.sh
+   - 脚本将逐个 docker load images/*.tar，无需外网。
+   - 校验：
+     $ sha256sum -c checksums.txt   # 可选完整性校验
+
+3) 配置与启动
+   - 进入源码快照：
+     $ cd repo/
+   - 编辑 .env：
+     * 设置 BASE_DOMAIN（如 dts.local 或内网域名）
+     * 检查并按需修改默认密码
+   - 初始化：
+     $ ./init.sh single 'Strong@2025!' your.domain
+   - 启动：
+     $ docker compose -f docker-compose.yml -f docker-compose-app.yml up -d
+
+4) 健康检查
+   - 列表：$ docker compose ps
+   - SSO： $ curl -k https://sso.${BASE_DOMAIN}
+   - Trino：$ docker compose exec dts-trino wget -qO- http://localhost:8080/v1/info
+
+四、可选：推送到客户内网 Registry（若存在）
+1) 加载后重新打 tag 并推送：
+   $ docker load -i images/<file>.tar
+   $ docker tag <image> <private-registry>/<ns>/<image>:<tag>
+   $ docker push <private-registry>/<ns>/<image>:<tag>
+
+2) 替换 .env 中 IMAGE_* 为私有仓库地址，之后按“三、配置与启动”流程进行。
+
+五、注意事项
+- 建议保持固定版本运行，避免临时改回 latest。
+- 证书：默认使用 init.sh 生成的内部 CA，生产可替换 services/certs/。
+- 若首次启动失败，优先查看 dts-keycloak、dts-pg、dts-minio、dts-trino 的日志定位。
+
+六、差异追踪与可复现
+- 打包脚本会在 images/image-manifest.txt 中记录每个镜像的 ID 与 RepoDigest，便于审计与复现。
+- 如需进一步锁定，可将 manifest 中的 digest 写回 .env（使用 @sha256 形式）。
+

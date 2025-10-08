@@ -109,6 +109,20 @@ const sources = useMemo(() => {
 	return Array.from(set);
 }, [items, resolvedDefaultSource, normalizeSourceType]);
 
+const deptLabelMap = useMemo(() => {
+  const map = new Map<string, string>();
+  for (const d of deptOptions) {
+    const label = d.nameZh || d.nameEn || d.code;
+    map.set(d.code, label);
+  }
+  return map;
+}, [deptOptions]);
+
+const renderDept = (code?: string) => {
+  if (!code) return "-";
+  return deptLabelMap.get(code) || code;
+};
+
 const renderSourceLabel = (value: string) => {
 	const upper = normalizeSourceType(value);
 	switch (upper) {
@@ -181,23 +195,25 @@ const renderSourceLabel = (value: string) => {
 		}
 	};
 
+	// Load department options for filters and creation dialog
 	useEffect(() => {
 		let mounted = true;
-		if (form.scope === "DEPT") {
-			setDeptLoading(true);
-			deptService
-				.listDepartments()
-				.then((list) => mounted && setDeptOptions(list || []))
-				.finally(() => mounted && setDeptLoading(false));
-		}
+		setDeptLoading(true);
+		deptService
+			.listDepartments()
+			.then((list) => mounted && setDeptOptions(list || []))
+			.finally(() => mounted && setDeptLoading(false));
 		return () => {
 			mounted = false;
 		};
-		// Policy: when scope is INST, avoid non-share option; auto fix if encountered
+	}, []);
+
+	// Keep shareScope sane when switching scope in the creation dialog
+	useEffect(() => {
 		if (form.scope === "INST" && form.shareScope === "PRIVATE_DEPT") {
 			setForm((f) => ({ ...f, shareScope: "SHARE_INST" }));
 		}
-	}, [form.scope, setForm]);
+	}, [form.scope, form.shareScope]);
 
 	useEffect(() => {
 		const loadBasics = async () => {
@@ -263,6 +279,15 @@ const renderSourceLabel = (value: string) => {
 		}
 		if (!form.name.trim()) {
 			toast.error("请填写数据集名称");
+			return;
+		}
+		// Scope-dependent validation to align with backend checks
+		if (form.scope === "DEPT" && !String(form.ownerDept || "").trim()) {
+			toast.error("当作用域为 DEPT 时，必须选择所属部门");
+			return;
+		}
+		if (form.scope === "INST" && !form.shareScope) {
+			toast.error("当作用域为 INST 时，必须选择共享范围");
 			return;
 		}
 		try {
@@ -486,7 +511,22 @@ const renderSourceLabel = (value: string) => {
 							</div>
 							<div>
 								<Label>部门（owner_dept）</Label>
-								<Input value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} placeholder="如 D001" />
+								<Select
+									value={deptFilter || "all"}
+									onValueChange={(v) => setDeptFilter(v === "all" ? "" : v)}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder={deptLoading ? "加载中…" : "全部"} />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="all">全部</SelectItem>
+										{deptOptions.map((d) => (
+											<SelectItem key={d.code} value={d.code}>
+												{d.nameZh || d.nameEn || d.code}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 						</div>
 					{!hasPrimarySource && (
@@ -520,7 +560,7 @@ const renderSourceLabel = (value: string) => {
 										<td className="px-3 py-2 text-xs">{renderSourceLabel(d.type)}</td>
 										<td className="px-3 py-2 text-xs">{d.dataLevel || "-"}</td>
 										<td className="px-3 py-2 text-xs">{d.scope || "-"}</td>
-										<td className="px-3 py-2 text-xs">{d.scope === "DEPT" ? (d.ownerDept || "-") : (d.shareScope || "-")}</td>
+									<td className="px-3 py-2 text-xs">{d.scope === "DEPT" ? renderDept(d.ownerDept) : (d.shareScope || "-")}</td>
 										<td className="px-3 py-2 space-x-1">
 											<Button variant="ghost" size="sm" onClick={() => router.push(`/catalog/datasets/${d.id}`)}>
 												编辑

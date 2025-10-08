@@ -42,12 +42,10 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/auth-info")).permitAll()
                     // Allow platform login/logout/refresh endpoints without prior auth
                     .requestMatchers(mvc.pattern("/api/keycloak/auth/**")).permitAll()
-                    // Allow localization resources and public portal menus without auth (used at boot)
+                    // Allow localization resources without auth (used at boot)
                     .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
-                    .requestMatchers(mvc.pattern("/api/menu"))
-                    .permitAll()
-                    .requestMatchers(mvc.pattern("/api/menu/**")).permitAll()
-                    .requestMatchers(mvc.pattern("/api/admin/**")).hasAnyAuthority(AuthoritiesConstants.ADMIN, AuthoritiesConstants.OP_ADMIN)
+                    // Menus must be fetched under authentication so role-based filtering works
+                    // Platform has no /api/admin/** endpoints; remove legacy matchers
                     .requestMatchers(mvc.pattern("/api/**")).authenticated()
                     .requestMatchers(mvc.pattern("/v3/api-docs/**")).hasAuthority(AuthoritiesConstants.ADMIN)
                     .requestMatchers(mvc.pattern("/management/health")).permitAll()

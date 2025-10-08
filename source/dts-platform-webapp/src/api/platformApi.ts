@@ -61,15 +61,15 @@ export const deleteStandard = (id: string) => api.delete({ url: `/modeling/stand
 export const listStandardVersions = (id: string) => api.get({ url: `/modeling/standards/${id}/versions` });
 export const listStandardAttachments = (id: string) => api.get({ url: `/modeling/standards/${id}/attachments` });
 export const uploadStandardAttachment = (id: string, formData: FormData) =>
-	api.post({
-		url: `/modeling/standards/${id}/attachments`,
-		data: formData,
-		headers: { "Content-Type": "multipart/form-data" },
-	});
+    api.post({
+        url: `/modeling/standards/${id}/attachments`,
+        data: formData,
+    });
 export const deleteStandardAttachment = (standardId: string, attachmentId: string) =>
 	api.delete({ url: `/modeling/standards/${standardId}/attachments/${attachmentId}` });
 export const getStandardSettings = () => api.get({ url: "/modeling/standards/settings" });
 export const updateStandardSettings = (data: any) => api.put({ url: "/modeling/standards/settings", data });
+export const getStandardHealth = () => api.get({ url: "/modeling/standards/health" });
 
 // Governance
 export const listQualityRules = () => api.get({ url: "/governance/quality/rules" });

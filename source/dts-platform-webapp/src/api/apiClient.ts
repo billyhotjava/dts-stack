@@ -9,16 +9,22 @@ import userStore from "@/store/userStore";
 import useContextStore from "@/store/contextStore";
 
 const axiosInstance = axios.create({
-	baseURL: GLOBAL_CONFIG.apiBaseUrl,
-	timeout: 50000,
-	headers: { "Content-Type": "application/json;charset=utf-8" },
+    baseURL: GLOBAL_CONFIG.apiBaseUrl,
+    timeout: 50000,
+    headers: { "Content-Type": "application/json;charset=utf-8" },
 });
 
 	axiosInstance.interceptors.request.use(
-	(config) => {
-		const { userToken } = userStore.getState();
-		const url = config.url || "";
-		const isAuthPath = url.includes("/keycloak/auth/");
+    (config) => {
+        const { userToken } = userStore.getState();
+        const url = config.url || "";
+        const isAuthPath = url.includes("/keycloak/auth/");
+        // For FormData uploads, let the browser set the proper multipart boundary
+        if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+            if (config.headers) {
+                delete (config.headers as any)["Content-Type"];
+            }
+        }
 		if (userToken.accessToken && !isAuthPath) {
 			const raw = String(userToken.accessToken).trim();
 			const token = raw.startsWith("Bearer ") ? raw.slice(7).trim() : raw;
@@ -84,17 +90,24 @@ axiosInstance.interceptors.response.use(
 		throw new Error(message || t("sys.api.apiRequestFailed"));
 	},
     (error: AxiosError<Result>) => {
-		const { response, message } = error || {};
-		const requestUrl = response?.config?.url ?? "";
-		const isLoginRequest = typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/login");
-		const shouldSuppressAuthHandling =
-			typeof requestUrl === "string" && requestUrl.includes("/keycloak/localization/");
-		if (!(isLoginRequest && response?.status === 401)) {
-			console.error("API Response Error:", response?.status, response?.data, error.message);
-		}
+        const { response, message } = error || {};
+        const requestUrl = response?.config?.url ?? "";
+        const isLoginRequest = typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/login");
+        const shouldSuppressAuthHandling =
+            typeof requestUrl === "string" && requestUrl.includes("/keycloak/localization/");
+        if (!(isLoginRequest && response?.status === 401)) {
+            console.error("API Response Error:", response?.status, response?.data, error.message);
+        }
         const apiBody: any = response?.data || {};
         const errCode: string | undefined = (apiBody && (apiBody as any).code) || undefined;
-        const errMsg = apiBody?.message || message || t("sys.api.errorMessage");
+        // Prefer Problem Details fields when present; then fall back to common keys
+        const problemDetail =
+          (typeof apiBody === "object" && (apiBody.detail || apiBody.message || apiBody.title || apiBody.error_description || apiBody.error)) ||
+          undefined;
+        // Attach first field error if available
+        const fieldErrors: any[] = Array.isArray((apiBody as any)?.fieldErrors) ? (apiBody as any).fieldErrors : [];
+        const fieldMsg = fieldErrors.length ? `${fieldErrors[0]?.field ?? "字段"}: ${fieldErrors[0]?.message ?? "非法"}` : "";
+        const errMsg = (problemDetail ? String(problemDetail) : "") || fieldMsg || message || t("sys.api.errorMessage");
         // Friendly hints for security codes
         let hint = "";
         switch (String(errCode || "")) {
@@ -120,7 +133,7 @@ axiosInstance.interceptors.response.use(
         if (!shouldSuppressAuthHandling && !isLoginRequest) {
             toast.error(hint ? `${errMsg}（${hint}）` : errMsg, { position: "top-center" });
         }
-		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest) {
+        if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest) {
 			// In development, relax auto-logout to ease debugging
 			if (import.meta.env?.DEV) {
 				console.warn("[DEV] 401 received; skipping auto logout & redirect");

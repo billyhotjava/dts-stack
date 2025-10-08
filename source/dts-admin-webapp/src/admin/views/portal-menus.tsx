@@ -64,15 +64,24 @@ export default function PortalMenusView() {
     markPending(id, true);
     try {
       if (currentlyDeleted) {
-        const result = await adminApi.updatePortalMenu(id, {
-          deleted: false,
-        } as unknown as PortalMenuItem);
-        updateCache(result);
-        toast.success("菜单已启用");
+        const result = await adminApi.updatePortalMenu(id, { deleted: false } as unknown as PortalMenuItem);
+        // When审批开启，后端返回的是变更请求而非菜单集合；此时不要污染缓存，直接刷新
+        if (result && typeof result === "object" && (result as any).menus) {
+          updateCache(result as any);
+        } else {
+          await refresh();
+        }
+        // 审批模式下，启用动作也会生成“变更申请”
+        toast.success("菜单已提交启用申请，等待授权管理员审批");
       } else {
         const result = await adminApi.deletePortalMenu(id);
-        updateCache(result);
-        toast.success("菜单已禁用");
+        if (result && typeof result === "object" && (result as any).menus) {
+          updateCache(result as any);
+        } else {
+          await refresh();
+        }
+        // 当启用审批流时，禁用动作会生成“变更申请”而非立即生效
+        toast.success("菜单已提交禁用申请，等待授权管理员审批");
       }
     } catch (error: any) {
       toast.error(error?.message || "操作失败，请稍后重试");
@@ -126,6 +135,9 @@ export default function PortalMenusView() {
           </div>
           <Text variant="body3" className="text-muted-foreground">
             说明：父节点仅用于分组，不提供启用/禁用按钮；叶子节点可切换状态
+          </Text>
+          <Text variant="body3" color="warning" className="mt-1">
+            提示：禁用此项会引起角色变更申请，请谨慎处理
           </Text>
         </CardHeader>
         <CardContent>

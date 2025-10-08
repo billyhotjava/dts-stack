@@ -50,6 +50,11 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/authenticate")).permitAll()
                     .requestMatchers(mvc.pattern("/api/auth-info")).permitAll()
                     .requestMatchers(mvc.pattern("/api/keycloak/auth/**")).permitAll()
+                    // Platform-friendly endpoints (service-to-service without triad token)
+                    .requestMatchers(mvc.pattern("/api/platform/**")).permitAll()
+                    .requestMatchers(mvc.pattern("/api/keycloak/platform/**")).permitAll()
+                    // Explicitly allow platform-consumed admin endpoints (orgs under /api/admin/platform/**)
+                    .requestMatchers(mvc.pattern("/api/admin/platform/**")).permitAll()
                     // Portal menu endpoints are needed by the platform for initial navigation
                     .requestMatchers(mvc.pattern("/api/menu"))
                         .permitAll()

@@ -74,6 +74,7 @@ interface MenuOption {
     depth: number;
     rawRoles: string[];
     canonicalRoles: string[];
+    deleted: boolean;
 }
 
 export default function RoleManagementView() {
@@ -512,8 +513,14 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
             const next = new Set(prev);
             const descendants = getDescendants(id);
             if (checked) {
-                next.add(id);
-                descendants.forEach((d) => next.add(d));
+                const selfOpt = menuRoleMap.get(id);
+                if (!selfOpt?.deleted) {
+                    next.add(id);
+                }
+                descendants.forEach((d) => {
+                    const opt = menuRoleMap.get(d);
+                    if (!opt?.deleted) next.add(d);
+                });
             } else {
                 next.delete(id);
                 descendants.forEach((d) => next.delete(d));
@@ -661,19 +668,23 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                             </Text>
                         ) : (
                             <div className="max-h-60 space-y-1 overflow-y-auto rounded-md border p-3">
-                                {menuOptions.map((option) => (
-                                    <label
-                                        key={option.id}
-                                        className="flex items-center gap-2 text-sm"
-                                        style={{ paddingLeft: option.depth * 16 }}
-                                    >
-                                        <Checkbox
-                                            checked={selectedMenus.has(option.id)}
-                                            onCheckedChange={(value) => toggleMenu(option.id, value === true)}
-                                        />
-                                        {option.label}
-                                    </label>
-                                ))}
+                                {menuOptions.map((option) => {
+                                    const disabled = Boolean(option.deleted);
+                                    return (
+                                        <label
+                                            key={option.id}
+                                            className={`flex items-center gap-2 text-sm ${disabled ? "text-muted-foreground cursor-not-allowed" : ""}`}
+                                            style={{ paddingLeft: option.depth * 16 }}
+                                        >
+                                            <Checkbox
+                                                checked={selectedMenus.has(option.id)}
+                                                onCheckedChange={(value) => toggleMenu(option.id, value === true)}
+                                                disabled={disabled}
+                                            />
+                                            <span>{option.label}</span>
+                                        </label>
+                                    );
+                                })}
                             </div>
                         )}
                         <Text variant="body3" className="text-muted-foreground">
@@ -767,8 +778,14 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
             const next = new Set(prev);
             const descendants = getDescendants(id);
             if (checked) {
-                next.add(id);
-                descendants.forEach((d) => next.add(d));
+                const selfOpt = menuRoleMap.get(id);
+                if (!selfOpt?.deleted) {
+                    next.add(id);
+                }
+                descendants.forEach((d) => {
+                    const opt = menuRoleMap.get(d);
+                    if (!opt?.deleted) next.add(d);
+                });
             } else {
                 next.delete(id);
                 descendants.forEach((d) => next.delete(d));
@@ -927,19 +944,23 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
                                 </Text>
                             ) : (
                                 <div className="max-h-60 space-y-1 overflow-y-auto rounded-md border p-3">
-                                    {menuOptions.map((option) => (
-                                        <label
-                                            key={option.id}
-                                            className="flex items-center gap-2 text-sm"
-                                            style={{ paddingLeft: option.depth * 16 }}
-                                        >
-                                            <Checkbox
-                                                checked={selectedMenus.has(option.id)}
-                                                onCheckedChange={(value) => toggleMenu(option.id, value === true)}
-                                            />
-                                            {option.label}
-                                        </label>
-                                    ))}
+                                    {menuOptions.map((option) => {
+                                        const disabled = Boolean(option.deleted);
+                                        return (
+                                            <label
+                                                key={option.id}
+                                                className={`flex items-center gap-2 text-sm ${disabled ? "text-muted-foreground cursor-not-allowed" : ""}`}
+                                                style={{ paddingLeft: option.depth * 16 }}
+                                            >
+                                                <Checkbox
+                                                    checked={selectedMenus.has(option.id)}
+                                                    onCheckedChange={(value) => toggleMenu(option.id, value === true)}
+                                                    disabled={disabled}
+                                                />
+                                                <span>{option.label}</span>
+                                            </label>
+                                        );
+                                    })}
                                 </div>
                             )}
                             <Text variant="body3" className="text-muted-foreground">
@@ -1246,6 +1267,7 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
                     depth,
                     rawRoles: normalizedRoles,
                     canonicalRoles,
+                    deleted: Boolean(item.deleted),
                 };
                 options.push(option);
                 menuRoleMap.set(option.id, option);
@@ -1300,6 +1322,8 @@ async function submitMenuChangeRequests(params: {
     affectedIds.forEach((menuId) => {
         const option = menuRoleMap.get(menuId);
         if (!option) return;
+        // Skip disabled menus: cannot be assigned/unassigned while disabled
+        if (option.deleted) return;
         const beforeAllowedRoles = option.rawRoles;
         const existingRoles = new Set(beforeAllowedRoles);
         const shouldHave = desiredMenuIds.has(menuId);
