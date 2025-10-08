@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnsType } from "antd/es/table";
 import { Table } from "antd";
-import type { KeycloakUser } from "#/keycloak";
+import type { KeycloakRole, KeycloakUser } from "#/keycloak";
 import { KeycloakUserService } from "@/api/services/keycloakService";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -12,6 +12,28 @@ import { Icon } from "@/components/icon";
 import UserModal from "./user-management.modal";
 import { toast } from "sonner";
 import { useRouter } from "@/routes/hooks";
+import type { OrganizationNode } from "@/admin/types";
+import { adminApi } from "@/admin/api/adminApi";
+
+function getSingleAttr(attrs: Record<string, string[]> | undefined, key: string): string {
+  const values = attrs?.[key];
+  if (!values || values.length === 0) return "";
+  const nonEmpty = values.find((v) => v && v.trim());
+  return (nonEmpty ?? values[0] ?? "").toString().trim();
+}
+
+function toPersonnelLevelZh(raw?: string): string {
+  const v = (raw || "").toString().trim();
+  if (!v) return "";
+  const upper = v.toUpperCase();
+  if (upper === "CORE") return "核心";
+  if (upper === "IMPORTANT") return "重要";
+  if (upper === "GENERAL") return "一般";
+  if (upper === "NON_SECRET") return "非密";
+  return v;
+}
+
+// (deduped) helpers defined once above
 
 function collectRoleNames(user: KeycloakUser): string[] {
   const names = new Set<string>();
@@ -38,6 +60,8 @@ export default function UserManagementView() {
   const [list, setList] = useState<KeycloakUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchValue, setSearchValue] = useState("");
+  const [rolesMap, setRolesMap] = useState<Record<string, string[]>>({});
+  const [orgIndexById, setOrgIndexById] = useState<Record<string, OrganizationNode>>({});
   const [modalState, setModalState] = useState<{
     open: boolean;
     mode: "create" | "edit";
@@ -52,6 +76,7 @@ export default function UserManagementView() {
         ? await KeycloakUserService.searchUsers(searchValue.trim())
         : await KeycloakUserService.getAllUsers({ first: 0, max: 100 });
       setList(data || []);
+      setRolesMap({});
     } catch (e: any) {
       toast.error(e?.message || "加载用户失败");
     } finally {
@@ -65,26 +90,117 @@ export default function UserManagementView() {
 
   const toggleEnabled = useCallback(async () => {}, []);
 
+  // Build organization index once for dept_code -> name mapping
+  useEffect(() => {
+    (async () => {
+      try {
+        if (Object.keys(orgIndexById).length > 0) return;
+        const tree = await adminApi.getOrganizations();
+        const index: Record<string, OrganizationNode> = {};
+        const visit = (nodes?: OrganizationNode[]) => {
+          if (!nodes) return;
+          for (const n of nodes) {
+            index[String(n.id)] = n;
+            if (n.children && n.children.length) visit(n.children);
+          }
+        };
+        visit(tree);
+        setOrgIndexById(index);
+      } catch {
+        // ignore errors
+      }
+    })();
+  }, [orgIndexById]);
+
+  // Background fetch for user roles to fill the roles column
+  useEffect(() => {
+    (async () => {
+      const entries = list || [];
+      if (!entries.length) return;
+      const limit = 5; // simple concurrency cap
+      let i = 0;
+      async function worker() {
+        while (i < entries.length) {
+          const idx = i++;
+          const u = entries[idx];
+          const id = String(u.id || u.username || idx);
+          if (rolesMap[id] !== undefined) continue;
+          try {
+            const roles: KeycloakRole[] = await KeycloakUserService.getUserRoles(String(u.id));
+            const names = (roles || []).map((r) => r?.name).filter(Boolean) as string[];
+            setRolesMap((prev) => ({ ...prev, [id]: names }));
+          } catch {
+            setRolesMap((prev) => ({ ...prev, [id]: [] }));
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(limit, entries.length) }, () => worker()));
+    })();
+  }, [list]);
+
+  const leafOfPath = (path?: string) => {
+    if (!path) return "";
+    const idx = path.lastIndexOf("/");
+    return idx >= 0 && idx + 1 < path.length ? path.substring(idx + 1) : path;
+  };
+
   const columns: ColumnsType<KeycloakUser> = useMemo(
     () => [
-      { title: "用户名", dataIndex: "username", key: "username", width: 180, onCell: () => ({ style: { verticalAlign: "middle" } }) },
+      { title: "用户名", dataIndex: "username", key: "username", width: 200, ellipsis: true, onCell: () => ({ style: { verticalAlign: "middle" } }) },
       {
         title: "姓名",
         key: "fullName",
-        width: 180,
+        width: 160,
+        ellipsis: true,
         onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => {
           const name = resolveFullName(record);
           return name ? name : <span className="text-muted-foreground">-</span>;
         },
       },
-      { title: "邮箱", dataIndex: "email", key: "email", width: 220, onCell: () => ({ style: { verticalAlign: "middle" } }) },
+      { title: "邮箱", dataIndex: "email", key: "email", width: 220, ellipsis: true, onCell: () => ({ style: { verticalAlign: "middle" } }) },
+      {
+        title: "所属部门",
+        key: "department",
+        width: 200,
+        ellipsis: true,
+        onCell: () => ({ style: { verticalAlign: "middle" } }),
+        render: (_, record) => {
+          // 1) department attribute
+          const dept = getSingleAttr(record.attributes, "department");
+          if (dept) return dept;
+          // 2) group path leaf (when included in summary)
+          const gp = Array.isArray((record as any).groups) && (record as any).groups.length ? (record as any).groups[0] : "";
+          const idx = gp.lastIndexOf("/");
+          const leaf = idx >= 0 && idx + 1 < gp.length ? gp.substring(idx + 1) : gp;
+          if (leaf) return leaf;
+          // 3) map dept_code via organizations index
+          const dc = getSingleAttr(record.attributes, "dept_code");
+          if (dc && orgIndexById[dc]) return orgIndexById[dc].name || dc;
+          return <span className="text-muted-foreground">-</span>;
+        },
+      },
+      {
+        title: "人员密级",
+        key: "personnel_level",
+        width: 140,
+        onCell: () => ({ style: { verticalAlign: "middle" } }),
+        render: (_, record) => {
+          const primary = getSingleAttr(record.attributes, "personnel_security_level");
+          const fallback = getSingleAttr(record.attributes, "person_security_level") || getSingleAttr(record.attributes, "person_level");
+          const zh = toPersonnelLevelZh(primary || fallback);
+          return zh || <span className="text-muted-foreground">-</span>;
+        },
+      },
       {
         title: "角色",
         key: "roles",
         onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => {
-          const roles = collectRoleNames(record);
+          const id = String(record.id || record.username);
+          const names = rolesMap[id] ?? collectRoleNames(record);
+          if (names === undefined) return <span className="text-muted-foreground">加载中…</span>;
+          const roles = names || [];
           return roles.length ? (
             <div className="flex flex-wrap gap-1">
               {roles.slice(0, 5).map((r) => (
@@ -101,7 +217,7 @@ export default function UserManagementView() {
         title: "状态",
         dataIndex: "enabled",
         key: "enabled",
-        width: 140,
+        width: 120,
         onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (val?: boolean) => (
           <div className="flex items-center gap-2">
@@ -141,7 +257,7 @@ export default function UserManagementView() {
         ),
       },
     ],
-    [toggleEnabled],
+    [toggleEnabled, rolesMap, orgIndexById],
   );
 
   return (

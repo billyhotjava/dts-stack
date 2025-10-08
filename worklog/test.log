@@ -3140,3 +3140,5 @@ dts-platform-1  | [2m2025-10-08T01:19:28.605Z[0;39m [33m WARN[0;39m [35m256
 [2025-10-08 16:51:59]    PUT /api/admin/portal/menus/{fid} with allowedRoles=[ROLE_USER] -> applied via CR, effective visibilities keep only ROLE_OP_ADMIN
 [2025-10-08 16:51:59] 7) Regression: normal explore/catalog APIs unaffected; headers X-Active-* still honored
 [2025-10-08 16:51:59] End checklist
+[2025-10-08 16:58:32] Fix: platform FE guard default allows all roles; users with DEPT_/INST_* can sign in.
+[2025-10-08 16:58:32] Fix: map Keycloak client roles (DEPT_/INST_*) -> platform authorities (ROLE_DEPT_*/ROLE_INST_*) for menu audience.

@@ -101,8 +101,10 @@ const resolveApiBaseUrl = () => {
 };
 
 const resolveAllowedLoginRoles = (): string[] => {
-    // Default to OP_ADMIN only; override via VITE_ALLOWED_LOGIN_ROLES when needed.
-    const defaultValue = "ROLE_OP_ADMIN";
+    // Default: allow all authenticated users (empty list).
+    // If you want to restrict, set VITE_ALLOWED_LOGIN_ROLES to a comma-separated list, e.g.
+    // "DEPT_VIEWER,DEPT_EDITOR,DEPT_OWNER,INST_VIEWER,INST_EDITOR,INST_OWNER,ROLE_OP_ADMIN".
+    const defaultValue = "";
     const raw = (import.meta.env.VITE_ALLOWED_LOGIN_ROLES || defaultValue) as string;
     return String(raw)
         .split(",")

@@ -13,6 +13,7 @@ import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 
 import { getAttributeDisplayName } from "@/utils/translation";
+import { PERSON_SECURITY_LEVELS } from "@/constants/governance";
 // import ResetPasswordModal from "./reset-password-modal";
 import UserModal from "./user-modal";
 import { ApprovalStatus } from "./approval-status";
@@ -25,6 +26,8 @@ const RESERVED_PROFILE_ATTRIBUTES = new Set<string>([
 	"locale",
 	"fullname",
 	...CUSTOM_USER_ATTRIBUTE_KEYS,
+    // 合并“人员安全等级”和“人员密级”，不在自定义属性列表重复展示
+    "person_security_level",
 ]);
 
 const getSingleAttributeValue = (attributes: Record<string, string[]> | undefined, key: CustomUserAttributeKey) => {
@@ -213,9 +216,14 @@ export default function UserDetail() {
 		return translatedName;
 	};
 
-	const fullName = user?.firstName || user?.attributes?.fullname?.[0] || "";
-	const email = user?.email?.trim() || "";
-	const personnelSecurityLevel = getSingleAttributeValue(user?.attributes, "personnel_security_level");
+    const fullName = user?.firstName || user?.attributes?.fullname?.[0] || "";
+    const email = user?.email?.trim() || "";
+    // 合并：personnel_security_level 优先，缺失时回退 person_security_level
+    const personnelSecurityLevelRaw =
+        getSingleAttributeValue(user?.attributes, "personnel_security_level") ||
+        (user?.attributes?.person_security_level?.[0] ?? "");
+    const levelMap = new Map(PERSON_SECURITY_LEVELS.map((it) => [it.value, it.label] as const));
+    const personnelSecurityLevel = levelMap.get((personnelSecurityLevelRaw || "").toUpperCase()) || personnelSecurityLevelRaw;
 	const department = getSingleAttributeValue(user?.attributes, "department");
 	const position = getSingleAttributeValue(user?.attributes, "position");
 

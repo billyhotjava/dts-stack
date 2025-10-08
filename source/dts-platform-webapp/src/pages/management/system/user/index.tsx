@@ -143,7 +143,8 @@ export default function UserPage() {
 		{
 			title: "用户名",
 			dataIndex: "username",
-			width: 220,
+			width: 240,
+			ellipsis: true,
 			render: (_, record) => (
 				<div className="flex items-center">
 					<div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-medium">
@@ -152,10 +153,9 @@ export default function UserPage() {
 					<div className="ml-3">
 						<div className="font-medium flex flex-wrap items-center gap-2">
 							<span>{record.username}</span>
-							{record.firstName && <span className="text-sm text-muted-foreground">({record.firstName})</span>}
+							{record.firstName && <span className="text-xs text-muted-foreground">{record.firstName}</span>}
 						</div>
-						<div className="font-medium">{record.username}</div>
-						<div className="text-sm text-muted-foreground">{record.email || "未填写邮箱"}</div>
+						<div className="text-xs text-muted-foreground">{record.email || "未填写邮箱"}</div>
 					</div>
 				</div>
 			),
@@ -163,16 +163,18 @@ export default function UserPage() {
 		{
 			title: "姓名",
 			dataIndex: "firstName",
-			width: 160,
+			width: 140,
+			ellipsis: true,
 			render: (_: string, record) => {
 				const name = (record.firstName ?? record.lastName ?? "").trim();
 				return name.length > 0 ? name : "-";
 			},
 		},
 		{
-			title: "部门",
+			title: "所属部门",
 			dataIndex: ["attributes", "department"],
-			width: 180,
+			width: 200,
+			ellipsis: true,
 			render: (_: string[] | undefined, record) => {
 				const department = getSingleAttributeValue(record.attributes, "department").trim();
 				return department.length > 0 ? department : "-";
@@ -181,7 +183,8 @@ export default function UserPage() {
 		{
 			title: "职位",
 			dataIndex: ["attributes", "position"],
-			width: 180,
+			width: 160,
+			ellipsis: true,
 			render: (_: string[] | undefined, record) => {
 				const position = getSingleAttributeValue(record.attributes, "position").trim();
 				return position.length > 0 ? position : "-";
@@ -190,14 +193,14 @@ export default function UserPage() {
 		{
 			title: "人员密级",
 			dataIndex: ["attributes", "personnel_security_level"],
-			width: 150,
+			width: 140,
 			render: (_: string[] | undefined, record) => {
 				const primaryLevel = getSingleAttributeValue(record.attributes, "personnel_security_level").trim();
 				const legacyLevel = record.attributes?.person_security_level?.[0]?.trim();
 				const levelValue = primaryLevel || legacyLevel || "";
 				if (!levelValue) return "-";
 				const label = personLevelLabelMap.get(levelValue) ?? levelValue;
-				return label !== levelValue ? `${label}（${levelValue}）` : label;
+				return label;
 			},
 		},
 		{
@@ -225,7 +228,7 @@ export default function UserPage() {
 		{
 			title: "创建时间",
 			dataIndex: "createdTimestamp",
-			width: 150,
+			width: 170,
 			render: (timestamp: number) => {
 				if (!timestamp) return "-";
 				return new Date(timestamp).toLocaleString("zh-CN");

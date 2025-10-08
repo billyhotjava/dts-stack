@@ -31,7 +31,7 @@ interface DataStandardDto {
     domain?: string;
     scope?: string;
     status: DataStandardStatus;
-    securityLevel: DataSecurityLevel;
+    securityLevel: DataLevel;
     owner?: string;
     tags?: string[];
     currentVersion: string;
@@ -188,7 +188,13 @@ const DataStandardsPage = () => {
                 params.securityLevel = toLegacyLevel(filters.security as DataLevel);
             }
             const data: any = await listStandards(params);
-            setStandards(data?.content ?? []);
+            const content = Array.isArray(data?.content) ? data.content : [];
+            const mapped: DataStandardDto[] = content.map((it: any) => ({
+                ...it,
+                // Normalize legacy to DATA_* for display
+                securityLevel: fromLegacyLevel(it?.securityLevel || it?.dataLevel || "INTERNAL"),
+            }));
+            setStandards(mapped);
             setTotal(data?.total ?? 0);
         } catch (error: any) {
             console.error(error);
@@ -464,7 +470,7 @@ const DataStandardsPage = () => {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="ALL">全部数据密级</SelectItem>
-                                {SECURITY_OPTIONS.map((item) => (
+                                {DATA_LEVELS.map((item) => (
                                     <SelectItem key={item.value} value={item.value}>
                                         {item.label}
                                     </SelectItem>

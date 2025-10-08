@@ -136,11 +136,11 @@ const FREQUENCY_PRESETS: { preset: RuleForm["frequencyPreset"]; label: string; c
   { preset: "CUSTOM", label: "自定义", cron: "" },
 ];
 
-const DATA_LEVEL_OPTIONS: { value: DataSecurityLevel; label: string }[] = [
-  { value: "PUBLIC", label: "公开" },
-  { value: "INTERNAL", label: "内部" },
-  { value: "SECRET", label: "秘密" },
-  { value: "TOP_SECRET", label: "机密" },
+const DATA_LEVEL_OPTIONS: { value: DataLevel; label: string }[] = [
+  { value: "DATA_PUBLIC", label: "公开 (DATA_PUBLIC)" },
+  { value: "DATA_INTERNAL", label: "内部 (DATA_INTERNAL)" },
+  { value: "DATA_SECRET", label: "秘密 (DATA_SECRET)" },
+  { value: "DATA_TOP_SECRET", label: "机密 (DATA_TOP_SECRET)" },
 ];
 
 const SEVERITY_OPTIONS: { value: SeverityLevel; label: string }[] = [
@@ -717,7 +717,7 @@ const QualityRulesPage = () => {
               <Label>数据密级（DATA_*）</Label>
               <Select
                 value={form.dataLevel}
-                onValueChange={(value: DataSecurityLevel) => setForm((prev) => ({ ...prev, dataLevel: value }))}
+                onValueChange={(value: DataLevel) => setForm((prev) => ({ ...prev, dataLevel: value }))}
               >
                 <SelectTrigger>
                   <SelectValue />

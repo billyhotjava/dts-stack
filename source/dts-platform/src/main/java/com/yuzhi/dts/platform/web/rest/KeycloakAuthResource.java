@@ -51,13 +51,14 @@ public class KeycloakAuthResource {
             }
             var result = keycloakAuthService.login(username, password);
             Map<String, Object> user = result.user();
-            // Normalize and map roles from Keycloak into platform authorities
-            List<String> mappedRoles = mapRoles(toStringList(user.get("roles")));
-
-            // Forbid admin-console triad on the platform even if Keycloak returns them
-            if (containsTriad(mappedRoles)) {
+            // Forbid admin-console triad (SYS_ADMIN / AUTH_ADMIN / SECURITY_AUDITOR) on platform
+            // Check BEFORE mapping to platform authorities, using raw Keycloak roles
+            List<String> rawRoles = toStringList(user.get("roles"));
+            if (containsTriadOriginal(rawRoles)) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error("系统管理角色用户不能登录业务平台"));
             }
+            // Normalize and map roles from Keycloak into platform authorities
+            List<String> mappedRoles = mapRoles(rawRoles);
 
             // Derive basic permissions
             List<String> permissions = new ArrayList<>();
@@ -148,6 +149,18 @@ public class KeycloakAuthResource {
         return set.contains("ROLE_SYS_ADMIN") || set.contains("ROLE_AUTH_ADMIN") || set.contains("ROLE_SECURITY_AUDITOR");
     }
 
+    // Detect triad roles from raw Keycloak role names (with or without ROLE_ prefix and common aliases)
+    private boolean containsTriadOriginal(List<String> roles) {
+        java.util.Set<String> set = new java.util.HashSet<>();
+        for (String r : roles) if (r != null) set.add(r.toUpperCase());
+        return set.contains("ROLE_SYS_ADMIN") || set.contains("SYS_ADMIN") ||
+               set.contains("ROLE_AUTH_ADMIN") || set.contains("AUTH_ADMIN") ||
+               set.contains("ROLE_SECURITY_AUDITOR") || set.contains("SECURITY_AUDITOR") ||
+               set.contains("ROLE_AUDITOR_ADMIN") || set.contains("AUDITOR_ADMIN") ||
+               set.contains("ROLE_AUDIT_ADMIN") || set.contains("AUDIT_ADMIN") ||
+               set.contains("ROLE_AUDITADMIN") || set.contains("AUDITADMIN");
+    }
+
     private List<String> mapRoles(List<String> kcRoles) {
         java.util.Set<String> mapped = new java.util.LinkedHashSet<>();
         mapped.add(AuthoritiesConstants.USER);
@@ -161,6 +174,13 @@ public class KeycloakAuthResource {
                 case "GOV_ADMIN", "GOVERNANCE_ADMIN", "GOVADMIN" -> mapped.add(AuthoritiesConstants.GOV_ADMIN);
                 case "IAM_ADMIN", "IAMADMIN" -> mapped.add(AuthoritiesConstants.IAM_ADMIN);
                 case "ADMIN" -> mapped.add(AuthoritiesConstants.ADMIN);
+                // Data roles (client roles on dts-system). Map to canonical ROLE_* for audience filtering in Admin.
+                case "DEPT_VIEWER", "DEPARTMENT_VIEWER" -> mapped.add("ROLE_DEPT_VIEWER");
+                case "DEPT_EDITOR", "DEPARTMENT_EDITOR" -> mapped.add("ROLE_DEPT_EDITOR");
+                case "DEPT_OWNER",  "DEPARTMENT_OWNER"  -> mapped.add("ROLE_DEPT_OWNER");
+                case "INST_VIEWER", "INSTITUTE_VIEWER", "INSTITUTION_VIEWER" -> mapped.add("ROLE_INST_VIEWER");
+                case "INST_EDITOR", "INSTITUTE_EDITOR", "INSTITUTION_EDITOR" -> mapped.add("ROLE_INST_EDITOR");
+                case "INST_OWNER",  "INSTITUTE_OWNER",  "INSTITUTION_OWNER"  -> mapped.add("ROLE_INST_OWNER");
                 case "SYS_ADMIN", "SYSADMIN", "AUTH_ADMIN", "AUTHADMIN", "SECURITY_AUDITOR", "SECURITYAUDITOR", "AUDIT_ADMIN", "AUDITADMIN", "AUDITOR_ADMIN" -> {
                     // triad roles handled in containsTriad(); do not map into platform authorities
                 }

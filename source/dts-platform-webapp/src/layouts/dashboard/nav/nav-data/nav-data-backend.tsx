@@ -73,9 +73,20 @@ const convert = (menuTree: MenuTree[]): NavProps["data"] => {
 };
 
 export const getBackendNavData = (): NavProps["data"] => {
-	const source = getMenus();
-	const tree = hasChildren(source) ? source : convertFlatToTree(source);
-	return convert(tree);
+    const sourceRaw = getMenus();
+    const source = stripIamMenus(sourceRaw);
+    const tree = hasChildren(source) ? source : convertFlatToTree(source);
+    return convert(tree);
 };
 
 const hasChildren = (items: MenuTree[]): boolean => items.some((item) => Array.isArray(item.children) && item.children.length > 0);
+
+// Hide IAM-related entries from platform UI: remove any menu whose first path segment equals "iam"
+function stripIamMenus(items: MenuTree[] = []): MenuTree[] {
+    const prune = (nodes: MenuTree[]): MenuTree[] =>
+        (nodes || [])
+            .filter((n) => normalizePathSegment(n.path) !== "iam")
+            .map((n) => ({ ...n, children: prune(n.children || []) }))
+            .filter((n) => normalizePathSegment(n.path) !== "iam");
+    return prune(items);
+}

@@ -25,6 +25,8 @@ const RESERVED_PROFILE_ATTRIBUTES = new Set<string>([
   "locale",
   "fullname",
   ...CUSTOM_USER_ATTRIBUTE_KEYS,
+  // 合并人员密级显示：排除 person_security_level，避免动态区域重复
+  "person_security_level",
 ]);
 
 const getSingleAttributeValue = (attributes: Record<string, string[]> | undefined, key: string) => {
@@ -201,7 +203,20 @@ export default function UserDetailView() {
     { title: "路径", dataIndex: "path", key: "path" },
   ];
 
-  const personnelSecurityLevel = getSingleAttributeValue(user?.attributes, "person_level");
+  // 合并人员密级：优先 personnel_security_level，其次 person_security_level，再次 person_level
+  const personnelSecurityLevelRaw =
+    getSingleAttributeValue(user?.attributes, "personnel_security_level") ||
+    getSingleAttributeValue(user?.attributes, "person_security_level") ||
+    getSingleAttributeValue(user?.attributes, "person_level");
+  const personnelSecurityLevel = (() => {
+    const v = personnelSecurityLevelRaw || "";
+    const upper = v.toUpperCase();
+    if (upper === "CORE") return "核心";
+    if (upper === "IMPORTANT") return "重要";
+    if (upper === "GENERAL") return "一般";
+    if (upper === "NON_SECRET") return "非密";
+    return v;
+  })();
   // departmentName is derived from groups or dept_code
   const position = getSingleAttributeValue(user?.attributes, "position");
   const fullName = user?.firstName || user?.lastName || user?.attributes?.fullname?.[0] || "";

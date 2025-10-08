@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Select, Spin, Tag } from "antd";
 import useContextStore, { useActiveDept, useActiveScope, useContextActions } from "@/store/contextStore";
 import { useUserInfo } from "@/store/userStore";
+import { PERSON_SECURITY_LEVELS } from "@/constants/governance";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 
 export default function ScopeSwitcher() {
@@ -57,6 +58,11 @@ export default function ScopeSwitcher() {
   }, [userInfo]);
 
   const level = resolvePersonnelLevel();
+  const levelZh = useMemo(() => {
+    if (!level) return undefined;
+    const map = new Map(PERSON_SECURITY_LEVELS.map((it) => [it.value, it.label] as const));
+    return map.get(level) || level;
+  }, [level]);
 
   const confirmSwitch = useCallback(async (): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -113,7 +119,7 @@ export default function ScopeSwitcher() {
       ) : null}
       {level ? (
         <Tag color={level === "CORE" ? "red" : level === "IMPORTANT" ? "gold" : "default"} style={{ marginLeft: 8 }}>
-          人员密级: {level}
+          人员密级: {levelZh}
         </Tag>
       ) : null}
     </div>

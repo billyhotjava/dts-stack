@@ -210,20 +210,48 @@ export default function DatasetDetailPage() {
 		setDataset({ ...dataset, table: { ...dataset.table, columns: dataset.table.columns.filter((c) => c.id !== cid) } });
 	};
 
-	const onSave = async () => {
-		if (!dataset) return;
-		setSaving(true);
-		try {
-			await updateDataset(dataset.id, dataset);
-			await upsertAccessPolicy(dataset.id, { allowRoles, rowFilter, defaultMasking });
-			toast.success("已保存");
-		} catch (e) {
-			console.error(e);
-			toast.error("保存失败");
-		} finally {
-			setSaving(false);
-		}
-	};
+    const toLegacyClassification = (dl?: string): string => {
+        const v = String(dl || "").toUpperCase();
+        if (v === "DATA_PUBLIC") return "PUBLIC";
+        if (v === "DATA_INTERNAL") return "INTERNAL";
+        if (v === "DATA_SECRET") return "SECRET";
+        if (v === "DATA_TOP_SECRET") return "TOP_SECRET";
+        return "INTERNAL";
+    };
+
+    const onSave = async () => {
+        if (!dataset) return;
+        // Validate scope dependent fields
+        const scope = (dataset.scope as string) || "DEPT";
+        if (scope === "DEPT" && !String(dataset.ownerDept || "").trim()) {
+            toast.error("请选择所属部门（DEPT 范围需要部门）");
+            return;
+        }
+        if (scope === "INST" && !dataset.shareScope) {
+            toast.error("请选择共享范围（INST 范围需要 shareScope）");
+            return;
+        }
+        // Sanitize payload for backend
+        const payload: any = {
+            ...dataset,
+            classification: toLegacyClassification(dataset.dataLevel as string),
+            dataLevel: dataset.dataLevel,
+            scope,
+            ownerDept: scope === "DEPT" ? dataset.ownerDept || undefined : undefined,
+            shareScope: scope === "INST" ? dataset.shareScope || "SHARE_INST" : undefined,
+        };
+        setSaving(true);
+        try {
+            await updateDataset(dataset.id, payload);
+            await upsertAccessPolicy(dataset.id, { allowRoles, rowFilter, defaultMasking });
+            toast.success("已保存");
+        } catch (e) {
+            console.error(e);
+            toast.error("保存失败");
+        } finally {
+            setSaving(false);
+        }
+    };
 
     // Legacy classification UI removed; only DATA_* is used going forward
 
