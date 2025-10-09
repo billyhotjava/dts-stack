@@ -92,19 +92,21 @@ export default defineConfig(({ mode }) => {
 							: undefined,
 					secure: false,
 				},
-				// Proxy Admin API under same-origin path to avoid browser CORS in dev.
-				// When VITE_ADMIN_API_BASE_URL = '/admin/api', frontend calls hit Vite and are forwarded here.
+            // Proxy Admin API under same-origin path to avoid browser CORS in dev.
+            // When VITE_ADMIN_API_BASE_URL = '/admin/api', frontend calls hit Vite and are forwarded here.
 				"/admin/api": ((): any => {
 					const adminTarget = env.VITE_ADMIN_PROXY_TARGET || rawEnv.VITE_ADMIN_PROXY_TARGET;
 					if (!adminTarget) return undefined;
-					return {
-						target: adminTarget,
-						changeOrigin: true,
-						secure: false,
-						// No rewrite: keep '/admin/api' so target sees '/api/...'
-						rewrite: (path: string) => path.replace(/^\/admin\/api/, "/api"),
-					};
-				})(),
+                    return {
+                        target: adminTarget,
+                        changeOrigin: true,
+                        secure: false,
+                        // Rewrite '/admin/api' -> '/api/admin' so that:
+                        //   '/admin/api/platform/orgs' -> '/api/admin/platform/orgs'
+                        // which matches AdminApiResource (@RequestMapping("/api/admin")).
+                        rewrite: (path: string) => path.replace(/^\/admin\/api/, "/api/admin"),
+                    };
+                })(),
 			},
 		},
 

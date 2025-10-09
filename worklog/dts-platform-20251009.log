@@ -133,3 +133,19 @@
 [验证]
 - 重启 dev：`./dev-stop.sh --mode local && ./dev-up.sh --mode local`（确保 dts-admin 重新加载安全配置）。
 - 打开 #/catalog/assets，网络应显示 200：`GET http://localhost:18012/admin/api/admin/platform/orgs`（被 Vite 重写为 admin 的 `/api/admin/platform/orgs`）。
+
+[2025-10-09 04:20] Bugfix：平台前端菜单接口改为通过代理调用 admin `/api/menu`
+
+[问题]
+- 平台前端仍调用 `/admin/api/menu/tree`，而 admin 的公开菜单接口为 `/api/menu`（返回树形数据）。
+- 未透传用户角色时，admin 可能返回未裁剪的菜单或依赖安全上下文导致不一致。
+
+[修复]
+- 将 `menuService` 统一指向 `${ADMIN_BASE}/menu`，并在查询参数中透传当前用户角色：`roles=ROLE_XXX&roles=ROLE_YYY`；
+  若主路径 404/不通，则回退 `${ADMIN_BASE}/menu/tree` 以兼容旧版本。
+  • 修改：source/dts-platform-webapp/src/api/services/menuService.ts
+
+[验证]
+- 登录成功后，Network 显示：`GET http://localhost:18012/admin/api/menu?roles=...`（Vite 重写到 admin `/api/menu`），响应 200；
+- 左侧导航与顶栏仅显示与当前用户角色匹配的菜单项；
+- 断开 admin `/api/menu` 后能回退 `/api/menu/tree`，UI 仍可渲染（或使用静态兜底）。
