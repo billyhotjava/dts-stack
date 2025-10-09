@@ -1,85 +1,31 @@
 import type { Menu, MenuTree } from "#/entity";
-import axios from "axios";
-import { GLOBAL_CONFIG } from "@/global-config";
+import apiClient from "../apiClient";
 import { useMenuStore } from "@/store/menuStore";
-import userStore from "@/store/userStore";
 import { PORTAL_NAV_SECTIONS } from "@/constants/portal-navigation";
 
 export enum MenuApi {
-  // Admin service endpoints; always prefix with GLOBAL_CONFIG.adminApiBaseUrl
+  // Platform backend exposes adapted menu endpoints
   Menu = "/menu",
-  // Legacy/compat path in some older admin builds
-  MenuTreeLegacy = "/menu/tree",
-}
-
-function buildAudienceQuery(): string {
-  try {
-    const rolesRaw = (userStore.getState().userInfo as any)?.roles as unknown;
-    const roles: string[] = Array.isArray(rolesRaw)
-      ? (rolesRaw as any[]).map((r) => (typeof r === "string" ? r : String((r as any)?.code ?? (r as any)?.name ?? ""))).filter(Boolean)
-      : [];
-    const norm = Array.from(
-      new Set(
-        roles
-          .map((r) => String(r || "").trim())
-          .filter(Boolean)
-          .map((r) => r.toUpperCase())
-          .map((r) => (r.startsWith("ROLE_") ? r : `ROLE_${r}`))
-      )
-    );
-    const qs = norm.map((r) => `roles=${encodeURIComponent(r)}`).join("&");
-    return qs ? `?${qs}` : "";
-  } catch {
-    return "";
-  }
+  MenuTree = "/menu/tree",
 }
 
 const getMenuList = async () => {
-  const base = GLOBAL_CONFIG.adminApiBaseUrl.replace(/\/+$/, "");
-  const qs = buildAudienceQuery();
-  const primary = `${base}${MenuApi.Menu}${qs}`;
-  const legacy = `${base}${MenuApi.MenuTreeLegacy}${qs}`;
-  let list: any[] = [];
-  try {
-    const { data } = await axios.get<any>(primary, { withCredentials: false });
-    list = Array.isArray(data) ? (data as any) : Array.isArray((data as any)?.data) ? (data as any).data : [];
-  } catch (e) {
-    try {
-      const { data } = await axios.get<any>(legacy, { withCredentials: false });
-      list = Array.isArray(data) ? (data as any) : Array.isArray((data as any)?.data) ? (data as any).data : [];
-    } catch {
-      list = [];
-    }
-  }
-  const tree: MenuTree[] = Array.isArray(list) && list.length > 0 ? (list as any) : toMenuTreeFallback();
+  const data = await apiClient.get<Menu[]>({ url: MenuApi.Menu });
+  // Normalize to tree for consumers
+  const tree = Array.isArray(data) && data.length > 0 ? (data as any) : toMenuTreeFallback();
   useMenuStore.getState().setMenus(tree as any);
-  return list as Menu[];
+  return data;
 };
 
 const getMenuTree = async () => {
-  const base = GLOBAL_CONFIG.adminApiBaseUrl.replace(/\/+$/, "");
-  const qs = buildAudienceQuery();
-  const primary = `${base}${MenuApi.Menu}${qs}`;
-  const legacy = `${base}${MenuApi.MenuTreeLegacy}${qs}`;
-  let list: any[] = [];
-  try {
-    const { data } = await axios.get<any>(primary, { withCredentials: false });
-    list = Array.isArray(data) ? (data as any) : Array.isArray((data as any)?.data) ? (data as any).data : [];
-  } catch (e) {
-    try {
-      const { data } = await axios.get<any>(legacy, { withCredentials: false });
-      list = Array.isArray(data) ? (data as any) : Array.isArray((data as any)?.data) ? (data as any).data : [];
-    } catch {
-      list = [];
-    }
-  }
-  const tree: MenuTree[] = Array.isArray(list) && list.length > 0 ? (list as any) : toMenuTreeFallback();
+  const data = await apiClient.get<MenuTree[]>({ url: MenuApi.MenuTree });
+  const tree = Array.isArray(data) && data.length > 0 ? (data as any) : toMenuTreeFallback();
   useMenuStore.getState().setMenus(tree as any);
   try {
     // eslint-disable-next-line no-console
-    console.log("[menuService] admin /menu response:", Array.isArray(list) ? list.length : typeof list);
+    console.log("[menuService] /api/menu/tree response:", Array.isArray(data) ? data.length : typeof data);
   } catch {}
-  return list as MenuTree[];
+  return data;
 };
 
 function toMenuTreeFallback(): MenuTree[] {
