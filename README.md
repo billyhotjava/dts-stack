@@ -52,3 +52,7 @@
 - 查看容器状态：`docker compose ps`
 - Trino 探活：`docker compose exec dts-trino wget -qO- http://localhost:8080/v1/info`
 - SSO 探活：`curl -k https://sso.${BASE_DOMAIN}`
+
+【openEuler 适配说明】
+- 已在 Compose 清单中为所有本地目录挂载添加了 SELinux 友好配置（z/Z 标签）。
+- 在 openEuler 上的安装与注意事项，请参考 docs/openeuler.md。

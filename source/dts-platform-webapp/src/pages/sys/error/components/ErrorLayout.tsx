@@ -7,7 +7,6 @@ import { varBounce } from "@/components/animate/variants/bounce";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { Button } from "@/ui/button";
 import { Text, Title } from "@/ui/typography";
-import { urlJoin } from "@/utils";
 
 interface ErrorLayoutProps {
 	title: string;

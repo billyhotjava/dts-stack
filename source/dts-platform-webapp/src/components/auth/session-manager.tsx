@@ -109,8 +109,23 @@ export default function SessionManager() {
         const res = await userService.refresh(token.refreshToken!);
         const nextAccess = (res as any)?.accessToken;
         const nextRefresh = (res as any)?.refreshToken;
+        const normalizeDate = (value: unknown): string | undefined =>
+          typeof value === "string" && value.trim() ? value.trim() : undefined;
+        const nextAdminAccess = (res as any)?.adminAccessToken || token.adminAccessToken;
+        const nextAdminRefresh = (res as any)?.adminRefreshToken || token.adminRefreshToken;
+        const adminAccessExpiresAt =
+          normalizeDate((res as any)?.adminAccessTokenExpiresAt) ?? token.adminAccessTokenExpiresAt;
+        const adminRefreshExpiresAt =
+          normalizeDate((res as any)?.adminRefreshTokenExpiresAt) ?? token.adminRefreshTokenExpiresAt;
         if (nextAccess) {
-          setUserToken({ accessToken: nextAccess, refreshToken: nextRefresh || token.refreshToken });
+          setUserToken({
+            accessToken: nextAccess,
+            refreshToken: nextRefresh || token.refreshToken,
+            adminAccessToken: nextAdminAccess,
+            adminRefreshToken: nextAdminRefresh,
+            adminAccessTokenExpiresAt: adminAccessExpiresAt,
+            adminRefreshTokenExpiresAt: adminRefreshExpiresAt,
+          });
           schedule(nextRefreshDelayMs(nextAccess));
           return;
         }

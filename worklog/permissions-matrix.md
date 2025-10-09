@@ -60,14 +60,14 @@
 - active_scope/dept：由前端上下文传入 `X-Active-Scope`、`X-Active-Dept`
 - 资源：`scope`（DEPT/INST）、`share`（PRIVATE_DEPT/SHARE_INST/PUBLIC_INST）、`owner_dept`、`level`（DATA_* 或 legacy）
 
-| 场景 | 用户身份                                  | active_scope/dept | 资源(scope, share, owner_dept, level)  | 动作   | 结果        | 说明                                   |
-| -- | ------------------------------------- | ----------------- | ------------------------------------ | ------ | ----------- | -------------------------------------- |
-| A  | DEPT_VIEWER@D001, personnel=IMPORTANT | DEPT/D001         | (DEPT, PRIVATE_DEPT, D001, INTERNAL) | READ   | ✅           | 同域、同部门、密级不超                         |
-| B  | DEPT_EDITOR@D001                      | DEPT/D001         | (DEPT, PRIVATE_DEPT, D001, SECRET)   | WRITE  | ❌* 或 ✅*   | 取决于 personnel_level ≥ SECRET            |
-| C  | DEPT_OWNER@D001                       | DEPT/D001         | (DEPT, PRIVATE_DEPT, D002, INTERNAL) | MANAGE | ❌           | 非本部门资源（SCOPE_MISMATCH → dts-sec-0002） |
-| D  | INST_VIEWER, personnel=CORE           | INST/-            | (INST, SHARE_INST, -, TOP_SECRET)    | READ   | ✅           | 所共享域、密级满足                            |
-| E  | INST_EDITOR, personnel=IMPORTANT      | INST/-            | (INST, SHARE_INST, -, SECRET)        | WRITE  | ❌           | 人员密级不足（LEVEL_TOO_LOW → dts-sec-0003）  |
-| F  | DEPT_EDITOR@D001 + INST_VIEWER        | INST/-            | (INST, SHARE_INST, -, INTERNAL)      | READ   | ✅           | 跨域并存，切到 INST 生效                      |
+| 场景 | 用户身份   | active_scope/dept | 资源(scope, share, owner_dept, level)  | 动作   | 结果     | 说明                                   |
+| -- | ------------------------------ | ----------------- | ----------------------------------- | ------ | ----------- | -------------------------------------- |
+| A  | DEPT_VIEWER@D001, personnel=IMPORTANT | DEPT/D001  | (DEPT, PRIVATE_DEPT, D001, INTERNAL) | READ   | ✅         | 同域、同部门、密级不超                         |
+| B  | DEPT_EDITOR@D001                      | DEPT/D001  | (DEPT, PRIVATE_DEPT, D001, SECRET)   | WRITE  | ❌* 或 ✅* | 取决于 personnel_level ≥ SECRET            |
+| C  | DEPT_OWNER@D001                       | DEPT/D001  | (DEPT, PRIVATE_DEPT, D002, INTERNAL) | MANAGE | ❌         | 非本部门资源（SCOPE_MISMATCH → dts-sec-0002） |
+| D  | INST_VIEWER, personnel=CORE           | INST/-     | (INST, SHARE_INST, -, TOP_SECRET)    | READ   | ✅         | 所共享域、密级满足                            |
+| E  | INST_EDITOR, personnel=IMPORTANT      | INST/-     | (INST, SHARE_INST, -, SECRET)        | WRITE  | ❌         | 人员密级不足（LEVEL_TOO_LOW → dts-sec-0003）  |
+| F  | DEPT_EDITOR@D001 + INST_VIEWER        | INST/-     | (INST, SHARE_INST, -, INTERNAL)      | READ   | ✅          | 跨域并存，切到 INST 生效                      |
 
 注释：
 - 场景 B：若 `personnel_level < SECRET` 则返回 `dts-sec-0003`；若 RBAC 不具备 `WRITE`，则先以 `dts-sec-0001` 拒绝。

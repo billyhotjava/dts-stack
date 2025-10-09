@@ -1,4 +1,8 @@
-## Compose 'version' key is obsolete in v2; omitted for clarity
+version: "2.4"
+
+## Note for docker-compose 1.22.0 (legacy):
+## - Use file format 2.4 to support depends_on.condition, healthcheck.start_period, and restart policies.
+## - Keep YAML anchors (x-*) which are ignored by Compose and help reuse snippets.
 
 x-hc: &hc
   interval: 10s
@@ -38,11 +42,12 @@ services:
       - "127.0.0.1:${TRAEFIK_DASHBOARD_PORT}:8080"
       - "127.0.0.1:${TRAEFIK_METRICS_PORT}:${TRAEFIK_METRICS_PORT}"
     volumes:
+      # Do not relabel docker.sock; keep read-only
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./services/dts-proxy/dynamic:/etc/traefik/dynamic:ro
-      - ./services/certs:/etc/traefik/certs:ro
-      - ./services/certs/server.crt:/certs/server.crt:ro
-      - ./services/certs/server.key:/certs/server.key:ro
+      - ./services/dts-proxy/dynamic:/etc/traefik/dynamic:ro,z
+      - ./services/certs:/etc/traefik/certs:ro,z
+      - ./services/certs/server.crt:/certs/server.crt:ro,z
+      - ./services/certs/server.key:/certs/server.key:ro,z
     labels:
       - "traefik.enable=true"
       # - "traefik.http.routers.default-secure.tls=true"
@@ -78,8 +83,8 @@ services:
       PG_USER_RANGER: ${PG_USER_RANGER}
       PG_PWD_RANGER: ${PG_PWD_RANGER}
     volumes:
-      - ./services/dts-pg/data:/var/lib/postgresql/data
-      - ./services/dts-pg/init:/docker-entrypoint-initdb.d
+      - ./services/dts-pg/data:/var/lib/postgresql/data:Z
+      - ./services/dts-pg/init:/docker-entrypoint-initdb.d:ro,Z
     healthcheck:
       # Keep healthcheck lightweight and deterministic; do not rely on container env expansion
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null"]
@@ -153,7 +158,7 @@ services:
       MINIO_SERVER_URL: ${MINIO_SERVER_URL}
       MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL}
     volumes:
-      - ./services/dts-minio/data:/data
+      - ./services/dts-minio/data:/data:Z
     healthcheck:
       test: ["CMD","curl","-fsS","http://localhost:9000/minio/health/live"]
       <<: *hc
@@ -186,7 +191,7 @@ services:
       S3_BUCKET: ${S3_BUCKET}
     entrypoint: ["/bin/sh","-c","/init/init.sh"]
     volumes:
-      - ./services/dts-minio-init/init:/init:ro
+      - ./services/dts-minio-init/init:/init:ro,Z
     restart: "no"
     networks:
       - dts-core
@@ -217,8 +222,8 @@ services:
       dts-minio:
         condition: service_started
     volumes:
-      - ./services/dts-trino/init/catalog:/etc/trino/catalog
-      - ./services/dts-trino/config.properties:/etc/trino/config.properties
+      - ./services/dts-trino/init/catalog:/etc/trino/catalog:ro,Z
+      - ./services/dts-trino/config.properties:/etc/trino/config.properties:ro,Z
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -251,7 +256,7 @@ services:
       - "traefik.http.routers.dts-trino.middlewares=dts-trino-redirect@docker"
     restart: unless-stopped
     networks:
-      - dts-core
+  #     - dts-core
 
   # dts-ranger:
   #   image: ${IMAGE_RANGER_ADMIN}
@@ -286,7 +291,7 @@ services:
   #   networks:
   #     - dts-core
 
-volumes:
+lumes:
   maven-cache:
 
 networks:

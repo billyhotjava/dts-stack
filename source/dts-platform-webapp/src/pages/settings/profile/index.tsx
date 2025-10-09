@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useUserInfo } from "@/store/userStore";
 import { Avatar, AvatarImage } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
@@ -8,7 +8,7 @@ import ProfileTab, { USERNAME_FALLBACK_NAME, resolveRoleLabels } from "./profile
 
 type AttributeMap = Record<string, string[]> | undefined;
 
-const PROTECTED_USERNAMES = new Set(Object.keys(USERNAME_FALLBACK_NAME));
+// Note: reserved username map retained in profile-tab; no local usage here.
 
 const pickAttributeValue = (attributes: AttributeMap, keys: string[]) => {
 	if (!attributes) return "";

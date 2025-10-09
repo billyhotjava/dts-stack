@@ -1,6 +1,7 @@
 import axios from "axios";
 import type { KeycloakRole } from "#/keycloak";
 import { GLOBAL_CONFIG } from "@/global-config";
+import userStore from "@/store/userStore";
 
 /**
  * List realm roles from the admin service (platform-friendly endpoint).
@@ -10,7 +11,16 @@ import { GLOBAL_CONFIG } from "@/global-config";
 export async function listRealmRoles(): Promise<KeycloakRole[]> {
   const base = GLOBAL_CONFIG.adminApiBaseUrl.replace(/\/+$/, "");
   const url = `${base}/keycloak/platform/roles`;
-  const { data } = await axios.get<KeycloakRole[]>(url, { withCredentials: false });
+  const { data } = await axios.get<KeycloakRole[]>(url, {
+    withCredentials: false,
+    headers: (() => {
+      const { userToken } = userStore.getState();
+      const raw = String(userToken?.adminAccessToken || "").trim();
+      if (!raw) return {};
+      const headerValue = raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
+      return { Authorization: headerValue };
+    })(),
+  });
   if (Array.isArray(data)) return data;
   // Some admin endpoints return { status, data } envelope; unwrap best-effort
   const inner: any = (data as any)?.data;
@@ -18,4 +28,3 @@ export async function listRealmRoles(): Promise<KeycloakRole[]> {
 }
 
 export default { listRealmRoles };
-

@@ -13,6 +13,14 @@ type ApiEnvelope<T> = { status?: any; message?: string; data?: T } | T;
 
 const base = () => GLOBAL_CONFIG.adminApiBaseUrl.replace(/\/+$/, "");
 
+const authHeaders = (): Record<string, string> => {
+  const { userToken } = userStore.getState();
+  const raw = String(userToken?.adminAccessToken || "").trim();
+  if (!raw) return {};
+  const headerValue = raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
+  return { Authorization: headerValue };
+};
+
 function unwrap<T>(resp: { data: ApiEnvelope<T> }): T {
   const body: any = resp.data;
   if (body && typeof body === "object" && "data" in body) {
@@ -25,9 +33,13 @@ export async function whoAmI(): Promise<WhoAmI> {
   const url = `${base()}/admin/whoami`;
   const { userToken } = userStore.getState();
   const headers: Record<string, string> = {};
-  const raw = String(userToken?.accessToken || "").trim();
-  const token = raw.startsWith("Bearer ") ? raw.slice(7).trim() : raw;
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  Object.assign(headers, authHeaders());
+  if (!headers.Authorization) {
+    const raw = String(userToken?.accessToken || "").trim();
+    if (raw) {
+      headers.Authorization = raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
+    }
+  }
   const resp = await axios.get<ApiEnvelope<WhoAmI>>(url, { withCredentials: false, headers });
   return unwrap<WhoAmI>(resp) ?? { allowed: false, role: null, username: null, email: null };
 }
@@ -37,7 +49,7 @@ export type OrgNode = { id: number; name: string; parentId?: number; children?: 
 export async function listOrgs(): Promise<OrgNode[]> {
   // Prefer platform-friendly endpoint that is permitted without triad token
   const url = `${base()}/platform/orgs`;
-  const resp = await axios.get<ApiEnvelope<OrgNode[]>>(url, { withCredentials: false });
+  const resp = await axios.get<ApiEnvelope<OrgNode[]>>(url, { withCredentials: false, headers: authHeaders() });
   const arr = unwrap<OrgNode[]>(resp);
   return Array.isArray(arr) ? arr : [];
 }

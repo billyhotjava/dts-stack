@@ -134,15 +134,10 @@ export default function UserManagementView() {
           }
         }
       }
-      await Promise.all(Array.from({ length: Math.min(limit, entries.length) }, () => worker()));
+  await Promise.all(Array.from({ length: Math.min(limit, entries.length) }, () => worker()));
     })();
   }, [list]);
 
-  const leafOfPath = (path?: string) => {
-    if (!path) return "";
-    const idx = path.lastIndexOf("/");
-    return idx >= 0 && idx + 1 < path.length ? path.substring(idx + 1) : path;
-  };
 
   const columns: ColumnsType<KeycloakUser> = useMemo(
     () => [

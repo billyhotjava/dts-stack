@@ -1,6 +1,6 @@
-import apiClient from "../apiClient";
 import axios from "axios";
 import { GLOBAL_CONFIG } from "@/global-config";
+import userStore from "@/store/userStore";
 
 // Backward-compatible DTO used by existing pages (code + display names)
 export interface DeptDto {
@@ -54,32 +54,42 @@ export async function listDepartments(keyword?: string): Promise<DeptDto[]> {
     return [];
   };
 
+  const authHeaders = (): Record<string, string> => {
+    const { userToken } = userStore.getState();
+    const raw = String(userToken?.adminAccessToken || "").trim();
+    if (!raw) return {};
+    const headerValue = raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
+    return { Authorization: headerValue };
+  };
+
   // In dev we proxy '/admin/api' -> admin '/api', so prefer the explicit admin-scoped path first.
   // Try platform-friendly first to avoid double "/admin" when base is "/admin/api"
-  const paths = [AdminApi.OrgsAltGateway, AdminApi.OrgsPrimary, AdminApi.OrgsLegacy];
-  for (const path of paths) {
-    try {
-      const { data } = await axios.get<any>(`${base}${path}`, { withCredentials: false });
-      const arr = unwrap(data);
-      if (arr && arr.length) {
-        let flat = flattenOrgs(arr);
-        const kw = (keyword || "").trim().toLowerCase();
-        if (kw) {
-          flat = flat.filter((d) =>
-            d.code.toLowerCase().includes(kw) || (d.nameZh || "").toLowerCase().includes(kw) || (d.nameEn || "").toLowerCase().includes(kw)
-          );
-        }
-        return flat.slice(0, 100);
-      }
-    } catch (e) {
-      // Continue to next candidate on any error
-      const msg = (e as any)?.message || String(e);
-      console.warn(`[deptService] ${path} failed: ${msg}`);
-      continue;
-    }
-  }
-  console.warn("[deptService] All admin org endpoints failed; returning empty org list");
-  return [];
+const paths = [AdminApi.OrgsAltGateway, AdminApi.OrgsPrimary, AdminApi.OrgsLegacy];
+	for (const path of paths) {
+		try {
+			const { data } = await axios.get<any>(`${base}${path}`, { withCredentials: false, headers: authHeaders() });
+			const arr = unwrap(data);
+			if (arr && arr.length) {
+				let flat = flattenOrgs(arr);
+				const kw = (keyword || "").trim().toLowerCase();
+				if (kw) {
+					flat = flat.filter((d) =>
+						d.code.toLowerCase().includes(kw) ||
+						(d.nameZh || "").toLowerCase().includes(kw) ||
+						(d.nameEn || "").toLowerCase().includes(kw),
+					);
+				}
+				return flat.slice(0, 100);
+			}
+		} catch (e) {
+			// Continue to next candidate on any error
+			const msg = (e as any)?.message || String(e);
+			console.warn(`[deptService] ${path} failed: ${msg}`);
+			continue;
+		}
+	}
+	console.warn("[deptService] All admin org endpoints failed; returning empty org list");
+	return [];
 }
 
 export default {

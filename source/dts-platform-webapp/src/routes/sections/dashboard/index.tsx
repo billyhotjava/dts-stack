@@ -3,8 +3,6 @@ import { useEffect, useMemo } from "react";
 import { useMenuStore } from "@/store/menuStore";
 import useUserStore from "@/store/userStore";
 import { useRouter } from "@/routes/hooks";
-import { GLOBAL_CONFIG } from "@/global-config";
-import { urlJoin } from "@/utils";
 import DashboardLayout from "@/layouts/dashboard";
 import LoginAuthGuard from "@/routes/components/login-auth-guard";
 import { getFrontendDashboardRoutes } from "./frontend";

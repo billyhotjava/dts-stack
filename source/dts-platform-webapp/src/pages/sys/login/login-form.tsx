@@ -4,7 +4,6 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { SignInReq } from "@/api/services/userService";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { useContextActions } from "@/store/contextStore";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import { useSignIn } from "@/store/userStore";
@@ -12,7 +11,7 @@ import { Button } from "@/ui/button";
 import { Checkbox } from "@/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
-import { cn, urlJoin } from "@/utils";
+import { cn } from "@/utils";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {

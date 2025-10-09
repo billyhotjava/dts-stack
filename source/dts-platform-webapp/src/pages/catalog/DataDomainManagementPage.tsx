@@ -34,9 +34,6 @@ const DATA_LEVELS = [
 	{ value: "DATA_SECRET" as DataLevel, label: "秘密 (DATA_SECRET)" },
 	{ value: "DATA_TOP_SECRET" as DataLevel, label: "机密 (DATA_TOP_SECRET)" },
 ] as const;
-
-const toLegacy = (v: DataLevel): "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET" =>
-	v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
 const fromLegacy = (v: string): DataLevel => {
 	const u = String(v || "").toUpperCase();
 	if (u === "PUBLIC") return "DATA_PUBLIC";
@@ -128,13 +125,13 @@ const INITIAL_DOMAINS: DomainNode[] = [
 				classification: "DATA_INTERNAL",
 				sourceSystem: "MDM",
 			},
-			{
-				key: "domain-shared-ref",
-				name: "参考数据主题",
-				owner: "赵倩",
-				classification: "PUBLIC",
-				sourceSystem: "ODS",
-			},
+            {
+                key: "domain-shared-ref",
+                name: "参考数据主题",
+                owner: "赵倩",
+                classification: "DATA_PUBLIC",
+                sourceSystem: "ODS",
+            },
 		],
 	},
 ];
@@ -566,14 +563,14 @@ const levels = DATA_LEVELS.map((item) => item);
 				if (selectedDomainMeta) payload.parent = { id: selectedDomainMeta.node.key };
 				const saved = (await apiCreateDomain(payload)) as any;
 				// reflect locally
-				const newNode: DomainNode = {
-					key: String(saved.id || generateKey("domain")),
-					name: saved.name || formState.name.trim(),
-					owner: saved.owner || formState.owner.trim() || "暂未指定",
-					classification: toLegacy(formState.classification),
-					sourceSystem: formState.sourceSystem.trim() || "未配置",
-					description: saved.description || formState.description.trim() || undefined,
-				};
+        const newNode: DomainNode = {
+            key: String(saved.id || generateKey("domain")),
+            name: saved.name || formState.name.trim(),
+            owner: saved.owner || formState.owner.trim() || "暂未指定",
+            classification: formState.classification,
+            sourceSystem: formState.sourceSystem.trim() || "未配置",
+            description: saved.description || formState.description.trim() || undefined,
+        };
 				if (selectedDomainMeta) {
 					const data = cloneDomains(domains);
 					loop(data, selectedDomainMeta.node.key, (node) => {
@@ -590,14 +587,14 @@ const levels = DATA_LEVELS.map((item) => item);
 				await apiUpdateDomain(editingNode.key, payload);
 				const data = cloneDomains(domains);
 				loop(data, editingNode.key, (node, index, array) => {
-					array[index] = {
-						...node,
-						name: formState.name.trim(),
-						owner: formState.owner.trim() || "暂未指定",
-						classification: toLegacy(formState.classification),
-						sourceSystem: formState.sourceSystem.trim() || "未配置",
-						description: formState.description.trim() || undefined,
-					} as DomainNode;
+                    array[index] = {
+                        ...node,
+                        name: formState.name.trim(),
+                        owner: formState.owner.trim() || "暂未指定",
+                        classification: formState.classification,
+                        sourceSystem: formState.sourceSystem.trim() || "未配置",
+                        description: formState.description.trim() || undefined,
+                    } as DomainNode;
 				});
 				setDomains(data);
 				toast.success("节点信息已更新");
@@ -677,12 +674,6 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 
 	return (
 		<div className="space-y-4">
-			<div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-				<span aria-hidden className="text-red-500">
-					★
-				</span>
-				此功能涉及数据密级数据，请注意保密！
-			</div>
 			<div className="grid gap-4 xl:grid-cols-[320px,1fr]">
 				<Card className="h-[calc(100vh-220px)]">
 					<CardHeader className="space-y-4">

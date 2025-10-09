@@ -38,7 +38,7 @@ export type SyncStatus = {
 // 不再对 /iam/classification/** 发生任何网络请求。
 const BASE = "/iam/classification"; // reserved for future; not used now
 
-async function searchUsers(keyword: string) {
+async function searchUsers(_keyword: string) {
     return [];
 }
 
@@ -93,7 +93,7 @@ async function runSync() {
     return { lastSyncAt: new Date().toISOString(), deltaCount: 0, failures: [] } as SyncStatus;
 }
 
-async function retryFailure(id: string) {
+async function retryFailure(_id: string) {
     return { lastSyncAt: new Date().toISOString(), deltaCount: 0, failures: [] } as SyncStatus;
 }
 

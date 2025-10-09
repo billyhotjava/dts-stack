@@ -1,5 +1,4 @@
 import apiClient from "../apiClient";
-import { GLOBAL_CONFIG } from "@/global-config";
 
 /**
  * Keycloak本地化翻译服务

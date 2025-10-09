@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -30,8 +31,8 @@ public class PortalSessionRegistry {
     /**
      * Register a brand new session for the given username/authorities.
      */
-    public synchronized PortalSession createSession(String username, List<String> roles, List<String> permissions) {
-        PortalSession session = PortalSession.create(username, normalizeRoles(roles), permissions, DEFAULT_TTL);
+    public synchronized PortalSession createSession(String username, List<String> roles, List<String> permissions, AdminTokens adminTokens) {
+        PortalSession session = PortalSession.create(username, normalizeRoles(roles), permissions, adminTokens, DEFAULT_TTL);
         register(session);
         return session;
     }
@@ -39,7 +40,7 @@ public class PortalSessionRegistry {
     /**
      * Refresh an existing session by refresh token, returning a new set of access/refresh tokens.
      */
-    public synchronized PortalSession refreshSession(String refreshToken) {
+    public synchronized PortalSession refreshSession(String refreshToken, Function<PortalSession, AdminTokens> adminTokenProvider) {
         PortalSession existing = refreshTokenIndex.get(refreshToken);
         if (existing == null) {
             throw new IllegalArgumentException("unknown_refresh_token");
@@ -48,7 +49,18 @@ public class PortalSessionRegistry {
             remove(existing);
             throw new IllegalStateException("session_expired");
         }
-        PortalSession renewed = existing.renew(DEFAULT_TTL);
+        AdminTokens tokens = existing.adminTokens();
+        if (adminTokenProvider != null) {
+            try {
+                AdminTokens refreshed = adminTokenProvider.apply(existing);
+                if (refreshed != null) {
+                    tokens = refreshed;
+                }
+            } catch (Exception ignored) {
+                // fall back to existing tokens when refresh fails
+            }
+        }
+        PortalSession renewed = existing.renew(DEFAULT_TTL, tokens);
         register(renewed);
         return renewed;
     }
@@ -71,17 +83,20 @@ public class PortalSessionRegistry {
         return Optional.of(session);
     }
 
-    /**
-     * Invalidate a session by refresh token (used on logout).
-     */
-    public synchronized void invalidateByRefreshToken(String refreshToken) {
+    public synchronized PortalSession invalidateByRefreshToken(String refreshToken) {
         if (!StringUtils.hasText(refreshToken)) {
-            return;
+            return null;
         }
-        PortalSession existing = refreshTokenIndex.get(refreshToken);
-        if (existing != null) {
-            remove(existing);
+        PortalSession existing = refreshTokenIndex.remove(refreshToken);
+        if (existing == null) {
+            return null;
         }
+        accessTokenIndex.remove(existing.accessToken());
+        PortalSession current = userIndex.get(existing.username());
+        if (current != null && current.sessionId().equals(existing.sessionId())) {
+            userIndex.remove(existing.username());
+        }
+        return existing;
     }
 
     private void register(PortalSession session) {
@@ -129,23 +144,33 @@ public class PortalSessionRegistry {
         List<String> permissions,
         String accessToken,
         String refreshToken,
-        Instant expiresAt
+        Instant expiresAt,
+        AdminTokens adminTokens
     ) {
-        private static PortalSession create(String username, List<String> roles, List<String> permissions, Duration ttl) {
+        private static PortalSession create(
+            String username,
+            List<String> roles,
+            List<String> permissions,
+            AdminTokens adminTokens,
+            Duration ttl
+        ) {
             String sessionId = UUID.randomUUID().toString();
             String accessToken = "demo-" + UUID.randomUUID();
             String refreshToken = "refresh-" + UUID.randomUUID();
             Instant expiresAt = Instant.now().plus(ttl);
             List<String> perms = permissions == null ? Collections.emptyList() : List.copyOf(permissions);
-            return new PortalSession(sessionId, username, List.copyOf(roles), perms, accessToken, refreshToken, expiresAt);
+            AdminTokens tokens = adminTokens == null ? null : adminTokens;
+            return new PortalSession(sessionId, username, List.copyOf(roles), perms, accessToken, refreshToken, expiresAt, tokens);
         }
 
-        private PortalSession renew(Duration ttl) {
-            return create(username, roles, permissions, ttl);
+        private PortalSession renew(Duration ttl, AdminTokens adminTokens) {
+            return create(username, roles, permissions, adminTokens, ttl);
         }
 
         private boolean isExpired() {
             return Instant.now().isAfter(expiresAt);
         }
     }
+
+    public record AdminTokens(String accessToken, Instant accessExpiresAt, String refreshToken, Instant refreshExpiresAt) {}
 }

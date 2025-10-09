@@ -55,7 +55,11 @@ public class AdminAuthClient {
         Map<String, Object> user = (Map<String, Object>) data.getOrDefault("user", java.util.Collections.emptyMap());
         String accessToken = asText(data.get("accessToken"));
         String refreshToken = asText(data.get("refreshToken"));
-        return new LoginResult(user, accessToken, refreshToken);
+        Long accessExpiresIn = asLong(data.get("expiresIn"));
+        Long refreshExpiresIn = asLong(data.get("refreshExpiresIn"));
+        if (accessExpiresIn == null) accessExpiresIn = asLong(data.get("accessTokenExpiresIn"));
+        if (refreshExpiresIn == null) refreshExpiresIn = asLong(data.get("refreshTokenExpiresIn"));
+        return new LoginResult(user, accessToken, refreshToken, accessExpiresIn, refreshExpiresIn);
     }
 
     public void logout(String refreshToken) {
@@ -80,7 +84,11 @@ public class AdminAuthClient {
         Map<String, Object> data = resp.data();
         String accessToken = asText(data.get("accessToken"));
         String newRefreshToken = asText(data.get("refreshToken"));
-        return new RefreshResult(accessToken, newRefreshToken);
+        Long accessExpiresIn = asLong(data.get("expiresIn"));
+        Long refreshExpiresIn = asLong(data.get("refreshExpiresIn"));
+        if (accessExpiresIn == null) accessExpiresIn = asLong(data.get("accessTokenExpiresIn"));
+        if (refreshExpiresIn == null) refreshExpiresIn = asLong(data.get("refreshTokenExpiresIn"));
+        return new RefreshResult(accessToken, newRefreshToken, accessExpiresIn, refreshExpiresIn);
     }
 
     private ApiEnvelope<Map<String, Object>> exchangeJson(URI uri, HttpMethod method, Map<String, String> json) {
@@ -118,6 +126,20 @@ public class AdminAuthClient {
         return v == null ? null : v.toString();
     }
 
+    private Long asLong(Object v) {
+        if (v instanceof Number n) {
+            return n.longValue();
+        }
+        if (v instanceof String s) {
+            try {
+                return Long.parseLong(s.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
     private String trim(String s, int max) {
         if (s == null) return "";
         return s.length() <= max ? s : s.substring(0, max) + "...";
@@ -133,8 +155,15 @@ public class AdminAuthClient {
         return fallback == null ? body : fallback;
     }
 
-    public record LoginResult(Map<String, Object> user, String accessToken, String refreshToken) {}
-    public record RefreshResult(String accessToken, String refreshToken) {}
+    public record LoginResult(
+        Map<String, Object> user,
+        String accessToken,
+        String refreshToken,
+        Long accessTokenExpiresIn,
+        Long refreshTokenExpiresIn
+    ) {}
+
+    public record RefreshResult(String accessToken, String refreshToken, Long accessTokenExpiresIn, Long refreshTokenExpiresIn) {}
 
     public record ApiEnvelope<T>(
         @JsonProperty("status") String status,

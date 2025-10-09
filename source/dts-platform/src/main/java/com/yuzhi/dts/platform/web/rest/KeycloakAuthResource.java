@@ -2,19 +2,22 @@ package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
+import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.AdminTokens;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.PortalSession;
 import com.yuzhi.dts.platform.service.admin.AdminAuthClient;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.HttpStatus;
-import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/keycloak/auth")
@@ -70,7 +73,14 @@ public class KeycloakAuthResource {
             }
 
             // Issue a portal session (opaque tokens) for platform API access
-            PortalSession session = sessionRegistry.createSession(username, mappedRoles, permissions);
+            AdminTokens adminTokens = computeAdminTokens(
+                result.accessToken(),
+                result.accessTokenExpiresIn(),
+                result.refreshToken(),
+                result.refreshTokenExpiresIn(),
+                null
+            );
+            PortalSession session = sessionRegistry.createSession(username, mappedRoles, permissions, adminTokens);
 
             // Build user payload (override roles/permissions with mapped ones)
             Map<String, Object> userOut = new java.util.HashMap<>(user);
@@ -79,14 +89,20 @@ public class KeycloakAuthResource {
             userOut.putIfAbsent("enabled", Boolean.TRUE);
             userOut.putIfAbsent("id", UUID.nameUUIDFromBytes(username.getBytes()).toString());
 
-            Map<String, Object> data = Map.of(
-                "user",
-                userOut,
-                "accessToken",
-                session.accessToken(),
-                "refreshToken",
-                session.refreshToken()
-            );
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("user", userOut);
+            data.put("accessToken", session.accessToken());
+            data.put("refreshToken", session.refreshToken());
+            if (adminTokens != null) {
+                data.put("adminAccessToken", adminTokens.accessToken());
+                if (adminTokens.accessExpiresAt() != null) {
+                    data.put("adminAccessTokenExpiresAt", adminTokens.accessExpiresAt().toString());
+                }
+                data.put("adminRefreshToken", adminTokens.refreshToken());
+                if (adminTokens.refreshExpiresAt() != null) {
+                    data.put("adminRefreshTokenExpiresAt", adminTokens.refreshExpiresAt().toString());
+                }
+            }
             if (log.isInfoEnabled()) {
                 log.info("[login] success username={} roles={} perms={}", username, mappedRoles, permissions);
             }
@@ -103,13 +119,17 @@ public class KeycloakAuthResource {
 
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) RefreshPayload payload) {
-        if (payload != null && StringUtils.hasText(payload.refreshToken())) {
-            try {
-                adminAuthClient.logout(payload.refreshToken());
-            } catch (Exception ignore) {
-                // best-effort
+        String portalRefresh = payload != null ? payload.refreshToken() : null;
+        PortalSession session = sessionRegistry.invalidateByRefreshToken(portalRefresh);
+        if (session != null) {
+            AdminTokens adminTokens = session.adminTokens();
+            if (adminTokens != null && StringUtils.hasText(adminTokens.refreshToken())) {
+                try {
+                    adminAuthClient.logout(adminTokens.refreshToken());
+                } catch (Exception ignore) {
+                    // best-effort
+                }
             }
-            sessionRegistry.invalidateByRefreshToken(payload.refreshToken());
         }
         return ResponseEntity.ok(ApiResponses.ok(null));
     }
@@ -117,13 +137,44 @@ public class KeycloakAuthResource {
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<Map<String, String>>> refresh(@RequestBody RefreshPayload payload) {
         try {
-            PortalSession refreshed = sessionRegistry.refreshSession(payload.refreshToken());
-            Map<String, String> data = Map.of(
-                "accessToken",
-                refreshed.accessToken(),
-                "refreshToken",
-                refreshed.refreshToken()
+            PortalSession refreshed = sessionRegistry.refreshSession(
+                payload.refreshToken(),
+                existing -> {
+                    if (existing == null) return null;
+                    AdminTokens tokens = existing.adminTokens();
+                    String adminRefresh = tokens != null ? tokens.refreshToken() : null;
+                    if (!StringUtils.hasText(adminRefresh)) {
+                        return tokens;
+                    }
+                    try {
+                        var result = adminAuthClient.refresh(adminRefresh);
+                        return computeAdminTokens(
+                            result.accessToken(),
+                            result.accessTokenExpiresIn(),
+                            result.refreshToken(),
+                            result.refreshTokenExpiresIn(),
+                            tokens
+                        );
+                    } catch (Exception ex) {
+                        log.warn("[refresh] admin token refresh failed: {}", ex.getMessage());
+                        return tokens;
+                    }
+                }
             );
+            Map<String, String> data = new LinkedHashMap<>();
+            data.put("accessToken", refreshed.accessToken());
+            data.put("refreshToken", refreshed.refreshToken());
+            AdminTokens adminTokens = refreshed.adminTokens();
+            if (adminTokens != null) {
+                data.put("adminAccessToken", adminTokens.accessToken());
+                if (adminTokens.accessExpiresAt() != null) {
+                    data.put("adminAccessTokenExpiresAt", adminTokens.accessExpiresAt().toString());
+                }
+                data.put("adminRefreshToken", adminTokens.refreshToken());
+                if (adminTokens.refreshExpiresAt() != null) {
+                    data.put("adminRefreshTokenExpiresAt", adminTokens.refreshExpiresAt().toString());
+                }
+            }
             return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(401).body(ApiResponses.error("刷新令牌无效，请重新登录"));
@@ -165,28 +216,75 @@ public class KeycloakAuthResource {
     private List<String> mapRoles(List<String> kcRoles) {
         java.util.Set<String> mapped = new java.util.LinkedHashSet<>();
         for (String raw : kcRoles) {
-            if (raw == null || raw.isBlank()) continue;
-            String up = raw.toUpperCase(Locale.ROOT);
-            if (up.startsWith("ROLE_")) up = up.substring(5);
-            switch (up) {
-                case "OP_ADMIN", "OPADMIN" -> mapped.add(AuthoritiesConstants.OP_ADMIN);
-                case "CATALOG_ADMIN", "CATALOGADMIN" -> mapped.add(AuthoritiesConstants.CATALOG_ADMIN);
-                case "GOV_ADMIN", "GOVERNANCE_ADMIN", "GOVADMIN" -> mapped.add(AuthoritiesConstants.GOV_ADMIN);
-                case "IAM_ADMIN", "IAMADMIN" -> mapped.add(AuthoritiesConstants.IAM_ADMIN);
-                case "ADMIN" -> mapped.add(AuthoritiesConstants.ADMIN);
+            if (raw == null) {
+                continue;
+            }
+            String trimmed = raw.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            String up = trimmed.toUpperCase(Locale.ROOT);
+            if (up.startsWith("ROLE_")) {
+                up = up.substring(5);
+            }
+            boolean handled = switch (up) {
+                case "OP_ADMIN", "OPADMIN" -> {
+                    mapped.add(AuthoritiesConstants.OP_ADMIN);
+                    yield true;
+                }
+                case "CATALOG_ADMIN", "CATALOGADMIN" -> {
+                    mapped.add(AuthoritiesConstants.CATALOG_ADMIN);
+                    yield true;
+                }
+                case "GOV_ADMIN", "GOVERNANCE_ADMIN", "GOVADMIN" -> {
+                    mapped.add(AuthoritiesConstants.GOV_ADMIN);
+                    yield true;
+                }
+                case "IAM_ADMIN", "IAMADMIN" -> {
+                    mapped.add(AuthoritiesConstants.IAM_ADMIN);
+                    yield true;
+                }
+                case "ADMIN" -> {
+                    mapped.add(AuthoritiesConstants.ADMIN);
+                    yield true;
+                }
                 // Data roles (client roles on dts-system). Map to canonical ROLE_* for audience filtering in Admin.
-                case "DEPT_VIEWER", "DEPARTMENT_VIEWER" -> mapped.add("ROLE_DEPT_VIEWER");
-                case "DEPT_EDITOR", "DEPARTMENT_EDITOR" -> mapped.add("ROLE_DEPT_EDITOR");
-                case "DEPT_OWNER",  "DEPARTMENT_OWNER"  -> mapped.add("ROLE_DEPT_OWNER");
-                case "INST_VIEWER", "INSTITUTE_VIEWER", "INSTITUTION_VIEWER" -> mapped.add("ROLE_INST_VIEWER");
-                case "INST_EDITOR", "INSTITUTE_EDITOR", "INSTITUTION_EDITOR" -> mapped.add("ROLE_INST_EDITOR");
-                case "INST_OWNER",  "INSTITUTE_OWNER",  "INSTITUTION_OWNER"  -> mapped.add("ROLE_INST_OWNER");
+                case "DEPT_VIEWER", "DEPARTMENT_VIEWER" -> {
+                    mapped.add("ROLE_DEPT_VIEWER");
+                    yield true;
+                }
+                case "DEPT_EDITOR", "DEPARTMENT_EDITOR" -> {
+                    mapped.add("ROLE_DEPT_EDITOR");
+                    yield true;
+                }
+                case "DEPT_OWNER", "DEPARTMENT_OWNER" -> {
+                    mapped.add("ROLE_DEPT_OWNER");
+                    yield true;
+                }
+                case "INST_VIEWER", "INSTITUTE_VIEWER", "INSTITUTION_VIEWER" -> {
+                    mapped.add("ROLE_INST_VIEWER");
+                    yield true;
+                }
+                case "INST_EDITOR", "INSTITUTE_EDITOR", "INSTITUTION_EDITOR" -> {
+                    mapped.add("ROLE_INST_EDITOR");
+                    yield true;
+                }
+                case "INST_OWNER", "INSTITUTE_OWNER", "INSTITUTION_OWNER" -> {
+                    mapped.add("ROLE_INST_OWNER");
+                    yield true;
+                }
                 case "SYS_ADMIN", "SYSADMIN", "AUTH_ADMIN", "AUTHADMIN", "SECURITY_AUDITOR", "SECURITYAUDITOR", "AUDIT_ADMIN", "AUDITADMIN", "AUDITOR_ADMIN" -> {
-                    // triad roles handled in containsTriad(); do not map into platform authorities
+                    // triad roles handled earlier; skip silently
+                    yield true;
                 }
-                default -> {
-                    // ignore other roles for platform authorities
-                }
+                default -> false;
+            };
+            if (handled) {
+                continue;
+            }
+            String canonical = sanitizeRoleToken(up);
+            if (!canonical.isEmpty()) {
+                mapped.add("ROLE_" + canonical);
             }
         }
         // Only assign ROLE_USER when no specific roles were mapped
@@ -194,5 +292,43 @@ public class KeycloakAuthResource {
             mapped.add(AuthoritiesConstants.USER);
         }
         return java.util.List.copyOf(mapped);
+    }
+
+    private String sanitizeRoleToken(String candidate) {
+        if (candidate == null || candidate.isBlank()) {
+            return "";
+        }
+        String sanitized = candidate.replaceAll("[^A-Z0-9_]", "_");
+        sanitized = sanitized.replaceAll("_+", "_");
+        sanitized = sanitized.replaceAll("^_+", "").replaceAll("_+$", "");
+        return sanitized;
+    }
+
+    private AdminTokens computeAdminTokens(
+        String accessToken,
+        Long accessExpiresIn,
+        String refreshToken,
+        Long refreshExpiresIn,
+        AdminTokens fallback
+    ) {
+        if (!StringUtils.hasText(accessToken) && !StringUtils.hasText(refreshToken)) {
+            return fallback;
+        }
+        Instant now = Instant.now();
+        Instant accessExpiry = resolveExpiry(now, accessExpiresIn, fallback != null ? fallback.accessExpiresAt() : null, 300);
+        Instant refreshExpiry = resolveExpiry(now, refreshExpiresIn, fallback != null ? fallback.refreshExpiresAt() : null, 7200);
+        String nextAccess = StringUtils.hasText(accessToken) ? accessToken : (fallback != null ? fallback.accessToken() : null);
+        String nextRefresh = StringUtils.hasText(refreshToken) ? refreshToken : (fallback != null ? fallback.refreshToken() : null);
+        return new AdminTokens(nextAccess, accessExpiry, nextRefresh, refreshExpiry);
+    }
+
+    private Instant resolveExpiry(Instant now, Long offsetSeconds, Instant fallback, long defaultSeconds) {
+        if (offsetSeconds != null && offsetSeconds > 0) {
+            return now.plusSeconds(offsetSeconds);
+        }
+        if (fallback != null) {
+            return fallback;
+        }
+        return now.plusSeconds(defaultSeconds);
     }
 }

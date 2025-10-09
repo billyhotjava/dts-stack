@@ -866,13 +866,6 @@ export default function QueryWorkbenchPage() {
 	return (
 		<TooltipProvider>
 			<div className="space-y-4">
-				<div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-					<span aria-hidden className="text-red-500">
-						★
-					</span>
-					此功能涉及数据密级数据，请注意保密！
-				</div>
-
 				<Card>
 					<CardHeader className="space-y-4">
 						<CardTitle className="flex items-center justify-between text-base font-semibold">

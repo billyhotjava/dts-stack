@@ -316,7 +316,7 @@ const QualityRulesPage = () => {
       datasetId: primaryDataset,
       owner: rule.owner || "",
       severity: rule.severity || "MEDIUM",
-      dataLevel: rule.dataLevel || "INTERNAL",
+      dataLevel: rule.dataLevel ? rule.dataLevel : fromLegacy("INTERNAL"),
       frequencyPreset: preset,
       customCron: preset === "CUSTOM" ? cron : FREQUENCY_PRESETS.find((p) => p.preset === preset)?.cron || cron,
       enabled: rule.enabled,
@@ -526,7 +526,7 @@ const QualityRulesPage = () => {
                   {rule.datasetNames.length ? rule.datasetNames.join(", ") : "未绑定"}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{LEVEL_LABELS[rule.dataLevel || "INTERNAL"]}</Badge>
+                  <Badge variant="outline">{LEVEL_LABELS[rule.dataLevel ? rule.dataLevel as DataLevel : fromLegacy("INTERNAL")]}</Badge>
                   {rule.severity && (
                     <Badge variant={SEVERITY_BADGE[rule.severity]}>{SEVERITY_LABELS[rule.severity]}</Badge>
                   )}
@@ -567,7 +567,7 @@ const QualityRulesPage = () => {
                     <div className="text-xs text-muted-foreground">{rule.code || rule.id}</div>
                   </div>
                   <div className="flex gap-1">
-                    <Badge variant="outline">{LEVEL_LABELS[rule.dataLevel || "INTERNAL"]}</Badge>
+                    <Badge variant="outline">{LEVEL_LABELS[rule.dataLevel ? (rule.dataLevel as DataLevel) : fromLegacy("INTERNAL")]}</Badge>
                     {rule.severity && (
                       <Badge variant={SEVERITY_BADGE[rule.severity]}>{SEVERITY_LABELS[rule.severity]}</Badge>
                     )}

@@ -128,6 +128,22 @@ export const useSignIn = () => {
 			if (!accessToken) {
 				throw new Error("登录响应缺少访问令牌");
 			}
+			const adminAccessToken = pickToken((res as any)?.adminAccessToken);
+			const adminRefreshToken = pickToken((res as any)?.adminRefreshToken);
+			const normalizeDate = (value: unknown): string | undefined => {
+				if (typeof value === "string" && value.trim()) return value.trim();
+				if (value instanceof Date) return value.toISOString();
+				if (typeof value === "number" && Number.isFinite(value)) {
+					try {
+						return new Date(value).toISOString();
+					} catch {
+						return String(value);
+					}
+				}
+				return undefined;
+			};
+			const adminAccessTokenExpiresAt = normalizeDate((res as any)?.adminAccessTokenExpiresAt);
+			const adminRefreshTokenExpiresAt = normalizeDate((res as any)?.adminRefreshTokenExpiresAt);
 
 			// 适配后端数据格式：处理角色和权限信息
 			const adaptedUser = {
@@ -156,25 +172,32 @@ export const useSignIn = () => {
 				return set;
 			};
 
-            const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD ?? "true").toLowerCase() === "true";
-            if (FE_GUARD_ENABLED) {
-                const allowed = Array.isArray(GLOBAL_CONFIG.allowedLoginRoles) ? GLOBAL_CONFIG.allowedLoginRoles : [];
-                const allowedSet = expandSynonyms(allowed);
-                const userRoles: string[] = Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : [];
-                const userSet = expandSynonyms(userRoles);
-                if (allowedSet.size > 0) {
-                    const hasAllowed = Array.from(userSet).some((r) => allowedSet.has(r));
-                    if (!hasAllowed) {
-                        throw new Error("您无权登录该系统");
-                    }
-                }
-                // Defense-in-depth: explicitly forbid admin-console roles on platform
-                if (userSet.has("ROLE_SYS_ADMIN") || userSet.has("ROLE_AUTH_ADMIN") || userSet.has("ROLE_SECURITY_AUDITOR")) {
-                    throw new Error("您无权登录该系统");
-                }
-            }
+			const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD ?? "true").toLowerCase() === "true";
+			if (FE_GUARD_ENABLED) {
+				const allowed = Array.isArray(GLOBAL_CONFIG.allowedLoginRoles) ? GLOBAL_CONFIG.allowedLoginRoles : [];
+				const allowedSet = expandSynonyms(allowed);
+				const userRoles: string[] = Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : [];
+				const userSet = expandSynonyms(userRoles);
+				if (allowedSet.size > 0) {
+					const hasAllowed = Array.from(userSet).some((r) => allowedSet.has(r));
+					if (!hasAllowed) {
+						throw new Error("您无权登录该系统");
+					}
+				}
+				// Defense-in-depth: explicitly forbid admin-console roles on platform
+				if (userSet.has("ROLE_SYS_ADMIN") || userSet.has("ROLE_AUTH_ADMIN") || userSet.has("ROLE_SECURITY_AUDITOR")) {
+					throw new Error("您无权登录该系统");
+				}
+			}
 
-			setUserToken({ accessToken, refreshToken });
+			setUserToken({
+				accessToken,
+				refreshToken,
+				adminAccessToken,
+				adminRefreshToken,
+				adminAccessTokenExpiresAt,
+				adminRefreshTokenExpiresAt,
+			});
 			setUserInfo(adaptedUser);
 
 			// 登录成功后获取并更新Keycloak翻译词条
@@ -185,7 +208,18 @@ export const useSignIn = () => {
 				console.warn("Failed to load Keycloak translations:", translationError);
 				// 不阻塞登录流程，即使翻译加载失败也继续
 			}
-			return { mode: "backend" as const, user: adaptedUser, token: { accessToken, refreshToken } };
+			return {
+				mode: "backend" as const,
+				user: adaptedUser,
+				token: {
+					accessToken,
+					refreshToken,
+					adminAccessToken,
+					adminRefreshToken,
+					adminAccessTokenExpiresAt,
+					adminRefreshTokenExpiresAt,
+				},
+			};
 		} catch (err) {
 			const fallback = handleDevFallback({ error: err, payload: data, setUserToken, setUserInfo });
 			if (fallback) {

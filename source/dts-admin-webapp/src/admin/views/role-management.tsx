@@ -23,18 +23,14 @@ import { Textarea } from "@/ui/textarea";
 import { toast } from "sonner";
 import { GLOBAL_CONFIG } from "@/global-config";
 
-const OPERATION_LABELS: Record<DataOperation, string> = {
-    read: "读取",
-    write: "写入",
-    export: "导出",
-};
-
 const SCOPE_LABELS: Record<"DEPARTMENT" | "INSTITUTE", string> = {
     DEPARTMENT: "部门（含子部门）",
     INSTITUTE: "研究所共享区",
 };
 
-// SOURCE_LABELS unused; removed to satisfy TS noUnusedLocals
+// NOTE: Any previously declared constants used only in commented UI
+// blocks have been removed to satisfy TypeScript noUnusedLocals during
+// production builds.
 
 // Hide internal/administrative roles from role management UI.
 // Use canonical codes (strip ROLE_ and underscores) for matching.

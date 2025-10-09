@@ -1,3 +1,5 @@
+version: "2.4"
+
 ## Dev overlay: run services from source via bind mounts and live reload
 
 services:
@@ -50,12 +52,13 @@ services:
       - "18081:8081"
       - "5005:5005"
     volumes:
-      - ./source:/workspace-src
+      - ./source:/workspace-src:z
       - maven-cache:/root/.m2
-      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
-      - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro
+      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro,z
+      - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
     extra_hosts:
-      - "${HOST_SSO}:host-gateway"
+      # For Docker < 20.10, 'host-gateway' is unsupported; fall back to default bridge gateway IP.
+      - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
     healthcheck:
       test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8081/v3/api-docs >/dev/null || wget -qO- http://127.0.0.1:8081/v3/api-docs >/dev/null"]
       interval: 10s
@@ -131,14 +134,14 @@ services:
       - "18082:8081"
       - "5006:5006"
     volumes:
-      - ./source:/workspace-src
+      - ./source:/workspace-src:z
       - maven-cache:/root/.m2
-      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro
-      - ./services/dts-platform/drivers:/opt/dts/drivers:ro
-      - ./services/dts-platform/upload:/opt/dts/upload
-      - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro
+      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro,z
+      - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
+      - ./services/dts-platform/upload:/opt/dts/upload:Z
+      - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
     extra_hosts:
-      - "${HOST_SSO}:host-gateway"
+      - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
       - "tdh01:172.16.0.154"
     healthcheck:
       test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8081/v3/api-docs >/dev/null || wget -qO- http://127.0.0.1:8081/v3/api-docs >/dev/null"]
@@ -180,9 +183,9 @@ services:
     ports:
       - "18011:3001"
     volumes:
-      - ./source/dts-admin-webapp:/workspace
-      - ./source/dts-platform-webapp:/workspace/dts-platform-webapp:ro
-      - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
+      - ./source/dts-admin-webapp:/workspace:z
+      - ./source/dts-platform-webapp:/workspace/dts-platform-webapp:ro,z
+      - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro,z
       - pnpm-store:/pnpm-store
       - /workspace/node_modules
     networks:
@@ -227,8 +230,8 @@ services:
     ports:
       - "18012:3001"
     volumes:
-      - ./source/dts-platform-webapp:/workspace
-      - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro
+      - ./source/dts-platform-webapp:/workspace:z
+      - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro,z
       - pnpm-store:/pnpm-store
       - /workspace/node_modules
     networks:
