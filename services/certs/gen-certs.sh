@@ -22,6 +22,54 @@ log() { echo "[certs] $*"; }
 cleanup_placeholders() {
   local item
   local -a expected_files=(
+    "ca.crt" "ca.key" "server.key" "server.csr" "server.crt" "server.only.crt" "server.p12" "keystore.p12" "truststore.jks" "truststore.p12"
+  )
+  for item in "${expected_files[@]}"; do
+    if [[ -d "${CERT_DIR}/${item}" ]]; then
+      rm -rf "${CERT_DIR:?}/${item}"
+    fi
+  done
+}
+
+validate_ca() {
+  [[ -f "${CERT_DIR}/ca.crt" ]] || return 1
+  local bc_count
+  bc_count=$(openssl x509 -in "${CERT_DIR}/ca.crt" -noout -text 2>/dev/null | grep -c "X509v3 Basic Constraints") || bc_count=0
+  [[ "${bc_count}" -eq 1 ]]
+}
+
+gen_ca_clean() {
+  log "Creating clean root CA with minimal OpenSSL config ..."
+  local cfg
+  cfg="${CERT_DIR}/openssl-ca.cnf"
+  cat >"${cfg}" <<EOF
+[ req ]
+default_bits       = 2048
+prompt             = no
+default_md         = sha256
+distinguished_name = dn
+x509_extensions    = v3_ca
+
+[ dn ]
+CN = DTS Local CA
+O  = ${SUBJECT_O}
+
+[ v3_ca ]
+basicConstraints       = critical,CA:TRUE
+keyUsage               = critical,keyCertSign,cRLSign
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always,issuer
+EOF
+
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+    -config "${cfg}" \
+    -keyout "${CERT_DIR}/ca.key" -out "${CERT_DIR}/ca.crt" >/dev/null 2>&1
+  rm -f "${cfg}" 2>/dev/null || true
+}
+
+cleanup_placeholders() {
+  local item
+  local -a expected_files=(
     "ca.crt"
     "ca.key"
     "server.key"
@@ -57,14 +105,14 @@ have_valid_existing() {
 
 gen_ca_if_missing() {
   if [[ ! -f "${CERT_DIR}/ca.key" || ! -f "${CERT_DIR}/ca.crt" ]]; then
-    log "Creating root CA ..."
-    openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 3650 \
-      -subj "/CN=DTS Local CA/O=${SUBJECT_O}" \
-      -addext "basicConstraints=critical,CA:TRUE" \
-      -addext "keyUsage=critical,keyCertSign,cRLSign" \
-      -keyout "${CERT_DIR}/ca.key" -out "${CERT_DIR}/ca.crt" >/dev/null 2>&1
+    gen_ca_clean
   else
-    log "Using existing CA at ${CERT_DIR}/ca.crt"
+    if validate_ca; then
+      log "Using existing CA at ${CERT_DIR}/ca.crt"
+    else
+      log "Existing CA has duplicate/invalid extensions; reissuing clean CA ..."
+      gen_ca_clean
+    fi
   fi
 }
 
@@ -119,55 +167,76 @@ find_keytool() {
 }
 
 generate_truststores() {
-  # Generate JKS and PKCS12 truststores containing only the CA (for clients)
+  # Build clean truststores using keytool to avoid legacy PKCS12 quirks
+  rm -rf "${CERT_DIR}/truststore.p12" "${CERT_DIR}/truststore.jks"
+  local ca_pem="${CERT_DIR}/ca.crt"
+  if ! find_keytool; then
+    log "ERROR: keytool not found; cannot generate truststores."
+    return 1
+  fi
+  # JKS
+  if ! "${KEYTOOL_BIN}" -importcert -trustcacerts -noprompt -alias dts-ca -file "${ca_pem}" \
+      -keystore "${CERT_DIR}/truststore.jks" -storetype JKS -storepass "${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1; then
+    log "ERROR: keytool failed to generate truststore.jks"
+    return 1
+  fi
+  chmod 0644 "${CERT_DIR}/truststore.jks" 2>/dev/null || true
+  # PKCS12
+  if ! "${KEYTOOL_BIN}" -importcert -trustcacerts -noprompt -alias dts-ca -file "${ca_pem}" \
+      -keystore "${CERT_DIR}/truststore.p12" -storetype PKCS12 -storepass "${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1; then
+    log "ERROR: keytool failed to generate truststore.p12"
+    return 1
+  fi
+  chmod 0644 "${CERT_DIR}/truststore.p12" 2>/dev/null || true
+  log "generated truststore.jks and truststore.p12 (CA only). Password: ${TRUSTSTORE_PASSWORD}"
+}
+
+generate_truststores() {
+  # Always produce PKCS12 truststore; JKS is optional.
+  rm -rf "${CERT_DIR}/truststore.p12" "${CERT_DIR}/truststore.jks"
+
+  local ca_pem="${CERT_DIR}/ca.crt"
+  local have_keytool="false"
+  local pkcs12_created="false"
+
   if find_keytool; then
-    # Docker may leave directory placeholders when the file is bind-mounted.
-    rm -rf "${CERT_DIR}/truststore.jks" "${CERT_DIR}/truststore.p12"
+    have_keytool="true"
+    if "${KEYTOOL_BIN}" -importcert -trustcacerts -noprompt \
+      -alias dts-ca -file "${ca_pem}" \
+      -keystore "${CERT_DIR}/truststore.p12" -storetype PKCS12 -storepass "${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1; then
+      pkcs12_created="true"
+    else
+      log "WARNING: keytool failed to import certificate into PKCS12; falling back to openssl."
+      rm -f "${CERT_DIR}/truststore.p12"
+    fi
+  fi
 
-    local ca_pem="${CERT_DIR}/ca.crt"
-
-    # Always produce a PKCS12 truststore via OpenSSL (works reliably across distros)
+  if [[ "${pkcs12_created}" != "true" ]]; then
     if ! openssl pkcs12 -export -nokeys -in "${ca_pem}" -name "dts-ca" \
       -out "${CERT_DIR}/truststore.p12" -passout pass:"${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1; then
       log "ERROR: openssl failed to generate truststore.p12"
       return 1
     fi
+    pkcs12_created="true"
+  fi
+  chmod 0644 "${CERT_DIR}/truststore.p12" 2>/dev/null || true
 
-    # First try to convert PKCS12 -> JKS using keytool (importkeystore path)
+  if [[ "${have_keytool}" == "true" ]]; then
     if "${KEYTOOL_BIN}" -importkeystore -noprompt \
       -srckeystore "${CERT_DIR}/truststore.p12" -srcstoretype PKCS12 -srcstorepass "${TRUSTSTORE_PASSWORD}" \
       -destkeystore "${CERT_DIR}/truststore.jks" -deststoretype JKS -deststorepass "${TRUSTSTORE_PASSWORD}" \
       -srcalias dts-ca -destalias dts-ca >/dev/null 2>&1; then
+      chmod 0644 "${CERT_DIR}/truststore.jks" 2>/dev/null || true
       log "generated truststore.jks and truststore.p12 (CA only). Password: ${TRUSTSTORE_PASSWORD}"
       return 0
     fi
-
-    log "WARNING: keytool importkeystore failed; attempting DER import fallback..."
-
-    local tmp_der
-    tmp_der="$(mktemp "${CERT_DIR}/ca.XXXXXX.der")"
-    if ! openssl x509 -in "${ca_pem}" -outform der -out "${tmp_der}" >/dev/null 2>&1; then
-      log "ERROR: openssl failed to convert CA certificate to DER format"
-      rm -f "${tmp_der}"
-      return 1
-    fi
-
-    if "${KEYTOOL_BIN}" -importcert -noprompt -alias dts-ca -file "${tmp_der}" \
-      -keystore "${CERT_DIR}/truststore.jks" -storetype JKS -storepass "${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1; then
-      rm -f "${tmp_der}"
-      if [[ ! -f "${CERT_DIR}/truststore.jks" ]]; then
-        log "ERROR: truststore.jks not created after fallback import"
-        return 1
-      fi
-      log "generated truststore.jks (fallback) and truststore.p12 (PKCS12). Password: ${TRUSTSTORE_PASSWORD}"
-      return 0
-    fi
-    rm -f "${tmp_der}"
-    log "ERROR: keytool failed to generate truststore.jks; truststore.p12 is available as fallback."
-    return 1
+    log "WARNING: keytool importkeystore failed; keeping truststore.p12 only."
   else
-    log "keytool not found; skipped truststore generation. Install a JDK or supply truststores manually."
+    log "WARNING: keytool not found; only truststore.p12 was generated."
   fi
+
+  log "generated truststore.p12 (CA only). Password: ${TRUSTSTORE_PASSWORD}"
+  return 0
 }
 
 main() {
@@ -175,6 +244,13 @@ main() {
 
   if have_valid_existing; then
     log "TLS certificates already valid for *.${BASE_DOMAIN}; keeping existing files."
+    if [[ ! -f "${CERT_DIR}/truststore.p12" ]]; then
+      log "Truststore missing; regenerating truststore artifacts..."
+      if ! generate_truststores; then
+        log "ERROR: Failed to generate truststores."
+        exit 1
+      fi
+    fi
     return 0
   fi
 

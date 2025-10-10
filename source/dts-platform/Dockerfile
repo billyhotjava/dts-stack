@@ -1,9 +1,14 @@
 # syntax=docker/dockerfile:1
 
 # ---------- build stage ----------
-ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-17
-FROM ${MAVEN_IMAGE} AS build
+FROM openjdk:17-slim AS build
+
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends maven ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 COPY . .
 RUN set -eu; \
@@ -40,10 +45,17 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn -s /root/.m2/settings.xml -q -DskipTests -f "${BUILD_POM}" -pl dts-platform -am package
 
 # ---------- runtime stage ----------
-FROM eclipse-temurin:17-jre-jammy AS runtime
-ENV TZ=UTC \
+FROM openjdk:17-slim AS runtime
+ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
     JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0"
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tzdata && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo $TZ > /etc/timezone && \
+    apt-get purge -y --auto-remove tzdata && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /workspace/dts-platform/target/dts-platform-*.jar /app/app.jar
 EXPOSE 8080
