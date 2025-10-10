@@ -240,7 +240,12 @@ dts:
     # Controls whether dts-admin will auto-provision/sync Keycloak groups for organizations.
     # Default false to avoid startup failures when the client lacks admin privileges.
     # Enable by default; disable explicitly with DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED=false if KC admin perms not granted
-    group-provisioning-enabled: ${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:true}
+    group-provisioning-enabled: ${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:false}
+  organization:
+    default-root-name: ${DTS_ORG_DEFAULT_ROOT_NAME:}
+    unassigned-name: ${DTS_ORG_UNASSIGNED_NAME:}
+    unassigned-description: ${DTS_ORG_UNASSIGNED_DESCRIPTION:}
+    unassigned-data-level: ${DTS_ORG_UNASSIGNED_DATA_LEVEL:}
   admin:
     require-approval:
       portal-menu:

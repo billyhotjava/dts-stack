@@ -164,6 +164,7 @@ export interface AdminRoleDetail {
 	source?: string;
 	// Extended fields for richer role presentation (optional, backend-provided)
 	code?: string;
+	roleId?: string;
 	nameZh?: string;
 	nameEn?: string;
 	zone?: "DEPT" | "INST";
@@ -171,6 +172,12 @@ export interface AdminRoleDetail {
 	canWrite?: boolean;
 	canExport?: boolean;
 	canManage?: boolean;
+	legacyName?: string;
+	kcMemberCount?: number;
+	menuBindings?: number;
+	customRole?: boolean;
+	customRoleId?: number | null;
+	assignments?: AdminRoleAssignment[];
 }
 
 export interface AdminDataset {
@@ -219,6 +226,10 @@ export interface CreateCustomRolePayload {
 	maxRows?: number | null;
 	allowDesensitizeJson?: boolean;
 	description?: string;
+	titleCn?: string;
+	nameZh?: string;
+	displayName?: string;
+	titleEn?: string;
 	reason?: string;
 }
 

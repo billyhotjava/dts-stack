@@ -360,8 +360,8 @@
       "dts-system": [
         {
           "id": "4ea1aa86-db05-41f8-8403-31139c99dda1",
-          "name": "INST_VIEWER",
-          "description": "所层级数据查看角色， 浏览本所共享的密级不超的数据",
+          "name": "INST_DATA_VIEWER",
+          "description": "研究所数据查看员，浏览本所共享的密级不超的数据",
           "composite": false,
           "clientRole": true,
           "containerId": "145d46d2-070d-4dc9-99a8-efa117e86a5b",
@@ -369,8 +369,8 @@
         },
         {
           "id": "273d5e50-ff98-4e48-bc24-5fcb8e70a948",
-          "name": "DEPT_OWNER",
-          "description": "部门领导，部门数据管理员",
+          "name": "DEPT_DATA_OWNER",
+          "description": "部门数据管理员",
           "composite": false,
           "clientRole": true,
           "containerId": "145d46d2-070d-4dc9-99a8-efa117e86a5b",
@@ -378,8 +378,8 @@
         },
         {
           "id": "bdda5dbb-2da1-4f6d-b85f-cfbb6de3de42",
-          "name": "INST_EDITOR",
-          "description": "所层级数据开发员",
+          "name": "INST_DATA_DEV",
+          "description": "研究所数据开发员",
           "composite": false,
           "clientRole": true,
           "containerId": "145d46d2-070d-4dc9-99a8-efa117e86a5b",
@@ -387,8 +387,8 @@
         },
         {
           "id": "70e90579-000c-4b72-831f-18633b0b8a65",
-          "name": "INST_OWNER",
-          "description": "所领导，所层级数据管理员",
+          "name": "INST_DATA_OWNER",
+          "description": "研究所数据管理员",
           "composite": false,
           "clientRole": true,
           "containerId": "145d46d2-070d-4dc9-99a8-efa117e86a5b",
@@ -396,8 +396,8 @@
         },
         {
           "id": "13effe57-3ab6-4f9e-afe6-d9f511effde0",
-          "name": "DEPT_VIEWER",
-          "description": "部门数据查看角色， 浏览本部门密级不超的数据",
+          "name": "DEPT_DATA_VIEWER",
+          "description": "部门数据查看角色，浏览本部门密级不超的数据",
           "composite": false,
           "clientRole": true,
           "containerId": "145d46d2-070d-4dc9-99a8-efa117e86a5b",
@@ -405,7 +405,7 @@
         },
         {
           "id": "d1817772-f80b-4f9a-b580-03267320425a",
-          "name": "DEPT_EDITOR",
+          "name": "DEPT_DATA_DEV",
           "description": "部门数据开发员",
           "composite": false,
           "clientRole": true,

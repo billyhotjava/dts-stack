@@ -6,6 +6,7 @@ import com.yuzhi.dts.admin.service.PortalMenuService;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.dto.menu.MenuTreeDTO;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
+import com.yuzhi.dts.common.audit.AuditStage;
 import io.swagger.v3.oas.annotations.Operation;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -61,7 +62,13 @@ public class BasicApiResource {
                 out.add(dto);
             }
         }
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "MENU_LIST", "MENU", "portal", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "PORTAL_MENU_FETCH",
+            AuditStage.SUCCESS,
+            "portal",
+            Map.of("roleCount", roleCodes.size(), "permissionCount", permissionCodes.size())
+        );
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
@@ -70,7 +77,13 @@ public class BasicApiResource {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successful operation")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getDemoUsers() {
         List<Map<String, Object>> demo = List.of();
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "USER_DEMO_LIST", "USER", "demo", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_USER_VIEW",
+            AuditStage.SUCCESS,
+            "demo",
+            Map.of("source", "demo")
+        );
         return ResponseEntity.ok(ApiResponse.ok(demo));
     }
 

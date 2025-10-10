@@ -67,7 +67,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         PendingAuditEvent event = new PendingAuditEvent();
         event.occurredAt = Instant.now();
         event.actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        event.actorRole = SecurityUtils.getCurrentUserAuthorities().stream().findFirst().orElse(null);
+        event.actorRole = SecurityUtils.getCurrentUserPrimaryAuthority();
         event.module = resolveModule(request.getRequestURI());
         event.action = request.getMethod() + " " + request.getRequestURI();
         event.resourceType = event.module;

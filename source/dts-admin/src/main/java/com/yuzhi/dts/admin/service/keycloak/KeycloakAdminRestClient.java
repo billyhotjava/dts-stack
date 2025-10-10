@@ -190,12 +190,34 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         Map<String, Object> representation = toGroupRepresentation(payload);
         ResponseEntity<String> response = exchange(target, HttpMethod.POST, accessToken, representation);
         if (!response.getStatusCode().is2xxSuccessful()) {
-            throw toRuntime("创建 Keycloak 组失败", response);
+            Optional<KeycloakGroupDTO> fallback = findGroupByAttributes(payload, accessToken)
+                .or(() -> findGroupByName(payload.getName(), accessToken));
+            return fallback
+                .map(existing -> {
+                    LOG.warn(
+                        "Keycloak returned {} while creating group {}, resolved existing group {} instead",
+                        response.getStatusCode(),
+                        payload.getName(),
+                        existing.getId()
+                    );
+                    return existing;
+                })
+                .orElseGet(() -> {
+                    LOG.error(
+                        "Keycloak failed to create group {}: status={} body={}",
+                        payload.getName(),
+                        response.getStatusCode(),
+                        truncate(response.getBody())
+                    );
+                    KeycloakGroupDTO phantom = copyGroup(payload);
+                    phantom.setId(null);
+                    return phantom;
+                });
         }
-        Optional<KeycloakGroupDTO> created = findGroupByLocation(response, accessToken)
+        return findGroupByLocation(response, accessToken)
             .or(() -> findGroupByAttributes(payload, accessToken))
-            .or(() -> findGroupByName(payload.getName(), accessToken));
-        return created.orElseGet(() -> copyGroup(payload));
+            .or(() -> findGroupByName(payload.getName(), accessToken))
+            .orElseGet(() -> copyGroup(payload));
     }
 
     @Override

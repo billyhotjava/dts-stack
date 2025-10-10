@@ -1,8 +1,10 @@
 package com.yuzhi.dts.platform.web.filter;
 
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.service.audit.AuditFlowManager;
 import com.yuzhi.dts.platform.service.audit.AuditTrailService;
 import com.yuzhi.dts.platform.service.audit.AuditTrailService.PendingAuditEvent;
+import com.yuzhi.dts.common.audit.AuditStage;
 import org.springframework.beans.factory.ObjectProvider;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.util.StringUtils;
 
 @Component
 public class AuditLoggingFilter extends OncePerRequestFilter {
@@ -37,13 +40,16 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
     };
 
     private final ObjectProvider<AuditTrailService> auditServiceProvider;
+    private final AuditFlowManager flowManager;
     private final boolean accessLogEnabled;
 
     public AuditLoggingFilter(
         ObjectProvider<AuditTrailService> auditServiceProvider,
+        AuditFlowManager flowManager,
         @Value("${dts.http-access-log:false}") boolean accessLogEnabled
     ) {
         this.auditServiceProvider = auditServiceProvider;
+        this.flowManager = flowManager;
         this.accessLogEnabled = accessLogEnabled;
     }
 
@@ -67,8 +73,31 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         long start = System.nanoTime();
         ContentCachingRequestWrapper wrapper = new ContentCachingRequestWrapper(request);
         AuditResponseWrapper responseWrapper = new AuditResponseWrapper(response);
+        String actionHeader = wrapper.getHeader("X-Audit-Action");
+        String flowHeader = wrapper.getHeader("X-Audit-Flow");
+        String stageHeader = wrapper.getHeader("X-Audit-Stage");
+        AuditStage declaredStage = StringUtils.hasText(stageHeader) ? AuditStage.fromString(stageHeader) : null;
+        boolean flowOwned = false;
+        Throwable failure = null;
+        AuditFlowManager.FlowContext flowContext = null;
+        if (StringUtils.hasText(actionHeader)) {
+            String flowId = StringUtils.hasText(flowHeader) ? flowHeader : null;
+            if (declaredStage == AuditStage.BEGIN) {
+                flowContext = flowManager.begin(actionHeader, flowId);
+                flowOwned = true;
+            } else {
+                flowContext = flowManager.attach(actionHeader, flowId);
+                flowOwned = true;
+            }
+        }
         try {
             filterChain.doFilter(wrapper, responseWrapper);
+        } catch (IOException | ServletException ex) {
+            failure = ex;
+            throw ex;
+        } catch (RuntimeException ex) {
+            failure = ex;
+            throw ex;
         } finally {
             responseWrapper.flushBuffer();
             try {
@@ -79,6 +108,30 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                 } else {
                     if (log.isDebugEnabled()) {
                         log.debug("AuditTrailService not available; skipping audit record for {} {}", request.getMethod(), request.getRequestURI());
+                    }
+                }
+                Map<String, Object> flowSummary = new HashMap<>();
+                flowSummary.put("status", responseWrapper.getStatus());
+                flowSummary.put("uri", wrapper.getRequestURI());
+                flowSummary.put("method", wrapper.getMethod());
+                flowSummary.put("durationMs", event.latencyMs);
+                flowSummary.put("actor", event.actor);
+                flowSummary.put("result", event.result);
+                if (failure != null) {
+                    flowSummary.put("exception", failure.getClass().getSimpleName());
+                    flowSummary.put("errorMessage", failure.getMessage());
+                }
+                AuditStage effectiveStage = declaredStage;
+                if (flowContext != null && effectiveStage == null) {
+                    effectiveStage = "FAILURE".equalsIgnoreCase(event.result) ? AuditStage.FAIL : AuditStage.SUCCESS;
+                }
+                if (flowContext != null) {
+                    if (effectiveStage == AuditStage.SUCCESS) {
+                        flowManager.completeSuccess(flowSummary);
+                    } else if (effectiveStage == AuditStage.FAIL) {
+                        flowManager.completeFailure(failure, flowSummary);
+                    } else if (effectiveStage != AuditStage.BEGIN) {
+                        flowManager.appendSupportingCall(wrapper.getMethod(), wrapper.getRequestURI(), flowSummary);
                     }
                 }
                 // Lightweight access log for quick dev troubleshooting
@@ -98,6 +151,10 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                 }
             } catch (Exception ex) {
                 log.warn("Failed to record audit trail for {} {}", request.getMethod(), request.getRequestURI(), ex);
+            } finally {
+                if (flowOwned) {
+                    flowManager.clear();
+                }
             }
         }
     }

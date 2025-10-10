@@ -81,9 +81,18 @@ public class DevDataSeeder {
     }
 
     private void seedOrganizations() {
-        // Only ensure a single root "S10" and its child "待分配"
-        orgService.ensureUnassignedRoot();
-        log.info("Ensured minimal organizations: S10 -> 待分配");
+        OrganizationNode ensured = orgService.ensureUnassignedRoot();
+        if (ensured == null) {
+            log.info("No default organization seed configured; skipped organization seeding");
+        } else if (ensured.getParent() == null) {
+            log.info("Ensured organization root {}", ensured.getName());
+        } else {
+            log.info(
+                "Ensured organization seed {} under parent {}",
+                ensured.getName(),
+                ensured.getParent() != null ? ensured.getParent().getName() : "<root>"
+            );
+        }
     }
 
     private void seedDatasets() {

@@ -1,0 +1,375 @@
+version: "2.4"
+
+## Combined stack for legacy docker-compose 1.22 deployments.
+## Mirrors docker-compose.yml + docker-compose-app.yml so older CLIs
+## can run with a single manifest.
+
+x-hc: &hc
+  interval: 10s
+  timeout: 5s
+  retries: 30
+  start_period: 20s
+
+services:
+
+  dts-proxy:
+    image: ${IMAGE_TRAEFIK}
+    container_name: dts-proxy
+    command:
+      - "--api.dashboard=${TRAEFIK_DASHBOARD}"
+      - "--api.insecure=${TRAEFIK_DASHBOARD}"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=dts-core"
+      - "--providers.file.filename=/etc/traefik/dynamic/traefik-dynamic.yml"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--ping=${TRAEFIK_ENABLE_PING}"
+      - "--entrypoints.metrics.address=:${TRAEFIK_METRICS_PORT}"
+      - "--accesslog=true"
+      - "--serversTransport.insecureSkipVerify=true"
+      - "--log.level=INFO"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.entryPoint=metrics"
+      - "--metrics.prometheus.addEntryPointsLabels=true"
+      - "--metrics.prometheus.addServicesLabels=true"
+    ports:
+      - "80:80"
+      - "${TLS_PORT}:443"
+      - "127.0.0.1:${TRAEFIK_DASHBOARD_PORT}:8080"
+      - "127.0.0.1:${TRAEFIK_METRICS_PORT}:${TRAEFIK_METRICS_PORT}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./services/dts-proxy/dynamic:/etc/traefik/dynamic:ro,z
+      - ./services/certs:/etc/traefik/certs:ro,z
+      - ./services/certs/server.crt:/certs/server.crt:ro,z
+      - ./services/certs/server.key:/certs/server.key:ro,z
+    labels:
+      - "traefik.enable=true"
+    restart: unless-stopped
+    networks:
+      - dts-core
+    links:
+      - dts-pg
+
+  dts-pg:
+    image: ${IMAGE_POSTGRES}
+    container_name: dts-pg
+    environment:
+      POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD}
+      POSTGRES_USER: ${PG_SUPER_USER}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      PG_DB_DTADMIN: ${PG_DB_DTADMIN}
+      PG_USER_DTADMIN: ${PG_USER_DTADMIN}
+      PG_PWD_DTADMIN: ${PG_PWD_DTADMIN}
+      PG_DB_KEYCLOAK: ${PG_DB_KEYCLOAK}
+      PG_USER_KEYCLOAK: ${PG_USER_KEYCLOAK}
+      PG_PWD_KEYCLOAK: ${PG_PWD_KEYCLOAK}
+      PG_DB_DTPS: ${PG_DB_DTPS}
+      PG_USER_DTPS: ${PG_USER_DTPS}
+      PG_PWD_DTPS: ${PG_PWD_DTPS}
+      PG_DB_DTCOMMON: ${PG_DB_DTCOMMON}
+      PG_USER_DTCOMMON: ${PG_USER_DTCOMMON}
+      PG_PWD_DTCOMMON: ${PG_PWD_DTCOMMON}
+      PG_DB_RANGER: ${PG_DB_RANGER}
+      PG_USER_RANGER: ${PG_USER_RANGER}
+      PG_PWD_RANGER: ${PG_PWD_RANGER}
+    volumes:
+      - ./services/dts-pg/data:/var/lib/postgresql/data:Z
+      - ./services/dts-pg/init:/docker-entrypoint-initdb.d:ro,Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null"]
+      interval: 10s
+      timeout: 30s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    networks:
+      dts-core:
+        aliases:
+          - dts-pg
+
+  dts-keycloak:
+    image: ${IMAGE_KEYCLOAK}
+    container_name: dts-keycloak
+    command:
+      - start
+      - --hostname=${HOST_SSO}
+      - --proxy-headers=xforwarded
+      - --http-enabled=${KC_HTTP_ENABLED}
+    environment:
+      KEYCLOAK_ADMIN: ${KC_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PWD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_KEYCLOAK}
+      KC_DB_URL_HOST: dts-pg
+      KC_DB_URL_PORT: "5432"
+      KC_DB_URL_DATABASE: ${PG_DB_KEYCLOAK}
+      KC_DB_USERNAME: ${PG_USER_KEYCLOAK}
+      KC_DB_PASSWORD: ${PG_PWD_KEYCLOAK}
+      KC_DB_URL_PROPERTIES: "sslmode=disable"
+      KC_HOSTNAME: ${KC_HOSTNAME}
+      KC_HOSTNAME_PORT: ${KC_HOSTNAME_PORT}
+      KC_HOSTNAME_URL: ${KC_HOSTNAME_URL}
+      KC_HOSTNAME_STRICT: ${KC_HOSTNAME_STRICT}
+      KC_HOSTNAME_STRICT_HTTPS: ${KC_HOSTNAME_STRICT_HTTPS}
+      KC_HTTP_ENABLED: ${KC_HTTP_ENABLED}
+      KC_FEATURES: scripts
+    depends_on:
+      - dts-pg
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kc-redirect.rule=Host(`${HOST_SSO}`)"
+      - "traefik.http.routers.kc-redirect.entrypoints=web"
+      - "traefik.http.routers.kc-redirect.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.routers.kc.rule=Host(`${HOST_SSO}`)"
+      - "traefik.http.routers.kc.entrypoints=websecure"
+      - "traefik.http.routers.kc.tls=true"
+      - "traefik.http.routers.kc.service=kc"
+      - "traefik.http.services.kc.loadbalancer.server.port=8080"
+      - "traefik.http.services.kc.loadbalancer.passhostheader=true"
+      - "traefik.http.middlewares.kc-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.kc-headers.headers.customrequestheaders.X-Forwarded-Host=${HOST_SSO}"
+      - "traefik.http.routers.kc.middlewares=kc-headers"
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-minio:
+    image: ${IMAGE_MINIO}
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_REGION_NAME: ${MINIO_REGION_NAME}
+      MINIO_SERVER_URL: ${MINIO_SERVER_URL}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL}
+    volumes:
+      - ./services/dts-minio/data:/data:Z
+    healthcheck:
+      test: ["CMD","curl","-fsS","http://localhost:9000/minio/health/live"]
+      <<: *hc
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dts-minio-console.rule=Host(`${HOST_MINIO}`) && PathPrefix(`/`)"
+      - "traefik.http.routers.dts-minio-console.entrypoints=websecure"
+      - "traefik.http.routers.dts-minio-console.tls=true"
+      - "traefik.http.routers.dts-minio-console.service=dts-minio-console"
+      - "traefik.http.services.dts-minio-console.loadbalancer.server.port=9001"
+      - "traefik.http.routers.dts-minio-api.rule=Host(`${HOST_MINIO}`) && PathPrefix(`/s3`)"
+      - "traefik.http.routers.dts-minio-api.entrypoints=websecure"
+      - "traefik.http.routers.dts-minio-api.tls=true"
+      - "traefik.http.routers.dts-minio-api.service=dts-minio-api"
+      - "traefik.http.services.dts-minio-api.loadbalancer.server.port=9000"
+      - "traefik.http.middlewares.dts-strip-s3.stripprefixregex.regex=/s3"
+      - "traefik.http.routers.dts-minio-api.middlewares=dts-strip-s3@docker"
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-minio-init:
+    image: ${IMAGE_MINIO_MC}
+    depends_on:
+      - dts-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET}
+    entrypoint: ["/bin/sh","-c","/init/init.sh"]
+    volumes:
+      - ./services/dts-minio-init/init:/init:ro,Z
+    restart: "no"
+    networks:
+      - dts-core
+
+  dts-nessie:
+    image: ${IMAGE_NESSIE}
+    container_name: dts-nessie
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:19120/api/v1/config >/dev/null || wget -qO- http://127.0.0.1:19120/api/v1/config >/dev/null"]
+      <<: *hc
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-nessie.rule=Host(`${HOST_NESSIE}`)"
+      - "traefik.http.routers.dts-nessie.entrypoints=websecure"
+      - "traefik.http.routers.dts-nessie.tls=true"
+      - "traefik.http.services.dts-nessie.loadbalancer.server.port=19120"
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-trino:
+    image: ${IMAGE_TRINO}
+    container_name: dts-trino
+    depends_on:
+      - dts-nessie
+      - dts-minio
+    volumes:
+      - ./services/dts-trino/init/catalog:/etc/trino/catalog:ro,Z
+      - ./services/dts-trino/config.properties:/etc/trino/config.properties:ro,Z
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/v1/info >/dev/null || exit 1"]
+      <<: *hc
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-trino.rule=Host(`${HOST_TRINO}`) && PathPrefix(`/`)"
+      - "traefik.http.routers.dts-trino.entrypoints=websecure"
+      - "traefik.http.routers.dts-trino.tls=true"
+      - "traefik.http.services.dts-trino.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.dts-trino-redirect.redirectregex.regex=^/$$"
+      - "traefik.http.middlewares.dts-trino-redirect.redirectregex.replacement=/ui/"
+      - "traefik.http.middlewares.dts-trino-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.dts-trino-https.redirectscheme.permanent=true"
+      - "traefik.http.routers.dts-trino-http.rule=Host(`${HOST_TRINO}`)"
+      - "traefik.http.routers.dts-trino-http.entrypoints=web"
+      - "traefik.http.routers.dts-trino-http.middlewares=dts-trino-https@docker"
+      - "traefik.http.routers.dts-trino.middlewares=dts-trino-redirect@docker"
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-admin:
+    image: ${IMAGE_DTS_ADMIN:?Set IMAGE_DTS_ADMIN in imgversion.conf or .env}
+    depends_on:
+      - dts-pg
+    environment:
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTADMIN:-dts_admin}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
+      DTS_KEYCLOAK_ADMIN_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
+      DTS_KEYCLOAK_ADMIN_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
+      DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED: "${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:-true}"
+      JHIPSTER_CORS_ALLOWED_ORIGINS: "https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API}"
+      JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+      JHIPSTER_CORS_ALLOWED_HEADERS: "*"
+      JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      EUREKA_CLIENT_ENABLED: "false"
+      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12 -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
+    volumes:
+      - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
+    extra_hosts:
+      - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-admin.rule=Host(`${HOST_API}`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.dts-admin.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin.tls=true"
+      - "traefik.http.services.dts-admin.loadbalancer.server.port=8081"
+      - "traefik.http.middlewares.dts-strip-admin.stripprefixregex.regex=/admin"
+      - "traefik.http.routers.dts-admin.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file"
+      - "traefik.http.routers.dts-admin-uiapi.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.dts-admin-uiapi.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin-uiapi.tls=true"
+      - "traefik.http.routers.dts-admin-uiapi.service=dts-admin"
+      - "traefik.http.routers.dts-admin-uiapi.middlewares=cors-allow@file,security-headers@file"
+    restart: unless-stopped
+
+  dts-platform:
+    image: ${IMAGE_DTS_PLATFORM:?Set IMAGE_DTS_PLATFORM in imgversion.conf or .env}
+    depends_on:
+      - dts-pg
+      - dts-trino
+    environment:
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED_PLATFORM:-true}
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "${OIDC_ISSUER_URI:-https://${HOST_SSO}/realms/${KC_REALM}}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_PLATFORM_CLIENT_SECRET:-}"
+      JHIPSTER_CORS_ALLOWED_ORIGINS: "https://${HOST_PLATFORM_UI},https://${HOST_ADMIN_UI},https://${HOST_API}"
+      JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+      JHIPSTER_CORS_ALLOWED_HEADERS: "*"
+      JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      EUREKA_CLIENT_ENABLED: "false"
+      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12 -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
+      DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
+      DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
+      DTS_JDBC_DRIVER_JAR: "quark-driver-8.37.3.jar"
+      DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
+      DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY: "filesystem"
+      DATA_STANDARD_STORAGE_DIR: "/opt/dts/upload"
+      DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
+    volumes:
+      - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
+      - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
+      - ./services/dts-platform/upload:/opt/dts/upload:Z
+    extra_hosts:
+      - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-platform.rule=Host(`${HOST_API}`) && PathPrefix(`/platform`)"
+      - "traefik.http.routers.dts-platform.entrypoints=websecure"
+      - "traefik.http.routers.dts-platform.tls=true"
+      - "traefik.http.services.dts-platform.loadbalancer.server.port=8081"
+      - "traefik.http.middlewares.dts-strip-platform.stripprefixregex.regex=/platform"
+      - "traefik.http.routers.dts-platform.middlewares=dts-strip-platform@docker,cors-allow@file,security-headers@file"
+      - "traefik.http.routers.dts-platform-uiapi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.dts-platform-uiapi.entrypoints=websecure"
+      - "traefik.http.routers.dts-platform-uiapi.tls=true"
+      - "traefik.http.routers.dts-platform-uiapi.service=dts-platform"
+      - "traefik.http.routers.dts-platform-uiapi.middlewares=cors-allow@file,security-headers@file"
+    restart: unless-stopped
+
+  dts-admin-webapp:
+    image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-admin-ui.rule=Host(`${HOST_ADMIN_UI}`)"
+      - "traefik.http.routers.dts-admin-ui.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin-ui.tls=true"
+      - "traefik.http.services.dts-admin-ui.loadbalancer.server.port=80"
+    restart: unless-stopped
+
+  dts-platform-webapp:
+    image: ${IMAGE_DTS_PLATFORM_WEBAPP:?Set IMAGE_DTS_PLATFORM_WEBAPP in imgversion.conf or .env}
+    environment:
+      API_PROXY_TARGET: http://dts-platform:8081
+      VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`)"
+      - "traefik.http.routers.dts-platform-ui.entrypoints=websecure"
+      - "traefik.http.routers.dts-platform-ui.tls=true"
+      - "traefik.http.services.dts-platform-ui.loadbalancer.server.port=80"
+    restart: unless-stopped
+
+volumes:
+  maven-cache:
+
+networks:
+  dts-core:
+    name: dts-core
+    driver: bridge

@@ -5,6 +5,7 @@ import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,6 +13,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,9 +28,7 @@ public class OrganizationService {
 
     private static final Logger LOG = LoggerFactory.getLogger(OrganizationService.class);
 
-    private static final String UNASSIGNED_ORG_NAME = "待分配";
-    private static final String UNASSIGNED_DESCRIPTION = "待分配用户暂存组织";
-    private static final String UNASSIGNED_DATA_LEVEL = "DATA_INTERNAL";
+    private static final Duration PROVISIONING_RETRY_BACKOFF = Duration.ofSeconds(30);
 
     private final OrganizationRepository repository;
     private final KeycloakAdminClient keycloakAdminClient;
@@ -35,6 +36,12 @@ public class OrganizationService {
     private final String managementClientId;
     private final String managementClientSecret;
     private final boolean groupProvisioningEnabled;
+    private final String defaultRootName;
+    private final String defaultUnassignedName;
+    private final String defaultUnassignedDescription;
+    private final String defaultUnassignedDataLevel;
+    private final AtomicLong provisioningRetryAfter = new AtomicLong(0L);
+    private final AtomicBoolean resyncPending = new AtomicBoolean(false);
 
     public OrganizationService(
         OrganizationRepository repository,
@@ -42,7 +49,11 @@ public class OrganizationService {
         KeycloakAuthService keycloakAuthService,
         @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}") String managementClientId,
         @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}") String managementClientSecret,
-        @Value("${dts.keycloak.group-provisioning-enabled:false}") boolean groupProvisioningEnabled
+        @Value("${dts.keycloak.group-provisioning-enabled:false}") boolean groupProvisioningEnabled,
+        @Value("${dts.organization.default-root-name:}") String defaultRootName,
+        @Value("${dts.organization.unassigned-name:}") String defaultUnassignedName,
+        @Value("${dts.organization.unassigned-description:}") String defaultUnassignedDescription,
+        @Value("${dts.organization.unassigned-data-level:}") String defaultUnassignedDataLevel
     ) {
         this.repository = repository;
         this.keycloakAdminClient = keycloakAdminClient;
@@ -50,6 +61,10 @@ public class OrganizationService {
         this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
         this.managementClientSecret = managementClientSecret == null ? "" : managementClientSecret.trim();
         this.groupProvisioningEnabled = groupProvisioningEnabled;
+        this.defaultRootName = StringUtils.trimToEmpty(defaultRootName);
+        this.defaultUnassignedName = StringUtils.trimToEmpty(defaultUnassignedName);
+        this.defaultUnassignedDescription = StringUtils.trimToEmpty(defaultUnassignedDescription);
+        this.defaultUnassignedDataLevel = normalizeDataLevel(defaultUnassignedDataLevel);
     }
 
     public List<OrganizationNode> findTree() {
@@ -128,24 +143,29 @@ public class OrganizationService {
     }
 
     public OrganizationNode ensureUnassignedRoot() {
-        // Ensure the single root named "S10" exists
-        OrganizationNode root = repository.findFirstByNameAndParentIsNull("S10").orElse(null);
-        if (root == null) {
-            root = create("S10", null, null);
+        OrganizationNode existingRoot = repository.findByParentIsNullOrderByIdAsc().stream().findFirst().orElse(null);
+        if (StringUtils.isBlank(defaultRootName)) {
+            return existingRoot;
         }
-        // Ensure child "待分配" under root "S10"
+        OrganizationNode root = repository.findFirstByNameAndParentIsNull(defaultRootName).orElse(existingRoot);
+        if (root == null) {
+            root = create(defaultRootName, null, null);
+        }
+        if (StringUtils.isBlank(defaultUnassignedName)) {
+            return root;
+        }
         OrganizationNode finalRoot = root;
         OrganizationNode node = repository
-            .findFirstByParentIdAndName(root.getId(), UNASSIGNED_ORG_NAME)
-            .orElseGet(() -> create(UNASSIGNED_ORG_NAME, finalRoot.getId(), UNASSIGNED_DESCRIPTION));
+            .findFirstByParentIdAndName(root.getId(), defaultUnassignedName)
+            .orElseGet(() -> create(defaultUnassignedName, finalRoot.getId(), defaultUnassignedDescription));
 
         boolean dirty = false;
-        if (!Objects.equals(node.getDataLevel(), UNASSIGNED_DATA_LEVEL)) {
-            node.setDataLevel(UNASSIGNED_DATA_LEVEL);
+        if (StringUtils.isNotBlank(defaultUnassignedDataLevel) && !Objects.equals(node.getDataLevel(), defaultUnassignedDataLevel)) {
+            node.setDataLevel(defaultUnassignedDataLevel);
             dirty = true;
         }
-        if (!Objects.equals(node.getDescription(), UNASSIGNED_DESCRIPTION)) {
-            node.setDescription(UNASSIGNED_DESCRIPTION);
+        if (StringUtils.isNotBlank(defaultUnassignedDescription) && !Objects.equals(node.getDescription(), defaultUnassignedDescription)) {
+            node.setDescription(defaultUnassignedDescription);
             dirty = true;
         }
         if (dirty) {
@@ -235,8 +255,21 @@ public class OrganizationService {
     }
 
     private boolean isKeycloakSyncEnabled() {
-        // Only sync/provision groups when both admin credentials are present and explicitly enabled.
-        return groupProvisioningEnabled && StringUtils.isNotBlank(managementClientId) && StringUtils.isNotBlank(managementClientSecret);
+        if (!groupProvisioningEnabled) {
+            return false;
+        }
+        if (StringUtils.isBlank(managementClientId) || StringUtils.isBlank(managementClientSecret)) {
+            return false;
+        }
+        long retryAfter = provisioningRetryAfter.get();
+        if (retryAfter > 0) {
+            long now = System.currentTimeMillis();
+            if (now < retryAfter) {
+                resyncPending.set(true);
+                return false;
+            }
+        }
+        return true;
     }
 
     private String resolveManagementToken() {
@@ -265,6 +298,7 @@ public class OrganizationService {
         if (StringUtils.isNotBlank(node.getKeycloakGroupId())) {
             try {
                 if (keycloakAdminClient.findGroup(node.getKeycloakGroupId(), token).isPresent()) {
+                    markProvisioningHealthy();
                     return;
                 }
                 LOG.warn(
@@ -290,12 +324,35 @@ public class OrganizationService {
             ensureGroupSynced(resolvedParent, token);
         }
         String parentGroupId = resolvedParent != null ? resolvedParent.getKeycloakGroupId() : null;
-        KeycloakGroupDTO created = keycloakAdminClient.createGroup(toKeycloakGroupDto(node), parentGroupId, token);
-        node.setKeycloakGroupId(created.getId());
-        repository.save(node);
-        LOG.info(
-            "Created Keycloak group {} for organization {} (id={})",
-            created.getId(),
+
+        // Reuse existing Keycloak groups when possible to avoid duplicate-creation failures.
+        String expectedPath = buildKeycloakGroupPath(node);
+        if (StringUtils.isNotBlank(expectedPath)) {
+            try {
+                keycloakAdminClient
+                    .findGroupByPath(expectedPath, token)
+                    .ifPresent(existing -> {
+                        node.setKeycloakGroupId(existing.getId());
+                        repository.save(node);
+                        markProvisioningHealthy();
+                        LOG.info(
+                            "Reused Keycloak group {} for organization {} (id={}) via path {}",
+                            existing.getId(),
+                            node.getName(),
+                            node.getId(),
+                            expectedPath
+                        );
+                    });
+                if (StringUtils.isNotBlank(node.getKeycloakGroupId())) {
+                    return;
+                }
+            } catch (RuntimeException ex) {
+                LOG.warn("Failed probing Keycloak group by path {}: {}", expectedPath, ex.getMessage());
+            }
+        }
+
+        LOG.debug(
+            "Skip auto-provisioning Keycloak group for organization {} (id={}); set dts.keycloak.group-provisioning-enabled=true to enable creation",
             node.getName(),
             node.getId()
         );
@@ -307,8 +364,9 @@ public class OrganizationService {
         }
         try {
             keycloakAdminClient.updateGroup(node.getKeycloakGroupId(), toKeycloakGroupDto(node), token);
+            markProvisioningHealthy();
         } catch (RuntimeException ex) {
-            throw new IllegalStateException("同步组织至 Keycloak 失败: " + ex.getMessage(), ex);
+            suppressProvisioning("update", node, ex);
         }
     }
 
@@ -323,6 +381,7 @@ public class OrganizationService {
         if (StringUtils.isNotBlank(node.getKeycloakGroupId())) {
             try {
                 keycloakAdminClient.deleteGroup(node.getKeycloakGroupId(), token);
+                markProvisioningHealthy();
                 LOG.info(
                     "Deleted Keycloak group {} for organization {} (id={})",
                     node.getKeycloakGroupId(),
@@ -352,6 +411,7 @@ public class OrganizationService {
         }
         try {
             keycloakAdminClient.moveGroup(node.getKeycloakGroupId(), node.getName(), parentGroupId, token);
+            markProvisioningHealthy();
             LOG.info(
                 "Moved Keycloak group {} under parent {} (org id={})",
                 node.getKeycloakGroupId(),
@@ -359,7 +419,7 @@ public class OrganizationService {
                 node.getId()
             );
         } catch (RuntimeException ex) {
-            throw new IllegalStateException("移动 Keycloak 组失败: " + ex.getMessage(), ex);
+            suppressProvisioning("move", node, ex);
         }
     }
 
@@ -395,13 +455,32 @@ public class OrganizationService {
         return attributes;
     }
 
+    private String buildKeycloakGroupPath(OrganizationNode node) {
+        if (node == null) {
+            return null;
+        }
+        List<String> segments = new ArrayList<>();
+        OrganizationNode cursor = node;
+        while (cursor != null) {
+            String name = StringUtils.trimToNull(cursor.getName());
+            if (name != null) {
+                segments.add(0, name);
+            }
+            cursor = cursor.getParent();
+        }
+        if (segments.isEmpty()) {
+            return null;
+        }
+        return "/" + String.join("/", segments);
+    }
+
     private String determineDataLevel(OrganizationNode parent, String fallback) {
         String candidate = parent != null ? parent.getDataLevel() : fallback;
         String normalized = normalizeDataLevel(candidate);
         if (StringUtils.isNotBlank(normalized)) {
             return normalized;
         }
-        return UNASSIGNED_DATA_LEVEL;
+        return defaultUnassignedDataLevel;
     }
 
     private String normalizeDataLevel(String value) {
@@ -409,5 +488,48 @@ public class OrganizationService {
             return null;
         }
         return value.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+    }
+
+    private void markProvisioningHealthy() {
+        long previous = provisioningRetryAfter.getAndSet(0L);
+        long now = System.currentTimeMillis();
+        if (previous > now) {
+            LOG.info("Re-enabled Keycloak group provisioning after successful operation");
+            if (resyncPending.compareAndSet(true, false)) {
+                try {
+                    pushTreeToKeycloak();
+                } catch (RuntimeException ex) {
+                    LOG.warn("Failed to resync organization tree after Keycloak recovery: {}", ex.getMessage());
+                    resyncPending.set(true);
+                    provisioningRetryAfter.compareAndSet(0L, now + PROVISIONING_RETRY_BACKOFF.toMillis());
+                }
+            }
+        }
+    }
+
+    private void suppressProvisioning(String action, OrganizationNode node, RuntimeException ex) {
+        long now = System.currentTimeMillis();
+        long retryUntil = now + PROVISIONING_RETRY_BACKOFF.toMillis();
+        resyncPending.set(true);
+        long previous = provisioningRetryAfter.getAndUpdate(existing -> existing <= now ? retryUntil : Math.max(existing, retryUntil));
+        if (previous <= now) {
+            LOG.error(
+                "Temporarily disabling Keycloak group provisioning after {} failure for organization {} (id={}); will retry after {}s",
+                action,
+                node != null ? node.getName() : "unknown",
+                node != null ? node.getId() : null,
+                PROVISIONING_RETRY_BACKOFF.toSeconds(),
+                ex
+            );
+        } else {
+            LOG.warn(
+                "Keycloak group provisioning still suppressed; latest {} failure for organization {} (id={}): {}",
+                action,
+                node != null ? node.getName() : "unknown",
+                node != null ? node.getId() : null,
+                ex.getMessage()
+            );
+            LOG.debug("Suppressed Keycloak provisioning failure details", ex);
+        }
     }
 }

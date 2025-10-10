@@ -30,8 +30,10 @@
   - Platform：`https://platform.${BASE_DOMAIN}`（同域 `/api` → dts-platform）
 - 更新代码后：
   - 仅重建改动服务镜像并重启该服务（示例）：
-    - `docker build -t dts-admin:NEW_TAG source/dts-admin && docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-admin`
+    - `docker build -t dts-admin:NEW_TAG -f source/dts-admin/Dockerfile source && docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-admin`
+    - `docker build -t dts-platform:NEW_TAG -f source/dts-platform/Dockerfile source && docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-platform`
     - `docker build -t dts-admin-webapp:NEW_TAG source/dts-admin-webapp && docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-admin-webapp`
+    - `docker build -t dts-admin:NEW_TAG source/dts-admin` 与 `docker build -t dts-platform:NEW_TAG source/dts-platform` 依旧可用；如未包含 `dts-common`，Dockerfile 将自动注入轻量版审计依赖，仅影响容器内构建。
   - 使用固定标签时可：`up -d --force-recreate <服务名>`（不推荐长期使用）
 
 【说明】

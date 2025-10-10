@@ -5,6 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.config.AuditProperties;
 import com.yuzhi.dts.admin.domain.AuditEvent;
 import com.yuzhi.dts.admin.repository.AuditEventRepository;
+import com.yuzhi.dts.admin.security.SecurityUtils;
+import com.yuzhi.dts.common.audit.AuditActionCatalog;
+import com.yuzhi.dts.common.audit.AuditActionDefinition;
+import com.yuzhi.dts.common.audit.AuditStage;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.net.InetAddress;
@@ -13,6 +17,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
@@ -78,6 +85,7 @@ public class AdminAuditService {
     private final AuditProperties properties;
     private final DtsCommonAuditClient auditClient;
     private final ObjectMapper objectMapper;
+    private final AuditActionCatalog actionCatalog;
 
     private BlockingQueue<PendingAuditEvent> queue;
     private ScheduledExecutorService workerPool;
@@ -90,12 +98,14 @@ public class AdminAuditService {
         AuditEventRepository repository,
         AuditProperties properties,
         DtsCommonAuditClient auditClient,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        AuditActionCatalog actionCatalog
     ) {
         this.repository = repository;
         this.properties = properties;
         this.auditClient = auditClient;
         this.objectMapper = objectMapper;
+        this.actionCatalog = actionCatalog;
     }
 
     @PostConstruct
@@ -141,27 +151,99 @@ public class AdminAuditService {
         }
     }
 
+    public void recordAction(String actionCode, AuditStage stage, String resourceId, Object payload) {
+        recordAction(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), actionCode, stage, resourceId, payload);
+    }
+
+    public void recordAction(String actor, String actionCode, AuditStage stage, String resourceId, Object payload) {
+        if (!StringUtils.hasText(actionCode)) {
+            record(actor, actionCode, "GENERAL", "general", resourceId, outcomeFromStage(stage), payload, null);
+            return;
+        }
+        AuditStage effectiveStage = stage == null ? AuditStage.SUCCESS : stage;
+        AuditActionDefinition definition = actionCatalog
+            .findByCode(actionCode)
+            .orElseGet(() -> new AuditActionDefinition(
+                actionCode.trim().toUpperCase(Locale.ROOT),
+                actionCode,
+                "admin",
+                "管理端",
+                "admin",
+                "管理动作",
+                false,
+                null
+            ));
+        if (!definition.isStageSupported(effectiveStage)) {
+            log.debug("Audit action {} does not declare stage {}; continuing", definition.getCode(), effectiveStage);
+        }
+        Map<String, Object> extraTags = new HashMap<>();
+        extraTags.put("actionCode", definition.getCode());
+        extraTags.put("stage", effectiveStage.name());
+        extraTags.put("moduleKey", definition.getModuleKey());
+        extraTags.put("moduleTitle", definition.getModuleTitle());
+        extraTags.put("entryKey", definition.getEntryKey());
+        extraTags.put("entryTitle", definition.getEntryTitle());
+        extraTags.put("supportsFlow", definition.isSupportsFlow());
+        record(
+            actor,
+            definition.getDisplay(),
+            definition.getModuleKey(),
+            definition.getEntryKey(),
+            resourceId,
+            outcomeFromStage(effectiveStage),
+            payload,
+            extraTags
+        );
+    }
+
+    private String outcomeFromStage(AuditStage stage) {
+        AuditStage effective = stage == null ? AuditStage.SUCCESS : stage;
+        return switch (effective) {
+            case BEGIN -> "PENDING";
+            case SUCCESS -> "SUCCESS";
+            case FAIL -> "FAILURE";
+        };
+    }
+
     public void record(String actor, String action, String module, String resourceType, String resourceId, String outcome, Object payload) {
+        record(actor, action, module, resourceType, resourceId, outcome, payload, null);
+    }
+
+    public void record(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String outcome,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
         PendingAuditEvent event = new PendingAuditEvent();
         event.occurredAt = Instant.now();
         event.actor = defaultString(actor, "anonymous");
+        event.actorRole = SecurityUtils.getCurrentUserPrimaryAuthority();
         event.action = defaultString(action, "UNKNOWN");
         event.module = defaultString(module, "GENERAL");
         event.resourceType = resourceType;
         event.resourceId = resourceId;
         event.result = defaultString(outcome, "SUCCESS");
         event.payload = payload;
+        event.extraTags = serializeTags(extraTags);
         logEnqueuedEvent(event);
         offer(event);
     }
 
     public void record(String actor, String action, String module, String resourceId, String outcome, Object payload) {
-        record(actor, action, module, module, resourceId, outcome, payload);
+        record(actor, action, module, module, resourceId, outcome, payload, null);
     }
 
     public void record(PendingAuditEvent event) {
         if (event.occurredAt == null) {
             event.occurredAt = Instant.now();
+        }
+        if (!StringUtils.hasText(event.actorRole)) {
+            event.actorRole = SecurityUtils.getCurrentUserPrimaryAuthority();
         }
         logEnqueuedEvent(event);
         offer(event);
@@ -754,6 +836,18 @@ public class AdminAuditService {
             event.resourceId,
             queue != null ? queue.size() : 0
         );
+    }
+
+    private String serializeTags(Map<String, Object> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(tags);
+        } catch (JsonProcessingException ex) {
+            log.warn("Failed to serialize audit extra tags", ex);
+            return null;
+        }
     }
 
     private InetAddress parseClientIp(String raw) {

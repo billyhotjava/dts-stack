@@ -115,7 +115,7 @@ const resolveAdminApiBaseUrl = () => {
 const resolveAllowedLoginRoles = (): string[] => {
     // Default: allow all authenticated users (empty list).
     // If you want to restrict, set VITE_ALLOWED_LOGIN_ROLES to a comma-separated list, e.g.
-    // "DEPT_VIEWER,DEPT_EDITOR,DEPT_OWNER,INST_VIEWER,INST_EDITOR,INST_OWNER,ROLE_OP_ADMIN".
+    // "DEPT_DATA_VIEWER,DEPT_DATA_DEV,DEPT_DATA_OWNER,INST_DATA_VIEWER,INST_DATA_DEV,INST_DATA_OWNER,ROLE_OP_ADMIN".
     const defaultValue = "";
     const raw = (import.meta.env.VITE_ALLOWED_LOGIN_ROLES || defaultValue) as string;
     return String(raw)

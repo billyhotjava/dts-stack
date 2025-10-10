@@ -94,7 +94,7 @@ RBAC + ABAC 融合骨架（草案）
 
 - Keycloak 客户端与角色
   - 客户端：dts-system（采用 client roles）。
-  - 角色集合：DEPT_OWNER（部门领导/部门数据管理员）、DEPT_EDITOR（部门数据开发员）、DEPT_VIEWER（部门数据查看，浏览本部门且密级不超的数据）、INST_OWNER（所领导/所层级数据管理员）、INST_EDITOR（所层级数据开发员）、INST_VIEWER（所层级数据查看，浏览本所共享且密级不超的数据）。
+  - 角色集合：DEPT_OWNER（部门领导/部门数据管理员）、DEPT_EDITOR（部门数据开发员）、DEPT_VIEWER（部门数据查看，浏览本部门且密级不超的数据）、INST_OWNER（所领导/研究所数据管理员）、INST_EDITOR（研究所数据开发员）、INST_VIEWER（研究所数据查看，浏览本所共享且密级不超的数据）。
   - 部门组织：Keycloak Group 仅保留根节点 S10，其余部门在 dts-admin 模块维护。
 
 - 活跃上下文默认值与主部门

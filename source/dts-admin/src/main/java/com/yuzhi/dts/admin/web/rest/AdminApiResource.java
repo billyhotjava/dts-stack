@@ -46,6 +46,7 @@ import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
+import com.yuzhi.dts.common.audit.AuditStage;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -81,12 +82,48 @@ public class AdminApiResource {
     }
 
     private static String stripRolePrefix(String name) {
-        if (name == null) return null;
-        String upper = name.trim().toUpperCase(java.util.Locale.ROOT);
-        if (upper.startsWith("ROLE_")) {
-            return upper.substring(5);
+        if (name == null) {
+            return null;
         }
-        return upper;
+        String upper = name.trim().replace('-', '_').toUpperCase(Locale.ROOT);
+        if (upper.startsWith("ROLE_")) {
+            upper = upper.substring(5);
+        }
+        upper = upper.replaceAll("\\s+", "");
+        return ROLE_ALIASES.getOrDefault(upper, upper);
+    }
+
+    private static String resolveLegacyRole(String canonical) {
+        if (canonical == null) {
+            return null;
+        }
+        return ROLE_REVERSE_ALIASES.get(canonical);
+    }
+
+    private static List<String> authorityCandidates(String canonical) {
+        if (!StringUtils.hasText(canonical)) {
+            return List.of();
+        }
+        LinkedHashSet<String> codes = new LinkedHashSet<>();
+        codes.add("ROLE_" + canonical);
+        String legacy = resolveLegacyRole(canonical);
+        if (legacy != null) {
+            codes.add("ROLE_" + legacy);
+        }
+        return new ArrayList<>(codes);
+    }
+
+    private static List<String> roleNameCandidates(String canonical) {
+        if (!StringUtils.hasText(canonical)) {
+            return List.of();
+        }
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        names.add(canonical);
+        String legacy = resolveLegacyRole(canonical);
+        if (legacy != null) {
+            names.add(legacy);
+        }
+        return new ArrayList<>(names);
     }
 
     @GetMapping("/whoami")
@@ -116,7 +153,13 @@ public class AdminApiResource {
                 .findFirst()
                 .orElse(null);
         WhoAmI payload = new WhoAmI(allowed, role, principal != null ? principal.getName() : null, null);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "WHOAMI", "ADMIN", "self", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_SETTING_VIEW",
+            AuditStage.SUCCESS,
+            "whoami",
+            Map.of()
+        );
         return ResponseEntity.ok(ApiResponse.ok(payload));
     }
 
@@ -182,44 +225,87 @@ public class AdminApiResource {
 
     private static final List<String> OPERATION_ORDER = List.of("read", "write", "export");
 
-    private record BuiltinRoleSpec(String scope, List<String> operations, String description) {}
+    private static final Map<String, String> ROLE_ALIASES = Map.ofEntries(
+        Map.entry("DEPT_OWNER", "DEPT_DATA_OWNER"),
+        Map.entry("DEPT_EDITOR", "DEPT_DATA_DEV"),
+        Map.entry("DEPT_VIEWER", "DEPT_DATA_VIEWER"),
+        Map.entry("INST_OWNER", "INST_DATA_OWNER"),
+        Map.entry("INST_EDITOR", "INST_DATA_DEV"),
+        Map.entry("INST_VIEWER", "INST_DATA_VIEWER")
+    );
 
-    private static final Map<String, BuiltinRoleSpec> BUILTIN_DATA_ROLES = Map.of(
-        "DEPT_OWNER",
-        new BuiltinRoleSpec(
-            "DEPARTMENT",
-            List.of("read", "write", "export"),
-            "负责本部门数据；可读取本部门且密级不超的资源，具备本部门范围写入修改权限；可申请提升密级或设置共享；可授予/回收本部门 EDITOR、VIEWER 权限；导出高敏数据需审批。"
+    private static final Map<String, String> ROLE_REVERSE_ALIASES;
+
+    static {
+        Map<String, String> reverse = new HashMap<>();
+        for (Map.Entry<String, String> entry : ROLE_ALIASES.entrySet()) {
+            reverse.putIfAbsent(entry.getValue(), entry.getKey());
+        }
+        ROLE_REVERSE_ALIASES = Collections.unmodifiableMap(reverse);
+    }
+
+    private record BuiltinRoleSpec(String scope, List<String> operations, String titleCn, String titleEn, String description) {}
+
+    private static final Map<String, BuiltinRoleSpec> BUILTIN_DATA_ROLES = Map.ofEntries(
+        Map.entry(
+            "DEPT_DATA_OWNER",
+            new BuiltinRoleSpec(
+                "DEPARTMENT",
+                List.of("read", "write", "export"),
+                "部门数据管理员",
+                "department data administrator",
+                "负责本部门数据；可读取本部门且密级不超的资源，具备部门范围写入和授权能力；导出高敏数据需审批。"
+            )
         ),
-        "DEPT_EDITOR",
-        new BuiltinRoleSpec(
-            "DEPARTMENT",
-            List.of("read", "write", "export"),
-            "覆盖本部门；可读同级密级数据并在本部门内写入；无法调整密级或共享策略；不具备授权管理；导出时受行列与策略限制。"
+        Map.entry(
+            "DEPT_DATA_DEV",
+            new BuiltinRoleSpec(
+                "DEPARTMENT",
+                List.of("read", "write", "export"),
+                "部门数据开发员",
+                "department data developer",
+                "覆盖本部门数据开发；可读取密级不超的部门数据并在部门范围内写入；不具备密级或共享策略调整、授权管理能力；导出受策略限制。"
+            )
         ),
-        "DEPT_VIEWER",
-        new BuiltinRoleSpec(
-            "DEPARTMENT",
-            List.of("read"),
-            "仅浏览本部门密级不超的数据；无写入、密级/共享设置或授权管理能力；导出默认禁止。"
+        Map.entry(
+            "DEPT_DATA_VIEWER",
+            new BuiltinRoleSpec(
+                "DEPARTMENT",
+                List.of("read"),
+                "部门数据查看角色",
+                "department data viewer",
+                "浏览本部门密级不超的数据；无写入、导出或授权能力。"
+            )
         ),
-        "INST_OWNER",
-        new BuiltinRoleSpec(
-            "INSTITUTE",
-            List.of("read", "write", "export"),
-            "面向全所共享区；可读取全所共享区内密级不超的数据，并写入全所共享区；可管理全所共享策略（需审批）；负责共享区的编辑/查看授权；导出高敏数据需审批。"
+        Map.entry(
+            "INST_DATA_OWNER",
+            new BuiltinRoleSpec(
+                "INSTITUTE",
+                List.of("read", "write", "export"),
+                "研究所数据管理员",
+                "institute data administrator",
+                "面向全所共享区；可读取全所共享区内密级不超的数据，并写入和管理共享策略；负责编辑/查看授权；导出高敏数据需审批。"
+            )
         ),
-        "INST_EDITOR",
-        new BuiltinRoleSpec(
-            "INSTITUTE",
-            List.of("read", "write", "export"),
-            "在全所共享区操作；可读取共享区符合密级要求的数据并写入同一共享区；无密级或共享策略调整权限；导出受策略限制。"
+        Map.entry(
+            "INST_DATA_DEV",
+            new BuiltinRoleSpec(
+                "INSTITUTE",
+                List.of("read", "write", "export"),
+                "研究所数据开发员",
+                "institute data developer",
+                "在全所共享区开展数据开发；可读取共享区密级不超的数据并写入共享区；无密级或共享策略调整、授权能力；导出受策略限制。"
+            )
         ),
-        "INST_VIEWER",
-        new BuiltinRoleSpec(
-            "INSTITUTE",
-            List.of("read"),
-            "覆盖全所共享区的只读角色；仅能读取密级不超的数据；无写入、策略或授权管理能力；导出被禁用。"
+        Map.entry(
+            "INST_DATA_VIEWER",
+            new BuiltinRoleSpec(
+                "INSTITUTE",
+                List.of("read"),
+                "研究所数据查看员",
+                "institute data viewer",
+                "浏览全所共享且密级不超的数据；无写入、导出或授权能力。"
+            )
         )
     );
 
@@ -277,7 +363,13 @@ public class AdminApiResource {
             m.put("description", c.getDescription());
             list.add(m);
         }
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "SYSTEM_CONFIG_LIST", "CONFIG", "list", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_SETTING_VIEW",
+            AuditStage.SUCCESS,
+            "system-config/list",
+            Map.of("count", list.size())
+        );
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
 
@@ -293,7 +385,13 @@ public class AdminApiResource {
         after.put("value", cfg.get("value"));
         after.put("description", cfg.get("description"));
         ChangeRequest cr = changeRequestService.draft("CONFIG", "CONFIG_SET", key, after, before, Objects.toString(cfg.get("reason"), null));
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "SYSTEM_CONFIG_DRAFT", "CONFIG", (String) cfg.getOrDefault("key", "config"), "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "ADMIN_SETTING_VIEW",
+            AuditStage.SUCCESS,
+            Objects.toString(cfg.getOrDefault("key", "config")),
+            Map.of("draft", Boolean.TRUE)
+        );
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
@@ -304,7 +402,15 @@ public class AdminApiResource {
         if (SecurityUtils.hasCurrentUserNoneOfAuthorities(AuthoritiesConstants.OP_ADMIN)) {
             payload = filterFoundationForNonOpAdmin(payload);
         }
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "PORTAL_MENU_LIST", "MENU", "admin", "SUCCESS", null);
+        Object menus = payload.get("menus");
+        int sectionCount = menus instanceof java.util.Collection<?> col ? col.size() : 0;
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_MENU_VIEW_TREE",
+            AuditStage.SUCCESS,
+            "admin",
+            Map.of("sections", sectionCount)
+        );
         return ResponseEntity.ok(ApiResponse.ok(payload));
     }
 
@@ -314,6 +420,8 @@ public class AdminApiResource {
         String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("request", payload);
+        String pendingRef = Objects.toString(payload.get("name"), "portal-menu");
+        auditService.recordAction(actor, "ADMIN_MENU_CREATE", AuditStage.BEGIN, pendingRef, auditDetail);
         try {
             boolean visibilityTouched = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
             boolean structureTouched = payload.containsKey("name") || payload.containsKey("path") || payload.containsKey("component") || payload.containsKey("icon") || payload.containsKey("sortOrder") || payload.containsKey("parentId");
@@ -341,7 +449,10 @@ public class AdminApiResource {
                         )
                     );
                 } catch (Exception ignored) {}
-                auditService.record(actor, "PORTAL_MENU_CREATE_REQUEST", "PORTAL_MENU", Objects.toString(payload.get("name"), "menu"), "SUCCESS", auditDetail);
+                Map<String, Object> approvalPayload = new LinkedHashMap<>(auditDetail);
+                approvalPayload.put("status", "APPROVAL_PENDING");
+                approvalPayload.put("changeRequestId", cr.getId());
+                auditService.recordAction(actor, "ADMIN_MENU_CREATE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalPayload);
                 return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
             }
             String name = trimToNull(payload.get("name"));
@@ -379,19 +490,22 @@ public class AdminApiResource {
             portalMenuService.replaceVisibilities(menu, visibilities);
 
             PortalMenu persisted = portalMenuRepo.findById(menu.getId()).orElse(menu);
-            auditDetail.put("created", toPortalMenuPayload(persisted));
-            auditService.record(actor, "PORTAL_MENU_CREATE", "PORTAL_MENU", String.valueOf(persisted.getId()), "SUCCESS", auditDetail);
+            Map<String, Object> successDetail = new LinkedHashMap<>(auditDetail);
+            successDetail.put("created", toPortalMenuPayload(persisted));
+            auditService.recordAction(actor, "ADMIN_MENU_CREATE", AuditStage.SUCCESS, String.valueOf(persisted.getId()), successDetail);
             try {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "create", "id", String.valueOf(persisted.getId())));
             } catch (Exception ignored) {}
             return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
         } catch (IllegalArgumentException ex) {
-            auditDetail.put("error", ex.getMessage());
-            auditService.record(actor, "PORTAL_MENU_CREATE", "PORTAL_MENU", Objects.toString(payload.get("name"), "menu"), "FAILURE", auditDetail);
+            Map<String, Object> failureDetail = new LinkedHashMap<>(auditDetail);
+            failureDetail.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_MENU_CREATE", AuditStage.FAIL, pendingRef, failureDetail);
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         } catch (Exception ex) {
-            auditDetail.put("error", ex.getMessage());
-            auditService.record(actor, "PORTAL_MENU_CREATE", "PORTAL_MENU", Objects.toString(payload.get("name"), "menu"), "FAILURE", auditDetail);
+            Map<String, Object> failureDetail = new LinkedHashMap<>(auditDetail);
+            failureDetail.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_MENU_CREATE", AuditStage.FAIL, pendingRef, failureDetail);
             log.error("Failed to create portal menu", ex);
             return ResponseEntity.internalServerError().body(ApiResponse.error("创建菜单失败: " + ex.getMessage()));
         }
@@ -400,7 +514,13 @@ public class AdminApiResource {
     @PostMapping("/portal/menus/reset")
     public ResponseEntity<ApiResponse<Map<String, Object>>> resetMenus() {
         portalMenuService.resetMenusToSeed();
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "PORTAL_MENU_RESET", "PORTAL_MENU", "seed", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "ADMIN_MENU_UPDATE",
+            AuditStage.SUCCESS,
+            "seed",
+            Map.of("action", "reset")
+        );
         return portalMenus();
     }
 
@@ -414,6 +534,10 @@ public class AdminApiResource {
         Map<String, Object> payload = readPortalMenuPayload(body);
         Map<String, Object> before = toPortalMenuPayload(beforeEntity);
         String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        Map<String, Object> auditBase = new LinkedHashMap<>();
+        auditBase.put("before", before);
+        auditBase.put("payload", payload);
+        auditService.recordAction(actor, "ADMIN_MENU_UPDATE", AuditStage.BEGIN, id, auditBase);
         try {
             boolean visibilityTouchedGate = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
             boolean structureTouchedGate = payload.containsKey("name") || payload.containsKey("path") || payload.containsKey("component") || payload.containsKey("icon") || payload.containsKey("sortOrder") || payload.containsKey("parentId") || payload.containsKey("deleted");
@@ -441,7 +565,10 @@ public class AdminApiResource {
                         )
                     );
                 } catch (Exception ignored) {}
-                auditService.record(actor, "PORTAL_MENU_UPDATE_REQUEST", "PORTAL_MENU", id, "SUCCESS", Map.of("before", before, "payload", payload));
+                Map<String, Object> approvalDetail = new LinkedHashMap<>(auditBase);
+                approvalDetail.put("status", "APPROVAL_PENDING");
+                approvalDetail.put("changeRequestId", cr.getId());
+                auditService.recordAction(actor, "ADMIN_MENU_UPDATE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalDetail);
                 return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
             }
             applyMenuUpdates(beforeEntity, payload);
@@ -456,7 +583,7 @@ public class AdminApiResource {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("after", toPortalMenuPayload(persisted));
-            auditService.record(actor, "PORTAL_MENU_UPDATE", "PORTAL_MENU", id, "SUCCESS", detail);
+            auditService.recordAction(actor, "ADMIN_MENU_UPDATE", AuditStage.SUCCESS, id, detail);
             try {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "update", "id", String.valueOf(persisted.getId())));
             } catch (Exception ignored) {}
@@ -465,13 +592,13 @@ public class AdminApiResource {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("error", ex.getMessage());
-            auditService.record(actor, "PORTAL_MENU_UPDATE", "PORTAL_MENU", id, "FAILURE", detail);
+            auditService.recordAction(actor, "ADMIN_MENU_UPDATE", AuditStage.FAIL, id, detail);
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         } catch (Exception ex) {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("error", ex.getMessage());
-            auditService.record(actor, "PORTAL_MENU_UPDATE", "PORTAL_MENU", id, "FAILURE", detail);
+            auditService.recordAction(actor, "ADMIN_MENU_UPDATE", AuditStage.FAIL, id, detail);
             log.error("Failed to update portal menu {}", id, ex);
             return ResponseEntity.internalServerError().body(ApiResponse.error("更新菜单失败: " + ex.getMessage()));
         }
@@ -486,6 +613,9 @@ public class AdminApiResource {
         }
         Map<String, Object> before = toPortalMenuPayload(entity);
         String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        Map<String, Object> auditDetail = new LinkedHashMap<>();
+        auditDetail.put("before", before);
+        auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.BEGIN, id, auditDetail);
         if (requireMenuStructureApproval) {
             ChangeRequest cr = changeRequestService.draft(
                 "PORTAL_MENU",
@@ -510,7 +640,10 @@ public class AdminApiResource {
                     )
                 );
             } catch (Exception ignored) {}
-            auditService.record(actor, "PORTAL_MENU_DELETE_REQUEST", "PORTAL_MENU", id, "SUCCESS", before);
+            Map<String, Object> approvalDetail = new LinkedHashMap<>(auditDetail);
+            approvalDetail.put("status", "APPROVAL_PENDING");
+            approvalDetail.put("changeRequestId", cr.getId());
+            auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalDetail);
             return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
         }
         try {
@@ -519,7 +652,7 @@ public class AdminApiResource {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("after", toPortalMenuPayload(entity));
-            auditService.record(actor, "PORTAL_MENU_DELETE", "PORTAL_MENU", id, "SUCCESS", detail);
+            auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.SUCCESS, id, detail);
             try {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "disable", "id", String.valueOf(entity.getId())));
             } catch (Exception ignored) {}
@@ -528,7 +661,7 @@ public class AdminApiResource {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("error", ex.getMessage());
-            auditService.record(actor, "PORTAL_MENU_DELETE", "PORTAL_MENU", id, "FAILURE", detail);
+            auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.FAIL, id, detail);
             log.error("Failed to delete portal menu {}", id, ex);
             return ResponseEntity.internalServerError().body(ApiResponse.error("删除菜单失败: " + ex.getMessage()));
         }
@@ -537,7 +670,13 @@ public class AdminApiResource {
     @GetMapping("/orgs")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> orgs() {
         List<Map<String, Object>> tree = buildOrgTree();
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ORG_LIST", "ORG", "tree", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_ORG_VIEW_TREE",
+            AuditStage.SUCCESS,
+            "tree",
+            Map.of("nodeCount", tree.size())
+        );
         return ResponseEntity.ok(ApiResponse.ok(tree));
     }
 
@@ -545,7 +684,13 @@ public class AdminApiResource {
     @GetMapping("/platform/orgs")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> orgsForPlatform() {
         List<Map<String, Object>> tree = buildOrgTree();
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ORG_LIST_PLATFORM", "ORG", "tree", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_ORG_VIEW_TREE",
+            AuditStage.SUCCESS,
+            "tree",
+            Map.of("nodeCount", tree.size(), "audience", "platform")
+        );
         return ResponseEntity.ok(ApiResponse.ok(tree));
     }
 
@@ -557,7 +702,13 @@ public class AdminApiResource {
             log.warn("ensureUnassignedRoot failed: {}", ex.getMessage());
         }
         List<Map<String, Object>> tree = buildOrgTree();
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ORG_SYNC_PLATFORM", "ORG", "tree", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_ORG_VIEW_TREE",
+            AuditStage.SUCCESS,
+            "tree",
+            Map.of("nodeCount", tree.size(), "synced", true)
+        );
         return ResponseEntity.ok(ApiResponse.ok(tree));
     }
 
@@ -566,11 +717,25 @@ public class AdminApiResource {
         String name = trimToNull(payload.get("name"));
         Long parentId = payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString());
         String description = trimToNull(payload.get("description"));
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String parentRef = parentId == null ? "root" : String.valueOf(parentId);
+        Map<String, Object> auditDetail = new LinkedHashMap<>();
+        auditDetail.put("name", name);
+        if (parentId != null) {
+            auditDetail.put("parentId", parentId);
+        }
+        if (StringUtils.hasText(description)) {
+            auditDetail.put("description", description);
+        }
 
         if (!StringUtils.hasText(name)) {
+            Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
+            failure.put("error", "部门名称不能为空");
+            auditService.recordAction(actor, "ADMIN_ORG_CREATE", AuditStage.FAIL, parentRef, failure);
             return ResponseEntity.badRequest().body(ApiResponse.error("部门名称不能为空"));
         }
 
+        auditService.recordAction(actor, "ADMIN_ORG_CREATE", AuditStage.BEGIN, parentRef, auditDetail);
         try {
             OrganizationNode created = orgService.create(name, parentId, description);
             Map<String, Object> detail = new LinkedHashMap<>();
@@ -581,17 +746,14 @@ public class AdminApiResource {
             if (StringUtils.hasText(description)) {
                 detail.put("description", description);
             }
-            auditService.record(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-                "ORG_CREATE",
-                "ORG",
-                created.getId() == null ? name : String.valueOf(created.getId()),
-                "SUCCESS",
-                detail
-            );
+            detail.put("created", Map.of("id", created.getId(), "name", created.getName()));
+            auditService.recordAction(actor, "ADMIN_ORG_CREATE", AuditStage.SUCCESS, String.valueOf(created.getId()), detail);
 
             return ResponseEntity.ok(ApiResponse.ok(buildOrgTree()));
         } catch (IllegalArgumentException ex) {
+            Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
+            failure.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_ORG_CREATE", AuditStage.FAIL, parentRef, failure);
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         }
     }
@@ -603,6 +765,16 @@ public class AdminApiResource {
             return ResponseEntity.status(404).body(ApiResponse.error("部门不存在"));
         }
 
+        Map<String, Object> beforeView = new LinkedHashMap<>();
+        beforeView.put("id", existing.getId());
+        beforeView.put("name", existing.getName());
+        if (existing.getParent() != null) {
+            beforeView.put("parentId", existing.getParent().getId());
+        }
+        if (StringUtils.hasText(existing.getDescription())) {
+            beforeView.put("description", existing.getDescription());
+        }
+
         String name = payload.containsKey("name") ? trimToNull(payload.get("name")) : existing.getName();
         String description = payload.containsKey("description") ? trimToNull(payload.get("description")) : existing.getDescription();
         Long parentId = payload.containsKey("parentId")
@@ -610,35 +782,55 @@ public class AdminApiResource {
             : (existing.getParent() == null ? null : existing.getParent().getId());
 
         if (!StringUtils.hasText(name)) {
+            Map<String, Object> failure = new LinkedHashMap<>();
+            failure.put("before", beforeView);
+            failure.put("error", "部门名称不能为空");
+            auditService.recordAction(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ADMIN_ORG_UPDATE", AuditStage.FAIL, String.valueOf(id), failure);
             return ResponseEntity.badRequest().body(ApiResponse.error("部门名称不能为空"));
         }
+
+        Map<String, Object> requestView = new LinkedHashMap<>();
+        requestView.put("name", name);
+        if (parentId != null) {
+            requestView.put("parentId", parentId);
+        }
+        if (StringUtils.hasText(description)) {
+            requestView.put("description", description);
+        }
+        Map<String, Object> auditDetail = new LinkedHashMap<>();
+        auditDetail.put("before", beforeView);
+        auditDetail.put("request", requestView);
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+
+        auditService.recordAction(actor, "ADMIN_ORG_UPDATE", AuditStage.BEGIN, String.valueOf(id), auditDetail);
 
         Optional<OrganizationNode> updated;
         try {
             updated = orgService.update(id, name, description, parentId);
         } catch (IllegalArgumentException ex) {
+            Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
+            failure.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_ORG_UPDATE", AuditStage.FAIL, String.valueOf(id), failure);
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         }
         if (updated.isEmpty()) {
             return ResponseEntity.status(404).body(ApiResponse.error("部门不存在"));
         }
 
-        Map<String, Object> updateDetail = new LinkedHashMap<>();
-        updateDetail.put("name", name);
-        if (parentId != null) {
-            updateDetail.put("parentId", parentId);
+        OrganizationNode updatedNode = updated.orElseThrow();
+        Map<String, Object> afterView = new LinkedHashMap<>();
+        afterView.put("id", updatedNode.getId());
+        afterView.put("name", updatedNode.getName());
+        if (updatedNode.getParent() != null) {
+            afterView.put("parentId", updatedNode.getParent().getId());
         }
-        if (StringUtils.hasText(description)) {
-            updateDetail.put("description", description);
+        if (StringUtils.hasText(updatedNode.getDescription())) {
+            afterView.put("description", updatedNode.getDescription());
         }
-        auditService.record(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-            "ORG_UPDATE",
-            "ORG",
-            String.valueOf(id),
-            "SUCCESS",
-            updateDetail
-        );
+        Map<String, Object> successDetail = new LinkedHashMap<>();
+        successDetail.put("before", beforeView);
+        successDetail.put("after", afterView);
+        auditService.recordAction(actor, "ADMIN_ORG_UPDATE", AuditStage.SUCCESS, String.valueOf(id), successDetail);
 
         return ResponseEntity.ok(ApiResponse.ok(buildOrgTree()));
     }
@@ -649,40 +841,44 @@ public class AdminApiResource {
         if (existing == null) {
             return ResponseEntity.status(404).body(ApiResponse.error("部门不存在"));
         }
-        orgService.delete(id);
-        auditService.record(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-            "ORG_DELETE",
-            "ORG",
-            String.valueOf(id),
-            "SUCCESS",
-            Map.of("name", existing.getName())
-        );
-        return ResponseEntity.ok(ApiResponse.ok(buildOrgTree()));
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("id", existing.getId());
+        detail.put("name", existing.getName());
+        if (existing.getParent() != null) {
+            detail.put("parentId", existing.getParent().getId());
+        }
+        auditService.recordAction(actor, "ADMIN_ORG_DELETE", AuditStage.BEGIN, String.valueOf(id), detail);
+        try {
+            orgService.delete(id);
+            Map<String, Object> success = new LinkedHashMap<>(detail);
+            success.put("status", "DELETED");
+            auditService.recordAction(actor, "ADMIN_ORG_DELETE", AuditStage.SUCCESS, String.valueOf(id), success);
+            return ResponseEntity.ok(ApiResponse.ok(buildOrgTree()));
+        } catch (RuntimeException ex) {
+            Map<String, Object> failure = new LinkedHashMap<>(detail);
+            failure.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_ORG_DELETE", AuditStage.FAIL, String.valueOf(id), failure);
+            return ResponseEntity.internalServerError().body(ApiResponse.error("删除部门失败: " + ex.getMessage()));
+        }
     }
 
     @PostMapping("/orgs/sync")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> syncOrganizations() {
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        Map<String, Object> auditDetail = new LinkedHashMap<>();
+        auditDetail.put("sync", "keycloak");
+        auditService.recordAction(actor, "ADMIN_ORG_UPDATE", AuditStage.BEGIN, "sync", auditDetail);
         try {
             organizationSyncService.syncAll();
-            auditService.record(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-                "ORG_SYNC",
-                "ORG",
-                "all",
-                "SUCCESS",
-                Map.of("sync", "keycloak")
-            );
+            Map<String, Object> success = new LinkedHashMap<>(auditDetail);
+            success.put("status", "SUCCESS");
+            auditService.recordAction(actor, "ADMIN_ORG_UPDATE", AuditStage.SUCCESS, "sync", success);
             return ResponseEntity.ok(ApiResponse.ok(buildOrgTree()));
         } catch (RuntimeException ex) {
-            auditService.record(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-                "ORG_SYNC",
-                "ORG",
-                "all",
-                "FAILURE",
-                Map.of("error", ex.getMessage())
-            );
+            Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
+            failure.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_ORG_UPDATE", AuditStage.FAIL, "sync", failure);
             return ResponseEntity.status(500).body(ApiResponse.error("同步失败: " + ex.getMessage()));
         }
     }
@@ -691,14 +887,26 @@ public class AdminApiResource {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> datasets() {
         List<Map<String, Object>> out = new ArrayList<>();
         for (AdminDataset d : datasetRepo.findAll()) out.add(toDatasetVM(d));
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "DATASET_LIST", "DATASET", "list", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_DATASET_VIEW",
+            AuditStage.SUCCESS,
+            "datasets",
+            Map.of("count", out.size())
+        );
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
     @GetMapping("/custom-roles")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> customRoles() {
         var list = customRoleRepo.findAll().stream().map(this::toCustomRoleVM).toList();
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "CUSTOM_ROLE_LIST", "ROLE", "custom", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_CUSTOM_ROLE_VIEW",
+            AuditStage.SUCCESS,
+            "custom-roles",
+            Map.of("count", list.size())
+        );
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
 
@@ -706,15 +914,21 @@ public class AdminApiResource {
     public ResponseEntity<ApiResponse<Map<String, Object>>> createCustomRole(@RequestBody Map<String, Object> payload) {
         String rawName = Objects.toString(payload.get("name"), "").trim();
         if (rawName.isEmpty()) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("角色名称不能为空"));
+            return ResponseEntity.badRequest().body(ApiResponse.error("角色 ID 不能为空"));
         }
         String normalizedName = stripRolePrefix(rawName);
         if (isReservedRealmRoleName(normalizedName)) {
             return ResponseEntity.status(409).body(ApiResponse.error("内置角色不可创建"));
         }
-        if (customRoleRepo.findByName(normalizedName).isPresent()) {
+        if (locateCustomRole(normalizedName).isPresent()) {
             return ResponseEntity.status(409).body(ApiResponse.error("角色名称已存在"));
         }
+        String titleCn = Objects.toString(payload.getOrDefault("titleCn", payload.get("nameZh")), "").trim();
+        if (titleCn.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("角色名称不能为空"));
+        }
+        String displayName = Objects.toString(payload.getOrDefault("displayName", titleCn), titleCn).trim();
+        String titleEn = Objects.toString(payload.get("titleEn"), null);
         LinkedHashSet<String> operations = readStringList(payload.get("operations"))
             .stream()
             .map(String::trim)
@@ -738,6 +952,12 @@ public class AdminApiResource {
         after.put("maxRows", payload.get("maxRows"));
         after.put("allowDesensitizeJson", Boolean.TRUE.equals(payload.get("allowDesensitizeJson")));
         after.put("description", Objects.toString(payload.get("description"), null));
+        after.put("titleCn", titleCn);
+        after.put("nameZh", titleCn);
+        after.put("displayName", displayName);
+        if (StringUtils.hasText(titleEn)) {
+            after.put("titleEn", titleEn.trim());
+        }
         ChangeRequest cr = changeRequestService.draft(
             "CUSTOM_ROLE",
             "CREATE",
@@ -746,14 +966,26 @@ public class AdminApiResource {
             null,
             Objects.toString(payload.get("reason"), null)
         );
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ROLE_CUSTOM_CREATE_REQUEST", "ROLE", normalizedName, "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "ADMIN_CUSTOM_ROLE_REQUEST",
+            AuditStage.SUCCESS,
+            normalizedName,
+            Map.of("changeRequestId", cr.getId())
+        );
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @GetMapping("/role-assignments")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> roleAssignments() {
         var list = roleAssignRepo.findAll().stream().map(this::toRoleAssignmentVM).toList();
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ROLE_ASSIGNMENT_LIST", "ROLE_ASSIGNMENT", "list", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_ROLE_ASSIGNMENT_VIEW",
+            AuditStage.SUCCESS,
+            "role-assignments",
+            Map.of("count", list.size())
+        );
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
 
@@ -784,7 +1016,13 @@ public class AdminApiResource {
             null,
             Objects.toString(payload.get("reason"), null)
         );
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "ROLE_ASSIGNMENT_CREATE_REQUEST", "ROLE_ASSIGNMENT", username, "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "ADMIN_ROLE_ASSIGNMENT_CREATE",
+            AuditStage.SUCCESS,
+            username,
+            Map.of("changeRequestId", cr.getId(), "role", role)
+        );
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
@@ -792,7 +1030,13 @@ public class AdminApiResource {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> changeRequests(@RequestParam(required = false) String status, @RequestParam(required = false, name = "type") String resourceType) {
         List<ChangeRequest> list;
         if (status != null && resourceType != null) list = crRepo.findByStatusAndResourceType(status, resourceType); else if (status != null) list = crRepo.findByStatus(status); else list = crRepo.findAll();
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "CR_LIST", "CHANGE_REQUEST", "list", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_CHANGE_REQUEST_VIEW",
+            AuditStage.SUCCESS,
+            "change-requests",
+            Map.of("count", list.size())
+        );
         return ResponseEntity.ok(ApiResponse.ok(list.stream().map(AdminApiResource::toChangeVM).toList()));
     }
 
@@ -800,7 +1044,13 @@ public class AdminApiResource {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> myChangeRequests() {
         String me = SecurityUtils.getCurrentUserLogin().orElse("sysadmin");
         var list = crRepo.findByRequestedBy(me).stream().map(AdminApiResource::toChangeVM).toList();
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "CR_LIST_MINE", "CHANGE_REQUEST", me, "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_CHANGE_REQUEST_VIEW",
+            AuditStage.SUCCESS,
+            me,
+            Map.of("scope", "mine")
+        );
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
 
@@ -822,7 +1072,13 @@ public class AdminApiResource {
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("deletedApprovals", approvals);
         result.put("deletedChangeRequests", changes);
-        auditService.record(actor, "MAINTENANCE_PURGE_REQUESTS", "ADMIN", "purge", "SUCCESS", result.toString());
+        auditService.recordAction(
+            actor,
+            "ADMIN_CHANGE_REQUEST_MANAGE",
+            AuditStage.SUCCESS,
+            "purge",
+            Map.of("removed", result)
+        );
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
@@ -840,7 +1096,13 @@ public class AdminApiResource {
         cr.setCategory(Objects.toString(payload.get("category"), "GENERAL"));
         cr.setLastError(null);
         crRepo.save(cr);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "CHANGE_REQUEST_CREATE", "CHANGE_REQUEST", String.valueOf(cr.getId()), "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "ADMIN_CHANGE_REQUEST_MANAGE",
+            AuditStage.SUCCESS,
+            String.valueOf(cr.getId()),
+            Map.of("action", "CREATE")
+        );
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
@@ -871,7 +1133,13 @@ public class AdminApiResource {
         }
         cr.setStatus("PENDING");
         crRepo.save(cr);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "CHANGE_REQUEST_SUBMIT", "CHANGE_REQUEST", id, "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "ADMIN_CHANGE_REQUEST_MANAGE",
+            AuditStage.SUCCESS,
+            id,
+            Map.of("action", "SUBMIT")
+        );
         try {
             // Notify approvers (e.g., AUTH_ADMIN) that a new request arrived
             notifyClient.trySend(
@@ -903,7 +1171,13 @@ public class AdminApiResource {
         cr.setReason(body != null ? Objects.toString(body.get("reason"), null) : null);
         applyChangeRequest(cr, actor);
         crRepo.save(cr);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "CHANGE_REQUEST_APPROVE", "CHANGE_REQUEST", id, "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "ADMIN_CHANGE_REQUEST_MANAGE",
+            AuditStage.SUCCESS,
+            id,
+            Map.of("action", "APPROVE")
+        );
         try { notifyClient.trySend("approval_approved", Map.of("id", id, "type", cr.getResourceType(), "status", cr.getStatus())); } catch (Exception ignored) {}
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
@@ -919,7 +1193,13 @@ public class AdminApiResource {
         cr.setReason(body != null ? Objects.toString(body.get("reason"), null) : null);
         cr.setLastError(null);
         crRepo.save(cr);
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("unknown"), "CHANGE_REQUEST_REJECT", "CHANGE_REQUEST", id, "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            "ADMIN_CHANGE_REQUEST_MANAGE",
+            AuditStage.SUCCESS,
+            id,
+            Map.of("action", "REJECT")
+        );
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
@@ -937,16 +1217,57 @@ public class AdminApiResource {
             if (isReservedRealmRoleName(name)) {
                 continue;
             }
-            String normalized = name.trim().toUpperCase(Locale.ROOT);
-            BuiltinRoleSpec builtin = BUILTIN_DATA_ROLES.get(normalized);
-            Map<String, Object> summary = toRoleSummary(role, normalized, builtin, now);
+            String canonical = stripRolePrefix(name);
+            BuiltinRoleSpec builtin = BUILTIN_DATA_ROLES.get(canonical);
+            Map<String, Object> summary = toRoleSummary(role, canonical, builtin, now);
+            // Include legacy role name if Keycloak尚未迁移
+            String rawUpper = name.trim().toUpperCase(Locale.ROOT);
+            if (!rawUpper.equals(canonical)) {
+                summary.put("legacyName", name);
+            }
             // Enrich with Keycloak member count (realm role membership)
             try {
-                int kcMembers = adminUserService.countUsersByRealmRole(normalized);
+                int kcMembers = adminUserService.countUsersByRealmRole(canonical);
+                if (kcMembers == 0) {
+                    String legacy = resolveLegacyRole(canonical);
+                    if (legacy != null) {
+                        kcMembers = adminUserService.countUsersByRealmRole(legacy);
+                    }
+                }
                 summary.put("memberCount", kcMembers);
+                summary.put("kcMemberCount", kcMembers);
             } catch (Exception ignored) {}
+            try {
+                int menuBindings = 0;
+                for (String authority : authorityCandidates(canonical)) {
+                    menuBindings += visibilityRepo.findByRoleCode(authority).size();
+                }
+                summary.put("menuBindings", menuBindings);
+            } catch (Exception ignored) {
+                summary.put("menuBindings", 0);
+            }
+            try {
+                Optional<AdminCustomRole> customRole = locateCustomRole(canonical);
+                boolean custom = customRole.isPresent();
+                summary.put("customRole", custom);
+                summary.put("customRoleId", custom ? customRole.map(AdminCustomRole::getId).orElse(null) : null);
+            } catch (Exception ignored) {
+                summary.put("customRole", false);
+            }
+            try {
+                long assignmentCount = roleAssignRepo
+                    .findAll()
+                    .stream()
+                    .map(AdminRoleAssignment::getRole)
+                    .map(AdminApiResource::stripRolePrefix)
+                    .filter(roleName -> canonical.equalsIgnoreCase(roleName))
+                    .count();
+                summary.put("assignments", (int) assignmentCount);
+            } catch (Exception ignored) {
+                summary.put("assignments", 0);
+            }
             list.add(summary);
-            emitted.add(normalized);
+            emitted.add(canonical);
         }
 
         for (Map.Entry<String, BuiltinRoleSpec> entry : BUILTIN_DATA_ROLES.entrySet()) {
@@ -960,7 +1281,13 @@ public class AdminApiResource {
 
         list.sort(Comparator.comparing(o -> Objects.toString(o.get("name"), "")));
 
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ADMIN_ROLES_LIST", "ADMIN", "roles", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_ROLE_VIEW",
+            AuditStage.SUCCESS,
+            "admin-roles",
+            Map.of("count", list.size())
+        );
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
 
@@ -973,11 +1300,17 @@ public class AdminApiResource {
         String normalized = stripRolePrefix(raw);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("role", normalized);
-        boolean reserved = isReservedRealmRoleName(normalized);
+        boolean reserved = isReservedRealmRoleName(raw);
         out.put("reserved", reserved);
         out.put("deletable", !reserved);
         try {
             boolean existsInKeycloak = adminUserService.realmRoleExists(normalized);
+            if (!existsInKeycloak) {
+                String legacy = resolveLegacyRole(normalized);
+                if (legacy != null) {
+                    existsInKeycloak = adminUserService.realmRoleExists(legacy);
+                }
+            }
             out.put("existsInKeycloak", existsInKeycloak);
         } catch (Exception ex) {
             out.put("existsInKeycloak", false);
@@ -985,31 +1318,52 @@ public class AdminApiResource {
         }
         try {
             int kcMembers = adminUserService.countUsersByRealmRole(normalized);
+            if (kcMembers == 0) {
+                String legacy = resolveLegacyRole(normalized);
+                if (legacy != null) {
+                    kcMembers = adminUserService.countUsersByRealmRole(legacy);
+                }
+            }
             out.put("kcMemberCount", kcMembers);
         } catch (Exception ex) {
             out.put("kcMemberCount", 0);
         }
         try {
-            String authority = normalizeRoleAuthority(normalized);
-            int menuBindings = visibilityRepo.findByRoleCode(authority).size();
+            int menuBindings = 0;
+            for (String authority : authorityCandidates(normalized)) {
+                menuBindings += visibilityRepo.findByRoleCode(authority).size();
+            }
             out.put("menuBindings", menuBindings);
         } catch (Exception ex) {
             out.put("menuBindings", 0);
         }
         try {
-            boolean custom = customRoleRepo.findByName(normalized).isPresent();
+            Optional<AdminCustomRole> customRole = locateCustomRole(normalized);
+            boolean custom = customRole.isPresent();
             out.put("customRole", custom);
-            out.put("customRoleId", custom ? customRoleRepo.findByName(normalized).map(AdminCustomRole::getId).orElse(null) : null);
+            out.put("customRoleId", custom ? customRole.map(AdminCustomRole::getId).orElse(null) : null);
         } catch (Exception ex) {
             out.put("customRole", false);
         }
         try {
-            int assignmentCount = (int) roleAssignRepo.findAll().stream().filter(a -> normalized.equalsIgnoreCase(Objects.toString(a.getRole(), ""))).count();
-            out.put("assignments", assignmentCount);
+            long assignmentCount = roleAssignRepo
+                .findAll()
+                .stream()
+                .map(AdminRoleAssignment::getRole)
+                .map(AdminApiResource::stripRolePrefix)
+                .filter(roleName -> normalized.equalsIgnoreCase(roleName))
+                .count();
+            out.put("assignments", (int) assignmentCount);
         } catch (Exception ex) {
             out.put("assignments", 0);
         }
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "ROLE_PRE_DELETE_CHECK", "ROLE", normalized, "SUCCESS", out);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_ROLE_VIEW",
+            AuditStage.SUCCESS,
+            normalized,
+            out
+        );
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
@@ -1047,7 +1401,13 @@ public class AdminApiResource {
                 }
             }
         );
-        auditService.record(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "PERMISSION_CATALOG_LIST", "ADMIN", "permissions", "SUCCESS", null);
+        auditService.recordAction(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            "ADMIN_SETTING_VIEW",
+            AuditStage.SUCCESS,
+            "permissions",
+            Map.of("count", sections.size())
+        );
         return ResponseEntity.ok(ApiResponse.ok(sections));
     }
 
@@ -1391,7 +1751,8 @@ public class AdminApiResource {
 
     private Map<String, Object> toVisibilityRule(PortalMenuVisibility visibility) {
         Map<String, Object> rule = new LinkedHashMap<>();
-        rule.put("role", visibility.getRoleCode());
+        String normalizedCode = normalizeRoleAuthority(visibility.getRoleCode());
+        rule.put("role", normalizedCode != null ? normalizedCode : visibility.getRoleCode());
         if (visibility.getPermissionCode() != null && !visibility.getPermissionCode().isBlank()) {
             rule.put("permission", visibility.getPermissionCode());
         }
@@ -1417,11 +1778,11 @@ public class AdminApiResource {
     }
 
     private String normalizeRoleAuthority(String roleName) {
-        if (!StringUtils.hasText(roleName)) {
+        String canonical = stripRolePrefix(roleName);
+        if (!StringUtils.hasText(canonical)) {
             return null;
         }
-        String upper = roleName.trim().toUpperCase(Locale.ROOT);
-        return upper.startsWith("ROLE_") ? upper : "ROLE_" + upper;
+        return "ROLE_" + canonical;
     }
 
     private List<Map<String, Object>> normalizeVisibilityRules(Object rules) {
@@ -1545,15 +1906,11 @@ public class AdminApiResource {
         if (role == null) {
             return null;
         }
-        String value = role.toString().trim();
-        if (value.isEmpty()) {
+        String canonical = stripRolePrefix(role.toString());
+        if (!StringUtils.hasText(canonical)) {
             return null;
         }
-        String upper = value.toUpperCase(Locale.ROOT);
-        if (!upper.startsWith("ROLE_")) {
-            upper = "ROLE_" + upper;
-        }
-        return upper;
+        return "ROLE_" + canonical;
     }
 
     private String normalizeDataLevelForVisibility(Object rawLevel) {
@@ -1767,7 +2124,7 @@ public class AdminApiResource {
                 normalizedName,
                 Objects.toString(payload.get("scope"), null),
                 payload.get("operations") != null);
-        String auditAction = "ROLE_" + (action == null ? "UNKNOWN" : action.toUpperCase(Locale.ROOT)) + "_EXECUTE";
+        String auditAction = action == null ? "UNKNOWN" : action.toUpperCase(Locale.ROOT);
         try {
             if ("UPDATE".equalsIgnoreCase(action)) {
                 if (!StringUtils.hasText(normalizedName)) {
@@ -1785,6 +2142,9 @@ public class AdminApiResource {
                     throw new IllegalArgumentException("请至少保留一个操作权限");
                 }
                 String description = Objects.toString(payload.get("description"), null);
+                String explicitDesc = Objects.toString(payload.getOrDefault("roleDesc", description), description);
+                String titleCn = Objects.toString(payload.getOrDefault("titleCn", payload.get("nameZh")), null);
+                String titleEn = Objects.toString(payload.getOrDefault("titleEn", payload.get("nameEn")), null);
                 Integer maxRows = payload.get("maxRows") == null ? null : Integer.valueOf(payload.get("maxRows").toString());
                 Boolean allowDesensitize = payload.containsKey("allowDesensitizeJson")
                     ? Boolean.TRUE.equals(payload.get("allowDesensitizeJson"))
@@ -1792,26 +2152,42 @@ public class AdminApiResource {
 
                 detail.put("scope", normalizedScope);
                 detail.put("operations", new ArrayList<>(operations));
-                detail.put("description", description);
+                detail.put("description", explicitDesc);
                 if (maxRows != null) {
                     detail.put("maxRows", maxRows);
                 }
                 if (allowDesensitize != null) {
                     detail.put("allowDesensitizeJson", allowDesensitize);
                 }
+                if (StringUtils.hasText(titleCn)) {
+                    detail.put("titleCn", titleCn);
+                }
+                if (StringUtils.hasText(titleEn)) {
+                    detail.put("titleEn", titleEn);
+                }
 
                 if (!StringUtils.hasText(cr.getResourceId())) {
                     cr.setResourceId(normalizedName);
                 }
 
-                adminUserService.syncRealmRole(normalizedName, normalizedScope, operations, description);
+                Map<String, String> roleAttributes = new LinkedHashMap<>();
+                if (StringUtils.hasText(titleCn)) {
+                    roleAttributes.put("titleCn", titleCn.trim());
+                }
+                if (StringUtils.hasText(titleEn)) {
+                    roleAttributes.put("titleEn", titleEn.trim());
+                }
+                if (StringUtils.hasText(explicitDesc)) {
+                    roleAttributes.put("roleDesc", explicitDesc.trim());
+                }
 
-                customRoleRepo
-                    .findByName(normalizedName)
+                adminUserService.syncRealmRole(normalizedName, normalizedScope, operations, explicitDesc, roleAttributes);
+
+                locateCustomRole(normalizedName)
                     .ifPresent(role -> {
                         role.setScope(normalizedScope);
                         role.setOperationsCsv(String.join(",", operations));
-                        role.setDescription(description);
+                        role.setDescription(explicitDesc);
                         if (maxRows != null) {
                             role.setMaxRows(maxRows);
                         }
@@ -1822,7 +2198,7 @@ public class AdminApiResource {
                     });
 
                 cr.setStatus("APPLIED");
-                auditService.record(actor, auditAction, "ROLE", normalizedName, "SUCCESS", detail);
+                auditService.recordAction(actor, "ADMIN_ROLE_UPDATE", AuditStage.SUCCESS, normalizedName, detail);
             } else if ("DELETE".equalsIgnoreCase(action)) {
                 if (!StringUtils.hasText(normalizedName)) {
                     throw new IllegalArgumentException("角色名称不能为空");
@@ -1830,33 +2206,45 @@ public class AdminApiResource {
                 if (isReservedRealmRoleName(normalizedName)) {
                     throw new IllegalArgumentException("内置角色不可删除");
                 }
-                String authority = normalizeRoleAuthority(normalizedName);
                 // 1) 清理菜单可见性
-                try {
-                    visibilityRepo.deleteByRoleCode(authority);
-                } catch (Exception ex) {
-                    detail.put("menuVisibilityCleanupError", ex.getMessage());
+                List<String> visibilityErrors = new ArrayList<>();
+                for (String authority : authorityCandidates(normalizedName)) {
+                    try {
+                        visibilityRepo.deleteByRoleCode(authority);
+                    } catch (Exception ex) {
+                        visibilityErrors.add(authority + ":" + ex.getMessage());
+                    }
+                }
+                if (!visibilityErrors.isEmpty()) {
+                    detail.put("menuVisibilityCleanupError", String.join("; ", visibilityErrors));
                 }
                 // 2) 从所有用户移除该 Keycloak 角色并删除角色
-                try {
-                    adminUserService.deleteRealmRoleAndRemoveFromUsers(normalizedName);
-                } catch (Exception ex) {
-                    detail.put("keycloakCleanupError", ex.getMessage());
+                List<String> kcErrors = new ArrayList<>();
+                for (String candidate : roleNameCandidates(normalizedName)) {
+                    try {
+                        adminUserService.deleteRealmRoleAndRemoveFromUsers(candidate);
+                    } catch (Exception ex) {
+                        kcErrors.add(candidate + ":" + ex.getMessage());
+                    }
+                }
+                if (!kcErrors.isEmpty()) {
+                    detail.put("keycloakCleanupError", String.join("; ", kcErrors));
                 }
                 // 3) 删除自定义角色记录（如果存在）
                 try {
-                    customRoleRepo.findByName(normalizedName).ifPresent(customRoleRepo::delete);
+                    deleteCustomRoleIfExists(normalizedName);
                 } catch (Exception ex) {
                     detail.put("customRoleCleanupError", ex.getMessage());
                 }
                 cr.setStatus("APPLIED");
-                auditService.record(actor, auditAction, "ROLE", normalizedName, "SUCCESS", detail);
+                auditService.recordAction(actor, "ADMIN_ROLE_DELETE", AuditStage.SUCCESS, normalizedName, detail);
             } else {
                 throw new IllegalStateException("未支持的角色操作: " + action);
             }
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditService.record(actor, auditAction, "ROLE", normalizedName, "FAILURE", detail);
+            String failureCode = "DELETE".equalsIgnoreCase(auditAction) ? "ADMIN_ROLE_DELETE" : "ADMIN_ROLE_UPDATE";
+            auditService.recordAction(actor, failureCode, AuditStage.FAIL, normalizedName, detail);
             throw ex;
         }
     }
@@ -1866,7 +2254,7 @@ public class AdminApiResource {
         String action = cr.getAction();
         String rawName = Objects.toString(payload.get("name"), cr.getResourceId());
         String normalizedName = stripRolePrefix(rawName);
-        String auditAction = "ROLE_CUSTOM_" + action.toUpperCase(Locale.ROOT) + "_EXECUTE";
+        String auditAction = action == null ? "UNKNOWN" : action.toUpperCase(Locale.ROOT);
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("payload", payload);
         try {
@@ -1889,12 +2277,29 @@ public class AdminApiResource {
                 role = customRoleRepo.save(role);
                 cr.setResourceId(String.valueOf(role.getId()));
 
-                String authority = normalizeRoleAuthority(role.getName());
+                String titleCn = Objects.toString(payload.getOrDefault("titleCn", payload.get("nameZh")), "").trim();
+                String titleEn = Objects.toString(payload.get("titleEn"), "").trim();
+                String displayName = Objects.toString(payload.getOrDefault("displayName", titleCn), titleCn).trim();
+                LinkedHashMap<String, String> roleAttributes = new LinkedHashMap<>();
+                if (StringUtils.hasText(titleCn)) {
+                    roleAttributes.put("titleCn", titleCn);
+                    roleAttributes.put("nameZh", titleCn);
+                    detail.put("titleCn", titleCn);
+                }
+                if (StringUtils.hasText(titleEn)) {
+                    roleAttributes.put("titleEn", titleEn);
+                    roleAttributes.put("nameEn", titleEn);
+                    detail.put("titleEn", titleEn);
+                }
+                if (StringUtils.hasText(displayName)) {
+                    roleAttributes.put("displayName", displayName);
+                }
+
                 // 注意：不再在创建自定义角色时批量同步“默认菜单可见性”，
                 // 以免覆盖前端在同一流程中提交的“自定义菜单绑定(BATCH_UPDATE)”。
                 // 若需要默认可见性，应通过单独的变更单或在无自定义绑定时由运维手工触发。
                 try {
-                    adminUserService.syncRealmRole(role.getName(), role.getScope(), ops, role.getDescription());
+                    adminUserService.syncRealmRole(role.getName(), role.getScope(), ops, role.getDescription(), roleAttributes);
                 } catch (Exception ex) {
                     // 同步失败不阻塞审批，通过审计日志追踪
                 }
@@ -1905,10 +2310,10 @@ public class AdminApiResource {
                 throw new IllegalStateException("未支持的自定义角色操作: " + action);
             }
             cr.setStatus("APPLIED");
-            auditService.record(actor, auditAction, "ROLE", normalizedName, "SUCCESS", detail);
+            auditService.recordAction(actor, "ADMIN_CUSTOM_ROLE_EXECUTE", AuditStage.SUCCESS, normalizedName, detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditService.record(actor, auditAction, "ROLE", normalizedName, "FAILURE", detail);
+            auditService.recordAction(actor, "ADMIN_CUSTOM_ROLE_EXECUTE", AuditStage.FAIL, normalizedName, detail);
             throw ex;
         }
     }
@@ -1916,13 +2321,13 @@ public class AdminApiResource {
     private void applyRoleAssignmentChange(ChangeRequest cr, String actor) throws Exception {
         Map<String, Object> payload = fromJson(cr.getPayloadJson());
         String action = cr.getAction();
-        String auditAction = "ROLE_ASSIGNMENT_" + action.toUpperCase(Locale.ROOT) + "_EXECUTE";
+        String auditAction = action == null ? "UNKNOWN" : action.toUpperCase(Locale.ROOT);
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("payload", payload);
         try {
             if ("CREATE".equalsIgnoreCase(action)) {
                 AdminRoleAssignment assignment = new AdminRoleAssignment();
-                assignment.setRole(Objects.toString(payload.get("role"), null));
+                assignment.setRole(stripRolePrefix(Objects.toString(payload.get("role"), null)));
                 assignment.setUsername(Objects.toString(payload.get("username"), null));
                 assignment.setDisplayName(Objects.toString(payload.get("displayName"), null));
                 assignment.setUserSecurityLevel(Objects.toString(payload.get("userSecurityLevel"), null));
@@ -1945,14 +2350,14 @@ public class AdminApiResource {
                         Map.of("id", assignment.getId(), "username", assignment.getUsername(), "role", assignment.getRole())
                     );
                 } catch (Exception ignored) {}
-                auditService.record(actor, auditAction, "ROLE_ASSIGNMENT", assignment.getUsername(), "SUCCESS", detail);
+                auditService.recordAction(actor, "ADMIN_ROLE_ASSIGNMENT_CREATE", AuditStage.SUCCESS, assignment.getUsername(), detail);
             } else {
                 throw new IllegalStateException("未支持的角色指派操作: " + action);
             }
             cr.setStatus("APPLIED");
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditService.record(actor, auditAction, "ROLE_ASSIGNMENT", Objects.toString(payload.get("username"), null), "FAILURE", detail);
+            auditService.recordAction(actor, "ADMIN_ROLE_ASSIGNMENT_CREATE", AuditStage.FAIL, Objects.toString(payload.get("username"), null), detail);
             throw ex;
         }
     }
@@ -2246,7 +2651,6 @@ public class AdminApiResource {
 
 
     private Map<String, Object> toRoleSummary(KeycloakRoleDTO role, String normalizedName, BuiltinRoleSpec builtin, Instant fallbackInstant) {
-        String displayName = role != null && StringUtils.hasText(role.getName()) ? role.getName().trim() : normalizedName;
         Map<String, String> attributes = role != null && role.getAttributes() != null ? role.getAttributes() : Collections.emptyMap();
         LinkedHashSet<String> operations = parseOperations(attributes);
         if (operations.isEmpty() && builtin != null) {
@@ -2256,6 +2660,7 @@ public class AdminApiResource {
         String description = firstNonBlank(
             role != null ? role.getDescription() : null,
             attributes.get("description"),
+            attributes.get("roleDesc"),
             builtin != null ? builtin.description() : null
         );
         String securityLevel = firstNonBlank(attributes.get("securityLevel"), "GENERAL");
@@ -2264,8 +2669,8 @@ public class AdminApiResource {
         String updatedAt = firstNonBlank(attributes.get("updatedAt"), fallbackInstant.toString());
 
         // New fields aligned with worklog spec (minimal, derived when possible)
-        String nameZh = firstNonBlank(attributes.get("nameZh"), null);
-        String nameEn = firstNonBlank(attributes.get("nameEn"), null);
+        String nameZh = firstNonBlank(attributes.get("nameZh"), attributes.get("titleCn"), builtin != null ? builtin.titleCn() : null);
+        String nameEn = firstNonBlank(attributes.get("nameEn"), attributes.get("titleEn"), builtin != null ? builtin.titleEn() : null);
         String code = normalizedName;
         String zone = null;
         if ("DEPARTMENT".equalsIgnoreCase(scope)) {
@@ -2282,6 +2687,7 @@ public class AdminApiResource {
 
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("id", firstNonBlank(role != null ? role.getId() : null, "role-" + normalizedName));
+        String displayName = firstNonBlank(attributes.get("displayName"), nameZh, role != null ? role.getName() : null, normalizedName);
         summary.put("name", displayName);
         summary.put("description", description);
         summary.put("securityLevel", securityLevel);
@@ -2297,6 +2703,7 @@ public class AdminApiResource {
 
         // Additional presentation fields
         summary.put("code", code);
+        summary.put("roleId", code);
         if (nameZh != null) summary.put("nameZh", nameZh);
         if (nameEn != null) summary.put("nameEn", nameEn);
         if (zone != null) summary.put("zone", zone);
@@ -2305,6 +2712,24 @@ public class AdminApiResource {
         summary.put("canExport", canExport);
         summary.put("canManage", canManage);
         return summary;
+    }
+
+    private Optional<AdminCustomRole> locateCustomRole(String canonicalName) {
+        if (!StringUtils.hasText(canonicalName)) {
+            return Optional.empty();
+        }
+        Optional<AdminCustomRole> current = customRoleRepo.findByName(canonicalName);
+        if (current.isEmpty()) {
+            String legacy = resolveLegacyRole(canonicalName);
+            if (legacy != null) {
+                current = customRoleRepo.findByName(legacy);
+            }
+        }
+        return current;
+    }
+
+    private void deleteCustomRoleIfExists(String canonicalName) {
+        locateCustomRole(canonicalName).ifPresent(customRoleRepo::delete);
     }
 
     private static LinkedHashSet<String> parseOperations(Map<String, String> attributes) {

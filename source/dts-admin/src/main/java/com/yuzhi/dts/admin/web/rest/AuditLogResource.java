@@ -8,6 +8,7 @@ import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditEventView;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.web.rest.errors.BadRequestAlertException;
+import com.yuzhi.dts.common.audit.AuditStage;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -311,7 +312,7 @@ public class AuditLogResource {
     public ResponseEntity<ApiResponse<Map<String, Object>>> purge() {
         long removed = auditService.purgeAll();
         String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        auditService.record(actor, "AUDIT_PURGE", "AUDIT", "ALL", "SUCCESS", Map.of("removed", removed));
+        auditService.recordAction(actor, "ADMIN_AUDIT_PURGE", AuditStage.SUCCESS, "audit", Map.of("removed", removed));
         return ResponseEntity.ok(ApiResponse.ok(Map.of("removed", removed)));
     }
 

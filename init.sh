@@ -6,8 +6,9 @@ cd "$SCRIPT_DIR"
 MODE=""
 SECRET=""
 BASE_DOMAIN_ARG=""
+LEGACY_STACK=false
 
-usage(){ echo "Usage: $0 [single|ha2|cluster] [unified-password] [base-domain]"; }
+usage(){ echo "Usage: $0 [legacy] [single|ha2|cluster] [unified-password] [base-domain]"; }
 
 looks_like_domain(){
   local candidate="${1:-}"
@@ -97,15 +98,15 @@ ensure_pg_triplets(){
   echo "[init.sh] Ensuring Postgres roles/databases (idempotent)..."
   local i
   for i in {1..5}; do
-    if "${compose_cmd[@]}" exec -T dts-pg bash -lc \
-      "/docker-entrypoint-initdb.d/99-ensure-users-runtime.sh"; then
+    if "${compose_run[@]}" exec -T dts-pg bash -lc \
+      "bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh"; then
       echo "[init.sh] Postgres roles/databases ensured."
       return
     fi
     echo "[init.sh] Waiting for dts-pg to accept ensure script... (${i}/5)" >&2
     sleep 2
   done
-  echo "[init.sh] WARNING: Could not ensure PG roles/DBs automatically. You can run: docker compose exec dts-pg bash -lc '/docker-entrypoint-initdb.d/99-ensure-users-runtime.sh'" >&2
+  echo "[init.sh] WARNING: Could not ensure PG roles/DBs automatically. You can run: ${compose_run[*]} exec dts-pg bash -lc 'bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh'" >&2
 }
 
 generate_fernet(){
@@ -351,6 +352,13 @@ while (($#)); do
     -h|--help) usage; exit 0;;
     --password) shift; [[ $# -gt 0 ]] || { echo "[init.sh] ERROR: --password requires a value." >&2; exit 1; }; SECRET="$1";;
     --base-domain) shift; [[ $# -gt 0 ]] || { echo "[init.sh] ERROR: --base-domain requires a value." >&2; exit 1; }; [[ -z "$BASE_DOMAIN_ARG" ]] || { echo "[init.sh] ERROR: base domain already provided as '${BASE_DOMAIN_ARG}'." >&2; exit 1; }; BASE_DOMAIN_ARG="$1";;
+    legacy|--legacy)
+      if [[ "${LEGACY_STACK}" == "true" ]]; then
+        echo "[init.sh] ERROR: legacy flag specified multiple times." >&2
+        exit 1
+      fi
+      LEGACY_STACK=true
+      ;;
     single|ha2|cluster) [[ -z "$MODE" ]] || { echo "[init.sh] ERROR: deployment mode already specified as '${MODE}'." >&2; exit 1; }; MODE="$1";;
     *)
       if [[ -z "$BASE_DOMAIN_ARG" ]] && looks_like_domain "$1"; then BASE_DOMAIN_ARG="$1"
@@ -379,7 +387,16 @@ fi
 BASE_DOMAIN="$(normalize_base_domain "$BASE_DOMAIN")"
 if ! validate_base_domain "$BASE_DOMAIN"; then echo "[init.sh] ERROR: invalid base domain '${BASE_DOMAIN}'." >&2; exit 1; fi
 
+if [[ "${LEGACY_STACK}" == "true" && -z "${MODE}" ]]; then
+  MODE="single"
+fi
+
 if [[ -z "${MODE}" ]]; then pick_mode; else case "$MODE" in single|ha2|cluster) ;; *) usage; exit 1;; esac; fi
+
+if [[ "${LEGACY_STACK}" == "true" && "${MODE}" != "single" ]]; then
+  echo "[init.sh] ERROR: legacy stack currently supports only 'single' mode." >&2
+  exit 1
+fi
 if [[ -z "${SECRET}" ]]; then read_secret; else [[ ${#SECRET} -ge 10 && "$SECRET" =~ [A-Z] && "$SECRET" =~ [a-z] && "$SECRET" =~ [0-9] && "$SECRET" =~ [^A-Za-z0-9] ]] || { echo "Weak password"; exit 1; } fi
 
 PG_MODE="${PG_MODE:-}"
@@ -404,6 +421,12 @@ case "$MODE" in
     ;;
 esac
 
+if [[ "${LEGACY_STACK}" == "true" ]]; then
+  COMPOSE_FILE="docker-compose.legacy.yml"
+  PG_MODE="embedded"
+  PG_HOST="dts-pg"
+fi
+
 if [[ "${PG_MODE}" == "external" && "${PG_HOST}" == "your-external-pg-host" ]]; then
   if [[ -t 0 ]]; then
     read -rp "[init.sh] Enter the hostname or IP for the external PostgreSQL instance: " input_pg_host
@@ -418,6 +441,7 @@ fi
 generate_env_base
 ensure_env PG_MODE "${PG_MODE}"
 ensure_env PG_HOST "${PG_HOST}"
+ensure_env LEGACY_STACK "${LEGACY_STACK}"
 
 # 加载镜像版本 & 目录
 load_img_versions
@@ -436,26 +460,47 @@ else
   fi
 fi
 
+if [[ "${LEGACY_STACK}" == "true" ]]; then
+  echo "[init.sh] Legacy stack enabled; using docker-compose.legacy.yml (docker-compose 1.22 compatible)."
+fi
+
 echo "[init.sh] Starting with ${COMPOSE_FILE} ..."
-compose_cmd=()
-if docker compose version >/dev/null 2>&1; then
-  compose_cmd=(docker compose)
-elif command -v docker-compose >/dev/null 2>&1; then
-  compose_cmd=(docker-compose)
+compose_cli=()
+if [[ "${LEGACY_STACK}" == "true" ]]; then
+  if command -v docker-compose >/dev/null 2>&1; then
+    compose_cli=(docker-compose)
+  elif docker compose version >/dev/null 2>&1; then
+    compose_cli=(docker compose)
+  else
+    echo "[init.sh] ERROR: neither docker-compose nor docker compose is available; legacy mode requires docker-compose 1.22.x." >&2
+    exit 1
+  fi
 else
-  echo "docker compose not found"; exit 1
+  if docker compose version >/dev/null 2>&1; then
+    compose_cli=(docker compose)
+  elif command -v docker-compose >/dev/null 2>&1; then
+    compose_cli=(docker-compose)
+  else
+    echo "[init.sh] ERROR: docker compose not found." >&2
+    exit 1
+  fi
+fi
+
+compose_run=("${compose_cli[@]}")
+if [[ -n "${COMPOSE_FILE}" ]]; then
+  compose_run+=(-f "${COMPOSE_FILE}")
 fi
 
 if [[ "${PG_MODE}" == "embedded" ]]; then
   # 先启动 Postgres，确保用户/库就绪，再启动其余服务，避免依赖服务初始化竞态
   echo "[init.sh] Bringing up Postgres first to prepare roles/databases ..."
-  "${compose_cmd[@]}" -f "${COMPOSE_FILE}" up -d dts-pg
+  "${compose_run[@]}" up -d dts-pg
   # 等待容器起来后放宽一点时间
   sleep 2
   fix_pg_permissions
   # 等待 ready
   for i in {1..5}; do
-    if "${compose_cmd[@]}" exec -T dts-pg bash -lc "pg_isready -h 127.0.0.1 -p ${PG_PORT} -U ${PG_SUPER_USER} -d postgres" >/dev/null 2>&1; then
+    if "${compose_run[@]}" exec -T dts-pg bash -lc "pg_isready -h 127.0.0.1 -p ${PG_PORT} -U ${PG_SUPER_USER} -d postgres" >/dev/null 2>&1; then
       break
     fi
     echo "[init.sh] Waiting for Postgres to be ready ... (${i}/5)" >&2
@@ -464,10 +509,10 @@ if [[ "${PG_MODE}" == "embedded" ]]; then
   # 收敛角色/数据库（幂等）
   ensure_pg_triplets
   echo "[init.sh] Bringing up the remaining services ..."
-  "${compose_cmd[@]}" -f "${COMPOSE_FILE}" up -d
+  "${compose_run[@]}" up -d
 else
   # 外部 PG：直接启动全部服务
-  "${compose_cmd[@]}" -f "${COMPOSE_FILE}" up -d
+  "${compose_run[@]}" up -d
 fi
 
 # 输出可访问地址

@@ -14,12 +14,19 @@ const ROLE_LABEL_MAP: Record<string, string> = {
 	SYSADMIN: "系统管理员",
 	AUTHADMIN: "授权管理员",
 	AUDITADMIN: "安全审计员",
-	DEPT_OWNER: "部门主管",
-	DEPT_EDITOR: "部门数据专员",
-	DEPT_VIEWER: "数据查阅员",
-	INST_OWNER: "研究所领导",
-	INST_EDITOR: "研究所数据专员",
-	INST_VIEWER: "研究所数据查阅员",
+	DEPT_DATA_OWNER: "部门数据管理员",
+	DEPT_DATA_DEV: "部门数据开发员",
+	DEPT_DATA_VIEWER: "部门数据查看角色",
+	INST_DATA_OWNER: "研究所数据管理员",
+	INST_DATA_DEV: "研究所数据开发员",
+	INST_DATA_VIEWER: "研究所数据查看员",
+	// Legacy aliases retained for compatibility during迁移
+	DEPT_OWNER: "部门数据管理员",
+	DEPT_EDITOR: "部门数据开发员",
+	DEPT_VIEWER: "部门数据查看角色",
+	INST_OWNER: "研究所数据管理员",
+	INST_EDITOR: "研究所数据开发员",
+	INST_VIEWER: "研究所数据查看员",
 };
 
 function resolveRoleLabels(roles: unknown): string[] {

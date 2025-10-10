@@ -3,6 +3,7 @@ package com.yuzhi.dts.admin.security;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -106,6 +107,34 @@ public final class SecurityUtils {
         return getAuthorities(authentication).collect(Collectors.toList());
     }
 
+    public static String getCurrentUserPrimaryAuthority() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return null;
+        }
+        return resolvePrimaryAuthority(getAuthorities(authentication).collect(Collectors.toList()));
+    }
+
+    public static String resolvePrimaryAuthority(Collection<String> authorities) {
+        if (authorities == null || authorities.isEmpty()) {
+            return null;
+        }
+        LinkedHashSet<String> normalized = authorities
+            .stream()
+            .filter(java.util.Objects::nonNull)
+            .map(SecurityUtils::normalizeRole)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        for (String candidate : PRIMARY_ROLE_PRIORITY) {
+            if (normalized.contains(candidate)) {
+                return candidate;
+            }
+        }
+        return normalized.iterator().next();
+    }
+
     private static Stream<String> getAuthorities(Authentication authentication) {
         Collection<? extends GrantedAuthority> authorities = authentication instanceof JwtAuthenticationToken
             ? extractAuthorityFromClaims(((JwtAuthenticationToken) authentication).getToken().getClaims())
@@ -166,6 +195,14 @@ public final class SecurityUtils {
             .map(SimpleGrantedAuthority::new)
             .collect(Collectors.toList());
     }
+
+    private static final List<String> PRIMARY_ROLE_PRIORITY = List.of(
+        AuthoritiesConstants.SYS_ADMIN,
+        AuthoritiesConstants.AUTH_ADMIN,
+        AuthoritiesConstants.AUDITOR_ADMIN,
+        AuthoritiesConstants.OP_ADMIN,
+        AuthoritiesConstants.ADMIN
+    );
 
     private static final Map<String, String> ROLE_ALIASES = Map.ofEntries(
         // Canonical triad (no prefix aliases)

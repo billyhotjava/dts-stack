@@ -18,6 +18,7 @@ import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
+import com.yuzhi.dts.common.audit.AuditStage;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -438,12 +439,38 @@ public class AdminUserService {
         detail.put("payload", detailSource);
         detail.put("ip", ip);
         detail.put("timestamp", Instant.now().toString());
-        auditService.record(actor, action, "USER", target, "SUCCESS", detail);
+        String code = switch (action) {
+            case "USER_CREATE_REQUEST" -> "ADMIN_USER_CREATE";
+            case "USER_UPDATE_REQUEST", "USER_SET_PERSON_LEVEL_REQUEST" -> "ADMIN_USER_UPDATE";
+            case "USER_GRANT_ROLE_REQUEST", "USER_REVOKE_ROLE_REQUEST" -> "ADMIN_USER_ASSIGN_ROLE";
+            case "USER_ENABLE_REQUEST" -> "ADMIN_USER_ENABLE";
+            case "USER_DISABLE_REQUEST" -> "ADMIN_USER_DISABLE";
+            case "USER_RESET_PASSWORD_REQUEST" -> "ADMIN_USER_RESET_PASSWORD";
+            default -> action;
+        };
+        auditService.recordAction(actor, code, AuditStage.SUCCESS, target, detail);
     }
 
     private void auditUserChange(String actor, String action, String target, String result, Object detail) {
         String normalizedTarget = target == null ? "UNKNOWN" : target;
-        auditService.record(actor, action, "USER", normalizedTarget, result, detail);
+        Map<String, Object> payload;
+        if (detail instanceof Map<?, ?> map) {
+            payload = new HashMap<>();
+            map.forEach((k, v) -> payload.put(String.valueOf(k), v));
+        } else {
+            payload = Map.of("detail", detail);
+        }
+        String code = switch (action) {
+            case "USER_CREATE_EXECUTE" -> "ADMIN_USER_CREATE";
+            case "USER_UPDATE_EXECUTE", "USER_SET_PERSON_LEVEL_EXECUTE" -> "ADMIN_USER_UPDATE";
+            case "USER_DELETE_EXECUTE", "USER_DISABLE_EXECUTE" -> "ADMIN_USER_DISABLE";
+            case "USER_ENABLE_EXECUTE" -> "ADMIN_USER_ENABLE";
+            case "USER_GRANT_ROLE_EXECUTE", "USER_REVOKE_ROLE_EXECUTE" -> "ADMIN_USER_ASSIGN_ROLE";
+            case "USER_RESET_PASSWORD_EXECUTE" -> "ADMIN_USER_RESET_PASSWORD";
+            default -> action;
+        };
+        AuditStage stage = "SUCCESS".equalsIgnoreCase(result) ? AuditStage.SUCCESS : AuditStage.FAIL;
+        auditService.recordAction(actor, code, stage, normalizedTarget, payload);
     }
 
     private String normalizeSecurityLevel(String level) {
@@ -675,15 +702,33 @@ public class AdminUserService {
             approval.setDecisionNote(note);
             approval.setErrorMessage(null);
             approvalRepository.save(approval);
-            auditService.record(approver, "APPROVAL_APPROVE", "APPROVAL", String.valueOf(id), "SUCCESS", note);
+            auditService.recordAction(
+                approver,
+                "ADMIN_APPROVAL_DECIDE",
+                AuditStage.SUCCESS,
+                String.valueOf(id),
+                Map.of("result", "APPROVED", "note", note)
+            );
             updateChangeRequestStatus(changeRequestIds, ApprovalStatus.APPLIED.name(), approver, now, null);
             return toDetailDto(approval);
         } catch (Exception ex) {
-            auditService.record(approver, "APPROVAL_APPROVE", "APPROVAL", String.valueOf(id), "FAILURE", ex.getMessage());
+            auditService.recordAction(
+                approver,
+                "ADMIN_APPROVAL_DECIDE",
+                AuditStage.FAIL,
+                String.valueOf(id),
+                Map.of("error", ex.getMessage(), "result", "APPROVED")
+            );
             scheduleRetry(approval, note, ex.getMessage());
             approvalRepository.save(approval);
             updateChangeRequestStatus(changeRequestIds, ApprovalStatus.PENDING.name(), null, null, ex.getMessage());
-            auditService.record(approver, "APPROVAL_REQUEUE", "APPROVAL", String.valueOf(id), "SUCCESS", ex.getMessage());
+            auditService.recordAction(
+                approver,
+                "ADMIN_APPROVAL_DECIDE",
+                AuditStage.SUCCESS,
+                String.valueOf(id),
+                Map.of("result", "REQUEUE", "note", ex.getMessage())
+            );
             LOG.warn("Approval id={} failed to apply: {}", id, ex.getMessage());
             throw new IllegalStateException("审批执行失败: " + ex.getMessage(), ex);
         }
@@ -701,7 +746,13 @@ public class AdminUserService {
         approval.setApprover(approver);
         approval.setDecisionNote(note);
         approvalRepository.save(approval);
-        auditService.record(approver, "APPROVAL_REJECT", "APPROVAL", String.valueOf(id), "SUCCESS", note);
+        auditService.recordAction(
+            approver,
+            "ADMIN_APPROVAL_DECIDE",
+            AuditStage.SUCCESS,
+            String.valueOf(id),
+            Map.of("result", "REJECTED", "note", note)
+        );
         updateChangeRequestStatus(changeRequestIds, ApprovalStatus.REJECTED.name(), approver, now, null);
         return toDetailDto(approval);
     }
@@ -718,7 +769,13 @@ public class AdminUserService {
         approval.setApprover(approver);
         approval.setDecisionNote(note);
         approvalRepository.save(approval);
-        auditService.record(approver, "APPROVAL_PROCESS", "APPROVAL", String.valueOf(id), "SUCCESS", note);
+        auditService.recordAction(
+            approver,
+            "ADMIN_APPROVAL_DECIDE",
+            AuditStage.SUCCESS,
+            String.valueOf(id),
+            Map.of("result", "PROCESS", "note", note)
+        );
         updateChangeRequestStatus(changeRequestIds, ApprovalStatus.PROCESSING.name(), approver, now, null);
         return toDetailDto(approval);
     }
@@ -950,10 +1007,14 @@ public class AdminUserService {
     }
 
     public void syncRealmRole(String roleName, String scope, Set<String> operations) {
-        syncRealmRole(roleName, scope, operations, null);
+        syncRealmRole(roleName, scope, operations, null, Collections.emptyMap());
     }
 
     public void syncRealmRole(String roleName, String scope, Set<String> operations, String description) {
+        syncRealmRole(roleName, scope, operations, description, Collections.emptyMap());
+    }
+
+    public void syncRealmRole(String roleName, String scope, Set<String> operations, String description, Map<String, String> additionalAttributes) {
         if (StringUtils.isBlank(roleName)) {
             return;
         }
@@ -976,6 +1037,13 @@ public class AdminUserService {
         if (StringUtils.isNotBlank(description)) {
             attributes.put("description", desc);
         }
+        if (additionalAttributes != null && !additionalAttributes.isEmpty()) {
+            additionalAttributes.forEach((key, value) -> {
+                if (StringUtils.isNotBlank(key) && StringUtils.isNotBlank(value)) {
+                    attributes.putIfAbsent(key.trim(), value.trim());
+                }
+            });
+        }
         if (!attributes.isEmpty()) {
             dto.setAttributes(attributes);
         }
@@ -993,7 +1061,7 @@ public class AdminUserService {
                 }
             } catch (Exception ignored) {}
             keycloakAdminClient.upsertRealmRole(dto, token);
-            LOG.info("Synchronized realm role {} to Keycloak (scope={}, ops={}, hasCustomDesc={})", nameToUse, scope, operations, StringUtils.isNotBlank(description));
+            LOG.info("Synchronized realm role {} to Keycloak (scope={}, ops={}, hasCustomDesc={})", nameToUse, scope, operations, StringUtils.isNotBlank(desc));
         } catch (Exception ex) {
             LOG.warn("Failed to synchronize realm role {}: {}", normalizedRole, ex.getMessage());
         }

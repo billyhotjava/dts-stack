@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="10.23.1">
+<file name="/opt/prod/s10/dts-stack/source/dts-admin/README.md">
+</file>
+<file name="/opt/prod/s10/dts-stack/source/dts-admin/pom.xml">
+</file>
+<file name="/opt/prod/s10/dts-stack/source/dts-admin/src/main/resources/i18n/messages_en.properties">
+</file>
+<file name="/opt/prod/s10/dts-stack/source/dts-admin/src/main/resources/i18n/messages.properties">
+</file>
+<file name="/opt/prod/s10/dts-stack/source/dts-admin/src/test/resources/junit-platform.properties">
+</file>
+</checkstyle>

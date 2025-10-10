@@ -144,7 +144,8 @@ export default function RoleManagementView() {
         };
 
         roles.forEach((role) => {
-            const canonical = canonicalRole(role.name);
+            const authorityCode = role.roleId || role.code || role.name;
+            const canonical = canonicalRole(authorityCode);
             if (!canonical || RESERVED_ROLE_CODES.has(canonical)) {
                 return;
             }
@@ -154,11 +155,11 @@ export default function RoleManagementView() {
             const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
             const entry: RoleRow = {
                 id: role.id,
-                key: role.id?.toString() ?? role.name,
-                authority: role.name,
+                key: role.id?.toString() ?? authorityCode,
+                authority: authorityCode,
                 displayName: (role as any).nameZh || role.name,
                 canonical,
-                code: (role as any).code || canonical,
+                code: role.roleId || (role as any).code || canonical,
                 nameZh: (role as any).nameZh,
                 nameEn: (role as any).nameEn,
                 zone: (role as any).zone,
@@ -170,7 +171,7 @@ export default function RoleManagementView() {
                 menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
                 assignments: assignmentMap.get(canonical) ?? [],
                 source: role.source ?? undefined,
-                kcMemberCount: (role as any).memberCount ?? 0,
+                kcMemberCount: role.kcMemberCount ?? role.memberCount ?? 0,
             };
             map.set(canonical, entry);
         });
@@ -198,6 +199,9 @@ export default function RoleManagementView() {
                 }
             } else {
                 const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
+                const matchedRole = (rolesData || []).find(
+                    (r) => toRoleName(r.name) === canonical || toRoleName(r.code || "") === canonical
+                );
                 map.set(canonical, {
                     key: `custom-${role.id}`,
                     authority: role.name,
@@ -211,7 +215,7 @@ export default function RoleManagementView() {
                     menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
                     assignments: assignmentMap.get(canonical) ?? [],
                     source: "custom",
-                    kcMemberCount: (rolesData || []).find((r) => toRoleName(r.name) === canonical || toRoleName(r.code || "") === canonical)?.memberCount ?? 0,
+                    kcMemberCount: matchedRole?.kcMemberCount ?? matchedRole?.memberCount ?? 0,
                 });
             }
         });
@@ -266,6 +270,27 @@ export default function RoleManagementView() {
                             <span className="truncate font-medium">{code}</span>
                             {/* <span className="truncate text-xs text-muted-foreground">{code}</span> */}
                         </div>
+                    );
+                },
+            },
+            {
+                title: "角色名称",
+                dataIndex: "displayName",
+                key: "displayNameZh",
+                width: 200,
+                onCell: () => ({ style: { verticalAlign: "middle" } }),
+                render: (_value, record) => {
+                    const zh = (record.nameZh || record.displayName || "").trim();
+                    const fallback = record.description ?? "";
+                    const label = zh || fallback;
+                    return label ? (
+                        <span className="truncate block max-w-full" title={label}>
+                            {label}
+                        </span>
+                    ) : (
+                        <Text variant="body3" className="text-muted-foreground">
+                            未填写
+                        </Text>
                     );
                 },
             },
@@ -460,6 +485,7 @@ interface CreateRoleDialogProps {
 
 function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRoleMap, menuParentMap, menuChildrenMap }: CreateRoleDialogProps) {
     const [name, setName] = useState("");
+    const [displayName, setDisplayName] = useState("");
     const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
     const [allowDesensitize, setAllowDesensitize] = useState(true);
     const [description, setDescription] = useState("");
@@ -470,6 +496,7 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
     const resetState = useCallback(() => {
         setName("");
         setScope("DEPARTMENT");
+        setDisplayName("");
         setAllowDesensitize(true);
         setDescription("");
         setReason("");
@@ -535,6 +562,11 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
     const handleSubmit = async () => {
         const trimmedName = name.trim();
         if (!trimmedName) {
+            toast.error("请输入角色 ID");
+            return;
+        }
+        const trimmedDisplayName = displayName.trim();
+        if (!trimmedDisplayName) {
             toast.error("请输入角色名称");
             return;
         }
@@ -552,6 +584,9 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                 operations: ["read"] as DataOperation[],
                 allowDesensitizeJson: allowDesensitize,
                 description: trimmedDescription,
+                titleCn: trimmedDisplayName,
+                nameZh: trimmedDisplayName,
+                displayName: trimmedDisplayName,
                 reason: trimmedReason,
             };
             const change = await adminApi.createCustomRole(payload);
@@ -601,12 +636,12 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                 <div className="space-y-4 text-sm">
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                            <label htmlFor="role-name" className="font-medium">
-                                角色名称
+                            <label htmlFor="role-code" className="font-medium">
+                                角色 ID
                             </label>
                             <Input
-                                id="role-name"
-                                placeholder="如：DEPT_OWNER"
+                                id="role-code"
+                                placeholder="如：DEPT_DATA_DEV"
                                 value={name}
                                 onChange={(event) => setName(event.target.value)}
                             />
@@ -615,17 +650,31 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                             </Text>
                         </div>
                         <div className="space-y-2">
-                            <label htmlFor="role-description" className="font-medium">
-                             描述 
+                            <label htmlFor="role-display-name" className="font-medium">
+                                角色名称
                             </label>
-                            <Textarea
-                                id="role-description"
-                                rows={2}
-                                placeholder="补充角色用途，便于审批记录"
-                                value={description}
-                                onChange={(event) => setDescription(event.target.value)}
+                            <Input
+                                id="role-display-name"
+                                placeholder="如：部门数据开发员"
+                                value={displayName}
+                                onChange={(event) => setDisplayName(event.target.value)}
                             />
+                            <Text variant="body3" className="text-muted-foreground">
+                                展示给平台和审批流程的名称
+                            </Text>
                         </div>
+                    </div>
+                    <div className="space-y-2">
+                        <label htmlFor="role-description" className="font-medium">
+                            描述
+                        </label>
+                        <Textarea
+                            id="role-description"
+                            rows={2}
+                            placeholder="补充角色用途，便于审批记录"
+                            value={description}
+                            onChange={(event) => setDescription(event.target.value)}
+                        />
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">

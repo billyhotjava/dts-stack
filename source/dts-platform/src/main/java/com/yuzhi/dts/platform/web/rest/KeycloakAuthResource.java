@@ -249,28 +249,28 @@ public class KeycloakAuthResource {
                     yield true;
                 }
                 // Data roles (client roles on dts-system). Map to canonical ROLE_* for audience filtering in Admin.
-                case "DEPT_VIEWER", "DEPARTMENT_VIEWER" -> {
-                    mapped.add("ROLE_DEPT_VIEWER");
+                case "DEPT_DATA_VIEWER", "DEPT_VIEWER", "DEPARTMENT_VIEWER" -> {
+                    mapped.add("ROLE_DEPT_DATA_VIEWER");
                     yield true;
                 }
-                case "DEPT_EDITOR", "DEPARTMENT_EDITOR" -> {
-                    mapped.add("ROLE_DEPT_EDITOR");
+                case "DEPT_DATA_DEV", "DEPT_EDITOR", "DEPARTMENT_EDITOR" -> {
+                    mapped.add("ROLE_DEPT_DATA_DEV");
                     yield true;
                 }
-                case "DEPT_OWNER", "DEPARTMENT_OWNER" -> {
-                    mapped.add("ROLE_DEPT_OWNER");
+                case "DEPT_DATA_OWNER", "DEPT_OWNER", "DEPARTMENT_OWNER" -> {
+                    mapped.add("ROLE_DEPT_DATA_OWNER");
                     yield true;
                 }
-                case "INST_VIEWER", "INSTITUTE_VIEWER", "INSTITUTION_VIEWER" -> {
-                    mapped.add("ROLE_INST_VIEWER");
+                case "INST_DATA_VIEWER", "INST_VIEWER", "INSTITUTE_VIEWER", "INSTITUTION_VIEWER" -> {
+                    mapped.add("ROLE_INST_DATA_VIEWER");
                     yield true;
                 }
-                case "INST_EDITOR", "INSTITUTE_EDITOR", "INSTITUTION_EDITOR" -> {
-                    mapped.add("ROLE_INST_EDITOR");
+                case "INST_DATA_DEV", "INST_EDITOR", "INSTITUTE_EDITOR", "INSTITUTION_EDITOR" -> {
+                    mapped.add("ROLE_INST_DATA_DEV");
                     yield true;
                 }
-                case "INST_OWNER", "INSTITUTE_OWNER", "INSTITUTION_OWNER" -> {
-                    mapped.add("ROLE_INST_OWNER");
+                case "INST_DATA_OWNER", "INST_OWNER", "INSTITUTE_OWNER", "INSTITUTION_OWNER" -> {
+                    mapped.add("ROLE_INST_DATA_OWNER");
                     yield true;
                 }
                 case "SYS_ADMIN", "SYSADMIN", "AUTH_ADMIN", "AUTHADMIN", "SECURITY_AUDITOR", "SECURITYAUDITOR", "AUDIT_ADMIN", "AUDITADMIN", "AUDITOR_ADMIN" -> {

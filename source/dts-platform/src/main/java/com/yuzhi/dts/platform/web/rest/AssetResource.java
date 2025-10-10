@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.catalog.DatasetJobService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.validation.Valid;
@@ -67,10 +68,20 @@ public class AssetResource {
     public ApiResponse<Map<String, Object>> syncSchema(@PathVariable UUID id, @RequestBody(required = false) Map<String, Object> body) {
         try {
             CatalogDatasetJob job = datasetJobService.submitSchemaSync(id, body != null ? body : Map.of(), SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
-            audit.audit("SUBMIT", "dataset.schema", id + ":job=" + job.getId());
+            audit.auditAction(
+                "CATALOG_ASSET_EDIT",
+                AuditStage.SUCCESS,
+                id.toString(),
+                Map.of("jobId", job.getId(), "action", "syncSchema")
+            );
             return ApiResponses.ok(Map.of("job", datasetJobService.toDto(job)));
         } catch (RuntimeException ex) {
-            audit.audit("ERROR", "dataset.schema", id + ":" + sanitize(ex.getMessage()));
+            audit.auditAction(
+                "CATALOG_ASSET_EDIT",
+                AuditStage.FAIL,
+                id.toString(),
+                Map.of("error", sanitize(ex.getMessage()))
+            );
             throw ex;
         }
     }
@@ -80,7 +91,12 @@ public class AssetResource {
         CatalogDatasetJob job = datasetJobService
             .findJob(jobId)
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "job not found"));
-        audit.audit("READ", "dataset.job", jobId.toString());
+        audit.auditAction(
+            "CATALOG_ASSET_VIEW",
+            AuditStage.SUCCESS,
+            jobId.toString(),
+            Map.of("status", job.getStatus())
+        );
         return ApiResponses.ok(datasetJobService.toDto(job));
     }
 
@@ -91,7 +107,12 @@ public class AssetResource {
             .stream()
             .map(datasetJobService::toDto)
             .toList();
-        audit.audit("READ", "dataset.job.list", id.toString());
+        audit.auditAction(
+            "CATALOG_ASSET_VIEW",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("jobs", jobs.size())
+        );
         return ApiResponses.ok(jobs);
     }
 
@@ -103,7 +124,12 @@ public class AssetResource {
     public ApiResponse<Map<String, Object>> preview(@PathVariable UUID id, @RequestParam(defaultValue = "50") int rows) {
         CatalogDataset ds = datasetRepo.findById(id).orElseThrow();
         if (!accessChecker.canRead(ds)) {
-            audit.audit("DENY", "dataset.preview", id.toString());
+            audit.auditAction(
+                "CATALOG_ASSET_VIEW",
+                AuditStage.FAIL,
+                id.toString(),
+                Map.of("reason", "ACCESS_DENIED")
+            );
             return ApiResponses.error("Access denied");
         }
 
@@ -146,7 +172,12 @@ public class AssetResource {
         result.put("headers", headers);
         result.put("rows", data);
         result.put("rowCount", filtered);
-        audit.audit("READ", "dataset.preview", id.toString());
+        audit.auditAction(
+            "CATALOG_ASSET_VIEW",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("rows", filtered, "requestedRows", rows)
+        );
         return ApiResponses.ok(result);
     }
 

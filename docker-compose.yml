@@ -1,8 +1,5 @@
-version: "2.4"
-
-## Note for docker-compose 1.22.0 (legacy):
-## - Use file format 2.4 to support depends_on.condition, healthcheck.start_period, and restart policies.
-## - Keep YAML anchors (x-*) which are ignored by Compose and help reuse snippets.
+## Compose file compatible with docker compose v2+. Keep YAML anchors (x-*)
+## which are ignored by Compose and help reuse snippets.
 
 x-hc: &hc
   interval: 10s
@@ -233,30 +230,30 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
-   # Router（HTTPS）
+   # Router (HTTPS)
       - "traefik.http.routers.dts-trino.rule=Host(`${HOST_TRINO}`) && PathPrefix(`/`)"
       - "traefik.http.routers.dts-trino.entrypoints=websecure"
       - "traefik.http.routers.dts-trino.tls=true"
 
-      # Service 后端端口
+      # Backend service port
       - "traefik.http.services.dts-trino.loadbalancer.server.port=8080"
 
-      # 根路径 -> /ui/ 
-      - "traefik.http.middlewares.dts-trino-redirect.redirectregex.regex=^/$"
+      # Root path redirect to /ui/
+      - "traefik.http.middlewares.dts-trino-redirect.redirectregex.regex=^/$$"
       - "traefik.http.middlewares.dts-trino-redirect.redirectregex.replacement=/ui/"
 
-      # HTTP -> HTTPS（只给 trino 这个主机名做 80->443 跳转）
+      # HTTP -> HTTPS redirect for trino hostname only
       - "traefik.http.middlewares.dts-trino-https.redirectscheme.scheme=https"
       - "traefik.http.middlewares.dts-trino-https.redirectscheme.permanent=true"
       - "traefik.http.routers.dts-trino-http.rule=Host(`${HOST_TRINO}`)"
       - "traefik.http.routers.dts-trino-http.entrypoints=web"
       - "traefik.http.routers.dts-trino-http.middlewares=dts-trino-https@docker"
 
-      # 关键：把中间件“串起来”，不要重复写 middlewares 键
+      # Chain middlewares without repeating the key
       - "traefik.http.routers.dts-trino.middlewares=dts-trino-redirect@docker"
     restart: unless-stopped
     networks:
-  #     - dts-core
+      - dts-core
 
   # dts-ranger:
   #   image: ${IMAGE_RANGER_ADMIN}
@@ -291,10 +288,10 @@ services:
   #   networks:
   #     - dts-core
 
-lumes:
+volumes:
   maven-cache:
 
 networks:
   dts-core:
-    name: dts-core        # ← 真实 Docker 网络名就叫 dts-core
+    name: dts-core        # Real Docker network name
     driver: bridge

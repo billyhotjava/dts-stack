@@ -1,7 +1,14 @@
 package com.yuzhi.dts.platform.service.audit;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditActionCatalog;
+import com.yuzhi.dts.common.audit.AuditActionDefinition;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,23 +17,83 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 public class AuditService {
     private static final Logger log = LoggerFactory.getLogger(AuditService.class);
 
     private final ObjectProvider<AuditTrailService> auditTrailServiceProvider;
+    private final AuditActionCatalog actionCatalog;
+    private final ObjectMapper objectMapper;
 
-    public AuditService(ObjectProvider<AuditTrailService> auditTrailServiceProvider) {
+    public AuditService(
+        ObjectProvider<AuditTrailService> auditTrailServiceProvider,
+        AuditActionCatalog actionCatalog,
+        ObjectMapper objectMapper
+    ) {
         this.auditTrailServiceProvider = auditTrailServiceProvider;
+        this.actionCatalog = actionCatalog;
+        this.objectMapper = objectMapper;
+    }
+
+    public void auditAction(String actionCode, AuditStage stage, String resourceId, Object payload) {
+        if (!StringUtils.hasText(actionCode)) {
+            log.warn("auditAction invoked without action code; falling back to legacy audit");
+            audit(actionCode, "general", resourceId);
+            return;
+        }
+        AuditStage effectiveStage = stage == null ? AuditStage.SUCCESS : stage;
+        AuditActionDefinition definition = actionCatalog
+            .findByCode(actionCode)
+            .orElseGet(() -> {
+                log.warn("Unknown audit action code {}, using fallback metadata", actionCode);
+                return new AuditActionDefinition(
+                    actionCode.trim().toUpperCase(),
+                    actionCode,
+                    "general",
+                    "General",
+                    "general",
+                    "通用动作",
+                    false,
+                    null
+                );
+            });
+        if (!definition.isStageSupported(effectiveStage)) {
+            log.debug(
+                "Audit action {} does not declare stage {}; proceeding for backward compatibility",
+                definition.getCode(),
+                effectiveStage
+            );
+        }
+
+        String module = definition.getModuleKey();
+        String actionDisplay = definition.getDisplay();
+        String resourceType = definition.getEntryKey();
+        String result = switch (effectiveStage) {
+            case BEGIN -> "PENDING";
+            case SUCCESS -> "SUCCESS";
+            case FAIL -> "FAILURE";
+        };
+
+        Map<String, Object> tags = new HashMap<>();
+        tags.put("actionCode", definition.getCode());
+        tags.put("stage", effectiveStage.name());
+        tags.put("moduleKey", definition.getModuleKey());
+        tags.put("moduleTitle", definition.getModuleTitle());
+        tags.put("entryKey", definition.getEntryKey());
+        tags.put("entryTitle", definition.getEntryTitle());
+        tags.put("supportsFlow", definition.isSupportsFlow());
+
+        record(actionDisplay, module, resourceType, resourceId, result, payload, tags);
     }
 
     public void audit(String action, String targetKind, String targetRef) {
-        record(action, targetKind, targetKind, targetRef, "SUCCESS", null);
+        record(action, targetKind, targetKind, targetRef, "SUCCESS", null, null);
     }
 
     public void auditFailure(String action, String targetKind, String targetRef, Object payload) {
-        record(action, targetKind, targetKind, targetRef, "FAILURE", payload);
+        record(action, targetKind, targetKind, targetRef, "FAILURE", payload, null);
     }
 
     public void record(
@@ -36,6 +103,18 @@ public class AuditService {
         String resourceId,
         String result,
         Object payload
+    ) {
+        record(action, module, resourceType, resourceId, result, payload, null);
+    }
+
+    public void record(
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
     ) {
         String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
         log.info(
@@ -57,13 +136,24 @@ public class AuditService {
         event.resourceId = resourceId;
         event.result = result;
         event.payload = payload;
+        event.extraTags = serializeTags(extraTags);
         AuditTrailService svc = auditTrailServiceProvider.getIfAvailable();
         if (svc != null) {
             svc.record(event);
-        } else {
-            if (log.isDebugEnabled()) {
-                log.debug("AuditTrailService not available; skipping audit record action={} module={} resourceId={}", action, module, resourceId);
-            }
+        } else if (log.isDebugEnabled()) {
+            log.debug("AuditTrailService not available; skipping audit record action={} module={} resourceId={}", action, module, resourceId);
+        }
+    }
+
+    private String serializeTags(Map<String, Object> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(tags);
+        } catch (JsonProcessingException ex) {
+            log.warn("Failed to serialize audit extra tags", ex);
+            return null;
         }
     }
 

@@ -1,5 +1,3 @@
-version: "2.4"
-
 ## Dev overlay: run services from source via bind mounts and live reload
 
 services:
@@ -46,7 +44,7 @@ services:
         # Build current module and run with devtools; restarts on classpath changes
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true package || true
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true spring-boot:run \
-          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}" \
+          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12" \
           -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     ports:
       - "18081:8081"
@@ -54,7 +52,7 @@ services:
     volumes:
       - ./source:/workspace-src:z
       - maven-cache:/root/.m2
-      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro,z
+      - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
     extra_hosts:
       # For Docker < 20.10, 'host-gateway' is unsupported; fall back to default bridge gateway IP.
@@ -128,7 +126,7 @@ services:
         mvn -q -f /workspace-src/dts-common/pom.xml -Pdev -DskipTests -Dmodernizer.skip=true install || true
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true package || true
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true spring-boot:run \
-          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006 -Djavax.net.ssl.trustStore=/etc/dts/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}" \
+          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006 -Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12" \
           -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     ports:
       - "18082:8081"
@@ -136,7 +134,7 @@ services:
     volumes:
       - ./source:/workspace-src:z
       - maven-cache:/root/.m2
-      - ./services/certs/truststore.jks:/etc/dts/truststore.jks:ro,z
+      - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
       - ./services/dts-platform/upload:/opt/dts/upload:Z
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
