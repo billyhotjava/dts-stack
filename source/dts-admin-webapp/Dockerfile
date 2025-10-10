@@ -17,11 +17,14 @@ RUN pnpm build
 
 FROM node:20-alpine AS runtime
 
-WORKDIR /app
-RUN npm install -g serve@14.2.1
+RUN apk add --no-cache nginx && \
+    rm -f /etc/nginx/http.d/default.conf /etc/nginx/conf.d/default.conf && \
+    mkdir -p /usr/share/nginx/html
 
-COPY --from=build /app/dist ./dist
+WORKDIR /usr/share/nginx/html
+COPY --from=build /app/dist ./
+COPY nginx.conf /etc/nginx/http.d/default.conf
 
 EXPOSE 80
 
-CMD ["serve", "-s", "dist", "-l", "0.0.0.0:80"]
+CMD ["nginx", "-g", "daemon off;"]

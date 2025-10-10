@@ -8,8 +8,8 @@ set -eu
 UPSTREAM="${API_PROXY_TARGET:-http://host.docker.internal:8081}"
 export UPSTREAM
 
-TEMPLATE="/etc/nginx/conf.d/default.conf.template"
-TARGET="/etc/nginx/conf.d/default.conf"
+TEMPLATE="/etc/nginx/http.d/default.conf.template"
+TARGET="/etc/nginx/http.d/default.conf"
 
 if [ -f "$TEMPLATE" ]; then
   echo "[entrypoint] Rendering Nginx config with UPSTREAM=$UPSTREAM"

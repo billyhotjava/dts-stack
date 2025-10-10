@@ -20,13 +20,15 @@ RUN pnpm build
 
 FROM node:20-alpine AS runtime
 
-RUN apk add --no-cache nginx gettext
+RUN apk add --no-cache nginx gettext && \
+    rm -f /etc/nginx/http.d/default.conf /etc/nginx/conf.d/default.conf && \
+    mkdir -p /usr/share/nginx/html
 
 WORKDIR /usr/share/nginx/html
 COPY --from=build /app/dist ./
 
 # Template-based Nginx config rendered at container start
-COPY nginx.conf.template /etc/nginx/conf.d/default.conf.template
+COPY nginx.conf.template /etc/nginx/http.d/default.conf.template
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
