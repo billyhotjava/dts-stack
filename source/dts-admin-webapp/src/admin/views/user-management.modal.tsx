@@ -501,6 +501,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                     emailVerified: formData.emailVerified,
                     attributes: attributesPayload,
                     groups: groupPathsPayload.length > 0 ? groupPathsPayload : undefined,
+                    // 在创建时一并提交选择的角色，由后端生成包含角色分配的审批请求
+                    realmRoles: userRoles.map((r) => r.name).filter(Boolean),
                     // Persist deptCode as organization id (dts_org_id) to align with Keycloak group attribute
                     deptCode: (() => { const p = groupPathsPayload[0]; const node = p ? orgIndex[normalizeGroupPath(p)] : undefined; return node ? String(node.id) : (attributesPayload.dept_code?.[0] || undefined); })(),
                 };
@@ -779,7 +781,11 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 					</Card>
 
 
-					{mode === "edit" && user?.id && (
+					{(
+						// 创建和编辑均展示角色分配区块；
+						// 编辑模式会预加载现有角色，创建模式从空开始供选择
+						mode === "edit" ? true : mode === "create"
+					) && (
 						<Card>
 							<CardHeader>
 								<CardTitle className="text-lg">角色分配</CardTitle>

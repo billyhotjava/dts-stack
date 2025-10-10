@@ -21,6 +21,7 @@ interface FilterState {
 	from?: string;
 	to?: string;
 	module?: string;
+	resourceType?: string;
 	actor?: string;
 	resource?: string;
 	clientIp?: string;
@@ -44,7 +45,8 @@ export default function AuditCenterView() {
 	const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
 	const [totalElements, setTotalElements] = useState(0);
     // totalPages not displayed in UI; omit to satisfy TS noUnusedLocals
-	const [moduleOptions, setModuleOptions] = useState<string[]>([]);
+	const [moduleOptions, setModuleOptions] = useState<Array<{ value: string; label: string }>>([]);
+	const [categoryOptions, setCategoryOptions] = useState<Array<{ moduleKey: string; moduleTitle: string; entryKey: string; entryTitle: string }>>([]);
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 	const [exporting, setExporting] = useState(false);
 
@@ -61,10 +63,16 @@ export default function AuditCenterView() {
 				setSize(response.size);
 				setTotalElements(response.totalElements);
                 // totalPages is not used in UI; skip storing
+				// Fallback accumulation from logs if catalog not loaded yet
 				setModuleOptions((prev) => {
-					const values = new Set(prev);
-					response.content.forEach((item) => values.add(item.module));
-					return Array.from(values).filter(Boolean).sort();
+					const existing = new Map(prev.map((it) => [it.value, it] as const));
+					response.content.forEach((item) => {
+						const key = item.module;
+						if (key && !existing.has(`module:${key}`)) {
+							existing.set(`module:${key}`, { value: `module:${key}`, label: key });
+						}
+					});
+					return Array.from(existing.values()).sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
 				});
 			} catch (error) {
 				console.error("Failed to load audit logs", error);
@@ -79,6 +87,38 @@ export default function AuditCenterView() {
 	useEffect(() => {
 		loadLogs(page, size);
 	}, [loadLogs, page, size]);
+
+	// Load module catalog and categories once; build dropdown options
+	useEffect(() => {
+		(async () => {
+			try {
+				const [modules, categories] = await Promise.all([
+					AuditLogService.getAuditModules(),
+					AuditLogService.getAuditCategories(),
+				]);
+				setCategoryOptions(Array.isArray(categories) ? categories : []);
+				if (Array.isArray(modules) && modules.length) {
+					// Build options: replace "管理端" with its subcategories (用户管理/角色管理/菜单管理/组织机构管理)
+					const opts: Array<{ value: string; label: string }> = [];
+					for (const m of modules) {
+						if (m.key === "admin") {
+							const subs = (categories || []).filter((c) => c.moduleKey === "admin");
+							if (subs.length) {
+								for (const c of subs) {
+									opts.push({ value: `entry:${c.entryKey}`, label: c.entryTitle });
+								}
+								continue;
+							}
+						}
+						opts.push({ value: `module:${m.key}`, label: m.title });
+					}
+					setModuleOptions(opts);
+				}
+			} catch (e) {
+				// ignore, fallback to dynamic accumulation
+			}
+		})();
+	}, []);
 
 	const handleRefresh = useCallback(() => {
 		loadLogs(0, size);
@@ -225,9 +265,21 @@ export default function AuditCenterView() {
 						/>
 						<SelectField
 							label="功能模块"
-							value={filters.module ?? ""}
-							onChange={(value) => setFilters((prev) => ({ ...prev, module: value || undefined }))}
-							options={["", ...moduleOptions]}
+							value={filters.resourceType ? `entry:${filters.resourceType}` : (filters.module ? `module:${filters.module}` : "")}
+							onChange={(value) => {
+								if (!value) {
+									setFilters((prev) => ({ ...prev, module: undefined, resourceType: undefined }));
+									return;
+								}
+								if (value.startsWith("entry:")) {
+									const entryKey = value.slice(6);
+									setFilters((prev) => ({ ...prev, resourceType: entryKey, module: undefined }));
+								} else if (value.startsWith("module:")) {
+									const moduleKey = value.slice(7);
+									setFilters((prev) => ({ ...prev, module: moduleKey, resourceType: undefined }));
+								}
+							}}
+							options={[{ value: "", label: "全部模块" }, ...moduleOptions]}
 						/>
 						<InputField
 							label="操作人"
@@ -350,6 +402,9 @@ function buildQuery(filters: FilterState): Record<string, string> {
 	}
 	if (filters.module) {
 		params.module = filters.module;
+	}
+	if (filters.resourceType) {
+		params.resourceType = filters.resourceType;
 	}
 	if (filters.actor) {
 		params.actor = filters.actor;
@@ -510,11 +565,12 @@ function InputField({ label, value, onChange, placeholder }: FieldProps) {
 	);
 }
 
+interface SelectOption { value: string; label: string }
 interface SelectProps {
 	label: string;
 	value: string;
 	onChange: (value: string) => void;
-	options: string[];
+	options: SelectOption[];
 }
 
 function SelectField({ label, value, onChange, options }: SelectProps) {
@@ -529,8 +585,8 @@ function SelectField({ label, value, onChange, options }: SelectProps) {
 				onChange={(event) => onChange(event.target.value)}
 			>
 				{options.map((opt) => (
-					<option key={opt || "all"} value={opt}>
-						{opt ? opt : "全部模块"}
+					<option key={opt.value || "all"} value={opt.value}>
+						{opt.label}
 					</option>
 				))}
 			</select>

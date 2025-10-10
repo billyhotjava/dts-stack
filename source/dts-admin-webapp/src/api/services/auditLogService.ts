@@ -85,6 +85,20 @@ export class AuditLogService {
 		});
 	}
 
+	/** 获取审计模块分类（来自服务端审计目录） */
+	static getAuditModules(): Promise<Array<{ key: string; title: string }>> {
+		return apiClient.get<Array<{ key: string; title: string }>>({
+			url: `${AuditLogService.BASE_URL}/modules`,
+		});
+	}
+
+	/** 获取审计分类条目（模块下的细分条目，使用 entryKey/entryTitle） */
+	static getAuditCategories(): Promise<Array<{ moduleKey: string; moduleTitle: string; entryKey: string; entryTitle: string }>> {
+		return apiClient.get<Array<{ moduleKey: string; moduleTitle: string; entryKey: string; entryTitle: string }>>({
+			url: `${AuditLogService.BASE_URL}/categories`,
+		});
+	}
+
 	static async exportAuditLogs(filters: Record<string, string | number | boolean>): Promise<Blob> {
 		const params = new URLSearchParams();
 		Object.entries(filters).forEach(([key, value]) => {

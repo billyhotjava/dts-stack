@@ -101,39 +101,4 @@
         </addColumn>
     </changeSet>
 
-    <changeSet id="202509290003-04" author="platform">
-        <comment>Seed sample table and column schema for demo dataset</comment>
-        <insert tableName="catalog_table_schema">
-            <column name="id" value="bbbbbbb1-0000-0000-0000-000000000001"/>
-            <column name="dataset_id" value="aaaaaaa1-0000-0000-0000-000000000001"/>
-            <column name="name" value="sales_daily"/>
-            <column name="owner" value="alice"/>
-            <column name="classification" value="INTERNAL"/>
-            <column name="biz_domain" value="SALES"/>
-            <column name="tags" value="kpi,revenue"/>
-            <column name="created_by" value="system"/>
-            <column name="created_date" valueDate="${now}"/>
-        </insert>
-        <insert tableName="catalog_column_schema">
-            <column name="id" value="ccccccc1-0000-0000-0000-000000000001"/>
-            <column name="table_id" value="bbbbbbb1-0000-0000-0000-000000000001"/>
-            <column name="name" value="order_id"/>
-            <column name="data_type" value="varchar"/>
-            <column name="nullable" valueBoolean="false"/>
-            <column name="tags" value="pk"/>
-            <column name="created_by" value="system"/>
-            <column name="created_date" valueDate="${now}"/>
-        </insert>
-        <insert tableName="catalog_column_schema">
-            <column name="id" value="ccccccc1-0000-0000-0000-000000000002"/>
-            <column name="table_id" value="bbbbbbb1-0000-0000-0000-000000000001"/>
-            <column name="name" value="phone"/>
-            <column name="data_type" value="varchar"/>
-            <column name="nullable" valueBoolean="true"/>
-            <column name="sensitive_tags" value="PII:phone"/>
-            <column name="created_by" value="system"/>
-            <column name="created_date" valueDate="${now}"/>
-        </insert>
-    </changeSet>
-
 </databaseChangeLog>

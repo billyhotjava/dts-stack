@@ -12,14 +12,6 @@ import SavedQueriesPage from "@/pages/explore/SavedQueriesPage";
 import DataStandardsPage from "@/pages/modeling/DataStandardsPage";
 import QualityRulesPage from "@/pages/governance/QualityRulesPage";
 import CompliancePage from "@/pages/governance/CompliancePage";
-import DataProductsPage from "@/pages/services/DataProductsPage";
-import TokensPage from "@/pages/services/TokensPage";
-import ApiServicesPage from "@/pages/services/ApiServicesPage";
-import ApiServiceDetailPage from "@/pages/services/ApiServiceDetailPage";
-import ClassificationMappingPage from "@/pages/iam/ClassificationMappingPage";
-import AuthorizationPage from "@/pages/iam/AuthorizationPage";
-import SimulationPage from "@/pages/iam/SimulationPage";
-import RequestsPage from "@/pages/iam/RequestsPage";
 import CockpitPage from "@/pages/visualization/CockpitPage";
 import DashboardsPage from "@/pages/visualization/DashboardsPage";
 import ProjectsSummaryPage from "@/pages/visualization/ProjectsSummaryPage";
@@ -51,11 +43,6 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 					workbench: () => <QueryWorkbenchPage />,
 					savedQueries: () => <SavedQueriesPage />,
 				},
-				services: {
-					api: () => <ApiServicesPage />,
-					products: () => <DataProductsPage />,
-					tokens: () => <TokensPage />,
-				},
 				visualization: {
 					cockpit: () => <CockpitPage />,
 					dashboards: () => <DashboardsPage />,
@@ -63,12 +50,6 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 					finance: () => <FinanceSummaryPage />,
 					supplyChain: () => <SupplyChainSummaryPage />,
 					hr: () => <HRSummaryPage />,
-				},
-				iam: {
-					classification: () => <ClassificationMappingPage />,
-					authorization: () => <AuthorizationPage />,
-					simulation: () => <SimulationPage />,
-					requests: () => <RequestsPage />,
 				},
 				foundation: {
 					dataSources: () => <DataSourcesPage />,
@@ -96,9 +77,6 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 
 		// Extra non-menu routes
 		const extraChildren: RouteObject[] = [];
-		if (section.key === "services") {
-			extraChildren.push({ path: "apis/:id", element: <ApiServiceDetailPage /> });
-		}
 		if (section.key === "catalog") {
 			extraChildren.push({ path: "datasets/:id", element: <DatasetDetailPage /> });
 		}

@@ -50,6 +50,7 @@ const orgFormSchema = z.object({
         return value ?? undefined;
     }, z.string().max(2000, "部门说明过长").optional()),
     parentId: z.number().int().positive().nullable().optional(),
+    dataLevel: z.enum(DATA_LEVEL_VALUES, { required_error: "请选择部门最大数据密级" }),
 });
 
 type OrgFormValues = z.infer<typeof orgFormSchema>;
@@ -221,9 +222,14 @@ export default function OrgManagementView() {
 
 	const formLoading = createMutation.isPending || updateMutation.isPending;
 
-	const openCreateRoot = () => {
-		setFormState({ open: true, mode: "create", parentId: null, target: null });
-	};
+    const rootExists = useMemo(() => (Array.isArray(tree) ? tree.length > 0 : false), [tree]);
+    const openCreateRoot = () => {
+        if (rootExists) {
+            toast.error("仅允许存在一个根部门");
+            return;
+        }
+        setFormState({ open: true, mode: "create", parentId: null, target: null });
+    };
 
 	const openCreateChild = () => {
 		if (!selected) return;
@@ -250,7 +256,12 @@ export default function OrgManagementView() {
                 name: values.name,
                 description: values.description,
                 parentId,
+                dataLevel: values.dataLevel,
             };
+            if (parentId == null && rootExists) {
+                toast.error("仅允许存在一个根部门");
+                return;
+            }
             try {
                 await createMutation.mutateAsync(payload);
                 closeForm();
@@ -268,6 +279,7 @@ export default function OrgManagementView() {
                 name: values.name,
                 description: values.description,
                 parentId,
+                dataLevel: values.dataLevel,
             };
             try {
                 await updateMutation.mutateAsync({ id: formState.target.id, payload });
@@ -299,17 +311,25 @@ export default function OrgManagementView() {
         }
     };
 
-	const editingNode = formState.mode === "edit" ? formState.target : null;
+    const editingNode = formState.mode === "edit" ? formState.target : null;
+    const defaultParentLevel = (() => {
+        const pid = formState.parentId ?? null;
+        if (pid == null) return "DATA_INTERNAL" as OrgDataLevel;
+        const parent = flattened.find((n) => n.id === pid);
+        return (parent?.dataLevel as OrgDataLevel) || (parent?.sensitivity as OrgDataLevel) || ("DATA_INTERNAL" as OrgDataLevel);
+    })();
     const initialValues: OrgFormValues = editingNode
         ? {
                 name: editingNode.name,
                 description: editingNode.description ?? "",
                 parentId: editingNode.parentId ?? null,
+                dataLevel: (editingNode.dataLevel as OrgDataLevel) || (editingNode.sensitivity as OrgDataLevel) || "DATA_INTERNAL",
             }
         : {
                 name: "",
                 description: "",
                 parentId: formState.parentId ?? null,
+                dataLevel: defaultParentLevel,
             };
 
 	const disabledParentIds = useMemo(() => {
@@ -342,14 +362,11 @@ export default function OrgManagementView() {
 					<div className="flex items-center justify-between gap-3">
 						<CardTitle>组织结构</CardTitle>
 					<div className="flex items-center gap-2">
-						<Button size="sm" onClick={openCreateRoot}>
-							创建部门
-						</Button>
+            <Button size="sm" onClick={openCreateRoot} disabled={rootExists} title={rootExists ? "仅允许存在一个根部门" : undefined}>
+                创建部门
+            </Button>
 					</div>
 					</div>
-					<Text variant="body3" className="text-xs text-muted-foreground">
-						组织结构变更会即时保存并同步至 Keycloak，请谨慎操作。
-					</Text>
 					<Input
 						placeholder="搜索部门 / 数据密级"
 						value={search}
@@ -681,8 +698,8 @@ function OrganizationFormDialog({
 		await onSubmit(values);
 	});
 
-	const title = mode === "create" ? "创建部门" : "编辑部门";
-	const submitText = mode === "create" ? "创建" : "保存";
+    const title = mode === "create" ? "创建部门" : "编辑部门";
+    const submitText = mode === "create" ? "创建" : "保存";
 
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
@@ -703,9 +720,33 @@ function OrganizationFormDialog({
 										<Input placeholder="请输入部门名称" {...field} />
 									</FormControl>
 									<FormMessage />
-								</FormItem>
-							)}
-						/>
+                        </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="dataLevel"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>最大数据密级</FormLabel>
+                            <FormControl>
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                    <SelectTrigger className="w-full justify-between">
+                                        <SelectValue placeholder="请选择部门可承载的最高数据密级" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {DATA_LEVEL_OPTIONS.map((opt) => (
+                                            <SelectItem key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
 						<FormField
 							control={form.control}
 							name="parentId"

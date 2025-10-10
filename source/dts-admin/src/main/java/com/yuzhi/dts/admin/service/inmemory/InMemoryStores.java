@@ -7,7 +7,6 @@ import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -26,61 +25,12 @@ public class InMemoryStores {
 
     @PostConstruct
     public void seed() {
-        // Seed some roles (use canonical ROLE_* names)
-        for (String r : List.of(
-            "ROLE_SYS_ADMIN",
-            "ROLE_OP_ADMIN",
-            "ROLE_AUTH_ADMIN",
-            "ROLE_SECURITY_AUDITOR",
-            "DATA_STEWARD",
-            "DATA_ANALYST"
-        )) {
-            KeycloakRoleDTO role = new KeycloakRoleDTO();
-            role.setId(uid());
-            role.setName(r);
-            roles.put(role.getName(), role);
-        }
-
-        // Seed triad users (realm roles use canonical ROLE_* names)
-        addUser("sysadmin", "sysadmin@example.com", List.of("ROLE_SYS_ADMIN"));
-        addUser("authadmin", "authadmin@example.com", List.of("ROLE_AUTH_ADMIN"));
-        addUser("auditadmin", "auditadmin@example.com", List.of("ROLE_SECURITY_AUDITOR"));
-
-        // Seed example approval
-        ApprovalDTOs.ApprovalRequestDetail ar = new ApprovalDTOs.ApprovalRequestDetail();
-        ar.id = 202405001L;
-        ar.requester = "sysadmin";
-        ar.type = "CREATE_USER";
-        ar.reason = "demo request";
-        ar.createdAt = Instant.now().toString();
-        ar.status = "PENDING";
-        ar.approver = "authadmin";
-        ApprovalDTOs.ApprovalItem item = new ApprovalDTOs.ApprovalItem();
-        item.id = 5101L;
-        item.targetKind = "USER";
-        item.targetId = "dataops";
-        item.seqNumber = 1;
-        item.payload = "{}";
-        ar.items = List.of(item);
-        approvals.put(ar.id, ar);
-    }
-
-    private void addUser(String username, String email, List<String> realmRoles) {
-        KeycloakUserDTO u = new KeycloakUserDTO();
-        u.setId(uid());
-        u.setUsername(username);
-        u.setEmail(email);
-        u.setFirstName(username);
-        u.setEnabled(true);
-        u.setCreatedTimestamp(System.currentTimeMillis());
-        u.setRealmRoles(new ArrayList<>(realmRoles));
-        Map<String, List<String>> attrs = new HashMap<>();
-        attrs.put("person_security_level", List.of("CORE"));
-        attrs.put("data_levels", List.of("DATA_TOP_SECRET", "DATA_SECRET"));
-        attrs.put("phone", List.of("13800000000"));
-        u.setAttributes(attrs);
-        u.setGroups(List.of("/数据与智能中心/平台组"));
-        users.put(u.getId(), u);
+        // Switch to a clean cache for real Keycloak integration: keep maps empty at startup.
+        users.clear();
+        roles.clear();
+        groups.clear();
+        groupParents.clear();
+        approvals.clear();
     }
 
     public KeycloakUserDTO findUserById(String id) { return users.get(id); }

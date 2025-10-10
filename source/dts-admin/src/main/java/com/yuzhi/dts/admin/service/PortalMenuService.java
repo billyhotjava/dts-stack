@@ -37,13 +37,12 @@ public class PortalMenuService {
 
     // Default roles that can see menus when no explicit visibility is defined.
     // Note: Do NOT include ROLE_USER here; otherwise all authenticated users would see all menus.
-    private static final List<String> DEFAULT_MENU_ROLES = List.of(
-        "ROLE_OP_ADMIN"
-    );
+    private static final List<String> DEFAULT_MENU_ROLES = List.of("ROLE_OP_ADMIN");
+    private static final Set<String> DISABLED_SECTIONS = Set.of("services", "iam");
     private static final Set<String> BASE_READ_SECTIONS = Set.of("catalog", "explore", "visualization");
-    private static final Set<String> WRITE_SECTIONS = Set.of("modeling", "governance", "services");
+    private static final Set<String> WRITE_SECTIONS = Set.of("modeling", "governance");
     private static final Set<String> FOUNDATION_SECTIONS = Set.of("foundation");
-    private static final Set<String> IAM_SECTIONS = Set.of("iam");
+    private static final Set<String> IAM_SECTIONS = Set.of();
     private static final Map<String, String> MENU_COMPONENTS = Map.ofEntries(
         Map.entry("catalog.assets", "/pages/catalog/DatasetsPage"),
         Map.entry("catalog.accessPolicy", "/pages/catalog/AccessPolicyPage"),
@@ -53,19 +52,12 @@ public class PortalMenuService {
         Map.entry("governance.compliance", "/pages/governance/CompliancePage"),
         Map.entry("explore.workbench", "/pages/explore/QueryWorkbenchPage"),
         Map.entry("explore.savedQueries", "/pages/explore/SavedQueriesPage"),
-        Map.entry("services.api", "/pages/services/ApiServicesPage"),
-        Map.entry("services.products", "/pages/services/DataProductsPage"),
-        Map.entry("services.tokens", "/pages/services/TokensPage"),
         Map.entry("visualization.dashboards", "/pages/visualization/DashboardsPage"),
         Map.entry("visualization.cockpit", "/pages/visualization/CockpitPage"),
         Map.entry("visualization.projects", "/pages/visualization/ProjectsSummaryPage"),
         Map.entry("visualization.finance", "/pages/visualization/FinanceSummaryPage"),
         Map.entry("visualization.supplyChain", "/pages/visualization/SupplyChainSummaryPage"),
         Map.entry("visualization.hr", "/pages/visualization/HRSummaryPage"),
-        Map.entry("iam.classification", "/pages/iam/ClassificationMappingPage"),
-        Map.entry("iam.authorization", "/pages/iam/AuthorizationPage"),
-        Map.entry("iam.simulation", "/pages/iam/SimulationPage"),
-        Map.entry("iam.requests", "/pages/iam/RequestsPage"),
         Map.entry("foundation.dataSources", "/pages/foundation/DataSourcesPage"),
         Map.entry("foundation.dataStorage", "/pages/foundation/DataStoragePage"),
         Map.entry("foundation.taskScheduling", "/pages/foundation/TaskSchedulingPage")
@@ -90,9 +82,12 @@ public class PortalMenuService {
             () -> {
                 List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
                 roots.forEach(this::touch);
-                return roots;
+                return roots
+                    .stream()
+                    .filter(menu -> !isDisabledMenu(menu))
+                    .collect(Collectors.toCollection(ArrayList::new));
             },
-            List.of(),
+            java.util.Collections.<PortalMenu>emptyList(),
             "menu tree"
         );
     }
@@ -114,9 +109,12 @@ public class PortalMenuService {
             () -> {
                 List<PortalMenu> deleted = menuRepo.findByDeletedTrueOrderBySortOrderAscIdAsc();
                 deleted.forEach(this::touch);
-                return deleted;
+                return deleted
+                    .stream()
+                    .filter(menu -> !isDisabledMenu(menu))
+                    .collect(Collectors.toCollection(ArrayList::new));
             },
-            List.of(),
+            java.util.Collections.<PortalMenu>emptyList(),
             "deleted menu list"
         );
     }
@@ -128,14 +126,17 @@ public class PortalMenuService {
             () -> {
                 List<PortalMenu> all = menuRepo.findAllByOrderBySortOrderAscIdAsc();
                 all.forEach(this::touch);
-                return all;
+                return all
+                    .stream()
+                    .filter(menu -> !isDisabledMenu(menu))
+                    .collect(Collectors.toCollection(ArrayList::new));
             },
-            List.of(),
+            java.util.Collections.<PortalMenu>emptyList(),
             "full menu list"
         );
     }
 
-    private <T> T runSafely(java.util.concurrent.Callable<T> action, T fallback, String label) {
+    private <T> T runSafely(java.util.concurrent.Callable<? extends T> action, T fallback, String label) {
         try {
             return action.call();
         } catch (DataAccessException ex) {
@@ -162,6 +163,9 @@ public class PortalMenuService {
     }
 
     private PortalMenu filterMenu(PortalMenu menu, Set<String> roleCodes, Set<String> permissionCodes, String maxDataLevel) {
+        if (isDisabledMenu(menu)) {
+            return null;
+        }
         List<PortalMenu> filteredChildren = menu
             .getChildren()
             .stream()
@@ -332,6 +336,11 @@ public class PortalMenuService {
             PortalMenu root = buildMenuTree(section, null, sortOrder++, sectionComposite, sectionComposite);
             menuRepo.save(root);
         }
+        try {
+            applyDefaultRoleBindings();
+        } catch (Exception ex) {
+            log.warn("Failed applying default role bindings: {}", ex.getMessage());
+        }
     }
 
     private PortalMenu buildMenuTree(MenuNode node, PortalMenu parent, int sortOrder, String compositeKey, String sectionKey) {
@@ -471,10 +480,142 @@ public class PortalMenuService {
             List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
             if (!isSeedAligned(roots, seed)) {
                 resetMenusToSeed();
+            } else {
+                // Seed is present; ensure defaults exist at least once
+                try { applyDefaultRoleBindings(); } catch (Exception ignored) {}
             }
         } catch (Exception ex) {
             log.warn("Skip portal menu seed verification due to: {}", ex.getMessage());
         }
+    }
+
+    /**
+     * Apply default menu visibilities for six data roles from config/data/role-menu-defaults.json.
+     * Idempotent: only adds missing visibilities.
+     */
+    private void applyDefaultRoleBindings() {
+        List<Map<String, Object>> rules = loadDefaultRoleBindings();
+        if (rules == null || rules.isEmpty()) return;
+        // Build indices for quick lookup
+        List<PortalMenu> allMenus = menuRepo.findAll();
+        Map<Long, PortalMenu> byId = allMenus.stream().filter(m -> m.getId() != null).collect(Collectors.toMap(PortalMenu::getId, m -> m));
+        Map<String, List<PortalMenu>> byTitleKey = new LinkedHashMap<>();
+        Map<String, List<PortalMenu>> byPath = new LinkedHashMap<>();
+        for (PortalMenu m : allMenus) {
+            // index by metadata.titleKey
+            String titleKey = extractTitleKey(m);
+            if (StringUtils.hasText(titleKey)) {
+                byTitleKey.computeIfAbsent(titleKey, k -> new ArrayList<>()).add(m);
+            }
+            // index by path
+            if (StringUtils.hasText(m.getPath())) {
+                byPath.computeIfAbsent(m.getPath(), k -> new ArrayList<>()).add(m);
+            }
+        }
+
+        for (Map<String, Object> rule : rules) {
+            String code = objToString(rule.get("code"));
+            String route = objToString(rule.get("route"));
+            List<String> requiredRoles = listOfString(rule.get("requiredRoles"));
+            if ((requiredRoles == null || requiredRoles.isEmpty())) continue;
+            String normalizedCode = normalizeCodeSynonyms(code);
+            // Find target menus
+            List<PortalMenu> targets = new ArrayList<>();
+            if (StringUtils.hasText(normalizedCode) && byTitleKey.containsKey(normalizedCode)) {
+                targets.addAll(byTitleKey.get(normalizedCode));
+            }
+            if (targets.isEmpty() && StringUtils.hasText(route)) {
+                // exact path match or startsWith for subtree
+                for (Map.Entry<String, List<PortalMenu>> e : byPath.entrySet()) {
+                    String p = e.getKey();
+                    if (p.equalsIgnoreCase(route) || p.startsWith(route.endsWith("/") ? route : route + "/")) {
+                        targets.addAll(e.getValue());
+                    }
+                }
+            }
+            if (targets.isEmpty()) {
+                log.debug("No portal menu matched for code={} route={} when applying defaults", code, route);
+                continue;
+            }
+            // Expand to subtree for section-level items (root of section: metadata has sectionKey==key and entryKey null)
+            Set<Long> menuIds = new LinkedHashSet<>();
+            for (PortalMenu m : targets) {
+                collectSubtree(menuIds, m);
+            }
+            if (menuIds.isEmpty()) continue;
+            // Apply requiredRoles as basic visibility (dataLevel INTERNAL)
+            for (Long id : menuIds) {
+                PortalMenu m = byId.get(id);
+                if (m == null) continue;
+                List<PortalMenuVisibility> existing = m.getVisibilities() == null ? new ArrayList<>() : new ArrayList<>(m.getVisibilities());
+                Set<String> existingRoles = existing.stream().map(PortalMenuVisibility::getRoleCode).filter(Objects::nonNull).collect(Collectors.toSet());
+                boolean dirty = false;
+                for (String r : requiredRoles) {
+                    String roleCode = normalizeRoleCode(r);
+                    if (!existingRoles.contains(roleCode)) {
+                        PortalMenuVisibility v = new PortalMenuVisibility();
+                        v.setMenu(m);
+                        v.setRoleCode(roleCode);
+                        v.setDataLevel("INTERNAL");
+                        existing.add(v);
+                        dirty = true;
+                    }
+                }
+                if (dirty) {
+                    replaceVisibilities(m, existing);
+                }
+            }
+        }
+    }
+
+    private void collectSubtree(Set<Long> ids, PortalMenu menu) {
+        if (menu == null || menu.getId() == null) return;
+        if (ids.add(menu.getId()) && menu.getChildren() != null) {
+            for (PortalMenu c : menu.getChildren()) {
+                collectSubtree(ids, c);
+            }
+        }
+    }
+
+    private String extractTitleKey(PortalMenu menu) {
+        if (menu == null || !StringUtils.hasText(menu.getMetadata())) return null;
+        try {
+            JsonNode node = objectMapper.readTree(menu.getMetadata());
+            if (node.hasNonNull("titleKey")) return node.get("titleKey").asText();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private String normalizeCodeSynonyms(String code) {
+        if (!StringUtils.hasText(code)) return null;
+        String c = code.trim();
+        if ("sys.nav.portal.viz".equals(c)) return "sys.nav.portal.visualization";
+        return c;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> loadDefaultRoleBindings() {
+        try {
+            ClassPathResource resource = new ClassPathResource("config/data/role-menu-defaults.json");
+            if (!resource.exists()) return java.util.Collections.emptyList();
+            try (InputStream is = resource.getInputStream()) {
+                return objectMapper.readValue(is, List.class);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to read role-menu-defaults.json: {}", ex.getMessage());
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    private String objToString(Object o) { return o == null ? null : Objects.toString(o, null); }
+    @SuppressWarnings("unchecked")
+    private List<String> listOfString(Object o) {
+        if (o instanceof List<?> l) {
+            List<String> r = new ArrayList<>();
+            for (Object e : l) if (e != null && StringUtils.hasText(e.toString())) r.add(e.toString().trim());
+            return r;
+        }
+        return java.util.Collections.emptyList();
     }
 
     private boolean isSeedAligned(List<PortalMenu> roots, MenuSeed seed) {
@@ -595,10 +736,19 @@ public class PortalMenuService {
         if (CollectionUtils.isEmpty(menus) || CollectionUtils.isEmpty(sections)) {
             return Set.of();
         }
+        Set<String> normalizedSections = sections
+            .stream()
+            .filter(StringUtils::hasText)
+            .map(section -> section.trim().toLowerCase(Locale.ROOT))
+            .filter(section -> !DISABLED_SECTIONS.contains(section))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (normalizedSections.isEmpty()) {
+            return Set.of();
+        }
         Set<Long> ids = new LinkedHashSet<>();
         for (PortalMenu menu : menus) {
             String sectionKey = extractSectionKey(menu);
-            if (sectionKey != null && sections.contains(sectionKey)) {
+            if (sectionKey != null && normalizedSections.contains(sectionKey.trim().toLowerCase(Locale.ROOT))) {
                 ids.add(menu.getId());
             }
         }
@@ -620,6 +770,19 @@ public class PortalMenuService {
         return null;
     }
 
+    private boolean isDisabledMenu(PortalMenu menu) {
+        String sectionKey = extractSectionKey(menu);
+        return isDisabledSectionKey(sectionKey);
+    }
+
+    private boolean isDisabledSectionKey(String sectionKey) {
+        if (!StringUtils.hasText(sectionKey)) {
+            return false;
+        }
+        String normalized = sectionKey.trim().toLowerCase(Locale.ROOT);
+        return DISABLED_SECTIONS.contains(normalized);
+    }
+
     private Set<String> determineSectionsForRole(String normalizedRole, String scope, Set<String> operations) {
         LinkedHashSet<String> sections = new LinkedHashSet<>(BASE_READ_SECTIONS);
         Set<String> ops = operations == null
@@ -639,6 +802,7 @@ public class PortalMenuService {
         } else if ("INSTITUTE".equalsIgnoreCase(scope)) {
             sections.addAll(FOUNDATION_SECTIONS);
         }
+        sections.removeIf(this::isDisabledSectionKey);
 
         return sections;
     }

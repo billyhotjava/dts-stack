@@ -48,6 +48,9 @@ axiosInstance.interceptors.request.use(
 	},
 );
 
+let isRefreshing = false;
+let pendingQueue: Array<() => void> = [];
+
 axiosInstance.interceptors.response.use(
 	(res: AxiosResponse<Result<any>>) => {
 		console.log("API Response:", res.status, res.config.url, res.data);
@@ -100,6 +103,41 @@ axiosInstance.interceptors.response.use(
 			if (import.meta.env?.DEV) {
 				console.warn("[DEV] 401 received; skipping auto logout");
 			} else {
+				// 优先尝试使用 refreshToken 静默续期并重试原请求（最多一次）
+				const state = userStore.getState();
+				const { accessToken, refreshToken } = state.userToken || {} as any;
+				const original = error.config as AxiosRequestConfig & { _retry?: boolean };
+				if (!isRefreshRequest && !isLoginRequest && refreshToken && !original._retry) {
+					if (isRefreshing) {
+						return new Promise((resolve) => {
+							pendingQueue.push(() => resolve(axiosInstance.request(original)));
+						});
+					}
+					original._retry = true;
+					isRefreshing = true;
+					return import("@/api/services/userService").then(({ default: userService }) =>
+						userService
+							.refresh(refreshToken)
+							.then((res: any) => {
+								const nextAccess = res?.accessToken as string | undefined;
+								const nextRefresh = (res?.refreshToken as string | undefined) || refreshToken;
+								if (nextAccess) {
+									state.actions.setUserToken({ accessToken: nextAccess, refreshToken: nextRefresh });
+									// 更新原请求的认证头后重试
+									original.headers = original.headers || {};
+									(original.headers as any).Authorization = `Bearer ${nextAccess}`;
+									pendingQueue.forEach((cb) => cb());
+									pendingQueue = [];
+									return axiosInstance.request(original);
+								}
+								// 没有新token则直接抛出，走下方清理逻辑
+								throw error;
+                            })
+                            .finally(() => {
+                                isRefreshing = false;
+                            })
+                        );
+				}
 				// Only force logout for definite auth failures (refresh failure)
 				// Do NOT auto-logout for login failures or Keycloak admin endpoints that may 401/403 by design
 				if (isRefreshRequest) {

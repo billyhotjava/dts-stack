@@ -9,6 +9,8 @@ import com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditEventView;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.web.rest.errors.BadRequestAlertException;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.audit.AuditActionCatalog;
+import com.yuzhi.dts.common.audit.AuditActionDefinition;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -49,11 +51,53 @@ public class AuditLogResource {
     private static final Logger log = LoggerFactory.getLogger(AuditLogResource.class);
 
     private final AdminAuditService auditService;
+    private final AuditActionCatalog actionCatalog;
     private final ObjectMapper objectMapper;
 
-    public AuditLogResource(AdminAuditService auditService, ObjectMapper objectMapper) {
+    public AuditLogResource(AdminAuditService auditService, ObjectMapper objectMapper, AuditActionCatalog actionCatalog) {
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.actionCatalog = actionCatalog;
+    }
+
+    @GetMapping("/modules")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> modules() {
+        // Build unique module list from audit action catalog
+        Map<String, String> unique = new java.util.LinkedHashMap<>();
+        for (AuditActionDefinition def : actionCatalog.listAll()) {
+            if (def.getModuleKey() != null && def.getModuleTitle() != null) {
+                unique.putIfAbsent(def.getModuleKey(), def.getModuleTitle());
+            }
+        }
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        unique.forEach((key, title) -> out.add(java.util.Map.of("key", key, "title", title)));
+        return ResponseEntity.ok(ApiResponse.ok(out));
+    }
+
+    @GetMapping("/categories")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> categories() {
+        // Build a flat, de-duplicated list of (moduleKey, moduleTitle, entryKey, entryTitle)
+        Map<String, String> moduleTitles = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashSet<String> uniq = new java.util.LinkedHashSet<>();
+        java.util.List<Map<String, Object>> out = new java.util.ArrayList<>();
+        for (AuditActionDefinition def : actionCatalog.listAll()) {
+            String moduleKey = def.getModuleKey();
+            String moduleTitle = def.getModuleTitle();
+            String entryKey = def.getEntryKey();
+            String entryTitle = def.getEntryTitle();
+            if (moduleKey == null || entryKey == null) continue;
+            moduleTitles.putIfAbsent(moduleKey, moduleTitle);
+            String key = moduleKey + "::" + entryKey;
+            if (uniq.add(key)) {
+                out.add(java.util.Map.of(
+                    "moduleKey", moduleKey,
+                    "moduleTitle", moduleTitles.getOrDefault(moduleKey, moduleKey),
+                    "entryKey", entryKey,
+                    "entryTitle", entryTitle != null ? entryTitle : entryKey
+                ));
+            }
+        }
+        return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
     @GetMapping

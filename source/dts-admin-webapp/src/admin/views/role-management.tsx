@@ -310,6 +310,17 @@ export default function RoleManagementView() {
                 },
             },
             {
+                title: "可见上限",
+                key: "visibilityMax",
+                width: 160,
+                onCell: () => ({ style: { verticalAlign: "middle" } }),
+                render: (_: any, record) => {
+                    const scopeHint = record.scope === "DEPARTMENT" ? "不高于部门最大密级" : record.scope === "INSTITUTE" ? "不高于研究所最大密级" : "";
+                    const text = scopeHint ? `随人员密级，且${scopeHint}` : "随人员密级与组织策略";
+                    return <Text variant="body3" className="text-muted-foreground">{text}</Text>;
+                },
+            },
+            {
                 title: "描述",
                 dataIndex: "description",
                 key: "description",

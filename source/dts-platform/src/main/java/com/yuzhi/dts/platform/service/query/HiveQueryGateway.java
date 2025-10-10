@@ -41,7 +41,7 @@ public class HiveQueryGateway implements QueryGateway {
     public Map<String, Object> execute(String effectiveSql) {
         InceptorDataSourceState state = registry
             .getActive()
-            .orElseThrow(() -> new IllegalStateException("未检测到可用的 Inceptor 数据源，请先在基础管理中完成配置"));
+            .orElseThrow(() -> new IllegalStateException("未检测到可用的 Inceptor 数据源，联系系统管理员"));
 
         HiveConnectionTestRequest request = buildRequest(state);
         try {

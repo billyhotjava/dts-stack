@@ -81,6 +81,12 @@ public class OrganizationService {
 
     public OrganizationNode create(String name, Long parentId, String description) {
         OrganizationNode parent = null;
+        if (parentId == null) {
+            // Only one root organization is allowed
+            if (!repository.findByParentIsNullOrderByIdAsc().isEmpty()) {
+                throw new IllegalArgumentException("仅允许存在一个根部门");
+            }
+        }
         if (parentId != null) {
             parent = repository.findById(parentId).orElseThrow();
         }
@@ -96,6 +102,57 @@ public class OrganizationService {
             entity.setParent(parent);
             if (parent.getChildren() == null) {
                 parent.setChildren(new ArrayList<>());
+            }
+            parent.getChildren().add(entity);
+        }
+
+        OrganizationNode saved = repository.save(entity);
+
+        if (isKeycloakSyncEnabled()) {
+            String token = resolveManagementToken();
+            if (parent != null) {
+                ensureGroupSynced(parent, token);
+            }
+            ensureGroupSynced(saved, token, parent);
+            synchronizeGroup(saved, token);
+        }
+
+        return saved;
+    }
+
+    /**
+     * Create organization with optional explicit dataLevel. When null/blank, inherits from parent or defaults.
+     */
+    public OrganizationNode create(String name, Long parentId, String description, String dataLevel) {
+        OrganizationNode parent = null;
+        if (parentId == null) {
+            // Only one root organization is allowed
+            if (!repository.findByParentIsNullOrderByIdAsc().isEmpty()) {
+                throw new IllegalArgumentException("仅允许存在一个根部门");
+            }
+        }
+        if (parentId != null) {
+            parent = repository.findById(parentId).orElseThrow();
+        }
+
+        OrganizationNode entity = new OrganizationNode();
+        entity.setName(name);
+        String normalized = normalizeToDataLevelCode(dataLevel);
+        if (org.apache.commons.lang3.StringUtils.isNotBlank(normalized) && parent != null) {
+            String parentLevel = parent.getDataLevel();
+            if (exceedsParent(normalized, parentLevel)) {
+                throw new IllegalArgumentException("子部门最大数据密级不能高于上级部门");
+            }
+        }
+        entity.setDataLevel(org.apache.commons.lang3.StringUtils.isNotBlank(normalized) ? normalized : determineDataLevel(parent, null));
+        entity.setContact(null);
+        entity.setPhone(null);
+        entity.setDescription(description);
+
+        if (parent != null) {
+            entity.setParent(parent);
+            if (parent.getChildren() == null) {
+                parent.setChildren(new java.util.ArrayList<>());
             }
             parent.getChildren().add(entity);
         }
@@ -140,6 +197,83 @@ public class OrganizationService {
                 }
                 return saved;
             });
+    }
+
+    /**
+     * Update organization with optional explicit dataLevel. When null/blank, retains existing/newly-derived value.
+     */
+    public Optional<OrganizationNode> update(Long id, String name, String description, Long parentId, String dataLevel) {
+        return repository
+            .findById(id)
+            .map(entity -> {
+                Long previousParentId = getId(entity.getParent());
+                OrganizationNode newParent = resolveParent(parentId, entity);
+                if (!Objects.equals(getId(entity.getParent()), getId(newParent))) {
+                    reassignParent(entity, newParent);
+                }
+                entity.setName(name);
+                // start with derived value (inherit or keep)
+                String derived = determineDataLevel(newParent, entity.getDataLevel());
+                String normalized = normalizeToDataLevelCode(dataLevel);
+                if (org.apache.commons.lang3.StringUtils.isNotBlank(normalized)) {
+                    // Only enforce parent-bound when存在上级；根节点不受限制
+                    String parentLevel = newParent != null ? newParent.getDataLevel() : null;
+                    if (exceedsParent(normalized, parentLevel)) {
+                        throw new IllegalArgumentException("子部门最大数据密级不能高于上级部门");
+                    }
+                    entity.setDataLevel(normalized);
+                } else {
+                    entity.setDataLevel(derived);
+                }
+                entity.setContact(null);
+                entity.setPhone(null);
+                entity.setDescription(description);
+                OrganizationNode saved = repository.save(entity);
+                if (isKeycloakSyncEnabled()) {
+                    String token = resolveManagementToken();
+                    ensureGroupSynced(saved, token, saved.getParent());
+                    Long currentParentId = getId(saved.getParent());
+                    if (!Objects.equals(previousParentId, currentParentId)) {
+                        moveGroup(saved, token, currentParentId == null ? null : saved.getParent().getKeycloakGroupId());
+                    }
+                    synchronizeGroup(saved, token);
+                }
+                return saved;
+            });
+    }
+
+    // ---- helpers for level normalization and comparison ----
+    private String normalizeToDataLevelCode(String value) {
+        String v = normalizeDataLevel(value);
+        if (org.apache.commons.lang3.StringUtils.isBlank(v)) return null;
+        // Map legacy synonyms to DATA_* codes
+        return switch (v) {
+            case "TOP_SECRET" -> "DATA_TOP_SECRET";
+            case "SECRET" -> "DATA_SECRET";
+            case "INTERNAL", "NORMAL", "UNKNOWN" -> "DATA_INTERNAL";
+            case "PUBLIC" -> "DATA_PUBLIC";
+            default -> v.startsWith("DATA_") ? v : v;
+        };
+    }
+
+    private boolean exceedsParent(String candidate, String parentLevel) {
+        if (org.apache.commons.lang3.StringUtils.isBlank(candidate)) return false;
+        if (org.apache.commons.lang3.StringUtils.isBlank(parentLevel)) return false; // no parent bound
+        int c = rank(candidate);
+        int p = rank(normalizeToDataLevelCode(parentLevel));
+        return c > p;
+    }
+
+    private int rank(String code) {
+        String v = normalizeToDataLevelCode(code);
+        if (v == null) return 0;
+        return switch (v) {
+            case "DATA_PUBLIC" -> 1;
+            case "DATA_INTERNAL" -> 2;
+            case "DATA_SECRET" -> 3;
+            case "DATA_TOP_SECRET" -> 4;
+            default -> 0;
+        };
     }
 
     public OrganizationNode ensureUnassignedRoot() {

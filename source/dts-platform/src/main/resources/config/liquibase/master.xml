@@ -30,6 +30,7 @@
     <include file="config/liquibase/changelog/20251008_04_infra_module.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251008_05_dataset_abac_fields.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251008_06_iam_dept.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251010_01_remove_demo_seed_data.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

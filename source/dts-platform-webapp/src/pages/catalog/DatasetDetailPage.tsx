@@ -268,9 +268,6 @@ export default function DatasetDetailPage() {
             <CardHeader className="flex items-center justify-between">
                 <CardTitle className="text-base">基础信息</CardTitle>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" asChild>
-                        <Link to={`/iam/authorization?datasetId=${id}`}>权限与策略</Link>
-                    </Button>
                     <Button
                         variant="outline"
                         disabled={syncing}

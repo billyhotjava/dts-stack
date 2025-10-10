@@ -272,7 +272,7 @@ public class AdminApiResource {
             new BuiltinRoleSpec(
                 "DEPARTMENT",
                 List.of("read"),
-                "部门数据查看角色",
+                "部门数据查看员",
                 "department data viewer",
                 "浏览本部门密级不超的数据；无写入、导出或授权能力。"
             )
@@ -717,6 +717,7 @@ public class AdminApiResource {
         String name = trimToNull(payload.get("name"));
         Long parentId = payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString());
         String description = trimToNull(payload.get("description"));
+        String dataLevel = trimToNull(payload.get("dataLevel"));
         String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
         String parentRef = parentId == null ? "root" : String.valueOf(parentId);
         Map<String, Object> auditDetail = new LinkedHashMap<>();
@@ -726,6 +727,9 @@ public class AdminApiResource {
         }
         if (StringUtils.hasText(description)) {
             auditDetail.put("description", description);
+        }
+        if (StringUtils.hasText(dataLevel)) {
+            auditDetail.put("dataLevel", dataLevel);
         }
 
         if (!StringUtils.hasText(name)) {
@@ -737,7 +741,7 @@ public class AdminApiResource {
 
         auditService.recordAction(actor, "ADMIN_ORG_CREATE", AuditStage.BEGIN, parentRef, auditDetail);
         try {
-            OrganizationNode created = orgService.create(name, parentId, description);
+            OrganizationNode created = orgService.create(name, parentId, description, dataLevel);
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("name", created.getName());
             if (created.getParent() != null) {
@@ -746,6 +750,7 @@ public class AdminApiResource {
             if (StringUtils.hasText(description)) {
                 detail.put("description", description);
             }
+            detail.put("dataLevel", created.getDataLevel());
             detail.put("created", Map.of("id", created.getId(), "name", created.getName()));
             auditService.recordAction(actor, "ADMIN_ORG_CREATE", AuditStage.SUCCESS, String.valueOf(created.getId()), detail);
 
@@ -774,12 +779,14 @@ public class AdminApiResource {
         if (StringUtils.hasText(existing.getDescription())) {
             beforeView.put("description", existing.getDescription());
         }
+        beforeView.put("dataLevel", existing.getDataLevel());
 
         String name = payload.containsKey("name") ? trimToNull(payload.get("name")) : existing.getName();
         String description = payload.containsKey("description") ? trimToNull(payload.get("description")) : existing.getDescription();
         Long parentId = payload.containsKey("parentId")
             ? (payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString()))
             : (existing.getParent() == null ? null : existing.getParent().getId());
+        String dataLevel = payload.containsKey("dataLevel") ? trimToNull(payload.get("dataLevel")) : null;
 
         if (!StringUtils.hasText(name)) {
             Map<String, Object> failure = new LinkedHashMap<>();
@@ -797,6 +804,9 @@ public class AdminApiResource {
         if (StringUtils.hasText(description)) {
             requestView.put("description", description);
         }
+        if (StringUtils.hasText(dataLevel)) {
+            requestView.put("dataLevel", dataLevel);
+        }
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("before", beforeView);
         auditDetail.put("request", requestView);
@@ -806,7 +816,7 @@ public class AdminApiResource {
 
         Optional<OrganizationNode> updated;
         try {
-            updated = orgService.update(id, name, description, parentId);
+            updated = orgService.update(id, name, description, parentId, dataLevel);
         } catch (IllegalArgumentException ex) {
             Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
             failure.put("error", ex.getMessage());
@@ -827,6 +837,7 @@ public class AdminApiResource {
         if (StringUtils.hasText(updatedNode.getDescription())) {
             afterView.put("description", updatedNode.getDescription());
         }
+        afterView.put("dataLevel", updatedNode.getDataLevel());
         Map<String, Object> successDetail = new LinkedHashMap<>();
         successDetail.put("before", beforeView);
         successDetail.put("after", afterView);

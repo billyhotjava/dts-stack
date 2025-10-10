@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251010-01-remove-demo-catalog-seed" author="platform">
+        <comment>Remove legacy demo catalog seed data</comment>
+        <sql>
+            DELETE FROM catalog_column_schema
+            WHERE id IN ('ccccccc1-0000-0000-0000-000000000001', 'ccccccc1-0000-0000-0000-000000000002');
+        </sql>
+        <sql>
+            DELETE FROM catalog_table_schema
+            WHERE id IN ('bbbbbbb1-0000-0000-0000-000000000001');
+        </sql>
+        <sql>
+            DELETE FROM catalog_dataset
+            WHERE id IN ('aaaaaaa1-0000-0000-0000-000000000001', 'aaaaaaa1-0000-0000-0000-000000000002');
+        </sql>
+        <sql>
+            DELETE FROM catalog_domain
+            WHERE id IN ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222');
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251010-02-remove-demo-iam-seed" author="platform">
+        <comment>Remove legacy demo IAM department seed data</comment>
+        <sql>
+            DELETE FROM iam_dept
+            WHERE id IN (
+                '11111111-1111-4111-8111-111111111111',
+                '22222222-2222-4222-8222-222222222222',
+                '33333333-3333-4333-8333-333333333333'
+            );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

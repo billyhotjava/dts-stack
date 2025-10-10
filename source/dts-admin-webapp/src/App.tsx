@@ -7,6 +7,7 @@ import Toast from "./components/toast";
 import { GLOBAL_CONFIG } from "./global-config";
 import { AntdAdapter } from "./theme/adapter/antd.adapter";
 import { ThemeProvider } from "./theme/theme-provider";
+import SessionManager from "./components/auth/session-manager";
 
 function App({ children }: { children: React.ReactNode }) {
 	return (
@@ -19,6 +20,8 @@ function App({ children }: { children: React.ReactNode }) {
 					</Helmet>
 					<Toast />
 					<RouteLoadingProgress />
+					{/* 全局会话管理：定时刷新Access Token、跨标签页登出同步 */}
+					<SessionManager />
 					<MotionLazy>{children}</MotionLazy>
 				</ThemeProvider>
 			</QueryClientProvider>

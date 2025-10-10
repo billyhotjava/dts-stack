@@ -280,6 +280,7 @@
             { "code": "ADMIN_USER_ASSIGN_ROLE", "display": "调整用户角色", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         },
+        
         {
           "key": "admin.roles",
           "title": "角色管理",
@@ -288,22 +289,10 @@
             { "code": "ADMIN_ROLE_CREATE", "display": "创建角色", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "ADMIN_ROLE_UPDATE", "display": "编辑角色", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "ADMIN_ROLE_DELETE", "display": "删除角色", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_ROLE_ASSIGN", "display": "分配角色成员", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "admin.custom-roles",
-          "title": "自定义角色",
-          "actions": [
+            { "code": "ADMIN_ROLE_ASSIGN", "display": "分配角色成员", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "ADMIN_CUSTOM_ROLE_VIEW", "display": "查看自定义角色", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "ADMIN_CUSTOM_ROLE_REQUEST", "display": "提交自定义角色变更", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_CUSTOM_ROLE_EXECUTE", "display": "执行自定义角色操作", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "admin.role-assignments",
-          "title": "角色分配",
-          "actions": [
+            { "code": "ADMIN_CUSTOM_ROLE_EXECUTE", "display": "执行自定义角色操作", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "ADMIN_ROLE_ASSIGNMENT_VIEW", "display": "查看角色分配", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "ADMIN_ROLE_ASSIGNMENT_CREATE", "display": "提交角色分配", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
@@ -320,17 +309,6 @@
           ]
         },
         {
-          "key": "admin.groups",
-          "title": "组织与分组管理",
-          "actions": [
-            { "code": "ADMIN_GROUP_VIEW", "display": "查看分组", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "ADMIN_GROUP_CREATE", "display": "创建分组", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_GROUP_UPDATE", "display": "编辑分组", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_GROUP_DELETE", "display": "删除分组", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_GROUP_ASSIGN", "display": "分组成员调整", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
           "key": "admin.orgs",
           "title": "组织管理",
           "actions": [
@@ -341,36 +319,7 @@
             { "code": "ADMIN_ORG_DELETE", "display": "删除组织节点", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         },
-        {
-          "key": "admin.datasets",
-          "title": "资产视图",
-          "actions": [
-            { "code": "ADMIN_DATASET_VIEW", "display": "查看资产列表", "phases": ["SUCCESS"], "supportsFlow": false }
-          ]
-        },
-        {
-          "key": "admin.change-requests",
-          "title": "变更请求",
-          "actions": [
-            { "code": "ADMIN_CHANGE_REQUEST_VIEW", "display": "查看变更请求", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "ADMIN_CHANGE_REQUEST_MANAGE", "display": "处理变更请求", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "admin.approvals",
-          "title": "任务审批",
-          "actions": [
-            { "code": "ADMIN_APPROVAL_VIEW", "display": "查看审批任务", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "ADMIN_APPROVAL_DECIDE", "display": "审批操作", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "admin.settings",
-          "title": "系统配置",
-          "actions": [
-            { "code": "ADMIN_SETTING_VIEW", "display": "查看系统配置", "phases": ["SUCCESS"], "supportsFlow": false }
-          ]
-        },
+        
         {
           "key": "admin.audit",
           "title": "审计日志",

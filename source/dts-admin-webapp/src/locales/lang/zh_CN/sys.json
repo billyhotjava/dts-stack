@@ -24,10 +24,10 @@
       "errMsg505": "http版本不支持该请求!"
     },
     "login": {
-      "brandName": "数据管理平台(管理端)",
+      "brandName": "机密",
       "brandIllustrationAlt": "科技氛围大数据平台插画",
       "backSignIn": "返回",
-      "signInFormTitle": "登录到您的账户",
+      "signInFormTitle": "数据管理平台(管理端)",
       "mobileSignInFormTitle": "手机登录",
       "qrSignInFormTitle": "二维码登录",
       "signUpFormTitle": "注册",
@@ -273,7 +273,7 @@
         "AUDITADMIN": "审计管理员",
         "DEPT_DATA_OWNER": "部门数据管理员",
         "DEPT_DATA_DEV": "部门数据开发员",
-        "DEPT_DATA_VIEWER": "部门数据查看角色",
+        "DEPT_DATA_VIEWER": "部门数据查看员",
         "INST_DATA_OWNER": "研究所数据管理员",
         "INST_DATA_DEV": "研究所数据开发员",
         "INST_DATA_VIEWER": "研究所数据查看员",

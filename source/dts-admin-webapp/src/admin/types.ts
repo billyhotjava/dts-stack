@@ -130,12 +130,14 @@ export interface OrganizationCreatePayload {
     name: string;
     description?: string;
     parentId?: number | null;
+    dataLevel?: OrgDataLevel;
 }
 
 export interface OrganizationUpdatePayload {
     name?: string;
     description?: string;
     parentId?: number | null;
+    dataLevel?: OrgDataLevel;
 }
 
 export interface AdminUser {

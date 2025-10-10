@@ -501,7 +501,7 @@ public class CatalogResource {
         if (isDefaultSource(dataset) && !hasPrimarySourceConfigured()) {
             throw new ResponseStatusException(
                 HttpStatus.PRECONDITION_FAILED,
-                "未检测到 Hive 数据源，请先在“基础管理-数据源”中完成配置"
+                "未检测到 Hive 数据源，请联系系统管理员！"
             );
         }
     }

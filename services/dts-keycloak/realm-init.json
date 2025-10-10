@@ -198,7 +198,7 @@
       {
         "id": "f85cd6e0-253e-4a48-ac02-cc0686f19ef4",
         "name": "DEPT_DATA_VIEWER",
-        "description": "部门数据查看角色",
+        "description": "部门数据查看员",
         "composite": false,
         "clientRole": false,
         "containerId": "2db241c5-602d-4828-8b64-91dfd8926b60",

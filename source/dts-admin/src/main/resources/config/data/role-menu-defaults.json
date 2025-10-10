@@ -1,0 +1,67 @@
+[
+  {
+    "code": "sys.nav.portal.catalog",
+    "title": "数据资产管理",
+    "route": "/catalog",
+    "scopes": ["DEPT","INST"],
+    "requiredRoles": [
+      "DEPT_DATA_VIEWER","DEPT_DATA_DEV","DEPT_DATA_OWNER",
+      "INST_DATA_VIEWER","INST_DATA_DEV","INST_DATA_OWNER"
+    ],
+    "requiredMgmtRoles": []
+  },
+  {
+    "code": "sys.nav.portal.modeling",
+    "title": "数据标准",
+    "route": "/modeling/standards",
+    "scopes": ["DEPT","INST"],
+    "requiredRoles": [
+      "DEPT_DATA_VIEWER","DEPT_DATA_DEV","DEPT_DATA_OWNER",
+      "INST_DATA_VIEWER","INST_DATA_DEV","INST_DATA_OWNER"
+    ],
+    "editEnabledRoles": [
+      "DEPT_DATA_DEV","DEPT_DATA_OWNER","INST_DATA_DEV","INST_DATA_OWNER"
+    ],
+    "requiredMgmtRoles": []
+  },
+  {
+    "code": "sys.nav.portal.governance",
+    "title": "治理和质量",
+    "route": "/governance",
+    "scopes": ["DEPT","INST"],
+    "requiredRoles": [
+      "DEPT_DATA_VIEWER","DEPT_DATA_DEV","DEPT_DATA_OWNER",
+      "INST_DATA_VIEWER","INST_DATA_DEV","INST_DATA_OWNER"
+    ],
+    "editEnabledRoles": [
+      "DEPT_DATA_DEV","DEPT_DATA_OWNER","INST_DATA_DEV","INST_DATA_OWNER"
+    ],
+    "requiredMgmtRoles": []
+  },
+  {
+    "code": "sys.nav.portal.exploreWorkbench",
+    "title": "数据开发",
+    "route": "/explore/workbench",
+    "scopes": ["DEPT","INST"],
+    "requiredRoles": [
+      "DEPT_DATA_DEV","DEPT_DATA_OWNER",
+      "INST_DATA_DEV","INST_DATA_OWNER"
+    ],
+    "requiredMgmtRoles": []
+  },
+  {
+    "code": "sys.nav.portal.viz",
+    "title": "数据可视化",
+    "route": "/visualization",
+    "scopes": ["DEPT","INST"],
+    "requiredRoles": [
+      "DEPT_DATA_VIEWER","DEPT_DATA_DEV","DEPT_DATA_OWNER",
+      "INST_DATA_VIEWER","INST_DATA_DEV","INST_DATA_OWNER"
+    ],
+    "publishEnabledRoles": [
+      "DEPT_DATA_DEV","DEPT_DATA_OWNER","INST_DATA_DEV","INST_DATA_OWNER"
+    ],
+    "requiredMgmtRoles": []
+  }
+]
+

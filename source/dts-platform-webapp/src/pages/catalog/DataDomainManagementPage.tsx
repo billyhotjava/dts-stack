@@ -70,124 +70,9 @@ type DomainMeta = {
 	node: DomainNode;
 };
 
-const INITIAL_DOMAINS: DomainNode[] = [
-	{
-		key: "domain-core",
-		name: "企业核心域",
-		owner: "陈伟",
-		classification: "DATA_TOP_SECRET",
-		sourceSystem: "CDP",
-		description: "覆盖企业战略与核心经营指标",
-		children: [
-			{
-				key: "domain-core-ops",
-				name: "经营分析主题",
-				owner: "陈伟",
-				classification: "DATA_SECRET",
-				sourceSystem: "CDP",
-				children: [
-					{
-						key: "domain-core-ops-sales",
-						name: "销售运营",
-						owner: "周丽",
-						classification: "DATA_SECRET",
-						sourceSystem: "Salesforce",
-					},
-					{
-						key: "domain-core-ops-supply",
-						name: "供应链管理",
-						owner: "张强",
-						classification: "DATA_INTERNAL",
-						sourceSystem: "SAP",
-					},
-				],
-			},
-			{
-				key: "domain-core-risk",
-				name: "风控主题",
-				owner: "李云",
-				classification: "DATA_SECRET",
-				sourceSystem: "RiskHub",
-			},
-		],
-	},
-	{
-		key: "domain-shared",
-		name: "共享域",
-		owner: "刘敏",
-		classification: "DATA_INTERNAL",
-		sourceSystem: "ODS",
-		children: [
-			{
-				key: "domain-shared-master",
-				name: "主数据主题",
-				owner: "刘敏",
-				classification: "DATA_INTERNAL",
-				sourceSystem: "MDM",
-			},
-            {
-                key: "domain-shared-ref",
-                name: "参考数据主题",
-                owner: "赵倩",
-                classification: "DATA_PUBLIC",
-                sourceSystem: "ODS",
-            },
-		],
-	},
-];
+const INITIAL_DOMAINS: DomainNode[] = [];
 
-const INITIAL_DATASETS: Dataset[] = [
-	{
-		id: "ds-1001",
-		name: "销售收入日报",
-		domainKey: "domain-core-ops-sales",
-		owner: "周丽",
-		classification: "DATA_SECRET",
-		sourceSystem: "Salesforce",
-		lastUpdated: "2024-12-08",
-		tags: ["销售", "日报"],
-	},
-	{
-		id: "ds-1002",
-		name: "渠道目标完成情况",
-		domainKey: "domain-core-ops-sales",
-		owner: "周丽",
-		classification: "DATA_SECRET",
-		sourceSystem: "Salesforce",
-		lastUpdated: "2024-12-06",
-		tags: ["渠道", "KPI"],
-	},
-	{
-		id: "ds-1100",
-		name: "供应商准入记录",
-		domainKey: "domain-core-ops-supply",
-		owner: "张强",
-		classification: "DATA_INTERNAL",
-		sourceSystem: "SAP",
-		lastUpdated: "2024-12-07",
-		tags: ["供应链"],
-	},
-	{
-		id: "ds-1200",
-		name: "风控案件清单",
-		domainKey: "domain-core-risk",
-		owner: "李云",
-		classification: "DATA_SECRET",
-		sourceSystem: "RiskHub",
-		lastUpdated: "2024-12-05",
-		tags: ["风控"],
-	},
-	{
-		id: "ds-2000",
-		name: "客户主数据",
-		domainKey: "domain-shared-master",
-		owner: "刘敏",
-		classification: "DATA_INTERNAL",
-		sourceSystem: "MDM",
-		lastUpdated: "2024-12-02",
-		tags: ["主数据"],
-	},
-];
+const INITIAL_DATASETS: Dataset[] = [];
 
 function cloneDomains(domains: DomainNode[]): DomainNode[] {
 	return domains.map((node) => ({
@@ -362,7 +247,7 @@ export default function DataDomainManagementPage() {
 
 	const domainMeta = useMemo(() => buildDomainMeta(domains), [domains]);
 
-	// Load domain tree from backend if available
+	// Load domain tree from backend; default to empty when unavailable
 	useEffect(() => {
 		(async () => {
 			try {
@@ -381,6 +266,10 @@ export default function DataDomainManagementPage() {
 					setDomains(nodes);
 					setSelectedDomainKey(nodes[0]?.key || "");
 					setExpandedKeys(collectExpandedKeys(nodes));
+				} else {
+					setDomains([]);
+					setSelectedDomainKey("");
+					setExpandedKeys([]);
 				}
 			} catch (e) {
 				console.warn("load domain tree failed", e);
@@ -389,7 +278,7 @@ export default function DataDomainManagementPage() {
 	}, []);
 
 	useEffect(() => {
-		// Try loading datasets from backend; fallback to demo data when empty
+		// Load datasets from backend; remain empty when service returns none
 		(async () => {
 			try {
 				const resp = (await apiListDatasets({ page: 0, size: 50 })) as any;
@@ -406,6 +295,8 @@ export default function DataDomainManagementPage() {
 						tags: [],
 					}));
 					setDatasets(mapped);
+				} else {
+					setDatasets([]);
 				}
 			} catch (e) {
 				console.warn("load datasets failed", e);

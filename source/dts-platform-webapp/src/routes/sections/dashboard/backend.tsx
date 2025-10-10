@@ -99,8 +99,6 @@ const buildDynamicFallbackRoutes = (): RouteObject[] => [
     { path: "governance", children: [{ path: "*", element: <DynamicMenuResolver base="/governance" /> }] },
     { path: "explore", children: [{ path: "*", element: <DynamicMenuResolver base="/explore" /> }] },
     { path: "visualization", children: [{ path: "*", element: <DynamicMenuResolver base="/visualization" /> }] },
-    { path: "services", children: [{ path: "*", element: <DynamicMenuResolver base="/services" /> }] },
-    { path: "iam", children: [{ path: "*", element: <DynamicMenuResolver base="/iam" /> }] },
     { path: "foundation", children: [{ path: "*", element: <DynamicMenuResolver base="/foundation" /> }] },
 ];
 

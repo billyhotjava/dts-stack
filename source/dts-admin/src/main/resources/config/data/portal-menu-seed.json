@@ -130,66 +130,6 @@
       ]
     },
     {
-      "key": "services",
-      "path": "services",
-      "icon": "solar:server-bold-duotone",
-      "titleKey": "sys.nav.portal.services",
-      "title": "数据服务",
-      "children": [
-        {
-          "key": "api",
-          "path": "api",
-          "titleKey": "sys.nav.portal.servicesApi",
-          "title": "API 服务"
-        },
-        {
-          "key": "products",
-          "path": "products",
-          "titleKey": "sys.nav.portal.servicesProducts",
-          "title": "数据产品"
-        },
-        {
-          "key": "tokens",
-          "path": "tokens",
-          "titleKey": "sys.nav.portal.servicesTokens",
-          "title": "令牌与密钥"
-        }
-      ]
-    },
-    {
-      "key": "iam",
-      "path": "iam",
-      "icon": "solar:key-minimalistic-bold-duotone",
-      "titleKey": "sys.nav.portal.iam",
-      "title": "权限与策略",
-      "children": [
-        {
-          "key": "classification",
-          "path": "classification",
-          "titleKey": "sys.nav.portal.iamClassification",
-          "title": "密级模型映射"
-        },
-        {
-          "key": "authorization",
-          "path": "authorization",
-          "titleKey": "sys.nav.portal.iamAuthorization",
-          "title": "资源授权"
-        },
-        {
-          "key": "simulation",
-          "path": "simulation",
-          "titleKey": "sys.nav.portal.iamSimulation",
-          "title": "策略模拟与评估"
-        },
-        {
-          "key": "requests",
-          "path": "requests",
-          "titleKey": "sys.nav.portal.iamRequests",
-          "title": "权限申请入口"
-        }
-      ]
-    },
-    {
       "key": "foundation",
       "path": "foundation",
       "icon": "solar:database-bold-duotone",
