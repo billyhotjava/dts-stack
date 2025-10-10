@@ -18,7 +18,9 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm build
 
-FROM nginx:alpine
+FROM node:20-alpine AS runtime
+
+RUN apk add --no-cache nginx gettext
 
 WORKDIR /usr/share/nginx/html
 COPY --from=build /app/dist ./

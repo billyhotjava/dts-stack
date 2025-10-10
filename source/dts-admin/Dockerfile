@@ -10,9 +10,11 @@ RUN set -eu; \
     if [ -f pom.xml ] && [ -d dts-admin ] && [ -d dts-common ]; then \
         echo "pom.xml" > /workspace/.build-pom; \
     elif [ -f source/pom.xml ] && [ -d source/dts-admin ] && [ -d source/dts-common ]; then \
-        if [ ! -e dts-admin ]; then \
-            ln -s source/dts-admin dts-admin; \
-        fi; \
+        for module in dts-common dts-platform dts-admin; do \
+            if [ -d "source/${module}" ] && [ ! -e "${module}" ]; then \
+                ln -s "source/${module}" "${module}"; \
+            fi; \
+        done; \
         echo "source/pom.xml" > /workspace/.build-pom; \
     else \
         echo >&2 "Missing source modules. Run build with repository root or 'source' as context, e.g.:"; \
@@ -38,12 +40,11 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn -s /root/.m2/settings.xml -q -DskipTests -f "${BUILD_POM}" -pl dts-admin -am package
 
 # ---------- runtime stage ----------
-FROM build AS runtime
+FROM eclipse-temurin:17-jre-jammy AS runtime
 ENV TZ=UTC \
     LANG=C.UTF-8 \
     JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0"
 WORKDIR /app
 COPY --from=build /workspace/dts-admin/target/dts-admin-*.jar /app/app.jar
-RUN rm -rf /root/.m2 /workspace
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

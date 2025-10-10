@@ -15,12 +15,13 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm build
 
-FROM nginx:alpine
+FROM node:20-alpine AS runtime
 
-WORKDIR /usr/share/nginx/html
-COPY --from=build /app/dist ./
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
+RUN npm install -g serve@14.2.1
+
+COPY --from=build /app/dist ./dist
 
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["serve", "-s", "dist", "-l", "0.0.0.0:80"]
