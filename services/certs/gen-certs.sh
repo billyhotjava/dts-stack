@@ -19,6 +19,27 @@ mkdir -p "${CERT_DIR}"
 
 log() { echo "[certs] $*"; }
 
+cleanup_placeholders() {
+  local item
+  local -a expected_files=(
+    "ca.crt"
+    "ca.key"
+    "server.key"
+    "server.csr"
+    "server.crt"
+    "server.only.crt"
+    "server.p12"
+    "keystore.p12"
+    "truststore.jks"
+    "truststore.p12"
+  )
+  for item in "${expected_files[@]}"; do
+    if [[ -d "${CERT_DIR}/${item}" ]]; then
+      rm -rf "${CERT_DIR:?}/${item}"
+    fi
+  done
+}
+
 have_valid_existing() {
   # Must have cert and key
   [[ -f "${CERT_DIR}/server.crt" && -f "${CERT_DIR}/server.key" ]] || return 1
@@ -150,6 +171,8 @@ generate_truststores() {
 }
 
 main() {
+  cleanup_placeholders
+
   if have_valid_existing; then
     log "TLS certificates already valid for *.${BASE_DOMAIN}; keeping existing files."
     return 0
@@ -158,7 +181,10 @@ main() {
   log "Generating local CA (if missing) and server certificate for *.${BASE_DOMAIN} ..."
   gen_ca_if_missing
   gen_server_cert
-  generate_truststores
+  if ! generate_truststores; then
+    log "ERROR: Failed to generate truststores."
+    exit 1
+  fi
   log "generated server.key, server.crt (full chain), ca.crt, server.p12"
   # Show quick summary for debugging
   openssl x509 -in "${CERT_DIR}/server.crt" -noout -subject -issuer -ext subjectAltName | sed 's/^/[certs] /'

@@ -155,6 +155,7 @@ generate_env_base(){
   : "${TRAEFIK_DASHBOARD_PORT:=8080}"
   : "${TRAEFIK_METRICS_PORT:=9100}"
   : "${TRAEFIK_ENABLE_PING:=true}"
+  : "${TRUSTSTORE_PASSWORD:=changeit}"
 
   # ---------- Keycloak ----------
   : "${KC_ADMIN:=admin}"
@@ -242,6 +243,7 @@ generate_env_base(){
   : "${OAUTH2_ADMIN_CLIENT_SECRET:=${SECRET}}"
   : "${OAUTH2_PLATFORM_CLIENT_ID:=dts-platform}"
   : "${OAUTH2_PLATFORM_CLIENT_SECRET:=${SECRET}}"
+  OIDC_ISSUER_URI="https://${HOST_SSO}/realms/${KC_REALM}"
 
   cat > .env <<EOF
 # ====== Base & Traefik ======
@@ -273,6 +275,8 @@ KC_HOSTNAME_STRICT=${KC_HOSTNAME_STRICT}
 KC_HOSTNAME_STRICT_HTTPS=${KC_HOSTNAME_STRICT_HTTPS}
 KC_DB_URL_PROPERTIES=${KC_DB_URL_PROPERTIES}
 KC_REALM=${KC_REALM}
+OIDC_ISSUER_URI=${OIDC_ISSUER_URI}
+TRUSTSTORE_PASSWORD=${TRUSTSTORE_PASSWORD}
 
 # ====== Postgres (mode/host filled later) ======
 PG_AUTH_METHOD=${PG_AUTH_METHOD}
@@ -452,7 +456,10 @@ if [[ -n "${MODE}" ]]; then ensure_env DEPLOY_MODE "${MODE}"; fi
 
 # 证书
 if [[ "${MODE}" == "single" ]]; then
-  BASE_DOMAIN="${BASE_DOMAIN}" bash services/certs/gen-certs.sh || true
+  if ! BASE_DOMAIN="${BASE_DOMAIN}" TRUSTSTORE_PASSWORD="${TRUSTSTORE_PASSWORD:-changeit}" bash services/certs/gen-certs.sh; then
+    echo "[init.sh] ERROR: Failed to generate TLS certificates/truststores." >&2
+    exit 1
+  fi
 else
   if [[ ! -f services/certs/server.crt || ! -f services/certs/server.key ]]; then
     echo "[init.sh] ERROR: Production mode requires a CA-issued TLS certificate at services/certs/server.crt and services/certs/server.key." >&2
