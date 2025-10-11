@@ -1,7 +1,7 @@
-# syntax=docker/dockerfile:1
-
 # ---------- build stage ----------
-FROM openjdk:17-slim AS build
+# Allow overriding the base image to point at an internal mirror registry
+ARG BASE_IMAGE=openjdk:17-slim
+FROM ${BASE_IMAGE} AS build
 
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
@@ -43,7 +43,9 @@ RUN BUILD_POM=$(cat /workspace/.build-pom) && \
     mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package
 
 # ---------- runtime stage ----------
-FROM openjdk:17-slim AS runtime
+# Reuse the same base image (can be overridden via BASE_IMAGE)
+ARG BASE_IMAGE=openjdk:17-slim
+FROM ${BASE_IMAGE} AS runtime
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \

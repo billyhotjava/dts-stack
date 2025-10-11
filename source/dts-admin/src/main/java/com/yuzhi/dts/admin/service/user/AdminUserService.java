@@ -251,6 +251,29 @@ public class AdminUserService {
         return toDetailDto(approval);
     }
 
+    // Overload for KC REST: carry keycloakId from path param to avoid FGAP user search
+    public ApprovalDTOs.ApprovalRequestDetail submitGrantRoles(String username, List<String> roles, String keycloakId, String requester, String ip) {
+        ApprovalDTOs.ApprovalRequestDetail result = submitGrantRoles(username, roles, requester, ip);
+        // Patch payload to include explicit keycloakId if snapshot didn’t have it yet
+        try {
+            approvalRepository.findWithItemsById(result.id).ifPresent(approval -> {
+                for (AdminApprovalItem item : approval.getItems()) {
+                    try {
+                        Map<String, Object> payload = readPayload(item.getPayloadJson());
+                        if (payload != null && username.equals(payload.get("username"))) {
+                            if (!payload.containsKey("keycloakId") && keycloakId != null && !keycloakId.isBlank()) {
+                                payload.put("keycloakId", keycloakId);
+                                item.setPayloadJson(writeJson(payload));
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+                approvalRepository.save(approval);
+            });
+        } catch (Exception ignored) {}
+        return result;
+    }
+
     public ApprovalDTOs.ApprovalRequestDetail submitRevokeRoles(String username, List<String> roles, String requester, String ip) {
         if (StringUtils.isBlank(username)) {
             throw new IllegalArgumentException("用户名不能为空");
@@ -284,6 +307,28 @@ public class AdminUserService {
         approval = approvalRepository.save(approval);
         recordAudit(requester, "USER_REVOKE_ROLE_REQUEST", username, ip, Map.of("roles", roles));
         return toDetailDto(approval);
+    }
+
+    // Overload for KC REST: carry keycloakId from path param to avoid FGAP user search
+    public ApprovalDTOs.ApprovalRequestDetail submitRevokeRoles(String username, List<String> roles, String keycloakId, String requester, String ip) {
+        ApprovalDTOs.ApprovalRequestDetail result = submitRevokeRoles(username, roles, requester, ip);
+        try {
+            approvalRepository.findWithItemsById(result.id).ifPresent(approval -> {
+                for (AdminApprovalItem item : approval.getItems()) {
+                    try {
+                        Map<String, Object> payload = readPayload(item.getPayloadJson());
+                        if (payload != null && username.equals(payload.get("username"))) {
+                            if (!payload.containsKey("keycloakId") && keycloakId != null && !keycloakId.isBlank()) {
+                                payload.put("keycloakId", keycloakId);
+                                item.setPayloadJson(writeJson(payload));
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+                approvalRepository.save(approval);
+            });
+        } catch (Exception ignored) {}
+        return result;
     }
 
     public ApprovalDTOs.ApprovalRequestDetail submitSetEnabled(String username, boolean enabled, String requester, String ip) {

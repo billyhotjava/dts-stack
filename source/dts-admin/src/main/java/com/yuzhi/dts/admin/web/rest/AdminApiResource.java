@@ -80,7 +80,27 @@ public class AdminApiResource {
     }
 
     private static boolean isReservedRealmRoleName(String role) {
-        return RESERVED_REALM_ROLES.contains(canonicalReservedRole(role));
+        if (role == null) return false;
+        // Business-reserved roles (platform governance/admin)
+        if (RESERVED_REALM_ROLES.contains(canonicalReservedRole(role))) return true;
+        // Keycloak built-ins that should never appear in admin role catalogs
+        return isKeycloakBuiltInRealmRole(role);
+    }
+
+    /**
+     * Detect Keycloak built-in realm roles that we must hide from role catalogs.
+     * - offline_access
+     * - uma_authorization
+     * - default-roles-<clientId>
+     */
+    private static boolean isKeycloakBuiltInRealmRole(String role) {
+        if (role == null) return false;
+        String lower = role.trim().toLowerCase(java.util.Locale.ROOT);
+        if (lower.isEmpty()) return false;
+        if ("offline_access".equals(lower)) return true;
+        if ("uma_authorization".equals(lower)) return true;
+        if (lower.startsWith("default-roles-")) return true;
+        return false;
     }
 
     private static String stripRolePrefix(String name) {
@@ -1305,6 +1325,27 @@ public class AdminApiResource {
             // Builtin roles may not exist in Keycloak; memberCount stays 0
             list.add(summary);
         }
+
+        // Include custom roles that may exist only in admin DB even if Keycloak sync failed
+        try {
+            for (AdminCustomRole cr : customRoleRepo.findAll()) {
+                String name = Objects.toString(cr.getName(), "").trim();
+                if (name.isEmpty()) continue;
+                String canonical = stripRolePrefix(name);
+                if (emitted.contains(canonical)) continue;
+                Map<String, Object> summary = toRoleSummary(null, canonical, null, now);
+                summary.put("customRole", true);
+                summary.put("customRoleId", cr.getId());
+                summary.put("source", "custom");
+                // Derive scope/ops from DB record
+                if (StringUtils.hasText(cr.getScope())) summary.put("scope", cr.getScope());
+                if (StringUtils.hasText(cr.getOperationsCsv())) {
+                    summary.put("operations", Arrays.stream(cr.getOperationsCsv().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList());
+                }
+                list.add(summary);
+                emitted.add(canonical);
+            }
+        } catch (Exception ignored) {}
 
         list.sort(Comparator.comparing(o -> Objects.toString(o.get("name"), "")));
 

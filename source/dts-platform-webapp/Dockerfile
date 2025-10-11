@@ -1,4 +1,6 @@
-FROM node:20-alpine AS build
+# Allow overriding Node base from internal mirror
+ARG BASE_IMAGE_NODE=node:20-alpine
+FROM ${BASE_IMAGE_NODE} AS build
 
 WORKDIR /app
 
@@ -18,7 +20,8 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm build
 
-FROM node:20-alpine AS runtime
+ARG BASE_IMAGE_NODE=node:20-alpine
+FROM ${BASE_IMAGE_NODE} AS runtime
 
 RUN apk add --no-cache nginx gettext && \
     rm -f /etc/nginx/http.d/default.conf /etc/nginx/conf.d/default.conf && \

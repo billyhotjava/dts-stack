@@ -1,7 +1,7 @@
-# syntax=docker/dockerfile:1
-
 # ---------- build stage ----------
-FROM openjdk:17-slim AS build
+# Allow overriding base image via internal mirror
+ARG BASE_IMAGE=openjdk:17-slim
+FROM ${BASE_IMAGE} AS build
 
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
@@ -26,8 +26,7 @@ RUN set -eu; \
         echo >&2 "  docker build -f source/dts-platform/Dockerfile source"; \
         exit 1; \
     fi
-RUN --mount=type=cache,target=/root/.m2 \
-    mkdir -p /root/.m2 && \
+RUN mkdir -p /root/.m2 && \
     cat > /root/.m2/settings.xml <<'EOF'
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
   <mirrors>
@@ -39,13 +38,14 @@ RUN --mount=type=cache,target=/root/.m2 \
   </mirrors>
 </settings>
 EOF
-RUN --mount=type=cache,target=/root/.m2 \
-    BUILD_POM=$(cat /workspace/.build-pom); \
+RUN BUILD_POM=$(cat /workspace/.build-pom) && \
     sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml && \
-    mvn -s /root/.m2/settings.xml -q -DskipTests -f "${BUILD_POM}" -pl dts-platform -am package
+    mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am package
 
 # ---------- runtime stage ----------
-FROM openjdk:17-slim AS runtime
+# Reuse same base image; can be overridden by BASE_IMAGE
+ARG BASE_IMAGE=openjdk:17-slim
+FROM ${BASE_IMAGE} AS runtime
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \

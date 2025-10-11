@@ -105,7 +105,8 @@ axiosInstance.interceptors.response.use(
 			} else {
 				// 优先尝试使用 refreshToken 静默续期并重试原请求（最多一次）
 				const state = userStore.getState();
-				const { accessToken, refreshToken } = state.userToken || {} as any;
+				// accessToken is intentionally not read here; we'll use the refreshed token when available
+				const { refreshToken } = (state.userToken || ({} as any)) as any;
 				const original = error.config as AxiosRequestConfig & { _retry?: boolean };
 				if (!isRefreshRequest && !isLoginRequest && refreshToken && !original._retry) {
 					if (isRefreshing) {

@@ -1127,9 +1127,10 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     public java.util.Optional<KeycloakRoleDTO> findClientRole(String clientId, String roleName, String accessToken) {
         if (clientId == null || roleName == null) return java.util.Optional.empty();
         java.util.Optional<String> uuid = resolveClientUuid(clientId, accessToken);
-        if (uuid.isEmpty()) return java.util.Optional.empty();
+        String clientUuid = uuid.orElse(null);
+        if (clientUuid == null) return java.util.Optional.empty();
         URI uri = org.springframework.web.util.UriComponentsBuilder
-            .fromUri(clientRolesEndpoint(uuid.get()))
+            .fromUri(clientRolesEndpoint(clientUuid))
             .pathSegment(roleName)
             .build()
             .encode()
@@ -1155,21 +1156,21 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             throw new IllegalArgumentException("clientId/roleName 不能为空");
         }
         java.util.Optional<String> uuid = resolveClientUuid(clientId, accessToken);
-        if (uuid.isEmpty()) throw new IllegalStateException("找不到 Keycloak 客户端: " + clientId);
+        String clientUuid = uuid.orElseThrow(() -> new IllegalStateException("找不到 Keycloak 客户端: " + clientId));
         java.util.Optional<KeycloakRoleDTO> existing = findClientRole(clientId, role.getName(), accessToken);
         ResponseEntity<String> response;
         if (existing.isPresent()) {
             // PUT roles-by-id/{id}
-            String rid = existing.get().getId();
+            String rid = existing.map(KeycloakRoleDTO::getId).orElseThrow(() -> new IllegalStateException("缺少角色ID: " + role.getName()));
             URI uri = org.springframework.web.util.UriComponentsBuilder
-                .fromUri(clientRolesEndpoint(uuid.get()))
+                .fromUri(clientRolesEndpoint(clientUuid))
                 .path("-by-id/")
                 .path(rid)
                 .build()
                 .toUri();
             response = exchange(uri, HttpMethod.PUT, accessToken, toRoleRepresentation(role));
         } else {
-            URI uri = clientRolesEndpoint(uuid.get());
+            URI uri = clientRolesEndpoint(clientUuid);
             response = exchange(uri, HttpMethod.POST, accessToken, toRoleRepresentation(role));
         }
         if (!response.getStatusCode().is2xxSuccessful()) {
@@ -1182,7 +1183,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     public void addClientRolesToUser(String userId, String clientId, java.util.List<String> roleNames, String accessToken) {
         if (userId == null || clientId == null || roleNames == null || roleNames.isEmpty()) return;
         java.util.Optional<String> uuid = resolveClientUuid(clientId, accessToken);
-        if (uuid.isEmpty()) throw new IllegalStateException("找不到 Keycloak 客户端: " + clientId);
+        String clientUuid = uuid.orElseThrow(() -> new IllegalStateException("找不到 Keycloak 客户端: " + clientId));
         java.util.List<java.util.Map<String, Object>> payload = new java.util.ArrayList<>();
         for (String name : roleNames) {
             if (name == null || name.isBlank()) continue;
@@ -1199,7 +1200,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             payload.add(rep);
         }
         if (payload.isEmpty()) return;
-        URI uri = userUri(userId, "role-mappings", "clients", uuid.get());
+        URI uri = userUri(userId, "role-mappings", "clients", clientUuid);
         ResponseEntity<String> response = exchange(uri, HttpMethod.POST, accessToken, payload);
         int status = response.getStatusCode().value();
         if (status != 200 && status != 201 && status != 204) {
@@ -1211,7 +1212,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     public void removeClientRolesFromUser(String userId, String clientId, java.util.List<String> roleNames, String accessToken) {
         if (userId == null || clientId == null || roleNames == null || roleNames.isEmpty()) return;
         java.util.Optional<String> uuid = resolveClientUuid(clientId, accessToken);
-        if (uuid.isEmpty()) throw new IllegalStateException("找不到 Keycloak 客户端: " + clientId);
+        String clientUuid = uuid.orElseThrow(() -> new IllegalStateException("找不到 Keycloak 客户端: " + clientId));
         java.util.List<java.util.Map<String, Object>> payload = new java.util.ArrayList<>();
         for (String name : roleNames) {
             if (name == null || name.isBlank()) continue;
@@ -1221,7 +1222,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             payload.add(rep);
         }
         if (payload.isEmpty()) return;
-        URI uri = userUri(userId, "role-mappings", "clients", uuid.get());
+        URI uri = userUri(userId, "role-mappings", "clients", clientUuid);
         ResponseEntity<String> response = exchange(uri, HttpMethod.DELETE, accessToken, payload);
         int status = response.getStatusCode().value();
         if (status != 200 && status != 204) {

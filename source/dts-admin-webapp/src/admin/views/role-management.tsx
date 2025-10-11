@@ -22,6 +22,7 @@ import { Text } from "@/ui/typography";
 import { Textarea } from "@/ui/textarea";
 import { toast } from "sonner";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { isKeycloakBuiltInRole } from "@/constants/keycloak-roles";
 
 const SCOPE_LABELS: Record<"DEPARTMENT" | "INSTITUTE", string> = {
     DEPARTMENT: "部门（含子部门）",
@@ -137,6 +138,7 @@ export default function RoleManagementView() {
         const assignmentMap = groupAssignments(assignments);
 
         const hideDefaultRoles = GLOBAL_CONFIG.hideDefaultRoles;
+        const hideBuiltinRoles = GLOBAL_CONFIG.hideBuiltinRoles;
         const isDefaultRoles = (name?: string) => {
             if (!name) return false;
             const lower = name.trim().toLowerCase();
@@ -150,6 +152,9 @@ export default function RoleManagementView() {
                 return;
             }
             if (hideDefaultRoles && isDefaultRoles(role.name)) {
+                return;
+            }
+            if (hideBuiltinRoles && isKeycloakBuiltInRole({ name: role.name } as any)) {
                 return;
             }
             const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
@@ -182,6 +187,9 @@ export default function RoleManagementView() {
                 return;
             }
             if (hideDefaultRoles && isDefaultRoles(role.name)) {
+                return;
+            }
+            if (hideBuiltinRoles && isKeycloakBuiltInRole({ name: role.name } as any)) {
                 return;
             }
             const existing = map.get(canonical);

@@ -803,6 +803,7 @@ public class KeycloakApiResource {
         ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitGrantRoles(
             username,
             roleNames,
+            id,
             currentUser(),
             clientIp(request)
         );
@@ -839,6 +840,7 @@ public class KeycloakApiResource {
         ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitRevokeRoles(
             username,
             roleNames,
+            id,
             currentUser(),
             clientIp(request)
         );
