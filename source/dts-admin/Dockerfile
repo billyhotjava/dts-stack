@@ -26,8 +26,7 @@ RUN set -eu; \
         echo >&2 "  docker build -f source/dts-admin/Dockerfile source"; \
         exit 1; \
     fi
-RUN --mount=type=cache,target=/root/.m2 \
-    mkdir -p /root/.m2 && \
+RUN mkdir -p /root/.m2 && \
     cat > /root/.m2/settings.xml <<'EOF'
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
   <mirrors>
@@ -39,10 +38,9 @@ RUN --mount=type=cache,target=/root/.m2 \
   </mirrors>
 </settings>
 EOF
-RUN --mount=type=cache,target=/root/.m2 \
-    BUILD_POM=$(cat /workspace/.build-pom); \
+RUN BUILD_POM=$(cat /workspace/.build-pom) && \
     sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml && \
-    mvn -s /root/.m2/settings.xml -q -DskipTests -f "${BUILD_POM}" -pl dts-admin -am package
+    mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package
 
 # ---------- runtime stage ----------
 FROM openjdk:17-slim AS runtime
