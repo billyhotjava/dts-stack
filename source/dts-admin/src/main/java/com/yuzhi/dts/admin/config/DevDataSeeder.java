@@ -18,10 +18,12 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.env.Environment;
 import org.springframework.transaction.annotation.Transactional;
 
 @Configuration
+@ConditionalOnProperty(prefix = "dts.admin.seed", name = "demo-data", havingValue = "true")
 public class DevDataSeeder {
 
     private static final Logger log = LoggerFactory.getLogger(DevDataSeeder.class);

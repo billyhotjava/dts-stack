@@ -94,7 +94,16 @@ export default function UserDetailView() {
         KeycloakGroupService.getUserGroups(id),
       ]);
       setUser(userData);
-      setUserRoles(rolesData);
+      // 合并 DB-authority 下的数据类角色分配
+      let mergedRoles = rolesData || [];
+      try {
+        const allAssign = await adminApi.getRoleAssignments();
+        const mine = (allAssign || []).filter((it: any) => (it?.username || "").toString().toLowerCase() === (userData?.username || "").toLowerCase());
+        const add: KeycloakRole[] = mine.map((it: any) => ({ name: (it?.role || "").toString().trim().toUpperCase() }));
+        const seen = new Set<string>((mergedRoles || []).map((r) => (r?.name || "").toString().trim().toUpperCase()));
+        add.forEach((r) => { const k = (r?.name || "").toString().trim().toUpperCase(); if (k && !seen.has(k)) mergedRoles.push(r); });
+      } catch (e) { /* ignore */ }
+      setUserRoles(mergedRoles);
       setUserGroups(groupsData);
     } catch (err: any) {
       console.error("Error loading user detail:", err);
@@ -218,7 +227,11 @@ export default function UserDetailView() {
     return v;
   })();
   // departmentName is derived from groups or dept_code
-  const position = getSingleAttributeValue(user?.attributes, "position");
+  const phone =
+    getSingleAttributeValue(user?.attributes, "phone") ||
+    getSingleAttributeValue(user?.attributes, "phone_number") ||
+    getSingleAttributeValue(user?.attributes, "mobile") ||
+    getSingleAttributeValue(user?.attributes, "mobile_number");
   const fullName = user?.firstName || user?.lastName || user?.attributes?.fullname?.[0] || "";
   const email = user?.email || "";
 
@@ -309,8 +322,8 @@ export default function UserDetailView() {
               <p className={`mt-1 text-sm ${departmentName ? "" : "text-muted-foreground"}`}>{departmentName || "-"}</p>
             </div>
             <div>
-              <span className="text-sm font-medium text-muted-foreground">职位</span>
-              <p className={`mt-1 text-sm ${position ? "" : "text-muted-foreground"}`}>{position || "-"}</p>
+              <span className="text-sm font-medium text-muted-foreground">联系方式</span>
+              <p className={`mt-1 text-sm ${phone ? "" : "text-muted-foreground"}`}>{phone || "-"}</p>
             </div>
 
             {Object.entries(getFilteredUserAttributes()).map(([name, values]) => (

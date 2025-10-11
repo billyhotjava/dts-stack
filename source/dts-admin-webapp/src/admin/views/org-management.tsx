@@ -251,6 +251,25 @@ export default function OrgManagementView() {
 
     const handleSubmitForm = async (values: OrgFormValues) => {
         const parentId = values.parentId ?? null;
+        // 友好校验：若选择了上级，子部门最大密级不得高于上级
+        if (parentId != null) {
+            const parent = flattened.find((n) => n.id === parentId);
+            if (parent) {
+                const levelRank = (v: OrgDataLevel) => ({
+                    DATA_PUBLIC: 1,
+                    DATA_INTERNAL: 2,
+                    DATA_SECRET: 3,
+                    DATA_TOP_SECRET: 4,
+                }[v] || 0);
+                const parentLevel = normalizeDataLevel((parent.dataLevel as string) ?? (parent.sensitivity as string));
+                if (levelRank(values.dataLevel) > levelRank(parentLevel)) {
+                    const parentText = getDataLevelFallback(parent.dataLevel ?? parent.sensitivity);
+                    const childText = getDataLevelFallback(values.dataLevel);
+                    toast.error(`所选最大数据密级（${childText}）不能高于上级部门（${parent.name} / ${parentText}）`);
+                    return;
+                }
+            }
+        }
         if (formState.mode === "create") {
             const payload: OrganizationCreatePayload = {
                 name: values.name,

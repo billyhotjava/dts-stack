@@ -11,6 +11,8 @@ import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.admin.service.user.UserOperationRequest;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
+import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
+import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.common.audit.AuditStage;
 import java.time.Instant;
@@ -47,6 +49,7 @@ public class KeycloakApiResource {
     private final KeycloakAuthService keycloakAuthService;
     private final KeycloakAdminClient keycloakAdminClient;
     private final AdminUserService adminUserService;
+    private final AdminRoleAssignmentRepository roleAssignRepo;
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class);
 
@@ -74,13 +77,15 @@ public class KeycloakApiResource {
         AdminAuditService auditService,
         KeycloakAuthService keycloakAuthService,
         KeycloakAdminClient keycloakAdminClient,
-        AdminUserService adminUserService
+        AdminUserService adminUserService,
+        AdminRoleAssignmentRepository roleAssignRepo
     ) {
         this.stores = stores;
         this.auditService = auditService;
         this.keycloakAuthService = keycloakAuthService;
         this.keycloakAdminClient = keycloakAdminClient;
         this.adminUserService = adminUserService;
+        this.roleAssignRepo = roleAssignRepo;
     }
 
     // ---- Users ----
@@ -1312,7 +1317,25 @@ public class KeycloakApiResource {
             // Note: Do NOT enforce triad-only here. This endpoint serves the business platform audience.
             KeycloakAuthService.LoginResult loginResult = keycloakAuthService.login(username, password);
             Map<String, Object> data = new HashMap<>();
-            data.put("user", loginResult.user());
+            // Enrich roles with DB assignments so platform can work without Keycloak client roles
+            Map<String, Object> userOut = new HashMap<>(loginResult.user());
+            @SuppressWarnings("unchecked")
+            List<String> kcRoles = (List<String>) userOut.getOrDefault("roles", java.util.Collections.emptyList());
+            java.util.LinkedHashSet<String> roles = new java.util.LinkedHashSet<>();
+            for (String r : kcRoles) if (r != null && !r.isBlank()) roles.add(r);
+            String principal = java.util.Objects.toString(userOut.getOrDefault("preferred_username", userOut.get("username")), username);
+            try {
+                if (principal != null && !principal.isBlank()) {
+                    for (AdminRoleAssignment a : roleAssignRepo.findByUsernameIgnoreCase(principal)) {
+                        String role = a.getRole();
+                        if (role != null && !role.isBlank()) roles.add(role.trim());
+                    }
+                }
+            } catch (Exception ex) {
+                if (LOG.isDebugEnabled()) LOG.debug("DB role enrichment failed for {}: {}", principal, ex.getMessage());
+            }
+            userOut.put("roles", java.util.List.copyOf(roles));
+            data.put("user", userOut);
             data.put("accessToken", loginResult.tokens().accessToken());
             if (loginResult.tokens().refreshToken() != null) data.put("refreshToken", loginResult.tokens().refreshToken());
             if (loginResult.tokens().idToken() != null) data.put("idToken", loginResult.tokens().idToken());

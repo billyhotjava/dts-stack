@@ -33,6 +33,8 @@ import com.yuzhi.dts.admin.domain.PortalMenuVisibility;
 import com.yuzhi.dts.admin.domain.AdminDataset;
 import com.yuzhi.dts.admin.domain.AdminCustomRole;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
+import com.yuzhi.dts.admin.domain.AdminApprovalItem;
+import com.yuzhi.dts.admin.domain.AdminApprovalRequest;
 import com.yuzhi.dts.admin.repository.AdminDatasetRepository;
 import com.yuzhi.dts.admin.repository.AdminCustomRoleRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
@@ -1041,20 +1043,34 @@ public class AdminApiResource {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> changeRequests(@RequestParam(required = false) String status, @RequestParam(required = false, name = "type") String resourceType) {
         List<ChangeRequest> list;
         if (status != null && resourceType != null) list = crRepo.findByStatusAndResourceType(status, resourceType); else if (status != null) list = crRepo.findByStatus(status); else list = crRepo.findAll();
+        LinkedHashMap<Long, Map<String, Object>> viewById = new LinkedHashMap<>();
+        for (ChangeRequest cr : list) {
+            Map<String, Object> vm = toChangeVM(cr);
+            viewById.put(cr.getId(), vm);
+        }
+        augmentChangeRequestViewsFromApprovals(viewById);
+        List<Map<String, Object>> responseList = new ArrayList<>(viewById.values());
+        responseList.sort((a, b) -> compareByRequestedAtDesc(a, b));
         auditService.recordAction(
             SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
             "ADMIN_CHANGE_REQUEST_VIEW",
             AuditStage.SUCCESS,
             "change-requests",
-            Map.of("count", list.size())
+            Map.of("count", responseList.size())
         );
-        return ResponseEntity.ok(ApiResponse.ok(list.stream().map(AdminApiResource::toChangeVM).toList()));
+        return ResponseEntity.ok(ApiResponse.ok(responseList));
     }
 
     @GetMapping("/change-requests/mine")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> myChangeRequests() {
         String me = SecurityUtils.getCurrentUserLogin().orElse("sysadmin");
-        var list = crRepo.findByRequestedBy(me).stream().map(AdminApiResource::toChangeVM).toList();
+        LinkedHashMap<Long, Map<String, Object>> viewById = new LinkedHashMap<>();
+        crRepo
+            .findByRequestedBy(me)
+            .forEach(cr -> viewById.put(cr.getId(), toChangeVM(cr)));
+        augmentChangeRequestViewsFromApprovalsForActor(viewById, me);
+        List<Map<String, Object>> list = new ArrayList<>(viewById.values());
+        list.sort((a, b) -> compareByRequestedAtDesc(a, b));
         auditService.recordAction(
             SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
             "ADMIN_CHANGE_REQUEST_VIEW",
@@ -2473,6 +2489,149 @@ public class AdminApiResource {
         m.put("updatedValue", extractValue(cr, "after"));
         m.put("lastError", cr.getLastError());
         return m;
+    }
+
+    private void augmentChangeRequestViewsFromApprovals(LinkedHashMap<Long, Map<String, Object>> viewById) {
+        List<AdminApprovalRequest> approvals = approvalRepo.findAll();
+        for (AdminApprovalRequest approval : approvals) {
+            addChangeRequestViewsFromApproval(viewById, approval, null);
+        }
+    }
+
+    private void augmentChangeRequestViewsFromApprovalsForActor(LinkedHashMap<Long, Map<String, Object>> viewById, String actor) {
+        List<AdminApprovalRequest> approvals = approvalRepo.findAll();
+        for (AdminApprovalRequest approval : approvals) {
+            if (actor != null && !actor.equalsIgnoreCase(approval.getRequester())) {
+                continue;
+            }
+            addChangeRequestViewsFromApproval(viewById, approval, actor);
+        }
+    }
+
+    private void addChangeRequestViewsFromApproval(LinkedHashMap<Long, Map<String, Object>> viewById, AdminApprovalRequest approval, String actorScope) {
+        if (approval == null || approval.getItems() == null || approval.getItems().isEmpty()) {
+            return;
+        }
+        for (AdminApprovalItem item : approval.getItems()) {
+            Map<String, Object> payload = parsePayload(item.getPayloadJson());
+            Long crId = payload != null ? toLong(payload.get("changeRequestId")) : null;
+            if (crId == null) {
+                continue;
+            }
+            Map<String, Object> existing = viewById.get(crId);
+            if (existing != null) {
+                existing.put("status", approval.getStatus());
+                existing.put("decidedBy", approval.getApprover());
+                existing.put("decidedAt", approval.getDecidedAt() != null ? approval.getDecidedAt().toString() : null);
+                if (!existing.containsKey("payloadJson") || existing.get("payloadJson") == null) {
+                    existing.put("payloadJson", item.getPayloadJson());
+                }
+                if (approval.getErrorMessage() != null) {
+                    existing.put("lastError", approval.getErrorMessage());
+                }
+                if (approval.getReason() != null) {
+                    existing.put("reason", approval.getReason());
+                }
+                continue;
+            }
+            Map<String, Object> vm = new LinkedHashMap<>();
+            vm.put("id", crId);
+            String targetKind = item.getTargetKind() != null ? item.getTargetKind().trim().toUpperCase(Locale.ROOT) : null;
+            String action = payload != null ? stringValue(payload.get("action")) : null;
+            vm.put("resourceType", targetKind != null && !targetKind.isBlank() ? targetKind : inferResourceTypeFromAction(action));
+            vm.put("resourceId", item.getTargetId());
+            vm.put("action", action != null ? action.toUpperCase(Locale.ROOT) : approval.getType());
+            vm.put("payloadJson", item.getPayloadJson());
+            vm.put("diffJson", null);
+            vm.put("status", approval.getStatus());
+            vm.put("requestedBy", approval.getRequester());
+            vm.put("requestedAt", approval.getCreatedDate() != null ? approval.getCreatedDate().toString() : null);
+            vm.put("decidedBy", approval.getApprover());
+            vm.put("decidedAt", approval.getDecidedAt() != null ? approval.getDecidedAt().toString() : null);
+            vm.put("reason", approval.getReason());
+            vm.put("category", resolveApprovalCategory(approval.getType()));
+            vm.put("originalValue", null);
+            vm.put("updatedValue", null);
+            vm.put("lastError", approval.getErrorMessage());
+            if (actorScope == null || actorScope.equalsIgnoreCase(approval.getRequester())) {
+                viewById.put(crId, vm);
+            }
+        }
+    }
+
+    private int compareByRequestedAtDesc(Map<String, Object> left, Map<String, Object> right) {
+        Instant a = parseInstant(stringValue(left.get("requestedAt")));
+        Instant b = parseInstant(stringValue(right.get("requestedAt")));
+        if (a == null && b == null) return 0;
+        if (a == null) return 1;
+        if (b == null) return -1;
+        return b.compareTo(a);
+    }
+
+    private Instant parseInstant(String text) {
+        if (!StringUtils.hasText(text)) {
+            return null;
+        }
+        try {
+            return Instant.parse(text.trim());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String inferResourceTypeFromAction(String action) {
+        if (!StringUtils.hasText(action)) {
+            return "USER";
+        }
+        String upper = action.trim().toUpperCase(Locale.ROOT);
+        if (upper.contains("ROLE")) {
+            return "ROLE";
+        }
+        return "USER";
+    }
+
+    private String resolveApprovalCategory(String type) {
+        if (type == null) {
+            return "GENERAL";
+        }
+        if (type.startsWith("ROLE_")) {
+            return "ROLE_MANAGEMENT";
+        }
+        return "USER_MANAGEMENT";
+    }
+
+    private Map<String, Object> parsePayload(String payloadJson) {
+        if (!StringUtils.hasText(payloadJson)) {
+            return null;
+        }
+        try {
+            return JSON_MAPPER.readValue(payloadJson, Map.class);
+        } catch (Exception ex) {
+            log.debug("Failed to parse approval payload: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private Long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text) {
+            try {
+                return text.isBlank() ? null : Long.parseLong(text.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private String stringValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString();
+        return text.isBlank() ? null : text;
     }
 
     private static Object extractValue(ChangeRequest cr, String key) {

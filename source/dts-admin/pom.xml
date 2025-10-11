@@ -454,6 +454,8 @@
                         <source>${java.version}</source>
                         <target>${java.version}</target>
                         <parameters>true</parameters>
+                        <generatedSourcesDirectory>${project.build.directory}/generated-sources/annotations-workdir</generatedSourcesDirectory>
+                        <generatedTestSourcesDirectory>${project.build.directory}/generated-test-sources/test-annotations-workdir</generatedTestSourcesDirectory>
                         <annotationProcessorPaths>
                             <path>
                                 <groupId>org.springframework.boot</groupId>

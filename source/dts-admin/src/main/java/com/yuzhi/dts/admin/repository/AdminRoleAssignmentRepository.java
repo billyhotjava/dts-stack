@@ -5,5 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface AdminRoleAssignmentRepository extends JpaRepository<AdminRoleAssignment, Long> {}
-
+public interface AdminRoleAssignmentRepository extends JpaRepository<AdminRoleAssignment, Long> {
+    java.util.List<AdminRoleAssignment> findByUsernameIgnoreCase(String username);
+    java.util.List<AdminRoleAssignment> findByUsernameIgnoreCaseAndRoleIgnoreCase(String username, String role);
+    long deleteByUsernameIgnoreCaseAndRoleIgnoreCase(String username, String role);
+}

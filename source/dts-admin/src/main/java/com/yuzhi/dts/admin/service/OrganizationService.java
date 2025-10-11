@@ -141,7 +141,13 @@ public class OrganizationService {
         if (org.apache.commons.lang3.StringUtils.isNotBlank(normalized) && parent != null) {
             String parentLevel = parent.getDataLevel();
             if (exceedsParent(normalized, parentLevel)) {
-                throw new IllegalArgumentException("子部门最大数据密级不能高于上级部门");
+                String msg = String.format(
+                    "所选最大数据密级不能高于上级部门（上级：%s/%s，所选：%s）",
+                    parent.getName(),
+                    String.valueOf(parentLevel),
+                    normalized
+                );
+                throw new IllegalArgumentException(msg);
             }
         }
         entity.setDataLevel(org.apache.commons.lang3.StringUtils.isNotBlank(normalized) ? normalized : determineDataLevel(parent, null));
@@ -219,7 +225,13 @@ public class OrganizationService {
                     // Only enforce parent-bound when存在上级；根节点不受限制
                     String parentLevel = newParent != null ? newParent.getDataLevel() : null;
                     if (exceedsParent(normalized, parentLevel)) {
-                        throw new IllegalArgumentException("子部门最大数据密级不能高于上级部门");
+                        String msg = String.format(
+                            "所选最大数据密级不能高于上级部门（上级：%s/%s，所选：%s）",
+                            newParent != null ? newParent.getName() : "ROOT",
+                            String.valueOf(parentLevel),
+                            normalized
+                        );
+                        throw new IllegalArgumentException(msg);
                     }
                     entity.setDataLevel(normalized);
                 } else {

@@ -153,11 +153,12 @@ export class KeycloakRoleService {
 	/**
 	 * 根据名称获取角色
 	 */
-	static getRoleByName(roleName: string): Promise<KeycloakRole> {
-		return apiClient.get<KeycloakRole>({
-			url: `${KeycloakRoleService.BASE_URL}/${roleName}`,
-		});
-	}
+    static getRoleByName(roleName: string): Promise<KeycloakRole> {
+        const id = encodeURIComponent(roleName);
+        return apiClient.get<KeycloakRole>({
+            url: `${KeycloakRoleService.BASE_URL}/${id}`,
+        });
+    }
 
 	/**
 	 * 创建新角色
@@ -172,19 +173,21 @@ export class KeycloakRoleService {
 	/**
 	 * 更新角色
 	 */
-	static updateRole(roleName: string, role: UpdateRoleRequest): Promise<KeycloakApiResponse> {
-		return apiClient.put<KeycloakApiResponse>({
-			url: `${KeycloakRoleService.BASE_URL}/${roleName}`,
-			data: role,
-		});
-	}
+    static updateRole(roleName: string, role: UpdateRoleRequest): Promise<KeycloakApiResponse> {
+        const id = encodeURIComponent(roleName);
+        return apiClient.put<KeycloakApiResponse>({
+            url: `${KeycloakRoleService.BASE_URL}/${id}`,
+            data: role,
+        });
+    }
 
 	/**
 	 * 删除角色
 	 */
     static deleteRole(roleName: string): Promise<KeycloakApiResponse> {
+        const id = encodeURIComponent(roleName);
         return apiClient.delete<KeycloakApiResponse>({
-            url: `${KeycloakRoleService.BASE_URL}/${roleName}`,
+            url: `${KeycloakRoleService.BASE_URL}/${id}`,
         });
     }
 
@@ -192,8 +195,9 @@ export class KeycloakRoleService {
      * 列出拥有指定Realm角色的用户（返回精简信息）
      */
     static getRoleUsers(roleName: string): Promise<Array<{ id: string; username: string; fullName?: string }>> {
+        const id = encodeURIComponent(roleName);
         return apiClient.get<Array<{ id: string; username: string; fullName?: string }>>({
-            url: `${KeycloakRoleService.BASE_URL}/${roleName}/users`,
+            url: `${KeycloakRoleService.BASE_URL}/${id}/users`,
         });
     }
 }

@@ -5,7 +5,7 @@ import { TreeSelect } from "antd";
 import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest } from "#/keycloak";
 import { KeycloakRoleService, KeycloakUserService } from "@/api/services/keycloakService";
 import { adminApi } from "@/admin/api/adminApi";
-import { POSITION_SUGGESTIONS } from "@/constants/user";
+// 职位字段已废弃，改为联系方式（phone）
 import type { OrganizationNode } from "@/admin/types";
 import { Icon } from "@/components/icon";
 import { Alert, AlertDescription } from "@/ui/alert";
@@ -120,7 +120,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [formState, setFormState] = useState<FormState>(() => createEmptyFormState());
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string>("");
-	const [roles, setRoles] = useState<KeycloakRole[]>([]);
+    const [roles, setRoles] = useState<KeycloakRole[]>([]);
+    const [roleNameMap, setRoleNameMap] = useState<Record<string, string>>({});
 	const [userRoles, setUserRoles] = useState<KeycloakRole[]>([]);
 	const [roleError, setRoleError] = useState<string>("");
 	const [personLevel, setPersonLevel] = useState<string>("GENERAL");
@@ -231,8 +232,9 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				KeycloakRoleService.getAllRealmRoles(),
 				adminApi.getAdminRoles(),
 			]);
-			const list: KeycloakRole[] = [];
-			const byName = new Map<string, KeycloakRole>();
+            const list: KeycloakRole[] = [];
+            const byName = new Map<string, KeycloakRole>();
+            const nameMap: Record<string, string> = {};
 			const add = (r?: KeycloakRole) => {
 				if (!r || !r.name) return;
 				const key = r.name.trim().toUpperCase();
@@ -244,28 +246,77 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			if (kc.status === "fulfilled" && Array.isArray(kc.value)) {
 				kc.value.forEach((r) => add(r));
 			}
-			if (admin.status === "fulfilled" && Array.isArray(admin.value)) {
-				// Map AdminRoleDetail -> KeycloakRole shape (name + description)
-				(admin.value as any[]).forEach((ar: any) => add({ name: ar?.name, description: ar?.description } as KeycloakRole));
-			}
-			setRoles(list);
+            if (admin.status === "fulfilled" && Array.isArray(admin.value)) {
+                // Map AdminRoleDetail -> KeycloakRole: use canonical code for .name; keep displayName in map
+                (admin.value as any[]).forEach((ar: any) => {
+                    const code = normalizeRoleCode(ar?.roleId || ar?.code || ar?.name);
+                    const display = (ar?.nameZh || ar?.displayName || ar?.name || code) as string;
+                    if (!code) return;
+                    nameMap[code] = display;
+                    add({ name: code, description: ar?.description } as KeycloakRole);
+                });
+            }
+            setRoles(list);
+            setRoleNameMap(nameMap);
 		} catch (err) {
 			setRoleError("加载角色列表失败");
 			console.error("Error loading roles:", err);
 		}
 	}, []);
 
-	const loadUserRoles = useCallback(async (userId: string) => {
-		try {
-			const userRolesData = await KeycloakUserService.getUserRoles(userId);
-			setUserRoles(userRolesData);
-			return userRolesData;
-		} catch (err) {
-			setRoleError("加载用户角色失败");
-			console.error("Error loading user roles:", err);
-			return [];
+    function normalizeRoleCode(value?: string): string {
+		if (!value) return "";
+		let upper = String(value).trim().toUpperCase();
+		if (upper.startsWith("ROLE_")) {
+			upper = upper.substring(5);
+		} else if (upper.startsWith("ROLE-")) {
+			upper = upper.substring(5);
 		}
-	}, []);
+		upper = upper.replace(/[^A-Z0-9_]/g, "_").replace(/_+/g, "_");
+        return upper;
+    }
+
+    const displayRoleName = (name?: string): string => {
+        if (!name) return "";
+        const key = name.trim().toUpperCase();
+        // 优先使用从 admin 目录得到的中文名
+        return roleNameMap[key] || name;
+    };
+
+    const loadUserRoles = useCallback(async (userId: string) => {
+        try {
+            const userRolesData = await KeycloakUserService.getUserRoles(userId);
+            // 合并 DB-authority 模式下的角色分配（data roles）
+            const username = user?.username || "";
+            let assignmentRoles: KeycloakRole[] = [];
+            if (username) {
+                try {
+                    const all = await adminApi.getRoleAssignments();
+                    const mine = (all || []).filter((it: any) => (it?.username || "").toString().toLowerCase() === username.toLowerCase());
+                    assignmentRoles = mine.map((it: any) => ({ name: (it?.role || "").toString().trim().toUpperCase() })) as KeycloakRole[];
+                } catch (e) {
+                    // ignore
+                }
+            }
+            const merged: KeycloakRole[] = [];
+            const seen = new Set<string>();
+            const push = (r?: KeycloakRole) => {
+                if (!r || !r.name) return;
+                const key = r.name.trim().toUpperCase();
+                if (seen.has(key)) return;
+                seen.add(key);
+                merged.push(r);
+            };
+            (userRolesData || []).forEach(push);
+            (assignmentRoles || []).forEach(push);
+            setUserRoles(merged);
+            return merged;
+        } catch (err) {
+            setRoleError("加载用户角色失败");
+            console.error("Error loading user roles:", err);
+            return [];
+        }
+    }, [user?.username]);
 
 	const handlePersonLevelChange = useCallback(
 		(level: string) => {
@@ -627,7 +678,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 	};
 
-	const positionValue = formData.attributes.position?.[0] ?? "";
+    const phoneValue = formData.attributes.phone?.[0] ?? "";
 	const title = mode === "create" ? "创建用户" : "编辑用户";
 
 	return (
@@ -715,15 +766,15 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									/>
 									<p className="text-xs text-muted-foreground">如不选择，将暂不分配组织，可在审批后再调整。</p>
 								</div>
-								<div className="space-y-2">
-									<Label htmlFor="position">职位</Label>
-									<Input
-										id="position"
-										value={positionValue}
-										onChange={(e) => updateSingleValueAttribute("position", e.target.value)}
-										placeholder={`例如：${POSITION_SUGGESTIONS.join("、")}`}
-									/>
-								</div>
+                        <div className="space-y-2">
+                            <Label htmlFor="phone">联系方式</Label>
+                            <Input
+                                id="phone"
+                                value={phoneValue}
+                                onChange={(e) => updateSingleValueAttribute("phone", e.target.value)}
+                                placeholder="请输入联系方式"
+                            />
+                        </div>
 								<div className="space-y-2">
 									<Label>人员密级 *</Label>
 									<Select value={personLevel} onValueChange={handlePersonLevelChange}>
@@ -802,12 +853,12 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
             <div className="flex flex-wrap gap-2 mb-4">
                             {userRoles.map((role) => {
                                 const allowRemoval = !isDataRole(role.name) && !isReservedBusinessRoleName(role.name) && !isKeycloakBuiltInRole(role);
-											return (
-												<Badge key={roleKey(role)} variant={resolveRoleBadgeVariant(role.name)}>
-													{role.name}
-													{allowRemoval && (
-														<Button
-															variant="ghost"
+                                        return (
+                                            <Badge key={roleKey(role)} variant={resolveRoleBadgeVariant(role.name)}>
+                                                {displayRoleName(role.name)}
+                                                {allowRemoval && (
+                                                    <Button
+                                                        variant="ghost"
 															size="sm"
 															className="ml-1 h-4 w-4 p-0"
 															onClick={() => handleRoleToggle(role)}
@@ -828,16 +879,16 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                                 .filter((role) => !isDataRole(role.name))
                                 .filter((role) => (GLOBAL_CONFIG.hideBuiltinRoles ? !shouldHideRole(role) : true))
                                 .map((role) => (
-												<Badge
-													key={roleKey(role)}
-													variant={resolveRoleBadgeVariant(role.name)}
-													className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-													onClick={() => handleRoleToggle(role)}
-												>
-													{role.name}
-													<Icon icon="mdi:plus" size={12} className="ml-1" />
-												</Badge>
-											))}
+                                            <Badge
+                                                key={roleKey(role)}
+                                                variant={resolveRoleBadgeVariant(role.name)}
+                                                className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                                                onClick={() => handleRoleToggle(role)}
+                                            >
+                                                {displayRoleName(role.name)}
+                                                <Icon icon="mdi:plus" size={12} className="ml-1" />
+                                            </Badge>
+                                        ))}
 									</div>
 									<p className="text-xs text-muted-foreground mt-2">
 										治理角色与应用管理员角色互斥；数据密级角色由系统根据人员密级自动管理。

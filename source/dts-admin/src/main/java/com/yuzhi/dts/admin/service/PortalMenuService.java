@@ -22,12 +22,15 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
-import org.springframework.core.io.ClassPathResource;
 
 @Service
 @Transactional
@@ -66,13 +69,22 @@ public class PortalMenuService {
     private final PortalMenuRepository menuRepo;
     private final PortalMenuVisibilityRepository visibilityRepo;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate menuMutationTx;
 
     private volatile MenuSeed cachedSeed;
 
-    public PortalMenuService(PortalMenuRepository menuRepo, PortalMenuVisibilityRepository visibilityRepo, ObjectMapper objectMapper) {
+    public PortalMenuService(
+        PortalMenuRepository menuRepo,
+        PortalMenuVisibilityRepository visibilityRepo,
+        ObjectMapper objectMapper,
+        PlatformTransactionManager transactionManager
+    ) {
         this.menuRepo = menuRepo;
         this.visibilityRepo = visibilityRepo;
         this.objectMapper = objectMapper;
+        this.menuMutationTx = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
+        this.menuMutationTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.menuMutationTx.setReadOnly(false);
     }
 
     @Transactional(readOnly = true)
@@ -322,6 +334,13 @@ public class PortalMenuService {
 
     public void resetMenusToSeed() {
         MenuSeed seed = menuSeed();
+        menuMutationTx.execute(status -> {
+            performMenuReset(seed);
+            return null;
+        });
+    }
+
+    private void performMenuReset(MenuSeed seed) {
         visibilityRepo.deleteAllInBatch();
         menuRepo.deleteAllInBatch();
 
@@ -482,7 +501,12 @@ public class PortalMenuService {
                 resetMenusToSeed();
             } else {
                 // Seed is present; ensure defaults exist at least once
-                try { applyDefaultRoleBindings(); } catch (Exception ignored) {}
+                try {
+                    menuMutationTx.execute(status -> {
+                        applyDefaultRoleBindings();
+                        return null;
+                    });
+                } catch (Exception ignored) {}
             }
         } catch (Exception ex) {
             log.warn("Skip portal menu seed verification due to: {}", ex.getMessage());
@@ -547,6 +571,11 @@ public class PortalMenuService {
             for (Long id : menuIds) {
                 PortalMenu m = byId.get(id);
                 if (m == null) continue;
+                String sectionKey = extractSectionKey(m);
+                if (sectionKey != null && FOUNDATION_SECTIONS.contains(sectionKey.trim().toLowerCase(Locale.ROOT))) {
+                    // Foundation menus stay OP_ADMIN-only; skip binding additional roles
+                    continue;
+                }
                 List<PortalMenuVisibility> existing = m.getVisibilities() == null ? new ArrayList<>() : new ArrayList<>(m.getVisibilities());
                 Set<String> existingRoles = existing.stream().map(PortalMenuVisibility::getRoleCode).filter(Objects::nonNull).collect(Collectors.toSet());
                 boolean dirty = false;

@@ -48,6 +48,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     private final URI usersEndpoint;
     private final URI rolesEndpoint;
     private final URI groupsEndpoint;
+    private final URI clientsEndpoint;
 
     public KeycloakAdminRestClient(
         @Value("${spring.security.oauth2.client.provider.oidc.issuer-uri}") String issuerUri,
@@ -63,6 +64,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         this.usersEndpoint = resolveUsersEndpoint(issuerUri);
         this.rolesEndpoint = resolveRolesEndpoint(issuerUri);
         this.groupsEndpoint = resolveGroupsEndpoint(issuerUri);
+        this.clientsEndpoint = resolveClientsEndpoint(issuerUri);
         LOG.info("Keycloak admin endpoints: users={}, roles={}, groups={}", usersEndpoint, rolesEndpoint, groupsEndpoint);
     }
 
@@ -777,7 +779,8 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         if (roleName == null || roleName.isBlank()) {
             return Optional.empty();
         }
-        URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(roleName).build(true).toUri();
+        // roleName may contain non-ASCII (e.g., Chinese). Build unencoded and encode at the end.
+        URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(roleName).build().encode().toUri();
         try {
             ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
@@ -806,7 +809,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         Optional<KeycloakRoleDTO> existing = findRealmRole(role.getName(), accessToken);
         ResponseEntity<String> response;
         if (existing.isPresent()) {
-            URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(role.getName()).build(true).toUri();
+            URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(role.getName()).build().encode().toUri();
             response = exchange(uri, HttpMethod.PUT, accessToken, representation);
         } else {
             response = exchange(rolesEndpoint, HttpMethod.POST, accessToken, representation);
@@ -908,7 +911,13 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         if (roleName == null || roleName.isBlank()) {
             return List.of();
         }
-        URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(roleName, "users").queryParam("briefRepresentation", true).build(true).toUri();
+        URI uri = UriComponentsBuilder
+            .fromUri(rolesEndpoint)
+            .pathSegment(roleName, "users")
+            .queryParam("briefRepresentation", true)
+            .build()
+            .encode()
+            .toUri();
         try {
             LOG.debug("KC ADMIN list users by realm role: {}", roleName);
             ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
@@ -934,7 +943,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         if (!org.springframework.util.StringUtils.hasText(roleName)) {
             return;
         }
-        URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(roleName).build(true).toUri();
+        URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(roleName).build().encode().toUri();
         LOG.info("KC ADMIN delete realm role: {}", roleName);
         ResponseEntity<String> response = exchange(uri, HttpMethod.DELETE, accessToken, null);
         int status = response.getStatusCode().value();
@@ -1070,6 +1079,155 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         return URI.create(base);
     }
 
+    private static URI resolveClientsEndpoint(String issuerUri) {
+        URI issuer = URI.create(issuerUri);
+        String path = issuer.getPath();
+        if (path == null || !path.toLowerCase(java.util.Locale.ROOT).startsWith("/realms/")) {
+            throw new IllegalArgumentException("Unsupported issuer URI for Keycloak: " + issuerUri);
+        }
+        String realm = path.substring("/realms/".length());
+        if (realm.isEmpty()) {
+            throw new IllegalArgumentException("Keycloak realm cannot be resolved from issuer URI " + issuerUri);
+        }
+        String base = issuer.getScheme() + "://" + issuer.getAuthority() + "/admin/realms/" + realm + "/clients";
+        return URI.create(base);
+    }
+
+    // ---- Client roles helpers ----
+
+    @Override
+    public java.util.Optional<String> resolveClientUuid(String clientId, String accessToken) {
+        if (clientId == null || clientId.isBlank()) return java.util.Optional.empty();
+        URI uri = org.springframework.web.util.UriComponentsBuilder
+            .fromUri(clientsEndpoint)
+            .queryParam("clientId", clientId)
+            .build()
+            .toUri();
+        try {
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return java.util.Optional.empty();
+            }
+            java.util.List<java.util.Map<String, Object>> list = objectMapper.readValue(response.getBody(), LIST_OF_MAP);
+            for (var m : list) {
+                String id = stringValue(m.get("id"));
+                if (id != null && !id.isBlank()) return java.util.Optional.of(id);
+            }
+            return java.util.Optional.empty();
+        } catch (Exception ex) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    private URI clientRolesEndpoint(String clientUuid) {
+        return org.springframework.web.util.UriComponentsBuilder.fromUri(clientsEndpoint).pathSegment(clientUuid, "roles").build().toUri();
+    }
+
+    @Override
+    public java.util.Optional<KeycloakRoleDTO> findClientRole(String clientId, String roleName, String accessToken) {
+        if (clientId == null || roleName == null) return java.util.Optional.empty();
+        java.util.Optional<String> uuid = resolveClientUuid(clientId, accessToken);
+        if (uuid.isEmpty()) return java.util.Optional.empty();
+        URI uri = org.springframework.web.util.UriComponentsBuilder
+            .fromUri(clientRolesEndpoint(uuid.get()))
+            .pathSegment(roleName)
+            .build()
+            .encode()
+            .toUri();
+        try {
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
+                return java.util.Optional.empty();
+            }
+            java.util.Map<String, Object> body = objectMapper.readValue(response.getBody(), MAP_TYPE);
+            return java.util.Optional.of(toRoleDto(body));
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() == 404) return java.util.Optional.empty();
+            return java.util.Optional.empty();
+        } catch (Exception ex) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    @Override
+    public KeycloakRoleDTO upsertClientRole(String clientId, KeycloakRoleDTO role, String accessToken) {
+        if (clientId == null || role == null || role.getName() == null || role.getName().isBlank()) {
+            throw new IllegalArgumentException("clientId/roleName 不能为空");
+        }
+        java.util.Optional<String> uuid = resolveClientUuid(clientId, accessToken);
+        if (uuid.isEmpty()) throw new IllegalStateException("找不到 Keycloak 客户端: " + clientId);
+        java.util.Optional<KeycloakRoleDTO> existing = findClientRole(clientId, role.getName(), accessToken);
+        ResponseEntity<String> response;
+        if (existing.isPresent()) {
+            // PUT roles-by-id/{id}
+            String rid = existing.get().getId();
+            URI uri = org.springframework.web.util.UriComponentsBuilder
+                .fromUri(clientRolesEndpoint(uuid.get()))
+                .path("-by-id/")
+                .path(rid)
+                .build()
+                .toUri();
+            response = exchange(uri, HttpMethod.PUT, accessToken, toRoleRepresentation(role));
+        } else {
+            URI uri = clientRolesEndpoint(uuid.get());
+            response = exchange(uri, HttpMethod.POST, accessToken, toRoleRepresentation(role));
+        }
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw toRuntime("同步 Keycloak Client 角色失败", response);
+        }
+        return findClientRole(clientId, role.getName(), accessToken).orElse(role);
+    }
+
+    @Override
+    public void addClientRolesToUser(String userId, String clientId, java.util.List<String> roleNames, String accessToken) {
+        if (userId == null || clientId == null || roleNames == null || roleNames.isEmpty()) return;
+        java.util.Optional<String> uuid = resolveClientUuid(clientId, accessToken);
+        if (uuid.isEmpty()) throw new IllegalStateException("找不到 Keycloak 客户端: " + clientId);
+        java.util.List<java.util.Map<String, Object>> payload = new java.util.ArrayList<>();
+        for (String name : roleNames) {
+            if (name == null || name.isBlank()) continue;
+            java.util.Optional<KeycloakRoleDTO> existing = findClientRole(clientId, name, accessToken);
+            if (existing.isEmpty()) {
+                KeycloakRoleDTO dto = new KeycloakRoleDTO();
+                dto.setName(name);
+                try { upsertClientRole(clientId, dto, accessToken); } catch (RuntimeException ignore) {}
+                existing = findClientRole(clientId, name, accessToken);
+            }
+            java.util.Map<String, Object> rep = new java.util.LinkedHashMap<>();
+            rep.put("name", name);
+            existing.map(KeycloakRoleDTO::getId).filter(id -> id != null && !id.isBlank()).ifPresent(id -> rep.put("id", id));
+            payload.add(rep);
+        }
+        if (payload.isEmpty()) return;
+        URI uri = userUri(userId, "role-mappings", "clients", uuid.get());
+        ResponseEntity<String> response = exchange(uri, HttpMethod.POST, accessToken, payload);
+        int status = response.getStatusCode().value();
+        if (status != 200 && status != 201 && status != 204) {
+            throw toRuntime("分配用户 Client 角色失败", response);
+        }
+    }
+
+    @Override
+    public void removeClientRolesFromUser(String userId, String clientId, java.util.List<String> roleNames, String accessToken) {
+        if (userId == null || clientId == null || roleNames == null || roleNames.isEmpty()) return;
+        java.util.Optional<String> uuid = resolveClientUuid(clientId, accessToken);
+        if (uuid.isEmpty()) throw new IllegalStateException("找不到 Keycloak 客户端: " + clientId);
+        java.util.List<java.util.Map<String, Object>> payload = new java.util.ArrayList<>();
+        for (String name : roleNames) {
+            if (name == null || name.isBlank()) continue;
+            java.util.Map<String, Object> rep = new java.util.LinkedHashMap<>();
+            rep.put("name", name);
+            findClientRole(clientId, name, accessToken).map(KeycloakRoleDTO::getId).filter(id -> id != null && !id.isBlank()).ifPresent(id -> rep.put("id", id));
+            payload.add(rep);
+        }
+        if (payload.isEmpty()) return;
+        URI uri = userUri(userId, "role-mappings", "clients", uuid.get());
+        ResponseEntity<String> response = exchange(uri, HttpMethod.DELETE, accessToken, payload);
+        int status = response.getStatusCode().value();
+        if (status != 200 && status != 204) {
+            throw toRuntime("移除用户 Client 角色失败", response);
+        }
+    }
     private static URI resolveUsersEndpoint(String issuerUri) {
         URI issuer = URI.create(issuerUri);
         String path = issuer.getPath();

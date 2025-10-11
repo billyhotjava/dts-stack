@@ -15,6 +15,7 @@
     </changeSet>
 
     <changeSet id="20251005-02-portal-menu-seed" author="codex">
+        <validCheckSum>9:b225c668dd83a77546ca4430cf7def28</validCheckSum>
         <preConditions onFail="MARK_RAN">
             <tableIsEmpty tableName="portal_menu"/>
         </preConditions>

@@ -80,4 +80,21 @@ public interface KeycloakAdminClient {
      * Delete a realm role by name.
      */
     void deleteRealmRole(String roleName, String accessToken);
+
+    // ---- Client roles (for dts-system) ----
+
+    /** Resolve client UUID by its clientId. */
+    java.util.Optional<String> resolveClientUuid(String clientId, String accessToken);
+
+    /** Find a client role by name under the given clientId. */
+    java.util.Optional<KeycloakRoleDTO> findClientRole(String clientId, String roleName, String accessToken);
+
+    /** Create or update a client role under the given clientId. */
+    KeycloakRoleDTO upsertClientRole(String clientId, KeycloakRoleDTO role, String accessToken);
+
+    /** Assign client roles to a user for the given clientId. */
+    void addClientRolesToUser(String userId, String clientId, java.util.List<String> roleNames, String accessToken);
+
+    /** Remove client roles from a user for the given clientId. */
+    void removeClientRolesFromUser(String userId, String clientId, java.util.List<String> roleNames, String accessToken);
 }

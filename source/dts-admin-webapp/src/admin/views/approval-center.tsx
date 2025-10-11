@@ -277,33 +277,98 @@ export default function ApprovalCenterView() {
 		username: userInfo?.username || userInfo?.fullName || userInfo?.email,
 		email: userInfo?.email,
 	};
-	const {
-		data: changeRequests = [],
-		isLoading,
-		isError,
-	} = useQuery<ChangeRequest[]>({
-		queryKey: ["admin", "change-requests"],
-		queryFn: () => adminApi.getChangeRequests(),
-	});
+    const {
+        data: changeRequests = [],
+        isLoading,
+        isError,
+    } = useQuery<ChangeRequest[]>({
+        queryKey: ["admin", "change-requests"],
+        queryFn: () => adminApi.getChangeRequests(),
+    });
+
+    // 兼容性兜底：若后端仅返回“审批请求”而未返回“变更请求”，
+    // 则从 /approval-requests 拉取并映射为 ChangeRequest 以便列表展示
+    const { data: mappedFromApprovals = [] } = useQuery<ChangeRequest[]>({
+        queryKey: ["admin", "kc-approvals-mapped"],
+        queryFn: async () => {
+            try {
+                const list = await KeycloakApprovalService.getApprovalRequests();
+                const out: ChangeRequest[] = [];
+                // 按需拉取详情，以提取 payload 中的 changeRequestId
+                for (const item of list || []) {
+                    try {
+                        const detail = await KeycloakApprovalService.getApprovalRequestById(item.id);
+                        if (!detail?.items?.length) continue;
+                        for (const it of detail.items) {
+                            if (!it?.payload) continue;
+                            let crid: number | null = null;
+                            let payload: any = null;
+                            try { payload = JSON.parse(it.payload); crid = Number(payload?.changeRequestId ?? NaN); } catch {}
+                            if (!crid || Number.isNaN(crid)) continue;
+                            // 已存在的变更请求以后端结果为准
+                            if (Array.isArray(changeRequests) && changeRequests.some((x) => x.id === crid)) continue;
+                            const resource = String(it.targetKind || "").toUpperCase();
+                            const action = String(payload?.action || detail.type || "").toUpperCase();
+                            out.push({
+                                id: crid,
+                                resourceType: resource || inferResourceTypeFromAction(action),
+                                resourceId: it.targetId,
+                                action,
+                                payloadJson: it.payload,
+                                diffJson: undefined,
+                                status: (detail.status || "PENDING").toUpperCase(),
+                                requestedBy: detail.requester || "",
+                                requestedAt: detail.createdAt,
+                                decidedBy: detail.approver || undefined,
+                                decidedAt: detail.decidedAt || undefined,
+                                reason: detail.reason || undefined,
+                                category: detail.category || undefined,
+                                lastError: detail.errorMessage || undefined,
+                            });
+                        }
+                    } catch {
+                        // ignore single item failure and continue
+                    }
+                }
+                return out;
+            } catch {
+                return [] as ChangeRequest[];
+            }
+        },
+    });
+
+    const combinedChangeRequests = useMemo<ChangeRequest[]>(() => {
+        if (!Array.isArray(mappedFromApprovals) || mappedFromApprovals.length === 0) return changeRequests;
+        const map = new Map<number, ChangeRequest>();
+        for (const cr of changeRequests || []) map.set(cr.id, cr);
+        for (const cr of mappedFromApprovals) if (!map.has(cr.id)) map.set(cr.id, cr);
+        return Array.from(map.values());
+    }, [changeRequests, mappedFromApprovals]);
 
 	const [decisions, setDecisions] = useState<Record<number, DecisionRecord>>({});
 	const [categoryFilter, setCategoryFilter] = useState<TaskCategory>(CATEGORY_ORDER[0]);
 	const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
 	const [decisionLoading, setDecisionLoading] = useState(false);
 
-	const augmentedRequests = useMemo<AugmentedChangeRequest[]>(() => {
-		return changeRequests.map((item) => {
-			const override = decisions[item.id];
-			const effectiveStatus = override?.status ?? normalizeStatus(item.status);
-			return {
-				...item,
-				effectiveStatus,
-				effectiveDecidedAt: override?.decidedAt ?? item.decidedAt ?? null,
-				effectiveDecidedBy: override?.decidedBy ?? item.decidedBy ?? null,
-				override,
-			};
-		});
-	}, [changeRequests, decisions]);
+    const augmentedRequests = useMemo<AugmentedChangeRequest[]>(() => {
+        return combinedChangeRequests.map((item) => {
+            const override = decisions[item.id];
+            const effectiveStatus = override?.status ?? normalizeStatus(item.status);
+            return {
+                ...item,
+                effectiveStatus,
+                effectiveDecidedAt: override?.decidedAt ?? item.decidedAt ?? null,
+                effectiveDecidedBy: override?.decidedBy ?? item.decidedBy ?? null,
+                override,
+            };
+        });
+    }, [combinedChangeRequests, decisions]);
+
+    function inferResourceTypeFromAction(action: string | undefined): string {
+        const a = (action || "").toUpperCase();
+        if (a.includes("ROLE")) return "ROLE";
+        return "USER";
+    }
 
     const pendingGroups = useMemo(() => {
         const groups: Record<TaskCategory, AugmentedChangeRequest[]> = {

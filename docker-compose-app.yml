@@ -20,6 +20,9 @@ services:
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
       DTS_KEYCLOAK_ADMIN_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
       DTS_KEYCLOAK_ADMIN_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
+      # Target client that holds data roles (client roles). Default matches our realm seeds.
+      DTS_KEYCLOAK_TARGET_CLIENT_ID: "${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}"
+      DTS_KEYCLOAK_USE_CLIENT_ROLES: "${DTS_KEYCLOAK_USE_CLIENT_ROLES:-false}"
       # Default data level for newly created root organizations (avoids NOT NULL violations)
       DTS_ORG_UNASSIGNED_DATA_LEVEL: "${DTS_ORG_UNASSIGNED_DATA_LEVEL:-INTERNAL}"
       # Enable org<->Keycloak group provisioning (requires KC admin privileges for this client)

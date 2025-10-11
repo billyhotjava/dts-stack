@@ -28,6 +28,18 @@ interface FilterState {
 	action?: string;
 }
 
+interface AuditModuleCatalog {
+	key: string;
+	title: string;
+}
+
+interface AuditCategoryItem {
+	moduleKey: string;
+	moduleTitle: string;
+	entryKey: string;
+	entryTitle: string;
+}
+
 const ADMIN_LABELS: Record<string, string> = {
 	sysadmin: "系统管理员",
 	authadmin: "授权管理员",
@@ -46,7 +58,6 @@ export default function AuditCenterView() {
 	const [totalElements, setTotalElements] = useState(0);
     // totalPages not displayed in UI; omit to satisfy TS noUnusedLocals
 	const [moduleOptions, setModuleOptions] = useState<Array<{ value: string; label: string }>>([]);
-	const [categoryOptions, setCategoryOptions] = useState<Array<{ moduleKey: string; moduleTitle: string; entryKey: string; entryTitle: string }>>([]);
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 	const [exporting, setExporting] = useState(false);
 
@@ -63,17 +74,8 @@ export default function AuditCenterView() {
 				setSize(response.size);
 				setTotalElements(response.totalElements);
                 // totalPages is not used in UI; skip storing
-				// Fallback accumulation from logs if catalog not loaded yet
-				setModuleOptions((prev) => {
-					const existing = new Map(prev.map((it) => [it.value, it] as const));
-					response.content.forEach((item) => {
-						const key = item.module;
-						if (key && !existing.has(`module:${key}`)) {
-							existing.set(`module:${key}`, { value: `module:${key}`, label: key });
-						}
-					});
-					return Array.from(existing.values()).sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
-				});
+                // Note: 功能模块下拉仅使用审计目录（/audit-logs/modules），不再从日志内容动态补全，
+                // 以确保不同角色（含 auditadmin）看到一致的大类选项。
 			} catch (error) {
 				console.error("Failed to load audit logs", error);
 				toast.error("加载审计日志失败");
@@ -96,23 +98,11 @@ export default function AuditCenterView() {
 					AuditLogService.getAuditModules(),
 					AuditLogService.getAuditCategories(),
 				]);
-				setCategoryOptions(Array.isArray(categories) ? categories : []);
-				if (Array.isArray(modules) && modules.length) {
-					// Build options: replace "管理端" with its subcategories (用户管理/角色管理/菜单管理/组织机构管理)
-					const opts: Array<{ value: string; label: string }> = [];
-					for (const m of modules) {
-						if (m.key === "admin") {
-							const subs = (categories || []).filter((c) => c.moduleKey === "admin");
-							if (subs.length) {
-								for (const c of subs) {
-									opts.push({ value: `entry:${c.entryKey}`, label: c.entryTitle });
-								}
-								continue;
-							}
-						}
-						opts.push({ value: `module:${m.key}`, label: m.title });
-					}
-					setModuleOptions(opts);
+				const normalizedModules = Array.isArray(modules) ? modules : [];
+				const normalizedCategories = Array.isArray(categories) ? categories : [];
+				const derived = deriveModuleOptions(normalizedModules, normalizedCategories);
+				if (derived.length) {
+					setModuleOptions((prev) => mergeModuleOptionLists(prev, derived, true));
 				}
 			} catch (e) {
 				// ignore, fallback to dynamic accumulation
@@ -390,6 +380,71 @@ function CollapsibleText({
       )}
     </div>
   );
+}
+
+function mergeModuleOptionLists(
+	current: Array<{ value: string; label: string }>,
+	additions: Array<{ value: string; label: string }>,
+	shouldSort: boolean = true,
+): Array<{ value: string; label: string }> {
+	if (!additions || additions.length === 0) {
+		return current;
+	}
+	const map = new Map<string, { value: string; label: string }>();
+	for (const item of current) {
+		if (item?.value) {
+			map.set(item.value, item);
+		}
+	}
+	for (const item of additions) {
+		if (item?.value) {
+			const label = item.label?.trim();
+			map.set(item.value, { value: item.value, label: label || item.value });
+		}
+	}
+	const merged = Array.from(map.values());
+	if (shouldSort) {
+		merged.sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
+	}
+	return merged;
+}
+
+function deriveModuleOptions(
+    modules: AuditModuleCatalog[] = [],
+    categories: AuditCategoryItem[] = [],
+): Array<{ value: string; label: string }> {
+    // 需求：功能模块下拉只显示“大类”（模块），不显示子类。
+    // 优先使用服务端提供的模块清单；若缺失则根据分类条目聚合为模块大类。
+    const seen = new Set<string>();
+    const result: Array<{ value: string; label: string }> = [];
+
+    const pushModule = (key?: string, title?: string) => {
+        if (!key) return;
+        const value = `module:${key}`;
+        if (seen.has(value)) return;
+        result.push({ value, label: (title || key).trim() });
+        seen.add(value);
+    };
+
+    if (Array.isArray(modules) && modules.length > 0) {
+        for (const m of modules) {
+            pushModule(m?.key, m?.title);
+        }
+        return result;
+    }
+
+    // 模块清单缺失时：从分类条目反推模块列表（去重）
+    const moduleMap = new Map<string, string>();
+    for (const c of categories || []) {
+        if (!c?.moduleKey) continue;
+        if (!moduleMap.has(c.moduleKey)) {
+            moduleMap.set(c.moduleKey, c.moduleTitle || c.moduleKey);
+        }
+    }
+    for (const [key, title] of moduleMap.entries()) {
+        pushModule(key, title);
+    }
+    return result;
 }
 
 function buildQuery(filters: FilterState): Record<string, string> {

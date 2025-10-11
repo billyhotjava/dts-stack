@@ -10,6 +10,7 @@ import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
+import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.service.approval.ApprovalStatus;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
@@ -19,6 +20,7 @@ import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -53,6 +55,21 @@ public class AdminUserService {
     private static final Set<String> SUPPORTED_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> FORBIDDEN_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET");
     private static final Set<String> SUPPORTED_DATA_LEVELS = Set.of("DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_TOP_SECRET");
+    private static final Map<String, String> SECURITY_LEVEL_ALIASES = Map.ofEntries(
+        Map.entry("NONE_SECRET", "NON_SECRET"),
+        Map.entry("NON_SECRET", "NON_SECRET"),
+        Map.entry("NS", "NON_SECRET"),
+        Map.entry("GENERAL", "GENERAL"),
+        Map.entry("GN", "GENERAL"),
+        Map.entry("GE", "GENERAL"),
+        Map.entry("G", "GENERAL"),
+        Map.entry("IMPORTANT", "IMPORTANT"),
+        Map.entry("IM", "IMPORTANT"),
+        Map.entry("I", "IMPORTANT"),
+        Map.entry("CORE", "CORE"),
+        Map.entry("CO", "CORE"),
+        Map.entry("C", "CORE")
+    );
     private static final Map<String, String> DATA_LEVEL_ALIASES = Map.ofEntries(
         Map.entry("PUBLIC", "DATA_PUBLIC"),
         Map.entry("DATA_PUBLIC", "DATA_PUBLIC"),
@@ -80,10 +97,13 @@ public class AdminUserService {
     private final AdminAuditService auditService;
     private final ChangeRequestService changeRequestService;
     private final ChangeRequestRepository changeRequestRepository;
+    private final AdminRoleAssignmentRepository roleAssignRepo;
     private final ObjectMapper objectMapper;
     private final KeycloakAuthService keycloakAuthService;
     private final String managementClientId;
     private final String managementClientSecret;
+    private final String targetClientId;
+    private final boolean useClientRoles;
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
@@ -95,10 +115,13 @@ public class AdminUserService {
         AdminAuditService auditService,
         ChangeRequestService changeRequestService,
         ChangeRequestRepository changeRequestRepository,
+        AdminRoleAssignmentRepository roleAssignRepo,
         ObjectMapper objectMapper,
         KeycloakAuthService keycloakAuthService,
         @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}") String managementClientId,
-        @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}") String managementClientSecret
+        @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}") String managementClientSecret,
+        @Value("${dts.keycloak.target-client-id:${DTS_KEYCLOAK_TARGET_CLIENT_ID:${KC_SYNC_TARGET_CLIENT_ID:dts-system}}}") String targetClientId,
+        @Value("${dts.keycloak.use-client-roles:false}") boolean useClientRoles
     ) {
         this.userRepository = userRepository;
         this.approvalRepository = approvalRepository;
@@ -106,10 +129,13 @@ public class AdminUserService {
         this.auditService = auditService;
         this.changeRequestService = changeRequestService;
         this.changeRequestRepository = changeRequestRepository;
+        this.roleAssignRepo = roleAssignRepo;
         this.objectMapper = objectMapper;
         this.keycloakAuthService = keycloakAuthService;
         this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
         this.managementClientSecret = managementClientSecret == null ? "" : managementClientSecret;
+        this.targetClientId = targetClientId == null ? "dts-system" : targetClientId.trim();
+        this.useClientRoles = useClientRoles;
     }
 
     @Transactional(readOnly = true)
@@ -206,6 +232,10 @@ public class AdminUserService {
         payload.put("currentRoles", snapshot.getRealmRoles());
         payload.put("addedRoles", new ArrayList<>(roles));
         payload.put("resultRoles", mergeRoles(snapshot.getRealmRoles(), roles, true));
+        // Include keycloakId to avoid KC user search that may trigger FGAP NPEs
+        if (snapshot.getKeycloakId() != null) {
+            payload.put("keycloakId", snapshot.getKeycloakId());
+        }
         ChangeRequest changeRequest = createChangeRequest(
             "ROLE",
             "GRANT_ROLE",
@@ -237,6 +267,10 @@ public class AdminUserService {
         payload.put("currentRoles", snapshot.getRealmRoles());
         payload.put("removedRoles", new ArrayList<>(roles));
         payload.put("resultRoles", mergeRoles(snapshot.getRealmRoles(), roles, false));
+        // Include keycloakId to avoid KC user search that may trigger FGAP NPEs
+        if (snapshot.getKeycloakId() != null) {
+            payload.put("keycloakId", snapshot.getKeycloakId());
+        }
         ChangeRequest changeRequest = createChangeRequest(
             "ROLE",
             "REVOKE_ROLE",
@@ -262,6 +296,9 @@ public class AdminUserService {
         payload.put("action", "setEnabled");
         payload.put("username", username);
         payload.put("enabled", enabled);
+        if (snapshot.getKeycloakId() != null) {
+            payload.put("keycloakId", snapshot.getKeycloakId());
+        }
         payload.put("currentEnabled", snapshot.isEnabled());
         ChangeRequest changeRequest = createChangeRequest(
             "USER",
@@ -299,6 +336,9 @@ public class AdminUserService {
         payload.put("personSecurityLevel", normalizedPersonLevel);
         payload.put("dataLevels", dataLevels == null ? Collections.emptyList() : new ArrayList<>(dataLevels));
         payload.put("currentPersonSecurityLevel", snapshot.getPersonSecurityLevel());
+        if (snapshot.getKeycloakId() != null) {
+            payload.put("keycloakId", snapshot.getKeycloakId());
+        }
         payload.put("currentDataLevels", snapshot.getDataLevels());
         Map<String, Object> before = new LinkedHashMap<>();
         if (snapshot.getPersonSecurityLevel() != null) {
@@ -477,11 +517,8 @@ public class AdminUserService {
         if (level == null) {
             return null;
         }
-        String normalized = level.trim().toUpperCase().replace('-', '_');
-        if ("NONE_SECRET".equals(normalized)) {
-            return "NON_SECRET";
-        }
-        return normalized;
+        String normalized = level.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+        return SECURITY_LEVEL_ALIASES.getOrDefault(normalized, normalized);
     }
 
     private String normalizeDataLevel(String level) {
@@ -1235,7 +1272,28 @@ public class AdminUserService {
                             }
                         }
                     } catch (Exception ignored) {}
-                    target = keycloakAdminClient.createUser(dto, accessToken);
+                    try {
+                        target = keycloakAdminClient.createUser(dto, accessToken);
+                    } catch (RuntimeException exCreate) {
+                        // Some realms enforce strict User Profile validations that may reject
+                        // rich attribute payloads with opaque 'unknown_error'. Try a minimal
+                        // creation first, then patch attributes via update as a fallback.
+                        LOG.warn("Create user failed with full payload for {}: {}. Retrying with minimal representation", dto.getUsername(), exCreate.getMessage());
+                        com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO minimal = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO();
+                        minimal.setUsername(dto.getUsername());
+                        minimal.setEmail(dto.getEmail());
+                        minimal.setFirstName(dto.getFullName() != null && !dto.getFullName().isBlank() ? dto.getFullName() : dto.getFirstName());
+                        minimal.setEnabled(Boolean.TRUE.equals(dto.getEnabled()));
+                        try {
+                            com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO created = keycloakAdminClient.createUser(minimal, accessToken);
+                            // Patch back full attributes (best-effort)
+                            created = keycloakAdminClient.updateUser(created.getId(), dto, accessToken);
+                            target = created;
+                        } catch (RuntimeException exMinimal) {
+                            LOG.warn("Minimal user creation fallback failed for {}: {}", dto.getUsername(), exMinimal.getMessage());
+                            throw exMinimal;
+                        }
+                    }
                 }
             } else {
                 // Ensure dept_code aligns with Keycloak group dts_org_id if groups are provided
@@ -1262,29 +1320,57 @@ public class AdminUserService {
                         }
                     }
                 } catch (Exception ignored) {}
-                target = keycloakAdminClient.createUser(dto, accessToken);
+                try {
+                    target = keycloakAdminClient.createUser(dto, accessToken);
+                } catch (RuntimeException exCreate) {
+                    LOG.warn("Create user failed with full payload for {}: {}. Retrying with minimal representation", dto.getUsername(), exCreate.getMessage());
+                    com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO minimal = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO();
+                    minimal.setUsername(dto.getUsername());
+                    minimal.setEmail(dto.getEmail());
+                    minimal.setFirstName(dto.getFullName() != null && !dto.getFullName().isBlank() ? dto.getFullName() : dto.getFirstName());
+                    minimal.setEnabled(Boolean.TRUE.equals(dto.getEnabled()));
+                    try {
+                        com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO created = keycloakAdminClient.createUser(minimal, accessToken);
+                        created = keycloakAdminClient.updateUser(created.getId(), dto, accessToken);
+                        target = created;
+                    } catch (RuntimeException exMinimal) {
+                        LOG.warn("Minimal user creation fallback failed for {}: {}", dto.getUsername(), exMinimal.getMessage());
+                        throw exMinimal;
+                    }
+                }
             }
-            // Apply realm roles via role-mappings if provided in payload
+            // Apply roles via role-mappings if provided in payload (split into realm/client)
             List<String> requestedRoles = stringList(payload.get("realmRoles"));
             if (requestedRoles != null && !requestedRoles.isEmpty()) {
                 LOG.info("Approval applyCreate assign roles username={}, id={}, roles={}", target.getUsername(), target.getId(), requestedRoles);
                 try {
-                    // Ensure realm roles exist in Keycloak before assignment
-                    for (String r : requestedRoles) {
-                        if (r != null && !r.isBlank()) {
+                    List<String> realm = new java.util.ArrayList<>();
+                    List<String> client = new java.util.ArrayList<>();
+                    for (String r : requestedRoles) if (isDataRole(r)) client.add(normalizeRole(r)); else realm.add(normalizeRole(r));
+                    if (!realm.isEmpty()) {
+                        for (String r : realm) {
                             com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO roleDto = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO();
                             roleDto.setName(r);
                             keycloakAdminClient.upsertRealmRole(roleDto, accessToken);
                         }
+                        keycloakAdminClient.addRealmRolesToUser(target.getId(), realm, accessToken);
                     }
-                    keycloakAdminClient.addRealmRolesToUser(target.getId(), requestedRoles, accessToken);
-                    // Refresh assigned role names from Keycloak
+                    if (!client.isEmpty() && useClientRoles) {
+                        for (String r : client) {
+                            com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO roleDto = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO();
+                            roleDto.setName(r);
+                            keycloakAdminClient.upsertClientRole(targetClientId, roleDto, accessToken);
+                        }
+                        keycloakAdminClient.addClientRolesToUser(target.getId(), targetClientId, client, accessToken);
+                    }
+                    if (!client.isEmpty() && !useClientRoles) {
+                        // DB-authority mode: persist data role assignments to admin DB
+                        ensureDbAssignments(target.getUsername(), client, target);
+                    }
                     List<String> names = keycloakAdminClient.listUserRealmRoles(target.getId(), accessToken);
-                    if (names != null && !names.isEmpty()) {
-                        target.setRealmRoles(new ArrayList<>(names));
-                    }
+                    if (names != null && !names.isEmpty()) target.setRealmRoles(new ArrayList<>(names));
                 } catch (Exception e) {
-                    LOG.warn("Failed to assign realm roles on create for user {}: {}", target.getUsername(), e.getMessage());
+                    LOG.warn("Failed to assign roles on create for user {}: {}", target.getUsername(), e.getMessage());
                 }
             }
             // Apply group memberships if provided (resolve by group path)
@@ -1347,27 +1433,62 @@ public class AdminUserService {
             } catch (Exception ignored) {}
             ensureAllowedSecurityLevel(extractPersonLevel(update), "人员密级不允许为非密");
             update.setId(existing.getId());
-            // If realmRoles present in payload, ensure roles exist and apply via role-mappings API instead of user PUT
+            // If roles present, split to realm/client and apply via role-mappings APIs
             List<String> requestedRoles = stringList(payload.get("realmRoles"));
             if (requestedRoles != null && !requestedRoles.isEmpty()) {
+                List<String> realmReq = new java.util.ArrayList<>();
+                List<String> clientReq = new java.util.ArrayList<>();
+                for (String r : requestedRoles) if (isDataRole(r)) clientReq.add(normalizeRole(r)); else realmReq.add(normalizeRole(r));
+
+                // Realm role delta (best-effort based on existing snapshot)
                 List<String> currentRoles = existing.getRealmRoles() == null ? List.of() : existing.getRealmRoles();
-                LinkedHashSet<String> req = new LinkedHashSet<>(requestedRoles);
                 LinkedHashSet<String> cur = new LinkedHashSet<>(currentRoles);
-                List<String> toAdd = req.stream().filter(r -> !cur.contains(r)).toList();
-                List<String> toRemove = cur.stream().filter(r -> !req.contains(r)).toList();
-                LOG.info("Approval applyUpdate roles delta for user username={}, id={}: toAdd={}, toRemove={}", existing.getUsername(), existing.getId(), toAdd, toRemove);
-                if (!toAdd.isEmpty()) {
-                    for (String r : toAdd) {
+                LinkedHashSet<String> reqRealm = new LinkedHashSet<>(realmReq);
+                List<String> toAddRealm = reqRealm.stream().filter(r -> !cur.contains(r)).toList();
+                List<String> toRemoveRealm = cur.stream().filter(r -> !reqRealm.contains(r)).toList();
+                LOG.info("[applyUpdate] realm roles delta user={} add={} remove={}", existing.getUsername(), toAddRealm, toRemoveRealm);
+                if (!toAddRealm.isEmpty()) {
+                    for (String r : toAddRealm) {
                         if (r != null && !r.isBlank()) {
                             com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO dto = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO();
                             dto.setName(r);
                             keycloakAdminClient.upsertRealmRole(dto, accessToken);
                         }
                     }
-                    keycloakAdminClient.addRealmRolesToUser(existing.getId(), toAdd, accessToken);
+                    keycloakAdminClient.addRealmRolesToUser(existing.getId(), toAddRealm, accessToken);
                 }
-                if (!toRemove.isEmpty()) {
-                    keycloakAdminClient.removeRealmRolesFromUser(existing.getId(), toRemove, accessToken);
+                if (!toRemoveRealm.isEmpty()) {
+                    keycloakAdminClient.removeRealmRolesFromUser(existing.getId(), toRemoveRealm, accessToken);
+                }
+
+                // Client roles apply (no snapshot delta here; assign requested set)
+                if (!clientReq.isEmpty() && useClientRoles) {
+                    for (String r : clientReq) {
+                        com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO dto = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO();
+                        dto.setName(r);
+                        try { keycloakAdminClient.upsertClientRole(targetClientId, dto, accessToken); } catch (RuntimeException ignored) {}
+                    }
+                    keycloakAdminClient.addClientRolesToUser(existing.getId(), targetClientId, clientReq, accessToken);
+                }
+                if (!clientReq.isEmpty() && !useClientRoles) {
+                    // DB-authority mode: upsert requested data role assignments
+                    ensureDbAssignments(existing.getUsername(), clientReq, existing);
+                }
+                // DB-authority mode: reflect removal of data roles by deleting assignments not requested anymore
+                if (!useClientRoles) {
+                    try {
+                        java.util.Set<String> requestedData = new java.util.HashSet<>(clientReq);
+                        java.util.List<com.yuzhi.dts.admin.domain.AdminRoleAssignment> currentAssignments = roleAssignRepo.findByUsernameIgnoreCase(existing.getUsername());
+                        for (var a : currentAssignments) {
+                            String role = a.getRole();
+                            if (role != null) {
+                                String norm = normalizeRole(role);
+                                if (isDataRole(norm) && !requestedData.contains(norm)) {
+                                    roleAssignRepo.deleteByUsernameIgnoreCaseAndRoleIgnoreCase(existing.getUsername(), role);
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {}
                 }
                 // Avoid including roles in representation update
                 update.setRealmRoles(new ArrayList<>());
@@ -1456,19 +1577,31 @@ public class AdminUserService {
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
             LOG.info("Approval applyGrantRoles username={}, id={}, roles={}", existing.getUsername(), existing.getId(), rolesToAdd);
             if (!rolesToAdd.isEmpty()) {
-                // Ensure realm roles exist before assigning to user to avoid 404/409 errors
-                for (String r : rolesToAdd) {
-                    if (r != null && !r.isBlank()) {
+                List<String> realm = new java.util.ArrayList<>();
+                List<String> client = new java.util.ArrayList<>();
+                for (String r : rolesToAdd) if (isDataRole(r)) client.add(normalizeRole(r)); else realm.add(normalizeRole(r));
+                if (!realm.isEmpty()) {
+                    for (String r : realm) {
+                        if (r == null || r.isBlank()) continue;
                         com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO dto = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO();
                         dto.setName(r);
-                        try {
-                            keycloakAdminClient.upsertRealmRole(dto, accessToken);
-                        } catch (RuntimeException ex) {
-                            LOG.warn("Upsert realm role '{}' failed before assignment: {}", r, ex.getMessage());
-                        }
+                        try { keycloakAdminClient.upsertRealmRole(dto, accessToken); } catch (RuntimeException ex) { LOG.warn("Upsert realm role '{}' failed before assignment: {}", r, ex.getMessage()); }
                     }
+                    keycloakAdminClient.addRealmRolesToUser(existing.getId(), realm, accessToken);
                 }
-                keycloakAdminClient.addRealmRolesToUser(existing.getId(), rolesToAdd, accessToken);
+                if (!client.isEmpty() && useClientRoles) {
+                    for (String r : client) {
+                        if (r == null || r.isBlank()) continue;
+                        com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO dto = new com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO();
+                        dto.setName(r);
+                        try { keycloakAdminClient.upsertClientRole(targetClientId, dto, accessToken); } catch (RuntimeException ex) { LOG.warn("Upsert client role '{}' failed before assignment: {}", r, ex.getMessage()); }
+                    }
+                    keycloakAdminClient.addClientRolesToUser(existing.getId(), targetClientId, client, accessToken);
+                }
+                if (!client.isEmpty() && !useClientRoles) {
+                    // DB-authority mode: upsert data role assignments
+                    ensureDbAssignments(existing.getUsername(), client, existing);
+                }
             }
             KeycloakUserDTO updated = keycloakAdminClient.findById(existing.getId(), accessToken).orElse(existing);
             try {
@@ -1500,7 +1633,21 @@ public class AdminUserService {
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
             LOG.info("Approval applyRevokeRoles username={}, id={}, roles={}", existing.getUsername(), existing.getId(), remove);
             if (!remove.isEmpty()) {
-                keycloakAdminClient.removeRealmRolesFromUser(existing.getId(), remove, accessToken);
+                List<String> realmRm = new java.util.ArrayList<>();
+                List<String> clientRm = new java.util.ArrayList<>();
+                for (String r : remove) if (isDataRole(r)) clientRm.add(normalizeRole(r)); else realmRm.add(normalizeRole(r));
+                if (!realmRm.isEmpty()) keycloakAdminClient.removeRealmRolesFromUser(existing.getId(), realmRm, accessToken);
+                if (!clientRm.isEmpty() && useClientRoles) {
+                    keycloakAdminClient.removeClientRolesFromUser(existing.getId(), targetClientId, clientRm, accessToken);
+                }
+                if (!clientRm.isEmpty() && !useClientRoles) {
+                    try {
+                        for (String r : clientRm) {
+                            if (r == null || r.isBlank()) continue;
+                            roleAssignRepo.deleteByUsernameIgnoreCaseAndRoleIgnoreCase(existing.getUsername(), r);
+                        }
+                    } catch (Exception ignored) {}
+                }
             }
             KeycloakUserDTO updated = keycloakAdminClient.findById(existing.getId(), accessToken).orElse(existing);
             try {
@@ -1544,10 +1691,11 @@ public class AdminUserService {
         String username = stringValue(payload.get("username"));
         String auditAction = "USER_SET_PERSON_LEVEL_EXECUTE";
         String level = stringValue(payload.get("personSecurityLevel"));
+        String normalizedLevel = normalizeSecurityLevel(level);
         List<String> requestedDataLevels = stringList(payload.get("dataLevels"));
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("payload", payload);
-        detail.put("personLevel", level);
+        detail.put("personLevel", normalizedLevel == null ? level : normalizedLevel);
         detail.put("dataLevels", requestedDataLevels);
         try {
             String keycloakId = stringValue(payload.get("keycloakId"));
@@ -1555,8 +1703,9 @@ public class AdminUserService {
             Map<String, List<String>> attributes = existing.getAttributes() == null
                 ? new LinkedHashMap<>()
                 : new LinkedHashMap<>(existing.getAttributes());
-            if (level != null) {
-                attributes.put("person_level", List.of(level));
+            if (normalizedLevel != null) {
+                attributes.put("person_level", List.of(normalizedLevel));
+                attributes.put("person_security_level", List.of(normalizedLevel));
             }
             List<String> dataLevels = toKeycloakDataLevels(requestedDataLevels);
             if (!dataLevels.isEmpty()) {
@@ -1639,10 +1788,11 @@ public class AdminUserService {
             attributes.put("phone", List.of(phone));
         }
         String personLevel = stringValue(payload.get("personSecurityLevel"));
-        if (personLevel != null && !personLevel.isBlank()) {
+        String normalizedPersonLevel = normalizeSecurityLevel(personLevel);
+        if (normalizedPersonLevel != null && !normalizedPersonLevel.isBlank()) {
             // Keep both keys for compatibility with realm mappers and local extraction logic
-            attributes.put("person_level", List.of(personLevel));
-            attributes.put("person_security_level", List.of(personLevel));
+            attributes.put("person_level", List.of(normalizedPersonLevel));
+            attributes.put("person_security_level", List.of(normalizedPersonLevel));
         }
         // Ensure dept_code present when department is selected; prefer explicit value.
         // Do NOT derive from group path leaf (legacy behavior) to avoid persisting names.
@@ -1671,8 +1821,31 @@ public class AdminUserService {
             if (levels != null && !levels.isEmpty()) {
                 return normalizeSecurityLevel(levels.get(0));
             }
+            List<String> levels2 = dto.getAttributes().get("personnel_security_level");
+            if (levels2 != null && !levels2.isEmpty()) {
+                return normalizeSecurityLevel(levels2.get(0));
+            }
+            List<String> levels3 = dto.getAttributes().get("person_security_level");
+            if (levels3 != null && !levels3.isEmpty()) {
+                return normalizeSecurityLevel(levels3.get(0));
+            }
         }
         return null;
+    }
+
+    private boolean isDataRole(String role) {
+        if (role == null || role.isBlank()) return false;
+        String r = role.trim().toUpperCase(java.util.Locale.ROOT);
+        if (r.startsWith("ROLE_")) r = r.substring(5);
+        return r.startsWith("DEPT_DATA_") || r.startsWith("INST_DATA_");
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null) return "";
+        String r = role.trim().toUpperCase(java.util.Locale.ROOT);
+        if (r.startsWith("ROLE_")) r = r.substring(5);
+        r = r.replaceAll("[^A-Z0-9_]", "_").replaceAll("_+", "_");
+        return r;
     }
 
     private List<String> stringList(Object value) {
@@ -1723,5 +1896,37 @@ public class AdminUserService {
         if (value instanceof Boolean b) return b;
         if (value instanceof String s) return Boolean.parseBoolean(s);
         return null;
+    }
+
+    private void ensureDbAssignments(String username, List<String> dataRoles, KeycloakUserDTO user) {
+        if (username == null || dataRoles == null || dataRoles.isEmpty()) return;
+        String display = user.getFullName() != null && !user.getFullName().isBlank() ? user.getFullName() : username;
+        String sec = extractPersonLevel(user);
+        if (sec == null || sec.isBlank()) sec = DEFAULT_PERSON_LEVEL;
+        for (String role : new java.util.LinkedHashSet<>(dataRoles)) {
+            if (role == null || role.isBlank()) continue;
+            String norm = normalizeRole(role);
+            if (!isDataRole(norm)) continue;
+            // If exists, skip
+            java.util.List<AdminRoleAssignment> exists = roleAssignRepo.findByUsernameIgnoreCaseAndRoleIgnoreCase(username, norm);
+            if (exists != null && !exists.isEmpty()) continue;
+            AdminRoleAssignment a = new AdminRoleAssignment();
+            a.setUsername(username);
+            a.setRole(norm);
+            a.setDisplayName(display);
+            a.setUserSecurityLevel(sec);
+            a.setScopeOrgId(null);
+            a.setDatasetIdsCsv(null);
+            a.setOperationsCsv(defaultOpsForRole(norm));
+            try { roleAssignRepo.save(a); } catch (Exception ignored) {}
+        }
+    }
+
+    private String defaultOpsForRole(String roleCode) {
+        if (roleCode == null) return "read";
+        String r = roleCode.toUpperCase(java.util.Locale.ROOT);
+        if (r.endsWith("_OWNER")) return "read,write,export";
+        if (r.endsWith("_DEV") || r.endsWith("_DATA_DEV")) return "read,write";
+        return "read"; // VIEWER and others default to read
     }
 }

@@ -266,6 +266,62 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
         stores.roles.remove(roleName);
     }
 
+    // ---- Client roles (in-memory minimal simulation) ----
+
+    @Override
+    public java.util.Optional<String> resolveClientUuid(String clientId, String accessToken) {
+        return java.util.Optional.ofNullable(clientId);
+    }
+
+    @Override
+    public java.util.Optional<KeycloakRoleDTO> findClientRole(String clientId, String roleName, String accessToken) {
+        if (clientId == null || roleName == null) return java.util.Optional.empty();
+        String key = clientId + ":" + roleName;
+        KeycloakRoleDTO dto = stores.roles.get(key);
+        return java.util.Optional.ofNullable(dto);
+    }
+
+    @Override
+    public KeycloakRoleDTO upsertClientRole(String clientId, KeycloakRoleDTO role, String accessToken) {
+        String name = role.getName();
+        if (clientId == null || name == null || name.isBlank()) {
+            throw new IllegalArgumentException("clientId/roleName 不能为空");
+        }
+        KeycloakRoleDTO dto = new KeycloakRoleDTO();
+        dto.setId(java.util.UUID.randomUUID().toString());
+        dto.setName(name);
+        stores.roles.put(clientId + ":" + name, dto);
+        return dto;
+    }
+
+    @Override
+    public void addClientRolesToUser(String userId, String clientId, java.util.List<String> roleNames, String accessToken) {
+        KeycloakUserDTO user = stores.findUserById(userId);
+        if (user == null) throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        Map<String, java.util.List<String>> clientRoles = user.getClientRoles();
+        if (clientRoles == null) clientRoles = new java.util.LinkedHashMap<>();
+        java.util.List<String> list = clientRoles.getOrDefault(clientId, new java.util.ArrayList<>());
+        for (String r : roleNames) {
+            if (r != null && !list.contains(r)) list.add(r);
+        }
+        clientRoles.put(clientId, list);
+        user.setClientRoles(clientRoles);
+        stores.users.put(user.getId(), user);
+    }
+
+    @Override
+    public void removeClientRolesFromUser(String userId, String clientId, java.util.List<String> roleNames, String accessToken) {
+        KeycloakUserDTO user = stores.findUserById(userId);
+        if (user == null) throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        Map<String, java.util.List<String>> clientRoles = user.getClientRoles();
+        if (clientRoles == null) return;
+        java.util.List<String> list = clientRoles.getOrDefault(clientId, new java.util.ArrayList<>());
+        list.removeIf(r -> roleNames.stream().anyMatch(x -> x != null && x.equalsIgnoreCase(r)));
+        clientRoles.put(clientId, list);
+        user.setClientRoles(clientRoles);
+        stores.users.put(user.getId(), user);
+    }
+
     private void ensureUniqueUsername(String username) {
         if (username == null) {
             return;

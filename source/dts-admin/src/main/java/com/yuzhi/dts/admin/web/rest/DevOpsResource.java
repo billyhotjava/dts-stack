@@ -3,6 +3,7 @@ package com.yuzhi.dts.admin.web.rest;
 import com.yuzhi.dts.admin.config.DevDataSeeder;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
+import java.util.Optional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,15 +18,19 @@ public class DevOpsResource {
 
     private final DevDataSeeder seeder;
 
-    public DevOpsResource(DevDataSeeder seeder) {
-        this.seeder = seeder;
+    public DevOpsResource(Optional<DevDataSeeder> seeder) {
+        this.seeder = seeder.orElse(null);
     }
 
     @PostMapping("/seed")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.AUTH_ADMIN + "','" + AuthoritiesConstants.AUDITOR_ADMIN + "')")
     public ResponseEntity<ApiResponse<String>> triggerSeed() {
+        if (seeder == null) {
+            return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.error("Dev data seeding is disabled (dts.admin.seed.demo-data!=true)"));
+        }
         seeder.seedAll();
         return ResponseEntity.ok(ApiResponse.ok("seeded"));
     }
 }
-
