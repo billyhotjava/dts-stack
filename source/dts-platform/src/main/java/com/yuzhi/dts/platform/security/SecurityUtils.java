@@ -48,6 +48,14 @@ public final class SecurityUtils {
             if (attributes.containsKey("preferred_username")) {
                 return (String) attributes.get("preferred_username");
             }
+        } else if (authentication.getPrincipal() instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal principal) {
+            // Opaque token (portal session) path: attributes carry username/sub
+            String preferred = principal.getAttribute("preferred_username");
+            if (preferred != null && !preferred.isBlank()) return preferred;
+            String username = principal.getAttribute(org.springframework.security.oauth2.core.OAuth2TokenIntrospectionClaimNames.USERNAME);
+            if (username != null && !username.isBlank()) return username;
+            String sub = principal.getAttribute("sub");
+            if (sub != null && !sub.isBlank()) return sub;
         } else if (authentication.getPrincipal() instanceof String s) {
             return s;
         }

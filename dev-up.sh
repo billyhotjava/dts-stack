@@ -13,6 +13,38 @@ usage(){
   echo "Usage: $0 [--mode images|local] [--no-webapp]"
 }
 
+# Load image versions from imgversion.conf into env (non-destructive)
+load_img_versions_dev(){
+  local conf="imgversion.conf"
+  [[ -f "$conf" ]] || return 0
+  while IFS='=' read -r k v; do
+    # Skip blanks/comments
+    [[ -z "${k// }" || "${k#\#}" != "$k" ]] && continue
+    v="$(echo "$v" | sed -E 's/^\s+|\s+$//g')"
+    # Only export if not already set in environment
+    eval "__cur=\${$k-}"
+    if [[ -z "${__cur}" ]]; then
+      export "$k=$v"
+    fi
+  done < <(grep -E '^[[:space:]]*([A-Z0-9_]+)[[:space:]]*=' "$conf" || true)
+}
+
+# Detect optional services via imgversion.conf toggles
+determine_enabled_services(){
+  local conf="imgversion.conf"
+  ENABLE_MINIO="false"
+  ENABLE_NESSIE="false"
+  if [[ -f "$conf" ]]; then
+    if rg -n "^[[:space:]]*IMAGE_MINIO[[:space:]]*=" "$conf" >/dev/null 2>&1 || grep -Eq '^[[:space:]]*IMAGE_MINIO[[:space:]]*=' "$conf"; then
+      ENABLE_MINIO="true"
+    fi
+    if rg -n "^[[:space:]]*IMAGE_NESSIE[[:space:]]*=" "$conf" >/dev/null 2>&1 || grep -Eq '^[[:space:]]*IMAGE_NESSIE[[:space:]]*=' "$conf"; then
+      ENABLE_NESSIE="true"
+    fi
+  fi
+  export ENABLE_MINIO ENABLE_NESSIE
+}
+
 clean_maven_targets(){
   for module in dts-admin dts-platform dts-common; do
     local module_target="source/${module}/target"
@@ -99,6 +131,12 @@ source "$ENV_BASE"
 source "$ENV_DEV"
 set +a
 
+# Load optional image versions into current env (does not modify files)
+load_img_versions_dev
+
+# Decide optional services
+determine_enabled_services
+
 # Fill missing optional PG triplets to avoid compose interpolation warnings
 set -a
 : "${PG_DB_DTADMIN:=dts_admin}"
@@ -112,14 +150,22 @@ else
   compose_files=(-f docker-compose.yml -f docker-compose-app.yml)
 fi
 
-# Fill missing MINIO-derived vars for compose interpolation (avoid warnings)
-: "${S3_REGION:=cn-local-1}"
-: "${BASE_DOMAIN:=dts.local}"
-if [[ -z "${HOST_MINIO:-}" ]]; then HOST_MINIO="minio.${BASE_DOMAIN}"; fi
-if [[ -z "${MINIO_REGION_NAME:-}" ]]; then MINIO_REGION_NAME="${S3_REGION}"; fi
-if [[ -z "${MINIO_SERVER_URL:-}" ]]; then MINIO_SERVER_URL="https://${HOST_MINIO}"; fi
-if [[ -z "${MINIO_BROWSER_REDIRECT_URL:-}" ]]; then MINIO_BROWSER_REDIRECT_URL="https://${HOST_MINIO}"; fi
-export MINIO_REGION_NAME MINIO_SERVER_URL MINIO_BROWSER_REDIRECT_URL
+# Ensure required builder image defaults for local dev
+if [[ -z "${IMAGE_MAVEN:-}" ]]; then
+  IMAGE_MAVEN="maven:3.9.9-eclipse-temurin-21"
+fi
+export IMAGE_MAVEN
+
+# Fill MINIO-derived vars only when MinIO is enabled
+if [[ "${ENABLE_MINIO}" == "true" ]]; then
+  : "${S3_REGION:=cn-local-1}"
+  : "${BASE_DOMAIN:=dts.local}"
+  if [[ -z "${HOST_MINIO:-}" ]]; then HOST_MINIO="minio.${BASE_DOMAIN}"; fi
+  if [[ -z "${MINIO_REGION_NAME:-}" ]]; then MINIO_REGION_NAME="${S3_REGION}"; fi
+  if [[ -z "${MINIO_SERVER_URL:-}" ]]; then MINIO_SERVER_URL="https://${HOST_MINIO}"; fi
+  if [[ -z "${MINIO_BROWSER_REDIRECT_URL:-}" ]]; then MINIO_BROWSER_REDIRECT_URL="https://${HOST_MINIO}"; fi
+  export MINIO_REGION_NAME MINIO_SERVER_URL MINIO_BROWSER_REDIRECT_URL
+fi
 
 # Ensure Postgres from core stack is running and healthy
 echo "[dev-up] Ensuring Postgres (dts-pg) is running ..."

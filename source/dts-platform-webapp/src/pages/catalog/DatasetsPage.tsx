@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { createDataset, deleteDataset, getCatalogConfig, listDatasets } from "@/api/platformApi";
 import { listInfraDataSources } from "@/api/services/infraService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
+import { renderDataLevelLabel } from "@/constants/governance";
 import { useActiveDept, useActiveScope } from "@/store/contextStore";
 
 // Legacy display classification removed in favor of DATA_* levels
@@ -68,6 +69,7 @@ export default function DatasetsPage() {
 		hiveTable: "",
 	});
 	const [deptOptions, setDeptOptions] = useState<DeptDto[]>([]);
+	const nonRootDeptOptions = useMemo(() => deptOptions.filter((d) => d.parentId != null && d.parentId !== 0), [deptOptions]);
 	const [deptLoading, setDeptLoading] = useState(false);
 	const [catalogConfig, setCatalogConfig] = useState({
 		multiSourceEnabled: false,
@@ -138,7 +140,17 @@ const renderSourceLabel = (value: string) => {
 			default:
 				return upper || "-";
 		}
-	};
+};
+
+// Chinese labels for scope/share-scope
+const SCOPE_LABELS: Record<string, string> = { DEPT: "部门", INST: "研究所" };
+const SHARE_SCOPE_LABELS: Record<string, string> = {
+  PRIVATE_DEPT: "部门私有",
+  SHARE_INST: "所内共享",
+  PUBLIC_INST: "所内公开",
+};
+const renderScopeLabel = (v?: string) => (v ? SCOPE_LABELS[String(v).toUpperCase()] || v : "-");
+const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).toUpperCase()] || v : "-");
 
 	const toggleSecretMultiSource = useCallback(() => {
 		setMultiSourceUnlocked((prev) => {
@@ -245,6 +257,23 @@ const renderSourceLabel = (value: string) => {
 	useEffect(() => {
 		void fetchList();
 	}, [page, size, resolvedDefaultSource, dataLevelFilter, scopeFilter, deptFilter, keyword, activeScope, activeDept]);
+
+	// In keep-alive/multi-tab layouts, the list view may not unmount when navigating
+	// to the detail page. Refresh the list on window focus/history navigation.
+	useEffect(() => {
+		const onFocus = () => void fetchList();
+		const onPageShow = () => void fetchList();
+		const onVisibility = () => { if (!document.hidden) void fetchList(); };
+		window.addEventListener("focus", onFocus);
+		window.addEventListener("pageshow", onPageShow);
+		document.addEventListener("visibilitychange", onVisibility);
+		return () => {
+			window.removeEventListener("focus", onFocus);
+			window.removeEventListener("pageshow", onPageShow);
+			document.removeEventListener("visibilitychange", onVisibility);
+		};
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	useEffect(() => {
 		const handler = (event: KeyboardEvent) => {
@@ -485,12 +514,12 @@ const renderSourceLabel = (value: string) => {
 									</SelectContent>
 								</Select>
 							</div>
-							<div>
-								<Label>部门（owner_dept）</Label>
-								<Select
-									value={deptFilter || "all"}
-									onValueChange={(v) => setDeptFilter(v === "all" ? "" : v)}
-								>
+                        <div>
+                            <Label>所属部门</Label>
+                            <Select
+                                value={deptFilter || "all"}
+                                onValueChange={(v) => setDeptFilter(v === "all" ? "" : v)}
+                            >
 									<SelectTrigger>
 										<SelectValue placeholder={deptLoading ? "加载中…" : "全部"} />
 									</SelectTrigger>
@@ -521,9 +550,9 @@ const renderSourceLabel = (value: string) => {
 									<th className="px-3 py-2">名称</th>
 									<th className="px-3 py-2">负责人</th>
 									<th className="px-3 py-2">来源</th>
-									<th className="px-3 py-2">数据密级</th>
-										<th className="px-3 py-2">Scope</th>
-										<th className="px-3 py-2">Dept/Share</th>
+                        <th className="px-3 py-2">数据密级</th>
+									<th className="px-3 py-2">作用域</th>
+									<th className="px-3 py-2">所属部门</th>
 									<th className="px-3 py-2">操作</th>
 								</tr>
 							</thead>
@@ -534,9 +563,9 @@ const renderSourceLabel = (value: string) => {
 										<td className="px-3 py-2 font-medium">{d.name}</td>
 										<td className="px-3 py-2">{d.owner || "-"}</td>
 										<td className="px-3 py-2 text-xs">{renderSourceLabel(d.type)}</td>
-										<td className="px-3 py-2 text-xs">{d.dataLevel || "-"}</td>
-										<td className="px-3 py-2 text-xs">{d.scope || "-"}</td>
-									<td className="px-3 py-2 text-xs">{d.scope === "DEPT" ? renderDept(d.ownerDept) : (d.shareScope || "-")}</td>
+                            <td className="px-3 py-2 text-xs">{renderDataLevelLabel(d.dataLevel)}</td>
+                            <td className="px-3 py-2 text-xs">{renderScopeLabel(d.scope)}</td>
+                            <td className="px-3 py-2 text-xs">{d.scope === "DEPT" ? renderDept(d.ownerDept) : renderShareScopeLabel(d.shareScope)}</td>
 										<td className="px-3 py-2 space-x-1">
 											<Button variant="ghost" size="sm" onClick={() => router.push(`/catalog/datasets/${d.id}`)}>
 												编辑
@@ -548,11 +577,11 @@ const renderSourceLabel = (value: string) => {
 									</tr>
 								))}
 								{!filtered.length && (
-									<tr>
-										<td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">
-											{loading ? "加载中…" : "暂无数据"}
-										</td>
-									</tr>
+                                <tr>
+                                    <td colSpan={8} className="px-3 py-6 text-center text-xs text-muted-foreground">
+                                        {loading ? "加载中…" : "暂无数据"}
+                                    </td>
+                                </tr>
 								)}
 							</tbody>
 						</table>
@@ -639,7 +668,7 @@ const renderSourceLabel = (value: string) => {
 											<SelectValue placeholder={deptLoading ? "加载中…" : "选择部门…"} />
 										</SelectTrigger>
 										<SelectContent>
-											{deptOptions.map((d) => (
+											{nonRootDeptOptions.map((d) => (
 												<SelectItem key={d.code} value={d.code}>
 													{d.nameZh || d.nameEn || d.code}
 												</SelectItem>

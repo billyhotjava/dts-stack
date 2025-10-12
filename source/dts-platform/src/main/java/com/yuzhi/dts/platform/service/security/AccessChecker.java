@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAccessPolicyRepository;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
@@ -30,6 +31,8 @@ public class AccessChecker {
 
     public boolean canRead(CatalogDataset dataset) {
         if (dataset == null) return false;
+        // Special handling: OP_ADMIN (and ADMIN) can access all datasets without restriction
+        if (isSuperAdmin()) return true;
         // Level check (new ABAC: personnel_level vs data_level), fallback to legacy when claims absent
         if (!levelAllowed(dataset)) return false;
         // AccessPolicy check (if exists)
@@ -65,6 +68,8 @@ public class AccessChecker {
      */
     public boolean scopeAllowed(CatalogDataset dataset, String activeScope, String activeDept) {
         if (dataset == null) return false;
+        // Special handling for super admins
+        if (isSuperAdmin()) return true;
         String dsScope = Optional.ofNullable(dataset.getScope()).orElse("").trim().toUpperCase();
         String dsOwnerDept = Optional.ofNullable(dataset.getOwnerDept()).orElse("").trim();
         String dsShare = Optional.ofNullable(dataset.getShareScope()).orElse("").trim().toUpperCase();
@@ -83,6 +88,13 @@ public class AccessChecker {
         }
         // Unknown scope defaults to deny
         return false;
+    }
+
+    private boolean isSuperAdmin() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.OP_ADMIN,
+            AuthoritiesConstants.ADMIN
+        );
     }
 
     private PersonnelLevel extractPersonnelLevelFromJwt() {

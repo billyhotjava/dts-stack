@@ -60,10 +60,12 @@ public class AdminAuditService {
         public String clientAgent;
         public String httpMethod;
         public String result;
+        public String resultText; // SUCCESS/FAILED -> 成功/失败（只读显示）
         public String extraTags;
         public String payloadPreview;
         // extended view fields
         public String sourceSystem;
+        public String sourceSystemText; // admin/platform -> 管理端/业务端（只读显示）
         public String eventClass;
         public String eventType;
         public String summary;
@@ -72,9 +74,11 @@ public class AdminAuditService {
         public String operatorRoles; // JSON array string
         public String orgCode;
         public String orgName;
+        public String departmentName; // 别名（用于前端显示“部门”）
         // extracted from details for convenience
         public String requestId;
         public String targetTable;
+        public String targetTableLabel; // 表中文名（只读显示）
         public String targetId;
         public String targetRef;
     }
@@ -227,7 +231,7 @@ public class AdminAuditService {
         return switch (effective) {
             case BEGIN -> "PENDING";
             case SUCCESS -> "SUCCESS";
-            case FAIL -> "FAILURE";
+            case FAIL -> "FAILED";
         };
     }
 
@@ -369,7 +373,7 @@ public class AdminAuditService {
         String normalizedAction = entity.getAction() == null ? "" : entity.getAction().toUpperCase(java.util.Locale.ROOT);
         boolean security = normalizedAction.contains("AUTH_") || normalizedAction.contains("LOGIN") || normalizedAction.contains("LOGOUT") || normalizedAction.contains("ACCESS_DENIED");
         entity.setEventClass(security ? "SecurityEvent" : "AuditEvent");
-        entity.setEventType(mapEventType(normalizedAction, entity.getResult()));
+        entity.setEventType(mapEventCategory(pending.resourceType, pending.module, normalizedAction));
         entity.setResourceType(pending.resourceType);
         entity.setResourceId(pending.resourceId);
         entity.setClientIp(parseClientIp(pending.clientIp));
@@ -429,25 +433,39 @@ public class AdminAuditService {
         // details: 至少包含 target_table/target_id/action_result/request_id/param_digest
         java.util.Map<String, Object> det = new java.util.LinkedHashMap<>();
         det.put("target_table", tableFromResource(entity.getResourceType(), entity.getModule()));
-        // Only record numeric/UUID target_id (set below). Do not include target_ref.
-        // 仅在 resourceId 看起来是主键（数字或UUID）时记录 target_id；
-        // 否则若为用户相关(admin.auth/user)，尝试通过 username 解析本地用户PK
+        // Only record PK target_id. For admin_keycloak_user:
+        // - numeric -> local PK
+        // - UUID -> treat as KeycloakId and map to local PK via repository
+        // Else: numeric -> PK, UUID/string -> keep as-is only if nothing better is known
         String rid = entity.getResourceId();
         if (rid != null) {
             String s = rid.trim();
             boolean isNumeric = s.matches("\\d+");
             boolean isUuid = s.matches("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
-            if (isNumeric || isUuid) {
-                det.put("target_id", s);
-            } else {
-                String tbl = (String) det.get("target_table");
-                if ("admin_keycloak_user".equals(tbl) || "user".equalsIgnoreCase(entity.getResourceType()) || "admin.auth".equalsIgnoreCase(entity.getResourceType())) {
+            String tbl = (String) det.get("target_table");
+            if ("admin_keycloak_user".equals(tbl) || "user".equalsIgnoreCase(entity.getResourceType()) || "admin.auth".equalsIgnoreCase(entity.getResourceType())) {
+                if (isNumeric) {
+                    det.put("target_id", s);
+                } else if (isUuid) {
+                    try {
+                        var byKc = userRepo.findByKeycloakId(s);
+                        byKc.ifPresent(u -> det.put("target_id", String.valueOf(u.getId())));
+                    } catch (Exception ex) {
+                        if (log.isDebugEnabled()) log.debug("Failed to map keycloakId to local id {}: {}", s, ex.toString());
+                    }
+                } else {
                     try {
                         var userOpt = userRepo.findByUsernameIgnoreCase(s);
                         userOpt.ifPresent(u -> det.put("target_id", String.valueOf(u.getId())));
                     } catch (Exception ex) {
                         if (log.isDebugEnabled()) log.debug("Failed to resolve user id for username {}: {}", s, ex.toString());
                     }
+                }
+            } else {
+                if (isNumeric) {
+                    det.put("target_id", s);
+                } else if (isUuid) {
+                    det.put("target_id", s);
                 }
             }
         }
@@ -489,6 +507,14 @@ public class AdminAuditService {
             java.util.UUID uuid = entity.getEventUuid();
             det.put("target_id", uuid != null ? uuid.toString() : java.util.UUID.randomUUID().toString());
         }
+        // Compose a unified target reference: "<table>+<id>" for easy display/search
+        try {
+            String tbl = Objects.toString(det.get("target_table"), "").trim();
+            String tid = Objects.toString(det.get("target_id"), "").trim();
+            if (!tbl.isEmpty() && !tid.isEmpty()) {
+                det.put("target_ref", tbl + "+" + tid);
+            }
+        } catch (Exception ignore) {}
         det.put("request_id", extractRequestId());
 
         byte[] payloadBytes = pending.payload == null ? new byte[0] : objectMapper.writeValueAsBytes(pending.payload);
@@ -503,23 +529,46 @@ public class AdminAuditService {
         entity.setChainSignature(chainSignature);
         entity.setRecordSignature(simpleRecordSignature(entity, payloadDigest));
         entity.setSignatureKeyVer(null);
+        // Localize operatorName for built-in admins to improve readability
+        if (entity.getActor() != null) {
+            String a = entity.getActor().trim().toLowerCase(java.util.Locale.ROOT);
+            if (a.equals("sysadmin")) entity.setOperatorName("系统管理员");
+            else if (a.equals("authadmin")) entity.setOperatorName("授权管理员");
+            else if (a.equals("auditadmin")) entity.setOperatorName("安全审计员");
+        }
         entity.setSummary(buildSummary(entity));
         entity.setCreatedBy(entity.getActor());
         entity.setCreatedDate(Instant.now());
         return entity;
     }
 
-    private String mapEventType(String actionDisplay, String result) {
-        if (actionDisplay == null) return "UNKNOWN";
-        String a = actionDisplay.toUpperCase(java.util.Locale.ROOT);
-        if (a.contains("LOGIN")) return ("SUCCESS".equalsIgnoreCase(result) ? "AUTH_LOGIN_SUCCESS" : "AUTH_LOGIN_FAILURE");
-        if (a.contains("LOGOUT")) return "AUTH_LOGOUT";
-        if (a.contains("ROLE") && a.contains("GRANT")) return "ROLE_GRANTED";
-        if (a.contains("ROLE") && a.contains("REVOKE")) return "ROLE_REVOKED";
-        if (a.contains("PASSWORD") && a.contains("RESET")) return "PASSWORD_RESET";
-        if (a.contains("USER") && a.contains("CREATE")) return "ACCOUNT_CREATED";
-        if (a.contains("USER") && (a.contains("DISABLE") || a.contains("DISABLED"))) return "ACCOUNT_DISABLED";
-        return a.replace(' ', '_');
+    private String mapEventCategory(String resourceType, String module, String actionUpper) {
+        String a = actionUpper == null ? "" : actionUpper;
+        // 登录事件优先归类
+        if (a.contains("LOGIN") || a.contains("LOGOUT") || (a.contains("ACCESS") && a.contains("DENIED"))) {
+            return "登录管理";
+        }
+        String r = resourceType == null ? null : resourceType.trim().toLowerCase(java.util.Locale.ROOT);
+        String m = module == null ? null : module.trim().toLowerCase(java.util.Locale.ROOT);
+        String key = r != null && !r.isBlank() ? r : (m == null ? "" : m);
+        if (key.isBlank()) return "数据资产";
+        // 管理端 IAM/权限类并入 角色管理
+        if (key.startsWith("iam") || key.equals("iam_permission") || key.equals("iam_dataset_policy") || key.equals("iam_user_classification")) {
+            return "角色管理";
+        }
+        if (key.equals("admin.auth") || key.equals("auth")) return "登录管理";
+        if (key.equals("admin_keycloak_user") || key.equals("user") || key.equals("admin") || key.startsWith("admin.user") || key.startsWith("admin.users")) return "用户管理";
+        if (key.startsWith("role") || key.startsWith("admin.role") || key.equals("admin_role_assignment")) return "角色管理";
+        if (key.equals("portal_menu") || key.equals("menu") || key.startsWith("portal.menus") || key.startsWith("portal-menus") || key.equals("portal.navigation")) return "菜单管理";
+        if (key.startsWith("org") || key.startsWith("organization") || key.equals("organization_node") || key.startsWith("admin.org")) return "部门管理";
+        if (key.startsWith("modeling.standard") || key.startsWith("data_standard")) return "数据标准";
+        if (key.startsWith("governance") || key.startsWith("gov_")) return "数据质量";
+        if (key.startsWith("explore")) return "数据开发";
+        if (key.startsWith("visualization")) return "数据可视化";
+        if (key.equals("catalog_dataset_job") || key.contains("schedule")) return "数据开发";
+        if (key.startsWith("catalog") || key.equals("catalog_table_schema") || key.equals("catalog_secure_view") || key.equals("catalog_row_filter_rule") || key.equals("catalog_access_policy")) return "数据资产";
+        if (key.startsWith("svc") || key.startsWith("api")) return "数据资产";
+        return "数据资产";
     }
 
     private String tableFromResource(String resourceType, String module) {
@@ -602,8 +651,28 @@ public class AdminAuditService {
     private String buildSummary(AuditEvent e) {
         String name = e.getOperatorName() != null && !e.getOperatorName().isBlank() ? e.getOperatorName() : e.getActor();
         String actionDesc = e.getEventType() != null ? e.getEventType() : e.getAction();
-        String target = (e.getResourceType() == null ? "" : e.getResourceType()) + (e.getResourceId() == null ? "" : (":" + e.getResourceId()));
-        return String.format("用户【%s】执行【%s】 %s", nullToEmpty(name), nullToEmpty(actionDesc), target);
+        String resultText = (e.getResult() != null && e.getResult().equalsIgnoreCase("SUCCESS")) ? "成功" : (e.getResult() == null ? "" : "失败");
+        // Prefer details.target_table/target_id
+        String targetTable = null;
+        String targetId = null;
+        try {
+            if (e.getDetails() != null && !e.getDetails().isBlank()) {
+                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(e.getDetails());
+                if (node.hasNonNull("target_table")) targetTable = node.get("target_table").asText();
+                if (node.hasNonNull("target_id")) targetId = node.get("target_id").asText();
+            }
+        } catch (Exception ignore) {}
+        String tableLabel = mapTableLabel(targetTable != null ? targetTable : e.getResourceType());
+        String target = (tableLabel == null ? "" : tableLabel) + (targetId == null || targetId.isBlank() ? "" : "(ID=" + targetId + ")");
+        return String.format("用户【%s】%s【%s】 %s", nullToEmpty(name), nullToEmpty(resultText), nullToEmpty(actionDesc), target);
+    }
+
+    private String mapTableLabel(String key) {
+        if (key == null) return null;
+        String k = key.trim().toLowerCase(java.util.Locale.ROOT);
+        if (k.equals("admin_keycloak_user") || k.equals("admin") || k.equals("admin.auth") || k.equals("user")) return "用户";
+        if (k.equals("portal_menu") || k.equals("menu") || k.equals("portal.menus") || k.equals("portal-menus")) return "门户菜单";
+        return key;
     }
 
     public Page<AuditEvent> search(

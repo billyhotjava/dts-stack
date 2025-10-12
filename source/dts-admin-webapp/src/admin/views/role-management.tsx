@@ -1311,6 +1311,18 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
         childrenMap.set(parentId, list);
     };
 
+    const isFoundation = (item: PortalMenuItem): boolean => {
+        try {
+            if (!item) return false;
+            if (item.id === 2670) return true;
+            const p = (item.path || "").toLowerCase();
+            if (p === "/foundation" || p.startsWith("/foundation/")) return true;
+            const m = (item.metadata || "").toLowerCase();
+            if (m.includes('"sectionkey":"foundation"')) return true;
+        } catch {}
+        return false;
+    };
+
     const visit = (items: PortalMenuItem[] | undefined, depth: number, ancestors: string[], parentId: number | null) => {
         if (!items) {
             return;
@@ -1330,7 +1342,7 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
                     depth,
                     rawRoles: normalizedRoles,
                     canonicalRoles,
-                    deleted: Boolean(item.deleted),
+                    deleted: Boolean(item.deleted) || isFoundation(item),
                 };
                 options.push(option);
                 menuRoleMap.set(option.id, option);

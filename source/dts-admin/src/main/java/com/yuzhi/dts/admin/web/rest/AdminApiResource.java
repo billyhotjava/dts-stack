@@ -1973,14 +1973,28 @@ public class AdminApiResource {
     }
 
     private boolean isFoundationMenu(PortalMenu menu) {
-        if (menu == null || menu.getMetadata() == null) return false;
+        if (menu == null) return false;
         try {
+            // Prefer metadata sectionKey
             String meta = menu.getMetadata();
-            String lc = meta.toLowerCase(java.util.Locale.ROOT);
-            return lc.contains("\"sectionkey\":\"foundation\"");
-        } catch (Exception e) {
-            return false;
-        }
+            if (meta != null) {
+                String lc = meta.toLowerCase(java.util.Locale.ROOT);
+                if (lc.contains("\"sectionkey\":\"foundation\"")) return true;
+            }
+        } catch (Exception ignored) {}
+        try {
+            // Fallback by path heuristic
+            String p = menu.getPath();
+            if (p != null) {
+                String lp = p.trim().toLowerCase(java.util.Locale.ROOT);
+                if ("/foundation".equals(lp) || lp.startsWith("/foundation/")) return true;
+            }
+        } catch (Exception ignored) {}
+        try {
+            // Specific deployment might use fixed id 2670 for foundation
+            if (menu.getId() != null && menu.getId() == 2670L) return true;
+        } catch (Exception ignored) {}
+        return false;
     }
 
     private PortalMenuVisibility newVisibility(PortalMenu menu, String role, String permission, String dataLevel) {

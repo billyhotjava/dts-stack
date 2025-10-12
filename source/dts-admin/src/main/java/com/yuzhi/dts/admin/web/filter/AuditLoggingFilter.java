@@ -22,7 +22,19 @@ import org.springframework.web.util.ContentCachingRequestWrapper;
 public class AuditLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLoggingFilter.class);
-    private static final String[] EXCLUDED_PATH_PREFIXES = new String[] { "/management", "/actuator", "/v3/api-docs", "/swagger", "/webjars" };
+    private static final String[] EXCLUDED_PATH_PREFIXES = new String[] {
+        "/management",
+        "/actuator",
+        "/v3/api-docs",
+        "/swagger",
+        "/webjars",
+        // Avoid noisy anonymous entries around auth handshakes; dedicated listeners emit login/logout events
+        "/oauth2",
+        "/login",
+        "/logout",
+        "/sso",
+        "/auth"
+    };
 
     private final AdminAuditService auditService;
 
@@ -78,15 +90,16 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         String module = resolveModuleFromSegments(seg);
         String resourceType = resolveResourceTypeFromSegments(seg);
         event.module = module;
-        event.action = request.getMethod() + " " + uri;
         event.resourceType = resourceType;
+        // Normalize action to a semantic code, not raw "METHOD URI"
+        event.action = deriveActionCode(resourceType, request.getMethod());
         event.resourceId = uri;
         String forwarded = request.getHeader("X-Forwarded-For");
         event.clientIp = (forwarded != null && !forwarded.isBlank()) ? forwarded.split(",")[0].trim() : request.getRemoteAddr();
         event.clientAgent = request.getHeader("User-Agent");
         event.requestUri = request.getRequestURI();
         event.httpMethod = request.getMethod();
-        event.result = response.getStatus() >= HttpStatus.BAD_REQUEST.value() ? "FAILURE" : "SUCCESS";
+        event.result = response.getStatus() >= HttpStatus.BAD_REQUEST.value() ? "FAILED" : "SUCCESS";
         event.latencyMs = (int) (elapsedNanos / 1_000_000);
 
         Map<String, Object> payload = new HashMap<>();
@@ -96,6 +109,29 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         payload.put("requestSize", request.getContentLengthLong());
         event.payload = payload;
         return event;
+    }
+
+    private String deriveActionCode(String resourceType, String httpMethod) {
+        String entity = mapEntityKey(resourceType);
+        String op = switch (httpMethod == null ? "" : httpMethod.toUpperCase()) {
+            case "POST" -> "CREATE";
+            case "PUT", "PATCH" -> "UPDATE";
+            case "DELETE" -> "DELETE";
+            case "GET" -> "VIEW";
+            default -> "CALL";
+        };
+        return entity + "_" + op;
+    }
+
+    private String mapEntityKey(String resourceType) {
+        if (resourceType == null || resourceType.isBlank()) return "GENERAL";
+        String r = resourceType.trim().toLowerCase();
+        if (r.equals("admin.auth") || r.equals("auth")) return "AUTH";
+        if (r.equals("admin") || r.equals("user") || r.equals("admin_keycloak_user")) return "USER";
+        if (r.equals("role") || r.contains("role_assignment")) return "ROLE";
+        if (r.equals("portal_menu") || r.equals("menu") || r.contains("portal-menus")) return "MENU";
+        if (r.equals("org") || r.contains("organization")) return "ORG";
+        return r.replaceAll("[^a-z0-9]+", "_").toUpperCase();
     }
 
     private String[] splitSegments(String uri) {

@@ -334,10 +334,22 @@ public class PortalMenuService {
 
     public void resetMenusToSeed() {
         MenuSeed seed = menuSeed();
+        // Phase 1: purge and rebuild menu tree in its own TX
         menuMutationTx.execute(status -> {
             performMenuReset(seed);
             return null;
         });
+        // Phase 2: apply default role bindings in a separate TX so any
+        // transient schema/data issues don't mark phase 1 TX rollback-only
+        try {
+            menuMutationTx.execute(status -> {
+                applyDefaultRoleBindings();
+                return null;
+            });
+        } catch (Exception ex) {
+            log.warn("Failed applying default role bindings: {}", ex.getMessage());
+            log.debug("Default role bindings error stack", ex);
+        }
     }
 
     private void performMenuReset(MenuSeed seed) {
@@ -355,11 +367,7 @@ public class PortalMenuService {
             PortalMenu root = buildMenuTree(section, null, sortOrder++, sectionComposite, sectionComposite);
             menuRepo.save(root);
         }
-        try {
-            applyDefaultRoleBindings();
-        } catch (Exception ex) {
-            log.warn("Failed applying default role bindings: {}", ex.getMessage());
-        }
+        // Default bindings are applied outside this TX in resetMenusToSeed()
     }
 
     private PortalMenu buildMenuTree(MenuNode node, PortalMenu parent, int sortOrder, String compositeKey, String sectionKey) {

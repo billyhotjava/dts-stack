@@ -1601,7 +1601,7 @@ public class AdminUserService {
             auditUserChange(actor, auditAction, resolvedTarget, "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            auditUserChange(actor, auditAction, username, "FAILED", detail);
             throw ex;
         }
     }
@@ -1746,7 +1746,7 @@ public class AdminUserService {
             auditUserChange(actor, auditAction, targetId, "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            auditUserChange(actor, auditAction, username, "FAILED", detail);
             throw ex;
         }
     }
@@ -1775,7 +1775,7 @@ public class AdminUserService {
             auditUserChange(actor, auditAction, pkId != null ? String.valueOf(pkId) : existing.getUsername(), "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            auditUserChange(actor, auditAction, username, "FAILED", detail);
             throw ex;
         }
     }
@@ -1831,7 +1831,7 @@ public class AdminUserService {
             auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            auditUserChange(actor, auditAction, username, "FAILED", detail);
             throw ex;
         }
     }
@@ -1875,7 +1875,7 @@ public class AdminUserService {
             auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            auditUserChange(actor, auditAction, username, "FAILED", detail);
             throw ex;
         }
     }
@@ -1897,7 +1897,7 @@ public class AdminUserService {
             auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            auditUserChange(actor, auditAction, username, "FAILED", detail);
             throw ex;
         }
     }
@@ -1935,7 +1935,7 @@ public class AdminUserService {
             auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            auditUserChange(actor, auditAction, username, "FAILED", detail);
             throw ex;
         }
     }
@@ -1959,7 +1959,7 @@ public class AdminUserService {
             auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            auditUserChange(actor, auditAction, username, "FAILURE", detail);
+            auditUserChange(actor, auditAction, username, "FAILED", detail);
             throw ex;
         }
     }

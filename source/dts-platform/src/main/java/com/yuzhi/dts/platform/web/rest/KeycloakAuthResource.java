@@ -110,12 +110,12 @@ public class KeycloakAuthResource {
         return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (org.springframework.security.authentication.BadCredentialsException ex) {
             log.warn("[login] unauthorized username={} reason={}", username, ex.getMessage());
-            audit.record("AUTH LOGIN", "auth", "admin_keycloak_user", username, "FAILURE", java.util.Map.of("error", ex.getMessage()));
+            audit.record("AUTH LOGIN", "auth", "admin_keycloak_user", username, "FAILED", java.util.Map.of("error", ex.getMessage()));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error(ex.getMessage()));
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
             log.error("[login] error username={} msg={}", username, msg);
-            audit.record("AUTH LOGIN", "auth", "admin_keycloak_user", username, "FAILURE", java.util.Map.of("error", msg));
+            audit.record("AUTH LOGIN", "auth", "admin_keycloak_user", username, "FAILED", java.util.Map.of("error", msg));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
         }
     }
@@ -185,10 +185,10 @@ public class KeycloakAuthResource {
             audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "SUCCESS", java.util.Map.of());
             return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (IllegalArgumentException ex) {
-            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "FAILURE", java.util.Map.of("error", ex.getMessage()));
+            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "FAILED", java.util.Map.of("error", ex.getMessage()));
             return ResponseEntity.status(401).body(ApiResponses.error("刷新令牌无效，请重新登录"));
         } catch (IllegalStateException ex) {
-            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "FAILURE", java.util.Map.of("error", ex.getMessage()));
+            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "FAILED", java.util.Map.of("error", ex.getMessage()));
             return ResponseEntity.status(401).body(ApiResponses.error("会话已过期，请重新登录"));
         }
     }

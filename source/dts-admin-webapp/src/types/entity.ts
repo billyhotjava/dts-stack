@@ -112,10 +112,13 @@ export interface AuditLog {
     clientAgent?: string;
     httpMethod?: string;
     result: string;
+    // localized display-only fields (backend provided)
+    resultText?: string; // SUCCESS/FAILED -> 成功/失败
     extraTags?: string;
     payloadPreview?: string;
     // extended fields (audit refactor)
     sourceSystem?: string;
+    sourceSystemText?: string; // admin/platform -> 管理端/业务端
     eventClass?: string;
     eventType?: string;
     summary?: string;
@@ -124,9 +127,11 @@ export interface AuditLog {
     operatorRoles?: string; // JSON string from backend
     orgCode?: string;
     orgName?: string;
+    departmentName?: string; // alias of orgName for display
     // convenience fields extracted from details
     requestId?: string;
     targetTable?: string;
+    targetTableLabel?: string; // localized table label
     targetId?: string;
     targetRef?: string;
 }

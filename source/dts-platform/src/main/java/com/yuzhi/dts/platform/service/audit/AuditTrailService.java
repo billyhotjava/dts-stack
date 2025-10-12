@@ -278,7 +278,7 @@ public class AuditTrailService {
         String normalizedAction = entity.getAction() == null ? "" : entity.getAction().toUpperCase(java.util.Locale.ROOT);
         boolean security = normalizedAction.contains("AUTH_") || normalizedAction.contains("LOGIN") || normalizedAction.contains("LOGOUT") || normalizedAction.contains("ACCESS_DENIED");
         entity.setEventClass(security ? "SecurityEvent" : "AuditEvent");
-        entity.setEventType(mapEventType(normalizedAction, entity.getResult()));
+        entity.setEventType(mapEventCategory(pending.resourceType, pending.module, normalizedAction));
         entity.setResourceType(pending.resourceType);
         entity.setResourceId(pending.resourceId);
         InetAddress clientIp = parseClientIp(pending.clientIp);
@@ -326,6 +326,11 @@ public class AuditTrailService {
             boolean isUuid = s.matches("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
             if (isNumeric || isUuid) {
                 det.put("target_id", s);
+            } else {
+                String extracted = extractTargetId(s);
+                if (extracted != null && !extracted.isBlank()) {
+                    det.put("target_id", extracted);
+                }
             }
         }
         det.put("action_result", entity.getResult());
@@ -347,12 +352,33 @@ public class AuditTrailService {
         return entity;
     }
 
-    private String mapEventType(String actionDisplay, String result) {
-        if (actionDisplay == null) return "UNKNOWN";
-        String a = actionDisplay.toUpperCase(java.util.Locale.ROOT);
-        if (a.contains("LOGIN")) return ("SUCCESS".equalsIgnoreCase(result) ? "AUTH_LOGIN_SUCCESS" : "AUTH_LOGIN_FAILURE");
-        if (a.contains("LOGOUT")) return "AUTH_LOGOUT";
-        return a.replace(' ', '_');
+    private String mapEventCategory(String resourceType, String module, String actionUpper) {
+        String a = actionUpper == null ? "" : actionUpper;
+        // 登录类
+        if (a.contains("LOGIN") || a.contains("LOGOUT") || (a.contains("ACCESS") && a.contains("DENIED"))) {
+            return "登录管理";
+        }
+        String r = resourceType == null ? null : resourceType.trim().toLowerCase(java.util.Locale.ROOT);
+        String m = module == null ? null : module.trim().toLowerCase(java.util.Locale.ROOT);
+        String key = r != null && !r.isBlank() ? r : (m == null ? "" : m);
+        if (key.isBlank()) return "数据资产";
+        // 平台侧 IAM/权限并入 数据资产
+        if (key.startsWith("iam") || key.equals("iam_permission") || key.equals("iam_dataset_policy") || key.equals("iam_user_classification")) {
+            return "数据资产";
+        }
+        if (key.equals("admin.auth") || key.equals("auth")) return "登录管理";
+        if (key.equals("admin_keycloak_user") || key.equals("user") || key.equals("admin")) return "用户管理";
+        if (key.startsWith("role") || key.startsWith("admin.role") || key.equals("admin_role_assignment")) return "角色管理";
+        if (key.equals("portal_menu") || key.equals("menu") || key.startsWith("portal.menus") || key.startsWith("portal-menus") || key.equals("portal.navigation")) return "菜单管理";
+        if (key.startsWith("org") || key.startsWith("organization") || key.equals("organization_node") || key.startsWith("admin.org")) return "部门管理";
+        if (key.startsWith("modeling.standard") || key.startsWith("data_standard")) return "数据标准";
+        if (key.startsWith("governance") || key.startsWith("gov_")) return "数据质量";
+        if (key.startsWith("explore")) return "数据开发";
+        if (key.equals("catalog_dataset_job") || key.contains("schedule") || key.contains("foundation")) return "数据开发";
+        if (key.startsWith("visualization")) return "数据可视化";
+        if (key.startsWith("catalog") || key.equals("catalog_table_schema") || key.equals("catalog_secure_view") || key.equals("catalog_row_filter_rule") || key.equals("catalog_access_policy")) return "数据资产";
+        if (key.startsWith("svc") || key.startsWith("api")) return "数据资产";
+        return "数据资产";
     }
 
     private String tableFromResource(String resourceType, String module) {
@@ -367,6 +393,74 @@ public class AuditTrailService {
         if (r.equals("portal_menu") || r.equals("menu") || r.equals("portal.menus") || r.equals("portal-menus")) {
             return "portal_menu";
         }
+        // Modeling (数据标准)
+        if (r.equals("modeling.standard") || r.equals("standard") || r.equals("modeling.standards")) {
+            return "data_standard";
+        }
+        if (r.equals("modeling.standard.version") || r.equals("standard.version") || r.equals("standard.versions")) {
+            return "data_standard_version";
+        }
+        if (r.equals("modeling.standard.attachment") || r.equals("standard.attachment") || r.equals("standard.attachments")) {
+            return "data_standard_attachment";
+        }
+        // Services / APIs
+        if (r.equals("svc.api") || r.equals("svc.api.try") || r.equals("api.service")) {
+            return "svc_api";
+        }
+        if (r.equals("svc.dataproduct") || r.equals("svc.data_product") || r.equals("data.product")) {
+            return "svc_data_product";
+        }
+        if (r.equals("svc.dataproduct.version") || r.equals("data.product.version")) {
+            return "svc_data_product_version";
+        }
+        if (r.equals("svc.dataproduct.dataset") || r.equals("data.product.dataset")) {
+            return "svc_data_product_dataset";
+        }
+        // Governance
+        if (r.equals("governance.rule") || r.equals("gov.rule")) {
+            return "gov_rule";
+        }
+        if (r.equals("governance.rule.version") || r.equals("gov.rule.version")) {
+            return "gov_rule_version";
+        }
+        if (r.equals("governance.quality.metric") || r.equals("gov.quality.metric")) {
+            return "gov_quality_metric";
+        }
+        if (r.equals("governance.quality.run") || r.equals("gov.quality.run")) {
+            return "gov_quality_run";
+        }
+        if (r.equals("governance.issue") || r.equals("gov.issue")) {
+            return "gov_issue_ticket";
+        }
+        if (r.equals("governance.issue.action") || r.equals("gov.issue.action")) {
+            return "gov_issue_action";
+        }
+        // IAM
+        if (r.equals("iam.policy") || r.equals("iam.dataset.policy") || r.equals("iam.policy.dataset")) {
+            return "iam_dataset_policy";
+        }
+        if (r.equals("iam.permission")) {
+            return "iam_permission";
+        }
+        if (r.equals("iam.user.classification") || r.equals("iam.userclassification")) {
+            return "iam_user_classification";
+        }
+        // Catalog
+        if (r.equals("catalog.table") || r.equals("catalog.tableschema") || r.equals("catalog.table.schema")) {
+            return "catalog_table_schema";
+        }
+        if (r.equals("catalog.secureview") || r.equals("catalog.secure_view")) {
+            return "catalog_secure_view";
+        }
+        if (r.equals("catalog.rowfilter") || r.equals("catalog.row_filter_rule")) {
+            return "catalog_row_filter_rule";
+        }
+        if (r.equals("catalog.accesspolicy") || r.equals("catalog.access_policy")) {
+            return "catalog_access_policy";
+        }
+        if (r.equals("catalog.dataset.job") || r.equals("catalog.datasetjob")) {
+            return "catalog_dataset_job";
+        }
         if (r.equals("api") || r.equals("v1") || r.equals("v2")) {
             return "general";
         }
@@ -379,6 +473,36 @@ public class AuditTrailService {
         s = s.replaceAll("[^a-z0-9]+", "_");
         s = s.replaceAll("^_+", "").replaceAll("_+$", "");
         return s.isBlank() ? "general" : s;
+    }
+
+    // Try to extract a meaningful ID (UUID or numeric) from a composite resourceId string
+    private String extractTargetId(String resourceId) {
+        if (resourceId == null) return null;
+        String s = resourceId.trim();
+        if (s.isEmpty()) return null;
+        // 1) UUID anywhere in the string
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("(?i)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
+            .matcher(s);
+        if (m.find()) {
+            return m.group(1);
+        }
+        // 2) Query style ?id=... or &id=...
+        m = java.util.regex.Pattern.compile("[?&]id=([0-9a-zA-Z-]+)").matcher(s);
+        if (m.find()) {
+            String v = m.group(1);
+            if (v.matches("\\d+")) return v;
+            if (v.matches("(?i)[0-9a-f-]{36}")) return v;
+        }
+        // 3) Split by common separators and inspect rightmost tokens
+        String[] tokens = s.split("[^0-9A-Za-z-]+");
+        for (int i = tokens.length - 1; i >= 0; i--) {
+            String t = tokens[i];
+            if (t == null || t.isBlank()) continue;
+            if (t.matches("\\d+")) return t;
+            if (t.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) return t;
+        }
+        return null;
     }
 
     private String simpleRecordSignature(AuditEvent e, String payloadHmac) {
@@ -419,8 +543,48 @@ public class AuditTrailService {
     private String buildSummary(AuditEvent e) {
         String name = e.getOperatorName() != null && !e.getOperatorName().isBlank() ? e.getOperatorName() : e.getActor();
         String actionDesc = e.getEventType() != null ? e.getEventType() : e.getAction();
-        String target = (e.getResourceType() == null ? "" : e.getResourceType()) + (e.getResourceId() == null ? "" : (":" + e.getResourceId()));
-        return String.format("用户【%s】执行【%s】 %s", nullToEmpty(name), nullToEmpty(actionDesc), target);
+        String resultText = (e.getResult() != null && e.getResult().equalsIgnoreCase("SUCCESS")) ? "成功" : (e.getResult() == null ? "" : "失败");
+        String targetTable = null;
+        String targetId = null;
+        try {
+            if (e.getDetails() != null && !e.getDetails().isBlank()) {
+                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(e.getDetails());
+                if (node.hasNonNull("target_table")) targetTable = node.get("target_table").asText();
+                if (node.hasNonNull("target_id")) targetId = node.get("target_id").asText();
+            }
+        } catch (Exception ignore) {}
+        String tableLabel = mapTableLabel(targetTable != null ? targetTable : e.getResourceType());
+        String target = (tableLabel == null ? "" : tableLabel) + (targetId == null || targetId.isBlank() ? "" : "(ID=" + targetId + ")");
+        return String.format("用户【%s】%s【%s】 %s", nullToEmpty(name), nullToEmpty(resultText), nullToEmpty(actionDesc), target);
+    }
+
+    private String mapTableLabel(String key) {
+        if (key == null) return null;
+        String k = key.trim().toLowerCase(java.util.Locale.ROOT);
+        if (k.equals("admin_keycloak_user") || k.equals("admin") || k.equals("admin.auth") || k.equals("user")) return "用户";
+        if (k.equals("portal_menu") || k.equals("menu") || k.equals("portal.menus") || k.equals("portal-menus")) return "门户菜单";
+        if (k.equals("data_standard")) return "数据标准";
+        if (k.equals("data_standard_version")) return "数据标准版本";
+        if (k.equals("data_standard_attachment")) return "数据标准附件";
+        if (k.equals("svc_api")) return "接口";
+        if (k.equals("svc_data_product")) return "数据产品";
+        if (k.equals("svc_data_product_version")) return "数据产品版本";
+        if (k.equals("svc_data_product_dataset")) return "数据产品数据集";
+        if (k.equals("gov_rule")) return "治理规则";
+        if (k.equals("gov_rule_version")) return "治理规则版本";
+        if (k.equals("gov_quality_metric")) return "质量指标";
+        if (k.equals("gov_quality_run")) return "质量运行";
+        if (k.equals("gov_issue_ticket")) return "问题工单";
+        if (k.equals("gov_issue_action")) return "工单处理";
+        if (k.equals("iam_dataset_policy")) return "数据集授权策略";
+        if (k.equals("iam_permission")) return "权限";
+        if (k.equals("iam_user_classification")) return "用户分级";
+        if (k.equals("catalog_table_schema")) return "目录表";
+        if (k.equals("catalog_secure_view")) return "安全视图";
+        if (k.equals("catalog_row_filter_rule")) return "行过滤规则";
+        if (k.equals("catalog_access_policy")) return "访问控制策略";
+        if (k.equals("catalog_dataset_job")) return "目录作业";
+        return key;
     }
 
     private byte[] serializePayload(Object payload) throws JsonProcessingException {

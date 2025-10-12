@@ -205,6 +205,11 @@ export const useSignIn = () => {
 			});
 			setUserInfo(adaptedUser);
 
+			// Mark login timestamp for downstream grace handling on initial 401s
+			try {
+				localStorage.setItem("dts.session.loginTs", String(Date.now()));
+			} catch {}
+
 			// 登录成功后获取并更新Keycloak翻译词条
 			try {
 				const translations: KeycloakTranslations = await KeycloakLocalizationService.getChineseTranslations();

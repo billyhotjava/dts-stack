@@ -349,8 +349,13 @@ public class AuditLogResource {
             );
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("id,timestamp,source,event_class,event_type,module,action,summary,operator_id,operator_name,org_code,org_name,result,resource_type,resource_id,client_ip,client_agent,http_method,request_uri\n");
+        sb.append("id,timestamp,source,event_class,event_type,module,action,summary,operator_id,operator_name,org_code,org_name,result,resource_type,resource_id,client_ip,client_agent,http_method,request_uri,来源系统,结果中文,目标表,目标ID\n");
         for (AuditEvent event : events) {
+            String sourceText = mapSourceSystemText(event.getSourceSystem());
+            String resultText = mapResultText(event.getResult());
+            java.util.Map<String, Object> details = parseDetails(event);
+            String targetTable = details.getOrDefault("target_table", "").toString();
+            String targetId = details.getOrDefault("target_id", "").toString();
             sb
                 .append(event.getId()).append(',')
                 .append(event.getOccurredAt()).append(',')
@@ -370,7 +375,11 @@ public class AuditLogResource {
                 .append(escape(event.getClientIp())).append(',')
                 .append(escape(event.getClientAgent())).append(',')
                 .append(escape(event.getHttpMethod())).append(',')
-                .append(escape(event.getRequestUri()))
+                .append(escape(event.getRequestUri())).append(',')
+                .append(escape(sourceText)).append(',')
+                .append(escape(resultText)).append(',')
+                .append(escape(targetTable)).append(',')
+                .append(escape(targetId))
                 .append('\n');
         }
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audits.csv");
@@ -409,10 +418,18 @@ public class AuditLogResource {
         view.clientAgent = event.getClientAgent();
         view.httpMethod = event.getHttpMethod();
         view.result = event.getResult();
+        if (view.result != null) {
+            String r = view.result.trim().toUpperCase(java.util.Locale.ROOT);
+            view.resultText = r.equals("SUCCESS") ? "成功" : (r.equals("FAILED") || r.equals("FAILURE") ? "失败" : view.result);
+        }
         view.extraTags = event.getExtraTags();
         view.payloadPreview = decodePayloadPreview(event);
         // extended mapping for new audit schema
         view.sourceSystem = event.getSourceSystem();
+        if (view.sourceSystem != null) {
+            String s = view.sourceSystem.trim().toLowerCase(java.util.Locale.ROOT);
+            view.sourceSystemText = s.equals("admin") ? "管理端" : (s.equals("platform") ? "业务端" : view.sourceSystem);
+        }
         view.eventClass = event.getEventClass();
         view.eventType = event.getEventType();
         view.summary = event.getSummary();
@@ -421,6 +438,7 @@ public class AuditLogResource {
         view.operatorRoles = event.getOperatorRoles();
         view.orgCode = event.getOrgCode();
         view.orgName = event.getOrgName();
+        view.departmentName = view.orgName;
         // Extract minimal details for quick list rendering (requestId/target info)
         try {
             if (event.getDetails() != null && !event.getDetails().isBlank()) {
@@ -428,14 +446,32 @@ public class AuditLogResource {
                 Object req = det.get("request_id");
                 if (req != null) view.requestId = String.valueOf(req);
                 Object tbl = det.get("target_table");
-                if (tbl != null) view.targetTable = String.valueOf(tbl);
+                if (tbl != null) {
+                    view.targetTable = String.valueOf(tbl);
+                    view.targetTableLabel = mapTableLabel(view.targetTable);
+                }
                 Object tid = det.get("target_id");
                 if (tid != null) view.targetId = String.valueOf(tid);
                 Object tref = det.get("target_ref");
-                if (tref != null) view.targetRef = String.valueOf(tref);
+                if (tref != null) {
+                    view.targetRef = String.valueOf(tref);
+                } else {
+                    // Synthesize when missing: "<table>+<id>"
+                    if (view.targetTable != null && view.targetId != null) {
+                        view.targetRef = view.targetTable + "+" + view.targetId;
+                    }
+                }
             }
         } catch (Exception ignore) {}
         return view;
+    }
+
+    private String mapTableLabel(String key) {
+        if (key == null) return null;
+        String k = key.trim().toLowerCase(java.util.Locale.ROOT);
+        if (k.equals("admin_keycloak_user") || k.equals("admin") || k.equals("admin.auth") || k.equals("user")) return "用户";
+        if (k.equals("portal_menu") || k.equals("menu") || k.equals("portal.menus") || k.equals("portal-menus")) return "门户菜单";
+        return key;
     }
 
     private String decodePayloadPreview(AuditEvent event) {
@@ -544,6 +580,36 @@ public class AuditLogResource {
             return "";
         }
         return '"' + value.replace("\"", "\"\"") + '"';
+    }
+
+    private String mapSourceSystemText(String source) {
+        if (source == null || source.isBlank()) return "";
+        String s = source.trim().toLowerCase();
+        if (s.equals("admin") || s.equals("management") || s.equals("manager")) return "管理端";
+        if (s.equals("platform")) return "业务端";
+        return source;
+    }
+
+    private String mapResultText(String result) {
+        if (result == null) return "";
+        String r = result.trim().toUpperCase();
+        if ("SUCCESS".equals(r)) return "成功";
+        if ("FAILED".equals(r) || "FAILURE".equals(r)) return "失败";
+        return result;
+    }
+
+    private java.util.Map<String, Object> parseDetails(AuditEvent event) {
+        try {
+            if (event.getDetails() == null || event.getDetails().isBlank()) return java.util.Map.of();
+            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+            java.util.Map<?, ?> raw = om.readValue(event.getDetails(), java.util.Map.class);
+            java.util.Map<String, Object> out = new java.util.HashMap<>();
+            if (raw.containsKey("target_table")) out.put("target_table", raw.get("target_table"));
+            if (raw.containsKey("target_id")) out.put("target_id", raw.get("target_id"));
+            return out;
+        } catch (Exception ignore) {
+            return java.util.Map.of();
+        }
     }
 
     private boolean hasAuthority(org.springframework.security.core.Authentication auth, String role) {

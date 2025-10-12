@@ -286,7 +286,7 @@
         "DATA_SECRET": "秘密",
         "DATA_TOP_SECRET": "机密",
         "NON_SECRET": "非密",
-        "GENERAL": "普通",
+        "GENERAL": "一般",
         "IMPORTANT": "重要",
         "CORE": "核心",
         "TOP_SECRET": "机密",

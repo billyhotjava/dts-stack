@@ -178,7 +178,7 @@ public class InfraManagementService {
         try {
             InfraConnectionTestLog log = new InfraConnectionTestLog();
             log.setDataSourceId(dataSourceId);
-            log.setResult(result.success() ? "SUCCESS" : "FAILURE");
+            log.setResult(result.success() ? "SUCCESS" : "FAILED");
             log.setMessage(result.message());
             log.setElapsedMs((int) result.elapsedMillis());
             log.setRequestPayload(objectMapper.writeValueAsString(payload));

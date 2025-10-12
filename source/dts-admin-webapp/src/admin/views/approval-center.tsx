@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { KeycloakApprovalService } from "@/api/services/approvalService";
 import { KeycloakUserService } from "@/api/services/keycloakService";
 import { useUserInfo } from "@/store/userStore";
+import { PERSON_SECURITY_LEVELS } from "@/constants/governance";
 
 type TaskCategory = "user" | "role";
 
@@ -444,6 +445,11 @@ const DATA_LEVEL_LABELS: Record<string, string> = {
     DATA_TOP_SECRET: "机密",
 };
 
+// 人员密级（人员安全等级）中文映射
+const PERSON_LEVEL_LABELS: Record<string, string> = Object.fromEntries(
+    PERSON_SECURITY_LEVELS.map((it) => [String(it.value).toUpperCase(), it.label]),
+);
+
 const SCOPE_LABELS: Record<string, string> = {
     DEPARTMENT: "部门",
     INSTITUTE: "研究所共享区",
@@ -487,8 +493,29 @@ function mapArray<T>(v: unknown, mapper: (x: any) => string): string {
 }
 
 // 将值转换为更友好的中文显示
+function isPersonLevelKey(key: string): boolean {
+    const k = String(key || "").toLowerCase();
+    // 支持多种键名：personSecurityLevel / person_security_level / person_level / personnel_security_level
+    return (
+        k.endsWith("personsecuritylevel") ||
+        k.endsWith("person_level") ||
+        k.endsWith("person_security_level") ||
+        k.endsWith("personlevel") ||
+        k.endsWith("personnel_security_level") ||
+        k.endsWith("personnelsecuritylevel")
+    );
+}
+
 function formatFriendlyValue(key: string, value: unknown, ctx?: DiffFormatContext): string {
     if (value == null || value === "") return "—";
+    // 人员密级优先处理，兼容 attributes.person_level 等多种写法
+    if (isPersonLevelKey(key)) {
+        return mapArray(value, (x) => {
+            const raw = String(x || "");
+            const mapped = PERSON_LEVEL_LABELS[raw.toUpperCase()];
+            return mapped || raw;
+        });
+    }
     switch (key) {
         case "dataLevel":
         case "dataLevels":

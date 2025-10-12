@@ -83,8 +83,15 @@ public class AuditLogResource {
         AuditTrailService auditService = auditServiceProvider.getIfAvailable();
         List<AuditEvent> events = auditService != null ? auditService.findAll(Sort.by(Sort.Direction.DESC, "occurredAt")) : List.of();
         StringBuilder sb = new StringBuilder();
-        sb.append("id,timestamp,module,action,actor,result,resource,clientIp\n");
+        // Append Chinese-readable columns while keeping raw fields
+        sb.append("id,timestamp,module,action,actor,result,resource,clientIp,来源系统,事件类型,结果中文,目标表,目标ID,摘要\n");
         for (AuditEvent event : events) {
+            Map<String, String> details = parseDetails(event);
+            String targetTable = details.getOrDefault("target_table", "");
+            String targetId = details.getOrDefault("target_id", "");
+            String sourceText = mapSourceSystemText(event.getSourceSystem());
+            String resultText = mapResultText(event.getResult());
+            String eventType = event.getEventType();
             sb
                 .append(event.getId()).append(',')
                 .append(event.getOccurredAt()).append(',')
@@ -93,7 +100,13 @@ public class AuditLogResource {
                 .append(escape(event.getActor())).append(',')
                 .append(escape(event.getResult())).append(',')
                 .append(escape(event.getResourceId())).append(',')
-                .append(escape(event.getClientIp()))
+                .append(escape(event.getClientIp())).append(',')
+                .append(escape(sourceText)).append(',')
+                .append(escape(eventType)).append(',')
+                .append(escape(resultText)).append(',')
+                .append(escape(targetTable)).append(',')
+                .append(escape(targetId)).append(',')
+                .append(escape(event.getSummary()))
                 .append('\n');
         }
         return ResponseEntity
@@ -176,5 +189,36 @@ public class AuditLogResource {
             return "";
         }
         return '"' + value.replace("\"", "\"\"") + '"';
+    }
+
+    private Map<String, String> parseDetails(AuditEvent event) {
+        try {
+            if (event.getDetails() == null || event.getDetails().isBlank()) return Map.of();
+            Map<?, ?> raw = objectMapper.readValue(event.getDetails(), Map.class);
+            Map<String, String> out = new HashMap<>();
+            Object t = raw.get("target_table");
+            Object i = raw.get("target_id");
+            if (t != null) out.put("target_table", String.valueOf(t));
+            if (i != null) out.put("target_id", String.valueOf(i));
+            return out;
+        } catch (Exception ignore) {
+            return Map.of();
+        }
+    }
+
+    private String mapSourceSystemText(String source) {
+        if (source == null || source.isBlank()) return "";
+        String s = source.trim().toLowerCase();
+        if (s.equals("admin") || s.equals("management") || s.equals("manager")) return "管理端";
+        if (s.equals("platform")) return "业务端";
+        return source;
+    }
+
+    private String mapResultText(String result) {
+        if (result == null) return "";
+        String r = result.trim().toUpperCase();
+        if ("SUCCESS".equals(r)) return "成功";
+        if ("FAILED".equals(r) || "FAILURE".equals(r)) return "失败";
+        return result;
     }
 }

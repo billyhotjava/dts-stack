@@ -14,6 +14,53 @@ const axiosInstance = axios.create({
     headers: { "Content-Type": "application/json;charset=utf-8" },
 });
 
+// Token refresh coordination to avoid stampedes
+let refreshingPromise: Promise<void> | null = null;
+async function refreshTokenIfPossible(): Promise<boolean> {
+  const { userToken, actions } = userStore.getState() as any;
+  const refresh = String(userToken?.refreshToken || "").trim();
+  if (!refresh) return false;
+  // Only one refresh at a time
+  if (!refreshingPromise) {
+    refreshingPromise = (async () => {
+      try {
+        const resp: any = await axiosInstance.post(
+          "/keycloak/auth/refresh",
+          { refreshToken: refresh },
+          { headers: { Authorization: undefined } }
+        );
+        const nextAccess = String(resp?.accessToken || resp?.data?.accessToken || "").trim();
+        const nextRefresh = String(resp?.refreshToken || resp?.data?.refreshToken || "").trim();
+        const adminAccessToken = String(resp?.adminAccessToken || resp?.data?.adminAccessToken || "").trim();
+        const adminRefreshToken = String(resp?.adminRefreshToken || resp?.data?.adminRefreshToken || "").trim();
+        const adminAccessTokenExpiresAt = String(resp?.adminAccessTokenExpiresAt || resp?.data?.adminAccessTokenExpiresAt || "").trim();
+        const adminRefreshTokenExpiresAt = String(resp?.adminRefreshTokenExpiresAt || resp?.data?.adminRefreshTokenExpiresAt || "").trim();
+        if (!nextAccess) throw new Error("no_access_token");
+        actions.setUserToken({
+          accessToken: nextAccess,
+          refreshToken: nextRefresh || refresh,
+          adminAccessToken: adminAccessToken || userToken?.adminAccessToken,
+          adminRefreshToken: adminRefreshToken || userToken?.adminRefreshToken,
+          adminAccessTokenExpiresAt: adminAccessTokenExpiresAt || userToken?.adminAccessTokenExpiresAt,
+          adminRefreshTokenExpiresAt: adminRefreshTokenExpiresAt || userToken?.adminRefreshTokenExpiresAt,
+        });
+      } finally {
+        // Allow subsequent refresh attempts
+        const p = refreshingPromise;
+        refreshingPromise = null;
+        // Wait a tick to let store update propagate
+        try { await p; } catch {}
+      }
+    })();
+  }
+  try {
+    await refreshingPromise;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 	axiosInstance.interceptors.request.use(
     (config) => {
         const { userToken } = userStore.getState();
@@ -89,7 +136,7 @@ axiosInstance.interceptors.response.use(
 		}
 		throw new Error(message || t("sys.api.apiRequestFailed"));
 	},
-    (error: AxiosError<Result>) => {
+    async (error: AxiosError<Result>) => {
         const { response, message } = error || {};
         const requestUrl = response?.config?.url ?? "";
         const isLoginRequest = typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/login");
@@ -130,23 +177,47 @@ axiosInstance.interceptors.response.use(
           default:
             break;
         }
-        if (!shouldSuppressAuthHandling && !isLoginRequest) {
-            toast.error(hint ? `${errMsg}（${hint}）` : errMsg, { position: "top-center" });
-        }
+        // Attempt silent refresh on 401 (non-auth endpoints) and retry once
         if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest) {
-			// In development, relax auto-logout to ease debugging
-			if (import.meta.env?.DEV) {
-				console.warn("[DEV] 401 received; skipping auto logout & redirect");
-			} else {
-				userStore.getState().actions.clearUserInfoAndToken();
-				try {
-					localStorage.setItem("dts.session.logoutTs", String(Date.now()));
-				} catch {}
-				if (typeof window !== "undefined" && !isLoginRouteActive()) {
-					location.replace(resolveLoginHref());
-				}
-			}
-		}
+          const cfg = response.config || {};
+          // prevent infinite loop
+          if (!(cfg as any)._retry) {
+            const refreshed = await refreshTokenIfPossible();
+            if (refreshed) {
+              // retry original request with updated access token
+              const { userToken } = userStore.getState();
+              (cfg.headers as any) = (cfg.headers as any) || {};
+              (cfg.headers as any).Authorization = userToken?.accessToken ? `Bearer ${userToken.accessToken}` : undefined;
+              (cfg as any)._retry = true;
+              try {
+                return await axiosInstance.request(cfg as any);
+              } catch (e) {
+                // fallthrough to logout handling below
+              }
+            }
+          }
+          // Grace window just after login to avoid kicking user out on in-flight 401s
+          try {
+            const loginTs = Number(localStorage.getItem("dts.session.loginTs") || "0");
+            if (loginTs > 0 && Date.now() - loginTs < 2000) {
+              console.warn("[auth] Suppressing auto-logout due to grace window after login");
+              return Promise.reject(error);
+            }
+          } catch {}
+          if (!import.meta.env?.DEV) {
+            userStore.getState().actions.clearUserInfoAndToken();
+            try { localStorage.setItem("dts.session.logoutTs", String(Date.now())); } catch {}
+            if (typeof window !== "undefined" && !isLoginRouteActive()) {
+              location.replace(resolveLoginHref());
+            }
+          } else {
+            console.warn("[DEV] 401 after refresh; skipping auto logout");
+          }
+        } else {
+          if (!shouldSuppressAuthHandling && !isLoginRequest) {
+            toast.error(hint ? `${errMsg}（${hint}）` : errMsg, { position: "top-center" });
+          }
+        }
         return Promise.reject(error);
     },
 );

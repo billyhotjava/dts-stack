@@ -39,13 +39,13 @@
     "requiredMgmtRoles": []
   },
   {
-    "code": "sys.nav.portal.exploreWorkbench",
+    "code": "sys.nav.portal.explore",
     "title": "数据开发",
-    "route": "/explore/workbench",
+    "route": "/explore",
     "scopes": ["DEPT","INST"],
     "requiredRoles": [
-      "DEPT_DATA_DEV","DEPT_DATA_OWNER",
-      "INST_DATA_DEV","INST_DATA_OWNER"
+      "DEPT_DATA_VIEWER","DEPT_DATA_DEV","DEPT_DATA_OWNER",
+      "INST_DATA_VIEWER","INST_DATA_DEV","INST_DATA_OWNER"
     ],
     "requiredMgmtRoles": []
   },
@@ -64,4 +64,3 @@
     "requiredMgmtRoles": []
   }
 ]
-

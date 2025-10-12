@@ -428,8 +428,11 @@ public class CatalogResource {
         CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
         existing.setName(patch.getName());
         existing.setType(patch.getType());
+        // Keep dataset type normalization, but do not hard-require primary source when updating
+        // so that metadata changes (e.g., ownerDept, dataLevel) can be saved even if Hive/Inceptor
+        // isn’t configured in dev environments. Connectivity will still be enforced at execution time
+        // (e.g., preview/sync operations).
         applySourcePolicy(existing);
-        ensurePrimarySourceIfRequired(existing);
         existing.setClassification(patch.getClassification());
         // ABAC fields
         existing.setDataLevel(patch.getDataLevel());

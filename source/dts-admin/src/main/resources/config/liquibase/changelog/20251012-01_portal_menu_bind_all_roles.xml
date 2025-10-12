@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <!--
+      Ensure six data roles are bound to all menus under five sections (catalog/modeling/governance/explore/visualization).
+      Exclude foundation from these bindings so it remains OP_ADMIN-only.
+      Idempotent: only inserts missing rows.
+    -->
+    <changeSet id="20251012-01-portal-menu-bind-all-roles" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="portal_menu"/>
+                <tableExists tableName="portal_menu_visibility"/>
+            </and>
+        </preConditions>
+
+        <sql>
+            WITH target_menus AS (
+                SELECT id
+                FROM portal_menu
+                WHERE COALESCE((metadata::jsonb -&gt;&gt; 'sectionKey')::text, '') IN (
+                    'catalog','modeling','governance','explore','visualization'
+                )
+            ),
+            roles AS (
+                SELECT 'ROLE_DEPT_DATA_VIEWER' AS role_code UNION ALL
+                SELECT 'ROLE_DEPT_DATA_DEV' UNION ALL
+                SELECT 'ROLE_DEPT_DATA_OWNER' UNION ALL
+                SELECT 'ROLE_INST_DATA_VIEWER' UNION ALL
+                SELECT 'ROLE_INST_DATA_DEV' UNION ALL
+                SELECT 'ROLE_INST_DATA_OWNER'
+            )
+            INSERT INTO portal_menu_visibility (
+                id, menu_id, role_code, permission_code, data_level,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                nextval('portal_menu_visibility_seq'), m.id, r.role_code, NULL, 'INTERNAL',
+                'system', now(), 'system', now()
+            FROM target_menus m
+            CROSS JOIN roles r
+            WHERE NOT EXISTS (
+                SELECT 1 FROM portal_menu_visibility v
+                WHERE v.menu_id = m.id AND UPPER(v.role_code) = r.role_code
+            );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

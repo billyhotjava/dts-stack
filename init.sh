@@ -58,6 +58,22 @@ read_secret(){ while true; do read -rsp "Password: " p1; echo; read -rsp "Confir
 ensure_env(){ k="$1"; shift; v="$*"; if grep -qE "^${k}=" .env 2>/dev/null; then sed -i -E "s|^${k}=.*|${k}=${v}|g" .env; else echo "${k}=${v}" >> .env; fi; }
 load_img_versions(){ conf="imgversion.conf"; [[ -f "$conf" ]] || return 0; while IFS='=' read -r k v; do [[ -z "${k// }" || "${k#\#}" != "$k" ]] && continue; v="$(echo "$v"|sed -E 's/^\s+|\s+$//g')"; ensure_env "$k" "$v"; done < <(grep -E '^[[:space:]]*([A-Z0-9_]+)[[:space:]]*=' "$conf" || true); echo "[init.sh] loaded image versions"; }
 
+# Determine which optional services are enabled based on imgversion.conf
+determine_enabled_services(){
+  local conf="imgversion.conf"
+  ENABLE_MINIO="false"
+  ENABLE_NESSIE="false"
+  if [[ -f "$conf" ]]; then
+    if rg -n "^[[:space:]]*IMAGE_MINIO[[:space:]]*=" "$conf" >/dev/null 2>&1 || grep -Eq '^[[:space:]]*IMAGE_MINIO[[:space:]]*=' "$conf"; then
+      ENABLE_MINIO="true"
+    fi
+    if rg -n "^[[:space:]]*IMAGE_NESSIE[[:space:]]*=" "$conf" >/dev/null 2>&1 || grep -Eq '^[[:space:]]*IMAGE_NESSIE[[:space:]]*=' "$conf"; then
+      ENABLE_NESSIE="true"
+    fi
+  fi
+  export ENABLE_MINIO ENABLE_NESSIE
+}
+
 fix_pg_permissions(){
   if [[ "${PG_MODE:-}" != "embedded" ]]; then
     return
@@ -80,14 +96,18 @@ prepare_data_dirs(){
   fix_pg_permissions
   local -a data_dirs=(
     "services/certs"
-    "services/dts-minio/data"
     "services/dts-ranger"
   )
+  if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
+    data_dirs+=("services/dts-minio/data")
+  fi
   local dir
   for dir in "${data_dirs[@]}"; do
     mkdir -p "${dir}"
   done
-  chmod -R 777 services/dts-minio/data || true
+  if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
+    chmod -R 777 services/dts-minio/data || true
+  fi
 }
 
 # Ensure embedded Postgres has all required roles/databases
@@ -180,13 +200,15 @@ generate_env_base(){
   HOST_PLATFORM_UI="platform.${BASE_DOMAIN}"
 
   # ---------- MinIO/S3 (placed before Airflow uses it) ----------
-  : "${MINIO_ROOT_USER:=minio}"
-  : "${MINIO_ROOT_PASSWORD:=${SECRET}}"
-  : "${S3_BUCKET:=dts-lake}"
-  : "${S3_REGION:=cn-local-1}"
-  # Derived MinIO URLs for reverse-proxy deployments
-  MINIO_SERVER_URL="https://${HOST_MINIO}"
-  MINIO_BROWSER_REDIRECT_URL="https://${HOST_MINIO}"
+  if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
+    : "${MINIO_ROOT_USER:=minio}"
+    : "${MINIO_ROOT_PASSWORD:=${SECRET}}"
+    : "${S3_BUCKET:=dts-lake}"
+    : "${S3_REGION:=cn-local-1}"
+    # Derived MinIO URLs for reverse-proxy deployments
+    MINIO_SERVER_URL="https://${HOST_MINIO}"
+    MINIO_BROWSER_REDIRECT_URL="https://${HOST_MINIO}"
+  fi
 
   # ---------- Postgres & 多服务三元组 ----------
   : "${PG_AUTH_METHOD:=scram}"     # scram | md5
@@ -256,9 +278,7 @@ TRAEFIK_ENABLE_PING=${TRAEFIK_ENABLE_PING}
 
 # ====== Hosts ======
 HOST_SSO=${HOST_SSO}
-HOST_MINIO=${HOST_MINIO}
 HOST_TRINO=${HOST_TRINO}
-HOST_NESSIE=${HOST_NESSIE}
 HOST_API=${HOST_API}
 HOST_RANGER=${HOST_RANGER}
 HOST_ADMIN_UI=${HOST_ADMIN_UI}
@@ -314,15 +334,6 @@ PG_PWD_DTCOMMON=${PG_PWD_DTCOMMON}
 
 
 
-# ====== MinIO / S3 ======
-MINIO_ROOT_USER=${MINIO_ROOT_USER}
-MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-S3_BUCKET=${S3_BUCKET}
-S3_REGION=${S3_REGION}
-MINIO_REGION_NAME=${S3_REGION}
-MINIO_SERVER_URL=${MINIO_SERVER_URL}
-MINIO_BROWSER_REDIRECT_URL=${MINIO_BROWSER_REDIRECT_URL}
-
 # ====== OIDC Clients ======
 OAUTH2_ADMIN_CLIENT_ID=${OAUTH2_ADMIN_CLIENT_ID}
 OAUTH2_ADMIN_CLIENT_SECRET=${OAUTH2_ADMIN_CLIENT_SECRET}
@@ -348,6 +359,23 @@ EXPLORE_DB_NAME=${EXPLORE_DB_NAME}
 EXPLORE_DB_USER=${EXPLORE_DB_USER}
 EXPLORE_DB_PASSWORD=${EXPLORE_DB_PASSWORD}
 EOF
+
+  # Append optional hosts/env blocks conditionally to .env
+  if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
+    {
+      echo "HOST_MINIO=${HOST_MINIO}"
+      echo "MINIO_ROOT_USER=${MINIO_ROOT_USER}"
+      echo "MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}"
+      echo "S3_BUCKET=${S3_BUCKET}"
+      echo "S3_REGION=${S3_REGION}"
+      echo "MINIO_REGION_NAME=${S3_REGION}"
+      echo "MINIO_SERVER_URL=${MINIO_SERVER_URL}"
+      echo "MINIO_BROWSER_REDIRECT_URL=${MINIO_BROWSER_REDIRECT_URL}"
+    } >> .env
+  fi
+  if [[ "${ENABLE_NESSIE:-false}" == "true" ]]; then
+    echo "HOST_NESSIE=${HOST_NESSIE}" >> .env
+  fi
 }
 
 # ================= argument parsing (kept) =================
@@ -441,7 +469,8 @@ if [[ "${PG_MODE}" == "external" && "${PG_HOST}" == "your-external-pg-host" ]]; 
   fi
 fi
 
-# 生成 .env
+# 生成 .env（在生成前判定可选服务开关）
+determine_enabled_services
 generate_env_base
 ensure_env PG_MODE "${PG_MODE}"
 ensure_env PG_HOST "${PG_HOST}"
@@ -523,7 +552,10 @@ else
 fi
 
 # 输出可访问地址
-for host_var in HOST_SSO HOST_MINIO HOST_TRINO HOST_NESSIE HOST_RANGER HOST_API HOST_ADMIN_UI HOST_PLATFORM_UI; do
+host_vars=(HOST_SSO HOST_TRINO HOST_RANGER HOST_API HOST_ADMIN_UI HOST_PLATFORM_UI)
+if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then host_vars+=(HOST_MINIO); fi
+if [[ "${ENABLE_NESSIE:-false}" == "true" ]]; then host_vars+=(HOST_NESSIE); fi
+for host_var in "${host_vars[@]}"; do
   host_value="$(grep "^${host_var}=" .env | cut -d= -f2-)"
   if [[ -n "${host_value}" ]]; then echo "https://${host_value}"; fi
 done

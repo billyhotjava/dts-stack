@@ -16,6 +16,25 @@ export const GOVERNANCE_ROLE_NAMES = ["ROLE_SYS_ADMIN", "ROLE_AUTH_ADMIN", "ROLE
 export const APPLICATION_ROLE_NAMES = ["ROLE_OP_ADMIN"] as const;
 export const DATA_ROLE_NAMES = ["DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_TOP_SECRET"] as const;
 
+// Chinese labels for data security levels (DATA_*)
+export const DATA_SECURITY_LEVEL_LABELS: Record<(typeof DATA_ROLE_NAMES)[number], string> = {
+  DATA_PUBLIC: "公开",
+  DATA_INTERNAL: "内部",
+  DATA_SECRET: "秘密",
+  DATA_TOP_SECRET: "机密",
+};
+
+export const DATA_SECURITY_LEVEL_OPTIONS = (DATA_ROLE_NAMES as readonly string[]).map((value) => ({
+  value,
+  label: DATA_SECURITY_LEVEL_LABELS[value as (typeof DATA_ROLE_NAMES)[number]],
+}));
+
+export function renderDataLevelLabel(level?: string | null): string {
+  if (!level) return "-";
+  const key = String(level).trim().toUpperCase();
+  return (DATA_SECURITY_LEVEL_LABELS as Record<string, string>)[key] || level;
+}
+
 export function deriveDataLevels(level?: string | null): string[] {
 	if (!level) return [];
 	return DATA_LEVELS_BY_PERSON_LEVEL[level] ?? [];

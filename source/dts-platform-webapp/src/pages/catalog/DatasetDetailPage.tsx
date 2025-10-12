@@ -20,6 +20,8 @@ import {
 } from "@/api/platformApi";
 import type { DatasetAsset, DatasetJob, DatasetJobStatus, DataLevel, Scope, ShareScope } from "@/types/catalog";
 import deptService, { type DeptDto } from "@/api/services/deptService";
+import { useActiveDept } from "@/store/contextStore";
+import { useRouter } from "@/routes/hooks";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -33,6 +35,7 @@ const DATA_LEVELS = [
 export default function DatasetDetailPage() {
 	const params = useParams();
 	const id = String(params.id || "");
+	const activeDept = useActiveDept();
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [dataset, setDataset] = useState<DatasetAsset | null>(null);
@@ -47,12 +50,27 @@ export default function DatasetDetailPage() {
     const [lastJob, setLastJob] = useState<DatasetJob | null>(null);
     const [deptOptions, setDeptOptions] = useState<DeptDto[]>([]);
     const [deptLoading, setDeptLoading] = useState(false);
+    const router = useRouter();
+    const nonRootDeptOptions = useMemo(() => deptOptions.filter((d) => d.parentId != null && d.parentId !== 0), [deptOptions]);
 
     const loadDataset = async (withSpinner = false) => {
         if (withSpinner) setLoading(true);
         try {
             const data = (await getDataset(id)) as any;
-            setDataset(data);
+            // Normalize server payload for UI editing
+            const normalized: any = {
+                ...data,
+                // Ensure tags is an array for the input join/split logic below
+                tags: Array.isArray((data as any)?.tags)
+                    ? (data as any).tags
+                    : (typeof (data as any)?.tags === "string" && (data as any).tags.trim().length
+                        ? String((data as any).tags)
+                              .split(",")
+                              .map((s) => s.trim())
+                              .filter(Boolean)
+                        : []),
+            };
+            setDataset(normalized);
             try {
                 const p = (await getAccessPolicy(id)) as any;
                 if (p) {
@@ -139,7 +157,8 @@ export default function DatasetDetailPage() {
 
     useEffect(() => {
         let mounted = true;
-        if (dataset?.scope === "DEPT") {
+        const scope = ((dataset?.scope as string) || "DEPT").toUpperCase();
+        if (scope === "DEPT") {
             setDeptLoading(true);
             deptService
                 .listDepartments()
@@ -147,14 +166,34 @@ export default function DatasetDetailPage() {
                 .finally(() => mounted && setDeptLoading(false));
         }
         // Enforce INST scope cannot use PRIVATE_DEPT; auto-correct if necessary
-        if (dataset?.scope === "INST" && dataset?.shareScope === "PRIVATE_DEPT") {
+        if (scope === "INST" && dataset?.shareScope === "PRIVATE_DEPT") {
             setDataset({ ...(dataset as any), shareScope: "SHARE_INST" });
         }
         return () => {
             mounted = false;
         };
-    }, [dataset?.scope]);
+    }, [dataset?.scope, dataset?.id]);
 
+    // If dataset is scoped to DEPT but ownerDept is missing, prefill with active dept from context.
+    useEffect(() => {
+        if (!dataset) return;
+        const scope = ((dataset.scope as string) || "DEPT").toUpperCase();
+        if (scope === "DEPT" && (!dataset.ownerDept || String(dataset.ownerDept).trim() === "") && activeDept) {
+            setDataset({ ...(dataset as DatasetAsset), ownerDept: activeDept });
+        }
+    }, [dataset, activeDept]);
+
+    // Disallow choosing root when scope=DEPT: if当前值为根则清空
+    useEffect(() => {
+        if (!dataset) return;
+        const scope = ((dataset.scope as string) || "DEPT").toUpperCase();
+        if (scope !== "DEPT") return;
+        if (!dataset.ownerDept) return;
+        const root = deptOptions.find((d) => d.parentId == null || d.parentId === 0);
+        if (root && String(root.code) === String(dataset.ownerDept)) {
+            setDataset({ ...(dataset as DatasetAsset), ownerDept: undefined as any });
+        }
+    }, [dataset?.scope, dataset?.ownerDept, deptOptions]);
 
 
     const toLegacyClassification = (dl?: string): string => {
@@ -186,12 +225,18 @@ export default function DatasetDetailPage() {
             scope,
             ownerDept: scope === "DEPT" ? dataset.ownerDept || undefined : undefined,
             shareScope: scope === "INST" ? dataset.shareScope || "SHARE_INST" : undefined,
+            // Backend expects a string; submit as comma-separated list
+            tags: Array.isArray((dataset as any).tags)
+                ? ((dataset as any).tags as string[]).join(",")
+                : String((dataset as any).tags || ""),
         };
         setSaving(true);
         try {
             await updateDataset(dataset.id, payload);
             await upsertAccessPolicy(dataset.id, { allowRoles, rowFilter, defaultMasking });
             toast.success("已保存");
+            // 返回目录列表
+            try { router.push("/catalog/assets"); } catch {}
         } catch (e) {
             console.error(e);
             toast.error("保存失败");
@@ -364,19 +409,28 @@ export default function DatasetDetailPage() {
 					{((dataset.scope as Scope) || "DEPT") === "DEPT" ? (
 						<div className="grid gap-2">
 							<Label>所属部门</Label>
-							<Select
-								value={dataset.ownerDept || undefined}
-								onValueChange={(v) => setDataset({ ...(dataset as DatasetAsset), ownerDept: v })}
-							>
+                        <Select
+                            value={dataset.ownerDept || undefined}
+                            onValueChange={(v) =>
+                                setDataset({
+                                    ...(dataset as DatasetAsset),
+                                    ownerDept: v,
+                                    // Ensure scope is explicitly DEPT when choosing a department
+                                    scope: "DEPT" as any,
+                                    // Clear shareScope to avoid accidental mixed state
+                                    shareScope: undefined as any,
+                                })
+                            }
+                        >
 								<SelectTrigger>
 									<SelectValue placeholder={deptLoading ? "加载中…" : "选择部门…"} />
 								</SelectTrigger>
 								<SelectContent>
-									{deptOptions.map((d) => (
-										<SelectItem key={d.code} value={d.code}>
-											{d.nameZh || d.nameEn || d.code}
-										</SelectItem>
-									))}
+                                    {nonRootDeptOptions.map((d) => (
+                                        <SelectItem key={d.code} value={d.code}>
+                                            {d.nameZh || d.nameEn || d.code}
+                                        </SelectItem>
+                                    ))}
 								</SelectContent>
 							</Select>
 						</div>

@@ -36,7 +36,9 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         "/v3/api-docs",
         "/swagger",
         "/webjars",
-        "/error"
+        "/error",
+        // auth APIs are domain-audited explicitly; skip generic request log to avoid anonymousUser actor
+        "/api/keycloak/auth"
     };
 
     private final ObjectProvider<AuditTrailService> auditServiceProvider;
@@ -127,7 +129,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                 }
                 AuditStage effectiveStage = declaredStage;
                 if (flowContext != null && effectiveStage == null) {
-                    effectiveStage = "FAILURE".equalsIgnoreCase(event.result) ? AuditStage.FAIL : AuditStage.SUCCESS;
+                    effectiveStage = "FAILED".equalsIgnoreCase(event.result) ? AuditStage.FAIL : AuditStage.SUCCESS;
                 }
                 if (flowContext != null) {
                     if (effectiveStage == AuditStage.SUCCESS) {
@@ -173,15 +175,16 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         String module = resolveModuleFromSegments(seg);
         String resourceType = resolveResourceTypeFromSegments(seg);
         event.module = module;
-        event.action = request.getMethod() + " " + uri;
         event.resourceType = resourceType;
+        // Derive a semantic action code instead of raw "METHOD URI"
+        event.action = deriveActionCode(resourceType, request.getMethod());
         event.resourceId = uri;
         String forwarded = request.getHeader("X-Forwarded-For");
         event.clientIp = forwarded != null && !forwarded.isBlank() ? forwarded.split(",")[0].trim() : request.getRemoteAddr();
         event.clientAgent = request.getHeader("User-Agent");
         event.requestUri = request.getRequestURI();
         event.httpMethod = request.getMethod();
-        event.result = response.getStatus() >= HttpStatus.BAD_REQUEST.value() ? "FAILURE" : "SUCCESS";
+        event.result = response.getStatus() >= HttpStatus.BAD_REQUEST.value() ? "FAILED" : "SUCCESS";
         event.latencyMs = (int) (elapsedNanos / 1_000_000);
 
         Map<String, Object> payload = new HashMap<>();
@@ -238,6 +241,34 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             return s2;
         }
         return s1;
+    }
+
+    private String deriveActionCode(String resourceType, String httpMethod) {
+        String entity = mapEntityKey(resourceType);
+        String op = switch (httpMethod == null ? "" : httpMethod.toUpperCase()) {
+            case "POST" -> "CREATE";
+            case "PUT", "PATCH" -> "UPDATE";
+            case "DELETE" -> "DELETE";
+            case "GET" -> "VIEW";
+            default -> "CALL";
+        };
+        return entity + "_" + op;
+    }
+
+    private String mapEntityKey(String resourceType) {
+        if (resourceType == null || resourceType.isBlank()) return "GENERAL";
+        String r = resourceType.trim().toLowerCase();
+        if (r.equals("admin.auth") || r.equals("auth")) return "AUTH";
+        if (r.equals("admin") || r.equals("user") || r.equals("admin_keycloak_user")) return "USER";
+        if (r.equals("role") || r.contains("role_assignment")) return "ROLE";
+        if (r.equals("portal_menu") || r.equals("menu") || r.contains("portal-menus")) return "MENU";
+        if (r.equals("org") || r.contains("organization")) return "ORG";
+        // Modeling / services / governance common buckets
+        if (r.contains("standard")) return "STANDARD";
+        if (r.contains("svc") || r.contains("api")) return "SERVICE";
+        if (r.contains("gov")) return "GOV";
+        if (r.contains("catalog")) return "CATALOG";
+        return r.replaceAll("[^a-z0-9]+", "_").toUpperCase();
     }
 
     private String resolvePrimaryAuthority() {

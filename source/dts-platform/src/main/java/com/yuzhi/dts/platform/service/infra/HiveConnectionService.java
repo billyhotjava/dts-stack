@@ -53,7 +53,6 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.hadoop.security.UserGroupInformation;
 
 @Service
 public class HiveConnectionService {
@@ -170,24 +169,15 @@ public class HiveConnectionService {
 
             PrivilegedExceptionAction<T> action = () -> executeWithinDriver(request, callback);
 
-            if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB) {
-                UserGroupInformation ugi = loginWithKeytab(request, keytabPath);
-                bridgeKerberosSubjectToVendor(ugi);
-                try {
-                    return ugi.doAs(action);
-                } finally {
-                    try {
-                        ugi.logoutUserFromKeytab();
-                    } catch (IOException e) {
-                        log.debug("UGI logout failure: {}", e.getMessage());
-                    }
-                }
-            }
-
+            // Use pure JAAS for both KEYTAB and PASSWORD to avoid Hadoop Shell native process checks
+            // that may fail in restricted/containerized environments.
             LoginContext loginContext = buildLoginContext(request, keytabPath);
             loginContext.login();
             try {
-                return Subject.doAs(loginContext.getSubject(), action);
+                Subject subject = loginContext.getSubject();
+                // Register Subject to vendor UserGroupInformation (e.g., Transwarp), if available
+                bridgeKerberosSubjectToVendor(subject);
+                return Subject.doAs(subject, action);
             } finally {
                 try {
                     loginContext.logout();
@@ -420,35 +410,11 @@ public class HiveConnectionService {
         }
     }
 
-    private UserGroupInformation loginWithKeytab(HiveConnectionTestRequest request, Path keytabPath) throws IOException {
-        if (keytabPath == null || !Files.isRegularFile(keytabPath)) {
-            throw new IOException("Keytab 文件不存在或不可读");
-        }
-        String principal = request.getLoginPrincipal();
-        if (principal == null || principal.isBlank()) {
-            throw new IOException("必须提供 Kerberos principal");
-        }
-        org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration(false);
-        conf.set("hadoop.security.authentication", "kerberos");
-        UserGroupInformation.setConfiguration(conf);
-        String keytab = keytabPath.toAbsolutePath().toString();
-        UserGroupInformation ugi = UserGroupInformation.loginUserFromKeytabAndReturnUGI(principal, keytab);
-        log.info("UGI keytab login成功. principal={}, keytab={}, currentUser={}", principal, keytab, ugi);
-        return ugi;
-    }
-
-    private void bridgeKerberosSubjectToVendor(UserGroupInformation ugi) {
-        if (ugi == null) {
+    private void bridgeKerberosSubjectToVendor(Subject subject) {
+        if (subject == null || subject.getPrincipals().isEmpty()) {
             return;
         }
         try {
-            Method getSubject = UserGroupInformation.class.getDeclaredMethod("getSubject");
-            getSubject.setAccessible(true);
-            Subject subject = (Subject) getSubject.invoke(ugi);
-            if (subject == null || subject.getPrincipals().isEmpty()) {
-                log.debug("UGI subject is empty; skip vendor UGI bridge");
-                return;
-            }
             ClassLoader loader = jdbcDriverLoader != null ? jdbcDriverLoader : Thread.currentThread().getContextClassLoader();
             Class<?> vendorUgiClass;
             try {

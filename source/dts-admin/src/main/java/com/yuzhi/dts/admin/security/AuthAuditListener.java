@@ -40,7 +40,7 @@ public class AuthAuditListener {
     public void onAuthFailure(AbstractAuthenticationFailureEvent evt) {
         String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
         String message = evt.getException() != null && evt.getException().getMessage() != null ? evt.getException().getMessage() : "auth failed";
-        auditService.record(username, "ADMIN AUTH LOGIN", "admin", "admin_keycloak_user", username, "FAILURE", Map.of("error", message));
+        auditService.record(username, "ADMIN AUTH LOGIN", "admin", "admin_keycloak_user", username, "FAILED", Map.of("error", message));
         if (log.isDebugEnabled()) log.debug("Auth failure user={} error={}", username, message);
     }
 
@@ -51,4 +51,3 @@ public class AuthAuditListener {
         if (log.isDebugEnabled()) log.debug("Logout success user={}", username);
     }
 }
-

@@ -24,6 +24,7 @@
     <include file="config/liquibase/changelog/20251120-02_audit_event_table.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251011-01_audit_event_extend.json.xml" relativeToChangelogFile="false"/>
         <include file="config/liquibase/changelog/20251002-01_portal_menu_visibility.xml" relativeToChangelogFile="false"/>
+        <include file="config/liquibase/changelog/20251012-01_portal_menu_bind_all_roles.xml" relativeToChangelogFile="false"/>
         <include file="config/liquibase/changelog/20251002-02_admin_custom_role_cleanup.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251210-01_portal_menu_visibility_role_user_cleanup.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251201-01_org_keycloak_mapping.xml" relativeToChangelogFile="false"/>

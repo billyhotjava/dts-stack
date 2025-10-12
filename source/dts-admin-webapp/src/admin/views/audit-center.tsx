@@ -160,9 +160,13 @@ export default function AuditCenterView() {
                 width: 180,
                 render: (value: string) => <span className="text-sm">{formatDateTime(value)}</span>,
             },
-            { title: "来源", dataIndex: "sourceSystem", key: "sourceSystem", width: 90, render: (v?: string) => v || "-" },
-            { title: "事件类", dataIndex: "eventClass", key: "eventClass", width: 120, render: (v?: string) => v || "-" },
-            { title: "模块", dataIndex: "module", key: "module", width: 140 },
+            { title: "来源", dataIndex: "sourceSystemText", key: "sourceSystem", width: 90, render: (_: string, r) => r.sourceSystemText || r.sourceSystem || "-" },
+            { title: "事件类", dataIndex: "eventClass", key: "eventClass", width: 120, render: (v?: string) => {
+                if (!v) return "-";
+                const up = v.trim().toLowerCase();
+                return up === "securityevent" ? "安全事件" : "审计事件";
+            } },
+            // 移除“模块”列，避免与来源重复
             { title: "事件类型", dataIndex: "eventType", key: "eventType", width: 180, render: (v?: string) => v || "-" },
             {
                 title: "摘要",
@@ -178,14 +182,14 @@ export default function AuditCenterView() {
                 ),
             },
             {
-                title: "操作者 / 组织 / IP",
+                title: "操作者 / 部门 / IP",
                 dataIndex: "operatorName",
                 key: "operator",
                 width: 260,
                 render: (_: string, record) => (
                     <div className="text-xs text-muted-foreground break-words">
                         <div>操作者：{record.operatorName || formatOperatorName(record.actor)}</div>
-                        <div>组织：{record.orgName ? `${record.orgName}${record.orgCode ? `（${record.orgCode}）` : ""}` : (record.orgCode || "-")}</div>
+                        <div>部门：{record.departmentName ? `${record.departmentName}${record.orgCode ? `（${record.orgCode}）` : ""}` : (record.orgName || record.orgCode || "-")}</div>
                         <div>IP：{record.clientIp || "-"}</div>
                     </div>
                 ),
@@ -195,21 +199,30 @@ export default function AuditCenterView() {
                 dataIndex: "resourceId",
                 key: "resource",
                 width: 260,
-                render: (_: string, record) => (
-                    <div className="text-xs text-muted-foreground break-words">
-                        <div>{record.targetTable || record.resourceType || "-"}</div>
-                        <div>{record.targetId || record.resourceId || "-"}</div>
-                    </div>
-                ),
+                render: (_: string, record) => {
+                    const ref = record.targetRef
+                        || ((record.targetTable && record.targetId) ? `${record.targetTable}+${record.targetId}` : undefined);
+                    const fallbackLabel = record.targetTableLabel || record.targetTable || record.resourceType || "-";
+                    const fallbackId = record.targetId ? `ID=${record.targetId}` : (record.resourceId || "-");
+                    return (
+                        <div className="text-xs text-muted-foreground break-words">
+                            <div>{ref || fallbackLabel}</div>
+                            {!ref && <div>{fallbackId}</div>}
+                        </div>
+                    );
+                },
             },
             {
                 title: "结果",
                 dataIndex: "result",
                 key: "result",
                 width: 100,
-                render: (val: string) => (
-                    <Badge variant={val === "FAILURE" ? "destructive" : "secondary"}>{val}</Badge>
-                ),
+                render: (_: string, r) => {
+                    const raw = (r.result || "").toUpperCase();
+                    const isFail = raw === "FAILED" || raw === "FAILURE";
+                    const label = r.resultText || (raw === "SUCCESS" ? "成功" : isFail ? "失败" : r.result || "-");
+                    return <Badge variant={isFail ? "destructive" : "secondary"}>{label}</Badge>;
+                },
             },
         ],
         [expandedRows]
@@ -233,7 +246,7 @@ export default function AuditCenterView() {
                 <CardHeader className="space-y-2">
                     <CardTitle>查询条件</CardTitle>
                     <Text variant="body3" className="text-muted-foreground">
-                        支持按时间范围、功能模块、操作人、目标位置与 IP 筛选审计记录。
+                        支持按时间范围、来源系统、操作人、目标位置与 IP 筛选审计记录。
                     </Text>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -252,18 +265,18 @@ export default function AuditCenterView() {
 							label="来源系统"
 							value={filters.sourceSystem || ""}
 							onChange={(value) => setFilters((prev) => ({ ...prev, sourceSystem: value || undefined }))}
-							options={[
-								{ value: "", label: "全部来源" },
-								{ value: "admin", label: "admin" },
-								{ value: "platform", label: "platform" },
-							]}
+                            options={[
+                                { value: "", label: "全部来源" },
+                                { value: "admin", label: "管理端" },
+                                { value: "platform", label: "业务端" },
+                            ]}
 						/>
-						<InputField
-							label="操作人"
-							placeholder="如 sysadmin"
-							value={filters.actor ?? ""}
-							onChange={(value) => setFilters((prev) => ({ ...prev, actor: value || undefined }))}
-						/>
+                            <InputField
+                                label="操作者"
+                                placeholder="如 系统管理员 或 sysadmin"
+                                value={filters.actor ?? ""}
+                                onChange={(value) => setFilters((prev) => ({ ...prev, actor: value || undefined }))}
+                            />
 						<InputField
 							label="目标位置"
 							placeholder="例如 /admin/approval"
@@ -282,36 +295,24 @@ export default function AuditCenterView() {
 							value={filters.action ?? ""}
 							onChange={(value) => setFilters((prev) => ({ ...prev, action: value || undefined }))}
 						/>
-						<SelectField
-							label="事件类型"
-							value={filters.eventType || ""}
-							onChange={(value) => setFilters((prev) => ({ ...prev, eventType: value || undefined }))}
-							options={[{ value: "", label: "全部事件" },
-								{ value: "AUTH_LOGIN_SUCCESS", label: "登录成功" },
-								{ value: "AUTH_LOGIN_FAILURE", label: "登录失败" },
-								{ value: "AUTH_LOGOUT", label: "退出登录" },
-								{ value: "SESSION_CREATED", label: "创建会话" },
-								{ value: "SESSION_TERMINATED", label: "终止会话" },
-								{ value: "SESSION_TIMEOUT", label: "会话超时" },
-								{ value: "ACCESS_DENIED", label: "访问被拒绝" },
-								{ value: "PRIV_ESCALATION_ATTEMPT", label: "越权尝试" },
-								{ value: "SENSITIVE_EXPORT", label: "导出敏感数据" },
-								{ value: "RATE_LIMIT_TRIGGERED", label: "触发限流" },
-								{ value: "WAF_BLOCKED", label: "WAF拦截" },
-								{ value: "ACCOUNT_CREATED", label: "创建账号" },
-								{ value: "ACCOUNT_DISABLED", label: "禁用账号" },
-								{ value: "PASSWORD_RESET", label: "重置密码" },
-								{ value: "ROLE_GRANTED", label: "授予角色" },
-								{ value: "ROLE_REVOKED", label: "回收角色" },
-								{ value: "POLICY_CHANGED", label: "策略变更" },
-								{ value: "DATA_READ_SENSITIVE", label: "读取敏感数据" },
-								{ value: "DATA_WRITE_SENSITIVE", label: "写入敏感数据" },
-								{ value: "DATA_DELETE_SENSITIVE", label: "删除敏感数据" },
-								{ value: "CONFIG_CHANGED", label: "修改配置" },
-								{ value: "AUDIT_QUERY", label: "检索审计日志" },
-								{ value: "AUDIT_EXPORT", label: "导出审计日志" },
-							]}
-						/>
+                            <SelectField
+                                label="事件类型"
+                                value={filters.eventType || ""}
+                                onChange={(value) => setFilters((prev) => ({ ...prev, eventType: value || undefined }))}
+                                options={[
+                                    { value: "", label: "全部事件" },
+                                    { value: "登录管理", label: "登录管理" },
+                                    { value: "用户管理", label: "用户管理" },
+                                    { value: "角色管理", label: "角色管理" },
+                                    { value: "部门管理", label: "部门管理" },
+                                    { value: "菜单管理", label: "菜单管理" },
+                                    { value: "数据资产", label: "数据资产" },
+                                    { value: "数据标准", label: "数据标准" },
+                                    { value: "数据质量", label: "数据质量" },
+                                    { value: "数据开发", label: "数据开发" },
+                                    { value: "数据可视化", label: "数据可视化" },
+                                ]}
+                            />
 					</div>
                     <div className="flex flex-wrap gap-3">
                         <Button type="button" variant="outline" onClick={() => setFilters({})}>

@@ -73,7 +73,7 @@ public class AuditService {
         String result = switch (effectiveStage) {
             case BEGIN -> "PENDING";
             case SUCCESS -> "SUCCESS";
-            case FAIL -> "FAILURE";
+            case FAIL -> "FAILED";
         };
 
         Map<String, Object> tags = new HashMap<>();
@@ -93,7 +93,7 @@ public class AuditService {
     }
 
     public void auditFailure(String action, String targetKind, String targetRef, Object payload) {
-        record(action, targetKind, targetKind, targetRef, "FAILURE", payload, null);
+        record(action, targetKind, targetKind, targetRef, "FAILED", payload, null);
     }
 
     public void record(

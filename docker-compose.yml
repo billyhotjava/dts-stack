@@ -145,85 +145,78 @@ services:
 
   # Note: Keycloak realm/clients are configured manually via UI. No auto-init.
 
-  dts-minio:
-    image: ${IMAGE_MINIO}
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_REGION_NAME: ${MINIO_REGION_NAME}
-      MINIO_SERVER_URL: ${MINIO_SERVER_URL}
-      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL}
-    volumes:
-      - ./services/dts-minio/data:/data:Z
-    healthcheck:
-      test: ["CMD","curl","-fsS","http://localhost:9000/minio/health/live"]
-      <<: *hc
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.dts-minio-console.rule=Host(`${HOST_MINIO}`) && PathPrefix(`/`)"
-      - "traefik.http.routers.dts-minio-console.entrypoints=websecure"
-      - "traefik.http.routers.dts-minio-console.tls=true"
-      - "traefik.http.routers.dts-minio-console.service=dts-minio-console"
-      - "traefik.http.services.dts-minio-console.loadbalancer.server.port=9001"
-      - "traefik.http.routers.dts-minio-api.rule=Host(`${HOST_MINIO}`) && PathPrefix(`/s3`)"
-      - "traefik.http.routers.dts-minio-api.entrypoints=websecure"
-      - "traefik.http.routers.dts-minio-api.tls=true"
-      - "traefik.http.routers.dts-minio-api.service=dts-minio-api"
-      - "traefik.http.services.dts-minio-api.loadbalancer.server.port=9000"
-      - "traefik.http.middlewares.dts-strip-s3.stripprefixregex.regex=/s3"
-      - "traefik.http.routers.dts-minio-api.middlewares=dts-strip-s3@docker"
-    restart: unless-stopped
-    networks:
-      - dts-core
+  # dts-minio:
+  #   image: ${IMAGE_MINIO}
+  #   command: server /data --console-address ":9001"
+  #   environment:
+  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+  #     MINIO_REGION_NAME: ${MINIO_REGION_NAME}
+  #     MINIO_SERVER_URL: ${MINIO_SERVER_URL}
+  #     MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL}
+  #   volumes:
+  #     - ./services/dts-minio/data:/data:Z
+  #   healthcheck:
+  #     test: ["CMD","curl","-fsS","http://localhost:9000/minio/health/live"]
+  #     <<: *hc
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.dts-minio-console.rule=Host(`${HOST_MINIO}`) && PathPrefix(`/`)"
+  #     - "traefik.http.routers.dts-minio-console.entrypoints=websecure"
+  #     - "traefik.http.routers.dts-minio-console.tls=true"
+  #     - "traefik.http.routers.dts-minio-console.service=dts-minio-console"
+  #     - "traefik.http.services.dts-minio-console.loadbalancer.server.port=9001"
+  #     - "traefik.http.routers.dts-minio-api.rule=Host(`${HOST_MINIO}`) && PathPrefix(`/s3`)"
+  #     - "traefik.http.routers.dts-minio-api.entrypoints=websecure"
+  #     - "traefik.http.routers.dts-minio-api.tls=true"
+  #     - "traefik.http.routers.dts-minio-api.service=dts-minio-api"
+  #     - "traefik.http.services.dts-minio-api.loadbalancer.server.port=9000"
+  #     - "traefik.http.middlewares.dts-strip-s3.stripprefixregex.regex=/s3"
+  #     - "traefik.http.routers.dts-minio-api.middlewares=dts-strip-s3@docker"
+  #   restart: unless-stopped
+  #   networks:
+  #     - dts-core
 
-  dts-minio-init:
-    image: ${IMAGE_MINIO_MC}
-    depends_on:
-      dts-minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      S3_BUCKET: ${S3_BUCKET}
-    entrypoint: ["/bin/sh","-c","/init/init.sh"]
-    volumes:
-      - ./services/dts-minio-init/init:/init:ro,Z
-    restart: "no"
-    networks:
-      - dts-core
+  # dts-minio-init:
+  #   image: ${IMAGE_MINIO_MC}
+  #   depends_on:
+  #     dts-minio:
+  #       condition: service_healthy
+  #   environment:
+  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+  #     S3_BUCKET: ${S3_BUCKET}
+  #   entrypoint: ["/bin/sh","-c","/init/init.sh"]
+  #   volumes:
+  #     - ./services/dts-minio-init/init:/init:ro,Z
+  #   restart: "no"
+  #   networks:
+  #     - dts-core
 
-  dts-nessie:
-    image: ${IMAGE_NESSIE}
-    container_name: dts-nessie
-    healthcheck:
-      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:19120/api/v1/config >/dev/null || wget -qO- http://127.0.0.1:19120/api/v1/config >/dev/null"]
-      <<: *hc
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.dts-nessie.rule=Host(`${HOST_NESSIE}`)"
-      - "traefik.http.routers.dts-nessie.entrypoints=websecure"
-      - "traefik.http.routers.dts-nessie.tls=true"
-      - "traefik.http.services.dts-nessie.loadbalancer.server.port=19120"
-    restart: unless-stopped
-    networks:
-      - dts-core
+  # dts-nessie:
+  #   image: ${IMAGE_NESSIE}
+  #   container_name: dts-nessie
+  #   healthcheck:
+  #     test: ["CMD-SHELL","curl -fsS http://127.0.0.1:19120/api/v1/config >/dev/null || wget -qO- http://127.0.0.1:19120/api/v1/config >/dev/null"]
+  #     <<: *hc
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=dts-core"
+  #     - "traefik.http.routers.dts-nessie.rule=Host(`${HOST_NESSIE}`)"
+  #     - "traefik.http.routers.dts-nessie.entrypoints=websecure"
+  #     - "traefik.http.routers.dts-nessie.tls=true"
+  #     - "traefik.http.services.dts-nessie.loadbalancer.server.port=19120"
+  #   restart: unless-stopped
+  #   networks:
+  #     - dts-core
 
   dts-trino:
     image: ${IMAGE_TRINO}
     container_name: dts-trino 
-    depends_on:
-      dts-nessie:
-        condition: service_started
-      dts-minio:
-        condition: service_started
     volumes:
       - ./services/dts-trino/init/catalog:/etc/trino/catalog:ro,Z
       - ./services/dts-trino/config.properties:/etc/trino/config.properties:ro,Z
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      - ./services/dts-trino/hive-conf:/etc/trino/hive-conf:ro,Z
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/v1/info >/dev/null || exit 1"]
       <<: *hc
