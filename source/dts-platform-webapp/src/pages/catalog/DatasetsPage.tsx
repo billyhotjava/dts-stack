@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "@/routes/hooks";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { toast } from "sonner";
-import { createDataset, deleteDataset, getCatalogConfig, listDatasets } from "@/api/platformApi";
-import { listInfraDataSources } from "@/api/services/infraService";
+import { createDataset, deleteDataset, getCatalogConfig, listDatasets, previewDataset } from "@/api/platformApi";
+import { listInfraDataSources, refreshInceptorRegistry } from "@/api/services/infraService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import { renderDataLevelLabel } from "@/constants/governance";
 import { useActiveDept, useActiveScope } from "@/store/contextStore";
@@ -79,7 +79,14 @@ export default function DatasetsPage() {
 	});
 	const [dataSources, setDataSources] = useState<any[]>([]);
 	const [multiSourceUnlocked, setMultiSourceUnlocked] = useState(false);
-	const fileInputRef = useRef<HTMLInputElement | null>(null);
+	    const [refreshing, setRefreshing] = useState(false);
+    // Preview dialog state
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
+    const [previewRows, setPreviewRows] = useState<any[]>([]);
+    const [previewTitle, setPreviewTitle] = useState<string>("");
+    const [previewLevel, setPreviewLevel] = useState<string | undefined>(undefined);
+// Note: import-from-file feature removed in this build; re-enable when UI wires the input
 
 // const levels = SECURITY_LEVELS; // removed
 const normalizeSourceType = useCallback((value: string) => {
@@ -151,6 +158,23 @@ const SHARE_SCOPE_LABELS: Record<string, string> = {
 };
 const renderScopeLabel = (v?: string) => (v ? SCOPE_LABELS[String(v).toUpperCase()] || v : "-");
 const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).toUpperCase()] || v : "-");
+
+    // Badge for DATA_* levels with tones aligned to Explore pages
+    const dataLevelBadge = (level?: string) => {
+      const key = String(level || "").toUpperCase();
+      const tone =
+        key === "DATA_TOP_SECRET"
+          ? "bg-rose-500/10 text-rose-500"
+          : key === "DATA_SECRET"
+          ? "bg-amber-500/10 text-amber-500"
+          : key === "DATA_INTERNAL"
+          ? "bg-sky-500/10 text-sky-500"
+          : key === "DATA_PUBLIC"
+          ? "bg-emerald-500/10 text-emerald-600"
+          : "bg-muted text-muted-foreground";
+      const label = renderDataLevelLabel(level);
+      return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold ${tone}`}>{label}</span>;
+    };
 
 	const toggleSecretMultiSource = useCallback(() => {
 		setMultiSourceUnlocked((prev) => {
@@ -301,6 +325,48 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 
 	const totalPages = useMemo(() => Math.max(1, Math.ceil(total / size)), [total, size]);
 
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        try {
+            // Keep behavior consistent with data sources page: trigger registry refresh
+            await refreshInceptorRegistry();
+            // Reload config to reflect any primary source changes
+            try {
+                const cfg = (await getCatalogConfig()) as any;
+                if (cfg) {
+                    setCatalogConfig({
+                        multiSourceEnabled: Boolean(cfg.multiSourceEnabled),
+                        defaultSourceType: String(cfg.defaultSourceType || "HIVE"),
+                        hasPrimarySource: Boolean(cfg.hasPrimarySource),
+                        primarySourceType: String(cfg.primarySourceType || "HIVE"),
+                    });
+                }
+            } catch {}
+            await fetchList();
+            toast.success("Inceptor 状态已重新同步");
+        } catch (error: any) {
+            console.error(error);
+            toast.error(error?.message || "刷新失败");
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
+    const openPreview = async (item: ListItem) => {
+      try {
+        setPreviewTitle(item.name);
+        setPreviewLevel(item.dataLevel);
+        const resp: any = await previewDataset(item.id, 50);
+        const headers: string[] = Array.isArray(resp?.headers) ? resp.headers : [];
+        const rows: any[] = Array.isArray(resp?.rows) ? resp.rows : [];
+        setPreviewHeaders(headers);
+        setPreviewRows(rows);
+        setPreviewOpen(true);
+      } catch (e) {
+        console.error("preview failed", e);
+      }
+    };
+
 	const onCreate = async () => {
 		if (!hasPrimarySource) {
 			toast.error("请先在基础管理中完善默认数据源连接");
@@ -383,7 +449,7 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 		}
 	};
 
-	const onImport = async (file: File) => {
+	/* const onImport = async (file: File) => {
 		if (!hasPrimarySource) {
 			toast.error("请先配置默认数据源，再尝试导入");
 			return;
@@ -445,7 +511,7 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 		}
 		toast.success(`导入完成：${ok}/${rows.length}`);
 		await fetchList();
-	};
+	}; */
 
 	return (
 		<div className="space-y-4">
@@ -479,8 +545,8 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 								))}
 							</SelectContent>
 						</Select>
-						<Button variant="outline" onClick={fetchList} disabled={loading}>
-							刷新
+						<Button variant="outline" onClick={handleRefresh} disabled={loading || refreshing}>
+							{refreshing ? "同步中…" : "刷新"}
 						</Button>
 						{/* 需求：隐藏批量导入与新建入口（仅保留查询/刷新/筛选） */}
 					</div>
@@ -563,10 +629,13 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 										<td className="px-3 py-2 font-medium">{d.name}</td>
 										<td className="px-3 py-2">{d.owner || "-"}</td>
 										<td className="px-3 py-2 text-xs">{renderSourceLabel(d.type)}</td>
-                            <td className="px-3 py-2 text-xs">{renderDataLevelLabel(d.dataLevel)}</td>
+                            <td className="px-3 py-2 text-xs">{dataLevelBadge(d.dataLevel)}</td>
                             <td className="px-3 py-2 text-xs">{renderScopeLabel(d.scope)}</td>
                             <td className="px-3 py-2 text-xs">{d.scope === "DEPT" ? renderDept(d.ownerDept) : renderShareScopeLabel(d.shareScope)}</td>
 										<td className="px-3 py-2 space-x-1">
+											<Button variant="outline" size="sm" onClick={() => openPreview(d)}>
+												预览
+											</Button>
 											<Button variant="ghost" size="sm" onClick={() => router.push(`/catalog/datasets/${d.id}`)}>
 												编辑
 											</Button>
@@ -768,6 +837,53 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 							取消
 						</Button>
 						<Button onClick={onCreate}>创建</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Dataset preview dialog */}
+			<Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+				<DialogContent className="max-w-4xl">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<span>{previewTitle || "数据预览"}</span>
+							{dataLevelBadge(previewLevel)}
+						</DialogTitle>
+					</DialogHeader>
+					<div className="space-y-3">
+						<div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+							本数据受密级与作用域控制，未经授权不得外传。
+						</div>
+						<div className="overflow-auto rounded-md border">
+							<table className="w-full border-collapse text-xs">
+								<thead className="bg-muted/50">
+									<tr>
+										{previewHeaders.map((h) => (
+											<th key={h} className="border-b px-2 py-1 text-left font-medium">{h}</th>
+										))}
+									</tr>
+								</thead>
+								<tbody>
+									{previewRows.map((row, i) => (
+										<tr key={`r-${i}`} className="border-b last:border-b-0">
+											{previewHeaders.map((h) => (
+												<td key={h} className="px-2 py-1">{String(row?.[h] ?? "")}</td>
+											))}
+										</tr>
+									))}
+									{previewRows.length === 0 && (
+										<tr>
+											<td className="px-3 py-6 text-center text-xs text-muted-foreground" colSpan={Math.max(1, previewHeaders.length)}>
+												暂无数据
+											</td>
+										</tr>
+									)}
+								</tbody>
+							</table>
+						</div>
+					</div>
+					<DialogFooter>
+						<Button variant="ghost" onClick={() => setPreviewOpen(false)}>关闭</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>

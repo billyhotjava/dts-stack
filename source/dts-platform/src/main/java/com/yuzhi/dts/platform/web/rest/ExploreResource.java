@@ -847,6 +847,10 @@ public class ExploreResource {
                 Object v = token.getToken().getClaims().get(name);
                 return v == null ? null : String.valueOf(v);
             }
+            if (auth != null && auth.getPrincipal() instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal principal) {
+                Object v = principal.getAttribute(name);
+                return v == null ? null : String.valueOf(v);
+            }
         } catch (Exception ignored) {}
         return null;
     }

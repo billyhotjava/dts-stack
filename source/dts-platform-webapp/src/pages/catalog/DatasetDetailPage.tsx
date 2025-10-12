@@ -13,7 +13,6 @@ import {
     updateDataset,
     getAccessPolicy,
     upsertAccessPolicy,
-    syncDatasetSchema,
     previewDataset,
     applyPolicy,
     getDatasetJob,
@@ -46,12 +45,22 @@ export default function DatasetDetailPage() {
     const [preview, setPreview] = useState<Record<string, string> | null>(null);
     const [dataPreview, setDataPreview] = useState<{ headers: string[]; rows: any[] } | null>(null);
     const [busy, setBusy] = useState(false);
-    const [syncing, setSyncing] = useState(false);
     const [lastJob, setLastJob] = useState<DatasetJob | null>(null);
     const [deptOptions, setDeptOptions] = useState<DeptDto[]>([]);
     const [deptLoading, setDeptLoading] = useState(false);
     const router = useRouter();
     const nonRootDeptOptions = useMemo(() => deptOptions.filter((d) => d.parentId != null && d.parentId !== 0), [deptOptions]);
+
+    // Normalize legacy classification -> DATA_* for UI binding
+    const fromLegacy = (c?: string): DataLevel => {
+        const v = String(c || "").trim().toUpperCase();
+        if (v === "PUBLIC") return "DATA_PUBLIC" as DataLevel;
+        if (v === "INTERNAL") return "DATA_INTERNAL" as DataLevel;
+        if (v === "SECRET") return "DATA_SECRET" as DataLevel;
+        if (v === "TOP_SECRET") return "DATA_TOP_SECRET" as DataLevel;
+        // default minimal
+        return "DATA_INTERNAL" as DataLevel;
+    };
 
     const loadDataset = async (withSpinner = false) => {
         if (withSpinner) setLoading(true);
@@ -70,6 +79,23 @@ export default function DatasetDetailPage() {
                               .filter(Boolean)
                         : []),
             };
+            // Backfill initial values for edit form to avoid empty saves
+            // 1) dataLevel: prefer DATA_* if provided; otherwise map from legacy classification
+            if (!normalized.dataLevel) {
+                normalized.dataLevel = fromLegacy((data as any)?.classification);
+            }
+            // 2) scope/shareScope: ensure explicit defaults to maintain current semantics
+            normalized.scope = (String((data as any)?.scope || "DEPT").toUpperCase()) as Scope;
+            if (normalized.scope === "INST") {
+                normalized.shareScope = ((data as any)?.shareScope as ShareScope) || ("SHARE_INST" as ShareScope);
+            } else {
+                // DEPT mode never carries shareScope
+                normalized.shareScope = undefined;
+            }
+            // 3) primitive text fields: coerce to strings to keep controlled inputs stable
+            normalized.name = String((data as any)?.name || "");
+            normalized.owner = String((data as any)?.owner || "");
+            normalized.description = String((data as any)?.description || "");
             setDataset(normalized);
             try {
                 const p = (await getAccessPolicy(id)) as any;
@@ -125,7 +151,7 @@ export default function DatasetDetailPage() {
     };
 
     const pollJobStatus = async (jobId: string): Promise<DatasetJob> => {
-        const maxAttempts = 10;
+        const maxAttempts = 30; // ~45s at 1.5s interval
         let attempt = 0;
         while (attempt < maxAttempts) {
             try {
@@ -146,14 +172,17 @@ export default function DatasetDetailPage() {
                 }
             }
             attempt += 1;
-            await wait(1200);
+            await wait(1500);
         }
-        throw new Error("任务仍在执行，请稍后在任务列表查看");
+        // Signal pending state to caller without treating as a hard error
+        throw new Error("PENDING");
     };
 
 	useEffect(() => {
 		void loadDataset(true);
 	}, [id]);
+
+    // removed sync-schema feature: runtime source precheck no longer needed
 
     useEffect(() => {
         let mounted = true;
@@ -247,7 +276,12 @@ export default function DatasetDetailPage() {
 
     // Legacy classification UI removed; only DATA_* is used going forward
 
-	const hasHive = dataset?.source?.sourceType === "HIVE";
+    const hasHive = useMemo(() => {
+        const t = String((dataset as any)?.type || "").trim().toUpperCase();
+        if (t === "INCEPTOR" || t === "HIVE") return true;
+        const hasLegacyHive = Boolean((dataset as any)?.hiveTable) || Boolean((dataset as any)?.hiveDatabase);
+        return hasLegacyHive;
+    }, [dataset?.type, (dataset as any)?.hiveTable, (dataset as any)?.hiveDatabase]);
 
 	const viewKeys = useMemo(() => (preview ? Object.keys(preview) : []), [preview]);
 
@@ -260,33 +294,6 @@ export default function DatasetDetailPage() {
             <CardHeader className="flex items-center justify-between">
                 <CardTitle className="text-base">基础信息</CardTitle>
                 <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        disabled={syncing}
-                        onClick={async () => {
-                            setSyncing(true);
-                            try {
-                                const resp = (await syncDatasetSchema(id)) as { job?: DatasetJob } | undefined;
-                                const job = (resp?.job ?? null) as DatasetJob | null;
-                                if (!job) {
-                                    throw new Error("未返回任务信息");
-                                }
-                                toast.success("已提交同步任务");
-                                const completed = await pollJobStatus(job.id);
-                                setLastJob(completed);
-                                await loadDataset();
-                                toast.success("已同步表结构");
-                            } catch (e) {
-                                console.error(e);
-                                const message = e instanceof Error ? e.message : "同步失败";
-                                toast.error(`同步失败：${message}`);
-                            } finally {
-                                setSyncing(false);
-                            }
-                        }}
-                    >
-                        {syncing ? "同步中…" : "同步表结构"}
-                    </Button>
                     <Button
                         variant="outline"
                         onClick={async () => {
@@ -358,14 +365,14 @@ export default function DatasetDetailPage() {
 					<div className="grid gap-2">
 						<Label>名称</Label>
 						<Input
-							value={dataset.name}
+							value={dataset.name || ""}
 							onChange={(e) => setDataset({ ...(dataset as DatasetAsset), name: e.target.value })}
 						/>
 					</div>
 					<div className="grid gap-2">
 						<Label>负责人</Label>
 						<Input
-							value={dataset.owner}
+							value={dataset.owner || ""}
 							onChange={(e) => setDataset({ ...(dataset as DatasetAsset), owner: e.target.value })}
 						/>
 					</div>
@@ -475,34 +482,34 @@ export default function DatasetDetailPage() {
 					</div>
 					<div className="grid gap-2">
 						<Label>来源类型</Label>
-						<Input disabled value={dataset.source?.sourceType || "EXTERNAL"} />
+                    <Input disabled value={(dataset as any)?.type || "INCEPTOR"} />
 					</div>
 					{hasHive && (
 						<>
-							<div className="grid gap-2">
-								<Label>Hive Database</Label>
-								<Input
-									value={dataset.source?.hiveDatabase || ""}
-									onChange={(e) =>
-										setDataset({
-											...(dataset as DatasetAsset),
-											source: { ...(dataset.source as any), hiveDatabase: e.target.value },
-										})
-									}
-								/>
-							</div>
-							<div className="grid gap-2">
-								<Label>Hive Table</Label>
-								<Input
-									value={dataset.source?.hiveTable || ""}
-									onChange={(e) =>
-										setDataset({
-											...(dataset as DatasetAsset),
-											source: { ...(dataset.source as any), hiveTable: e.target.value },
-										})
-									}
-								/>
-							</div>
+                            <div className="grid gap-2">
+                                <Label>Hive Database</Label>
+                                <Input
+                                    value={(dataset as any)?.hiveDatabase || ""}
+                                    onChange={(e) =>
+                                        setDataset({
+                                            ...(dataset as any),
+                                            hiveDatabase: e.target.value,
+                                        } as any)
+                                    }
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Hive Table</Label>
+                                <Input
+                                    value={(dataset as any)?.hiveTable || ""}
+                                    onChange={(e) =>
+                                        setDataset({
+                                            ...(dataset as any),
+                                            hiveTable: e.target.value,
+                                        } as any)
+                                    }
+                                />
+                            </div>
 						</>
 					)}
 				</CardContent>

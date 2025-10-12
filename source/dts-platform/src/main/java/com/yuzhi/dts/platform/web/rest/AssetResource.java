@@ -124,16 +124,26 @@ public class AssetResource {
      * Returns sample rows applying simple masking and noting row filter presence.
      */
     @GetMapping("/datasets/{id}/preview")
-    public ApiResponse<Map<String, Object>> preview(@PathVariable UUID id, @RequestParam(defaultValue = "50") int rows) {
+    public ApiResponse<Map<String, Object>> preview(
+        @PathVariable UUID id,
+        @RequestParam(defaultValue = "50") int rows,
+        @RequestHeader(value = "X-Active-Scope", required = false) String activeScope,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         CatalogDataset ds = datasetRepo.findById(id).orElseThrow();
-        if (!accessChecker.canRead(ds)) {
+        String effScope = activeScope != null ? activeScope : "DEPT";
+        String effDept = activeDept;
+        if (!accessChecker.canRead(ds) || !accessChecker.scopeAllowed(ds, effScope, effDept)) {
             audit.auditAction(
                 "CATALOG_ASSET_VIEW",
                 AuditStage.FAIL,
                 id.toString(),
-                Map.of("reason", "ACCESS_DENIED")
+                Map.of("reason", !accessChecker.canRead(ds) ? "RBAC_DENY" : "SCOPE_MISMATCH")
             );
-            return ApiResponses.error("Access denied");
+            String code = !accessChecker.canRead(ds)
+                ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY
+                : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.SCOPE_MISMATCH;
+            return ApiResponses.error(code, "Access denied for dataset");
         }
 
         int safeRows = Math.max(1, Math.min(rows, 500));

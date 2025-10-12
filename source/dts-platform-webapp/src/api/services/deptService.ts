@@ -1,7 +1,6 @@
 import axios from "axios";
 import { GLOBAL_CONFIG } from "@/global-config";
 import userStore from "@/store/userStore";
-import apiClient from "@/api/apiClient";
 import useContextStore from "@/store/contextStore";
 
 // Backward-compatible DTO used by existing pages (code + display names)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ChangeEvent, JSX } from "react";
+import type { ChangeEvent, ReactElement } from "react";
 import { toast } from "sonner";
 import type {
 	SqlCatalogNode,
@@ -21,7 +21,7 @@ import { Badge } from "@/ui/badge";
 
 const DEFAULT_SQL = "SELECT 1";
 
-const renderCatalogTree = (node: SqlCatalogNode, depth = 0): JSX.Element => {
+const renderCatalogTree = (node: SqlCatalogNode, depth = 0): ReactElement => {
 	const padding = depth * 12;
 	return (
 		<div key={`${node.type}-${node.id}`} className="space-y-1">

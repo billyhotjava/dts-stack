@@ -32,7 +32,31 @@ public class PortalSessionRegistry {
      * Register a brand new session for the given username/authorities.
      */
     public synchronized PortalSession createSession(String username, List<String> roles, List<String> permissions, AdminTokens adminTokens) {
-        PortalSession session = PortalSession.create(username, normalizeRoles(roles), permissions, adminTokens, DEFAULT_TTL);
+        PortalSession session = PortalSession.create(username, normalizeRoles(roles), permissions, null, null, adminTokens, DEFAULT_TTL);
+        register(session);
+        return session;
+    }
+
+    /**
+     * Overload: Register a session with additional attributes such as dept code and personnel level.
+     */
+    public synchronized PortalSession createSession(
+        String username,
+        List<String> roles,
+        List<String> permissions,
+        String deptCode,
+        String personnelLevel,
+        AdminTokens adminTokens
+    ) {
+        PortalSession session = PortalSession.create(
+            username,
+            normalizeRoles(roles),
+            permissions,
+            deptCode,
+            personnelLevel,
+            adminTokens,
+            DEFAULT_TTL
+        );
         register(session);
         return session;
     }
@@ -142,6 +166,8 @@ public class PortalSessionRegistry {
         String username,
         List<String> roles,
         List<String> permissions,
+        String deptCode,
+        String personnelLevel,
         String accessToken,
         String refreshToken,
         Instant expiresAt,
@@ -151,6 +177,8 @@ public class PortalSessionRegistry {
             String username,
             List<String> roles,
             List<String> permissions,
+            String deptCode,
+            String personnelLevel,
             AdminTokens adminTokens,
             Duration ttl
         ) {
@@ -160,11 +188,22 @@ public class PortalSessionRegistry {
             Instant expiresAt = Instant.now().plus(ttl);
             List<String> perms = permissions == null ? Collections.emptyList() : List.copyOf(permissions);
             AdminTokens tokens = adminTokens == null ? null : adminTokens;
-            return new PortalSession(sessionId, username, List.copyOf(roles), perms, accessToken, refreshToken, expiresAt, tokens);
+            return new PortalSession(
+                sessionId,
+                username,
+                List.copyOf(roles),
+                perms,
+                deptCode,
+                personnelLevel,
+                accessToken,
+                refreshToken,
+                expiresAt,
+                tokens
+            );
         }
 
         private PortalSession renew(Duration ttl, AdminTokens adminTokens) {
-            return create(username, roles, permissions, adminTokens, ttl);
+            return create(username, roles, permissions, deptCode, personnelLevel, adminTokens, ttl);
         }
 
         private boolean isExpired() {

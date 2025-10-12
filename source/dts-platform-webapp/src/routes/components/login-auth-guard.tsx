@@ -1,6 +1,5 @@
 import { useCallback, useEffect } from "react";
 import menuService from "@/api/services/menuService";
-import { useMenuStore } from "@/store/menuStore";
 import { useUserInfo, useUserToken } from "@/store/userStore";
 import { LOGIN_ROUTE } from "../constants";
 import { useRouter } from "../hooks";
@@ -13,7 +12,6 @@ export default function LoginAuthGuard({ children }: Props) {
     const router = useRouter();
     const { accessToken } = useUserToken();
     const { roles = [] } = useUserInfo();
-    const menus = useMenuStore((s) => s.menus);
 
 	const isLocalDevToken = (token?: string) => Boolean(token?.startsWith("dev-access-"));
 

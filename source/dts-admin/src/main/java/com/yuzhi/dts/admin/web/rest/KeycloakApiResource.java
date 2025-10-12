@@ -1264,12 +1264,15 @@ public class KeycloakApiResource {
                     String resourceId = String.valueOf(id);
                     try {
                         var entityOpt = adminUserService.findApprovalEntity(id);
-                        if (entityOpt.isPresent() && entityOpt.get().getItems() != null && entityOpt.get().getItems().size() == 1) {
-                            var only = entityOpt.get().getItems().get(0);
-                            if (only != null && only.getId() != null) {
-                                resourceId = String.valueOf(only.getId());
-                            }
-                        }
+                        resourceId = entityOpt
+                            .map(e -> e.getItems())
+                            .filter(java.util.Objects::nonNull)
+                            .filter(list -> list.size() == 1)
+                            .map(list -> list.get(0))
+                            .map(item -> item != null ? item.getId() : null)
+                            .filter(java.util.Objects::nonNull)
+                            .map(String::valueOf)
+                            .orElse(resourceId);
                     } catch (Exception ignore) {}
                     auditService.recordAction(actor, "ADMIN_APPROVAL_DECIDE", AuditStage.SUCCESS, resourceId, Map.of("result", "APPROVED"));
                     yield ResponseEntity.ok(ApiResponse.ok(detail));
@@ -1297,10 +1300,13 @@ public class KeycloakApiResource {
 
     @PostMapping("/keycloak/user-sync/process/{id}")
     public ResponseEntity<ApiResponse<Void>> syncApproved(@PathVariable long id) {
-        Optional<ApprovalDTOs.ApprovalRequestDetail> detail = adminUserService.findApprovalDetail(id);
-        ApprovalDTOs.ApprovalRequestDetail current = detail.orElse(null);
-        if (current == null) {
-            return ResponseEntity.status(404).body(ApiResponse.error("审批请求不存在"));
+        ApprovalDTOs.ApprovalRequestDetail current;
+        try {
+            current = adminUserService
+                .findApprovalDetail(id)
+                .orElseThrow(() -> new IllegalArgumentException("审批请求不存在"));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(404).body(ApiResponse.error(ex.getMessage()));
         }
         if (!"PENDING".equalsIgnoreCase(current.status)) {
             return ResponseEntity.ok(ApiResponse.ok(null));

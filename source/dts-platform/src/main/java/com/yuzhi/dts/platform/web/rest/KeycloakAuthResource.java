@@ -72,6 +72,10 @@ public class KeycloakAuthResource {
                 permissions.add("iam.manage");
             }
 
+            // Extract optional attributes for ABAC (dept_code/personnel_level)
+            String deptCode = extractUserAttribute(user, "dept_code");
+            String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
+
             // Issue a portal session (opaque tokens) for platform API access
             AdminTokens adminTokens = computeAdminTokens(
                 result.accessToken(),
@@ -80,7 +84,7 @@ public class KeycloakAuthResource {
                 result.refreshTokenExpiresIn(),
                 null
             );
-            PortalSession session = sessionRegistry.createSession(username, mappedRoles, permissions, adminTokens);
+            PortalSession session = sessionRegistry.createSession(username, mappedRoles, permissions, deptCode, personnelLevel, adminTokens);
 
             // Build user payload (override roles/permissions with mapped ones)
             Map<String, Object> userOut = new java.util.HashMap<>(user);
@@ -201,6 +205,40 @@ public class KeycloakAuthResource {
         }
         if (value instanceof String s) return java.util.List.of(s);
         return java.util.List.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private String extractUserAttribute(Map<String, Object> user, String... keys) {
+        if (user == null) return null;
+        // Try flat fields first
+        for (String k : keys) {
+            Object v = user.get(k);
+            if (v instanceof String s && !s.isBlank()) return s.trim();
+        }
+        // Try nested attributes map as in Keycloak userinfo
+        Object attrs = user.get("attributes");
+        if (attrs instanceof Map<?, ?> map) {
+            for (String k : keys) {
+                Object v = map.get(k);
+                if (v instanceof String s && !s.isBlank()) return s.trim();
+                if (v instanceof java.util.List<?> list && !list.isEmpty()) {
+                    Object first = list.get(0);
+                    if (first instanceof String s && !s.isBlank()) return s.trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    private String normalizePersonnelLevel(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        String v = raw.trim().toUpperCase(Locale.ROOT);
+        // Map Chinese labels to canonical levels
+        if (v.equals("内部") || v.equals("INTERNAL") || v.equals("GENERAL")) return "GENERAL";
+        if (v.equals("秘密") || v.equals("SECRET") || v.equals("IMPORTANT")) return "IMPORTANT";
+        if (v.equals("机密") || v.equals("TOP_SECRET") || v.equals("CORE")) return "CORE";
+        // Best-effort: keep as-is
+        return v;
     }
 
     private boolean containsTriad(List<String> roles) {

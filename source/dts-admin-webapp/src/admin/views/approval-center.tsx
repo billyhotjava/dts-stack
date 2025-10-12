@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from "react";
+import type { ReactElement } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -193,93 +194,10 @@ function summarizeDetails(request: ChangeRequest): string {
     return "—";
 }
 
-function summarizeDiffPairs(request: ChangeRequest): string {
-    const diff = asRecord(parseJson(request.diffJson));
-    if (!diff) return "—";
-    // Handle batch diff: { items: [{ id, before, after }] }
-    if (Array.isArray((diff as any).items)) {
-        const items = (diff as any).items as any[];
-        const lines: string[] = [];
-        for (const it of items.slice(0, 3)) {
-            const id = it?.id ?? "?";
-            const before = asRecord(it?.before) || {};
-            const after = asRecord(it?.after) || {};
-            const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
-            const changes: string[] = [];
-            for (const key of keys) {
-                const a = (before as any)[key];
-                const b = (after as any)[key];
-                if (JSON.stringify(a) !== JSON.stringify(b)) {
-                    changes.push(`${key}: ${fmtValue(a)} → ${fmtValue(b)}`);
-                }
-            }
-            if (changes.length) {
-                lines.push(`菜单${id}: ${changes.join("，")}`);
-            }
-        }
-        const extra = items.length - Math.min(items.length, 3);
-        return lines.length ? lines.join("；") + (extra > 0 ? `（等${extra}项）` : "") : "—";
-    }
-    const before = asRecord(diff.before) || {};
-    const after = asRecord(diff.after) || {};
-    const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
-    const changes: string[] = [];
-    for (const key of keys) {
-        const a = (before as any)[key];
-        const b = (after as any)[key];
-        if (JSON.stringify(a) !== JSON.stringify(b)) {
-            changes.push(`${key}: ${fmtValue(a)} → ${fmtValue(b)}`);
-        }
-    }
-    return changes.length > 0 ? changes.join("；") : "—";
-}
-
-// Summarize diff focusing on a single side: "before" or "after"
-function summarizeDiffSide(request: ChangeRequest, side: "before" | "after"): string {
-    const diff = asRecord(parseJson(request.diffJson));
-    if (!diff) return "—";
-    // Batch items: summarize first few
-    if (Array.isArray((diff as any).items)) {
-        const items = (diff as any).items as any[];
-        const lines: string[] = [];
-        for (const it of items.slice(0, 3)) {
-            const id = it?.id ?? "?";
-            const before = asRecord(it?.before) || {};
-            const after = asRecord(it?.after) || {};
-            const a = side === "before" ? before : after;
-            const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
-            const changes: string[] = [];
-            for (const key of keys) {
-                const vb = (before as any)[key];
-                const va = (after as any)[key];
-                if (JSON.stringify(vb) !== JSON.stringify(va)) {
-                    const v = side === "before" ? vb : va;
-                    changes.push(`${key}: ${fmtValue(v)}`);
-                }
-            }
-            if (changes.length) lines.push(`菜单${id}: ${changes.slice(0, 3).join("，")}`);
-        }
-        const extra = items.length - Math.min(items.length, 3);
-        return lines.length ? lines.join("；") + (extra > 0 ? `（等${extra}项）` : "") : "—";
-    }
-    const before = asRecord(diff.before) || {};
-    const after = asRecord(diff.after) || {};
-    const src = side === "before" ? before : after;
-    const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
-    const parts: string[] = [];
-    for (const key of keys) {
-        const vb = (before as any)[key];
-        const va = (after as any)[key];
-        if (JSON.stringify(vb) !== JSON.stringify(va)) {
-            parts.push(`${key}: ${fmtValue((src as any)[key])}`);
-        }
-        if (parts.length >= 4) break;
-    }
-    return parts.length > 0 ? parts.join("；") : "—";
-}
+// Removed unused summarize helpers (summarizeDiffPairs/summarizeDiffSide) to satisfy TS noUnusedLocals
 
 // 与 summarizeDiffSide 类似，但返回 JSX，并在“变更后”用红色高亮变动值
-function renderDiffSide(request: ChangeRequest, side: "before" | "after", ctx?: DiffFormatContext): JSX.Element {
+function renderDiffSide(request: ChangeRequest, side: "before" | "after", ctx?: DiffFormatContext): ReactElement {
     const diff = asRecord(parseJson(request.diffJson));
     const containerClass = "flex flex-col gap-1 text-xs leading-5";
     const mutedClass = "text-xs text-muted-foreground";
@@ -325,7 +243,7 @@ function renderDiffSide(request: ChangeRequest, side: "before" | "after", ctx?: 
     // 批量
     if (Array.isArray((diff as any).items)) {
         const items = (diff as any).items as any[];
-        const lines: JSX.Element[] = [];
+        const lines: ReactElement[] = [];
         items.forEach((item, itemIndex) => {
             const before = asRecord(item?.before) || {};
             const after = asRecord(item?.after) || {};
@@ -486,7 +404,7 @@ function labelOf(key: string): string {
     return key;
 }
 
-function mapArray<T>(v: unknown, mapper: (x: any) => string): string {
+function mapArray(v: unknown, mapper: (x: any) => string): string {
     const arr = Array.isArray(v) ? v : v == null ? [] : [v];
     if (arr.length === 0) return "—";
     return arr.map(mapper).join("，");
@@ -930,7 +848,7 @@ export default function ApprovalCenterView() {
         };
         for (const it of combinedChangeRequests || []) {
             collect(it?.requestedBy);
-            collect(it?.effectiveDecidedBy);
+            collect((it as any)?.decidedBy);
         }
         const need = Array.from(usernames).filter((u) => {
             if (!u) return false;
@@ -1157,7 +1075,7 @@ export default function ApprovalCenterView() {
                 },
             }));
             if (decidedBy) {
-                const fullName = userInfo?.fullName || userInfo?.displayName || userInfo?.username;
+    const fullName = userInfo?.fullName || userInfo?.username;
                 if (fullName && fullName.trim().length > 0) {
                     setOperatorNameMap((prev) => {
                         const display = fullName.trim();

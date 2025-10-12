@@ -217,7 +217,9 @@ public class CatalogResource {
         @RequestParam(required = false) String owner,
         @RequestParam(required = false) String tag,
         @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "10") int size
+        @RequestParam(defaultValue = "10") int size,
+        @RequestHeader(value = "X-Active-Scope", required = false) String activeScope,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdDate").descending());
         Page<CatalogDataset> p = datasetRepo.findAll(pageable);
@@ -240,7 +242,12 @@ public class CatalogResource {
             .filter(ds -> exposedBy == null || (ds.getExposedBy() != null && ds.getExposedBy().equalsIgnoreCase(exposedBy)))
             .filter(ds -> owner == null || (ds.getOwner() != null && ds.getOwner().toLowerCase().contains(owner.toLowerCase())))
             .filter(ds -> tag == null || (ds.getTags() != null && ds.getTags().toLowerCase().contains(tag.toLowerCase())))
+            // RBAC/level gate
             .filter(accessChecker::canRead)
+            // Scope gate using active context (headers injected by frontend)
+            .filter(ds -> accessChecker.scopeAllowed(ds,
+                activeScope != null ? activeScope : "DEPT",
+                activeDept))
             .map(this::toDatasetDto)
             .toList();
         Map<String, Object> data = Map.of("content", filtered, "total", p.getTotalElements());

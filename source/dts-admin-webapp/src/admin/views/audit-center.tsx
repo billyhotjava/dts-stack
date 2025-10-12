@@ -28,17 +28,7 @@ interface FilterState {
 	eventType?: string;
 }
 
-interface AuditModuleCatalog {
-	key: string;
-	title: string;
-}
-
-interface AuditCategoryItem {
-	moduleKey: string;
-	moduleTitle: string;
-	entryKey: string;
-	entryTitle: string;
-}
+// Removed unused types (AuditModuleCatalog, AuditCategoryItem) to satisfy strict TS settings
 
 const ADMIN_LABELS: Record<string, string> = {
 	sysadmin: "系统管理员",
@@ -421,32 +411,7 @@ function CollapsibleText({
   );
 }
 
-function mergeModuleOptionLists(
-	current: Array<{ value: string; label: string }>,
-	additions: Array<{ value: string; label: string }>,
-	shouldSort: boolean = true,
-): Array<{ value: string; label: string }> {
-	if (!additions || additions.length === 0) {
-		return current;
-	}
-	const map = new Map<string, { value: string; label: string }>();
-	for (const item of current) {
-		if (item?.value) {
-			map.set(item.value, item);
-		}
-	}
-	for (const item of additions) {
-		if (item?.value) {
-			const label = item.label?.trim();
-			map.set(item.value, { value: item.value, label: label || item.value });
-		}
-	}
-	const merged = Array.from(map.values());
-	if (shouldSort) {
-		merged.sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
-	}
-	return merged;
-}
+// mergeModuleOptionLists removed (unused)
 
 // module catalog removed; sourceSystem now drives filtering
 

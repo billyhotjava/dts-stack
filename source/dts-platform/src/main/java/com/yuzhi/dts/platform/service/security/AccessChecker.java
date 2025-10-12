@@ -99,14 +99,22 @@ public class AccessChecker {
 
     private PersonnelLevel extractPersonnelLevelFromJwt() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth instanceof JwtAuthenticationToken token) {
-            Map<String, Object> claims = token.getToken().getClaims();
-            Object v = claims.get("person_security_level");
-            if (v == null) v = claims.get("personnel_level");
-            if (v instanceof String s) {
-                return PersonnelLevel.normalize(s);
+        try {
+            if (auth instanceof JwtAuthenticationToken token) {
+                Map<String, Object> claims = token.getToken().getClaims();
+                Object v = claims.get("person_security_level");
+                if (v == null) v = claims.get("personnel_level");
+                if (v instanceof String s) {
+                    return PersonnelLevel.normalize(s);
+                }
+            } else if (auth != null && auth.getPrincipal() instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal principal) {
+                String v = principal.getAttribute("personnel_level");
+                if (v == null) v = principal.getAttribute("person_security_level");
+                if (v != null) {
+                    return PersonnelLevel.normalize(v);
+                }
             }
-        }
+        } catch (Exception ignored) {}
         return null;
     }
 }

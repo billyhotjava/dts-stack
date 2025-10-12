@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { useRouter } from "@/routes/hooks";
 import type { OrganizationNode } from "@/admin/types";
 import { adminApi } from "@/admin/api/adminApi";
-import { shouldHideRole } from "@/constants/keycloak-roles";
+import { isKeycloakBuiltInRole } from "@/constants/keycloak-roles";
 import { GLOBAL_CONFIG } from "@/global-config";
 
 function getSingleAttr(attrs: Record<string, string[]> | undefined, key: string): string {
@@ -163,7 +163,10 @@ export default function UserManagementView() {
               const name = (r?.name || "").toString();
               if (!name) return false;
               if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
-              if (GLOBAL_CONFIG.hideBuiltinRoles && shouldHideRole(r)) return false;
+              // Only hide Keycloak built-in roles in the list view. Do NOT hide
+              // reserved business roles (e.g. SYSADMIN/OPADMIN) from display here,
+              // otherwise the “角色”列会被清空。
+              if (GLOBAL_CONFIG.hideBuiltinRoles && isKeycloakBuiltInRole(r)) return false;
               return true;
             });
             const names = filtered.map((r) => (r?.name || "").toString().trim().toUpperCase());

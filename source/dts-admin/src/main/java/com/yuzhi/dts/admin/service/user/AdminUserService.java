@@ -637,10 +637,12 @@ public class AdminUserService {
                 Long.parseLong(normalizedTarget);
             } catch (NumberFormatException ignore) {
                 try {
-                    var userOpt = userRepository.findByUsernameIgnoreCase(normalizedTarget);
-                    if (userOpt.isPresent() && userOpt.get().getId() != null) {
-                        normalizedTarget = String.valueOf(userOpt.get().getId());
-                    }
+                    String resolved = userRepository
+                        .findByUsernameIgnoreCase(normalizedTarget)
+                        .map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::getId)
+                        .map(String::valueOf)
+                        .orElse(normalizedTarget);
+                    normalizedTarget = resolved;
                 } catch (Exception ignored) {
                     // fall through with original target
                 }
@@ -1760,16 +1762,12 @@ public class AdminUserService {
             String keycloakId = stringValue(payload.get("keycloakId"));
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
             keycloakAdminClient.deleteUser(existing.getId(), accessToken);
-            Long pkId = null;
-            boolean removedSnapshot;
-            var existed = userRepository.findByUsernameIgnoreCase(existing.getUsername());
-            if (existed.isPresent()) {
-                pkId = existed.get().getId();
-                userRepository.delete(existed.get());
-                removedSnapshot = true;
-            } else {
-                removedSnapshot = false;
-            }
+            Long pkId = userRepository
+                .findByUsernameIgnoreCase(existing.getUsername())
+                .map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::getId)
+                .orElse(null);
+            boolean removedSnapshot = userRepository.findByUsernameIgnoreCase(existing.getUsername()).isPresent();
+            userRepository.findByUsernameIgnoreCase(existing.getUsername()).ifPresent(userRepository::delete);
             detail.put("keycloakId", existing.getId());
             detail.put("snapshotRemoved", removedSnapshot);
             auditUserChange(actor, auditAction, pkId != null ? String.valueOf(pkId) : existing.getUsername(), "SUCCESS", detail);
