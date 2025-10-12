@@ -105,9 +105,11 @@ public class AuditLogResource {
         @RequestParam(value = "page", defaultValue = "0") int page,
         @RequestParam(value = "size", defaultValue = "20") int size,
         @RequestParam(value = "sort", defaultValue = "occurredAt,desc") String sort,
+        @RequestParam(value = "eventType", required = false) String eventType,
         @RequestParam(value = "actor", required = false) String actor,
         @RequestParam(value = "module", required = false) String module,
         @RequestParam(value = "action", required = false) String action,
+        @RequestParam(value = "sourceSystem", required = false) String sourceSystem,
         @RequestParam(value = "result", required = false) String result,
         @RequestParam(value = "resourceType", required = false) String resourceType,
         @RequestParam(value = "resource", required = false) String resource,
@@ -141,6 +143,8 @@ public class AuditLogResource {
                 actor,
                 module,
                 action,
+                sourceSystem,
+                eventType,
                 result,
                 resourceType,
                 resource,
@@ -154,6 +158,8 @@ public class AuditLogResource {
                 actor,
                 module,
                 action,
+                sourceSystem,
+                eventType,
                 result,
                 resourceType,
                 resource,
@@ -172,6 +178,8 @@ public class AuditLogResource {
                 actor,
                 module,
                 action,
+                sourceSystem,
+                eventType,
                 result,
                 resourceType,
                 resource,
@@ -185,6 +193,8 @@ public class AuditLogResource {
                 actor,
                 module,
                 action,
+                sourceSystem,
+                eventType,
                 result,
                 resourceType,
                 resource,
@@ -201,6 +211,8 @@ public class AuditLogResource {
                 actor,
                 module,
                 action,
+                sourceSystem,
+                eventType,
                 result,
                 resourceType,
                 resource,
@@ -227,6 +239,8 @@ public class AuditLogResource {
         @RequestParam(value = "actor", required = false) String actor,
         @RequestParam(value = "module", required = false) String module,
         @RequestParam(value = "action", required = false) String action,
+        @RequestParam(value = "sourceSystem", required = false) String sourceSystem,
+        @RequestParam(value = "eventType", required = false) String eventType,
         @RequestParam(value = "result", required = false) String result,
         @RequestParam(value = "resourceType", required = false) String resourceType,
         @RequestParam(value = "resource", required = false) String resource,
@@ -256,6 +270,8 @@ public class AuditLogResource {
                     actor,
                     module,
                     action,
+                    sourceSystem,
+                    eventType,
                     result,
                     resourceType,
                     resource,
@@ -269,6 +285,8 @@ public class AuditLogResource {
                     actor,
                     module,
                     action,
+                    sourceSystem,
+                    eventType,
                     result,
                     resourceType,
                     resource,
@@ -287,6 +305,8 @@ public class AuditLogResource {
                     actor,
                     module,
                     action,
+                    sourceSystem,
+                    eventType,
                     result,
                     resourceType,
                     resource,
@@ -300,6 +320,8 @@ public class AuditLogResource {
                     actor,
                     module,
                     action,
+                    sourceSystem,
+                    eventType,
                     result,
                     resourceType,
                     resource,
@@ -315,6 +337,8 @@ public class AuditLogResource {
                 actor,
                 module,
                 action,
+                sourceSystem,
+                eventType,
                 result,
                 resourceType,
                 resource,
@@ -325,17 +349,28 @@ public class AuditLogResource {
             );
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("id,timestamp,module,action,actor,result,resource,clientIp\n");
+        sb.append("id,timestamp,source,event_class,event_type,module,action,summary,operator_id,operator_name,org_code,org_name,result,resource_type,resource_id,client_ip,client_agent,http_method,request_uri\n");
         for (AuditEvent event : events) {
             sb
                 .append(event.getId()).append(',')
                 .append(event.getOccurredAt()).append(',')
+                .append(escape(event.getSourceSystem())).append(',')
+                .append(escape(event.getEventClass())).append(',')
+                .append(escape(event.getEventType())).append(',')
                 .append(escape(event.getModule())).append(',')
                 .append(escape(event.getAction())).append(',')
-                .append(escape(event.getActor())).append(',')
+                .append(escape(event.getSummary())).append(',')
+                .append(escape(event.getOperatorId())).append(',')
+                .append(escape(event.getOperatorName())).append(',')
+                .append(escape(event.getOrgCode())).append(',')
+                .append(escape(event.getOrgName())).append(',')
                 .append(escape(event.getResult())).append(',')
+                .append(escape(event.getResourceType())).append(',')
                 .append(escape(event.getResourceId())).append(',')
-                .append(escape(event.getClientIp()))
+                .append(escape(event.getClientIp())).append(',')
+                .append(escape(event.getClientAgent())).append(',')
+                .append(escape(event.getHttpMethod())).append(',')
+                .append(escape(event.getRequestUri()))
                 .append('\n');
         }
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audits.csv");
@@ -362,6 +397,7 @@ public class AuditLogResource {
 
     private AuditEventView toView(AuditEvent event) {
         AuditEventView view = new AuditEventView();
+        view.eventId = event.getEventUuid() != null ? event.getEventUuid().toString() : null;
         view.id = event.getId();
         view.occurredAt = event.getOccurredAt();
         view.actor = event.getActor();
@@ -375,6 +411,30 @@ public class AuditLogResource {
         view.result = event.getResult();
         view.extraTags = event.getExtraTags();
         view.payloadPreview = decodePayloadPreview(event);
+        // extended mapping for new audit schema
+        view.sourceSystem = event.getSourceSystem();
+        view.eventClass = event.getEventClass();
+        view.eventType = event.getEventType();
+        view.summary = event.getSummary();
+        view.operatorId = event.getOperatorId();
+        view.operatorName = event.getOperatorName();
+        view.operatorRoles = event.getOperatorRoles();
+        view.orgCode = event.getOrgCode();
+        view.orgName = event.getOrgName();
+        // Extract minimal details for quick list rendering (requestId/target info)
+        try {
+            if (event.getDetails() != null && !event.getDetails().isBlank()) {
+                Map<?,?> det = objectMapper.readValue(event.getDetails(), Map.class);
+                Object req = det.get("request_id");
+                if (req != null) view.requestId = String.valueOf(req);
+                Object tbl = det.get("target_table");
+                if (tbl != null) view.targetTable = String.valueOf(tbl);
+                Object tid = det.get("target_id");
+                if (tid != null) view.targetId = String.valueOf(tid);
+                Object tref = det.get("target_ref");
+                if (tref != null) view.targetRef = String.valueOf(tref);
+            }
+        } catch (Exception ignore) {}
         return view;
     }
 
@@ -418,7 +478,23 @@ public class AuditLogResource {
         detail.result = base.result;
         detail.extraTags = base.extraTags;
         detail.payloadPreview = base.payloadPreview;
+        // extended
+        detail.sourceSystem = base.sourceSystem;
+        detail.eventClass = base.eventClass;
+        detail.eventType = base.eventType;
+        detail.summary = base.summary;
+        detail.operatorId = base.operatorId;
+        detail.operatorName = base.operatorName;
+        detail.operatorRoles = base.operatorRoles;
+        detail.orgCode = base.orgCode;
+        detail.orgName = base.orgName;
         detail.payload = decodePayload(event);
+        // parse details json if present
+        try {
+            if (event.getDetails() != null && !event.getDetails().isBlank()) {
+                detail.details = objectMapper.readValue(event.getDetails(), Object.class);
+            }
+        } catch (Exception ignore) {}
         return detail;
     }
 
@@ -480,5 +556,6 @@ public class AuditLogResource {
 
     private static final class AuditEventDetailView extends AuditEventView {
         public Object payload;
+        public Object details;
     }
 }

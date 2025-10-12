@@ -6,6 +6,8 @@ import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } fro
 import type { OrganizationNode } from "@/admin/types";
 import { adminApi } from "@/admin/api/adminApi";
 import { KeycloakGroupService, KeycloakUserProfileService, KeycloakUserService } from "@/api/services/keycloakService";
+import { isKeycloakBuiltInRole } from "@/constants/keycloak-roles";
+import { GLOBAL_CONFIG } from "@/global-config";
 import { Icon } from "@/components/icon";
 import { useParams, useRouter } from "@/routes/hooks";
 import { Alert, AlertDescription } from "@/ui/alert";
@@ -53,8 +55,11 @@ export default function UserDetailView() {
   const [userGroups, setUserGroups] = useState<KeycloakGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
-  // Role catalog for richer descriptions (fallback when KC role lacks one)
+  // Role catalogs
+  // 1) description catalog: ROLE_NAME -> description
   const [roleCatalog, setRoleCatalog] = useState<Record<string, string>>({});
+  // 2) display name catalog: ROLE_NAME -> 中文名称/展示名
+  const [roleDisplayNameCatalog, setRoleDisplayNameCatalog] = useState<Record<string, string>>({});
   const [departmentName, setDepartmentName] = useState<string>("");
   const [orgIndexById, setOrgIndexById] = useState<Record<string, OrganizationNode>>({});
 
@@ -103,7 +108,14 @@ export default function UserDetailView() {
         const seen = new Set<string>((mergedRoles || []).map((r) => (r?.name || "").toString().trim().toUpperCase()));
         add.forEach((r) => { const k = (r?.name || "").toString().trim().toUpperCase(); if (k && !seen.has(k)) mergedRoles.push(r); });
       } catch (e) { /* ignore */ }
-      setUserRoles(mergedRoles);
+      // Hide Keycloak 内置/默认角色（如 default-roles-*、offline_access、uma_authorization、realm-management 等）
+      const filtered = (mergedRoles || []).filter((r) => {
+        const name = (r?.name || "").toString();
+        if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
+        if (GLOBAL_CONFIG.hideBuiltinRoles && isKeycloakBuiltInRole(r as any)) return false;
+        return true;
+      });
+      setUserRoles(filtered);
       setUserGroups(groupsData);
     } catch (err: any) {
       console.error("Error loading user detail:", err);
@@ -118,18 +130,30 @@ export default function UserDetailView() {
     loadUserProfileConfig();
   }, [loadUserDetail, loadUserProfileConfig]);
 
-  // Load admin role catalog once to enrich role descriptions
+  // Load admin role catalog once to enrich role descriptions & display names
   useEffect(() => {
     (async () => {
       try {
         const roles = await adminApi.getAdminRoles();
-        const map: Record<string, string> = {};
+        const descMap: Record<string, string> = {};
+        const displayMap: Record<string, string> = {};
+        const put = (key: string, cn: string | undefined) => {
+          const k = (key || "").toString().trim().toUpperCase();
+          if (!k) return;
+          const v = (cn || "").toString().trim();
+          if (v) displayMap[k] = v;
+        };
         (roles || []).forEach((r: any) => {
           const name = (r?.name || "").toString().trim().toUpperCase();
+          const code = (r?.code || r?.roleId || r?.legacyName || "").toString().trim().toUpperCase();
           const desc = (r?.description || "").toString();
-          if (name) map[name] = desc;
+          const display = (r?.nameZh || r?.displayName || "").toString();
+          if (name) descMap[name] = desc;
+          if (name) put(name, display);
+          if (code) put(code, display);
         });
-        setRoleCatalog(map);
+        setRoleCatalog(descMap);
+        setRoleDisplayNameCatalog(displayMap);
       } catch (e) {
         // best-effort only
       }
@@ -186,7 +210,11 @@ export default function UserDetailView() {
 
   // 角色表格列定义
   const roleColumns: ColumnsType<KeycloakRole> = [
-    { title: "角色名称", dataIndex: "name", key: "name" },
+    { title: "角色名称", dataIndex: "name", key: "name", render: (_: any, record) => {
+      const key = (record?.name || "").toString().trim().toUpperCase();
+      const display = roleDisplayNameCatalog[key];
+      return (display || record?.name || "-").toString();
+    } },
     {
       title: "描述",
       dataIndex: "description",

@@ -11,6 +11,7 @@ import userService, { type SignInReq } from "@/api/services/userService";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { updateLocalTranslations } from "@/utils/translation";
 import { useMenuStore } from "./menuStore";
+import useContextStore from "./contextStore";
 
 // Normalize possibly mixed arrays (objects or strings) to string[] by picking
 // common identity fields such as `code` or `name` when present.
@@ -72,6 +73,10 @@ const useUserStore = create<UserStore>()(
 					set({ userInfo: {}, userToken: {} });
 					try {
 						useMenuStore.getState().clearMenus();
+						// Reset scoped context so the next user doesn't inherit prior dept/scope
+						const ctx = useContextStore.getState();
+						ctx.actions.setActiveDept(undefined);
+						ctx.actions.setActiveScope("DEPT");
 					} catch {
 						// ignore store access errors (e.g., during SSR)
 					}

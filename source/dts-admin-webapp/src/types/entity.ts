@@ -100,23 +100,40 @@ export type MenuTree = Menu & {
 
 // 审计日志相关类型
 export interface AuditLog {
-	id: number;
-	occurredAt: string;
-	module: string;
-	action: string;
-	actor: string;
-	resourceType?: string;
-	resourceId?: string;
-	clientIp?: string;
-	clientAgent?: string;
-	httpMethod?: string;
-	result: string;
-	extraTags?: string;
-	payloadPreview?: string;
+    eventId?: string;
+    id: number;
+    occurredAt: string;
+    module: string;
+    action: string;
+    actor: string;
+    resourceType?: string;
+    resourceId?: string;
+    clientIp?: string;
+    clientAgent?: string;
+    httpMethod?: string;
+    result: string;
+    extraTags?: string;
+    payloadPreview?: string;
+    // extended fields (audit refactor)
+    sourceSystem?: string;
+    eventClass?: string;
+    eventType?: string;
+    summary?: string;
+    operatorId?: string;
+    operatorName?: string;
+    operatorRoles?: string; // JSON string from backend
+    orgCode?: string;
+    orgName?: string;
+    // convenience fields extracted from details
+    requestId?: string;
+    targetTable?: string;
+    targetId?: string;
+    targetRef?: string;
 }
 
 export interface AuditLogDetail extends AuditLog {
-	payload?: unknown;
+    payload?: unknown;
+    details?: unknown;
 }
 
 export interface AuditLogPageResponse {

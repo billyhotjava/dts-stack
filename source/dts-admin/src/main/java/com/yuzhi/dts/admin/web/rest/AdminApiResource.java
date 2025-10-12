@@ -474,7 +474,8 @@ public class AdminApiResource {
                 Map<String, Object> approvalPayload = new LinkedHashMap<>(auditDetail);
                 approvalPayload.put("status", "APPROVAL_PENDING");
                 approvalPayload.put("changeRequestId", cr.getId());
-                auditService.recordAction(actor, "ADMIN_MENU_CREATE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalPayload);
+                // 记录变更单本身：target_table=change_request, target_id=cr.id
+                auditService.record(actor, "ADMIN_MENU_CREATE", "PORTAL_MENU", "change_request", String.valueOf(cr.getId()), "SUCCESS", approvalPayload, null);
                 return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
             }
             String name = trimToNull(payload.get("name"));
@@ -1576,7 +1577,22 @@ public class AdminApiResource {
     }
 
     private Map<String, Object> buildPortalMenuCollection() {
+        return buildPortalMenuCollection(true);
+    }
+
+    private Map<String, Object> buildPortalMenuCollection(boolean allowReseed) {
         List<PortalMenu> allMenus = portalMenuService.findAllMenusOrdered();
+        if ((allMenus == null || allMenus.isEmpty()) && allowReseed) {
+            try {
+                portalMenuService.resetMenusToSeed();
+                allMenus = portalMenuService.findAllMenusOrdered();
+            } catch (Exception ex) {
+                log.warn("Failed to reseed portal menus: {}", ex.getMessage());
+            }
+        }
+        if (allMenus == null) {
+            allMenus = java.util.Collections.emptyList();
+        }
         Comparator<PortalMenu> ordering = menuOrdering();
         Map<Long, PortalMenu> idIndex = new LinkedHashMap<>();
         Map<Long, List<PortalMenu>> childrenLookup = new LinkedHashMap<>();
@@ -1613,6 +1629,12 @@ public class AdminApiResource {
             if (activeNode != null) {
                 activeTree.add(activeNode);
             }
+        }
+
+        if (allowReseed && fullTree.isEmpty() && !allMenus.isEmpty()) {
+            // all menus might have been filtered out (e.g., deleted-only tree). Attempt a soft reset once.
+            portalMenuService.resetMenusToSeed();
+            return buildPortalMenuCollection(false);
         }
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -2266,7 +2288,8 @@ public class AdminApiResource {
                     });
 
                 cr.setStatus("APPLIED");
-                auditService.recordAction(actor, "ADMIN_ROLE_UPDATE", AuditStage.SUCCESS, normalizedName, detail);
+                String roleIdForAudit = locateCustomRole(normalizedName).map(AdminCustomRole::getId).map(String::valueOf).orElse(normalizedName);
+                auditService.recordAction(actor, "ADMIN_ROLE_UPDATE", AuditStage.SUCCESS, roleIdForAudit, detail);
             } else if ("DELETE".equalsIgnoreCase(action)) {
                 if (!StringUtils.hasText(normalizedName)) {
                     throw new IllegalArgumentException("角色名称不能为空");
@@ -2305,7 +2328,8 @@ public class AdminApiResource {
                     detail.put("customRoleCleanupError", ex.getMessage());
                 }
                 cr.setStatus("APPLIED");
-                auditService.recordAction(actor, "ADMIN_ROLE_DELETE", AuditStage.SUCCESS, normalizedName, detail);
+                String roleIdForDelete = locateCustomRole(normalizedName).map(AdminCustomRole::getId).map(String::valueOf).orElse(normalizedName);
+                auditService.recordAction(actor, "ADMIN_ROLE_DELETE", AuditStage.SUCCESS, roleIdForDelete, detail);
             } else {
                 throw new IllegalStateException("未支持的角色操作: " + action);
             }
@@ -2378,7 +2402,7 @@ public class AdminApiResource {
                 throw new IllegalStateException("未支持的自定义角色操作: " + action);
             }
             cr.setStatus("APPLIED");
-            auditService.recordAction(actor, "ADMIN_CUSTOM_ROLE_EXECUTE", AuditStage.SUCCESS, normalizedName, detail);
+            auditService.recordAction(actor, "ADMIN_CUSTOM_ROLE_EXECUTE", AuditStage.SUCCESS, cr.getResourceId(), detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
             auditService.recordAction(actor, "ADMIN_CUSTOM_ROLE_EXECUTE", AuditStage.FAIL, normalizedName, detail);
@@ -2418,7 +2442,7 @@ public class AdminApiResource {
                         Map.of("id", assignment.getId(), "username", assignment.getUsername(), "role", assignment.getRole())
                     );
                 } catch (Exception ignored) {}
-                auditService.recordAction(actor, "ADMIN_ROLE_ASSIGNMENT_CREATE", AuditStage.SUCCESS, assignment.getUsername(), detail);
+                auditService.recordAction(actor, "ADMIN_ROLE_ASSIGNMENT_CREATE", AuditStage.SUCCESS, String.valueOf(assignment.getId()), detail);
             } else {
                 throw new IllegalStateException("未支持的角色指派操作: " + action);
             }
@@ -2511,14 +2535,55 @@ public class AdminApiResource {
         return null;
     }
 
+    // Redaction: hide sensitive Keycloak IDs in all change request views
+    private static final String SENSITIVE_KEYCLOAK_ID = "7f3868a1-9c8c-4122-b7e4-7f921a40c019";
+
+    private static String redactSensitiveText(String raw) {
+        if (raw == null) return null;
+        try {
+            return raw.replace(SENSITIVE_KEYCLOAK_ID, "");
+        } catch (Exception ignored) {
+            return raw;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object redactSensitiveObject(Object value) {
+        if (value == null) return null;
+        if (value instanceof String s) {
+            return redactSensitiveText(s);
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                String k = String.valueOf(e.getKey());
+                Object v = e.getValue();
+                if ("keycloakId".equalsIgnoreCase(k)) {
+                    // drop entirely: do not expose keycloakId
+                    continue;
+                } else {
+                    out.put(k, redactSensitiveObject(v));
+                }
+            }
+            return out;
+        }
+        if (value instanceof Iterable<?> it) {
+            List<Object> out = new ArrayList<>();
+            for (Object v : it) out.add(redactSensitiveObject(v));
+            return out;
+        }
+        return value;
+    }
+
     private static Map<String, Object> toChangeVM(ChangeRequest cr) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", cr.getId());
         m.put("resourceType", cr.getResourceType());
         m.put("resourceId", cr.getResourceId());
         m.put("action", cr.getAction());
-        m.put("payloadJson", cr.getPayloadJson());
-        m.put("diffJson", cr.getDiffJson());
+        // Redact sensitive IDs within raw JSON strings
+        m.put("payloadJson", redactSensitiveText(cr.getPayloadJson()));
+        m.put("diffJson", redactSensitiveText(cr.getDiffJson()));
         m.put("status", cr.getStatus());
         m.put("requestedBy", cr.getRequestedBy());
         m.put("requestedAt", cr.getRequestedAt() != null ? cr.getRequestedAt().toString() : null);
@@ -2526,8 +2591,8 @@ public class AdminApiResource {
         m.put("decidedAt", cr.getDecidedAt() != null ? cr.getDecidedAt().toString() : null);
         m.put("reason", cr.getReason());
         m.put("category", cr.getCategory());
-        m.put("originalValue", extractValue(cr, "before"));
-        m.put("updatedValue", extractValue(cr, "after"));
+        m.put("originalValue", redactSensitiveObject(extractValue(cr, "before")));
+        m.put("updatedValue", redactSensitiveObject(extractValue(cr, "after")));
         m.put("lastError", cr.getLastError());
         return m;
     }
@@ -2796,7 +2861,11 @@ public class AdminApiResource {
         node.put("securityLevel", menu.getSecurityLevel());
         node.put("deleted", menu.isDeleted());
         node.put("parentId", menu.getParent() != null ? menu.getParent().getId() : null);
-        List<Map<String, Object>> visibilityRules = menu.getVisibilities().stream().map(this::toVisibilityRule).toList();
+        List<PortalMenuVisibility> visibilities = menu.getVisibilities();
+        List<Map<String, Object>> visibilityRules = (visibilities == null ? java.util.List.<PortalMenuVisibility>of() : visibilities)
+            .stream()
+            .map(this::toVisibilityRule)
+            .toList();
         node.put("visibilityRules", visibilityRules);
         node.put(
             "allowedRoles",

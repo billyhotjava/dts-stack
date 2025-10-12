@@ -26,10 +26,12 @@ public class KeycloakAuthResource {
     private static final Logger log = LoggerFactory.getLogger(KeycloakAuthResource.class);
     private final PortalSessionRegistry sessionRegistry;
     private final AdminAuthClient adminAuthClient;
+    private final com.yuzhi.dts.platform.service.audit.AuditService audit;
 
-    public KeycloakAuthResource(PortalSessionRegistry sessionRegistry, AdminAuthClient adminAuthClient) {
+    public KeycloakAuthResource(PortalSessionRegistry sessionRegistry, AdminAuthClient adminAuthClient, com.yuzhi.dts.platform.service.audit.AuditService audit) {
         this.sessionRegistry = sessionRegistry;
         this.adminAuthClient = adminAuthClient;
+        this.audit = audit;
     }
 
     public record LoginPayload(String username, String password) {}
@@ -43,22 +45,20 @@ public class KeycloakAuthResource {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponses.error("用户名或密码不能为空"));
         }
 
-        String norm = username.toLowerCase(Locale.ROOT);
-        if (List.of("sysadmin", "authadmin", "auditadmin").contains(norm)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error("系统管理角色用户不能登录业务平台"));
-        }
+        // No username-based blocking; admin service enforces gating/approval rules
 
         try {
+            // audit: login begin
+            java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+            auditPayload.put("username", username);
+            audit.recordAs(username, "AUTH LOGIN", "auth", "admin_keycloak_user", username, "PENDING", auditPayload, null);
             if (log.isInfoEnabled()) {
                 log.info("[login] attempt username={}", username);
             }
             var result = adminAuthClient.login(username, password);
             Map<String, Object> user = result.user();
-            // Strengthen triad rejection: check raw Keycloak roles BEFORE mapping
+            // Role-based blocks are handled by admin; platform trusts admin decision
             List<String> rawRoles = toStringList(user.get("roles"));
-            if (containsTriadOriginal(rawRoles)) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error("系统管理角色用户不能登录业务平台"));
-            }
             // Normalize and map roles from Keycloak into platform authorities
             List<String> mappedRoles = mapRoles(rawRoles);
 
@@ -106,13 +106,16 @@ public class KeycloakAuthResource {
             if (log.isInfoEnabled()) {
                 log.info("[login] success username={} roles={} perms={}", username, mappedRoles, permissions);
             }
-            return ResponseEntity.ok(ApiResponses.ok(data));
+            audit.recordAs(username, "AUTH LOGIN", "auth", "admin_keycloak_user", username, "SUCCESS", java.util.Map.of("audience", "platform"), null);
+        return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (org.springframework.security.authentication.BadCredentialsException ex) {
             log.warn("[login] unauthorized username={} reason={}", username, ex.getMessage());
+            audit.record("AUTH LOGIN", "auth", "admin_keycloak_user", username, "FAILURE", java.util.Map.of("error", ex.getMessage()));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error(ex.getMessage()));
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
             log.error("[login] error username={} msg={}", username, msg);
+            audit.record("AUTH LOGIN", "auth", "admin_keycloak_user", username, "FAILURE", java.util.Map.of("error", msg));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
         }
     }
@@ -120,6 +123,8 @@ public class KeycloakAuthResource {
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) RefreshPayload payload) {
         String portalRefresh = payload != null ? payload.refreshToken() : null;
+        // mark begin
+        audit.record("AUTH LOGOUT", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "PENDING", java.util.Map.of("hasRefreshToken", portalRefresh != null && !portalRefresh.isBlank()));
         PortalSession session = sessionRegistry.invalidateByRefreshToken(portalRefresh);
         if (session != null) {
             AdminTokens adminTokens = session.adminTokens();
@@ -131,12 +136,14 @@ public class KeycloakAuthResource {
                 }
             }
         }
+        audit.record("AUTH LOGOUT", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "SUCCESS", java.util.Map.of());
         return ResponseEntity.ok(ApiResponses.ok(null));
     }
 
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<Map<String, String>>> refresh(@RequestBody RefreshPayload payload) {
         try {
+            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "PENDING", java.util.Map.of());
             PortalSession refreshed = sessionRegistry.refreshSession(
                 payload.refreshToken(),
                 existing -> {
@@ -175,10 +182,13 @@ public class KeycloakAuthResource {
                     data.put("adminRefreshTokenExpiresAt", adminTokens.refreshExpiresAt().toString());
                 }
             }
+            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "SUCCESS", java.util.Map.of());
             return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (IllegalArgumentException ex) {
+            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "FAILURE", java.util.Map.of("error", ex.getMessage()));
             return ResponseEntity.status(401).body(ApiResponses.error("刷新令牌无效，请重新登录"));
         } catch (IllegalStateException ex) {
+            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "FAILURE", java.util.Map.of("error", ex.getMessage()));
             return ResponseEntity.status(401).body(ApiResponses.error("会话已过期，请重新登录"));
         }
     }

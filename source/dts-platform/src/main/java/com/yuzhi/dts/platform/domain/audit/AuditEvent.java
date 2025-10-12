@@ -88,6 +88,48 @@ public class AuditEvent implements Serializable {
     @Column(name = "extra_tags")
     private String extraTags;
 
+    // Extended columns for unified audit model
+    @Column(name = "event_uuid")
+    private java.util.UUID eventUuid;
+
+    @Column(name = "event_class", length = 32)
+    private String eventClass;
+
+    @Column(name = "event_type", length = 64)
+    private String eventType;
+
+    @Column(name = "source_system", length = 32)
+    private String sourceSystem;
+
+    @Column(name = "operator_id", length = 128)
+    private String operatorId;
+
+    @Column(name = "operator_name", length = 128)
+    private String operatorName;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "operator_roles")
+    private String operatorRoles;
+
+    @Column(name = "org_code", length = 64)
+    private String orgCode;
+
+    @Column(name = "org_name", length = 128)
+    private String orgName;
+
+    @Column(name = "summary")
+    private String summary;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "details")
+    private String details;
+
+    @Column(name = "record_signature", length = 128)
+    private String recordSignature;
+
+    @Column(name = "signature_key_ver", length = 16)
+    private String signatureKeyVer;
+
     @Column(name = "created_by", length = 128)
     private String createdBy;
 
@@ -270,6 +312,33 @@ public class AuditEvent implements Serializable {
     public void setExtraTags(String extraTags) {
         this.extraTags = extraTags;
     }
+
+    public java.util.UUID getEventUuid() { return eventUuid; }
+    public void setEventUuid(java.util.UUID eventUuid) { this.eventUuid = eventUuid; }
+    public String getEventClass() { return eventClass; }
+    public void setEventClass(String eventClass) { this.eventClass = eventClass; }
+    public String getEventType() { return eventType; }
+    public void setEventType(String eventType) { this.eventType = eventType; }
+    public String getSourceSystem() { return sourceSystem; }
+    public void setSourceSystem(String sourceSystem) { this.sourceSystem = sourceSystem; }
+    public String getOperatorId() { return operatorId; }
+    public void setOperatorId(String operatorId) { this.operatorId = operatorId; }
+    public String getOperatorName() { return operatorName; }
+    public void setOperatorName(String operatorName) { this.operatorName = operatorName; }
+    public String getOperatorRoles() { return operatorRoles; }
+    public void setOperatorRoles(String operatorRoles) { this.operatorRoles = operatorRoles; }
+    public String getOrgCode() { return orgCode; }
+    public void setOrgCode(String orgCode) { this.orgCode = orgCode; }
+    public String getOrgName() { return orgName; }
+    public void setOrgName(String orgName) { this.orgName = orgName; }
+    public String getSummary() { return summary; }
+    public void setSummary(String summary) { this.summary = summary; }
+    public String getDetails() { return details; }
+    public void setDetails(String details) { this.details = details; }
+    public String getRecordSignature() { return recordSignature; }
+    public void setRecordSignature(String recordSignature) { this.recordSignature = recordSignature; }
+    public String getSignatureKeyVer() { return signatureKeyVer; }
+    public void setSignatureKeyVer(String signatureKeyVer) { this.signatureKeyVer = signatureKeyVer; }
 
     public String getCreatedBy() {
         return createdBy;

@@ -228,7 +228,7 @@ public final class SecurityUtils {
         Map.entry(AuthoritiesConstants.OP_ADMIN, AuthoritiesConstants.OP_ADMIN)
     );
 
-    private static String normalizeRole(String role) {
+    public static String normalizeRole(String role) {
         if (role == null) {
             return null;
         }

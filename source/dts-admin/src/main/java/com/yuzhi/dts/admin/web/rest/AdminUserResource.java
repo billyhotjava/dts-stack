@@ -12,7 +12,11 @@ import com.yuzhi.dts.admin.web.rest.vm.PagedResultVM;
 import com.yuzhi.dts.admin.web.rest.vm.UserRequestVM;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -27,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.MultiValueMap;
 
 @RestController
 @RequestMapping("/api/admin/users")
@@ -51,6 +56,15 @@ public class AdminUserResource {
         List<AdminUserVM> content = result.getContent().stream().map(this::toVm).collect(java.util.stream.Collectors.toList());
         PagedResultVM<AdminUserVM> body = new PagedResultVM<>(content, result.getTotalElements(), result.getNumber(), result.getSize());
         return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    @GetMapping("/display-names")
+    public ResponseEntity<ApiResponse<Map<String, String>>> resolveDisplayNames(
+        @RequestParam MultiValueMap<String, String> query
+    ) {
+        List<String> inputs = normalizeUsernames(query);
+        Map<String, String> resolved = adminUserService.resolveDisplayNames(inputs);
+        return ResponseEntity.ok(ApiResponse.ok(resolved));
     }
 
     @PostMapping
@@ -93,6 +107,29 @@ public class AdminUserResource {
     ) {
         String message = "用户删除功能已禁用，请改用停用操作";
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(message));
+    }
+
+    private List<String> normalizeUsernames(MultiValueMap<String, String> query) {
+        if (query == null || query.isEmpty()) {
+            return List.of();
+        }
+        Set<String> result = new LinkedHashSet<>();
+        List<String> rawValues = query.get("usernames");
+        if (rawValues == null || rawValues.isEmpty()) {
+            return List.of();
+        }
+        for (String raw : rawValues) {
+            if (StringUtils.isBlank(raw)) {
+                continue;
+            }
+            for (String token : raw.split("[,;]")) {
+                String cleaned = StringUtils.trimToNull(token);
+                if (cleaned != null) {
+                    result.add(cleaned);
+                }
+            }
+        }
+        return result.isEmpty() ? List.of() : new ArrayList<>(result);
     }
 
     private UserOperationRequest toCommand(UserRequestVM request) {

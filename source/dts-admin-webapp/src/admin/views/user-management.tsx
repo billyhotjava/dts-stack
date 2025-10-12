@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { useRouter } from "@/routes/hooks";
 import type { OrganizationNode } from "@/admin/types";
 import { adminApi } from "@/admin/api/adminApi";
+import { shouldHideRole } from "@/constants/keycloak-roles";
+import { GLOBAL_CONFIG } from "@/global-config";
 
 function getSingleAttr(attrs: Record<string, string[]> | undefined, key: string): string {
   const values = attrs?.[key];
@@ -41,7 +43,17 @@ function collectRoleNames(user: KeycloakUser): string[] {
   if (user.clientRoles) {
     (Object.values(user.clientRoles) as string[][]).forEach((arr: string[]) => arr?.forEach((r: string) => r && names.add(r)));
   }
-  return Array.from(names);
+  // Hide default/builtin roles from raw summary as well
+  const raw = Array.from(names).map((n) => String(n || "").trim());
+  const filtered = raw.filter((n) => {
+    if (!n) return false;
+    if (GLOBAL_CONFIG.hideDefaultRoles && n.toLowerCase().startsWith("default-roles-")) return false;
+    // realm built-ins (when present as plain names)
+    const lower = n.toLowerCase();
+    if (GLOBAL_CONFIG.hideBuiltinRoles && (lower === "offline_access" || lower === "uma_authorization" || lower.startsWith("realm-management"))) return false;
+    return true;
+  });
+  return filtered;
 }
 
 function resolveFullName(user: KeycloakUser): string {
@@ -61,6 +73,7 @@ export default function UserManagementView() {
   const [loading, setLoading] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [rolesMap, setRolesMap] = useState<Record<string, string[]>>({});
+  const [roleDisplayNameMap, setRoleDisplayNameMap] = useState<Record<string, string>>({});
   const [orgIndexById, setOrgIndexById] = useState<Record<string, OrganizationNode>>({});
   const [modalState, setModalState] = useState<{
     open: boolean;
@@ -112,6 +125,25 @@ export default function UserManagementView() {
     })();
   }, [orgIndexById]);
 
+  // Load admin role catalog for Chinese display names
+  useEffect(() => {
+    (async () => {
+      try {
+        const roles = await adminApi.getAdminRoles();
+        const map: Record<string, string> = {};
+        for (const r of roles || []) {
+          const display = (r as any).nameZh || (r as any).displayName || (r as any).name || "";
+          const keys = [ (r as any).name, (r as any).code, (r as any).roleId, (r as any).legacyName ];
+          for (const k of keys) {
+            const key = (k || "").toString().trim().toUpperCase();
+            if (key && display) map[key] = String(display);
+          }
+        }
+        setRoleDisplayNameMap(map);
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
   // Background fetch for user roles to fill the roles column
   useEffect(() => {
     (async () => {
@@ -127,7 +159,14 @@ export default function UserManagementView() {
           if (rolesMap[id] !== undefined) continue;
           try {
             const roles: KeycloakRole[] = await KeycloakUserService.getUserRoles(String(u.id));
-            const names = (roles || []).map((r) => r?.name).filter(Boolean) as string[];
+            const filtered = (roles || []).filter((r) => {
+              const name = (r?.name || "").toString();
+              if (!name) return false;
+              if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
+              if (GLOBAL_CONFIG.hideBuiltinRoles && shouldHideRole(r)) return false;
+              return true;
+            });
+            const names = filtered.map((r) => (r?.name || "").toString().trim().toUpperCase());
             setRolesMap((prev) => ({ ...prev, [id]: names }));
           } catch {
             setRolesMap((prev) => ({ ...prev, [id]: [] }));
@@ -193,13 +232,13 @@ export default function UserManagementView() {
         onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => {
           const id = String(record.id || record.username);
-          const names = rolesMap[id] ?? collectRoleNames(record);
+          const names = rolesMap[id] ?? collectRoleNames(record).map((n) => n.toUpperCase());
           if (names === undefined) return <span className="text-muted-foreground">加载中…</span>;
           const roles = names || [];
           return roles.length ? (
             <div className="flex flex-wrap gap-1">
               {roles.slice(0, 5).map((r) => (
-                <Badge key={r} variant="outline">{r}</Badge>
+                <Badge key={r} variant="outline">{roleDisplayNameMap[r] || r}</Badge>
               ))}
               {roles.length > 5 ? <Badge variant="secondary">+{roles.length - 5}</Badge> : null}
             </div>

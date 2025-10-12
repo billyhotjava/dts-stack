@@ -137,6 +137,47 @@ public class AuditService {
         event.result = result;
         event.payload = payload;
         event.extraTags = serializeTags(extraTags);
+        com.yuzhi.dts.platform.service.audit.AuditRequestContext.markDomainAudit();
+        AuditTrailService svc = auditTrailServiceProvider.getIfAvailable();
+        if (svc != null) {
+            svc.record(event);
+        } else if (log.isDebugEnabled()) {
+            log.debug("AuditTrailService not available; skipping audit record action={} module={} resourceId={}", action, module, resourceId);
+        }
+    }
+
+    // Explicit-actor variant used for events occurring before SecurityContext is populated (e.g., login)
+    public void recordAs(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
+        if (!StringUtils.hasText(actor)) {
+            actor = "anonymous";
+        }
+        if (log.isInfoEnabled()) {
+            log.info(
+                "AUDIT actor={} action={} module={} resourceType={} resourceId={} result={}",
+                actor, action, module, resourceType, resourceId, result
+            );
+        }
+        AuditTrailService.PendingAuditEvent event = new AuditTrailService.PendingAuditEvent();
+        event.occurredAt = Instant.now();
+        event.actor = actor;
+        event.actorRole = resolvePrimaryAuthority();
+        event.module = module;
+        event.action = action;
+        event.resourceType = resourceType;
+        event.resourceId = resourceId;
+        event.result = result;
+        event.payload = payload;
+        event.extraTags = serializeTags(extraTags);
+        com.yuzhi.dts.platform.service.audit.AuditRequestContext.markDomainAudit();
         AuditTrailService svc = auditTrailServiceProvider.getIfAvailable();
         if (svc != null) {
             svc.record(event);

@@ -48,6 +48,7 @@ public class AdminAuditService {
     private static final Logger log = LoggerFactory.getLogger(AdminAuditService.class);
 
     public static class AuditEventView {
+        public String eventId;
         public long id;
         public Instant occurredAt;
         public String actor;
@@ -61,6 +62,21 @@ public class AdminAuditService {
         public String result;
         public String extraTags;
         public String payloadPreview;
+        // extended view fields
+        public String sourceSystem;
+        public String eventClass;
+        public String eventType;
+        public String summary;
+        public String operatorId;
+        public String operatorName;
+        public String operatorRoles; // JSON array string
+        public String orgCode;
+        public String orgName;
+        // extracted from details for convenience
+        public String requestId;
+        public String targetTable;
+        public String targetId;
+        public String targetRef;
     }
 
     public static final class PendingAuditEvent {
@@ -79,6 +95,9 @@ public class AdminAuditService {
         public Integer latencyMs;
         public Object payload;
         public String extraTags;
+        // captured entity info (propagated from request thread by aspect)
+        public String capturedTable;
+        public String capturedId;
     }
 
     private final AuditEventRepository repository;
@@ -86,6 +105,8 @@ public class AdminAuditService {
     private final DtsCommonAuditClient auditClient;
     private final ObjectMapper objectMapper;
     private final AuditActionCatalog actionCatalog;
+    private final com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository userRepo;
+    private final com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository;
 
     private BlockingQueue<PendingAuditEvent> queue;
     private ScheduledExecutorService workerPool;
@@ -99,13 +120,17 @@ public class AdminAuditService {
         AuditProperties properties,
         DtsCommonAuditClient auditClient,
         ObjectMapper objectMapper,
-        AuditActionCatalog actionCatalog
+        AuditActionCatalog actionCatalog,
+        com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository userRepo,
+        com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository
     ) {
         this.repository = repository;
         this.properties = properties;
         this.auditClient = auditClient;
         this.objectMapper = objectMapper;
         this.actionCatalog = actionCatalog;
+        this.userRepo = userRepo;
+        this.organizationRepository = organizationRepository;
     }
 
     @PostConstruct
@@ -152,6 +177,7 @@ public class AdminAuditService {
     }
 
     public void recordAction(String actionCode, AuditStage stage, String resourceId, Object payload) {
+        com.yuzhi.dts.admin.service.audit.AuditRequestContext.markDomainAudit();
         recordAction(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), actionCode, stage, resourceId, payload);
     }
 
@@ -206,6 +232,7 @@ public class AdminAuditService {
     }
 
     public void record(String actor, String action, String module, String resourceType, String resourceId, String outcome, Object payload) {
+        com.yuzhi.dts.admin.service.audit.AuditRequestContext.markDomainAudit();
         record(actor, action, module, resourceType, resourceId, outcome, payload, null);
     }
 
@@ -230,11 +257,21 @@ public class AdminAuditService {
         event.result = defaultString(outcome, "SUCCESS");
         event.payload = payload;
         event.extraTags = serializeTags(extraTags);
+        // capture last entity from current thread (aspect)
+        try {
+            var cap = com.yuzhi.dts.admin.service.audit.AuditEntityContext.getLast();
+            if (cap != null) {
+                event.capturedTable = cap.tableName;
+                event.capturedId = cap.id;
+            }
+        } catch (Exception ignore) {}
+        try { com.yuzhi.dts.admin.service.audit.AuditEntityContext.clear(); } catch (Exception ignore) {}
         logEnqueuedEvent(event);
         offer(event);
     }
 
     public void record(String actor, String action, String module, String resourceId, String outcome, Object payload) {
+        com.yuzhi.dts.admin.service.audit.AuditRequestContext.markDomainAudit();
         record(actor, action, module, module, resourceId, outcome, payload, null);
     }
 
@@ -245,7 +282,19 @@ public class AdminAuditService {
         if (!StringUtils.hasText(event.actorRole)) {
             event.actorRole = SecurityUtils.getCurrentUserPrimaryAuthority();
         }
+        // If not prefilled, attempt to capture entity snapshot at record time
+        if (!StringUtils.hasText(event.capturedId)) {
+            try {
+                var cap = com.yuzhi.dts.admin.service.audit.AuditEntityContext.getLast();
+                if (cap != null) {
+                    event.capturedTable = cap.tableName;
+                    event.capturedId = cap.id;
+                }
+            } catch (Exception ignore) {}
+            try { com.yuzhi.dts.admin.service.audit.AuditEntityContext.clear(); } catch (Exception ignore) {}
+        }
         logEnqueuedEvent(event);
+        com.yuzhi.dts.admin.service.audit.AuditRequestContext.markDomainAudit();
         offer(event);
     }
 
@@ -287,6 +336,8 @@ public class AdminAuditService {
             return;
         }
         repository.saveAll(entities);
+        // Clear captured entity context after flush of this batch
+        try { com.yuzhi.dts.admin.service.audit.AuditEntityContext.clear(); } catch (Exception ignore) {}
         lastChainSignature.set(previousChain);
         if (log.isDebugEnabled()) {
             AuditEvent last = entities.get(entities.size() - 1);
@@ -309,8 +360,16 @@ public class AdminAuditService {
         entity.setOccurredAt(pending.occurredAt);
         entity.setActor(defaultString(pending.actor, "anonymous"));
         entity.setActorRole(pending.actorRole);
+        // extended: source_system 固定 admin
+        entity.setSourceSystem("admin");
+        entity.setEventUuid(java.util.UUID.randomUUID());
         entity.setModule(defaultString(pending.module, "GENERAL"));
         entity.setAction(defaultString(pending.action, "UNKNOWN"));
+        // event_class/event_type 简化映射：安全相关 action -> SecurityEvent；其余 -> AuditEvent
+        String normalizedAction = entity.getAction() == null ? "" : entity.getAction().toUpperCase(java.util.Locale.ROOT);
+        boolean security = normalizedAction.contains("AUTH_") || normalizedAction.contains("LOGIN") || normalizedAction.contains("LOGOUT") || normalizedAction.contains("ACCESS_DENIED");
+        entity.setEventClass(security ? "SecurityEvent" : "AuditEvent");
+        entity.setEventType(mapEventType(normalizedAction, entity.getResult()));
         entity.setResourceType(pending.resourceType);
         entity.setResourceId(pending.resourceId);
         entity.setClientIp(parseClientIp(pending.clientIp));
@@ -321,25 +380,238 @@ public class AdminAuditService {
         entity.setLatencyMs(pending.latencyMs);
         entity.setExtraTags(normalizeExtraTags(pending.extraTags));
 
-        byte[] payloadBytes = pending.payload == null ? new byte[0] : objectMapper.writeValueAsBytes(pending.payload);
-        byte[] iv = AuditCrypto.randomIv();
-        byte[] cipher = AuditCrypto.encrypt(payloadBytes, encryptionKey, iv);
-        String payloadHmac = AuditCrypto.hmac(payloadBytes, hmacKey);
-        String chainSignature = AuditCrypto.chain(previousChain, payloadHmac, hmacKey);
+        // operator_* 与组织信息
+        String username = entity.getActor();
+        entity.setOperatorId(username);
+        var snapshot = (username == null) ? java.util.Optional.<com.yuzhi.dts.admin.domain.AdminKeycloakUser>empty() : userRepo.findByUsernameIgnoreCase(username);
+        entity.setOperatorName(snapshot.map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::getFullName).orElse(username));
+        java.util.List<String> roles = SecurityUtils.getCurrentUserAuthorities();
+        java.util.LinkedHashSet<String> filtered = new java.util.LinkedHashSet<>();
+        for (String r : roles) {
+            if (r == null || r.isBlank()) continue;
+            String norm = SecurityUtils.normalizeRole(r);
+            if (norm.startsWith("DEPT_DATA_") || norm.startsWith("INST_DATA_")) filtered.add(norm);
+        }
+        try { entity.setOperatorRoles(objectMapper.writeValueAsString(new java.util.ArrayList<>(filtered))); } catch (Exception ignored) {}
+        // org_code 从用户属性（dept_code）推断：本地快照缺省无该字段，尝试从 group path 末级名作为占位
+        String orgCode = null;
+        if (snapshot.isPresent()) {
+            // Prefer Optional.orElse* chain to avoid Optional.get
+            java.util.List<String> gps = snapshot
+                .map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::getGroupPaths)
+                .orElse(null);
+            if (gps != null && !gps.isEmpty()) {
+                String p = gps.get(0);
+                if (p != null && !p.isBlank()) {
+                    String[] seg = p.split("/");
+                    orgCode = seg.length > 0 ? seg[seg.length - 1] : p; // 占位：用末级组名作为 org_code 占位
+                }
+            }
+        }
+        entity.setOrgCode(orgCode);
+        // 通过 org_code（dept_code）查组织库，获取中文组织名称
+        // 口径：dept_code 等同于 admin 组织的 ID（字符串），因此可按 Long 解析后查找
+        String orgName = null;
+        if (orgCode != null && !orgCode.isBlank()) {
+            try {
+                Long orgId = Long.parseLong(orgCode.trim());
+                var orgOpt = organizationRepository.findById(orgId);
+                // Prefer Optional.orElse* instead of get()
+                orgName = orgOpt.map(com.yuzhi.dts.admin.domain.OrganizationNode::getName).orElse(null);
+            } catch (NumberFormatException ignore) {
+                // 非数字的 org_code，保留为空；前端可能从路径叶子展示
+            } catch (Exception ex) {
+                log.debug("Failed to resolve org name by org_code {}: {}", orgCode, ex.toString());
+            }
+        }
+        entity.setOrgName(orgName);
 
-        entity.setPayloadIv(iv);
-        entity.setPayloadCipher(cipher);
-        entity.setPayloadHmac(payloadHmac);
+        // details: 至少包含 target_table/target_id/action_result/request_id/param_digest
+        java.util.Map<String, Object> det = new java.util.LinkedHashMap<>();
+        det.put("target_table", tableFromResource(entity.getResourceType(), entity.getModule()));
+        // Only record numeric/UUID target_id (set below). Do not include target_ref.
+        // 仅在 resourceId 看起来是主键（数字或UUID）时记录 target_id；
+        // 否则若为用户相关(admin.auth/user)，尝试通过 username 解析本地用户PK
+        String rid = entity.getResourceId();
+        if (rid != null) {
+            String s = rid.trim();
+            boolean isNumeric = s.matches("\\d+");
+            boolean isUuid = s.matches("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
+            if (isNumeric || isUuid) {
+                det.put("target_id", s);
+            } else {
+                String tbl = (String) det.get("target_table");
+                if ("admin_keycloak_user".equals(tbl) || "user".equalsIgnoreCase(entity.getResourceType()) || "admin.auth".equalsIgnoreCase(entity.getResourceType())) {
+                    try {
+                        var userOpt = userRepo.findByUsernameIgnoreCase(s);
+                        userOpt.ifPresent(u -> det.put("target_id", String.valueOf(u.getId())));
+                    } catch (Exception ex) {
+                        if (log.isDebugEnabled()) log.debug("Failed to resolve user id for username {}: {}", s, ex.toString());
+                    }
+                }
+            }
+        }
+        // If still missing and resource is admin_keycloak_user, fallback to actor username lookup
+        if ((!det.containsKey("target_id")) || det.get("target_id") == null) {
+            String tbl = (String) det.get("target_table");
+            if ("admin_keycloak_user".equals(tbl)) {
+                String actorUser = entity.getActor();
+                if (actorUser != null && !actorUser.isBlank()) {
+                    try {
+                        var userOpt = userRepo.findByUsernameIgnoreCase(actorUser.trim());
+                        userOpt.ifPresent(u -> det.put("target_id", String.valueOf(u.getId())));
+                    } catch (Exception ignore) {}
+                }
+            }
+        }
+        // Fallback to captured last entity if target_id not resolved above
+        if (!det.containsKey("target_id") || det.get("target_id") == null || String.valueOf(det.get("target_id")).isBlank()) {
+            var cap = com.yuzhi.dts.admin.service.audit.AuditEntityContext.getLast();
+            if (cap != null && cap.id != null && !cap.id.isBlank()) {
+                det.put("target_id", cap.id);
+                if (cap.tableName != null && !cap.tableName.isBlank()) {
+                    det.put("target_table", cap.tableName);
+                }
+            }
+        }
+        // Fallback to captured last entity if target_id not resolved above
+        if ((!det.containsKey("target_id")) || det.get("target_id") == null || String.valueOf(det.get("target_id")).isBlank()) {
+            if (pending.capturedId != null && !pending.capturedId.isBlank()) {
+                det.put("target_id", pending.capturedId);
+                if (pending.capturedTable != null && !pending.capturedTable.isBlank()) {
+                    det.put("target_table", pending.capturedTable);
+                }
+            }
+        }
+        det.put("action_result", entity.getResult());
+        // Absolute fallback: if target_id still missing, use event UUID to guarantee non-empty value
+        if ((!det.containsKey("target_id")) || det.get("target_id") == null || String.valueOf(det.get("target_id")).isBlank()) {
+            java.util.UUID uuid = entity.getEventUuid();
+            det.put("target_id", uuid != null ? uuid.toString() : java.util.UUID.randomUUID().toString());
+        }
+        det.put("request_id", extractRequestId());
+
+        byte[] payloadBytes = pending.payload == null ? new byte[0] : objectMapper.writeValueAsBytes(pending.payload);
+        String payloadDigest = sha256Hex(payloadBytes); // first phase: no key/HMAC, just SHA-256
+        String chainSignature = sha256Hex((previousChain + "|" + payloadDigest).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        det.put("param_digest", payloadDigest);
+        try { entity.setDetails(objectMapper.writeValueAsString(det)); } catch (Exception ignored) {}
+
+        entity.setPayloadIv(null);
+        entity.setPayloadCipher(null);
+        entity.setPayloadHmac(payloadDigest);
         entity.setChainSignature(chainSignature);
+        entity.setRecordSignature(simpleRecordSignature(entity, payloadDigest));
+        entity.setSignatureKeyVer(null);
+        entity.setSummary(buildSummary(entity));
         entity.setCreatedBy(entity.getActor());
         entity.setCreatedDate(Instant.now());
         return entity;
+    }
+
+    private String mapEventType(String actionDisplay, String result) {
+        if (actionDisplay == null) return "UNKNOWN";
+        String a = actionDisplay.toUpperCase(java.util.Locale.ROOT);
+        if (a.contains("LOGIN")) return ("SUCCESS".equalsIgnoreCase(result) ? "AUTH_LOGIN_SUCCESS" : "AUTH_LOGIN_FAILURE");
+        if (a.contains("LOGOUT")) return "AUTH_LOGOUT";
+        if (a.contains("ROLE") && a.contains("GRANT")) return "ROLE_GRANTED";
+        if (a.contains("ROLE") && a.contains("REVOKE")) return "ROLE_REVOKED";
+        if (a.contains("PASSWORD") && a.contains("RESET")) return "PASSWORD_RESET";
+        if (a.contains("USER") && a.contains("CREATE")) return "ACCOUNT_CREATED";
+        if (a.contains("USER") && (a.contains("DISABLE") || a.contains("DISABLED"))) return "ACCOUNT_DISABLED";
+        return a.replace(' ', '_');
+    }
+
+    private String tableFromResource(String resourceType, String module) {
+        if (resourceType == null || resourceType.isBlank()) {
+            return module == null || module.isBlank() ? "general" : normalizeTableKey(module);
+        }
+        String r = resourceType.toLowerCase(java.util.Locale.ROOT);
+        // Normalize common admin entry keys to concrete table names
+        if (r.equals("user") || r.equals("admin_keycloak_user") || r.equals("admin.users") || r.equals("admin.user")) {
+            return "admin_keycloak_user";
+        }
+        if (r.equals("role") || r.equals("role_assignment") || r.equals("admin_role_assignment") || r.equals("admin.roles") || r.equals("admin.role")) {
+            return "admin_role_assignment";
+        }
+        if (r.equals("portal_menu") || r.equals("menu") || r.equals("admin.portal-menus") || r.equals("admin.menus") || r.equals("portal.navigation")) {
+            return "portal_menu";
+        }
+        if (r.equals("org") || r.equals("organization") || r.equals("organization_node") || r.equals("admin.orgs") || r.equals("admin.org")) {
+            return "organization_node";
+        }
+        if (r.equals("admin.auth") || r.equals("auth") || r.equals("admin")) {
+            // Auth-related events anchor to user table to avoid non-existent 'admin' table
+            return "admin_keycloak_user";
+        }
+        if (r.equals("api") || r.equals("v1") || r.equals("v2")) {
+            return "general";
+        }
+        return normalizeTableKey(r);
+    }
+
+    private String normalizeTableKey(String key) {
+        if (key == null) return "general";
+        // convert dotted or kebab keys to snake-like token
+        String s = key.trim().toLowerCase(java.util.Locale.ROOT);
+        s = s.replaceAll("[^a-z0-9]+", "_");
+        s = s.replaceAll("^_+", "").replaceAll("_+$", "");
+        return s.isBlank() ? "general" : s;
+    }
+
+    private String extractRequestId() {
+        return java.util.UUID.randomUUID().toString();
+    }
+
+    private String simpleRecordSignature(AuditEvent e, String payloadHmac) {
+        String base = String.join("|",
+            nullToEmpty(e.getSourceSystem()),
+            nullToEmpty(e.getActor()),
+            nullToEmpty(e.getAction()),
+            nullToEmpty(e.getModule()),
+            nullToEmpty(e.getResourceType()),
+            nullToEmpty(e.getResourceId()),
+            nullToEmpty(payloadHmac),
+            e.getOccurredAt() == null ? "" : e.getOccurredAt().toString()
+        );
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] out = md.digest(base.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(out.length * 2);
+            for (byte b : out) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String sha256Hex(byte[] data) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] out = md.digest(data);
+            StringBuilder sb = new StringBuilder(out.length * 2);
+            for (byte b : out) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private static String nullToEmpty(String s) { return s == null ? "" : s; }
+
+    private String buildSummary(AuditEvent e) {
+        String name = e.getOperatorName() != null && !e.getOperatorName().isBlank() ? e.getOperatorName() : e.getActor();
+        String actionDesc = e.getEventType() != null ? e.getEventType() : e.getAction();
+        String target = (e.getResourceType() == null ? "" : e.getResourceType()) + (e.getResourceId() == null ? "" : (":" + e.getResourceId()));
+        return String.format("用户【%s】执行【%s】 %s", nullToEmpty(name), nullToEmpty(actionDesc), target);
     }
 
     public Page<AuditEvent> search(
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -357,6 +629,8 @@ public class AdminAuditService {
             likePattern(actor),
             likePattern(module),
             likePattern(action),
+            likePattern(sourceSystem),
+            likePattern(eventType),
             likePattern(result),
             likePattern(resourceType),
             likePattern(resource),
@@ -372,6 +646,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -390,6 +666,8 @@ public class AdminAuditService {
             likePattern(actor),
             likePattern(module),
             likePattern(action),
+            likePattern(sourceSystem),
+            likePattern(eventType),
             likePattern(result),
             likePattern(resourceType),
             likePattern(resource),
@@ -406,6 +684,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -425,6 +705,8 @@ public class AdminAuditService {
             likePattern(actor),
             likePattern(module),
             likePattern(action),
+            likePattern(sourceSystem),
+            likePattern(eventType),
             likePattern(result),
             likePattern(resourceType),
             likePattern(resource),
@@ -442,6 +724,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -460,6 +744,8 @@ public class AdminAuditService {
             likePattern(actor),
             likePattern(module),
             likePattern(action),
+            likePattern(sourceSystem),
+            likePattern(eventType),
             likePattern(result),
             likePattern(resourceType),
             likePattern(resource),
@@ -476,6 +762,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -494,6 +782,8 @@ public class AdminAuditService {
             likePattern(actor),
             likePattern(module),
             likePattern(action),
+            likePattern(sourceSystem),
+            likePattern(eventType),
             likePattern(result),
             likePattern(resourceType),
             likePattern(resource),
@@ -510,6 +800,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -529,6 +821,8 @@ public class AdminAuditService {
             likePattern(actor),
             likePattern(module),
             likePattern(action),
+            likePattern(sourceSystem),
+            likePattern(eventType),
             likePattern(result),
             likePattern(resourceType),
             likePattern(resource),
@@ -546,6 +840,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -554,7 +850,7 @@ public class AdminAuditService {
         Instant to,
         String clientIp
     ) {
-        return search(actor, module, action, result, resourceType, resource, requestUri, from, to, clientIp, Pageable.unpaged())
+        return search(actor, module, action, sourceSystem, eventType, result, resourceType, resource, requestUri, from, to, clientIp, Pageable.unpaged())
             .getContent()
             .stream()
             .map(this::toView)
@@ -569,6 +865,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -582,6 +880,8 @@ public class AdminAuditService {
                 likePattern(actor),
                 likePattern(module),
                 likePattern(action),
+                likePattern(sourceSystem),
+                likePattern(eventType),
                 likePattern(result),
                 likePattern(resourceType),
                 likePattern(resource),
@@ -598,6 +898,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -612,6 +914,8 @@ public class AdminAuditService {
                 likePattern(actor),
                 likePattern(module),
                 likePattern(action),
+                likePattern(sourceSystem),
+                likePattern(eventType),
                 likePattern(result),
                 likePattern(resourceType),
                 likePattern(resource),
@@ -629,6 +933,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -644,6 +950,8 @@ public class AdminAuditService {
                 likePattern(actor),
                 likePattern(module),
                 likePattern(action),
+                likePattern(sourceSystem),
+                likePattern(eventType),
                 likePattern(result),
                 likePattern(resourceType),
                 likePattern(resource),
@@ -662,6 +970,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -676,6 +986,8 @@ public class AdminAuditService {
                 likePattern(actor),
                 likePattern(module),
                 likePattern(action),
+                likePattern(sourceSystem),
+                likePattern(eventType),
                 likePattern(result),
                 likePattern(resourceType),
                 likePattern(resource),
@@ -693,6 +1005,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -707,6 +1021,8 @@ public class AdminAuditService {
                 likePattern(actor),
                 likePattern(module),
                 likePattern(action),
+                likePattern(sourceSystem),
+                likePattern(eventType),
                 likePattern(result),
                 likePattern(resourceType),
                 likePattern(resource),
@@ -724,6 +1040,8 @@ public class AdminAuditService {
         String actor,
         String module,
         String action,
+        String sourceSystem,
+        String eventType,
         String result,
         String resourceType,
         String resource,
@@ -739,6 +1057,8 @@ public class AdminAuditService {
                 likePattern(actor),
                 likePattern(module),
                 likePattern(action),
+                likePattern(sourceSystem),
+                likePattern(eventType),
                 likePattern(result),
                 likePattern(resourceType),
                 likePattern(resource),
@@ -775,7 +1095,14 @@ public class AdminAuditService {
         if (event.getPayloadCipher() == null || event.getPayloadCipher().length == 0) {
             return new byte[0];
         }
-        return AuditCrypto.decrypt(event.getPayloadCipher(), encryptionKey, event.getPayloadIv());
+        try {
+            return AuditCrypto.decrypt(event.getPayloadCipher(), encryptionKey, event.getPayloadIv());
+        } catch (Exception ex) {
+            // Backward compatibility: if legacy rows were stored with a different key/format,
+            // do not break listing; return empty to omit preview/details silently.
+            log.debug("decryptPayload failed for id {}: {}", event.getId(), ex.toString());
+            return new byte[0];
+        }
     }
 
     public AuditEventView toView(AuditEvent event) {

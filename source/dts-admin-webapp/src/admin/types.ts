@@ -143,6 +143,7 @@ export interface OrganizationUpdatePayload {
 export interface AdminUser {
 	id: number;
 	username: string;
+	fullName?: string;
 	displayName?: string;
 	email?: string;
 	orgPath?: string[];

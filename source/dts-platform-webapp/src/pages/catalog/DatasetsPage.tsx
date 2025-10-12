@@ -453,31 +453,7 @@ const renderSourceLabel = (value: string) => {
 						<Button variant="outline" onClick={fetchList} disabled={loading}>
 							刷新
 						</Button>
-						<input
-							ref={fileInputRef}
-							type="file"
-							accept=".csv,.json"
-							className="hidden"
-							onChange={(e) => {
-								const f = e.target.files?.[0];
-								if (f) void onImport(f);
-								e.currentTarget.value = "";
-							}}
-						/>
-						<Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
-							批量导入
-						</Button>
-						<Button
-							onClick={() => {
-								if (!hasPrimarySource) {
-									toast.error("请先配置默认数据源");
-									return;
-								}
-								setOpen(true);
-							}}
-						>
-							新建
-						</Button>
+						{/* 需求：隐藏批量导入与新建入口（仅保留查询/刷新/筛选） */}
 					</div>
 				</CardHeader>
 					<CardContent className="space-y-3">
@@ -533,7 +509,7 @@ const renderSourceLabel = (value: string) => {
 						<Alert variant="destructive">
 							<AlertTitle>缺少默认数据源</AlertTitle>
 							<AlertDescription>
-								未检测到 {renderSourceLabel(primarySourceLabel)} 连接，请前往「基础管理 - 数据源」完成配置后再新建或导入数据集。
+								未检测到 {renderSourceLabel(primarySourceLabel)} 连接，请前往「基础管理 - 数据源」完成配置后再浏览或管理数据集。
 							</AlertDescription>
 						</Alert>
 					)}

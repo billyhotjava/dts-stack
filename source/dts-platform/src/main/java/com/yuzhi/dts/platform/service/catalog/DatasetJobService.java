@@ -11,13 +11,21 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetJobRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.infra.HiveConnectionService;
+import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry;
+import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
 import com.yuzhi.dts.platform.service.security.SecurityViewService;
 import com.yuzhi.dts.platform.service.security.dto.StatementExecutionResult;
+import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import java.time.Instant;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -143,6 +151,8 @@ public class DatasetJobService {
         private final SecurityViewService securityViewService;
         private final AuditService auditService;
         private final ObjectMapper objectMapper;
+        private final HiveConnectionService hiveConnectionService;
+        private final InceptorDataSourceRegistry dataSourceRegistry;
 
         public DatasetJobWorker(
             CatalogDatasetJobRepository jobRepository,
@@ -152,7 +162,9 @@ public class DatasetJobService {
             CatalogAccessPolicyRepository accessPolicyRepository,
             SecurityViewService securityViewService,
             AuditService auditService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            HiveConnectionService hiveConnectionService,
+            InceptorDataSourceRegistry dataSourceRegistry
         ) {
             this.jobRepository = jobRepository;
             this.datasetRepository = datasetRepository;
@@ -162,6 +174,8 @@ public class DatasetJobService {
             this.securityViewService = securityViewService;
             this.auditService = auditService;
             this.objectMapper = objectMapper;
+            this.hiveConnectionService = hiveConnectionService;
+            this.dataSourceRegistry = dataSourceRegistry;
         }
 
         @Transactional
@@ -176,47 +190,53 @@ public class DatasetJobService {
             Map<String, Object> result = new HashMap<>();
             try {
                 CatalogDataset dataset = datasetRepository.findById(job.getDataset().getId()).orElseThrow();
-                var tables = tableRepository.findByDataset(dataset);
-                if (!tables.isEmpty()) {
-                    result.put("skipped", true);
-                    job.setStatus(DatasetJobStatus.SUCCEEDED.name());
-                    job.setMessage("已存在表结构，跳过同步");
-                    job.setFinishedAt(Instant.now());
-                    job.setDetailPayload(writeResult(result));
-                    jobRepository.save(job);
-                    auditService.audit("SKIP", "dataset.schema", dataset.getId() + ":existing");
-                    return;
+                ColumnSyncPlan plan = resolveColumnPlan(dataset, body);
+                if (plan.columns().isEmpty()) {
+                    throw new IllegalStateException("未获取到列信息，请确认源表存在或手动指定列列表");
                 }
 
-                String tableName = dataset.getHiveTable() != null && !dataset.getHiveTable().isBlank() ? dataset.getHiveTable() : dataset.getName();
-                var table = new com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema();
+                String tableName = resolveTableName(dataset);
+                if (tableName == null) {
+                    throw new IllegalStateException("数据集未配置 Hive 表名，无法同步");
+                }
+
+                com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema table = tableRepository
+                    .findFirstByDatasetAndNameIgnoreCase(dataset, tableName)
+                    .orElseGet(() -> {
+                        com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema schema = new com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema();
+                        schema.setDataset(dataset);
+                        schema.setName(tableName);
+                        return schema;
+                    });
                 table.setDataset(dataset);
                 table.setName(tableName);
-                var savedTable = tableRepository.save(table);
+                boolean newTable = table.getId() == null;
+                table = tableRepository.save(table);
 
-                List<Map<String, Object>> columns = resolveColumns(body);
-                int importedColumns = 0;
-                for (Map<String, Object> columnSpec : columns) {
-                    var column = new com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema();
-                    column.setTable(savedTable);
-                    column.setName(String.valueOf(columnSpec.getOrDefault("name", "col" + importedColumns)));
-                    column.setDataType(String.valueOf(columnSpec.getOrDefault("dataType", "string")));
-                    Object nullable = columnSpec.get("nullable");
-                    column.setNullable(nullable == null || Boolean.parseBoolean(String.valueOf(nullable)));
-                    column.setTags(columnSpec.containsKey("tags") ? String.valueOf(columnSpec.get("tags")) : null);
-                    column.setSensitiveTags(columnSpec.containsKey("sensitiveTags") ? String.valueOf(columnSpec.get("sensitiveTags")) : null);
-                    columnRepository.save(column);
-                    importedColumns++;
+                columnRepository.deleteByTable(table);
+                List<com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema> columns = new ArrayList<>();
+                for (ColumnSpec spec : plan.columns()) {
+                    com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema column = new com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema();
+                    column.setTable(table);
+                    column.setName(spec.name());
+                    column.setDataType(spec.dataType());
+                    column.setNullable(spec.nullable());
+                    columns.add(column);
                 }
+                columnRepository.saveAll(columns);
 
-                result.put("tablesCreated", 1);
-                result.put("columnsImported", importedColumns);
+                result.put("source", plan.source());
+                result.put("database", plan.database());
+                result.put("table", tableName);
+                result.put("columnsImported", columns.size());
+                result.put("tablesCreated", newTable ? 1 : 0);
+
                 job.setStatus(DatasetJobStatus.SUCCEEDED.name());
-                job.setMessage("表结构同步完成");
+                job.setMessage("表结构同步完成（列数：" + columns.size() + "）");
                 job.setFinishedAt(Instant.now());
                 job.setDetailPayload(writeResult(result));
                 jobRepository.save(job);
-                auditService.audit("SUCCESS", "dataset.schema", dataset.getId() + ":" + importedColumns);
+                auditService.audit("SUCCESS", "dataset.schema", dataset.getId() + ":" + columns.size());
             } catch (Exception ex) {
                 workerLog.error("Schema sync job failed: {}", ex.getMessage());
                 job.setStatus(DatasetJobStatus.FAILED.name());
@@ -316,25 +336,6 @@ public class DatasetJobService {
             }
         }
 
-        private List<Map<String, Object>> resolveColumns(Map<String, Object> body) {
-            Object columns = body != null ? body.get("columns") : null;
-            if (columns instanceof List<?> list) {
-                return list
-                    .stream()
-                    .filter(Map.class::isInstance)
-                    .map(Map.class::cast)
-                    .map(item -> (Map<String, Object>) item)
-                    .toList();
-            }
-            return List.of(
-                Map.of("name", "id", "dataType", "string", "nullable", false),
-                Map.of("name", "name", "dataType", "string", "nullable", true),
-                Map.of("name", "email", "dataType", "string", "nullable", true),
-                Map.of("name", "created_at", "dataType", "timestamp", "nullable", true),
-                Map.of("name", "level", "dataType", "string", "nullable", true)
-            );
-        }
-
         private String writeResult(Map<String, Object> result) {
             try {
                 return objectMapper.writeValueAsString(result);
@@ -349,5 +350,124 @@ public class DatasetJobService {
             }
             return message.length() > 180 ? message.substring(0, 180) : message;
         }
+
+        private ColumnSyncPlan resolveColumnPlan(CatalogDataset dataset, Map<String, Object> body) throws Exception {
+            List<ColumnSpec> manual = parseColumns(body);
+            if (!manual.isEmpty()) {
+                return new ColumnSyncPlan(manual, "payload", dataset.getHiveDatabase());
+            }
+            List<ColumnSpec> discovered = fetchColumnsFromSource(dataset);
+            return new ColumnSyncPlan(discovered, "datasource", resolveDatabase(dataset));
+        }
+
+        private List<ColumnSpec> parseColumns(Map<String, Object> body) {
+            Object columns = body != null ? body.get("columns") : null;
+            if (!(columns instanceof List<?> list)) {
+                return List.of();
+            }
+            List<ColumnSpec> specs = new ArrayList<>();
+            for (Object item : list) {
+                if (!(item instanceof Map<?, ?> map)) {
+                    continue;
+                }
+                String name = Objects.toString(map.get("name"), "").trim();
+                if (name.isEmpty()) {
+                    continue;
+                }
+                String type = Objects.toString(map.get("dataType"), "string");
+                Object nullableObj = map.get("nullable");
+                boolean nullable = nullableObj == null || Boolean.parseBoolean(String.valueOf(nullableObj));
+                specs.add(new ColumnSpec(name, normalizeDataType(type), nullable));
+            }
+            return specs;
+        }
+
+        private List<ColumnSpec> fetchColumnsFromSource(CatalogDataset dataset) throws Exception {
+            InceptorDataSourceState state = dataSourceRegistry
+                .getActive()
+                .orElseThrow(() -> new IllegalStateException("未检测到可用的 Inceptor 数据源，请联系系统管理员"));
+
+            String tableName = resolveTableName(dataset);
+            if (tableName == null) {
+                throw new IllegalStateException("数据集未配置 Hive 表名，无法同步");
+            }
+            String database = resolveDatabase(dataset);
+
+            HiveConnectionTestRequest request = buildRequest(state);
+            return hiveConnectionService.executeWithConnection(request, (connection, connectStart) -> {
+                if (org.springframework.util.StringUtils.hasText(database)) {
+                    try (Statement schemaStmt = connection.createStatement()) {
+                        schemaStmt.execute("USE `" + sanitizeIdentifier(database) + "`");
+                    }
+                }
+                String sql = "DESCRIBE `" + sanitizeIdentifier(tableName) + "`";
+                List<ColumnSpec> specs = new ArrayList<>();
+                try (Statement stmt = connection.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+                    while (rs.next()) {
+                        String columnName = rs.getString(1);
+                        String dataType = rs.getString(2);
+                        if (!org.springframework.util.StringUtils.hasText(columnName)) {
+                            continue;
+                        }
+                        columnName = columnName.trim();
+                        if (columnName.startsWith("#")) {
+                            break;
+                        }
+                        specs.add(new ColumnSpec(columnName, normalizeDataType(dataType), true));
+                    }
+                }
+                if (specs.isEmpty()) {
+                    throw new IllegalStateException("源表 " + tableName + " 未返回任何列信息");
+                }
+                return specs;
+            });
+        }
+
+        private HiveConnectionTestRequest buildRequest(InceptorDataSourceState state) {
+            HiveConnectionTestRequest request = new HiveConnectionTestRequest();
+            request.setJdbcUrl(state.jdbcUrl());
+            request.setLoginPrincipal(state.loginPrincipal());
+            request.setAuthMethod(state.authMethod());
+            request.setKrb5Conf(state.krb5Conf());
+            request.setProxyUser(state.proxyUser());
+            request.setJdbcProperties(state.jdbcProperties());
+            request.setTestQuery("SELECT 1");
+            if (state.authMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB) {
+                request.setKeytabBase64(state.keytabBase64());
+                request.setKeytabFileName(state.keytabFileName());
+            } else if (state.authMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD) {
+                request.setPassword(state.password());
+            }
+            return request;
+        }
+
+        private String resolveTableName(CatalogDataset dataset) {
+            if (dataset.getHiveTable() != null && !dataset.getHiveTable().isBlank()) {
+                return dataset.getHiveTable().trim();
+            }
+            return dataset.getName();
+        }
+
+        private String resolveDatabase(CatalogDataset dataset) {
+            if (dataset.getHiveDatabase() != null && !dataset.getHiveDatabase().isBlank()) {
+                return dataset.getHiveDatabase().trim();
+            }
+            return dataSourceRegistry.getActive().map(InceptorDataSourceState::database).orElse(null);
+        }
+
+        private String normalizeDataType(String type) {
+            if (type == null || type.isBlank()) {
+                return "string";
+            }
+            return type.trim().toLowerCase(java.util.Locale.ROOT);
+        }
+
+        private String sanitizeIdentifier(String identifier) {
+            return identifier.replace("`", "``");
+        }
+
+        private record ColumnSpec(String name, String dataType, boolean nullable) {}
+
+        private record ColumnSyncPlan(List<ColumnSpec> columns, String source, String database) {}
     }
 }

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
-import type { ChangeRequest } from "@/admin/types";
+import type { AdminUser, ChangeRequest } from "@/admin/types";
 import { AdminSessionContext } from "@/admin/lib/session-context";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Text } from "@/ui/typography";
 import { toast } from "sonner";
 import { KeycloakApprovalService } from "@/api/services/approvalService";
+import { KeycloakUserService } from "@/api/services/keycloakService";
 import { useUserInfo } from "@/store/userStore";
 
 type TaskCategory = "user" | "role";
@@ -119,7 +120,18 @@ function getStringField(source: Record<string, unknown> | null, key: string): st
 	return typeof raw === "string" && raw.trim().length > 0 ? raw : null;
 }
 
-function resolveTarget(request: ChangeRequest): string {
+function resolveOperatorDisplayName(username: string | null | undefined, map: Record<string, string>): string {
+	const key = (username || "").trim();
+	if (!key) return "-";
+	return map[key] || map[key.toLowerCase()] || key;
+}
+
+type DiffFormatContext = {
+    roleDisplay?: Record<string, string>;
+    userDisplay?: Record<string, string>;
+};
+
+function resolveTarget(request: ChangeRequest, ctx?: DiffFormatContext): string {
 	const payload = asRecord(parseJson(request.payloadJson));
 	const diff = asRecord(parseJson(request.diffJson));
 	const after = diff && asRecord(diff.after);
@@ -130,8 +142,13 @@ function resolveTarget(request: ChangeRequest): string {
 		getStringField(after, "username"),
 		getStringField(after, "name"),
 	];
-	const target = candidates.find((item) => typeof item === "string" && item.trim().length > 0);
-	return target ? String(target) : "-";
+    const target = candidates.find((item) => typeof item === "string" && item.trim().length > 0);
+    const raw = target ? String(target) : "-";
+    if (ctx?.userDisplay) {
+        const mapped = ctx.userDisplay[raw] || ctx.userDisplay[raw.toLowerCase?.() || raw];
+        if (mapped) return mapped;
+    }
+    return raw;
 }
 
 function summarizeDetails(request: ChangeRequest): string {
@@ -216,11 +233,318 @@ function summarizeDiffPairs(request: ChangeRequest): string {
     return changes.length > 0 ? changes.join("；") : "—";
 }
 
+// Summarize diff focusing on a single side: "before" or "after"
+function summarizeDiffSide(request: ChangeRequest, side: "before" | "after"): string {
+    const diff = asRecord(parseJson(request.diffJson));
+    if (!diff) return "—";
+    // Batch items: summarize first few
+    if (Array.isArray((diff as any).items)) {
+        const items = (diff as any).items as any[];
+        const lines: string[] = [];
+        for (const it of items.slice(0, 3)) {
+            const id = it?.id ?? "?";
+            const before = asRecord(it?.before) || {};
+            const after = asRecord(it?.after) || {};
+            const a = side === "before" ? before : after;
+            const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+            const changes: string[] = [];
+            for (const key of keys) {
+                const vb = (before as any)[key];
+                const va = (after as any)[key];
+                if (JSON.stringify(vb) !== JSON.stringify(va)) {
+                    const v = side === "before" ? vb : va;
+                    changes.push(`${key}: ${fmtValue(v)}`);
+                }
+            }
+            if (changes.length) lines.push(`菜单${id}: ${changes.slice(0, 3).join("，")}`);
+        }
+        const extra = items.length - Math.min(items.length, 3);
+        return lines.length ? lines.join("；") + (extra > 0 ? `（等${extra}项）` : "") : "—";
+    }
+    const before = asRecord(diff.before) || {};
+    const after = asRecord(diff.after) || {};
+    const src = side === "before" ? before : after;
+    const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+    const parts: string[] = [];
+    for (const key of keys) {
+        const vb = (before as any)[key];
+        const va = (after as any)[key];
+        if (JSON.stringify(vb) !== JSON.stringify(va)) {
+            parts.push(`${key}: ${fmtValue((src as any)[key])}`);
+        }
+        if (parts.length >= 4) break;
+    }
+    return parts.length > 0 ? parts.join("；") : "—";
+}
+
+// 与 summarizeDiffSide 类似，但返回 JSX，并在“变更后”用红色高亮变动值
+function renderDiffSide(request: ChangeRequest, side: "before" | "after", ctx?: DiffFormatContext): JSX.Element {
+    const diff = asRecord(parseJson(request.diffJson));
+    const containerClass = "flex flex-col gap-1 text-xs leading-5";
+    const mutedClass = "text-xs text-muted-foreground";
+    if (!diff) return <span className={mutedClass}>—</span>;
+
+    const renderLine = (label: string, value: unknown, key: string, prefix?: string | null, idx?: number) => (
+        <div key={`${prefix ?? ""}${key}-${idx ?? 0}`} className="whitespace-pre-wrap">
+            {prefix ? <span className="text-muted-foreground">{prefix} · </span> : null}
+            <span className="text-muted-foreground">{label}：</span>
+            <span className={side === "after" ? "text-destructive" : undefined}>{formatFriendlyValue(key, value, ctx)}</span>
+        </div>
+    );
+
+    const collectChangedKeys = (
+        before: Record<string, unknown>,
+        after: Record<string, unknown>,
+        changeList?: any[],
+    ) => {
+        if (Array.isArray(changeList) && changeList.length > 0) {
+            return changeList
+                .map((item) => {
+                    const field = String(item?.field ?? "");
+                    if (!field || shouldIgnoreField(field)) return null;
+                    return {
+                        field,
+                        value: side === "after" ? item?.after : item?.before,
+                    };
+                })
+                .filter((entry): entry is { field: string; value: unknown } => entry !== null);
+        }
+        const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+        return keys
+            .filter(
+                (key) =>
+                    !shouldIgnoreField(key) && JSON.stringify(before[key]) !== JSON.stringify(after[key]),
+            )
+            .map((field) => ({
+                field,
+                value: (side === "after" ? after : before)[field],
+            }));
+    };
+
+    // 批量
+    if (Array.isArray((diff as any).items)) {
+        const items = (diff as any).items as any[];
+        const lines: JSX.Element[] = [];
+        items.forEach((item, itemIndex) => {
+            const before = asRecord(item?.before) || {};
+            const after = asRecord(item?.after) || {};
+            const changes = collectChangedKeys(before, after, Array.isArray(item?.changes) ? item.changes : undefined);
+            const itemLabel = resolveBatchItemLabel(item, before, after, itemIndex);
+            changes.forEach(({ field, value }, idx) => {
+                lines.push(renderLine(labelOf(field), value, field, itemLabel, idx));
+            });
+        });
+        if (lines.length === 0) {
+            return <span className={mutedClass}>—</span>;
+        }
+        return <div className={containerClass}>{lines}</div>;
+    }
+
+    const before = asRecord(diff.before) || {};
+    const after = asRecord(diff.after) || {};
+    const changes = collectChangedKeys(before, after, Array.isArray((diff as any).changes) ? (diff as any).changes : undefined);
+
+    if (changes.length === 0) {
+        return <span className={mutedClass}>—</span>;
+    }
+
+    return (
+        <div className={containerClass}>
+            {changes.map(({ field, value }, idx) => renderLine(labelOf(field), value, field, null, idx))}
+        </div>
+    );
+}
+
+function resolveBatchItemLabel(
+    item: Record<string, unknown> | null,
+    before: Record<string, unknown>,
+    after: Record<string, unknown>,
+    index: number,
+): string {
+    const candidates = [
+        item?.label,
+        item?.name,
+        item?.displayName,
+        item?.title,
+        after?.name,
+        after?.displayName,
+        after?.title,
+        before?.name,
+        before?.displayName,
+        before?.title,
+    ];
+    for (const candidate of candidates) {
+        if (typeof candidate === "string" && candidate.trim().length > 0) {
+            return candidate.trim();
+        }
+    }
+    return `第${index + 1}项`;
+}
+
 function fmtValue(v: unknown): string {
     if (v == null) return "—";
     if (Array.isArray(v)) return `[${v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ")}]`;
-    if (typeof v === "string") return v;
+    if (typeof v === "string") return v.replaceAll("7f3868a1-9c8c-4122-b7e4-7f921a40c019", "***");
     return JSON.stringify(v);
+}
+
+// 字段中文名映射
+const FIELD_LABELS: Record<string, string> = {
+    // 通用
+    username: "用户名",
+    name: "名称",
+    displayName: "显示名称",
+    fullName: "姓名",
+    description: "描述",
+    reason: "审批备注",
+    operations: "操作权限",
+    action: "操作",
+    actionDisplay: "操作",
+    allowRoles: "允许角色",
+    allowedPermissions: "允许权限",
+    allowedRoles: "允许角色",
+    enabled: "是否启用",
+    email: "邮箱",
+    mobile: "手机号",
+    phone: "联系电话",
+    groupPaths: "所属组织",
+    orgPath: "所属组织",
+    orgPaths: "所属组织",
+    orgName: "组织名称",
+    orgId: "组织标识",
+    securityLevel: "安全级别",
+    personSecurityLevel: "人员密级",
+    "attributes.person_level": "人员密级",
+    "attributes.person_security_level": "人员密级",
+    "attributes.data_levels": "数据密级",
+    "attributes.fullname": "姓名",
+    maxDataLevel: "最大数据密级",
+    maxDataLevels: "最大数据密级",
+    dataOperations: "数据操作",
+    // 数据级别 / 作用域
+    dataLevel: "数据密级",
+    dataLevels: "数据密级",
+    scope: "作用域",
+    shareScope: "共享范围",
+    // 角色/菜单
+    roles: "角色",
+    resultRoles: "角色",
+    realmRoles: "角色",
+    clientRoles: "客户端角色",
+    menuIds: "菜单绑定",
+    menuBindings: "菜单绑定",
+    // Keycloak 相关
+    keycloakId: "Keycloak ID",
+};
+
+const DATA_LEVEL_LABELS: Record<string, string> = {
+    DATA_PUBLIC: "公开",
+    DATA_INTERNAL: "内部",
+    DATA_SECRET: "秘密",
+    DATA_TOP_SECRET: "机密",
+};
+
+const SCOPE_LABELS: Record<string, string> = {
+    DEPARTMENT: "部门",
+    INSTITUTE: "研究所共享区",
+};
+
+const SHARE_SCOPE_LABELS: Record<string, string> = {
+    SHARE_INST: "所内共享",
+    PUBLIC_INST: "所内公开",
+};
+
+const OP_LABELS: Record<string, string> = { read: "读取", write: "写入", export: "导出" };
+
+const IGNORED_FIELD_PREFIXES = new Set(["attributes", "target"]);
+const IGNORED_EXACT_FIELDS = new Set(["keycloakId"]);
+
+function shouldIgnoreField(key: string): boolean {
+    const prefix = key.includes(".") ? key.split(".")[0] : key;
+    if (IGNORED_FIELD_PREFIXES.has(prefix)) return true;
+    const lower = key.toLowerCase();
+    if (IGNORED_EXACT_FIELDS.has(key) || lower === "keycloakid") return true;
+    return false;
+}
+
+function labelOf(key: string): string {
+    if (FIELD_LABELS[key]) {
+        return FIELD_LABELS[key];
+    }
+    if (key.includes(".")) {
+        const tail = key.substring(key.lastIndexOf(".") + 1);
+        if (FIELD_LABELS[tail]) {
+            return FIELD_LABELS[tail];
+        }
+    }
+    return key;
+}
+
+function mapArray<T>(v: unknown, mapper: (x: any) => string): string {
+    const arr = Array.isArray(v) ? v : v == null ? [] : [v];
+    if (arr.length === 0) return "—";
+    return arr.map(mapper).join("，");
+}
+
+// 将值转换为更友好的中文显示
+function formatFriendlyValue(key: string, value: unknown, ctx?: DiffFormatContext): string {
+    if (value == null || value === "") return "—";
+    switch (key) {
+        case "dataLevel":
+        case "dataLevels":
+            return mapArray(value, (x) => DATA_LEVEL_LABELS[String(x)] || String(x));
+        case "operations":
+            return mapArray(value, (x) => OP_LABELS[String(x)] || String(x));
+        case "role":
+        case "roles":
+        case "resultRoles":
+        case "realmRoles":
+        case "clientRoles":
+        case "allowRoles":
+            return mapArray(value, (x) => {
+                const raw = String(x || "");
+                const upper = raw.toUpperCase();
+                const mapped = ctx?.roleDisplay?.[upper];
+                if (mapped) return mapped;
+                if (upper.startsWith("DEFAULT-ROLES-")) return "默认角色";
+                return raw;
+            });
+        case "action": {
+            const s = String(value || "").toLowerCase();
+            const map: Record<string, string> = {
+                create: "新增",
+                update: "更新",
+                delete: "删除",
+                grantroles: "分配角色",
+                revokeroles: "撤销角色",
+                enable: "启用",
+                disable: "禁用",
+                resetpassword: "重置密码",
+            };
+            return map[s] || String(value);
+        }
+        case "actionDisplay":
+            return String(value || "");
+        case "username": {
+            const u = String(value || "").trim();
+            const mapped = ctx?.userDisplay?.[u] || ctx?.userDisplay?.[u.toLowerCase?.() || u];
+            return mapped || u || "—";
+        }
+        case "scope":
+            return SCOPE_LABELS[String(value)] || String(value);
+        case "shareScope":
+            return SHARE_SCOPE_LABELS[String(value)] || String(value);
+        case "keycloakId":
+            return "***";
+        case "menuIds":
+        case "menuBindings":
+            return mapArray(value, (x) => `菜单${String(x)}`);
+        default:
+            if (typeof value === "boolean") return value ? "是" : "否";
+            if (Array.isArray(value)) return value.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join("，");
+            if (typeof value === "object") return JSON.stringify(value);
+            return String(value);
+    }
 }
 
 function getActionText(request: ChangeRequest): string {
@@ -250,7 +574,8 @@ function formatDateTime(value?: string | null): string {
 function formatJson(value: Record<string, unknown> | null) {
 	if (!value) return "—";
 	try {
-		return JSON.stringify(value, null, 2);
+		const text = JSON.stringify(value, null, 2);
+		return text.replaceAll("7f3868a1-9c8c-4122-b7e4-7f921a40c019", "***");
 	} catch (error) {
 		console.warn("Failed to stringify JSON content", error, value);
 		return "—";
@@ -284,6 +609,10 @@ export default function ApprovalCenterView() {
     } = useQuery<ChangeRequest[]>({
         queryKey: ["admin", "change-requests"],
         queryFn: () => adminApi.getChangeRequests(),
+    });
+    const { data: adminUsers = [] } = useQuery<AdminUser[]>({
+        queryKey: ["admin", "users"],
+        queryFn: () => adminApi.getAdminUsers(),
     });
 
     // 兼容性兜底：若后端仅返回“审批请求”而未返回“变更请求”，
@@ -345,10 +674,117 @@ export default function ApprovalCenterView() {
         return Array.from(map.values());
     }, [changeRequests, mappedFromApprovals]);
 
-	const [decisions, setDecisions] = useState<Record<number, DecisionRecord>>({});
-	const [categoryFilter, setCategoryFilter] = useState<TaskCategory>(CATEGORY_ORDER[0]);
-	const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
-	const [decisionLoading, setDecisionLoading] = useState(false);
+    const [decisions, setDecisions] = useState<Record<number, DecisionRecord>>({});
+    const [categoryFilter, setCategoryFilter] = useState<TaskCategory>(CATEGORY_ORDER[0]);
+    const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
+    const [decisionLoading, setDecisionLoading] = useState(false);
+    const [operatorNameMap, setOperatorNameMap] = useState<Record<string, string>>({});
+    const [roleDisplayNameMap, setRoleDisplayNameMap] = useState<Record<string, string>>({});
+    const [userDisplayMap, setUserDisplayMap] = useState<Record<string, string>>({});
+
+    // 载入角色中文名映射（来自管理端角色目录）
+    useEffect(() => {
+        (async () => {
+            try {
+                const roles = await adminApi.getAdminRoles();
+                const map: Record<string, string> = {};
+                for (const r of roles || []) {
+                    const display = (r as any).nameZh || (r as any).displayName || (r as any).name || "";
+                    const codeKeys = [
+                        (r as any).name,
+                        (r as any).code,
+                        (r as any).roleId,
+                        (r as any).legacyName,
+                    ];
+                    for (const k of codeKeys) {
+                        const key = (k || "").toString().trim().toUpperCase();
+                        if (key && display) map[key] = String(display);
+                    }
+                }
+                setRoleDisplayNameMap(map);
+            } catch {
+                // ignore
+            }
+        })();
+    }, []);
+
+    // 收集请求中的用户名，并解析为中文姓名（优先后端接口，其次 Keycloak 搜索）
+    useEffect(() => {
+        const usernames = new Set<string>();
+        const add = (u?: string | null) => {
+            const v = (u || "").trim();
+            if (v) usernames.add(v);
+        };
+        for (const cr of combinedChangeRequests || []) {
+            add(cr.requestedBy);
+            add(cr.decidedBy as any);
+            if ((cr.resourceType || "").toUpperCase() === "USER") add(String(cr.resourceId || ""));
+            const payload = asRecord(parseJson(cr.payloadJson));
+            const diff = asRecord(parseJson(cr.diffJson));
+            const after = diff && asRecord(diff.after);
+            const scan = (obj: any) => {
+                if (!obj || typeof obj !== "object") return;
+                for (const [k, v] of Object.entries(obj)) {
+                    if (k === "username" && typeof v === "string") add(v);
+                    if (v && typeof v === "object") scan(v);
+                }
+            };
+            scan(payload);
+            scan(after);
+        }
+        const all = Array.from(usernames);
+        const need = all.filter((u) => userDisplayMap[u] == null && userDisplayMap[u.toLowerCase?.() || u] == null);
+        if (need.length === 0) return;
+        (async () => {
+            try {
+                const data = await adminApi.resolveUserDisplayNames(need);
+                if (data && typeof data === "object") {
+                    setUserDisplayMap((prev) => ({ ...prev, ...data }));
+                    return;
+                }
+            } catch {
+                // Fallback: Keycloak 搜索
+            }
+            const updates: Record<string, string> = {};
+            for (const u of need) {
+                try {
+                    const list = await KeycloakUserService.searchUsers(u);
+                    const match = (list || []).find((x) => (x?.username || "").toLowerCase() === u.toLowerCase());
+                    const name =
+                        (match?.fullName || match?.firstName || match?.lastName || match?.attributes?.fullname?.[0] || u).toString();
+                    updates[u] = name;
+                    updates[u.toLowerCase()] = name;
+                } catch {
+                    // ignore single failure
+                }
+            }
+            if (Object.keys(updates).length) setUserDisplayMap((prev) => ({ ...prev, ...updates }));
+        })();
+    }, [combinedChangeRequests, userDisplayMap]);
+
+    useEffect(() => {
+        if (!Array.isArray(adminUsers) || adminUsers.length === 0) return;
+        setOperatorNameMap((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const user of adminUsers) {
+                const username = (user?.username || "").trim();
+                if (!username) continue;
+                const display = (user.fullName || user.displayName || username).trim();
+                if (!display) continue;
+                if (next[username] !== display) {
+                    next[username] = display;
+                    changed = true;
+                }
+                const lower = username.toLowerCase();
+                if (next[lower] !== display) {
+                    next[lower] = display;
+                    changed = true;
+                }
+            }
+            return changed ? next : prev;
+        });
+    }, [adminUsers]);
 
     const augmentedRequests = useMemo<AugmentedChangeRequest[]>(() => {
         return combinedChangeRequests.map((item) => {
@@ -448,44 +884,107 @@ export default function ApprovalCenterView() {
 	const selectedLabel = CATEGORY_LABELS[selectedCategory];
 	const selectedPending = pendingGroups[selectedCategory] ?? [];
 	const selectedCompleted = completedGroups[selectedCategory] ?? [];
-	const activeTask = useMemo(
-		() => augmentedRequests.find((item) => item.id === activeTaskId) ?? null,
-		[augmentedRequests, activeTaskId],
-	);
+    const activeTask = useMemo(
+        () => augmentedRequests.find((item) => item.id === activeTaskId) ?? null,
+        [augmentedRequests, activeTaskId],
+    );
 
-	const pendingColumns = useMemo<ColumnsType<AugmentedChangeRequest>>(
-		() => [
-			{
-				title: "操作编号",
-				dataIndex: "id",
-				width: 120,
-				render: (id: number) => <span className="font-medium">CR-{id}</span>,
-			},
-			{
-				title: "操作类型",
-				dataIndex: "action",
-				width: 160,
-				render: (_: unknown, record) => getActionText(record),
-			},
-			{
-				title: "操作内容",
-				dataIndex: "diffJson",
-				ellipsis: true,
-				render: (_: unknown, record) => (
-					<div className="text-xs text-muted-foreground">{summarizeDiffPairs(record)}</div>
-				),
-			},
-			{
-				title: "影响对象",
-				dataIndex: "resourceId",
-				width: 160,
-				render: (_: unknown, record) => resolveTarget(record),
-			},
-			{
+    // 加载“操作人”的中文姓名（fullName），缓存到 operatorNameMap
+    useEffect(() => {
+        const usernames = new Set<string>();
+        const collect = (value: unknown) => {
+            if (value === null || value === undefined) {
+                return;
+            }
+            const normalized = String(value).trim();
+            if (normalized) {
+                usernames.add(normalized);
+            }
+        };
+        for (const it of combinedChangeRequests || []) {
+            collect(it?.requestedBy);
+            collect(it?.effectiveDecidedBy);
+        }
+        const need = Array.from(usernames).filter((u) => {
+            if (!u) return false;
+            const lowered = u.toLowerCase();
+            return operatorNameMap[u] === undefined && operatorNameMap[lowered] === undefined;
+        });
+        if (need.length === 0) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const resolved = await adminApi.resolveUserDisplayNames(need);
+                const updates: Record<string, string> = {};
+                for (const username of need) {
+                    const key = username.trim();
+                    const lowered = key.toLowerCase();
+                    const candidate = resolved?.[key] ?? resolved?.[lowered] ?? key;
+                    const display = candidate && String(candidate).trim().length > 0 ? String(candidate).trim() : key;
+                    updates[key] = display;
+                    updates[lowered] = display;
+                }
+                if (!cancelled && Object.keys(updates).length) {
+                    setOperatorNameMap((prev) => ({ ...prev, ...updates }));
+                }
+            } catch {
+                if (cancelled) return;
+                const fallbacks: Record<string, string> = {};
+                for (const username of need) {
+                    const key = username.trim();
+                    const lowered = key.toLowerCase();
+                    fallbacks[key] = key;
+                    fallbacks[lowered] = key;
+                }
+                setOperatorNameMap((prev) => ({ ...prev, ...fallbacks }));
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [combinedChangeRequests, operatorNameMap]);
+
+    const pendingColumns = useMemo<ColumnsType<AugmentedChangeRequest>>(
+        () => [
+            {
+                title: "操作编号",
+                dataIndex: "id",
+                width: 120,
+                render: (id: number) => <span className="font-medium">CR-{id}</span>,
+            },
+            {
+                title: "操作类型",
+                dataIndex: "action",
+                width: 160,
+                render: (_: unknown, record) => getActionText(record),
+            },
+            {
+                title: "变更前",
+                dataIndex: "diffJson",
+                ellipsis: true,
+                width: 280,
+                render: (_: unknown, record) => renderDiffSide(record, "before", { roleDisplay: roleDisplayNameMap, userDisplay: userDisplayMap }),
+            },
+            {
+                title: "变更后",
+                dataIndex: "diffJson2",
+                ellipsis: true,
+                width: 280,
+                render: (_: unknown, record) => renderDiffSide(record, "after", { roleDisplay: roleDisplayNameMap, userDisplay: userDisplayMap }),
+            },
+            {
+                title: "影响对象",
+                dataIndex: "resourceId",
+                width: 160,
+                render: (_: unknown, record) => resolveTarget(record, { userDisplay: userDisplayMap }),
+            },
+            {
 				title: "操作人",
 				dataIndex: "requestedBy",
 				width: 140,
-				render: (_: unknown, record) => <span className="text-xs">{record.requestedBy}</span>,
+				render: (_: unknown, record) => (
+					<span className="text-xs">{resolveOperatorDisplayName(record.requestedBy, operatorNameMap)}</span>
+				),
 			},
 			{
 				title: "操作时间",
@@ -519,45 +1018,57 @@ export default function ApprovalCenterView() {
 						操作
 					</Button>
 				),
-			},
-		],
-		[activeTaskId, decisionLoading],
-	);
+            },
+        ],
+        [activeTaskId, decisionLoading, operatorNameMap, roleDisplayNameMap, userDisplayMap],
+    );
 
-	const completedColumns = useMemo<ColumnsType<AugmentedChangeRequest>>(
-		() => [
-			{
-				title: "操作编号",
-				dataIndex: "id",
-				width: 120,
-				render: (id: number) => <span className="font-medium">CR-{id}</span>,
-			},
-			{
-				title: "操作类型",
-				dataIndex: "action",
-				width: 160,
-				render: (_: unknown, record) => getActionText(record),
-			},
-			{
-				title: "操作内容",
-				dataIndex: "diffJson",
-				ellipsis: true,
-				render: (_: unknown, record) => (
-					<div className="text-xs text-muted-foreground">{summarizeDiffPairs(record)}</div>
-				),
-			},
-			{
-				title: "影响对象",
-				dataIndex: "resourceId",
-				width: 160,
-				render: (_: unknown, record) => resolveTarget(record),
-			},
-			{
-				title: "操作人",
-				dataIndex: "effectiveDecidedBy",
-				width: 140,
-				render: (_: unknown, record) => <span className="text-xs">{record.effectiveDecidedBy ?? "-"}</span>,
-			},
+    const completedColumns = useMemo<ColumnsType<AugmentedChangeRequest>>(
+        () => [
+            {
+                title: "操作编号",
+                dataIndex: "id",
+                width: 120,
+                render: (id: number) => <span className="font-medium">CR-{id}</span>,
+            },
+            {
+                title: "操作类型",
+                dataIndex: "action",
+                width: 160,
+                render: (_: unknown, record) => getActionText(record),
+            },
+            {
+                title: "变更前",
+                dataIndex: "diffJson",
+                ellipsis: true,
+                width: 280,
+                render: (_: unknown, record) => renderDiffSide(record, "before", { roleDisplay: roleDisplayNameMap, userDisplay: userDisplayMap }),
+            },
+            {
+                title: "变更后",
+                dataIndex: "diffJson2",
+                ellipsis: true,
+                width: 280,
+                render: (_: unknown, record) => renderDiffSide(record, "after", { roleDisplay: roleDisplayNameMap, userDisplay: userDisplayMap }),
+            },
+            {
+                title: "影响对象",
+                dataIndex: "resourceId",
+                width: 160,
+                render: (_: unknown, record) => resolveTarget(record, { userDisplay: userDisplayMap }),
+            },
+            {
+                title: "操作人",
+                dataIndex: "effectiveDecidedBy",
+                width: 140,
+                render: (_: unknown, record) => {
+                    return (
+                        <span className="text-xs">
+                            {resolveOperatorDisplayName(record.effectiveDecidedBy, operatorNameMap)}
+                        </span>
+                    );
+                },
+            },
 			{
 				title: "操作时间",
 				dataIndex: "effectiveDecidedAt",
@@ -574,9 +1085,9 @@ export default function ApprovalCenterView() {
 					</Badge>
 				),
 			},
-		],
-		[],
-	);
+        ],
+        [operatorNameMap, roleDisplayNameMap, userDisplayMap],
+    );
 
 
     const handleDecision = async (status: DecisionStatus) => {
@@ -618,6 +1129,23 @@ export default function ApprovalCenterView() {
                     decidedBy,
                 },
             }));
+            if (decidedBy) {
+                const fullName = userInfo?.fullName || userInfo?.displayName || userInfo?.username;
+                if (fullName && fullName.trim().length > 0) {
+                    setOperatorNameMap((prev) => {
+                        const display = fullName.trim();
+                        const existing = prev[decidedBy] || prev[decidedBy.toLowerCase()];
+                        if (existing && existing === display) {
+                            return prev;
+                        }
+                        return {
+                            ...prev,
+                            [decidedBy]: display,
+                            [decidedBy.toLowerCase()]: display,
+                        };
+                    });
+                }
+            }
             toast.success(status === "APPROVED" ? "已批准该变更请求" : status === "REJECTED" ? "已拒绝该变更请求" : "已将该请求标记为待定");
             // 刷新变更请求列表
             await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests"] });
@@ -706,7 +1234,7 @@ export default function ApprovalCenterView() {
                                     size="small"
                                     className="text-sm"
                                     rowClassName={() => "text-sm"}
-                                    scroll={{ x: 1100 }}
+                                    scroll={{ x: 1360 }}
                                 />
 								)}
 							</>
@@ -757,7 +1285,7 @@ export default function ApprovalCenterView() {
                                     size="small"
                                     className="text-sm"
                                     rowClassName={() => "text-sm"}
-                                    scroll={{ x: 1100 }}
+                                    scroll={{ x: 1360 }}
                                 />
 								)}
 							</>
@@ -800,13 +1328,13 @@ export default function ApprovalCenterView() {
 									<Text variant="body3" className="text-muted-foreground">
 										影响对象
 									</Text>
-									<div className="font-medium">{resolveTarget(activeTask)}</div>
+                            <div className="font-medium">{resolveTarget(activeTask, { userDisplay: userDisplayMap })}</div>
 								</div>
 								<div className="space-y-1">
 									<Text variant="body3" className="text-muted-foreground">
 										提交人
 									</Text>
-									<div>{activeTask.requestedBy}</div>
+									<div>{resolveOperatorDisplayName(activeTask.requestedBy, operatorNameMap)}</div>
 								</div>
 								<div className="space-y-1">
 									<Text variant="body3" className="text-muted-foreground">

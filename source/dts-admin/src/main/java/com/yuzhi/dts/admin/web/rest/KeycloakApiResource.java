@@ -287,14 +287,12 @@ public class KeycloakApiResource {
             command.getGroupPaths() == null ? 0 : command.getGroupPaths().size());
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("username", username);
-        auditDetail.put("request", Map.of(
-            "fullName",
-            command.getFullName(),
-            "email",
-            command.getEmail(),
-            "groups",
-            command.getGroupPaths() == null ? 0 : command.getGroupPaths().size()
-        ));
+        Map<String, Object> req = new LinkedHashMap<>();
+        // 允许为空值，避免 Map.of 在遇到 null 时抛出 NPE
+        if (command.getFullName() != null) req.put("fullName", command.getFullName());
+        if (command.getEmail() != null) req.put("email", command.getEmail());
+        req.put("groups", command.getGroupPaths() == null ? 0 : command.getGroupPaths().size());
+        auditDetail.put("request", req);
         auditService.recordAction(actor, "ADMIN_USER_UPDATE", AuditStage.BEGIN, username, auditDetail);
         try {
             ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitUpdate(
@@ -1262,7 +1260,18 @@ public class KeycloakApiResource {
                 case "approve" -> {
                     // Provide caller token for best effort; service falls back to service-account if needed
                     ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.approve(id, approver, note, currentAccessToken());
-                    auditService.recordAction(actor, "ADMIN_APPROVAL_DECIDE", AuditStage.SUCCESS, String.valueOf(id), Map.of("result", "APPROVED"));
+                    // If only one item, record decision with item.id as resourceId for target_id precision
+                    String resourceId = String.valueOf(id);
+                    try {
+                        var entityOpt = adminUserService.findApprovalEntity(id);
+                        if (entityOpt.isPresent() && entityOpt.get().getItems() != null && entityOpt.get().getItems().size() == 1) {
+                            var only = entityOpt.get().getItems().get(0);
+                            if (only != null && only.getId() != null) {
+                                resourceId = String.valueOf(only.getId());
+                            }
+                        }
+                    } catch (Exception ignore) {}
+                    auditService.recordAction(actor, "ADMIN_APPROVAL_DECIDE", AuditStage.SUCCESS, resourceId, Map.of("result", "APPROVED"));
                     yield ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 case "reject" -> {
@@ -1318,6 +1327,20 @@ public class KeycloakApiResource {
         try {
             // Note: Do NOT enforce triad-only here. This endpoint serves the business platform audience.
             KeycloakAuthService.LoginResult loginResult = keycloakAuthService.login(username, password);
+
+            // Gate login: built-ins may always log in; others must exist and be enabled in admin snapshot
+            String uname = username.toLowerCase();
+            boolean isProtected = PROTECTED_USERNAMES.contains(uname);
+            if (!isProtected) {
+                boolean allowed = adminUserService
+                    .findSnapshotByUsername(username)
+                    .map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::isEnabled)
+                    .orElse(false);
+                if (!allowed) {
+                    auditService.recordAction(username, "ADMIN_AUTH_LOGIN", AuditStage.FAIL, username, Map.of("error", "not_approved", "audience", "platform"));
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
+                }
+            }
             Map<String, Object> data = new HashMap<>();
             // Enrich roles with DB assignments so platform can work without Keycloak client roles
             Map<String, Object> userOut = new HashMap<>(loginResult.user());
@@ -1382,6 +1405,7 @@ public class KeycloakApiResource {
                             set.contains("ROLE_AUDIT_ADMIN") || set.contains("AUDIT_ADMIN") ||
                             set.contains("ROLE_AUDITADMIN") || set.contains("AUDITADMIN");
             if (!triad) {
+                auditService.recordAction(username, "ADMIN_AUTH_LOGIN", AuditStage.FAIL, username, Map.of("error", "仅系统管理角色可登录系统端", "audience", "admin"));
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("仅系统管理角色可登录系统端"));
             }
             Map<String, Object> data = new HashMap<>();

@@ -23,6 +23,7 @@
     <include file="config/liquibase/changelog/20251001_01_sql_workbench.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251002_02_catalog_dataset_job.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251007_01_audit_event_table.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251011_01_audit_event_extend.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251007_02_data_standard_tables.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251008_01_governance_quality_tables.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251008_02_services_module.xml" relativeToChangelogFile="false"/>

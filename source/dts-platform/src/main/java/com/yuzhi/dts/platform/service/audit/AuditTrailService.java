@@ -271,8 +271,14 @@ public class AuditTrailService {
         entity.setOccurredAt(pending.occurredAt);
         entity.setActor(defaultString(pending.actor, "anonymous"));
         entity.setActorRole(pending.actorRole);
+        entity.setSourceSystem("platform");
+        entity.setEventUuid(java.util.UUID.randomUUID());
         entity.setModule(defaultString(pending.module, "GENERAL"));
         entity.setAction(defaultString(pending.action, "UNKNOWN"));
+        String normalizedAction = entity.getAction() == null ? "" : entity.getAction().toUpperCase(java.util.Locale.ROOT);
+        boolean security = normalizedAction.contains("AUTH_") || normalizedAction.contains("LOGIN") || normalizedAction.contains("LOGOUT") || normalizedAction.contains("ACCESS_DENIED");
+        entity.setEventClass(security ? "SecurityEvent" : "AuditEvent");
+        entity.setEventType(mapEventType(normalizedAction, entity.getResult()));
         entity.setResourceType(pending.resourceType);
         entity.setResourceId(pending.resourceId);
         InetAddress clientIp = parseClientIp(pending.clientIp);
@@ -287,17 +293,134 @@ public class AuditTrailService {
         entity.setLatencyMs(pending.latencyMs);
         entity.setExtraTags(normalizeExtraTags(pending.extraTags));
 
+        // operator_* from security context
+        String username = entity.getActor();
+        entity.setOperatorId(username);
+        entity.setOperatorName(username);
+        java.util.List<String> roles = new java.util.ArrayList<>();
+        try {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.getAuthorities() != null) {
+                for (org.springframework.security.core.GrantedAuthority ga : auth.getAuthorities()) {
+                    if (ga != null && ga.getAuthority() != null) roles.add(ga.getAuthority());
+                }
+            }
+        } catch (Exception ignore) {}
+        java.util.LinkedHashSet<String> filtered = new java.util.LinkedHashSet<>();
+        for (String r : roles) {
+            if (r == null || r.isBlank()) continue;
+            String norm = normalizeRole(r);
+            if (norm.startsWith("DEPT_DATA_") || norm.startsWith("INST_DATA_")) filtered.add(norm);
+        }
+        try { entity.setOperatorRoles(objectMapper.writeValueAsString(new java.util.ArrayList<>(filtered))); } catch (Exception ignored) {}
+        entity.setOrgCode(null);
+        entity.setOrgName(null);
+
+        java.util.Map<String, Object> det = new java.util.LinkedHashMap<>();
+        det.put("target_table", tableFromResource(entity.getResourceType(), entity.getModule()));
+        // Do not include target_ref; only target_id when resolvable
+        String rid = entity.getResourceId();
+        if (rid != null) {
+            String s = rid.trim();
+            boolean isNumeric = s.matches("\\d+");
+            boolean isUuid = s.matches("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
+            if (isNumeric || isUuid) {
+                det.put("target_id", s);
+            }
+        }
+        det.put("action_result", entity.getResult());
+        det.put("request_id", java.util.UUID.randomUUID().toString());
+
         byte[] payloadBytes = serializePayload(pending.payload);
-        byte[] iv = AuditCrypto.randomIv();
-        entity.setPayloadIv(iv);
-        byte[] cipher = AuditCrypto.encrypt(payloadBytes, encryptionKey, iv);
-        entity.setPayloadCipher(cipher);
-        String payloadHmac = AuditCrypto.hmac(payloadBytes, hmacKey);
-        entity.setPayloadHmac(payloadHmac);
-        entity.setChainSignature(AuditCrypto.chain(previousChain, payloadHmac, hmacKey));
+        String payloadDigest = sha256Hex(payloadBytes); // phase 1: remove key/HMAC
+        det.put("param_digest", payloadDigest);
+        try { entity.setDetails(objectMapper.writeValueAsString(det)); } catch (Exception ignored) {}
+        entity.setPayloadIv(null);
+        entity.setPayloadCipher(null);
+        entity.setPayloadHmac(payloadDigest);
+        entity.setChainSignature(sha256Hex((previousChain + "|" + payloadDigest).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        entity.setRecordSignature(simpleRecordSignature(entity, payloadDigest));
+        entity.setSignatureKeyVer(null);
+        entity.setSummary(buildSummary(entity));
         entity.setCreatedBy(entity.getActor());
         entity.setCreatedDate(Instant.now());
         return entity;
+    }
+
+    private String mapEventType(String actionDisplay, String result) {
+        if (actionDisplay == null) return "UNKNOWN";
+        String a = actionDisplay.toUpperCase(java.util.Locale.ROOT);
+        if (a.contains("LOGIN")) return ("SUCCESS".equalsIgnoreCase(result) ? "AUTH_LOGIN_SUCCESS" : "AUTH_LOGIN_FAILURE");
+        if (a.contains("LOGOUT")) return "AUTH_LOGOUT";
+        return a.replace(' ', '_');
+    }
+
+    private String tableFromResource(String resourceType, String module) {
+        if (resourceType == null || resourceType.isBlank()) {
+            return module == null || module.isBlank() ? "general" : normalizeKey(module);
+        }
+        String r = resourceType.toLowerCase(java.util.Locale.ROOT);
+        // Align key aliases to concrete table names where applicable
+        if (r.equals("admin.auth") || r.equals("auth") || r.equals("admin") || r.equals("user") || r.equals("admin_keycloak_user")) {
+            return "admin_keycloak_user";
+        }
+        if (r.equals("portal_menu") || r.equals("menu") || r.equals("portal.menus") || r.equals("portal-menus")) {
+            return "portal_menu";
+        }
+        if (r.equals("api") || r.equals("v1") || r.equals("v2")) {
+            return "general";
+        }
+        return normalizeKey(r);
+    }
+
+    private String normalizeKey(String key) {
+        if (key == null) return "general";
+        String s = key.trim().toLowerCase(java.util.Locale.ROOT);
+        s = s.replaceAll("[^a-z0-9]+", "_");
+        s = s.replaceAll("^_+", "").replaceAll("_+$", "");
+        return s.isBlank() ? "general" : s;
+    }
+
+    private String simpleRecordSignature(AuditEvent e, String payloadHmac) {
+        String base = String.join("|",
+            nullToEmpty(e.getSourceSystem()), nullToEmpty(e.getActor()), nullToEmpty(e.getAction()), nullToEmpty(e.getModule()),
+            nullToEmpty(e.getResourceType()), nullToEmpty(e.getResourceId()), nullToEmpty(payloadHmac), e.getOccurredAt() == null ? "" : e.getOccurredAt().toString()
+        );
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] out = md.digest(base.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(out.length * 2);
+            for (byte b : out) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception ex) { return null; }
+    }
+
+    private String sha256Hex(byte[] data) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] out = md.digest(data);
+            StringBuilder sb = new StringBuilder(out.length * 2);
+            for (byte b : out) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private static String nullToEmpty(String s) { return s == null ? "" : s; }
+
+    private static String normalizeRole(String role) {
+        if (role == null) return "";
+        String r = role.trim().toUpperCase(java.util.Locale.ROOT);
+        if (r.startsWith("ROLE_")) r = r.substring(5);
+        return r;
+    }
+
+    private String buildSummary(AuditEvent e) {
+        String name = e.getOperatorName() != null && !e.getOperatorName().isBlank() ? e.getOperatorName() : e.getActor();
+        String actionDesc = e.getEventType() != null ? e.getEventType() : e.getAction();
+        String target = (e.getResourceType() == null ? "" : e.getResourceType()) + (e.getResourceId() == null ? "" : (":" + e.getResourceId()));
+        return String.format("用户【%s】执行【%s】 %s", nullToEmpty(name), nullToEmpty(actionDesc), target);
     }
 
     private byte[] serializePayload(Object payload) throws JsonProcessingException {

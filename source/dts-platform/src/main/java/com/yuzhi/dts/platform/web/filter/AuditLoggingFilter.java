@@ -73,6 +73,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         long start = System.nanoTime();
         ContentCachingRequestWrapper wrapper = new ContentCachingRequestWrapper(request);
         AuditResponseWrapper responseWrapper = new AuditResponseWrapper(response);
+        com.yuzhi.dts.platform.service.audit.AuditRequestContext.clear();
         String actionHeader = wrapper.getHeader("X-Audit-Action");
         String flowHeader = wrapper.getHeader("X-Audit-Flow");
         String stageHeader = wrapper.getHeader("X-Audit-Stage");
@@ -101,13 +102,16 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         } finally {
             responseWrapper.flushBuffer();
             try {
+                boolean alreadyAudited = com.yuzhi.dts.platform.service.audit.AuditRequestContext.wasDomainAudited();
                 PendingAuditEvent event = buildEvent(wrapper, responseWrapper, System.nanoTime() - start);
-                AuditTrailService svc = auditServiceProvider.getIfAvailable();
-                if (svc != null) {
-                    svc.record(event);
-                } else {
-                    if (log.isDebugEnabled()) {
-                        log.debug("AuditTrailService not available; skipping audit record for {} {}", request.getMethod(), request.getRequestURI());
+                if (!alreadyAudited) {
+                    AuditTrailService svc = auditServiceProvider.getIfAvailable();
+                    if (svc != null) {
+                        svc.record(event);
+                    } else {
+                        if (log.isDebugEnabled()) {
+                            log.debug("AuditTrailService not available; skipping audit record for {} {}", request.getMethod(), request.getRequestURI());
+                        }
                     }
                 }
                 Map<String, Object> flowSummary = new HashMap<>();
@@ -164,10 +168,14 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         event.occurredAt = Instant.now();
         event.actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
         event.actorRole = resolvePrimaryAuthority();
-        event.module = resolveModule(request.getRequestURI());
-        event.action = request.getMethod() + " " + request.getRequestURI();
-        event.resourceType = event.module;
-        event.resourceId = request.getRequestURI();
+        String uri = request.getRequestURI();
+        String[] seg = splitSegments(uri);
+        String module = resolveModuleFromSegments(seg);
+        String resourceType = resolveResourceTypeFromSegments(seg);
+        event.module = module;
+        event.action = request.getMethod() + " " + uri;
+        event.resourceType = resourceType;
+        event.resourceId = uri;
         String forwarded = request.getHeader("X-Forwarded-For");
         event.clientIp = forwarded != null && !forwarded.isBlank() ? forwarded.split(",")[0].trim() : request.getRemoteAddr();
         event.clientAgent = request.getHeader("User-Agent");
@@ -185,16 +193,51 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         return event;
     }
 
-    private String resolveModule(String uri) {
+    private String[] splitSegments(String uri) {
         if (uri == null || uri.isBlank()) {
-            return "general";
+            return new String[0];
         }
         String sanitized = uri.startsWith("/") ? uri.substring(1) : uri;
-        int idx = sanitized.indexOf('/');
-        if (idx > 0) {
-            return sanitized.substring(0, idx);
+        return sanitized.split("/");
+    }
+
+    // Prefer the first meaningful segment as module; skip common prefixes like "api", "v1", "v2"
+    private String resolveModuleFromSegments(String[] seg) {
+        if (seg == null || seg.length == 0) return "general";
+        int i = 0;
+        while (i < seg.length && (seg[i] == null || seg[i].isBlank() || isGenericPrefix(seg[i]))) i++;
+        return i < seg.length ? seg[i] : "general";
+    }
+
+    private boolean isGenericPrefix(String s) {
+        String k = s.toLowerCase();
+        return k.equals("api") || k.equals("v1") || k.equals("v2");
+    }
+
+    // Derive a more specific resourceType from URI segments to avoid non-existent tables like "api"
+    private String resolveResourceTypeFromSegments(String[] seg) {
+        if (seg == null || seg.length == 0) return "general";
+        int i = 0;
+        while (i < seg.length && (seg[i] == null || seg[i].isBlank() || isGenericPrefix(seg[i]))) i++;
+        if (i >= seg.length) return "general";
+        String s1 = seg[i].toLowerCase();
+        String s2 = (i + 1) < seg.length ? seg[i + 1].toLowerCase() : null;
+        String s3 = (i + 2) < seg.length ? seg[i + 2].toLowerCase() : null;
+        // Known mappings
+        if ("keycloak".equals(s1) && "auth".equals(s2)) {
+            return "admin.auth"; // maps to admin_keycloak_user
         }
-        return sanitized.isEmpty() ? "general" : sanitized;
+        if ("admin".equals(s1)) {
+            return "admin"; // maps to admin_keycloak_user in table mapping
+        }
+        if ("portal".equals(s1) && "menus".equals(s2)) {
+            return "portal_menu";
+        }
+        // Fallbacks: prefer the next segment when present; otherwise use first meaningful
+        if (s2 != null && !s2.isBlank()) {
+            return s2;
+        }
+        return s1;
     }
 
     private String resolvePrimaryAuthority() {

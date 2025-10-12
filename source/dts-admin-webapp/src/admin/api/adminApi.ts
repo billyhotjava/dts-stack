@@ -139,6 +139,12 @@ export const adminApi = {
 			url: "/admin/users",
 		}),
 
+	resolveUserDisplayNames: (usernames: string[]) =>
+		apiClient.get<Record<string, string>>({
+			url: "/admin/users/display-names",
+			params: { usernames: usernames.join(",") },
+		}),
+
 	getAdminRoles: () =>
 		apiClient.get<AdminRoleDetail[]>({
 			url: "/admin/roles",

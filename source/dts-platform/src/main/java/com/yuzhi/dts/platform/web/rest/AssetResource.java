@@ -12,12 +12,12 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.catalog.DatasetJobService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.validation.Valid;
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -38,6 +38,7 @@ public class AssetResource {
     private final AccessChecker accessChecker;
     private final AuditService audit;
     private final DatasetJobService datasetJobService;
+    private final QueryGateway queryGateway;
 
     public AssetResource(
         CatalogDatasetRepository datasetRepo,
@@ -47,7 +48,8 @@ public class AssetResource {
         CatalogMaskingRuleRepository maskingRepo,
         AccessChecker accessChecker,
         AuditService audit,
-        DatasetJobService datasetJobService
+        DatasetJobService datasetJobService,
+        QueryGateway queryGateway
     ) {
         this.datasetRepo = datasetRepo;
         this.tableRepo = tableRepo;
@@ -57,6 +59,7 @@ public class AssetResource {
         this.accessChecker = accessChecker;
         this.audit = audit;
         this.datasetJobService = datasetJobService;
+        this.queryGateway = queryGateway;
     }
 
     /**
@@ -133,55 +136,73 @@ public class AssetResource {
             return ApiResponses.error("Access denied");
         }
 
-        // headers based on first table columns if exists
-        List<CatalogTableSchema> tables = tableRepo.findByDataset(ds);
-        List<String> headers = new ArrayList<>();
-        if (!tables.isEmpty()) {
-            List<CatalogColumnSchema> cols = columnRepo.findByTable(tables.get(0));
-            for (CatalogColumnSchema c : cols) headers.add(c.getName());
+        int safeRows = Math.max(1, Math.min(rows, 500));
+        String sql;
+        try {
+            sql = buildPreviewSql(ds, safeRows);
+        } catch (IllegalStateException ex) {
+            audit.auditAction(
+                "CATALOG_ASSET_VIEW",
+                AuditStage.FAIL,
+                id.toString(),
+                Map.of("reason", ex.getMessage())
+            );
+            return ApiResponses.error(ex.getMessage());
         }
-        if (headers.isEmpty()) headers = List.of("id", "name", "email", "level");
 
-        // masking rules by dataset
-        var masking = maskingRepo.findByDataset(ds);
-        Map<String, String> maskingMap = new HashMap<>(); // column -> function
-        for (var m : masking) maskingMap.put(m.getColumn(), m.getFunction());
-
-        // generate sample rows
-        ThreadLocalRandom r = ThreadLocalRandom.current();
-        List<Map<String, Object>> data = new ArrayList<>();
-        int n = Math.max(1, Math.min(rows, 200));
-        for (int i = 0; i < n; i++) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            for (String h : headers) {
-                Object v;
-                if (h.toLowerCase().contains("id")) v = UUID.randomUUID().toString().substring(0, 8);
-                else if (h.toLowerCase().contains("email")) v = "user" + r.nextInt(10, 99) + "@example.com";
-                else if (h.equalsIgnoreCase("level")) v = List.of("PUBLIC", "INTERNAL", "SECRET").get(r.nextInt(0, 3));
-                else v = "v" + r.nextInt(1, 1000);
-                // apply simple masking if configured
-                String fn = maskingMap.get(h);
-                if (fn != null) v = applyMask(fn, String.valueOf(v));
-                row.put(h, v);
+        try {
+            Map<String, Object> queryResult = queryGateway.execute(sql);
+            List<String> headers = extractHeaders(queryResult.get("headers"));
+            List<Map<String, Object>> rowsData = extractRows(queryResult.get("rows"), headers);
+            Map<String, String> maskingMap = new HashMap<>();
+            maskingRepo
+                .findByDataset(ds)
+                .forEach(rule -> maskingMap.put(rule.getColumn(), rule.getFunction()));
+            if (!maskingMap.isEmpty()) {
+                for (Map<String, Object> row : rowsData) {
+                    for (String header : headers) {
+                        String fn = maskingMap.get(header);
+                        if (fn != null && row.containsKey(header)) {
+                            Object original = row.get(header);
+                            row.put(header, applyMask(fn, original != null ? String.valueOf(original) : null));
+                        }
+                    }
+                }
             }
-            data.add(row);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("headers", headers);
+            result.put("rows", rowsData);
+            result.put("rowCount", rowsData.size());
+            result.put("sql", sql);
+            if (queryResult.containsKey("connectMillis")) {
+                result.put("connectMillis", queryResult.get("connectMillis"));
+            }
+            if (queryResult.containsKey("queryMillis")) {
+                result.put("queryMillis", queryResult.get("queryMillis"));
+            }
+            audit.auditAction(
+                "CATALOG_ASSET_VIEW",
+                AuditStage.SUCCESS,
+                id.toString(),
+                Map.of("rows", rowsData.size(), "requestedRows", safeRows)
+            );
+            return ApiResponses.ok(result);
+        } catch (Exception ex) {
+            String message = sanitize(ex.getMessage());
+            audit.auditAction(
+                "CATALOG_ASSET_VIEW",
+                AuditStage.FAIL,
+                id.toString(),
+                Map.of("error", message, "sql", sql)
+            );
+            return ApiResponses.error("数据预览失败: " + message);
         }
-
-        int filtered = data.size(); // placeholder; real row filter pushdown not executed here
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("headers", headers);
-        result.put("rows", data);
-        result.put("rowCount", filtered);
-        audit.auditAction(
-            "CATALOG_ASSET_VIEW",
-            AuditStage.SUCCESS,
-            id.toString(),
-            Map.of("rows", filtered, "requestedRows", rows)
-        );
-        return ApiResponses.ok(result);
     }
 
     private Object applyMask(String function, String value) {
+        if (value == null) {
+            return null;
+        }
         return switch (function == null ? "" : function.toLowerCase()) {
             case "hash" -> Integer.toHexString(Objects.hashCode(value));
             case "mask_email" -> value.replaceAll("(^.).*(@.*$)", "$1***$2");
@@ -197,5 +218,54 @@ public class AssetResource {
         }
         String cleaned = message.replaceAll("\n", " ").trim();
         return cleaned.length() > 160 ? cleaned.substring(0, 160) : cleaned;
+    }
+
+    private String buildPreviewSql(CatalogDataset dataset, int limit) {
+        String table = dataset.getHiveTable() != null && !dataset.getHiveTable().isBlank() ? dataset.getHiveTable().trim() : dataset.getName();
+        if (table == null || table.isBlank()) {
+            throw new IllegalStateException("数据集未配置 Hive 表名");
+        }
+        String database = dataset.getHiveDatabase();
+        StringBuilder builder = new StringBuilder("SELECT * FROM ");
+        if (database != null && !database.isBlank()) {
+            builder.append('`').append(database.replace("`", "``")).append('`').append('.');
+        }
+        builder.append('`').append(table.replace("`", "``")).append('`');
+        builder.append(" LIMIT ").append(limit);
+        return builder.toString();
+    }
+
+    private List<String> extractHeaders(Object headersObj) {
+        if (headersObj instanceof List<?> list) {
+            List<String> headers = new ArrayList<>();
+            for (Object item : list) {
+                if (item != null) {
+                    headers.add(String.valueOf(item));
+                }
+            }
+            if (!headers.isEmpty()) {
+                return headers;
+            }
+        }
+        return List.of("col_1", "col_2", "col_3");
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractRows(Object rowsObj, List<String> headers) {
+        if (rowsObj instanceof List<?> list) {
+            List<Map<String, Object>> rows = new ArrayList<>();
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (String header : headers) {
+                        Object value = map.get(header);
+                        row.put(header, value);
+                    }
+                    rows.add(row);
+                }
+            }
+            return rows;
+        }
+        return List.of();
     }
 }

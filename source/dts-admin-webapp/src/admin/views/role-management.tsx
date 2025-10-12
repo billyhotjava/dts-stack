@@ -402,7 +402,6 @@ export default function RoleManagementView() {
                             <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={immutable}
                                 onClick={() => setEditTarget(record)}
                             >
                                 编辑

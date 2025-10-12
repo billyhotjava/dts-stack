@@ -298,7 +298,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                     // ignore
                 }
             }
-            const merged: KeycloakRole[] = [];
+            let merged: KeycloakRole[] = [];
             const seen = new Set<string>();
             const push = (r?: KeycloakRole) => {
                 if (!r || !r.name) return;
@@ -309,6 +309,13 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
             };
             (userRolesData || []).forEach(push);
             (assignmentRoles || []).forEach(push);
+            // Hide Keycloak 内置/默认角色
+            merged = merged.filter((r) => {
+                const name = (r?.name || "").toString();
+                if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
+                if (GLOBAL_CONFIG.hideBuiltinRoles && shouldHideRole(r)) return false;
+                return true;
+            });
             setUserRoles(merged);
             return merged;
         } catch (err) {
@@ -519,9 +526,15 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 
         const attributesPayload = buildAttributesPayload();
-		const groupPathsPayload = selectedGroupPaths
-			.map((item) => normalizeGroupPath(item))
-			.filter((item) => item);
+        const groupPathsPayload = selectedGroupPaths
+            .map((item) => normalizeGroupPath(item))
+            .filter((item) => item);
+
+        // 部门必填：创建与编辑均需选择所属组织
+        if (groupPathsPayload.length === 0) {
+            setError("所属组织为必填项，请先选择所属组织");
+            return;
+        }
 
 		// 创建用户时人员密级不得为“非密”
 		if (personLevel?.toUpperCase?.() === "NON_SECRET") {
@@ -746,26 +759,26 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									/>
 									<p className="text-xs text-muted-foreground">邮箱用于接收通知，可选填写。</p>
 								</div>
-								<div className="space-y-2">
-									<Label htmlFor="department">组织机构（可选）</Label>
-									<TreeSelect
-										id="department"
-										allowClear
-										value={selectedGroupPaths[0] ?? undefined}
-										treeData={orgOptions}
-										showSearch
-										treeNodeFilterProp="title"
-										placeholder="请选择所属组织（可选）"
-										style={{ width: "100%" }}
-										dropdownStyle={{ maxHeight: 320, overflow: "auto" }}
-										loading={orgLoading}
-										treeDefaultExpandAll
-										getPopupContainer={(triggerNode) => triggerNode.parentElement ?? document.body}
-										onChange={(value) => handleOrganizationChange(value as string | string[] | null)}
-										onSelect={(value) => handleOrganizationChange(value as string)}
-									/>
-									<p className="text-xs text-muted-foreground">如不选择，将暂不分配组织，可在审批后再调整。</p>
-								</div>
+                        <div className="space-y-2">
+                            <Label htmlFor="department">组织机构 *</Label>
+                            <TreeSelect
+                                id="department"
+                                allowClear
+                                value={selectedGroupPaths[0] ?? undefined}
+                                treeData={orgOptions}
+                                showSearch
+                                treeNodeFilterProp="title"
+                                placeholder="请选择所属组织"
+                                style={{ width: "100%" }}
+                                dropdownStyle={{ maxHeight: 320, overflow: "auto" }}
+                                loading={orgLoading}
+                                treeDefaultExpandAll
+                                getPopupContainer={(triggerNode) => triggerNode.parentElement ?? document.body}
+                                onChange={(value) => handleOrganizationChange(value as string | string[] | null)}
+                                onSelect={(value) => handleOrganizationChange(value as string)}
+                            />
+                            <p className="text-xs text-muted-foreground">必须选择所属组织，平台将依据组织控制数据访问范围。</p>
+                        </div>
                         <div className="space-y-2">
                             <Label htmlFor="phone">联系方式</Label>
                             <Input
@@ -877,7 +890,12 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                             {roles
                                 .filter((role) => !userRoles.some((ur) => roleKey(ur) === roleKey(role)))
                                 .filter((role) => !isDataRole(role.name))
-                                .filter((role) => (GLOBAL_CONFIG.hideBuiltinRoles ? !shouldHideRole(role) : true))
+                                .filter((role) => {
+                                    const name = (role?.name || "").toString();
+                                    if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
+                                    if (GLOBAL_CONFIG.hideBuiltinRoles && shouldHideRole(role)) return false;
+                                    return true;
+                                })
                                 .map((role) => (
                                             <Badge
                                                 key={roleKey(role)}

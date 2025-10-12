@@ -51,21 +51,18 @@ export default function LoginAuthGuard({ children }: Props) {
         check();
     }, [check]);
 
-	// After authenticated, if menus are empty, try to load backend menus once
-	useEffect(() => {
-		if (
-			accessToken &&
-			!isLocalDevToken(accessToken) &&
-			(!Array.isArray(menus) || menus.length === 0)
-		) {
-			menuService
-				.getMenuTree()
-				.catch(() => {
-					/* ignore */
-				});
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [accessToken]);
+    // Ensure menus reflect the current identity. Reload on token change even if a previous menu exists.
+    // This fixes a stale-menu issue when switching accounts without a full page reload.
+    useEffect(() => {
+        if (accessToken && !isLocalDevToken(accessToken)) {
+            menuService
+                .getMenuTree()
+                .catch(() => {
+                    /* ignore */
+                });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [accessToken]);
 
 	return <>{children}</>;
 }

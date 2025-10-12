@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
 import { Button } from "@/ui/button";
-import { Badge } from "@/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Textarea } from "@/ui/textarea";
-import { ScrollArea } from "@/ui/scroll-area";
 import { toast } from "sonner";
 import {
     getDataset,
@@ -19,8 +17,6 @@ import {
     previewDataset,
     applyPolicy,
     getDatasetJob,
-    latestQuality,
-    triggerQuality,
 } from "@/api/platformApi";
 import type { DatasetAsset, DatasetJob, DatasetJobStatus, DataLevel, Scope, ShareScope } from "@/types/catalog";
 import deptService, { type DeptDto } from "@/api/services/deptService";
@@ -49,9 +45,6 @@ export default function DatasetDetailPage() {
     const [busy, setBusy] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [lastJob, setLastJob] = useState<DatasetJob | null>(null);
-    const [qualitySummary, setQualitySummary] = useState<any | null>(null);
-    const [qualityLoading, setQualityLoading] = useState(false);
-	const [qualityRunning, setQualityRunning] = useState(false);
     const [deptOptions, setDeptOptions] = useState<DeptDto[]>([]);
     const [deptLoading, setDeptLoading] = useState(false);
 
@@ -75,37 +68,6 @@ export default function DatasetDetailPage() {
             toast.error("加载失败");
         } finally {
             if (withSpinner) setLoading(false);
-        }
-    };
-
-    const loadQualitySummary = async () => {
-        if (!id) return;
-        setQualityLoading(true);
-        try {
-            const summary = (await latestQuality(id)) as any;
-            setQualitySummary(summary);
-        } catch (error) {
-            console.warn("Latest quality fetch failed", error);
-            setQualitySummary(null);
-        } finally {
-            setQualityLoading(false);
-        }
-    };
-
-    const handleTriggerQuality = async () => {
-        if (!id) return;
-        setQualityRunning(true);
-        try {
-            await triggerQuality(id);
-            toast.success("已提交质量检测任务");
-            setTimeout(() => {
-                void loadQualitySummary();
-            }, 2000);
-        } catch (error) {
-            console.error(error);
-            toast.error("触发质量检测失败");
-        } finally {
-            setQualityRunning(false);
         }
     };
 
@@ -173,7 +135,6 @@ export default function DatasetDetailPage() {
 
 	useEffect(() => {
 		void loadDataset(true);
-		void loadQualitySummary();
 	}, [id]);
 
     useEffect(() => {
@@ -194,21 +155,7 @@ export default function DatasetDetailPage() {
         };
     }, [dataset?.scope]);
 
-	const onAddColumn = () => {
-		if (!dataset) return;
-		const next = { ...dataset } as DatasetAsset;
-		const cols = next.table?.columns || [];
-		const idc = `${dataset.id}_c_${Date.now()}`;
-		const col = { id: idc, name: `col_${cols.length + 1}`, dataType: "STRING", sensitiveTags: [] as string[] };
-		next.table = next.table || { tableName: dataset.name, columns: [] };
-		next.table.columns = [...cols, col];
-		setDataset(next);
-	};
 
-	const onRemoveColumn = (cid: string) => {
-		if (!dataset || !dataset.table) return;
-		setDataset({ ...dataset, table: { ...dataset.table, columns: dataset.table.columns.filter((c) => c.id !== cid) } });
-	};
 
     const toLegacyClassification = (dl?: string): string => {
         const v = String(dl || "").toUpperCase();
@@ -504,162 +451,9 @@ export default function DatasetDetailPage() {
 							</div>
 						</>
 					)}
-			</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-					<div>
-						<CardTitle className="text-base">质量监控</CardTitle>
-						<p className="text-xs text-muted-foreground">查看最近一次质量检测状态，快速触发按需检测。</p>
-					</div>
-					<div className="flex items-center gap-2">
-						{qualitySummary?.status && (
-							<Badge variant="outline">{qualitySummary.status}</Badge>
-						)}
-						<Button variant="outline" size="sm" disabled={qualityRunning} onClick={handleTriggerQuality}>
-							{qualityRunning ? "执行中…" : "立即检测"}
-						</Button>
-						<Button variant="ghost" size="sm" asChild>
-							<Link to="/governance">前往治理</Link>
-						</Button>
-					</div>
-				</CardHeader>
-				<CardContent className="space-y-2 text-sm">
-					{qualityLoading ? (
-						<div className="text-muted-foreground">正在加载质量检测信息…</div>
-					) : (
-						<>
-							<div>
-								<span className="text-muted-foreground">最近一次：</span>
-								<span className="text-foreground">{qualitySummary?.time ? new Date(qualitySummary.time).toLocaleString() : "暂无记录"}</span>
-							</div>
-							<div className="text-muted-foreground">结果：{qualitySummary?.message || qualitySummary?.status || "尚未执行"}</div>
-						</>
-					)}
 				</CardContent>
 			</Card>
 
-			<Card>
-				<CardHeader className="flex items-center justify-between">
-					<CardTitle className="text-base">表结构与敏感标注</CardTitle>
-					<Button size="sm" variant="outline" onClick={onAddColumn}>
-						新增字段
-					</Button>
-				</CardHeader>
-				<CardContent className="p-0">
-					<ScrollArea className="h-[360px]">
-						<table className="w-full min-w-[840px] table-fixed text-sm">
-							<thead className="sticky top-0 bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-								<tr>
-									<th className="px-3 py-2 w-[40px]">#</th>
-									<th className="px-3 py-2">字段名</th>
-									<th className="px-3 py-2">类型</th>
-									<th className="px-3 py-2">敏感标签</th>
-									<th className="px-3 py-2">操作</th>
-								</tr>
-							</thead>
-							<tbody>
-								{(dataset.table?.columns || []).map((c, idx) => (
-									<tr key={c.id} className="border-b last:border-b-0">
-										<td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
-										<td className="px-3 py-2">
-											<Input
-												value={c.name}
-												onChange={(e) => {
-													const cols = (dataset.table?.columns || []).map((it) =>
-														it.id === c.id ? { ...it, name: e.target.value } : it,
-													);
-													setDataset({
-														...(dataset as DatasetAsset),
-														table: { ...(dataset.table as any), columns: cols },
-													});
-												}}
-											/>
-										</td>
-										<td className="px-3 py-2">
-											<Input
-												value={c.dataType}
-												onChange={(e) => {
-													const cols = (dataset.table?.columns || []).map((it) =>
-														it.id === c.id ? { ...it, dataType: e.target.value } : it,
-													);
-													setDataset({
-														...(dataset as DatasetAsset),
-														table: { ...(dataset.table as any), columns: cols },
-													});
-												}}
-											/>
-										</td>
-										<td className="px-3 py-2">
-											<Input
-												value={(c.sensitiveTags || []).join(",")}
-												onChange={(e) => {
-													const tags = e.target.value
-														.split(",")
-														.map((s) => s.trim())
-														.filter(Boolean);
-													const cols = (dataset.table?.columns || []).map((it) =>
-														it.id === c.id ? { ...it, sensitiveTags: tags } : it,
-													);
-													setDataset({
-														...(dataset as DatasetAsset),
-														table: { ...(dataset.table as any), columns: cols },
-													});
-												}}
-												placeholder="例如: PII:phone, PII:id"
-											/>
-										</td>
-										<td className="px-3 py-2">
-											<Button size="sm" variant="ghost" onClick={() => onRemoveColumn(c.id)}>
-												删除
-											</Button>
-										</td>
-									</tr>
-								))}
-								{!(dataset.table?.columns || []).length && (
-									<tr>
-										<td colSpan={5} className="px-3 py-6 text-center text-xs text-muted-foreground">
-											暂无字段
-										</td>
-									</tr>
-								)}
-							</tbody>
-						</table>
-					</ScrollArea>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader>
-					<CardTitle className="text-base">访问策略（RLS/列级脱敏）</CardTitle>
-				</CardHeader>
-				<CardContent className="grid gap-3">
-					<div className="grid gap-2">
-						<Label>允许角色（逗号分隔）</Label>
-						<Input value={allowRoles} onChange={(e) => setAllowRoles(e.target.value)} />
-					</div>
-					<div className="grid gap-2">
-						<Label>行级过滤表达式（可选）</Label>
-						<Textarea value={rowFilter} onChange={(e) => setRowFilter(e.target.value)} rows={3} />
-					</div>
-					<div className="grid gap-2">
-						<Label>默认兜底策略</Label>
-						<Select value={defaultMasking} onValueChange={setDefaultMasking}>
-							<SelectTrigger className="w-[200px]">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="NONE">NONE</SelectItem>
-								<SelectItem value="PARTIAL">PARTIAL</SelectItem>
-								<SelectItem value="HASH">HASH</SelectItem>
-								<SelectItem value="TOKENIZE">TOKENIZE</SelectItem>
-								<SelectItem value="CUSTOM">CUSTOM</SelectItem>
-							</SelectContent>
-						</Select>
-					</div>
-				</CardContent>
-			</Card>
 
             {preview && (
 				<Card>

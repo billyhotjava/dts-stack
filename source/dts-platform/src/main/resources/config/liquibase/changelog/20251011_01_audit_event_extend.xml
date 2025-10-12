@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251011-01-audit-event-extend" author="codex">
+        <preConditions onFail="CONTINUE"/>
+        <addColumn tableName="audit_event">
+            <column name="event_uuid" type="UUID"/>
+            <column name="event_class" type="VARCHAR(32)"/>
+            <column name="event_type" type="VARCHAR(64)"/>
+            <column name="source_system" type="VARCHAR(32)"/>
+            <column name="operator_id" type="VARCHAR(128)"/>
+            <column name="operator_name" type="VARCHAR(128)"/>
+            <column name="operator_roles" type="JSONB"/>
+            <column name="org_code" type="VARCHAR(64)"/>
+            <column name="org_name" type="VARCHAR(128)"/>
+            <column name="summary" type="TEXT"/>
+            <column name="details" type="JSONB"/>
+            <column name="record_signature" type="VARCHAR(128)"/>
+            <column name="signature_key_ver" type="VARCHAR(16)"/>
+        </addColumn>
+
+        <createIndex indexName="idx_aevt_src_time" tableName="audit_event">
+            <column name="source_system"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex indexName="idx_aevt_class_type_time" tableName="audit_event">
+            <column name="event_class"/>
+            <column name="event_type"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex indexName="idx_aevt_operator_time" tableName="audit_event">
+            <column name="operator_id"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex indexName="idx_aevt_org_time" tableName="audit_event">
+            <column name="org_code"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex indexName="idx_aevt_roles_gin" tableName="audit_event">
+            <column name="operator_roles" type="gin"/>
+        </createIndex>
+        <createIndex indexName="idx_aevt_details_gin" tableName="audit_event">
+            <column name="details" type="gin"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

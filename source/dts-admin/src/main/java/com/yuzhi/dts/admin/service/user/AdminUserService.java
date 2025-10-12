@@ -154,6 +154,77 @@ public class AdminUserService {
         return userRepository.findByUsernameIgnoreCase(username);
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, String> resolveDisplayNames(Collection<String> usernames) {
+        LinkedHashMap<String, String> result = new LinkedHashMap<>();
+        if (usernames == null || usernames.isEmpty()) {
+            return result;
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (String raw : usernames) {
+            if (StringUtils.isBlank(raw)) {
+                continue;
+            }
+            String trimmed = raw.trim();
+            if (!trimmed.isEmpty()) {
+                normalized.add(trimmed);
+            }
+        }
+        if (normalized.isEmpty()) {
+            return result;
+        }
+        Set<String> lowerCase = normalized
+            .stream()
+            .map(name -> name.toLowerCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, String> cached = new HashMap<>();
+        if (!lowerCase.isEmpty()) {
+            userRepository
+                .findByUsernameInIgnoreCase(lowerCase)
+                .forEach(entity -> {
+                    String display = StringUtils.firstNonBlank(StringUtils.trimToNull(entity.getFullName()), entity.getUsername());
+                    if (StringUtils.isNotBlank(display)) {
+                        cached.put(entity.getUsername().toLowerCase(Locale.ROOT), display.trim());
+                    }
+                });
+        }
+        String managementToken = null;
+        boolean tokenResolved = false;
+        for (String username : normalized) {
+            String lower = username.toLowerCase(Locale.ROOT);
+            String display = cached.get(lower);
+            if (StringUtils.isBlank(display)) {
+                if (!tokenResolved) {
+                    try {
+                        managementToken = resolveManagementToken();
+                    } catch (Exception ex) {
+                        LOG.warn("Failed to obtain Keycloak admin token for display-name lookup: {}", ex.getMessage());
+                        managementToken = null;
+                    } finally {
+                        tokenResolved = true;
+                    }
+                }
+                if (StringUtils.isBlank(display) && StringUtils.isNotBlank(managementToken)) {
+                    try {
+                        display =
+                            keycloakAdminClient
+                                .findByUsername(username, managementToken)
+                                .map(this::resolveFullName)
+                                .map(StringUtils::trimToNull)
+                                .orElse(null);
+                    } catch (Exception ex) {
+                        LOG.warn("Failed to resolve display name for {} via Keycloak: {}", username, ex.getMessage());
+                    }
+                }
+            }
+            if (StringUtils.isBlank(display)) {
+                display = username;
+            }
+            result.put(username, display);
+        }
+        return result;
+    }
+
     public ApprovalDTOs.ApprovalRequestDetail submitCreate(UserOperationRequest request, String requester, String ip) {
         validateOperation(request, true);
         String username = request.getUsername().trim();
@@ -227,6 +298,7 @@ public class AdminUserService {
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, null, "GRANT_ROLE");
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("action", "grantRoles");
+        payload.put("actionDisplay", actionDisplay("grantRoles"));
         payload.put("username", username);
         payload.put("roles", new ArrayList<>(roles));
         payload.put("currentRoles", snapshot.getRealmRoles());
@@ -285,6 +357,7 @@ public class AdminUserService {
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, null, "REVOKE_ROLE");
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("action", "revokeRoles");
+        payload.put("actionDisplay", actionDisplay("revokeRoles"));
         payload.put("username", username);
         payload.put("roles", new ArrayList<>(roles));
         payload.put("currentRoles", snapshot.getRealmRoles());
@@ -470,6 +543,7 @@ public class AdminUserService {
     private Map<String, Object> buildDeletePayload(AdminKeycloakUser snapshot, String reason) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("action", "delete");
+        payload.put("actionDisplay", actionDisplay("delete"));
         payload.put("username", snapshot.getUsername());
         payload.put("reason", reason);
         payload.put("target", snapshotPayload(snapshot));
@@ -479,6 +553,7 @@ public class AdminUserService {
     private Map<String, Object> basePayload(String action, String username, UserOperationRequest request) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("action", action);
+        payload.put("actionDisplay", actionDisplay(action));
         payload.put("username", username);
         payload.put("fullName", request.getFullName());
         payload.put("email", request.getEmail());
@@ -507,8 +582,24 @@ public class AdminUserService {
         payload.put("groupPaths", snapshot.getGroupPaths());
         payload.put("enabled", snapshot.isEnabled());
         payload.put("attributes", Map.of());
-        payload.put("keycloakId", snapshot.getKeycloakId());
+        // Do not expose keycloakId to clients
         return payload;
+    }
+
+    private static String actionDisplay(String code) {
+        if (code == null) return "";
+        String c = code.trim().toLowerCase(Locale.ROOT);
+        return switch (c) {
+            case "create" -> "新增";
+            case "update" -> "更新";
+            case "delete" -> "删除";
+            case "grantroles" -> "分配角色";
+            case "revokeroles" -> "撤销角色";
+            case "enable" -> "启用";
+            case "disable" -> "禁用";
+            case "resetpassword" -> "重置密码";
+            default -> code;
+        };
     }
 
     private String writeJson(Object value) {
@@ -538,6 +629,23 @@ public class AdminUserService {
 
     private void auditUserChange(String actor, String action, String target, String result, Object detail) {
         String normalizedTarget = target == null ? "UNKNOWN" : target;
+        // Prefer recording the local DB primary key for admin_keycloak_user
+        // If target looks like a username (non-numeric), try resolve to PK id
+        if (normalizedTarget != null) {
+            try {
+                // if it's a number already, keep as-is
+                Long.parseLong(normalizedTarget);
+            } catch (NumberFormatException ignore) {
+                try {
+                    var userOpt = userRepository.findByUsernameIgnoreCase(normalizedTarget);
+                    if (userOpt.isPresent() && userOpt.get().getId() != null) {
+                        normalizedTarget = String.valueOf(userOpt.get().getId());
+                    }
+                } catch (Exception ignored) {
+                    // fall through with original target
+                }
+            }
+        }
         Map<String, Object> payload;
         if (detail instanceof Map<?, ?> map) {
             payload = new HashMap<>();
@@ -642,10 +750,38 @@ public class AdminUserService {
     }
 
     private String resolveFullName(KeycloakUserDTO dto) {
-        if (StringUtils.isNotBlank(dto.getFirstName()) || StringUtils.isNotBlank(dto.getLastName())) {
-            return StringUtils.trim(StringUtils.defaultString(dto.getLastName()) + " " + StringUtils.defaultString(dto.getFirstName()));
+        if (dto == null) {
+            return "";
         }
-        return dto.getUsername();
+        String attributeName = StringUtils.firstNonBlank(
+            extractSingle(dto, "fullName"),
+            extractSingle(dto, "fullname"),
+            extractSingle(dto, "display_name"),
+            extractSingle(dto, "displayName")
+        );
+        String combined = buildName(dto.getFirstName(), dto.getLastName());
+        String fallback = StringUtils.firstNonBlank(
+            StringUtils.trimToNull(dto.getFullName()),
+            combined,
+            StringUtils.trimToNull(dto.getUsername())
+        );
+        String candidate = StringUtils.firstNonBlank(StringUtils.trimToNull(attributeName), fallback);
+        return StringUtils.isNotBlank(candidate) ? candidate.trim() : dto.getUsername();
+    }
+
+    private String buildName(String firstName, String lastName) {
+        String first = StringUtils.trimToNull(firstName);
+        String last = StringUtils.trimToNull(lastName);
+        if (first == null && last == null) {
+            return null;
+        }
+        if (last == null) {
+            return first;
+        }
+        if (first == null) {
+            return last;
+        }
+        return last + " " + first;
     }
 
     private String extractSingle(KeycloakUserDTO dto, String key) {
@@ -784,6 +920,29 @@ public class AdminUserService {
             approval.setDecisionNote(note);
             approval.setErrorMessage(null);
             approvalRepository.save(approval);
+            // Per-item audit: target_table=admin_approval_item, target_id=item.id
+            try {
+                if (approval.getItems() != null) {
+                    for (AdminApprovalItem item : approval.getItems()) {
+                        if (item != null && item.getId() != null) {
+                            Map<String, Object> itemDetail = new java.util.LinkedHashMap<>();
+                            itemDetail.put("approvalId", approval.getId());
+                            itemDetail.put("type", approval.getType());
+                            if (item.getSeqNumber() != null) itemDetail.put("seq", item.getSeqNumber());
+                            auditService.record(
+                                approver,
+                                "ADMIN_APPROVAL_APPLY",
+                                "admin.approvals",
+                                "admin_approval_item",
+                                String.valueOf(item.getId()),
+                                "SUCCESS",
+                                itemDetail
+                            );
+                        }
+                    }
+                }
+            } catch (Exception ignore) {}
+            // Decision audit: keep request-level entry for correlation
             auditService.recordAction(
                 approver,
                 "ADMIN_APPROVAL_DECIDE",
@@ -1433,10 +1592,12 @@ public class AdminUserService {
             } catch (Exception e) {
                 LOG.warn("Failed to assign groups on create for {}: {}", target.getUsername(), e.getMessage());
             }
-            syncSnapshot(target);
+            AdminKeycloakUser savedEntity = syncSnapshot(target);
             detail.put("keycloakId", target.getId());
             detail.put("realmRoles", target.getRealmRoles());
-            String resolvedTarget = target.getUsername() != null ? target.getUsername() : username;
+            String resolvedTarget = (savedEntity != null && savedEntity.getId() != null)
+                ? String.valueOf(savedEntity.getId())
+                : (target.getUsername() != null ? target.getUsername() : username);
             auditUserChange(actor, auditAction, resolvedTarget, "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
@@ -1576,10 +1737,13 @@ public class AdminUserService {
                     updated.setRealmRoles(new ArrayList<>(names));
                 }
             } catch (Exception ignored) {}
-            syncSnapshot(updated);
+            AdminKeycloakUser updatedEntity = syncSnapshot(updated);
             detail.put("keycloakId", existing.getId());
             detail.put("realmRoles", updated.getRealmRoles());
-            auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
+            String targetId = (updatedEntity != null && updatedEntity.getId() != null)
+                ? String.valueOf(updatedEntity.getId())
+                : existing.getUsername();
+            auditUserChange(actor, auditAction, targetId, "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
             auditUserChange(actor, auditAction, username, "FAILURE", detail);
@@ -1596,13 +1760,19 @@ public class AdminUserService {
             String keycloakId = stringValue(payload.get("keycloakId"));
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
             keycloakAdminClient.deleteUser(existing.getId(), accessToken);
-            boolean removedSnapshot = userRepository.findByUsernameIgnoreCase(existing.getUsername()).map(entity -> {
-                userRepository.delete(entity);
-                return true;
-            }).orElse(false);
+            Long pkId = null;
+            boolean removedSnapshot;
+            var existed = userRepository.findByUsernameIgnoreCase(existing.getUsername());
+            if (existed.isPresent()) {
+                pkId = existed.get().getId();
+                userRepository.delete(existed.get());
+                removedSnapshot = true;
+            } else {
+                removedSnapshot = false;
+            }
             detail.put("keycloakId", existing.getId());
             detail.put("snapshotRemoved", removedSnapshot);
-            auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
+            auditUserChange(actor, auditAction, pkId != null ? String.valueOf(pkId) : existing.getUsername(), "SUCCESS", detail);
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
             auditUserChange(actor, auditAction, username, "FAILURE", detail);

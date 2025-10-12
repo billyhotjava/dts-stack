@@ -22,6 +22,9 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -35,6 +38,9 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -48,6 +54,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("actor") String actor,
         @Param("module") String module,
         @Param("action") String action,
+        @Param("sourceSystem") String sourceSystem,
+        @Param("eventType") String eventType,
         @Param("result") String result,
         @Param("resourceType") String resourceType,
         @Param("resource") String resource,
@@ -67,6 +75,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -81,6 +91,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -95,6 +107,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("actor") String actor,
         @Param("module") String module,
         @Param("action") String action,
+        @Param("sourceSystem") String sourceSystem,
+        @Param("eventType") String eventType,
         @Param("result") String result,
         @Param("resourceType") String resourceType,
         @Param("resource") String resource,
@@ -112,6 +126,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -126,6 +142,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -140,6 +158,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("actor") String actor,
         @Param("module") String module,
         @Param("action") String action,
+        @Param("sourceSystem") String sourceSystem,
+        @Param("eventType") String eventType,
         @Param("result") String result,
         @Param("resourceType") String resourceType,
         @Param("resource") String resource,
@@ -157,6 +177,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -171,6 +193,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -185,6 +209,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("actor") String actor,
         @Param("module") String module,
         @Param("action") String action,
+        @Param("sourceSystem") String sourceSystem,
+        @Param("eventType") String eventType,
         @Param("result") String result,
         @Param("resourceType") String resourceType,
         @Param("resource") String resource,
@@ -202,6 +228,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -217,6 +245,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -232,6 +262,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("actor") String actor,
         @Param("module") String module,
         @Param("action") String action,
+        @Param("sourceSystem") String sourceSystem,
+        @Param("eventType") String eventType,
         @Param("result") String result,
         @Param("resourceType") String resourceType,
         @Param("resource") String resource,
@@ -250,6 +282,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -265,6 +299,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "where coalesce(e.actor, '') ilike :actor escape '\\' " +
             "and coalesce(e.module, '') ilike :module escape '\\' " +
             "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
             "and coalesce(e.result, '') ilike :result escape '\\' " +
             "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
             "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
@@ -280,6 +316,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("actor") String actor,
         @Param("module") String module,
         @Param("action") String action,
+        @Param("sourceSystem") String sourceSystem,
+        @Param("eventType") String eventType,
         @Param("result") String result,
         @Param("resourceType") String resourceType,
         @Param("resource") String resource,

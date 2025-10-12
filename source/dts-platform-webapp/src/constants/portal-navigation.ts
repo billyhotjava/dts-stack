@@ -24,7 +24,7 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 	{
 		key: "catalog",
 		path: "catalog",
-		icon: "solar:book-bold-duotone",
+    icon: "local:ic-management",
 		titleKey: "sys.nav.portal.catalog",
 		children: [
 			{ key: "assets", path: "assets", titleKey: "sys.nav.portal.catalogAssetsDirectory" },
@@ -35,7 +35,7 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 	{
 		key: "modeling",
 		path: "modeling",
-		icon: "solar:documents-bold-duotone",
+    icon: "local:ic-dashboard",
 		titleKey: "sys.nav.portal.modeling",
 		children: [
 			{
@@ -48,7 +48,7 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 	{
 		key: "governance",
 		path: "governance",
-		icon: "solar:shield-check-bold-duotone",
+    icon: "local:ic-setting",
 		titleKey: "sys.nav.portal.governance",
 		children: [
 			{ key: "rules", path: "rules", titleKey: "sys.nav.portal.governanceRules" },
@@ -58,7 +58,7 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 	{
 		key: "explore",
 		path: "explore",
-		icon: "solar:compass-bold-duotone",
+    icon: "local:ic-workbench",
 		titleKey: "sys.nav.portal.explore",
 		children: [
 			{ key: "workbench", path: "workbench", titleKey: "sys.nav.portal.exploreWorkbench" },
@@ -68,7 +68,7 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 	{
 		key: "visualization",
 		path: "visualization",
-		icon: "solar:pie-chart-bold-duotone",
+    icon: "local:ic-analysis",
 		titleKey: "sys.nav.portal.visualization",
 		children: [
 			{ key: "dashboards", path: "dashboards", titleKey: "sys.nav.portal.visualizationDashboards" },
@@ -83,7 +83,7 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 	{
 		key: "foundation",
 		path: "foundation",
-		icon: "solar:database-bold-duotone",
+    icon: "local:ic-delivery",
 		titleKey: "sys.nav.portal.foundation",
 		children: [
 			{ key: "dataSources", path: "data-sources", titleKey: "sys.nav.portal.foundationDataSources" },

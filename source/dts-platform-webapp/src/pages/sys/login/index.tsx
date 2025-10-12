@@ -24,6 +24,16 @@ function LoginPage() {
 
 	return (
 		<div className="relative grid min-h-svh lg:grid-cols-2 bg-background">
+			{/* Illustration at left on desktop to distinguish from admin style */}
+			<div className="relative hidden bg-background-paper lg:block">
+				<img
+					src={TechDataBackground}
+					alt={brandIllustrationAlt}
+					className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.5] dark:grayscale"
+				/>
+			</div>
+
+			{/* Login form on the right */}
 			<div className="flex flex-col gap-4 p-6 md:p-10">
 				<div className="flex justify-center gap-2 md:justify-start">
 					<div className="flex items-center gap-3 font-medium cursor-default">
@@ -40,14 +50,6 @@ function LoginPage() {
 						</LoginProvider>
 					</div>
 				</div>
-			</div>
-
-			<div className="relative hidden bg-background-paper lg:block">
-				<img
-					src={TechDataBackground}
-					alt={brandIllustrationAlt}
-					className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.5] dark:grayscale"
-				/>
 			</div>
 
 			<div className="absolute right-2 top-2 flex flex-row items-center gap-2">

@@ -50,13 +50,18 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         long start = System.nanoTime();
         ContentCachingRequestWrapper wrapper = new ContentCachingRequestWrapper(request);
         AuditResponseWrapper responseWrapper = new AuditResponseWrapper(response);
+        // Clear per-request audit marker so we can decide later whether a domain log already happened
+        com.yuzhi.dts.admin.service.audit.AuditRequestContext.clear();
         try {
             filterChain.doFilter(wrapper, responseWrapper);
         } finally {
             responseWrapper.flushBuffer();
             try {
-                PendingAuditEvent event = buildEvent(wrapper, responseWrapper, System.nanoTime() - start);
-                auditService.record(event);
+                boolean alreadyAudited = com.yuzhi.dts.admin.service.audit.AuditRequestContext.wasDomainAudited();
+                if (!alreadyAudited) {
+                    PendingAuditEvent event = buildEvent(wrapper, responseWrapper, System.nanoTime() - start);
+                    auditService.record(event);
+                }
             } catch (Exception ex) {
                 log.warn("Failed to record audit trail for {} {}", request.getMethod(), request.getRequestURI(), ex);
             }
@@ -68,10 +73,14 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         event.occurredAt = Instant.now();
         event.actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
         event.actorRole = SecurityUtils.getCurrentUserPrimaryAuthority();
-        event.module = resolveModule(request.getRequestURI());
-        event.action = request.getMethod() + " " + request.getRequestURI();
-        event.resourceType = event.module;
-        event.resourceId = request.getRequestURI();
+        String uri = request.getRequestURI();
+        String[] seg = splitSegments(uri);
+        String module = resolveModuleFromSegments(seg);
+        String resourceType = resolveResourceTypeFromSegments(seg);
+        event.module = module;
+        event.action = request.getMethod() + " " + uri;
+        event.resourceType = resourceType;
+        event.resourceId = uri;
         String forwarded = request.getHeader("X-Forwarded-For");
         event.clientIp = (forwarded != null && !forwarded.isBlank()) ? forwarded.split(",")[0].trim() : request.getRemoteAddr();
         event.clientAgent = request.getHeader("User-Agent");
@@ -89,15 +98,48 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         return event;
     }
 
-    private String resolveModule(String uri) {
+    private String[] splitSegments(String uri) {
         if (uri == null || uri.isBlank()) {
-            return "general";
+            return new String[0];
         }
         String sanitized = uri.startsWith("/") ? uri.substring(1) : uri;
-        int idx = sanitized.indexOf('/');
-        if (idx > 0) {
-            return sanitized.substring(0, idx);
+        return sanitized.split("/");
+    }
+
+    private boolean isGenericPrefix(String s) {
+        String k = s.toLowerCase();
+        return k.equals("api") || k.equals("v1") || k.equals("v2");
+    }
+
+    private String resolveModuleFromSegments(String[] seg) {
+        if (seg == null || seg.length == 0) return "general";
+        int i = 0;
+        while (i < seg.length && (seg[i] == null || seg[i].isBlank() || isGenericPrefix(seg[i]))) i++;
+        return i < seg.length ? seg[i] : "general";
+    }
+
+    private String resolveResourceTypeFromSegments(String[] seg) {
+        if (seg == null || seg.length == 0) return "general";
+        int i = 0;
+        while (i < seg.length && (seg[i] == null || seg[i].isBlank() || isGenericPrefix(seg[i]))) i++;
+        if (i >= seg.length) return "general";
+        String s1 = seg[i].toLowerCase();
+        String s2 = (i + 1) < seg.length ? seg[i + 1].toLowerCase() : null;
+        String s3 = (i + 2) < seg.length ? seg[i + 2].toLowerCase() : null;
+        // Map well-known admin endpoints
+        if ("keycloak".equals(s1) && "auth".equals(s2)) {
+            return "admin.auth"; // -> admin_keycloak_user
         }
-        return sanitized.isEmpty() ? "general" : sanitized;
+        if ("admin".equals(s1)) {
+            return "admin"; // -> admin_keycloak_user
+        }
+        if ("portal".equals(s1) && "menus".equals(s2)) {
+            return "portal_menu";
+        }
+        // Fallbacks
+        if (s2 != null && !s2.isBlank()) {
+            return s2;
+        }
+        return s1;
     }
 }

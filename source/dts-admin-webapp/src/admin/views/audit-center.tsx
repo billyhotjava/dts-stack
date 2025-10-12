@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import { Calendar as CalendarIcon, Clock3 } from "lucide-react";
 import { toast } from "sonner";
 import { AuditLogService } from "@/api/services/auditLogService";
-import type { AuditLog, AuditLogPageResponse } from "#/entity";
+import type { AuditLog, AuditLogPageResponse, AuditLogDetail } from "#/entity";
 import { GLOBAL_CONFIG } from "@/global-config";
 import userStore from "@/store/userStore";
 import { Badge } from "@/ui/badge";
@@ -20,12 +20,12 @@ import { cn } from "@/utils";
 interface FilterState {
 	from?: string;
 	to?: string;
-	module?: string;
-	resourceType?: string;
+	sourceSystem?: string;
 	actor?: string;
 	resource?: string;
 	clientIp?: string;
 	action?: string;
+	eventType?: string;
 }
 
 interface AuditModuleCatalog {
@@ -57,9 +57,10 @@ export default function AuditCenterView() {
 	const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
 	const [totalElements, setTotalElements] = useState(0);
     // totalPages not displayed in UI; omit to satisfy TS noUnusedLocals
-	const [moduleOptions, setModuleOptions] = useState<Array<{ value: string; label: string }>>([]);
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 	const [exporting, setExporting] = useState(false);
+    const [rowDetails, setRowDetails] = useState<Record<number, AuditLogDetail | null>>({});
+    const [rowLoading, setRowLoading] = useState<Record<number, boolean>>({});
 
 	const loadLogs = useCallback(
 		async (nextPage: number, nextSize: number) => {
@@ -90,25 +91,7 @@ export default function AuditCenterView() {
 		loadLogs(page, size);
 	}, [loadLogs, page, size]);
 
-	// Load module catalog and categories once; build dropdown options
-	useEffect(() => {
-		(async () => {
-			try {
-				const [modules, categories] = await Promise.all([
-					AuditLogService.getAuditModules(),
-					AuditLogService.getAuditCategories(),
-				]);
-				const normalizedModules = Array.isArray(modules) ? modules : [];
-				const normalizedCategories = Array.isArray(categories) ? categories : [];
-				const derived = deriveModuleOptions(normalizedModules, normalizedCategories);
-				if (derived.length) {
-					setModuleOptions((prev) => mergeModuleOptionLists(prev, derived, true));
-				}
-			} catch (e) {
-				// ignore, fallback to dynamic accumulation
-			}
-		})();
-	}, []);
+    // no module catalog; sourceSystem replaces the old module filter
 
 	const handleRefresh = useCallback(() => {
 		loadLogs(0, size);
@@ -138,59 +121,71 @@ export default function AuditCenterView() {
 		}
 	}, [filters]);
 
+    const handleExpandRow = useCallback(
+        async (expanded: boolean, record: AuditLog) => {
+            if (!expanded) return;
+            const id = record.id;
+            if (rowDetails[id] !== undefined) return; // already fetched
+            setRowLoading((prev) => ({ ...prev, [id]: true }));
+            try {
+                const detail = await AuditLogService.getAuditLogById(id);
+                setRowDetails((prev) => ({ ...prev, [id]: detail }));
+            } catch (e) {
+                console.error("加载详情失败", e);
+                setRowDetails((prev) => ({ ...prev, [id]: null }));
+            } finally {
+                setRowLoading((prev) => ({ ...prev, [id]: false }));
+            }
+        },
+        [rowDetails]
+    );
+
     // 使用 Antd Table 的分页展示，无需单独显示分页文案
 
     const columns = useMemo<ColumnsType<AuditLog>>(
         () => [
             {
-                title: "ID",
-                dataIndex: "id",
-                key: "id",
-                width: 80,
-                render: (id: number) => <span className="font-medium">{id}</span>,
+                title: "事件ID",
+                dataIndex: "eventId",
+                key: "eventId",
+                width: 260,
+                render: (_: string, record) => (
+                    <span className="font-mono text-xs">{record.eventId || String(record.id)}</span>
+                ),
             },
             {
-                title: "时间",
+                title: "发生时间",
                 dataIndex: "occurredAt",
                 key: "occurredAt",
                 width: 180,
                 render: (value: string) => <span className="text-sm">{formatDateTime(value)}</span>,
             },
-            { title: "模块", dataIndex: "module", key: "module", width: 160 },
+            { title: "来源", dataIndex: "sourceSystem", key: "sourceSystem", width: 90, render: (v?: string) => v || "-" },
+            { title: "事件类", dataIndex: "eventClass", key: "eventClass", width: 120, render: (v?: string) => v || "-" },
+            { title: "模块", dataIndex: "module", key: "module", width: 140 },
+            { title: "事件类型", dataIndex: "eventType", key: "eventType", width: 180, render: (v?: string) => v || "-" },
             {
-                title: "操作",
-                dataIndex: "action",
-                key: "action",
+                title: "摘要",
+                dataIndex: "summary",
+                key: "summary",
+                ellipsis: true,
+                render: (value: string | undefined, record) => (
+                    <CollapsibleText
+                        text={value || record.payloadPreview || record.action}
+                        expanded={!!expandedRows[record.id]}
+                        onToggle={() => setExpandedRows((prev) => ({ ...prev, [record.id]: !prev[record.id] }))}
+                    />
+                ),
+            },
+            {
+                title: "操作者 / 组织 / IP",
+                dataIndex: "operatorName",
+                key: "operator",
                 width: 260,
-                ellipsis: true,
-                render: (val: string) => <div className="text-sm font-medium break-words">{val}</div>,
-            },
-            {
-                title: "内容摘要",
-                dataIndex: "payloadPreview",
-                key: "payloadPreview",
-                ellipsis: true,
-                render: (value: string | undefined, record) =>
-                    value ? (
-                        <CollapsibleText
-                            text={value}
-                            expanded={!!expandedRows[record.id]}
-                            onToggle={() =>
-                                setExpandedRows((prev) => ({ ...prev, [record.id]: !prev[record.id] }))
-                            }
-                        />
-                    ) : (
-                        <span>-</span>
-                    ),
-            },
-            {
-                title: "操作者 / IP",
-                dataIndex: "actor",
-                key: "actor",
-                width: 220,
                 render: (_: string, record) => (
                     <div className="text-xs text-muted-foreground break-words">
-                        <div>操作者：{formatOperatorName(record.actor)}</div>
+                        <div>操作者：{record.operatorName || formatOperatorName(record.actor)}</div>
+                        <div>组织：{record.orgName ? `${record.orgName}${record.orgCode ? `（${record.orgCode}）` : ""}` : (record.orgCode || "-")}</div>
                         <div>IP：{record.clientIp || "-"}</div>
                     </div>
                 ),
@@ -199,11 +194,11 @@ export default function AuditCenterView() {
                 title: "目标",
                 dataIndex: "resourceId",
                 key: "resource",
-                width: 220,
+                width: 260,
                 render: (_: string, record) => (
                     <div className="text-xs text-muted-foreground break-words">
-                        <div>{record.resourceType || "-"}</div>
-                        <div>{record.resourceId || "-"}</div>
+                        <div>{record.targetTable || record.resourceType || "-"}</div>
+                        <div>{record.targetId || record.resourceId || "-"}</div>
                     </div>
                 ),
             },
@@ -211,7 +206,7 @@ export default function AuditCenterView() {
                 title: "结果",
                 dataIndex: "result",
                 key: "result",
-                width: 120,
+                width: 100,
                 render: (val: string) => (
                     <Badge variant={val === "FAILURE" ? "destructive" : "secondary"}>{val}</Badge>
                 ),
@@ -254,22 +249,14 @@ export default function AuditCenterView() {
 							onChange={(value) => setFilters((prev) => ({ ...prev, to: value }))}
 						/>
 						<SelectField
-							label="功能模块"
-							value={filters.resourceType ? `entry:${filters.resourceType}` : (filters.module ? `module:${filters.module}` : "")}
-							onChange={(value) => {
-								if (!value) {
-									setFilters((prev) => ({ ...prev, module: undefined, resourceType: undefined }));
-									return;
-								}
-								if (value.startsWith("entry:")) {
-									const entryKey = value.slice(6);
-									setFilters((prev) => ({ ...prev, resourceType: entryKey, module: undefined }));
-								} else if (value.startsWith("module:")) {
-									const moduleKey = value.slice(7);
-									setFilters((prev) => ({ ...prev, module: moduleKey, resourceType: undefined }));
-								}
-							}}
-							options={[{ value: "", label: "全部模块" }, ...moduleOptions]}
+							label="来源系统"
+							value={filters.sourceSystem || ""}
+							onChange={(value) => setFilters((prev) => ({ ...prev, sourceSystem: value || undefined }))}
+							options={[
+								{ value: "", label: "全部来源" },
+								{ value: "admin", label: "admin" },
+								{ value: "platform", label: "platform" },
+							]}
 						/>
 						<InputField
 							label="操作人"
@@ -295,6 +282,36 @@ export default function AuditCenterView() {
 							value={filters.action ?? ""}
 							onChange={(value) => setFilters((prev) => ({ ...prev, action: value || undefined }))}
 						/>
+						<SelectField
+							label="事件类型"
+							value={filters.eventType || ""}
+							onChange={(value) => setFilters((prev) => ({ ...prev, eventType: value || undefined }))}
+							options={[{ value: "", label: "全部事件" },
+								{ value: "AUTH_LOGIN_SUCCESS", label: "登录成功" },
+								{ value: "AUTH_LOGIN_FAILURE", label: "登录失败" },
+								{ value: "AUTH_LOGOUT", label: "退出登录" },
+								{ value: "SESSION_CREATED", label: "创建会话" },
+								{ value: "SESSION_TERMINATED", label: "终止会话" },
+								{ value: "SESSION_TIMEOUT", label: "会话超时" },
+								{ value: "ACCESS_DENIED", label: "访问被拒绝" },
+								{ value: "PRIV_ESCALATION_ATTEMPT", label: "越权尝试" },
+								{ value: "SENSITIVE_EXPORT", label: "导出敏感数据" },
+								{ value: "RATE_LIMIT_TRIGGERED", label: "触发限流" },
+								{ value: "WAF_BLOCKED", label: "WAF拦截" },
+								{ value: "ACCOUNT_CREATED", label: "创建账号" },
+								{ value: "ACCOUNT_DISABLED", label: "禁用账号" },
+								{ value: "PASSWORD_RESET", label: "重置密码" },
+								{ value: "ROLE_GRANTED", label: "授予角色" },
+								{ value: "ROLE_REVOKED", label: "回收角色" },
+								{ value: "POLICY_CHANGED", label: "策略变更" },
+								{ value: "DATA_READ_SENSITIVE", label: "读取敏感数据" },
+								{ value: "DATA_WRITE_SENSITIVE", label: "写入敏感数据" },
+								{ value: "DATA_DELETE_SENSITIVE", label: "删除敏感数据" },
+								{ value: "CONFIG_CHANGED", label: "修改配置" },
+								{ value: "AUDIT_QUERY", label: "检索审计日志" },
+								{ value: "AUDIT_EXPORT", label: "导出审计日志" },
+							]}
+						/>
 					</div>
                     <div className="flex flex-wrap gap-3">
                         <Button type="button" variant="outline" onClick={() => setFilters({})}>
@@ -317,6 +334,27 @@ export default function AuditCenterView() {
                         columns={columns}
                         dataSource={logs}
                         loading={loading}
+                        expandable={{
+                            columnWidth: 48,
+                            expandRowByClick: true,
+                            onExpand: handleExpandRow,
+                            expandedRowRender: (record) => {
+                                const loadingRow = rowLoading[record.id];
+                                const detail = rowDetails[record.id];
+                                if (loadingRow) {
+                                    return <div className="text-xs text-muted-foreground">加载详情...</div>;
+                                }
+                                const content = detail?.details ?? null;
+                                if (!content) {
+                                    return <div className="text-xs text-muted-foreground">无详情</div>;
+                                }
+                                return (
+                                    <pre className="text-xs whitespace-pre-wrap break-words">
+                                        {JSON.stringify(content, null, 2)}
+                                    </pre>
+                                );
+                            },
+                        }}
                         pagination={{
                             current: page + 1,
                             pageSize: size,
@@ -409,43 +447,7 @@ function mergeModuleOptionLists(
 	return merged;
 }
 
-function deriveModuleOptions(
-    modules: AuditModuleCatalog[] = [],
-    categories: AuditCategoryItem[] = [],
-): Array<{ value: string; label: string }> {
-    // 需求：功能模块下拉只显示“大类”（模块），不显示子类。
-    // 优先使用服务端提供的模块清单；若缺失则根据分类条目聚合为模块大类。
-    const seen = new Set<string>();
-    const result: Array<{ value: string; label: string }> = [];
-
-    const pushModule = (key?: string, title?: string) => {
-        if (!key) return;
-        const value = `module:${key}`;
-        if (seen.has(value)) return;
-        result.push({ value, label: (title || key).trim() });
-        seen.add(value);
-    };
-
-    if (Array.isArray(modules) && modules.length > 0) {
-        for (const m of modules) {
-            pushModule(m?.key, m?.title);
-        }
-        return result;
-    }
-
-    // 模块清单缺失时：从分类条目反推模块列表（去重）
-    const moduleMap = new Map<string, string>();
-    for (const c of categories || []) {
-        if (!c?.moduleKey) continue;
-        if (!moduleMap.has(c.moduleKey)) {
-            moduleMap.set(c.moduleKey, c.moduleTitle || c.moduleKey);
-        }
-    }
-    for (const [key, title] of moduleMap.entries()) {
-        pushModule(key, title);
-    }
-    return result;
-}
+// module catalog removed; sourceSystem now drives filtering
 
 function buildQuery(filters: FilterState): Record<string, string> {
 	const params: Record<string, string> = {};
@@ -455,11 +457,8 @@ function buildQuery(filters: FilterState): Record<string, string> {
 	if (filters.to) {
 		params.to = new Date(filters.to).toISOString();
 	}
-	if (filters.module) {
-		params.module = filters.module;
-	}
-	if (filters.resourceType) {
-		params.resourceType = filters.resourceType;
+	if (filters.sourceSystem) {
+		params.sourceSystem = filters.sourceSystem;
 	}
 	if (filters.actor) {
 		params.actor = filters.actor;
@@ -472,6 +471,9 @@ function buildQuery(filters: FilterState): Record<string, string> {
 	}
 	if (filters.action) {
 		params.action = filters.action;
+	}
+	if (filters.eventType) {
+		params.eventType = filters.eventType;
 	}
 	return params;
 }
