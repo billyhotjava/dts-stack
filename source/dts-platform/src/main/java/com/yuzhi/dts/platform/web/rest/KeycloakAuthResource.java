@@ -37,6 +37,8 @@ public class KeycloakAuthResource {
     public record LoginPayload(String username, String password) {}
     public record RefreshPayload(String refreshToken) {}
 
+    public record PkiSessionPayload(String username, Map<String, Object> user) {}
+
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody LoginPayload payload) {
         String username = payload.username() == null ? "" : payload.username().trim();
@@ -92,6 +94,32 @@ public class KeycloakAuthResource {
             userOut.put("permissions", permissions);
             userOut.putIfAbsent("enabled", Boolean.TRUE);
             userOut.putIfAbsent("id", UUID.nameUUIDFromBytes(username.getBytes()).toString());
+            // Propagate ABAC attributes so frontend can initialize active context (scope/dept)
+            if (deptCode != null && !deptCode.isBlank()) {
+                userOut.put("dept_code", deptCode);
+            }
+            if (personnelLevel != null && !personnelLevel.isBlank()) {
+                userOut.put("personnel_level", personnelLevel);
+            }
+            // Ensure nested attributes map contains dept_code/personnel_level for FE store defaults
+            try {
+                Object existingAttrs = userOut.get("attributes");
+                java.util.Map<String, Object> attrs = new java.util.LinkedHashMap<>();
+                if (existingAttrs instanceof java.util.Map<?, ?> m) {
+                    for (var e : m.entrySet()) {
+                        if (e.getKey() != null) attrs.put(String.valueOf(e.getKey()), e.getValue());
+                    }
+                }
+                if (deptCode != null && !deptCode.isBlank()) {
+                    attrs.put("dept_code", java.util.List.of(deptCode));
+                }
+                if (personnelLevel != null && !personnelLevel.isBlank()) {
+                    attrs.put("personnel_level", java.util.List.of(personnelLevel));
+                }
+                if (!attrs.isEmpty()) {
+                    userOut.put("attributes", attrs);
+                }
+            } catch (Exception ignore) {}
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("user", userOut);
@@ -142,6 +170,85 @@ public class KeycloakAuthResource {
         }
         audit.record("AUTH LOGOUT", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "SUCCESS", java.util.Map.of());
         return ResponseEntity.ok(ApiResponses.ok(null));
+    }
+
+    /**
+     * Establish a portal session after upstream PKI login succeeded on admin service.
+     * This endpoint does NOT perform certificate verification; it only converts a verified identity
+     * (provided via 'username' and optional 'user' profile from admin) into platform session tokens.
+     */
+    @PostMapping("/pki-session")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createPkiSession(@RequestBody PkiSessionPayload payload) {
+        String username = payload == null ? null : (payload.username() == null ? null : payload.username().trim());
+        if (!org.springframework.util.StringUtils.hasText(username)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponses.error("缺少用户名"));
+        }
+
+        try {
+            // audit: login begin (pki)
+            java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+            auditPayload.put("username", username);
+            auditPayload.put("mode", "pki");
+            audit.recordAs(username, "AUTH LOGIN", "auth", "admin_keycloak_user", username, "PENDING", auditPayload, null);
+
+            Map<String, Object> user = payload.user() == null ? java.util.Collections.emptyMap() : new java.util.LinkedHashMap<>(payload.user());
+            // Normalize and map roles from upstream into platform authorities
+            java.util.List<String> rawRoles = toStringList(user.get("roles"));
+            java.util.List<String> mappedRoles = mapRoles(rawRoles);
+
+            // Derive basic permissions
+            java.util.List<String> permissions = new java.util.ArrayList<>();
+            permissions.add("portal.view");
+            if (mappedRoles.contains(com.yuzhi.dts.platform.security.AuthoritiesConstants.OP_ADMIN)) {
+                permissions.add("portal.manage");
+                permissions.add("catalog.manage");
+                permissions.add("governance.manage");
+                permissions.add("iam.manage");
+            }
+
+            // Extract optional attributes for ABAC (dept_code/personnel_level)
+            String deptCode = extractUserAttribute(user, "dept_code");
+            String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
+
+            // Issue a portal session (opaque tokens) for platform API access (no admin tokens needed for PKI path)
+            AdminTokens adminTokens = null;
+            PortalSession session = sessionRegistry.createSession(username, mappedRoles, permissions, deptCode, personnelLevel, adminTokens);
+
+            // Build user payload (override roles/permissions with mapped ones)
+            Map<String, Object> userOut = new java.util.LinkedHashMap<>(user);
+            userOut.put("username", userOut.getOrDefault("username", username));
+            userOut.put("roles", mappedRoles);
+            userOut.put("permissions", permissions);
+            userOut.putIfAbsent("enabled", Boolean.TRUE);
+            userOut.putIfAbsent("id", java.util.UUID.nameUUIDFromBytes(username.getBytes()).toString());
+            if (deptCode != null && !deptCode.isBlank()) userOut.put("dept_code", deptCode);
+            if (personnelLevel != null && !personnelLevel.isBlank()) userOut.put("personnel_level", personnelLevel);
+            // Ensure nested attributes map contains dept_code/personnel_level for FE store defaults
+            try {
+                Object existingAttrs = userOut.get("attributes");
+                java.util.Map<String, Object> attrs = new java.util.LinkedHashMap<>();
+                if (existingAttrs instanceof java.util.Map<?, ?> m) {
+                    for (var e : m.entrySet()) {
+                        if (e.getKey() != null) attrs.put(String.valueOf(e.getKey()), e.getValue());
+                    }
+                }
+                if (deptCode != null && !deptCode.isBlank()) attrs.put("dept_code", java.util.List.of(deptCode));
+                if (personnelLevel != null && !personnelLevel.isBlank()) attrs.put("personnel_level", java.util.List.of(personnelLevel));
+                if (!attrs.isEmpty()) userOut.put("attributes", attrs);
+            } catch (Exception ignore) {}
+
+            Map<String, Object> data = new java.util.LinkedHashMap<>();
+            data.put("user", userOut);
+            data.put("accessToken", session.accessToken());
+            data.put("refreshToken", session.refreshToken());
+
+            audit.recordAs(username, "AUTH LOGIN", "auth", "admin_keycloak_user", username, "SUCCESS", java.util.Map.of("audience", "platform", "mode", "pki"), null);
+            return ResponseEntity.ok(ApiResponses.ok(data));
+        } catch (Exception ex) {
+            String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
+            audit.record("AUTH LOGIN", "auth", "admin_keycloak_user", username, "FAILED", java.util.Map.of("error", msg));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
+        }
     }
 
     @PostMapping("/refresh")

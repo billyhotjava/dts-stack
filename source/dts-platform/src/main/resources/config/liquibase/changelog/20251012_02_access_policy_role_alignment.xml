@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251012_02_access_policy_role_alignment_upper" author="platform">
+        <comment>Normalize allow_roles to UPPERCASE</comment>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy
+               SET allow_roles = UPPER(allow_roles)
+             WHERE allow_roles IS NOT NULL;
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251012_02_access_policy_role_alignment_prefix" author="platform">
+        <comment>Add ROLE_ prefix to known data roles if missing</comment>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy
+               SET allow_roles = regexp_replace(allow_roles, '(^|[,\s])DEPT_DATA_VIEWER([,\s]|$)', E'\\1ROLE_DEPT_DATA_VIEWER\\2', 'g')
+             WHERE allow_roles ~ '(^|[,\s])DEPT_DATA_VIEWER([,\s]|$)';
+        </sql>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy
+               SET allow_roles = regexp_replace(allow_roles, '(^|[,\s])DEPT_DATA_DEV([,\s]|$)', E'\\1ROLE_DEPT_DATA_DEV\\2', 'g')
+             WHERE allow_roles ~ '(^|[,\s])DEPT_DATA_DEV([,\s]|$)';
+        </sql>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy
+               SET allow_roles = regexp_replace(allow_roles, '(^|[,\s])DEPT_DATA_OWNER([,\s]|$)', E'\\1ROLE_DEPT_DATA_OWNER\\2', 'g')
+             WHERE allow_roles ~ '(^|[,\s])DEPT_DATA_OWNER([,\s]|$)';
+        </sql>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy
+               SET allow_roles = regexp_replace(allow_roles, '(^|[,\s])INST_DATA_VIEWER([,\s]|$)', E'\\1ROLE_INST_DATA_VIEWER\\2', 'g')
+             WHERE allow_roles ~ '(^|[,\s])INST_DATA_VIEWER([,\s]|$)';
+        </sql>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy
+               SET allow_roles = regexp_replace(allow_roles, '(^|[,\s])INST_DATA_DEV([,\s]|$)', E'\\1ROLE_INST_DATA_DEV\\2', 'g')
+             WHERE allow_roles ~ '(^|[,\s])INST_DATA_DEV([,\s]|$)';
+        </sql>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy
+               SET allow_roles = regexp_replace(allow_roles, '(^|[,\s])INST_DATA_OWNER([,\s]|$)', E'\\1ROLE_INST_DATA_OWNER\\2', 'g')
+             WHERE allow_roles ~ '(^|[,\s])INST_DATA_OWNER([,\s]|$)';
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251012_02_access_policy_role_alignment_scope_flip_dept" author="platform">
+        <comment>Align INST_* roles to DEPT_* when dataset.scope=DEPT</comment>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy p
+               SET allow_roles = replace(replace(replace(p.allow_roles,
+                                      'ROLE_INST_DATA_VIEWER','ROLE_DEPT_DATA_VIEWER'),
+                                      'ROLE_INST_DATA_DEV','ROLE_DEPT_DATA_DEV'),
+                                      'ROLE_INST_DATA_OWNER','ROLE_DEPT_DATA_OWNER')
+              FROM catalog_dataset d
+             WHERE p.dataset_id = d.id
+               AND UPPER(COALESCE(d.scope,'')) = 'DEPT'
+               AND p.allow_roles ~ 'ROLE_INST_DATA_(VIEWER|DEV|OWNER)';
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251012_02_access_policy_role_alignment_scope_flip_inst" author="platform">
+        <comment>Align DEPT_* roles to INST_* when dataset.scope=INST</comment>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy p
+               SET allow_roles = replace(replace(replace(p.allow_roles,
+                                      'ROLE_DEPT_DATA_VIEWER','ROLE_INST_DATA_VIEWER'),
+                                      'ROLE_DEPT_DATA_DEV','ROLE_INST_DATA_DEV'),
+                                      'ROLE_DEPT_DATA_OWNER','ROLE_INST_DATA_OWNER')
+              FROM catalog_dataset d
+             WHERE p.dataset_id = d.id
+               AND UPPER(COALESCE(d.scope,'')) = 'INST'
+               AND p.allow_roles ~ 'ROLE_DEPT_DATA_(VIEWER|DEV|OWNER)';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

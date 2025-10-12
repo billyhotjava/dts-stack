@@ -132,7 +132,7 @@ public class AssetResource {
     ) {
         CatalogDataset ds = datasetRepo.findById(id).orElseThrow();
         String effScope = activeScope != null ? activeScope : "DEPT";
-        String effDept = activeDept;
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
         if (!accessChecker.canRead(ds) || !accessChecker.scopeAllowed(ds, effScope, effDept)) {
             audit.auditAction(
                 "CATALOG_ASSET_VIEW",
@@ -277,5 +277,21 @@ public class AssetResource {
             return rows;
         }
         return List.of();
+    }
+
+
+    private String claim(String name) {
+        try {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
+                Object v = token.getToken().getClaims().get(name);
+                return v == null ? null : String.valueOf(v);
+            }
+            if (auth != null && auth.getPrincipal() instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal principal) {
+                Object v = principal.getAttribute(name);
+                return v == null ? null : String.valueOf(v);
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 }

@@ -6,7 +6,8 @@ export type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_
 export type Scope = "DEPT" | "INST";
 export type ShareScope = "PRIVATE_DEPT" | "SHARE_INST" | "PUBLIC_INST";
 
-export type SourceType = "HIVE" | "TRINO" | "EXTERNAL" | "API";
+// SourceType values seen in backend/CSV imports use both HIVE and INCEPTOR; treat INCEPTOR as HIVE alias
+export type SourceType = "HIVE" | "INCEPTOR" | "TRINO" | "EXTERNAL" | "API";
 
 export type ExposureType = "VIEW" | "RANGER" | "API" | "DIRECT";
 
@@ -45,9 +46,15 @@ export interface DatasetAsset {
 	scope?: Scope;
 	ownerDept?: string;
 	shareScope?: ShareScope;
-	tags: string[];
+    tags: string[];
 	description?: string;
-	source: DatasetSource;
+    // During transition, some screens submit/receive flattened source fields
+    // Make both shapes acceptable to keep build stable.
+    source?: DatasetSource;
+    // Flattened source fields (optional)
+    type?: SourceType;
+    hiveDatabase?: string;
+    hiveTable?: string;
 	exposure: ExposureType[];
 	table?: TableSchema;
 	createdAt: string;

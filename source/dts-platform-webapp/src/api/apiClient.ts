@@ -81,22 +81,42 @@ async function refreshTokenIfPossible(): Promise<boolean> {
 		}
 
 
-		// Inject active scope/department headers for ABAC gates (non-auth endpoints)
-		if (!isAuthPath) {
-			try {
-				const ctx = useContextStore.getState();
-				// Initialize defaults from user profile once
-				ctx.actions.initDefaults();
-				if (ctx.activeScope) {
-					(config.headers as any)["X-Active-Scope"] = ctx.activeScope;
-				}
-				if (ctx.activeDept) {
-					(config.headers as any)["X-Active-Dept"] = ctx.activeDept;
-				}
-			} catch (e) {
-				console.warn("Failed to inject active context headers", e);
-			}
-		}
+        // Inject active scope/department headers for ABAC gates (non-auth endpoints)
+        if (!isAuthPath) {
+            try {
+                const ctx = useContextStore.getState();
+                // Initialize defaults from user profile once
+                ctx.actions.initDefaults();
+                if (ctx.activeScope) {
+                    (config.headers as any)["X-Active-Scope"] = ctx.activeScope;
+                }
+                if (ctx.activeDept) {
+                    (config.headers as any)["X-Active-Dept"] = ctx.activeDept;
+                } else {
+                    // Fallback: derive dept from user profile when store hasn't been hydrated yet
+                    try {
+                        const ui: any = userStore.getState().userInfo || {};
+                        const pick = (v: any): string => {
+                            if (Array.isArray(v)) return String((v[0] ?? "")).trim();
+                            if (v == null) return "";
+                            return String(v).trim();
+                        };
+                        const attrs: any = ui.attributes || {};
+                        const fromAttrs = pick(attrs.dept_code || attrs.deptCode || attrs.department);
+                        const fromTop = pick(ui.dept_code || ui.deptCode);
+                        const dept = (fromAttrs || fromTop || "").trim();
+                        if (dept) {
+                            (config.headers as any)["X-Active-Dept"] = dept;
+                            try { ctx.actions.setActiveDept(dept); } catch {}
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to inject active context headers", e);
+            }
+        }
 
 		console.log("API Request:", config.method?.toUpperCase(), config.baseURL, config.url, config);
 		return config;
@@ -165,7 +185,7 @@ axiosInstance.interceptors.response.use(
             hint = "作用域/部门不匹配，请在右上角切换上下文后重试";
             break;
           case "dts-sec-0003":
-            hint = "人员密级低于数据密级，无法访问该资源";
+            hint = "权限不足，当前密级不可访问";
             break;
           case "dts-sec-0007":
             hint = "资源不存在或不可见";

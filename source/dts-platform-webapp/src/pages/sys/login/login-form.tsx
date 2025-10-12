@@ -6,13 +6,16 @@ import { toast } from "sonner";
 import type { SignInReq } from "@/api/services/userService";
 import { useContextActions } from "@/store/contextStore";
 import { useBilingualText } from "@/hooks/useBilingualText";
-import { useSignIn } from "@/store/userStore";
+import { useSignIn, useUserActions } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { Checkbox } from "@/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
 import { cn } from "@/utils";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
+import { getPkiChallenge, pkiLogin, trySignWithLocalAgent, createPortalSessionFromPki } from "@/api/services/pkiService";
+import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
+import { updateLocalTranslations } from "@/utils/translation";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
 	const [loading, setLoading] = useState(false);
@@ -22,6 +25,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	const { loginState } = useLoginStateContext();
 	const signIn = useSignIn();
+	const { setUserToken, setUserInfo } = useUserActions();
 	const bilingual = useBilingualText();
 
 	const form = useForm<SignInReq>({
@@ -65,6 +69,54 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		} catch (error) {
 			// 错误已在signIn中处理，这里不需要额外处理
 			console.error("Login failed:", error);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const handlePkiLogin = async () => {
+		setLoading(true);
+		try {
+			const challenge = await getPkiChallenge();
+			const plain = challenge.nonce; // server requires the nonce to be present in the plain text
+			const signed = await trySignWithLocalAgent(plain);
+			if (!signed) {
+				toast.error("未检测到本地签名Agent，请安装或启动后重试", { position: "top-center" });
+				return;
+			}
+            const resp: any = await pkiLogin({
+                challengeId: challenge.challengeId,
+                plain,
+                p7Signature: signed.p7,
+                certB64: signed.cert,
+                mode: "agent",
+            });
+            const rawUser = (resp as any)?.user ?? (resp as any)?.userInfo ?? {};
+            const username = String(rawUser?.username || rawUser?.preferred_username || "").trim();
+            if (!username) throw new Error("无法识别用户名");
+            // Exchange to platform portal session tokens
+            const portal = await createPortalSessionFromPki(username, rawUser);
+            const portalUser = (portal as any)?.user ?? rawUser;
+            const accessToken = String((portal as any)?.accessToken || (portal as any)?.token || "").trim();
+            const refreshToken = String((portal as any)?.refreshToken || "").trim();
+            if (!accessToken) throw new Error("登录响应缺少访问令牌");
+            setUserToken({ accessToken, refreshToken });
+            setUserInfo(portalUser);
+			// 初始化上下文并预加载菜单
+			try { useContextActions().initDefaults(); } catch {}
+			try {
+				const svc = await import("@/api/services/menuService");
+				await svc.default.getMenuTree().catch(() => undefined);
+			} catch {}
+			// 加载Keycloak中文翻译（非阻塞）
+			try {
+				const translations = await KeycloakLocalizationService.getChineseTranslations();
+				updateLocalTranslations(translations);
+			} catch {}
+			navigate("/dashboard/workbench", { replace: true });
+			toast.success(bilingual("sys.login.loginSuccessTitle"), { closeButton: true });
+		} catch (error: any) {
+			toast.error(error?.message || "证书登录失败", { position: "top-center" });
 		} finally {
 			setLoading(false);
 		}
@@ -146,6 +198,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					<Button type="submit" className="w-full">
 						{loading && <Loader2 className="animate-spin mr-2" />}
 						{bilingual("sys.login.loginButton")}
+					</Button>
+					<Button type="button" variant="outline" className="w-full" onClick={handlePkiLogin} disabled={loading}>
+						{loading && <Loader2 className="animate-spin mr-2" />}
+						证书登录
 					</Button>
 				</form>
 			</Form>

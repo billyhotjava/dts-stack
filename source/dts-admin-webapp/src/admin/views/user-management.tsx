@@ -39,16 +39,19 @@ function toPersonnelLevelZh(raw?: string): string {
 
 function collectRoleNames(user: KeycloakUser): string[] {
   const names = new Set<string>();
+  // 1) backend may return a flat roles[] summary
+  (user.roles || []).forEach((r: string) => r && names.add(r));
+  // 2) realm roles (preferred when available)
   (user.realmRoles || []).forEach((r: string) => r && names.add(r));
+  // 3) client roles (flatten)
   if (user.clientRoles) {
     (Object.values(user.clientRoles) as string[][]).forEach((arr: string[]) => arr?.forEach((r: string) => r && names.add(r)));
   }
-  // Hide default/builtin roles from raw summary as well
+  // Hide built-in/default technical roles from list display
   const raw = Array.from(names).map((n) => String(n || "").trim());
   const filtered = raw.filter((n) => {
     if (!n) return false;
     if (GLOBAL_CONFIG.hideDefaultRoles && n.toLowerCase().startsWith("default-roles-")) return false;
-    // realm built-ins (when present as plain names)
     const lower = n.toLowerCase();
     if (GLOBAL_CONFIG.hideBuiltinRoles && (lower === "offline_access" || lower === "uma_authorization" || lower.startsWith("realm-management"))) return false;
     return true;
@@ -158,7 +161,8 @@ export default function UserManagementView() {
           const id = String(u.id || u.username || idx);
           if (rolesMap[id] !== undefined) continue;
           try {
-            const roles: KeycloakRole[] = await KeycloakUserService.getUserRoles(String(u.id));
+            const key = String(u.id || u.username || idx);
+            const roles: KeycloakRole[] = await KeycloakUserService.getUserRoles(String(u.id || u.username || ""));
             const filtered = (roles || []).filter((r) => {
               const name = (r?.name || "").toString();
               if (!name) return false;
@@ -170,7 +174,7 @@ export default function UserManagementView() {
               return true;
             });
             const names = filtered.map((r) => (r?.name || "").toString().trim().toUpperCase());
-            setRolesMap((prev) => ({ ...prev, [id]: names }));
+            setRolesMap((prev) => ({ ...prev, [key]: names }));
           } catch {
             setRolesMap((prev) => ({ ...prev, [id]: [] }));
           }

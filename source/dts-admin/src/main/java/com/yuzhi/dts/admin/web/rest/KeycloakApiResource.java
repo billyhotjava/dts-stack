@@ -1513,7 +1513,14 @@ public class KeycloakApiResource {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.yuzhi.dts.admin.config.PkiAuthProperties pkiProps;
 
-    public record PkiLoginPayload(String assertion, String username) {}
+    public record PkiLoginPayload(
+        String challengeId,
+        String plain,           // server-issued string to sign (includes nonce)
+        String p7Signature,     // Base64 PKCS#7 signature
+        String certB64,         // optional: Base64 of signer leaf certificate
+        String mode,            // agent|gateway (informational)
+        String username         // optional: mock username for allow-mock
+    ) {}
 
     @PostMapping("/keycloak/auth/pki-login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> pkiLogin(
@@ -1525,7 +1532,165 @@ public class KeycloakApiResource {
             return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).body(ApiResponse.error("PKI 登录未启用"));
         }
 
-        // Placeholder implementation: return 501 until PKI integration is configured.
-        return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_IMPLEMENTED).body(ApiResponse.error("PKI 登录尚未集成，请稍后再试"));
+        try {
+            if (payload == null) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("请求体不能为空"));
+            }
+
+            // Verify challenge first
+            com.yuzhi.dts.admin.service.pki.PkiChallengeService challengeService = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiChallengeService.class);
+            if (payload.challengeId == null || payload.plain == null) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("缺少 challenge 或 plain"));
+            }
+            boolean challengeOk = challengeService.validateAndConsume(payload.challengeId, payload.plain);
+            if (!challengeOk) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("挑战校验失败或已过期"));
+            }
+
+            // Verify signature via gateway/vendor
+            com.yuzhi.dts.admin.service.pki.PkiVerificationService verifier = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiVerificationService.class);
+            var vr = verifier.verifyPkcs7(payload.plain, payload.p7Signature, payload.certB64);
+            if (!vr.ok()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(vr.message()));
+            }
+
+            Map<String, Object> data = new HashMap<>();
+            if (vr.identity() != null) data.putAll(vr.identity());
+            data.put("mode", payload.mode == null ? (pkiProps.getMode() == null ? "gateway" : pkiProps.getMode()) : payload.mode);
+
+            // Resolve username mapping: prefer dev-provided username when allow-mock enabled; otherwise derive from certificate subject DN
+            String mappedUsername = null;
+            boolean allowMock = Boolean.TRUE.equals(pkiProps.isAllowMock());
+            if (allowMock && payload.username != null && !payload.username.isBlank()) {
+                mappedUsername = payload.username.trim();
+            }
+            if ((mappedUsername == null || mappedUsername.isBlank()) && vr.identity() != null) {
+                Object dnObj = vr.identity().get("subjectDn");
+                String subjectDn = dnObj == null ? null : dnObj.toString();
+                mappedUsername = extractFromDn(subjectDn, "UID", "CN");
+            }
+            if (mappedUsername == null || mappedUsername.isBlank()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("无法从证书映射用户名"));
+            }
+
+            // Enforce: admin-only users must NOT log into platform via PKI
+            String normalized = mappedUsername.toLowerCase();
+            if (normalized.equals("sysadmin") || normalized.equals("authadmin") || normalized.equals("auditadmin")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("系统管理角色用户不能登录业务平台"));
+            }
+
+            // Gate login: built-ins may always log in; others must exist and be enabled in admin snapshot
+            boolean isProtected = PROTECTED_USERNAMES.contains(normalized);
+            if (!isProtected) {
+                boolean allowed = adminUserService
+                    .findSnapshotByUsername(mappedUsername)
+                    .map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::isEnabled)
+                    .orElse(false);
+                if (!allowed) {
+                    auditService.recordAction(mappedUsername, "ADMIN_AUTH_LOGIN", AuditStage.FAIL, mappedUsername, Map.of("error", "not_approved", "audience", "platform"));
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
+                }
+            }
+
+            // Issue tokens via Keycloak Token Exchange (impersonation)
+            KeycloakAuthService.LoginResult loginResult;
+            try {
+                loginResult = keycloakAuthService.loginByTokenExchange(mappedUsername);
+            } catch (org.springframework.security.authentication.BadCredentialsException | IllegalStateException ex) {
+                // Some Keycloak setups require requested_subject=userId instead of username.
+                // Fallback: resolve userId via admin REST using service account, then retry.
+                try {
+                    if (managementClientId != null && !managementClientId.isBlank()) {
+                        var sa = keycloakAuthService.obtainClientCredentialsToken(managementClientId, managementClientSecret);
+                        var kcUser = keycloakAdminClient.findByUsername(mappedUsername, sa.accessToken()).orElse(null);
+                        String userId = kcUser != null ? kcUser.getId() : null;
+                        if (userId != null && !userId.isBlank()) {
+                            loginResult = keycloakAuthService.loginByTokenExchange(userId);
+                        } else {
+                            throw ex;
+                        }
+                    } else {
+                        throw ex;
+                    }
+                } catch (Exception inner) {
+                    // Preserve the original error message for client troubleshooting
+                    throw ex;
+                }
+            }
+
+            Map<String, Object> userOut = new HashMap<>(loginResult.user());
+            @SuppressWarnings("unchecked")
+            List<String> kcRoles = (List<String>) userOut.getOrDefault("roles", java.util.Collections.emptyList());
+            java.util.LinkedHashSet<String> roles = new java.util.LinkedHashSet<>();
+            for (String r : kcRoles) if (r != null && !r.isBlank()) roles.add(r);
+            String principal = java.util.Objects.toString(userOut.getOrDefault("preferred_username", userOut.get("username")), mappedUsername);
+            try {
+                if (principal != null && !principal.isBlank()) {
+                    for (AdminRoleAssignment a : roleAssignRepo.findByUsernameIgnoreCase(principal)) {
+                        String role = a.getRole();
+                        if (role != null && !role.isBlank()) roles.add(role.trim());
+                    }
+                }
+            } catch (Exception ex) {
+                if (LOG.isDebugEnabled()) LOG.debug("DB role enrichment failed for {}: {}", principal, ex.getMessage());
+            }
+            userOut.put("roles", java.util.List.copyOf(roles));
+
+            data.put("user", userOut);
+            data.put("accessToken", loginResult.tokens().accessToken());
+            if (loginResult.tokens().refreshToken() != null) data.put("refreshToken", loginResult.tokens().refreshToken());
+            if (loginResult.tokens().idToken() != null) data.put("idToken", loginResult.tokens().idToken());
+            if (loginResult.tokens().tokenType() != null) data.put("tokenType", loginResult.tokens().tokenType());
+            if (loginResult.tokens().scope() != null) data.put("scope", loginResult.tokens().scope());
+            if (loginResult.tokens().sessionState() != null) data.put("sessionState", loginResult.tokens().sessionState());
+            if (loginResult.tokens().expiresIn() != null) data.put("expiresIn", loginResult.tokens().expiresIn());
+            if (loginResult.tokens().refreshExpiresIn() != null) data.put("refreshExpiresIn", loginResult.tokens().refreshExpiresIn());
+
+            auditService.recordAction(mappedUsername, "ADMIN_AUTH_LOGIN", AuditStage.SUCCESS, mappedUsername, Map.of("audience", "platform", "mode", "pki"));
+            return ResponseEntity.ok(ApiResponse.ok(data));
+        } catch (Exception ex) {
+            String message = Optional.ofNullable(ex.getMessage()).filter(m -> !m.isBlank()).orElse("PKI 登录失败");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(message));
+        }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.context.ApplicationContext ctx;
+
+    public record PkiChallengeView(String challengeId, String nonce, String aud, long ts, long exp) {}
+
+    @GetMapping("/keycloak/auth/pki-challenge")
+    public ResponseEntity<ApiResponse<PkiChallengeView>> pkiChallenge(jakarta.servlet.http.HttpServletRequest request) {
+        boolean enabled = pkiProps != null && pkiProps.isEnabled();
+        if (!enabled) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).body(ApiResponse.error("PKI 登录未启用"));
+        }
+        com.yuzhi.dts.admin.service.pki.PkiChallengeService svc = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiChallengeService.class);
+        String ip = Optional.ofNullable(request.getHeader("X-Forwarded-For")).orElse(request.getRemoteAddr());
+        String ua = Optional.ofNullable(request.getHeader("User-Agent")).orElse("");
+        var c = svc.issue("dts-admin", ip, ua, java.time.Duration.ofMinutes(5));
+        var view = new PkiChallengeView(c.id, c.nonce, c.aud, c.ts.toEpochMilli(), c.exp.toEpochMilli());
+        return ResponseEntity.ok(ApiResponse.ok(view));
+    }
+
+    private static String extractFromDn(String dn, String... keys) {
+        if (dn == null || dn.isBlank() || keys == null || keys.length == 0) return "";
+        try {
+            String[] parts = dn.split(",");
+            for (String key : keys) {
+                String k = key.toUpperCase();
+                for (String p : parts) {
+                    String s = p.trim();
+                    int idx = s.indexOf('=');
+                    if (idx > 0) {
+                        String name = s.substring(0, idx).trim().toUpperCase();
+                        if (name.equals(k)) {
+                            return s.substring(idx + 1).trim();
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignore) {}
+        return "";
     }
 }

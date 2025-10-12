@@ -9,9 +9,11 @@ public enum PersonnelLevel {
 
     public int rank() {
         return switch (this) {
-            case GENERAL -> 0;
-            case IMPORTANT -> 1;
-            case CORE -> 2;
+            // Align with admin service securityRank: NON_SECRET=0, GENERAL=1, IMPORTANT=2, CORE=3
+            // Platform does not model NON_SECRET explicitly; start from 1 here for consistency
+            case GENERAL -> 1;
+            case IMPORTANT -> 2;
+            case CORE -> 3;
         };
     }
 
@@ -26,4 +28,3 @@ public enum PersonnelLevel {
         };
     }
 }
-

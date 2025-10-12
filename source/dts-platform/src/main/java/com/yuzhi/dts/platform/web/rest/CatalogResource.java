@@ -223,6 +223,8 @@ public class CatalogResource {
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdDate").descending());
         Page<CatalogDataset> p = datasetRepo.findAll(pageable);
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        String effScope = activeScope != null ? activeScope : ((effDept != null && !effDept.isBlank()) ? "DEPT" : "INST");
         List<Map<String, Object>> filtered = p
             .getContent()
             .stream()
@@ -246,11 +248,12 @@ public class CatalogResource {
             .filter(accessChecker::canRead)
             // Scope gate using active context (headers injected by frontend)
             .filter(ds -> accessChecker.scopeAllowed(ds,
-                activeScope != null ? activeScope : "DEPT",
-                activeDept))
+                effScope,
+                effDept))
             .map(this::toDatasetDto)
             .toList();
-        Map<String, Object> data = Map.of("content", filtered, "total", p.getTotalElements());
+        // Align with other list endpoints: total reflects the filtered list size
+        Map<String, Object> data = Map.of("content", filtered, "total", filtered.size());
         audit.audit("READ", "catalog.dataset", "page=" + page);
         return ApiResponses.ok(data);
     }
@@ -288,7 +291,10 @@ public class CatalogResource {
             np.setDataset(ds);
             return np;
         });
-        p.setAllowRoles(Objects.toString(body.get("allowRoles"), null));
+        String rawRoles = Objects.toString(body.get("allowRoles"), null);
+        // Normalize: uppercase, add ROLE_ prefix; align DEPT/INST role families to dataset scope
+        String normalizedRoles = com.yuzhi.dts.platform.security.RoleUtils.normalizeAndAlignToScope(rawRoles, ds.getScope());
+        p.setAllowRoles(normalizedRoles);
         p.setRowFilter(Objects.toString(body.get("rowFilter"), null));
         p.setDefaultMasking(Objects.toString(body.get("defaultMasking"), null));
         var saved = policyRepo.save(p);
@@ -304,13 +310,14 @@ public class CatalogResource {
     @GetMapping("/access-policies/{datasetId}/validate")
     public ApiResponse<Map<String, Object>> validatePolicy(@PathVariable UUID datasetId) {
         CatalogDataset ds = datasetRepo.findById(datasetId).orElseThrow();
+        // ABAC-aligned: ClassificationUtils now prefers personnel_level/person_security_level
         boolean classificationOk = classificationUtils.canAccess(ds.getClassification());
         var polOpt = policyRepo.findByDataset(ds);
         boolean roleMatched = true;
         String rolesCsv = polOpt.map(com.yuzhi.dts.platform.domain.catalog.CatalogAccessPolicy::getAllowRoles).orElse(null);
         if (rolesCsv != null && !rolesCsv.isBlank()) {
-            String[] roles = rolesCsv.split("\\s*,\\s*");
-            roleMatched = com.yuzhi.dts.platform.security.SecurityUtils.hasCurrentUserAnyOfAuthorities(roles);
+            String[] normalized = com.yuzhi.dts.platform.security.RoleUtils.toAuthorityArray(rolesCsv);
+            roleMatched = com.yuzhi.dts.platform.security.SecurityUtils.hasCurrentUserAnyOfAuthorities(normalized);
         }
         boolean allowed = classificationOk && roleMatched;
         Map<String, Object> result = new LinkedHashMap<>();
@@ -814,5 +821,21 @@ public class CatalogResource {
         rowFilterRepo.deleteById(id);
         audit.audit("DELETE", "catalog.rowFilter", id.toString());
         return ApiResponses.ok(Boolean.TRUE);
+    }
+
+
+    private String claim(String name) {
+        try {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
+                Object v = token.getToken().getClaims().get(name);
+                return v == null ? null : String.valueOf(v);
+            }
+            if (auth != null && auth.getPrincipal() instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal principal) {
+                Object v = principal.getAttribute(name);
+                return v == null ? null : String.valueOf(v);
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 }

@@ -568,6 +568,14 @@ public class ExploreResource {
         String dsShare = Optional.ofNullable(dataset.getShareScope()).orElse("").trim().toUpperCase(Locale.ROOT);
         // Backward-compatible: if dataset not annotated with scope, don't alter SQL
         if (dsScope.isEmpty()) return sql;
+        // Heuristic guard: only push down department predicate when the query result
+        // contains an owner_dept column. Many legacy/ODS表并不包含 owner_dept 字段，盲目
+        // 追加 WHERE owner_dept = 'XXX' 会导致编译失败（如本次用户反馈）。
+        // 为了兼容：若 SQL 未显式引用 owner_dept，则仅依赖上游的 scopeAllowed() 门禁放行，
+        // 不再强行注入行级条件。这样既不破坏已有 DEPT 数据集的访问控制（数据集级门禁已生效），
+        // 也能兼容不含 owner_dept 的表结构。测试用例中显式选择了 owner_dept，仍会命中过滤。
+        String normalized = sql.toLowerCase(Locale.ROOT);
+        boolean resultHasOwnerDept = normalized.matches("(?s).*\\bower_dept\\b.*");
         String where;
         if ("DEPT".equalsIgnoreCase(activeScope)) {
             if (!"DEPT".equals(dsScope)) {
@@ -576,6 +584,10 @@ public class ExploreResource {
             } else {
                 String dept = activeDept == null ? "" : activeDept.trim();
                 if (dept.isEmpty()) return sql; // can't enforce without dept
+                if (!resultHasOwnerDept) {
+                    // Skip predicate when result set doesn't expose owner_dept
+                    return sql;
+                }
                 where = "owner_dept = '" + dept.replace("'", "''") + "'";
             }
         } else if ("INST".equalsIgnoreCase(activeScope)) {

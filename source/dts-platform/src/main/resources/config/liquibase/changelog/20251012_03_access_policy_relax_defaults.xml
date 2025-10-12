@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251012_03_access_policy_relax_defaults_clear_dept" author="platform">
+        <comment>Relax overly restrictive default policies: clear allow_roles when it exactly equals DEPT default triple</comment>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy p
+               SET allow_roles = NULL
+              FROM catalog_dataset d
+             WHERE p.dataset_id = d.id
+               AND UPPER(COALESCE(d.scope,'')) = 'DEPT'
+               AND regexp_replace(COALESCE(p.allow_roles,''),'\s','', 'g') IN (
+                     'ROLE_DEPT_DATA_VIEWER,ROLE_DEPT_DATA_DEV,ROLE_DEPT_DATA_OWNER',
+                     'ROLE_DEPT_DATA_VIEWER,ROLE_DEPT_DATA_OWNER,ROLE_DEPT_DATA_DEV',
+                     'ROLE_DEPT_DATA_DEV,ROLE_DEPT_DATA_VIEWER,ROLE_DEPT_DATA_OWNER',
+                     'ROLE_DEPT_DATA_DEV,ROLE_DEPT_DATA_OWNER,ROLE_DEPT_DATA_VIEWER',
+                     'ROLE_DEPT_DATA_OWNER,ROLE_DEPT_DATA_VIEWER,ROLE_DEPT_DATA_DEV',
+                     'ROLE_DEPT_DATA_OWNER,ROLE_DEPT_DATA_DEV,ROLE_DEPT_DATA_VIEWER'
+               );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251012_03_access_policy_relax_defaults_clear_inst" author="platform">
+        <comment>Relax overly restrictive default policies: clear allow_roles when it exactly equals INST default triple</comment>
+        <sql dbms="postgresql">
+            UPDATE catalog_access_policy p
+               SET allow_roles = NULL
+              FROM catalog_dataset d
+             WHERE p.dataset_id = d.id
+               AND UPPER(COALESCE(d.scope,'')) = 'INST'
+               AND regexp_replace(COALESCE(p.allow_roles,''),'\s','', 'g') IN (
+                     'ROLE_INST_DATA_VIEWER,ROLE_INST_DATA_DEV,ROLE_INST_DATA_OWNER',
+                     'ROLE_INST_DATA_VIEWER,ROLE_INST_DATA_OWNER,ROLE_INST_DATA_DEV',
+                     'ROLE_INST_DATA_DEV,ROLE_INST_DATA_VIEWER,ROLE_INST_DATA_OWNER',
+                     'ROLE_INST_DATA_DEV,ROLE_INST_DATA_OWNER,ROLE_INST_DATA_VIEWER',
+                     'ROLE_INST_DATA_OWNER,ROLE_INST_DATA_VIEWER,ROLE_INST_DATA_DEV',
+                     'ROLE_INST_DATA_OWNER,ROLE_INST_DATA_DEV,ROLE_INST_DATA_VIEWER'
+               );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

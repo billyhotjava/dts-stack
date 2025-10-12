@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
 
 @Component
 @Transactional
@@ -41,6 +42,9 @@ public class InceptorCatalogSyncService {
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogTableSchemaRepository tableRepository;
     private final CatalogColumnSchemaRepository columnRepository;
+
+    @Value("${dts.jdbc.statement-timeout-seconds:30}")
+    private int statementTimeoutSeconds;
 
     public InceptorCatalogSyncService(
         InceptorDataSourceRegistry registry,
@@ -177,12 +181,17 @@ public class InceptorCatalogSyncService {
             }
 
             List<String> tables = new ArrayList<>();
-            try (Statement stmt = connection.createStatement(); ResultSet rs = stmt.executeQuery("SHOW TABLES")) {
+            try (Statement stmt = connection.createStatement()) {
+                try {
+                    stmt.setQueryTimeout(Math.max(1, statementTimeoutSeconds));
+                } catch (Throwable ignored) {}
+                try (ResultSet rs = stmt.executeQuery("SHOW TABLES")) {
                 while (rs.next()) {
                     String name = rs.getString(1);
                     if (StringUtils.hasText(name)) {
                         tables.add(name.trim());
                     }
+                }
                 }
             }
 
@@ -199,7 +208,11 @@ public class InceptorCatalogSyncService {
         String sanitizedTable = table.replace("`", "``");
         String sql = "DESCRIBE `" + sanitizedTable + "`";
         List<ColumnMeta> columns = new ArrayList<>();
-        try (Statement stmt = connection.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+        try (Statement stmt = connection.createStatement()) {
+            try {
+                stmt.setQueryTimeout(Math.max(1, statementTimeoutSeconds));
+            } catch (Throwable ignored) {}
+            try (ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
                 String columnName = rs.getString(1);
                 String dataType = rs.getString(2);
@@ -211,6 +224,7 @@ public class InceptorCatalogSyncService {
                     break; // reached partition or metadata section
                 }
                 columns.add(new ColumnMeta(columnName, safeDataType(dataType), true));
+            }
             }
         } catch (SQLException e) {
             LOG.warn("Failed to describe table {}: {}", table, e.getMessage());

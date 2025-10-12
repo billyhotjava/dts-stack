@@ -91,6 +91,12 @@ public class HiveConnectionService {
     @Value("${dts.platform.hive.test.preserve-artifacts:false}")
     private boolean preserveArtifacts;
 
+    @Value("${dts.jdbc.login-timeout-seconds:20}")
+    private int loginTimeoutSeconds;
+
+    @Value("${dts.jdbc.validation-timeout-seconds:15}")
+    private int validationTimeoutSeconds;
+
     @PostConstruct
     void ensureDriverPresent() {
         try {
@@ -438,6 +444,9 @@ public class HiveConnectionService {
 
     private Connection openConnection(String url, java.util.Properties props) throws SQLException {
         try {
+            try {
+                java.sql.DriverManager.setLoginTimeout(Math.max(1, loginTimeoutSeconds));
+            } catch (Throwable ignored) {}
             return props == null || props.isEmpty() ? DriverManager.getConnection(url) : DriverManager.getConnection(url, props);
         } catch (SQLException ex) {
             String msg = Optional.ofNullable(ex.getMessage()).orElse("");
@@ -461,6 +470,9 @@ public class HiveConnectionService {
             try {
                 if (driverLoader != null) {
                     try {
+                        try {
+                            java.sql.DriverManager.setLoginTimeout(Math.max(1, loginTimeoutSeconds));
+                        } catch (Throwable ignored) {}
                         Connection retry = props == null || props.isEmpty()
                             ? DriverManager.getConnection(url)
                             : DriverManager.getConnection(url, props);
@@ -502,12 +514,18 @@ public class HiveConnectionService {
                             try {
                                 if (d.acceptsURL(candidate)) {
                                     log.info("Using driver {} with rewritten URL {}", d.getClass().getName(), candidate);
+                                    try {
+                                        java.sql.DriverManager.setLoginTimeout(Math.max(1, loginTimeoutSeconds));
+                                    } catch (Throwable ignored) {}
                                     Connection c = d.connect(candidate, props);
                                     if (c != null) return c;
                                 }
                             } catch (Throwable ignored) {}
                         }
                         // direct try via DriverManager
+                        try {
+                            java.sql.DriverManager.setLoginTimeout(Math.max(1, loginTimeoutSeconds));
+                        } catch (Throwable ignored) {}
                         Connection c = props == null || props.isEmpty()
                             ? DriverManager.getConnection(candidate)
                             : DriverManager.getConnection(candidate, props);
@@ -562,6 +580,9 @@ public class HiveConnectionService {
     private void runValidationQuery(Connection connection, String query) {
         String sql = (query == null || query.isBlank()) ? "SELECT 1" : query;
         try (Statement statement = connection.createStatement()) {
+            try {
+                statement.setQueryTimeout(Math.max(1, validationTimeoutSeconds));
+            } catch (Throwable ignored) {}
             statement.setMaxRows(1);
             log.info("Running validation query: {}", sql);
             statement.execute(sql);

@@ -10,10 +10,11 @@ import { Textarea } from "@/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { toast } from "sonner";
 import { createDataset, deleteDataset, getCatalogConfig, listDatasets, previewDataset } from "@/api/platformApi";
-import { listInfraDataSources, refreshInceptorRegistry } from "@/api/services/infraService";
+import { listInfraDataSources, refreshInceptorRegistry, fetchInfraFeatures } from "@/api/services/infraService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import { renderDataLevelLabel } from "@/constants/governance";
-import { useActiveDept, useActiveScope } from "@/store/contextStore";
+import { useUserInfo } from "@/store/userStore";
+import { useActiveDept, useActiveScope, useContextActions } from "@/store/contextStore";
 
 // Legacy display classification removed in favor of DATA_* levels
 
@@ -38,12 +39,16 @@ type ListItem = {
 	domainId: string;
 	type: string;
 	tags?: string[];
+    description?: string;
 };
 
 export default function DatasetsPage() {
 	const router = useRouter();
 	const activeScope = useActiveScope();
 	const activeDept = useActiveDept();
+	// Keep ABAC上下文与列表筛选在本页面内同步，供筛选器回填与交互使用
+	const { setActiveScope, setActiveDept } = useContextActions();
+	const { roles = [] } = useUserInfo();
 	const [items, setItems] = useState<ListItem[]>([]);
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(false);
@@ -86,6 +91,7 @@ export default function DatasetsPage() {
     const [previewRows, setPreviewRows] = useState<any[]>([]);
     const [previewTitle, setPreviewTitle] = useState<string>("");
     const [previewLevel, setPreviewLevel] = useState<string | undefined>(undefined);
+    const [previewScope, setPreviewScope] = useState<string | undefined>(undefined);
 // Note: import-from-file feature removed in this build; re-enable when UI wires the input
 
 // const levels = SECURITY_LEVELS; // removed
@@ -158,6 +164,17 @@ const SHARE_SCOPE_LABELS: Record<string, string> = {
 };
 const renderScopeLabel = (v?: string) => (v ? SCOPE_LABELS[String(v).toUpperCase()] || v : "-");
 const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).toUpperCase()] || v : "-");
+const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : it.scope === "INST" ? "研究所" : "-");
+
+    // Simple role check: OPADMIN or ROLE_OP_ADMIN can编辑
+    const canEdit = useMemo(() => {
+      try {
+        const set = new Set<string>((Array.isArray(roles) ? roles : [] as any[]).map((r) => String(r || "").toUpperCase()));
+        return set.has("OPADMIN") || set.has("ROLE_OP_ADMIN");
+      } catch {
+        return false;
+      }
+    }, [roles]);
 
     // Badge for DATA_* levels with tones aligned to Explore pages
     const dataLevelBadge = (level?: string) => {
@@ -208,18 +225,19 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 							.map((s: string) => s.trim())
 							.filter(Boolean)
 					: [];
-					return {
-						id: String(it.id),
-						name: it.name,
-						owner: it.owner || "",
-						dataLevel: it.dataLevel || undefined,
-						scope: it.scope || undefined,
-						ownerDept: it.ownerDept || undefined,
-						shareScope: it.shareScope || undefined,
-						domainId: String(it.domainId || ""),
-						type: normalizeSourceType(rawType || resolvedDefaultSource),
-						tags,
-					};
+						return {
+							id: String(it.id),
+							name: it.name,
+							owner: it.owner || "",
+							dataLevel: it.dataLevel || undefined,
+							scope: it.scope || undefined,
+							ownerDept: it.ownerDept || undefined,
+							shareScope: it.shareScope || undefined,
+							domainId: String(it.domainId || ""),
+							type: normalizeSourceType(rawType || resolvedDefaultSource),
+							tags,
+                            description: typeof it.description === "string" ? it.description : "",
+						};
 				});
 			setItems(mapped);
 			setTotal(Number(resp?.total || mapped.length));
@@ -329,7 +347,17 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
         setRefreshing(true);
         try {
             // Keep behavior consistent with data sources page: trigger registry refresh
-            await refreshInceptorRegistry();
+            try {
+                await refreshInceptorRegistry();
+            } catch (e: any) {
+                // Non-OP_ADMIN will get 403; fall back to a lightweight features sync
+                try {
+                    await fetchInfraFeatures();
+                    toast.info("无权执行刷新，已改为状态同步");
+                } catch {
+                    throw e;
+                }
+            }
             // Reload config to reflect any primary source changes
             try {
                 const cfg = (await getCatalogConfig()) as any;
@@ -356,6 +384,7 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
       try {
         setPreviewTitle(item.name);
         setPreviewLevel(item.dataLevel);
+        setPreviewScope(item.scope);
         const resp: any = await previewDataset(item.id, 50);
         const headers: string[] = Array.isArray(resp?.headers) ? resp.headers : [];
         const rows: any[] = Array.isArray(resp?.rows) ? resp.rows : [];
@@ -518,7 +547,7 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 			<Card>
 				<CardHeader className="flex flex-wrap items-center justify-between gap-2">
 					<CardTitle className="flex items-center gap-2 text-base">
-						数据资产目录
+						数据资产列表
 						<span className="rounded bg-muted px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
 							默认来源：{renderSourceLabel(primarySourceLabel)}
 						</span>
@@ -568,37 +597,57 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 								</Select>
 							</div>
 							<div>
-								<Label>作用域</Label>
-								<Select value={scopeFilter} onValueChange={setScopeFilter}>
-									<SelectTrigger>
-										<SelectValue placeholder="全部" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="all">全部</SelectItem>
-										<SelectItem value="DEPT">DEPT</SelectItem>
-										<SelectItem value="INST">INST</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
+                            <Label>作用域</Label>
+                            <Select
+                                value={scopeFilter}
+                                onValueChange={(v) => {
+                                    setScopeFilter(v);
+                                    // 同步到全局上下文，仅当用户明确选择具体作用域时生效
+                                    if (v === "DEPT" || v === "INST") {
+                                        try { setActiveScope(v as any); } catch {}
+                                    }
+                                }}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="全部" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">全部</SelectItem>
+                                    <SelectItem value="DEPT">部门</SelectItem>
+                                    <SelectItem value="INST">研究所</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <div>
-                            <Label>所属部门</Label>
+                            <Label>
+                              所属部门{activeScope === "DEPT" ? <span className="ml-1 text-[11px] text-muted-foreground">（当前上下文）</span> : null}
+                            </Label>
                             <Select
                                 value={deptFilter || "all"}
-                                onValueChange={(v) => setDeptFilter(v === "all" ? "" : v)}
+                                onValueChange={(v) => {
+                                    const next = v === "all" ? "" : v;
+                                    setDeptFilter(next);
+                                    if (next) {
+                                        try { setActiveDept(next); } catch {}
+                                    }
+                                }}
+                                disabled={activeScope === "INST"}
                             >
 									<SelectTrigger>
-										<SelectValue placeholder={deptLoading ? "加载中…" : "全部"} />
+                                    <SelectValue placeholder={deptLoading ? "加载中…" : activeScope === "DEPT" ? "全部（本部门）" : "全部"} />
 									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="all">全部</SelectItem>
-										{deptOptions.map((d) => (
-											<SelectItem key={d.code} value={d.code}>
-												{d.nameZh || d.nameEn || d.code}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
+                                <SelectContent>
+                                    <SelectItem value="all">{activeScope === "DEPT" ? "全部（本部门）" : "全部"}</SelectItem>
+                                    {[...deptOptions]
+                                      .sort((a, b) => ((a.parentId ?? 0) - (b.parentId ?? 0)))
+                                      .map((d) => (
+                                        <SelectItem key={d.code} value={d.code}>
+                                            {d.nameZh || d.nameEn || d.code}
+                                        </SelectItem>
+                                      ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
 						</div>
 					{!hasPrimarySource && (
 						<Alert variant="destructive">
@@ -609,17 +658,16 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 						</Alert>
 					)}
 					<div className="overflow-hidden rounded-md border">
-						<table className="w-full min-w-[920px] table-fixed text-sm">
+						<table className="w-full min-w-[820px] table-fixed text-sm">
 							<thead className="bg-muted/50">
 								<tr className="text-left">
 									<th className="px-3 py-2 w-[32px]">#</th>
-									<th className="px-3 py-2">名称</th>
-									<th className="px-3 py-2">负责人</th>
-									<th className="px-3 py-2">来源</th>
-                        <th className="px-3 py-2">数据密级</th>
-									<th className="px-3 py-2">作用域</th>
-									<th className="px-3 py-2">所属部门</th>
-									<th className="px-3 py-2">操作</th>
+									<th className="px-3 py-2">数据集名称</th>
+                                <th className="px-3 py-2">数据域</th>
+                                <th className="px-3 py-2">所属部门</th>
+                                <th className="px-3 py-2">数据密级</th>
+                                <th className="px-3 py-2">描述</th>
+                                <th className="px-3 py-2">操作</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -627,27 +675,29 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 									<tr key={d.id} className="border-b last:border-b-0">
 										<td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
 										<td className="px-3 py-2 font-medium">{d.name}</td>
-										<td className="px-3 py-2">{d.owner || "-"}</td>
-										<td className="px-3 py-2 text-xs">{renderSourceLabel(d.type)}</td>
-                            <td className="px-3 py-2 text-xs">{dataLevelBadge(d.dataLevel)}</td>
-                            <td className="px-3 py-2 text-xs">{renderScopeLabel(d.scope)}</td>
-                            <td className="px-3 py-2 text-xs">{d.scope === "DEPT" ? renderDept(d.ownerDept) : renderShareScopeLabel(d.shareScope)}</td>
+                                <td className="px-3 py-2 text-xs">{renderDomainForRow(d)}</td>
+                                <td className="px-3 py-2 text-xs">{renderDept(d.ownerDept)}</td>
+                                <td className="px-3 py-2 text-xs">{dataLevelBadge(d.dataLevel)}</td>
+                                <td className="px-3 py-2 text-xs truncate" title={d.description || "-"}>{d.description || "-"}</td>
 										<td className="px-3 py-2 space-x-1">
 											<Button variant="outline" size="sm" onClick={() => openPreview(d)}>
 												预览
 											</Button>
-											<Button variant="ghost" size="sm" onClick={() => router.push(`/catalog/datasets/${d.id}`)}>
-												编辑
-											</Button>
-											<Button variant="ghost" size="sm" onClick={() => onDelete(d.id)}>
-												删除
-											</Button>
+                                        {canEdit && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => router.push(`/catalog/datasets/${d.id}`)}
+                                            >
+                                                编辑
+                                            </Button>
+                                        )}
 										</td>
 									</tr>
 								))}
 								{!filtered.length && (
                                 <tr>
-                                    <td colSpan={8} className="px-3 py-6 text-center text-xs text-muted-foreground">
+                                    <td colSpan={7} className="px-3 py-6 text-center text-xs text-muted-foreground">
                                         {loading ? "加载中…" : "暂无数据"}
                                     </td>
                                 </tr>
@@ -844,18 +894,18 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 			{/* Dataset preview dialog */}
 			<Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
 				<DialogContent className="max-w-4xl">
-					<DialogHeader>
-						<DialogTitle className="flex items-center gap-2">
-							<span>{previewTitle || "数据预览"}</span>
-							{dataLevelBadge(previewLevel)}
-						</DialogTitle>
-					</DialogHeader>
-					<div className="space-y-3">
-						<div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-							本数据受密级与作用域控制，未经授权不得外传。
-						</div>
-						<div className="overflow-auto rounded-md border">
-							<table className="w-full border-collapse text-xs">
+						<DialogHeader>
+							<DialogTitle className="flex items-center gap-2">
+								<span>{previewTitle || "数据预览"}</span>
+								{dataLevelBadge(previewLevel)}
+                            <span className="ml-2 inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                              {renderScopeLabel(previewScope)}
+                            </span>
+							</DialogTitle>
+						</DialogHeader>
+						<div className="space-y-3">
+							<div className="overflow-auto rounded-md border">
+								<table className="w-full border-collapse text-xs">
 								<thead className="bg-muted/50">
 									<tr>
 										{previewHeaders.map((h) => (
@@ -882,9 +932,15 @@ const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).
 							</table>
 						</div>
 					</div>
-					<DialogFooter>
-						<Button variant="ghost" onClick={() => setPreviewOpen(false)}>关闭</Button>
-					</DialogFooter>
+						<DialogFooter>
+                            <div className="mr-auto text-xs text-muted-foreground">
+                              {(() => {
+                                const lvl = renderDataLevelLabel(previewLevel);
+                                return lvl && lvl !== "-" ? `本数据属于【${lvl}】级，仅限授权人员查看，不得外传。` : "本数据受密级与作用域控制，未经授权不得外传。";
+                              })()}
+                            </div>
+                            <Button variant="ghost" onClick={() => setPreviewOpen(false)}>关闭</Button>
+                        </DialogFooter>
 				</DialogContent>
 			</Dialog>
 		</div>

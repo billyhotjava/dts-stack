@@ -179,7 +179,20 @@ public class InfraResource {
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> refreshInceptorDataSource() {
         inceptorRegistry.refresh();
-        integrationCoordinator.synchronize("manual-refresh");
+        // Run catalog synchronization asynchronously to avoid blocking request threads if Hive hangs
+        try {
+            if (!integrationCoordinator.isSyncInProgress()) {
+                Thread t = new Thread(() -> {
+                    try {
+                        integrationCoordinator.synchronize("manual-refresh");
+                    } catch (Exception ex) {
+                        // Best-effort logging; do not rethrow to avoid killing the worker
+                    }
+                }, "inceptor-manual-refresh");
+                t.setDaemon(true);
+                t.start();
+            }
+        } catch (Exception ignored) {}
         audit.audit("REFRESH", "infra.dataSource.inceptor", "manual");
         return ApiResponses.ok(buildFeaturesPayload());
     }

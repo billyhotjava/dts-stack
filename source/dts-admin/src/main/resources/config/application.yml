@@ -344,3 +344,10 @@ dts:
     api-timeout-ms: ${DTS_PKI_API_TIMEOUT:3000}
     # Dev-only: allow mock username during integration testing
     allow-mock: ${DTS_PKI_ALLOW_MOCK:false}
+    # Gateway verification endpoint (for vendor SVS/统一安全中间件)
+    gateway-host: ${DTS_PKI_GATEWAY_HOST:}
+    gateway-port: ${DTS_PKI_GATEWAY_PORT:0}
+    # Digest algorithm hint for PKCS#7 verify (SHA1|MD5|NONE). Default SHA1; adjust per vendor profile
+    digest: ${DTS_PKI_DIGEST:SHA1}
+    # Optional path to vendor client jar (e.g. svs-uk_custom.jar) for runtime loading
+    vendor-jar-path: ${DTS_PKI_VENDOR_JAR:}

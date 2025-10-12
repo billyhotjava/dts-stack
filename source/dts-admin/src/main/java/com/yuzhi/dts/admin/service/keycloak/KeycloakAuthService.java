@@ -72,6 +72,20 @@ public class KeycloakAuthService {
     }
 
     /**
+     * Issue tokens for a given Keycloak user via Token Exchange (impersonation) using this client's service account.
+     * Preconditions in Keycloak:
+     * - Token Exchange enabled for the realm
+     * - This client has permission to perform token exchange and impersonation (realm-management roles)
+     */
+    public LoginResult loginByTokenExchange(String requestedSubject) {
+        TokenResponse tokens = tokenExchangeForUser(requestedSubject);
+        Map<String, Object> claims = decodeTokenClaims(tokens.accessToken());
+        Map<String, Object> userInfo = fetchUserInfo(tokens.accessToken());
+        Map<String, Object> enrichedUser = buildUserProfile(requestedSubject, userInfo, claims);
+        return new LoginResult(tokens, enrichedUser);
+    }
+
+    /**
      * Refresh tokens using Keycloak's refresh_token grant.
      */
     public TokenResponse refreshTokens(String refreshToken) {
@@ -133,6 +147,51 @@ public class KeycloakAuthService {
             TokenResponse body = response.getBody();
             if (body == null || body.accessToken() == null) {
                 throw new IllegalStateException("Keycloak token response missing access_token");
+            }
+            return body;
+        } catch (HttpStatusCodeException ex) {
+            throw translateAuthError(ex);
+        }
+    }
+
+    /**
+     * Perform Keycloak Token Exchange to obtain an access token for the requested subject (user).
+     * Uses this client's service account token as the subject_token.
+     */
+    private TokenResponse tokenExchangeForUser(String requestedSubject) {
+        if (requestedSubject == null || requestedSubject.isBlank()) {
+            throw new IllegalArgumentException("requestedSubject must not be blank");
+        }
+
+        // Obtain a service-account token for this client
+        TokenResponse sa = obtainClientCredentialsToken(clientId, clientSecret);
+
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange");
+        form.add("subject_token", sa.accessToken());
+        form.add("requested_token_type", "urn:ietf:params:oauth:token-type:access_token");
+        form.add("client_id", clientId);
+        if (!clientSecret.isBlank()) {
+            form.add("client_secret", clientSecret);
+        }
+        // Keycloak accepts user id; many setups also accept username here when impersonation is allowed
+        form.add("requested_subject", requestedSubject);
+        if (!scopeParam.isBlank()) {
+            form.add("scope", scopeParam);
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        try {
+            ResponseEntity<TokenResponse> response = restTemplate.exchange(
+                tokenEndpoint,
+                HttpMethod.POST,
+                new HttpEntity<>(form, headers),
+                TokenResponse.class
+            );
+            TokenResponse body = response.getBody();
+            if (body == null || body.accessToken() == null) {
+                throw new IllegalStateException("Keycloak token-exchange response missing access_token");
             }
             return body;
         } catch (HttpStatusCodeException ex) {

@@ -40,8 +40,8 @@ public class AccessChecker {
         if (p == null) return true;
         String rolesCsv = p.getAllowRoles();
         if (rolesCsv == null || rolesCsv.isBlank()) return true;
-        Set<String> allowed = new HashSet<>(Arrays.asList(rolesCsv.split("\\s*,\\s*")));
-        return SecurityUtils.hasCurrentUserAnyOfAuthorities(allowed.toArray(new String[0]));
+        String[] normalized = com.yuzhi.dts.platform.security.RoleUtils.toAuthorityArray(rolesCsv);
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(normalized);
     }
 
     private boolean levelAllowed(CatalogDataset dataset) {
@@ -80,6 +80,15 @@ public class AccessChecker {
             if (!"DEPT".equals(dsScope)) return false;
             // If owner_dept missing on dataset, do not block (assume legacy)
             if (dsOwnerDept.isEmpty()) return true;
+            // Normalize department codes to be tolerant of differing formats such as
+            // "3552" vs "DEPT-3552" vs "dept_3552". Compare both normalized forms
+            // and also fallback to suffix match to handle prefixed codes.
+            String left = normalizeDeptCode(dsOwnerDept);
+            String right = normalizeDeptCode(Optional.ofNullable(activeDept).orElse(""));
+            if (!left.isEmpty() && !right.isEmpty()) {
+                return left.equalsIgnoreCase(right) || left.endsWith(right) || right.endsWith(left);
+            }
+            // Fallback to raw comparison when normalization yields empty
             return dsOwnerDept.equalsIgnoreCase(Optional.ofNullable(activeDept).orElse(""));
         } else if ("INST".equals(as)) {
             if (!"INST".equals(dsScope)) return false;
@@ -88,6 +97,31 @@ public class AccessChecker {
         }
         // Unknown scope defaults to deny
         return false;
+    }
+
+    /**
+     * Normalize department code for comparison:
+     * - Trim and upper-case
+     * - Remove common separators (dash/underscore/space)
+     * - Strip leading tokens like "DEPT" or "D" when followed by digits/letters
+     */
+    private String normalizeDeptCode(String raw) {
+        if (raw == null) return "";
+        String s = raw.trim().toUpperCase();
+        if (s.isEmpty()) return "";
+        // Remove common separators
+        s = s.replaceAll("[\\s_]+", "");
+        // If starts with DEPT, drop the prefix
+        if (s.startsWith("DEPT")) {
+            s = s.substring(4);
+        }
+        // If starts with a single 'D' followed by digits/letters, drop the 'D'
+        if (s.length() > 1 && s.charAt(0) == 'D' && Character.isLetterOrDigit(s.charAt(1))) {
+            s = s.substring(1);
+        }
+        // Remove leading dashes left by partial prefixes
+        while (s.startsWith("-")) s = s.substring(1);
+        return s;
     }
 
     private boolean isSuperAdmin() {

@@ -93,7 +93,20 @@ public class InceptorIntegrationCoordinator {
 
     @EventListener
     public void handlePublished(InceptorDataSourcePublishedEvent event) {
-        synchronize("publish-event");
+        // Avoid blocking the publishing request thread; run sync asynchronously.
+        if (syncing.get()) {
+            LOG.info("Inceptor publish event received but sync already in progress; skipping immediate re-sync");
+            return;
+        }
+        Thread t = new Thread(() -> {
+            try {
+                synchronize("publish-event");
+            } catch (Exception ex) {
+                LOG.warn("Async publish-event sync failed: {}", ex.getMessage());
+            }
+        }, "inceptor-publish-sync");
+        t.setDaemon(true);
+        t.start();
     }
 
     public IntegrationStatus currentStatus() {

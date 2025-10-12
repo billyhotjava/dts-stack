@@ -14,6 +14,10 @@ public class PkiAuthProperties {
     private String apiToken;
     private int apiTimeoutMs = 3000;
     private boolean allowMock = false;
+    private String gatewayHost;
+    private int gatewayPort = 0;
+    private String digest = "SHA1"; // SHA1|MD5|NONE (depends on vendor profile)
+    private String vendorJarPath; // Path to svs-uk_custom.jar (optional)
 
     public boolean isEnabled() {
         return enabled;
@@ -86,5 +90,36 @@ public class PkiAuthProperties {
     public void setAllowMock(boolean allowMock) {
         this.allowMock = allowMock;
     }
-}
 
+    public String getGatewayHost() {
+        return gatewayHost;
+    }
+
+    public void setGatewayHost(String gatewayHost) {
+        this.gatewayHost = gatewayHost;
+    }
+
+    public int getGatewayPort() {
+        return gatewayPort;
+    }
+
+    public void setGatewayPort(int gatewayPort) {
+        this.gatewayPort = gatewayPort;
+    }
+
+    public String getDigest() {
+        return digest;
+    }
+
+    public void setDigest(String digest) {
+        this.digest = digest;
+    }
+
+    public String getVendorJarPath() {
+        return vendorJarPath;
+    }
+
+    public void setVendorJarPath(String vendorJarPath) {
+        this.vendorJarPath = vendorJarPath;
+    }
+}
