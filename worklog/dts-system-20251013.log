@@ -1,0 +1,210 @@
+[#] 审计日志重构方案（监管侧专用）
+
+[2025-10-13 10:00] 达成共识与改造清单
+
+一、定位与范围
+- 本功能为“监管机构审查人员操作”的独立审计模块，不是运维日志。
+- 统一在管理端集中展示与导出：删除业务端日志列表/查询/导出入口（平台仅负责写入）。
+
+二、表格列与口径（管理端展示）
+- 操作人：显示实名（fullName）；内置账号映射中文名（系统管理员/授权管理员/安全审计员）。
+- 操作人编码：Keycloak 中的真实用户名（username）。
+- IP 地址：优先 X-Forwarded-For 首段，其次 X-Real-IP，最后 remoteAddr；保证非空。
+- 操作时间：occurredAt（时间戳）。
+- 模块名称：来源系统映射，admin→“系统管理”，platform→“业务管理”。
+- 操作内容：使用动作短语，避免技术术语（示例：“修改了用户”、“查询了用户列表”）。
+- 操作类型：查询/新增/修改/删除/登录/登出（GET/PUT/POST/PATCH/DELETE 映射：GET=查询，PUT=新建，POST=修改，PATCH=部分更新，DELETE=删除；登录/登出单独识别）。
+- 操作结果：同时识别 HTTP 结果与业务结果。业务结果从响应体解析：
+  • 管理端：ApiResponse.status ∈ {SUCCESS, ERROR}
+  • 业务端：ApiResponse.status 数值=200 代表成功
+  任何一侧失败即标记“失败”，否则“成功”。
+- 日志类型：按 eventClass 区分“安全审计/操作审计”（后续可扩展）。
+- 操作详情：JSON，使用中文键：
+  { "源表": "用户", "目标ID": "123", "请求ID": "...", "参数摘要": "..." , ... }
+
+三、记录原则
+- 仅记录“有人为操作上下文”的 HTTP 请求；无用户上下文一律不记（禁止 Anonymous）。
+- 查询量控制：不做采样/去噪，只要是主动操作均记录。
+- 后端保留校验/追溯字段：param_digest / record_signature / chain_signature（前端不展示）。
+
+四、实现与改动点
+- Admin（写入与查询）：
+  1) Web 过滤器改为使用 ContentCachingResponseWrapper：
+     - 采集响应体，做业务级成功/失败判定；
+     - 无用户上下文则直接跳过记录；
+     - IP 按优先级取值并兜底。
+  2) AdminAuditService：
+     - details 改为中文键（源表/目标ID/请求ID/参数摘要）；
+     - 继续计算 param_digest / record_signature / chain_signature；
+     - toView 输出 operationType / operationContent / logTypeText 并把来源映射为“系统管理/业务管理”。
+  3) AuditLogResource：
+     - 解析中文详情键；
+     - 列表默认每页 10 条；
+     - 导出维持不变（字段按新口径展现）。
+- Platform（仅写入）：
+  1) Web 过滤器同 Admin：用户上下文必需、业务级成功/失败判定、IP 兜底；
+  2) AuditTrailService：details 写中文键；operatorName 从 JWT claims（name/full_name）回填；
+  3) 删除 /api/audit-logs 列表/导出接口（平台侧）。
+- 前端（管理端）：
+  - 表格列改为上述口径；默认分页 10 条；行距收紧，内容区域可加宽；点击展开查看完整详情 JSON。
+  - 业务端移除日志菜单/调用（如有残留）。
+
+五、非目标与兼容性
+- 历史数据/历史表不做迁移；允许新旧键并行解析（优先中文键，兼容旧英文键）。
+- 不变更数据库表结构（沿用现有 audit_event 扩展列与索引）。
+
+六、验收要点（手工核对）
+- 管理端：内置三员操作可见一致，actor/姓名/IP/模块/类型/结果/详情正确；
+- 业务端：登录/操作日志出现在管理端；POST/PUT/PATCH/DELETE 类型映射正确；
+- 失败用例：HTTP 500、业务 status=ERROR 或!=200 均显示“失败”；
+- 前端：分页=10；展开详情显示中文键；导出不包含敏感密钥，仅展示必要字段。
+
+[2025-10-13 13:15] 修复：出现 anonymousUser 的原因与处理
+
+现象
+- 审计列表出现记录：operator=anonymousUser，模块=系统管理，操作内容=查询了 localization。
+
+原因分析
+- 本次记录命中“Keycloak 本地化”接口（/api/keycloak/localization/**），该接口为前端登录前的启动流程所需，Spring Security 配置为 permitAll；
+- 审计过滤器（Admin/Platform）此前仅排除了部分认证相关前缀，未显式排除 localization 路径；
+- 过滤器对匿名用户判断只屏蔽了字符串 "anonymous"，未覆盖框架默认的 "anonymousUser"，导致匿名请求被误记。
+
+修复内容
+- Admin 过滤器：
+  - EXCLUDED_PATH_PREFIXES 增加：/api/keycloak/auth、/api/authenticate、/api/auth-info、/keycloak/localization、/api/keycloak/localization；
+  - 记录条件改为：SecurityUtils.isAuthenticated()==true 且 actor 非空，且不等于 anonymous/anonymousUser（大小写无关）。
+- Platform 过滤器：
+  - EXCLUDED_PATH_PREFIXES 增加：/api/keycloak/localization；
+  - 记录条件同上，要求已认证且排除 anonymous/anonymousUser。
+
+验证步骤
+- 在未登录状态下访问 /api/keycloak/localization/zh-CN：不应产生审计记录；
+- 完成登录后访问业务/管理接口：应产生正常审计记录（无 anonymousUser）；
+- 回归检查 /api/authenticate 与 /api/keycloak/auth/**：不应出现匿名记录。
+
+[2025-10-13 13:40] 优化：操作内容中文化与人名映射
+
+问题
+- 操作内容出现“操作了用户”“操作了admin_role_assignment”“查询了approval_requests”等技术性/含糊描述；
+- 个别记录显示“查询了2351”等仅含主键ID；
+- 登录/登出在列表中不易区分。
+
+改动
+- 列表派生字段 toView：
+  - 当 HTTP 方法缺失时，按 actionCode 回退推断操作类型（CREATE→新增，UPDATE/ENABLE/DISABLE/RESET→修改，DELETE/REMOVE→删除，VIEW/LIST/SEARCH→查询）；
+  - 操作内容优先使用中文表名，并在可用时追加“（目标引用）”，如“修改了用户（张三）/查询了用户（授权管理员）”；
+  - 登录/登出分别显示“登录系统/登出系统”。
+- 目标引用（人类可读名）：
+  - Admin 写入详情时为“用户”表补充“目标引用”=fullName（从本地用户快照查得）；同时兼容写入“目标ID/target_id”。
+- 表中文名映射扩充：
+  - admin_role_assignment/role_assignment(s) → 用户角色；
+  - approval_requests/approval(s) → 审批请求；
+  - role/role_* → 角色；
+  - organization/org/organization_node → 部门；
+  - localization → 界面语言（但该路径已排除，不会入库）。
+
+验证要点
+- 修改用户类操作显示为“修改了用户（<姓名>）”，不再出现“操作了用户/仅ID”。
+- 角色/审批等资源不再出现英文表名；
+- 登录与登出区分显示。
+
+[2025-10-13 14:05] 优化：授权管理员审批日志使用审批“操作类型”作为操作内容
+
+背景
+- 授权管理员在审批中心的每条审批记录都有“操作类型”，希望审计列表直接采用该“操作类型”作为“操作内容”，以便一眼看懂。
+
+实现
+- 后端在审批决策写入审计时补充 type 字段：
+  - AdminUserService.approve/reject/delay：recordAction 的 details 增加 { type: approval.type }；
+  - 已有的每项应用日志（ADMIN_APPROVAL_APPLY）同样带有 { type }。
+- 审计列表派生 toView：
+  - 识别审批相关事件（action 含 APPROVAL，或 resourceType ∈ approvals/approval_requests/admin_approval_item）；
+  - 若 details 中存在 type，则将其映射为中文短语作为 operationContent（如：授予角色、撤销角色、重置密码、启用/禁用用户、调整人员密级、修改用户 等）；
+  - 保持“操作结果”“模块名称”等口径不变；若存在目标引用则追加“（目标引用）”。
+
+验证
+- 在审批中心执行“通过/驳回/处理中”：审计列表对应行的“操作内容”应显示审批操作类型中文，如“授予角色/重置密码/修改用户”等。
+
+[2025-10-13 14:30] 修复：禁止在“操作内容”中显示主键ID
+
+问题
+- 仍出现“查询了2352（2352+<uuid>）”等含主键ID的表述。
+
+修复
+- 去除 targetRef 的“表名+ID”兜底合成；仅当详情明确提供“目标引用”（中文名）时才显示括注；
+- operationContent 仅使用中文表名；若无法映射到中文（或为纯数字/英文技术名），则不显示对象名；
+- 登录/登出文案保持不变。
+
+实现位置
+- 列表派生逻辑：source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AuditLogResource.java（移除 ID 兜底、仅限中文显示、hasChinese 判定）。
+
+验收
+- 执行各类查询/修改/审批动作：操作内容不再包含任何 ID/UUID；若无中文对象名，仅显示“查询/修改/删除”等动词，不附对象。
+
+[2025-10-13 15:00] 日志集中查看：平台 → 管理端汇聚
+
+目标
+- 所有日志统一在管理端查看；平台端不再提供日志查看功能。
+
+实现
+- 平台侧：保持仅写入，不提供列表/导出 API 与前端页面（已移除）。
+- 管理端新增接收端点 `/api/audit-events`，用于接收平台转发的审计事件并落库（sourceSystem=platform）。
+  - 控制器：source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AuditIngestResource.java
+  - 安全：路径 permitAll，内部校验共享密钥（Authorization: Bearer ${DTS_COMMON_AUDIT_TOKEN} 或 X-Audit-Token）。
+- AdminAuditService 支持覆盖 sourceSystem（默认 admin，平台转发置为 platform）。
+
+运行配置（需在部署时设置）
+- 平台：
+  - `AUDITING_FORWARD_ENABLED=true`（已设为默认）
+  - `DTS_COMMON_AUDIT_ENABLED=true`（已设为默认）
+  - `DTS_COMMON_AUDIT_BASE_URL=https://admin.${BASE_DOMAIN}`（或内网直连URL）
+  - `DTS_COMMON_AUDIT_TOKEN=<共享密钥>`
+- 管理端：
+  - `DTS_COMMON_AUDIT_TOKEN=<共享密钥>`（与平台一致，用于校验）
+
+验收
+- 平台执行登录/登出/查询/修改等，管理端“审计中心”应显示来源系统=“业务管理”；
+- 平台端不出现“日志审计”菜单或任何 `/audit-logs` 访问路径。
+
+[2025-10-13 15:20] 优化：列表查询文案
+
+需求
+- 非单对象的查询操作需显示“查询<对象>列表”，例如“查询了用户列表”。
+
+实现
+- 列表判定：当 HTTP 方法为 GET 且未解析出“目标ID”，将该查询视为列表查询；
+- 文案：使用“查询了<中文对象名>列表”；单对象仍显示“查询了<中文对象名>（<目标引用>）”。
+- 位置：source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AuditLogResource.java（toView → isListQuery）。
+
+验收
+- 访问用户列表、菜单列表等：显示“查询了用户列表/门户菜单列表”；
+- 访问用户详情（带目标引用）：显示“查询了用户（张三）”；
+
+[2025-10-13 15:30] 简化平台日志汇聚（封闭网络）
+
+背景
+- 系统运行于封闭网络环境，采用最简方案将平台日志汇聚到管理端。
+
+调整
+- 管理端接收端点 `/api/audit-events` 将“共享密钥”设为可选：
+  - 未配置 `DTS_COMMON_AUDIT_TOKEN` 时，默认放行平台转发请求；
+  - 如配置了该变量，则按 Bearer/X-Audit-Token 校验。
+- 平台默认开启转发（dev/prod 已内置默认值），无需额外配置即可集中到管理端。
+
+注意
+- 该方案适用于封闭网络；如将管理端暴露到互联网，需启用 Token 或 mTLS。
+
+[2025-10-13 16:10] 修正：登出事件被误显示为“登录系统”的风险
+
+现象/反馈
+- 个别环境反馈登出后未看到“登出系统”，怀疑被显示为“登录系统”。
+
+分析
+- 列表派生口径使用 action 文本包含关系判断登录/登出；极端情况下（上游 action 文本格式不规范或包含复合词）可能先匹配到 LOGIN。
+
+修复
+- 调整判断顺序并增加同义词：优先匹配 LOGOUT（兼容 SIGNOUT/LOGOFF），随后才匹配 LOGIN/LOG IN。
+- 代码：source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AuditLogResource.java（toView）。
+
+核对建议
+- 管理端与平台端各登录/登出一次，列表中应出现“登录系统/登出系统”各一条，对应“操作类型”为“登录/登出”。

@@ -1,0 +1,54 @@
+===== dts-platform 2025-10-12 10:35:00 (dts-platform-20251012-103500.log) =====
+[ABAC 对齐与角色规范化]
+- 新增 RoleUtils 工具类，统一处理 allowRoles：大写、去空格、自动补 `ROLE_` 前缀、去重；并按数据集 `scope` 自动对齐数据角色族（DEPT/INST 间翻译 VIEWER/DEV/OWNER）。
+  • 位置：source/dts-platform/src/main/java/com/yuzhi/dts/platform/security/RoleUtils.java:1
+- 统一消费侧改造：
+  • AccessChecker 使用 RoleUtils 解析策略角色，避免各处重复实现。
+    · 位置：source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/security/AccessChecker.java:43
+  • validate 接口使用 RoleUtils，保持校验一致性。
+    · 位置：source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/CatalogResource.java:317
+- 策略写入路径规范化：保存/更新策略时，对 allowRoles 做“规范化 + 与作用域对齐”，落库统一为 `ROLE_*`，并消除 DEPT 数据集使用 INST_* 角色的混乱。
+  • 位置：source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/CatalogResource.java:294
+
+[作用域门禁兜底逻辑（修复“列表=0”）]
+- 列表接口默认上下文：
+  • effDept = `X-Active-Dept`，若未传则从令牌 claim `dept_code` 兜底。
+  • effScope = 若未传 `X-Active-Scope`，则：有 effDept→DEPT；否则→INST。
+  • 解决此前“未带部门且默认 DEPT 导致全拒”的问题。
+  • 位置：source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/CatalogResource.java:220,233
+- 资产预览同样增加 `dept_code` 兜底，避免作用域误拒。
+  • 位置：source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/AssetResource.java:134
+- 说明：validate 接口仅做“密级 + 角色”校验，不受作用域门禁影响（用于单条诊断）。
+
+[访问策略数据修复（落库变更 + 启动对齐）]
+- Liquibase 变更：
+  • 20251012_02_access_policy_role_alignment.xml
+    · 统一 allow_roles 大写、为六个数据角色补 `ROLE_` 前缀、并根据数据集 `scope` 将 INST_* ↔ DEPT_* 对齐。
+    · 位置：source/dts-platform/src/main/resources/config/liquibase/changelog/20251012_02_access_policy_role_alignment.xml:1
+  • 20251012_03_access_policy_relax_defaults.xml
+    · 清空“恰好等于默认三角色集合”的 allow_roles，恢复为“无角色门禁”（仅密级 + 作用域）。
+    · 位置：source/dts-platform/src/main/resources/config/liquibase/changelog/20251012_03_access_policy_relax_defaults.xml:1
+  • master 已注册上述变更。
+    · 位置：source/dts-platform/src/main/resources/config/liquibase/master.xml:20
+- 启动对齐（ApplicationRunner）：
+  • AccessPolicySeeder 仅“规范化已有策略”，不再为“无策略”数据集自动创建默认三角色，避免误收紧。
+  • Modernizer 合规：替换 Optional.get() → Optional.orElseThrow()。
+  • 位置：source/dts-platform/src/main/java/com/yuzhi/dts/platform/config/AccessPolicySeeder.java:1
+
+[构建问题与合规]
+- 修复 modernizer-maven-plugin 违规：`Optional.get()` 被禁止，已替换为 `opt.orElseThrow()`，消除构建失败。
+  • 位置：source/dts-platform/src/main/java/com/yuzhi/dts/platform/config/AccessPolicySeeder.java:51
+
+[验证建议]
+- 重启 dts-platform 以应用 Liquibase 与代码：
+  • Dev：`docker compose -f docker-compose.dev.yml restart dts-platform`
+  • Packaged：`docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-platform`
+- 验证：
+  • `GET /api/auth-info` 确认 token 中 `dept_code` 是否存在。
+  • 无头部：`GET /api/catalog/datasets`（有 dept_code→DEPT 视图；否则→INST 视图）。
+  • DEPT 视图：加 `X-Active-Scope: DEPT, X-Active-Dept: 3552`，应返回 ownerDept=3552 数据集。
+  • INST 视图：加 `X-Active-Scope: INST`，应返回 `shareScope=PUBLIC_INST/SHARE_INST` 的数据集。
+
+[兼容说明]
+- “无策略或 allow_roles 为空” → 不进行角色门禁，仅按密级与作用域判定；避免历史环境因默认策略导致“看不到”。
+- 六个“数据访问角色族”与数据集作用域强一致，写入时自动规范化，校验时保持一致口径。

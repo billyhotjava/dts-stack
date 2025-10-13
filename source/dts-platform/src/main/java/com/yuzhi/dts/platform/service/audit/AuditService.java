@@ -18,6 +18,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Service
 public class AuditService {
@@ -137,6 +139,21 @@ public class AuditService {
         event.result = result;
         event.payload = payload;
         event.extraTags = serializeTags(extraTags);
+        // Best-effort populate client/network fields from current request
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null && attrs.getRequest() != null) {
+                var req = attrs.getRequest();
+                String forwarded = req.getHeader("X-Forwarded-For");
+                String xfip = StringUtils.hasText(forwarded) ? forwarded.split(",")[0].trim() : null;
+                String realIp = req.getHeader("X-Real-IP");
+                String remote = req.getRemoteAddr();
+                event.clientIp = firstNonBlank(xfip, realIp, remote, "127.0.0.1");
+                event.clientAgent = req.getHeader("User-Agent");
+                event.requestUri = req.getRequestURI();
+                event.httpMethod = req.getMethod();
+            }
+        } catch (Exception ignore) {}
         com.yuzhi.dts.platform.service.audit.AuditRequestContext.markDomainAudit();
         AuditTrailService svc = auditTrailServiceProvider.getIfAvailable();
         if (svc != null) {
@@ -177,6 +194,21 @@ public class AuditService {
         event.result = result;
         event.payload = payload;
         event.extraTags = serializeTags(extraTags);
+        // Best-effort populate client/network fields from current request
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null && attrs.getRequest() != null) {
+                var req = attrs.getRequest();
+                String forwarded = req.getHeader("X-Forwarded-For");
+                String xfip = StringUtils.hasText(forwarded) ? forwarded.split(",")[0].trim() : null;
+                String realIp = req.getHeader("X-Real-IP");
+                String remote = req.getRemoteAddr();
+                event.clientIp = firstNonBlank(xfip, realIp, remote, "127.0.0.1");
+                event.clientAgent = req.getHeader("User-Agent");
+                event.requestUri = req.getRequestURI();
+                event.httpMethod = req.getMethod();
+            }
+        } catch (Exception ignore) {}
         com.yuzhi.dts.platform.service.audit.AuditRequestContext.markDomainAudit();
         AuditTrailService svc = auditTrailServiceProvider.getIfAvailable();
         if (svc != null) {
@@ -184,6 +216,14 @@ public class AuditService {
         } else if (log.isDebugEnabled()) {
             log.debug("AuditTrailService not available; skipping audit record action={} module={} resourceId={}", action, module, resourceId);
         }
+    }
+
+    private static String firstNonBlank(String... vals) {
+        if (vals == null) return null;
+        for (String v : vals) {
+            if (StringUtils.hasText(v)) return v;
+        }
+        return null;
     }
 
     private String serializeTags(Map<String, Object> tags) {

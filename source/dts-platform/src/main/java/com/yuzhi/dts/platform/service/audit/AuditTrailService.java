@@ -153,6 +153,9 @@ public class AuditTrailService {
     }
 
     public void record(String actor, String action, String module, String resourceType, String resourceId, String outcome, Object payload) {
+        if (actor == null || actor.isBlank() || "anonymous".equalsIgnoreCase(actor)) {
+            return;
+        }
         PendingAuditEvent event = new PendingAuditEvent();
         event.occurredAt = Instant.now();
         event.actor = defaultString(actor, "anonymous");
@@ -166,10 +169,16 @@ public class AuditTrailService {
     }
 
     public void record(String actor, String action, String module, String resourceId, String outcome, Object payload) {
+        if (actor == null || actor.isBlank() || "anonymous".equalsIgnoreCase(actor)) {
+            return;
+        }
         record(actor, action, module, module, resourceId, outcome, payload);
     }
 
     public void record(PendingAuditEvent event) {
+        if (event == null || event.actor == null || event.actor.isBlank() || "anonymous".equalsIgnoreCase(event.actor)) {
+            return;
+        }
         if (event.occurredAt == null) {
             event.occurredAt = Instant.now();
         }
@@ -293,10 +302,25 @@ public class AuditTrailService {
         entity.setLatencyMs(pending.latencyMs);
         entity.setExtraTags(normalizeExtraTags(pending.extraTags));
 
-        // operator_* from security context
+        // operator_* from security context (prefer full name from claims)
         String username = entity.getActor();
         entity.setOperatorId(username);
-        entity.setOperatorName(username);
+        String fullName = null;
+        try {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
+                Object v = token.getToken().getClaims().get("name");
+                if (v == null) v = token.getToken().getClaims().get("full_name");
+                if (v == null) v = token.getToken().getClaims().get("fullName");
+                if (v instanceof String s && !s.isBlank()) fullName = s;
+            } else if (auth instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal p) {
+                Object v = p.getAttribute("name");
+                if (v == null) v = p.getAttribute("full_name");
+                if (v == null) v = p.getAttribute("fullName");
+                if (v instanceof String s && !s.isBlank()) fullName = s;
+            }
+        } catch (Exception ignore) {}
+        entity.setOperatorName(fullName != null && !fullName.isBlank() ? fullName : username);
         java.util.List<String> roles = new java.util.ArrayList<>();
         try {
             org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
@@ -317,28 +341,29 @@ public class AuditTrailService {
         entity.setOrgName(null);
 
         java.util.Map<String, Object> det = new java.util.LinkedHashMap<>();
-        det.put("target_table", tableFromResource(entity.getResourceType(), entity.getModule()));
-        // Do not include target_ref; only target_id when resolvable
+        String tableKey = tableFromResource(entity.getResourceType(), entity.getModule());
+        String tableLabel = mapTableLabel(tableKey);
+        det.put("源表", tableLabel);
+        // 仅在可解析时记录目标ID
         String rid = entity.getResourceId();
         if (rid != null) {
             String s = rid.trim();
             boolean isNumeric = s.matches("\\d+");
             boolean isUuid = s.matches("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
             if (isNumeric || isUuid) {
-                det.put("target_id", s);
+                det.put("目标ID", s);
             } else {
                 String extracted = extractTargetId(s);
                 if (extracted != null && !extracted.isBlank()) {
-                    det.put("target_id", extracted);
+                    det.put("目标ID", extracted);
                 }
             }
         }
-        det.put("action_result", entity.getResult());
-        det.put("request_id", java.util.UUID.randomUUID().toString());
+        det.put("请求ID", java.util.UUID.randomUUID().toString());
 
         byte[] payloadBytes = serializePayload(pending.payload);
         String payloadDigest = sha256Hex(payloadBytes); // phase 1: remove key/HMAC
-        det.put("param_digest", payloadDigest);
+        det.put("参数摘要", payloadDigest);
         try { entity.setDetails(objectMapper.writeValueAsString(det)); } catch (Exception ignored) {}
         entity.setPayloadIv(null);
         entity.setPayloadCipher(null);
@@ -563,6 +588,11 @@ public class AuditTrailService {
         String k = key.trim().toLowerCase(java.util.Locale.ROOT);
         if (k.equals("admin_keycloak_user") || k.equals("admin") || k.equals("admin.auth") || k.equals("user")) return "用户";
         if (k.equals("portal_menu") || k.equals("menu") || k.equals("portal.menus") || k.equals("portal-menus")) return "门户菜单";
+        if (k.equals("role") || k.startsWith("role_")) return "角色";
+        if (k.equals("admin_role_assignment") || k.equals("role_assignment") || k.equals("role_assignments")) return "用户角色";
+        if (k.equals("approval_requests") || k.equals("approval_request") || k.equals("approvals") || k.equals("approval")) return "审批请求";
+        if (k.equals("organization") || k.equals("organization_node") || k.equals("org") || k.startsWith("admin.org")) return "部门";
+        if (k.equals("localization") || k.contains("localization")) return "界面语言";
         if (k.equals("data_standard")) return "数据标准";
         if (k.equals("data_standard_version")) return "数据标准版本";
         if (k.equals("data_standard_attachment")) return "数据标准附件";

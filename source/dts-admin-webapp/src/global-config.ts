@@ -72,7 +72,7 @@ const resolveAllowedLoginRoles = (): string[] => {
 };
 
 export const GLOBAL_CONFIG: GlobalConfig = {
-	appName: import.meta.env.VITE_APP_NAME || "数据管理平台",
+	appName: import.meta.env.VITE_APP_NAME || "数智管理平台(机密级)",
 	appVersion: packageJson.version,
 	defaultRoute: resolveDefaultRoute(),
 	publicPath: import.meta.env.VITE_PUBLIC_PATH || "/",

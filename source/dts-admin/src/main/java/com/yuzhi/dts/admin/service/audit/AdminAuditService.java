@@ -81,12 +81,17 @@ public class AdminAuditService {
         public String targetTableLabel; // 表中文名（只读显示）
         public String targetId;
         public String targetRef;
+        // derived presentation fields (新口径)
+        public String operationType;     // 查询/新增/修改/删除/登录/登出/部分更新
+        public String operationContent;  // 如：修改了用户/查询了用户列表
+        public String logTypeText;       // 安全审计/操作审计
     }
 
     public static final class PendingAuditEvent {
         public Instant occurredAt;
         public String actor;
         public String actorRole;
+        public String sourceSystem; // admin|platform（缺省admin）
         public String module;
         public String action;
         public String resourceType;
@@ -186,6 +191,10 @@ public class AdminAuditService {
     }
 
     public void recordAction(String actor, String actionCode, AuditStage stage, String resourceId, Object payload) {
+        // 仅记录有人为操作上下文的事件
+        if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor)) {
+            return;
+        }
         if (!StringUtils.hasText(actionCode)) {
             record(actor, actionCode, "GENERAL", "general", resourceId, outcomeFromStage(stage), payload, null);
             return;
@@ -250,6 +259,9 @@ public class AdminAuditService {
         Object payload,
         Map<String, Object> extraTags
     ) {
+        if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor)) {
+            return;
+        }
         PendingAuditEvent event = new PendingAuditEvent();
         event.occurredAt = Instant.now();
         event.actor = defaultString(actor, "anonymous");
@@ -280,6 +292,10 @@ public class AdminAuditService {
     }
 
     public void record(PendingAuditEvent event) {
+        if (event == null) return;
+        if (!StringUtils.hasText(event.actor) || "anonymous".equalsIgnoreCase(event.actor)) {
+            return;
+        }
         if (event.occurredAt == null) {
             event.occurredAt = Instant.now();
         }
@@ -364,8 +380,10 @@ public class AdminAuditService {
         entity.setOccurredAt(pending.occurredAt);
         entity.setActor(defaultString(pending.actor, "anonymous"));
         entity.setActorRole(pending.actorRole);
-        // extended: source_system 固定 admin
-        entity.setSourceSystem("admin");
+        // source_system：默认admin，可由调用方覆盖（平台转发时置为platform）
+        String src = pending.sourceSystem;
+        if (src == null || src.isBlank()) src = "admin";
+        entity.setSourceSystem(src);
         entity.setEventUuid(java.util.UUID.randomUUID());
         entity.setModule(defaultString(pending.module, "GENERAL"));
         entity.setAction(defaultString(pending.action, "UNKNOWN"));
@@ -376,7 +394,11 @@ public class AdminAuditService {
         entity.setEventType(mapEventCategory(pending.resourceType, pending.module, normalizedAction));
         entity.setResourceType(pending.resourceType);
         entity.setResourceId(pending.resourceId);
-        entity.setClientIp(parseClientIp(pending.clientIp));
+        java.net.InetAddress ip = parseClientIp(pending.clientIp);
+        if (ip == null) {
+            try { ip = java.net.InetAddress.getByName("127.0.0.1"); } catch (Exception ignore) {}
+        }
+        entity.setClientIp(ip);
         entity.setClientAgent(pending.clientAgent);
         entity.setRequestUri(pending.requestUri);
         entity.setHttpMethod(pending.httpMethod);
@@ -430,97 +452,106 @@ public class AdminAuditService {
         }
         entity.setOrgName(orgName);
 
-        // details: 至少包含 target_table/target_id/action_result/request_id/param_digest
+        // 详情：中文键
         java.util.Map<String, Object> det = new java.util.LinkedHashMap<>();
-        det.put("target_table", tableFromResource(entity.getResourceType(), entity.getModule()));
-        // Only record PK target_id. For admin_keycloak_user:
-        // - numeric -> local PK
-        // - UUID -> treat as KeycloakId and map to local PK via repository
-        // Else: numeric -> PK, UUID/string -> keep as-is only if nothing better is known
+        String tableKey = tableFromResource(entity.getResourceType(), entity.getModule());
+        String tableLabel = mapTableLabel(tableKey);
+        det.put("源表", tableLabel);
+        // Only record PK 目标ID（同时兼容旧键 target_id 以便历史/平台复用）。
+        // 对 admin_keycloak_user（用户）：
+        // - 数字 -> 本地主键
+        // - UUID -> 当作 KeycloakId，转换为本地主键
+        // - 用户名 -> 解析为本地主键
         String rid = entity.getResourceId();
         if (rid != null) {
             String s = rid.trim();
             boolean isNumeric = s.matches("\\d+");
             boolean isUuid = s.matches("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
-            String tbl = (String) det.get("target_table");
+            String tbl = tableKey;
             if ("admin_keycloak_user".equals(tbl) || "user".equalsIgnoreCase(entity.getResourceType()) || "admin.auth".equalsIgnoreCase(entity.getResourceType())) {
                 if (isNumeric) {
+                    det.put("目标ID", s);
                     det.put("target_id", s);
                 } else if (isUuid) {
                     try {
                         var byKc = userRepo.findByKeycloakId(s);
-                        byKc.ifPresent(u -> det.put("target_id", String.valueOf(u.getId())));
+                        byKc.ifPresent(u -> { det.put("目标ID", String.valueOf(u.getId())); det.put("target_id", String.valueOf(u.getId())); });
                     } catch (Exception ex) {
                         if (log.isDebugEnabled()) log.debug("Failed to map keycloakId to local id {}: {}", s, ex.toString());
                     }
                 } else {
                     try {
                         var userOpt = userRepo.findByUsernameIgnoreCase(s);
-                        userOpt.ifPresent(u -> det.put("target_id", String.valueOf(u.getId())));
+                        userOpt.ifPresent(u -> { det.put("目标ID", String.valueOf(u.getId())); det.put("target_id", String.valueOf(u.getId())); });
                     } catch (Exception ex) {
                         if (log.isDebugEnabled()) log.debug("Failed to resolve user id for username {}: {}", s, ex.toString());
                     }
                 }
             } else {
                 if (isNumeric) {
-                    det.put("target_id", s);
+                    det.put("目标ID", s);
                 } else if (isUuid) {
-                    det.put("target_id", s);
+                    det.put("目标ID", s);
                 }
             }
         }
         // If still missing and resource is admin_keycloak_user, fallback to actor username lookup
-        if ((!det.containsKey("target_id")) || det.get("target_id") == null) {
-            String tbl = (String) det.get("target_table");
-            if ("admin_keycloak_user".equals(tbl)) {
+        if ((!det.containsKey("目标ID")) || det.get("目标ID") == null) {
+            if ("admin_keycloak_user".equals(tableKey)) {
                 String actorUser = entity.getActor();
                 if (actorUser != null && !actorUser.isBlank()) {
                     try {
                         var userOpt = userRepo.findByUsernameIgnoreCase(actorUser.trim());
-                        userOpt.ifPresent(u -> det.put("target_id", String.valueOf(u.getId())));
+                        userOpt.ifPresent(u -> det.put("目标ID", String.valueOf(u.getId())));
                     } catch (Exception ignore) {}
                 }
             }
         }
         // Fallback to captured last entity if target_id not resolved above
-        if (!det.containsKey("target_id") || det.get("target_id") == null || String.valueOf(det.get("target_id")).isBlank()) {
+        if (!det.containsKey("目标ID") || det.get("目标ID") == null || String.valueOf(det.get("目标ID")).isBlank()) {
             var cap = com.yuzhi.dts.admin.service.audit.AuditEntityContext.getLast();
             if (cap != null && cap.id != null && !cap.id.isBlank()) {
-                det.put("target_id", cap.id);
-                if (cap.tableName != null && !cap.tableName.isBlank()) {
-                    det.put("target_table", cap.tableName);
-                }
+                det.put("目标ID", cap.id);
             }
         }
         // Fallback to captured last entity if target_id not resolved above
-        if ((!det.containsKey("target_id")) || det.get("target_id") == null || String.valueOf(det.get("target_id")).isBlank()) {
+        if ((!det.containsKey("目标ID")) || det.get("目标ID") == null || String.valueOf(det.get("目标ID")).isBlank()) {
             if (pending.capturedId != null && !pending.capturedId.isBlank()) {
-                det.put("target_id", pending.capturedId);
-                if (pending.capturedTable != null && !pending.capturedTable.isBlank()) {
-                    det.put("target_table", pending.capturedTable);
+                det.put("目标ID", pending.capturedId);
+            }
+        }
+        // 目标引用（人类可读名称）：当前支持 用户 -> 姓名
+        try {
+            Object tidObj = det.get("目标ID");
+            if (tidObj == null) tidObj = det.get("target_id");
+            String tid = tidObj == null ? null : String.valueOf(tidObj);
+            if (tid != null && !tid.isBlank()) {
+                if ("admin_keycloak_user".equals(tableKey) || "user".equalsIgnoreCase(entity.getResourceType()) || "admin.auth".equalsIgnoreCase(entity.getResourceType())) {
+                    try {
+                        Long uid = Long.parseLong(tid);
+                        userRepo.findById(uid).ifPresent(u -> det.put("目标引用", u.getFullName() != null && !u.getFullName().isBlank() ? u.getFullName() : u.getUsername()));
+                    } catch (NumberFormatException ignore) {
+                        // 非数字：可能是 username 或 UUID，前面已尽可能转为本地ID；此处不再重复解析
+                    }
                 }
             }
+        } catch (Exception ex) {
+            if (log.isDebugEnabled()) log.debug("Failed to build human-readable target_ref: {}", ex.toString());
         }
-        det.put("action_result", entity.getResult());
+
+        det.put("请求ID", extractRequestId());
         // Absolute fallback: if target_id still missing, use event UUID to guarantee non-empty value
-        if ((!det.containsKey("target_id")) || det.get("target_id") == null || String.valueOf(det.get("target_id")).isBlank()) {
+        if ((!det.containsKey("目标ID")) || det.get("目标ID") == null || String.valueOf(det.get("目标ID")).isBlank()) {
             java.util.UUID uuid = entity.getEventUuid();
-            det.put("target_id", uuid != null ? uuid.toString() : java.util.UUID.randomUUID().toString());
+            det.put("目标ID", uuid != null ? uuid.toString() : java.util.UUID.randomUUID().toString());
         }
-        // Compose a unified target reference: "<table>+<id>" for easy display/search
-        try {
-            String tbl = Objects.toString(det.get("target_table"), "").trim();
-            String tid = Objects.toString(det.get("target_id"), "").trim();
-            if (!tbl.isEmpty() && !tid.isEmpty()) {
-                det.put("target_ref", tbl + "+" + tid);
-            }
-        } catch (Exception ignore) {}
-        det.put("request_id", extractRequestId());
+        // 参数摘要（哈希）
+        // param_digest 写入后以中文键暴露为“参数摘要”
 
         byte[] payloadBytes = pending.payload == null ? new byte[0] : objectMapper.writeValueAsBytes(pending.payload);
         String payloadDigest = sha256Hex(payloadBytes); // first phase: no key/HMAC, just SHA-256
         String chainSignature = sha256Hex((previousChain + "|" + payloadDigest).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        det.put("param_digest", payloadDigest);
+        det.put("参数摘要", payloadDigest);
         try { entity.setDetails(objectMapper.writeValueAsString(det)); } catch (Exception ignored) {}
 
         entity.setPayloadIv(null);
@@ -652,14 +683,16 @@ public class AdminAuditService {
         String name = e.getOperatorName() != null && !e.getOperatorName().isBlank() ? e.getOperatorName() : e.getActor();
         String actionDesc = e.getEventType() != null ? e.getEventType() : e.getAction();
         String resultText = (e.getResult() != null && e.getResult().equalsIgnoreCase("SUCCESS")) ? "成功" : (e.getResult() == null ? "" : "失败");
-        // Prefer details.target_table/target_id
+        // Prefer中文详情键（兼容旧英文键）
         String targetTable = null;
         String targetId = null;
         try {
             if (e.getDetails() != null && !e.getDetails().isBlank()) {
                 var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(e.getDetails());
-                if (node.hasNonNull("target_table")) targetTable = node.get("target_table").asText();
-                if (node.hasNonNull("target_id")) targetId = node.get("target_id").asText();
+                if (node.hasNonNull("源表")) targetTable = node.get("源表").asText();
+                if (node.hasNonNull("目标ID")) targetId = node.get("目标ID").asText();
+                if (targetTable == null && node.hasNonNull("target_table")) targetTable = node.get("target_table").asText();
+                if (targetId == null && node.hasNonNull("target_id")) targetId = node.get("target_id").asText();
             }
         } catch (Exception ignore) {}
         String tableLabel = mapTableLabel(targetTable != null ? targetTable : e.getResourceType());
@@ -672,6 +705,11 @@ public class AdminAuditService {
         String k = key.trim().toLowerCase(java.util.Locale.ROOT);
         if (k.equals("admin_keycloak_user") || k.equals("admin") || k.equals("admin.auth") || k.equals("user")) return "用户";
         if (k.equals("portal_menu") || k.equals("menu") || k.equals("portal.menus") || k.equals("portal-menus")) return "门户菜单";
+        if (k.equals("role") || k.startsWith("role_")) return "角色";
+        if (k.equals("admin_role_assignment") || k.equals("role_assignment") || k.equals("role_assignments")) return "用户角色";
+        if (k.equals("approval_requests") || k.equals("approval_request") || k.equals("approvals") || k.equals("approval")) return "审批请求";
+        if (k.equals("organization") || k.equals("organization_node") || k.equals("org") || k.startsWith("admin.org")) return "部门";
+        if (k.equals("localization") || k.contains("localization")) return "界面语言";
         return key;
     }
 

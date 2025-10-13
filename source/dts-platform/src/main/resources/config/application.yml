@@ -309,13 +309,13 @@ auditing:
   retention-days: 180
   encryption-key: ${AUDITING_ENCRYPTION_KEY:}
   hmac-key: ${AUDITING_HMAC_KEY:}
-  forward-enabled: ${AUDITING_FORWARD_ENABLED:false}
+  forward-enabled: ${AUDITING_FORWARD_ENABLED:true}
   forward-retry-interval: 60000
 
 dts:
   common:
     audit:
-      enabled: ${DTS_COMMON_AUDIT_ENABLED:false}
+      enabled: ${DTS_COMMON_AUDIT_ENABLED:true}
       base-url: ${DTS_COMMON_AUDIT_BASE_URL:}
       service-token: ${DTS_COMMON_AUDIT_TOKEN:}
   platform:

@@ -16,12 +16,12 @@ export class AuditLogService {
 	 * @param sort 排序字段
 	 * @returns 审计日志分页数据
 	 */
-	static getAuditLogs(
-		page: number = 0,
-		size: number = 20,
-		sort: string = "occurredAt,desc",
-		filters: Record<string, unknown> = {},
-	): Promise<AuditLogPageResponse> {
+    static getAuditLogs(
+        page: number = 0,
+        size: number = 10,
+        sort: string = "occurredAt,desc",
+        filters: Record<string, unknown> = {},
+    ): Promise<AuditLogPageResponse> {
 		return apiClient.get<AuditLogPageResponse>({
 			url: AuditLogService.BASE_URL,
 			params: {

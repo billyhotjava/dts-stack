@@ -136,6 +136,11 @@ services:
       # Base64 key for AES-GCM (16 bytes here for dev; replace in prod)
       # Decodes to ASCII: 0123456789abcdef (16 bytes)
       DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
+      # Centralize audit logs to admin in dev as well
+      AUDITING_FORWARD_ENABLED: "${AUDITING_FORWARD_ENABLED:-true}"
+      DTS_COMMON_AUDIT_ENABLED: "${DTS_COMMON_AUDIT_ENABLED:-true}"
+      DTS_COMMON_AUDIT_BASE_URL: "http://dts-admin:8081" # dev direct container URL
+      DTS_COMMON_AUDIT_TOKEN: "${DTS_COMMON_AUDIT_TOKEN:-}"
     command:
       - bash
       - -lc

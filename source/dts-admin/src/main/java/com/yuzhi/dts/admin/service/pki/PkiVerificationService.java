@@ -1,12 +1,15 @@
 package com.yuzhi.dts.admin.service.pki;
 
 import com.yuzhi.dts.admin.config.PkiAuthProperties;
-import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
@@ -74,31 +77,33 @@ public class PkiVerificationService {
     private boolean verifyWithVendor(String plain, String p7SignatureBase64, String certBase64Optional)
         throws Exception {
             String jarPath = props.getVendorJarPath();
-            File file = new File(jarPath);
-            if (!file.exists()) {
+            Path path = Path.of(jarPath);
+            if (!Files.exists(path)) {
                 throw new IllegalStateException("vendor-jar-path 不存在: " + jarPath);
             }
             // Build classloader with vendor jar and sibling jars to satisfy dependencies
             URL[] urls;
-            if (file.isDirectory()) {
-                File[] jars = file.listFiles(f -> f.isFile() && f.getName().toLowerCase().endsWith(".jar"));
-                if (jars == null || jars.length == 0) {
-                    throw new IllegalStateException("vendor 目录下未发现 JAR 文件: " + file.getAbsolutePath());
+            if (Files.isDirectory(path)) {
+                java.util.List<URL> list = new java.util.ArrayList<>();
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(path, "*.jar")) {
+                    for (Path p : stream) {
+                        try { list.add(p.toUri().toURL()); } catch (Exception e) { throw new RuntimeException(e); }
+                    }
                 }
-                urls = java.util.Arrays.stream(jars).map(f -> {
-                    try { return f.toURI().toURL(); } catch (Exception e) { throw new RuntimeException(e); }
-                }).toArray(URL[]::new);
+                if (list.isEmpty()) {
+                    throw new IllegalStateException("vendor 目录下未发现 JAR 文件: " + path.toAbsolutePath());
+                }
+                urls = list.toArray(new URL[0]);
             } else {
                 // include sibling jars in the same dir to load transitive deps
-                File dir = file.getParentFile();
                 java.util.List<URL> list = new java.util.ArrayList<>();
-                list.add(file.toURI().toURL());
-                if (dir != null && dir.isDirectory()) {
-                    File[] sibs = dir.listFiles(f -> f.isFile() && f.getName().toLowerCase().endsWith(".jar"));
-                    if (sibs != null) {
-                        for (File j : sibs) {
-                            if (!j.equals(file)) {
-                                try { list.add(j.toURI().toURL()); } catch (Exception ignore) {}
+                list.add(path.toUri().toURL());
+                Path dir = path.getParent();
+                if (dir != null && Files.isDirectory(dir)) {
+                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.jar")) {
+                        for (Path p : stream) {
+                            if (!p.equals(path)) {
+                                try { list.add(p.toUri().toURL()); } catch (Exception ignore) {}
                             }
                         }
                     }

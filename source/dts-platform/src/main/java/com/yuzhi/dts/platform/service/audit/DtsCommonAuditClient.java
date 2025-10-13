@@ -72,7 +72,12 @@ public class DtsCommonAuditClient {
         body.put("targetRef", event.getResourceId());
         body.put("targetKind", event.getResourceType());
         body.put("module", event.getModule());
+        body.put("result", event.getResult());
         body.put("occurredAt", event.getOccurredAt() != null ? event.getOccurredAt().toString() : Instant.now().toString());
+        try { body.put("clientIp", event.getClientIp() != null ? event.getClientIp().getHostAddress() : null); } catch (Exception ignore) {}
+        body.put("clientAgent", event.getClientAgent());
+        body.put("requestUri", event.getRequestUri());
+        body.put("httpMethod", event.getHttpMethod());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

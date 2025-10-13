@@ -25,7 +25,6 @@ interface FilterState {
 	resource?: string;
 	clientIp?: string;
 	action?: string;
-	eventType?: string;
 }
 
 // Removed unused types (AuditModuleCatalog, AuditCategoryItem) to satisfy strict TS settings
@@ -37,7 +36,7 @@ const ADMIN_LABELS: Record<string, string> = {
 	opadmin: "运维管理员",
 };
 
-const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 10;
 
 export default function AuditCenterView() {
 	const [filters, setFilters] = useState<FilterState>({});
@@ -133,89 +132,23 @@ export default function AuditCenterView() {
     // 使用 Antd Table 的分页展示，无需单独显示分页文案
 
     const columns = useMemo<ColumnsType<AuditLog>>(
-        () => [
-            {
-                title: "事件ID",
-                dataIndex: "eventId",
-                key: "eventId",
-                width: 260,
-                render: (_: string, record) => (
-                    <span className="font-mono text-xs">{record.eventId || String(record.id)}</span>
-                ),
-            },
-            {
-                title: "发生时间",
-                dataIndex: "occurredAt",
-                key: "occurredAt",
-                width: 180,
-                render: (value: string) => <span className="text-sm">{formatDateTime(value)}</span>,
-            },
-            { title: "来源", dataIndex: "sourceSystemText", key: "sourceSystem", width: 90, render: (_: string, r) => r.sourceSystemText || r.sourceSystem || "-" },
-            { title: "事件类", dataIndex: "eventClass", key: "eventClass", width: 120, render: (v?: string) => {
-                if (!v) return "-";
-                const up = v.trim().toLowerCase();
-                return up === "securityevent" ? "安全事件" : "审计事件";
-            } },
-            // 移除“模块”列，避免与来源重复
-            { title: "事件类型", dataIndex: "eventType", key: "eventType", width: 180, render: (v?: string) => v || "-" },
-            {
-                title: "摘要",
-                dataIndex: "summary",
-                key: "summary",
-                ellipsis: true,
-                render: (value: string | undefined, record) => (
-                    <CollapsibleText
-                        text={value || record.payloadPreview || record.action}
-                        expanded={!!expandedRows[record.id]}
-                        onToggle={() => setExpandedRows((prev) => ({ ...prev, [record.id]: !prev[record.id] }))}
-                    />
-                ),
-            },
-            {
-                title: "操作者 / 部门 / IP",
-                dataIndex: "operatorName",
-                key: "operator",
-                width: 260,
-                render: (_: string, record) => (
-                    <div className="text-xs text-muted-foreground break-words">
-                        <div>操作者：{record.operatorName || formatOperatorName(record.actor)}</div>
-                        <div>部门：{record.departmentName ? `${record.departmentName}${record.orgCode ? `（${record.orgCode}）` : ""}` : (record.orgName || record.orgCode || "-")}</div>
-                        <div>IP：{record.clientIp || "-"}</div>
-                    </div>
-                ),
-            },
-            {
-                title: "目标",
-                dataIndex: "resourceId",
-                key: "resource",
-                width: 260,
-                render: (_: string, record) => {
-                    const ref = record.targetRef
-                        || ((record.targetTable && record.targetId) ? `${record.targetTable}+${record.targetId}` : undefined);
-                    const fallbackLabel = record.targetTableLabel || record.targetTable || record.resourceType || "-";
-                    const fallbackId = record.targetId ? `ID=${record.targetId}` : (record.resourceId || "-");
-                    return (
-                        <div className="text-xs text-muted-foreground break-words">
-                            <div>{ref || fallbackLabel}</div>
-                            {!ref && <div>{fallbackId}</div>}
-                        </div>
-                    );
-                },
-            },
-            {
-                title: "结果",
-                dataIndex: "result",
-                key: "result",
-                width: 100,
-                render: (_: string, r) => {
-                    const raw = (r.result || "").toUpperCase();
-                    const isFail = raw === "FAILED" || raw === "FAILURE";
-                    const label = r.resultText || (raw === "SUCCESS" ? "成功" : isFail ? "失败" : r.result || "-");
-                    return <Badge variant={isFail ? "destructive" : "secondary"}>{label}</Badge>;
-                },
-            },
-        ],
-        [expandedRows]
+      () => [
+        { title: "操作人", dataIndex: "operatorName", key: "operatorName", width: 140, render: (_: string, r) => r.operatorName || formatOperatorName(r.actor) },
+        { title: "操作人编码", dataIndex: "actor", key: "actor", width: 140 },
+        { title: "IP地址", dataIndex: "clientIp", key: "clientIp", width: 130, render: (v?: string) => v || "127.0.0.1" },
+        { title: "操作时间", dataIndex: "occurredAt", key: "occurredAt", width: 180, render: (v: string) => <span className="text-sm">{formatDateTime(v)}</span> },
+        { title: "模块名称", dataIndex: "sourceSystemText", key: "sourceSystemText", width: 120, render: (_: string, r) => r.sourceSystemText || r.sourceSystem || "-" },
+        { title: "操作内容", dataIndex: "operationContent", key: "operationContent", width: 200, render: (_: string, r) => r.operationContent || r.summary || r.action },
+        { title: "操作类型", dataIndex: "operationType", key: "operationType", width: 110, render: (_: string, r) => r.operationType || "操作" },
+        { title: "操作结果", dataIndex: "result", key: "result", width: 100, render: (_: string, r) => {
+            const raw = (r.result || "").toUpperCase();
+            const isFail = raw === "FAILED" || raw === "FAILURE";
+            const label = r.resultText || (raw === "SUCCESS" ? "成功" : isFail ? "失败" : r.result || "-");
+            return <Badge variant={isFail ? "destructive" : "secondary"}>{label}</Badge>;
+        }},
+        { title: "日志类型", dataIndex: "logTypeText", key: "logTypeText", width: 110, render: (_: string, r) => r.logTypeText || (r.eventClass && r.eventClass.toLowerCase() === "securityevent" ? "安全审计" : "操作审计") },
+      ],
+      []
     );
 
     return (
@@ -257,8 +190,8 @@ export default function AuditCenterView() {
 							onChange={(value) => setFilters((prev) => ({ ...prev, sourceSystem: value || undefined }))}
                             options={[
                                 { value: "", label: "全部来源" },
-                                { value: "admin", label: "管理端" },
-                                { value: "platform", label: "业务端" },
+                                { value: "admin", label: "系统管理" },
+                                { value: "platform", label: "业务管理" },
                             ]}
 						/>
                             <InputField
@@ -285,24 +218,7 @@ export default function AuditCenterView() {
 							value={filters.action ?? ""}
 							onChange={(value) => setFilters((prev) => ({ ...prev, action: value || undefined }))}
 						/>
-                            <SelectField
-                                label="事件类型"
-                                value={filters.eventType || ""}
-                                onChange={(value) => setFilters((prev) => ({ ...prev, eventType: value || undefined }))}
-                                options={[
-                                    { value: "", label: "全部事件" },
-                                    { value: "登录管理", label: "登录管理" },
-                                    { value: "用户管理", label: "用户管理" },
-                                    { value: "角色管理", label: "角色管理" },
-                                    { value: "部门管理", label: "部门管理" },
-                                    { value: "菜单管理", label: "菜单管理" },
-                                    { value: "数据资产", label: "数据资产" },
-                                    { value: "数据标准", label: "数据标准" },
-                                    { value: "数据质量", label: "数据质量" },
-                                    { value: "数据开发", label: "数据开发" },
-                                    { value: "数据可视化", label: "数据可视化" },
-                                ]}
-                            />
+                            {/* 事件类型筛选已移除 */}
 					</div>
                     <div className="flex flex-wrap gap-3">
                         <Button type="button" variant="outline" onClick={() => setFilters({})}>
@@ -437,9 +353,6 @@ function buildQuery(filters: FilterState): Record<string, string> {
 	}
 	if (filters.action) {
 		params.action = filters.action;
-	}
-	if (filters.eventType) {
-		params.eventType = filters.eventType;
 	}
 	return params;
 }

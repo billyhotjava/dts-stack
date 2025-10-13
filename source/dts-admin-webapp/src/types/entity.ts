@@ -134,6 +134,10 @@ export interface AuditLog {
     targetTableLabel?: string; // localized table label
     targetId?: string;
     targetRef?: string;
+    // derived fields
+    operationType?: string;    // 查询/新增/修改/删除/登录/登出/部分更新
+    operationContent?: string; // 如：修改了用户
+    logTypeText?: string;      // 安全审计/操作审计
 }
 
 export interface AuditLogDetail extends AuditLog {

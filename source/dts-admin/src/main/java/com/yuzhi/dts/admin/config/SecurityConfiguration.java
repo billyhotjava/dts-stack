@@ -62,6 +62,8 @@ public class SecurityConfiguration {
                         .permitAll()
                     // Localization endpoints are required by the login/UI bootstrap without auth
                     .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
+                    // Ingest endpoint for platform-forwarded audit logs (token validated inside controller)
+                    .requestMatchers(mvc.pattern("/api/audit-events")).permitAll()
                     // Admin service is governance-only: restrict all API endpoints to the triad roles
                     .requestMatchers(mvc.pattern("/api/admin/**"))
                         .hasAnyAuthority(

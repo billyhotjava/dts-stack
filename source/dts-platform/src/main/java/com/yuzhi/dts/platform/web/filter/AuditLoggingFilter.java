@@ -23,6 +23,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
+import org.springframework.web.util.ContentCachingResponseWrapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 
@@ -38,7 +39,9 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         "/webjars",
         "/error",
         // auth APIs are domain-audited explicitly; skip generic request log to avoid anonymousUser actor
-        "/api/keycloak/auth"
+        "/api/keycloak/auth",
+        // localization is permitAll and fetched pre-login by FE
+        "/api/keycloak/localization"
     };
 
     private final ObjectProvider<AuditTrailService> auditServiceProvider;
@@ -74,7 +77,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         throws ServletException, IOException {
         long start = System.nanoTime();
         ContentCachingRequestWrapper wrapper = new ContentCachingRequestWrapper(request);
-        AuditResponseWrapper responseWrapper = new AuditResponseWrapper(response);
+        ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
         com.yuzhi.dts.platform.service.audit.AuditRequestContext.clear();
         String actionHeader = wrapper.getHeader("X-Audit-Action");
         String flowHeader = wrapper.getHeader("X-Audit-Flow");
@@ -102,14 +105,21 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             failure = ex;
             throw ex;
         } finally {
-            responseWrapper.flushBuffer();
+            try { responseWrapper.copyBodyToResponse(); } catch (Exception ignore) {}
             try {
                 boolean alreadyAudited = com.yuzhi.dts.platform.service.audit.AuditRequestContext.wasDomainAudited();
                 PendingAuditEvent event = buildEvent(wrapper, responseWrapper, System.nanoTime() - start);
                 if (!alreadyAudited) {
                     AuditTrailService svc = auditServiceProvider.getIfAvailable();
                     if (svc != null) {
-                        svc.record(event);
+                        // 仅记录有人为操作上下文：必须是已认证用户，且排除 anonymous/anonymousUser
+                        boolean authenticated = com.yuzhi.dts.platform.security.SecurityUtils.isAuthenticated();
+                        String actor = event.actor == null ? "" : event.actor.trim();
+                        if (authenticated && !actor.isEmpty() &&
+                            !"anonymous".equalsIgnoreCase(actor) &&
+                            !"anonymoususer".equalsIgnoreCase(actor)) {
+                            svc.record(event);
+                        }
                     } else {
                         if (log.isDebugEnabled()) {
                             log.debug("AuditTrailService not available; skipping audit record for {} {}", request.getMethod(), request.getRequestURI());
@@ -165,10 +175,10 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         }
     }
 
-    private PendingAuditEvent buildEvent(ContentCachingRequestWrapper request, AuditResponseWrapper response, long elapsedNanos) {
+    private PendingAuditEvent buildEvent(ContentCachingRequestWrapper request, ContentCachingResponseWrapper response, long elapsedNanos) {
         PendingAuditEvent event = new PendingAuditEvent();
         event.occurredAt = Instant.now();
-        event.actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        event.actor = SecurityUtils.getCurrentUserLogin().orElse("");
         event.actorRole = resolvePrimaryAuthority();
         String uri = request.getRequestURI();
         String[] seg = splitSegments(uri);
@@ -180,17 +190,22 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         event.action = deriveActionCode(resourceType, request.getMethod());
         event.resourceId = uri;
         String forwarded = request.getHeader("X-Forwarded-For");
-        event.clientIp = forwarded != null && !forwarded.isBlank() ? forwarded.split(",")[0].trim() : request.getRemoteAddr();
+        String xfip = forwarded != null && !forwarded.isBlank() ? forwarded.split(",")[0].trim() : null;
+        String realIp = request.getHeader("X-Real-IP");
+        String remote = request.getRemoteAddr();
+        event.clientIp = firstNonBlank(xfip, realIp, remote, "127.0.0.1");
         event.clientAgent = request.getHeader("User-Agent");
         event.requestUri = request.getRequestURI();
         event.httpMethod = request.getMethod();
-        event.result = response.getStatus() >= HttpStatus.BAD_REQUEST.value() ? "FAILED" : "SUCCESS";
+        boolean httpFail = response.getStatus() >= HttpStatus.BAD_REQUEST.value();
+        boolean bizFail = detectBizFailure(response);
+        event.result = (httpFail || bizFail) ? "FAILED" : "SUCCESS";
         event.latencyMs = (int) (elapsedNanos / 1_000_000);
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("status", response.getStatus());
         payload.put("query", request.getQueryString());
-        payload.put("responseSize", response.getContentSize());
+        payload.put("responseSize", (long) response.getContentAsByteArray().length);
         payload.put("requestSize", request.getContentLengthLong());
         event.payload = payload;
         return event;
@@ -269,6 +284,37 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         if (r.contains("gov")) return "GOV";
         if (r.contains("catalog")) return "CATALOG";
         return r.replaceAll("[^a-z0-9]+", "_").toUpperCase();
+    }
+
+    private boolean detectBizFailure(ContentCachingResponseWrapper response) {
+        try {
+            byte[] body = response.getContentAsByteArray();
+            if (body == null || body.length == 0) return false;
+            String text = new String(body, java.nio.charset.StandardCharsets.UTF_8).trim();
+            if (text.isEmpty()) return false;
+            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode node = om.readTree(text);
+            if (node == null) return false;
+            if (node.has("status") && node.get("status").isInt()) {
+                int code = node.get("status").asInt(200);
+                return code != 200;
+            }
+            if (node.has("status") && node.get("status").isTextual()) {
+                String s = node.get("status").asText("");
+                return !"SUCCESS".equalsIgnoreCase(s);
+            }
+            return false;
+        } catch (Exception ignore) {
+            return false;
+        }
+    }
+
+    private static String firstNonBlank(String... vals) {
+        if (vals == null) return null;
+        for (String v : vals) {
+            if (v != null && !v.isBlank()) return v;
+        }
+        return null;
     }
 
     private String resolvePrimaryAuthority() {

@@ -6,7 +6,7 @@ import { useBilingualText } from "@/hooks/useBilingualText";
 export default function Brand() {
 	const bilingual = useBilingualText();
 	const classified = bilingual("sys.brand.classified") || "机密级";
-	const appName = (GLOBAL_CONFIG.appName || "数据管理平台")
+	const appName = (GLOBAL_CONFIG.appName || "数智管理平台")
 		.replace("系统端", "")
 		.replace(/[（(]机密级[)）]/g, "")
 		.trim();

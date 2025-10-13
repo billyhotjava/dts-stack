@@ -48,7 +48,7 @@ public class AccessPolicySeeder implements ApplicationRunner {
         // Do NOT auto-create restrictive policies; leave datasets open by role until admin configures them.
         continue;
       }
-      CatalogAccessPolicy p = opt.get();
+      CatalogAccessPolicy p = opt.orElseThrow();
       String before = p.getAllowRoles();
       String after = RoleUtils.normalizeAndAlignToScope(before, scope);
       if (!Objects.equals(before, after)) {

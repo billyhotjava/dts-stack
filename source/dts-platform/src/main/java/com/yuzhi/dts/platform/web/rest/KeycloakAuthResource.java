@@ -155,9 +155,10 @@ public class KeycloakAuthResource {
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) RefreshPayload payload) {
         String portalRefresh = payload != null ? payload.refreshToken() : null;
-        // mark begin
-        audit.record("AUTH LOGOUT", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "PENDING", java.util.Map.of("hasRefreshToken", portalRefresh != null && !portalRefresh.isBlank()));
         PortalSession session = sessionRegistry.invalidateByRefreshToken(portalRefresh);
+        String actor = session != null ? session.username() : com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        // mark begin with explicit actor to avoid anonymous drop
+        audit.recordAs(actor, "AUTH LOGOUT", "auth", "admin_keycloak_user", actor, "PENDING", java.util.Map.of("hasRefreshToken", portalRefresh != null && !portalRefresh.isBlank()), null);
         if (session != null) {
             AdminTokens adminTokens = session.adminTokens();
             if (adminTokens != null && StringUtils.hasText(adminTokens.refreshToken())) {
@@ -168,7 +169,7 @@ public class KeycloakAuthResource {
                 }
             }
         }
-        audit.record("AUTH LOGOUT", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "SUCCESS", java.util.Map.of());
+        audit.recordAs(actor, "AUTH LOGOUT", "auth", "admin_keycloak_user", actor, "SUCCESS", java.util.Map.of(), null);
         return ResponseEntity.ok(ApiResponses.ok(null));
     }
 

@@ -950,7 +950,11 @@ public class AdminUserService {
                 "ADMIN_APPROVAL_DECIDE",
                 AuditStage.SUCCESS,
                 String.valueOf(id),
-                Map.of("result", "APPROVED", "note", note)
+                new java.util.LinkedHashMap<String, Object>() {{
+                    put("result", "APPROVED");
+                    put("note", note);
+                    put("type", approval.getType());
+                }}
             );
             updateChangeRequestStatus(changeRequestIds, ApprovalStatus.APPLIED.name(), approver, now, null);
             return toDetailDto(approval);
@@ -960,7 +964,11 @@ public class AdminUserService {
                 "ADMIN_APPROVAL_DECIDE",
                 AuditStage.FAIL,
                 String.valueOf(id),
-                Map.of("error", ex.getMessage(), "result", "APPROVED")
+                new java.util.LinkedHashMap<String, Object>() {{
+                    put("error", ex.getMessage());
+                    put("result", "APPROVED");
+                    put("type", approval.getType());
+                }}
             );
             scheduleRetry(approval, note, ex.getMessage());
             approvalRepository.save(approval);
@@ -970,7 +978,11 @@ public class AdminUserService {
                 "ADMIN_APPROVAL_DECIDE",
                 AuditStage.SUCCESS,
                 String.valueOf(id),
-                Map.of("result", "REQUEUE", "note", ex.getMessage())
+                new java.util.LinkedHashMap<String, Object>() {{
+                    put("result", "REQUEUE");
+                    put("note", ex.getMessage());
+                    put("type", approval.getType());
+                }}
             );
             LOG.warn("Approval id={} failed to apply: {}", id, ex.getMessage());
             throw new IllegalStateException("审批执行失败: " + ex.getMessage(), ex);
@@ -994,7 +1006,11 @@ public class AdminUserService {
             "ADMIN_APPROVAL_DECIDE",
             AuditStage.SUCCESS,
             String.valueOf(id),
-            Map.of("result", "REJECTED", "note", note)
+            new java.util.LinkedHashMap<String, Object>() {{
+                put("result", "REJECTED");
+                put("note", note);
+                put("type", approval.getType());
+            }}
         );
         updateChangeRequestStatus(changeRequestIds, ApprovalStatus.REJECTED.name(), approver, now, null);
         return toDetailDto(approval);
@@ -1017,7 +1033,11 @@ public class AdminUserService {
             "ADMIN_APPROVAL_DECIDE",
             AuditStage.SUCCESS,
             String.valueOf(id),
-            Map.of("result", "PROCESS", "note", note)
+            new java.util.LinkedHashMap<String, Object>() {{
+                put("result", "PROCESS");
+                put("note", note);
+                put("type", approval.getType());
+            }}
         );
         updateChangeRequestStatus(changeRequestIds, ApprovalStatus.PROCESSING.name(), approver, now, null);
         return toDetailDto(approval);

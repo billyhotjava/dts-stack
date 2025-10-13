@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { toast } from "sonner";
-import { createDataset, deleteDataset, getCatalogConfig, listDatasets, previewDataset } from "@/api/platformApi";
+import { createDataset, getCatalogConfig, listDatasets, previewDataset } from "@/api/platformApi";
 import { listInfraDataSources, refreshInceptorRegistry, fetchInfraFeatures } from "@/api/services/infraService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import { renderDataLevelLabel } from "@/constants/governance";
@@ -155,15 +155,9 @@ const renderSourceLabel = (value: string) => {
 		}
 };
 
-// Chinese labels for scope/share-scope
+// Chinese labels for scope
 const SCOPE_LABELS: Record<string, string> = { DEPT: "部门", INST: "研究所" };
-const SHARE_SCOPE_LABELS: Record<string, string> = {
-  PRIVATE_DEPT: "部门私有",
-  SHARE_INST: "所内共享",
-  PUBLIC_INST: "所内公开",
-};
 const renderScopeLabel = (v?: string) => (v ? SCOPE_LABELS[String(v).toUpperCase()] || v : "-");
-const renderShareScopeLabel = (v?: string) => (v ? SHARE_SCOPE_LABELS[String(v).toUpperCase()] || v : "-");
 const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : it.scope === "INST" ? "研究所" : "-");
 
     // Simple role check: OPADMIN or ROLE_OP_ADMIN can编辑
@@ -467,16 +461,7 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 		}
 	};
 
-	const onDelete = async (id: string) => {
-		try {
-			await deleteDataset(id);
-			toast.success("已删除");
-			await fetchList();
-		} catch (e) {
-			console.error(e);
-			toast.error("删除失败");
-		}
-	};
+
 
 	/* const onImport = async (file: File) => {
 		if (!hasPrimarySource) {
