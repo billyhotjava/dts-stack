@@ -54,6 +54,10 @@ public class AuditIngestResource {
                 event.occurredAt = Instant.now();
             }
             event.actor = asText(body.get("actor"));
+            if (event.actor == null || event.actor.isBlank() || "anonymous".equalsIgnoreCase(event.actor) || "anonymoususer".equalsIgnoreCase(event.actor)) {
+                // Closed system: ignore anonymous/anonymousUser forwarded events to keep store clean
+                return ResponseEntity.accepted().build();
+            }
             event.action = asText(body.get("action"));
             event.module = asText(body.get("module"));
             event.resourceType = asText(body.get("targetKind"));

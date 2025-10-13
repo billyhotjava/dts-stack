@@ -153,7 +153,7 @@ public class AuditTrailService {
     }
 
     public void record(String actor, String action, String module, String resourceType, String resourceId, String outcome, Object payload) {
-        if (actor == null || actor.isBlank() || "anonymous".equalsIgnoreCase(actor)) {
+        if (actor == null || actor.isBlank() || "anonymous".equalsIgnoreCase(actor) || "anonymoususer".equalsIgnoreCase(actor)) {
             return;
         }
         PendingAuditEvent event = new PendingAuditEvent();
@@ -169,14 +169,14 @@ public class AuditTrailService {
     }
 
     public void record(String actor, String action, String module, String resourceId, String outcome, Object payload) {
-        if (actor == null || actor.isBlank() || "anonymous".equalsIgnoreCase(actor)) {
+        if (actor == null || actor.isBlank() || "anonymous".equalsIgnoreCase(actor) || "anonymoususer".equalsIgnoreCase(actor)) {
             return;
         }
         record(actor, action, module, module, resourceId, outcome, payload);
     }
 
     public void record(PendingAuditEvent event) {
-        if (event == null || event.actor == null || event.actor.isBlank() || "anonymous".equalsIgnoreCase(event.actor)) {
+        if (event == null || event.actor == null || event.actor.isBlank() || "anonymous".equalsIgnoreCase(event.actor) || "anonymoususer".equalsIgnoreCase(event.actor)) {
             return;
         }
         if (event.occurredAt == null) {

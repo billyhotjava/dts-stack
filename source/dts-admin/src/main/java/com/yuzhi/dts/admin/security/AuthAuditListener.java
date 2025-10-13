@@ -25,6 +25,7 @@ public class AuthAuditListener {
     @EventListener
     public void onAuthSuccess(AuthenticationSuccessEvent evt) {
         String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
+        if (username == null || username.isBlank() || "anonymous".equalsIgnoreCase(username) || "anonymoususer".equalsIgnoreCase(username)) return;
         auditService.record(username, "ADMIN AUTH LOGIN", "admin", "admin_keycloak_user", username, "SUCCESS", Map.of());
         if (log.isDebugEnabled()) log.debug("Auth success (AuthenticationSuccessEvent) user={}", username);
     }
@@ -32,6 +33,7 @@ public class AuthAuditListener {
     @EventListener
     public void onInteractiveAuthSuccess(InteractiveAuthenticationSuccessEvent evt) {
         String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
+        if (username == null || username.isBlank() || "anonymous".equalsIgnoreCase(username) || "anonymoususer".equalsIgnoreCase(username)) return;
         auditService.record(username, "ADMIN AUTH LOGIN", "admin", "admin_keycloak_user", username, "SUCCESS", Map.of());
         if (log.isDebugEnabled()) log.debug("Auth success (InteractiveAuthenticationSuccessEvent) user={}", username);
     }
@@ -39,6 +41,7 @@ public class AuthAuditListener {
     @EventListener
     public void onAuthFailure(AbstractAuthenticationFailureEvent evt) {
         String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
+        if (username == null || username.isBlank() || "anonymous".equalsIgnoreCase(username) || "anonymoususer".equalsIgnoreCase(username)) return;
         String message = evt.getException() != null && evt.getException().getMessage() != null ? evt.getException().getMessage() : "auth failed";
         auditService.record(username, "ADMIN AUTH LOGIN", "admin", "admin_keycloak_user", username, "FAILED", Map.of("error", message));
         if (log.isDebugEnabled()) log.debug("Auth failure user={} error={}", username, message);
@@ -47,6 +50,7 @@ public class AuthAuditListener {
     @EventListener
     public void onLogoutSuccess(LogoutSuccessEvent evt) {
         String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
+        if (username == null || username.isBlank() || "anonymous".equalsIgnoreCase(username) || "anonymoususer".equalsIgnoreCase(username)) return;
         auditService.record(username, "ADMIN AUTH LOGOUT", "admin", "admin_keycloak_user", username, "SUCCESS", Map.of());
         if (log.isDebugEnabled()) log.debug("Logout success user={}", username);
     }

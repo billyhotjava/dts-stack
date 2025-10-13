@@ -192,7 +192,7 @@ public class AdminAuditService {
 
     public void recordAction(String actor, String actionCode, AuditStage stage, String resourceId, Object payload) {
         // 仅记录有人为操作上下文的事件
-        if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor)) {
+        if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor) || "anonymoususer".equalsIgnoreCase(actor)) {
             return;
         }
         if (!StringUtils.hasText(actionCode)) {
@@ -293,7 +293,7 @@ public class AdminAuditService {
 
     public void record(PendingAuditEvent event) {
         if (event == null) return;
-        if (!StringUtils.hasText(event.actor) || "anonymous".equalsIgnoreCase(event.actor)) {
+        if (!StringUtils.hasText(event.actor) || "anonymous".equalsIgnoreCase(event.actor) || "anonymoususer".equalsIgnoreCase(event.actor)) {
             return;
         }
         if (event.occurredAt == null) {

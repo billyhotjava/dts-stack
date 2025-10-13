@@ -74,7 +74,8 @@ public class DtsCommonAuditClient {
         body.put("module", event.getModule());
         body.put("result", event.getResult());
         body.put("occurredAt", event.getOccurredAt() != null ? event.getOccurredAt().toString() : Instant.now().toString());
-        try { body.put("clientIp", event.getClientIp() != null ? event.getClientIp().getHostAddress() : null); } catch (Exception ignore) {}
+        // event.getClientIp() already returns String host address (AuditEvent normalizes InetAddress)
+        body.put("clientIp", event.getClientIp());
         body.put("clientAgent", event.getClientAgent());
         body.put("requestUri", event.getRequestUri());
         body.put("httpMethod", event.getHttpMethod());
