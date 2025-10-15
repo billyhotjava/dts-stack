@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251015-09-clean-secure-view-row-filters" author="gemini-cli">
+        <comment>Clean up existing CatalogSecureView row_filter entries that contain forbidden tokens (scope, share_scope).</comment>
+
+        <sql>
+            UPDATE catalog_secure_view
+            SET row_filter = NULL
+            WHERE row_filter IS NOT NULL
+              AND (row_filter ILIKE '%scope=%' OR row_filter ILIKE '%share_scope=%');
+        </sql>
+
+    </changeSet>
+</databaseChangeLog>

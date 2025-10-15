@@ -528,7 +528,7 @@ public class AuditLogResource {
         try {
             var mapped = opMappingEngine.resolve(event);
             if (mapped.isPresent()) {
-                var m = mapped.get();
+                var m = mapped.orElseThrow();
                 if (StringUtils.hasText(m.actionType)) view.operationType = m.actionType;
                 if (StringUtils.hasText(m.description)) view.operationContent = m.description;
                 ruleHit = true;

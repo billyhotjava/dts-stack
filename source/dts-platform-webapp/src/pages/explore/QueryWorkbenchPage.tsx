@@ -1334,7 +1334,6 @@ useEffect(() => {
 																	if (dsId) {
 																		const ds = datasets.find((d) => d.id === dsId);
 																		if (ds) {
-																			setSelectedSource(ds.source);
 																			setSelectedDatasetId(ds.id);
 																			setVisualQuery(createDefaultVisualState(ds));
 																		}

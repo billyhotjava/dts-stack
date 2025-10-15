@@ -654,15 +654,24 @@ const onCreate = async () => {
 							<td className="px-3 py-2 text-xs">{dataLevelBadge(d.dataLevel)}</td>
 							<td className="px-3 py-2 text-xs truncate" title={d.description || "-"}>{d.description || "-"}</td>
 										<td className="px-3 py-2">
-											{d.editable ? (
+											<div className="flex flex-wrap items-center gap-2">
 												<button
 													type="button"
-													onClick={() => router.push(`/catalog/datasets/${d.id}`)}
-													className="inline-flex items-center rounded-md border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring"
+													onClick={() => void openPreview(d)}
+													className="inline-flex items-center rounded-md border border-muted-foreground/30 bg-muted/20 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring"
 												>
-													编辑
+													预览
 												</button>
-											) : null}
+												{d.editable ? (
+													<button
+														type="button"
+														onClick={() => router.push(`/catalog/datasets/${d.id}`)}
+														className="inline-flex items-center rounded-md border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring"
+													>
+														编辑
+													</button>
+												) : null}
+											</div>
 										</td>
 									</tr>
 								))}

@@ -304,7 +304,13 @@ public class CatalogResource {
         // Normalize: uppercase, add ROLE_ prefix; align DEPT/INST role families to dataset scope
         String normalizedRoles = com.yuzhi.dts.platform.security.RoleUtils.normalizeCsv(rawRoles);
         p.setAllowRoles(normalizedRoles);
-        p.setRowFilter(Objects.toString(body.get("rowFilter"), null));
+        // Sanitize rowFilter before saving to CatalogAccessPolicy
+        String originalRowFilter = Objects.toString(body.get("rowFilter"), null);
+        // Need metadata to sanitize row filter.
+        String table = ds.getHiveTable() != null && !ds.getHiveTable().isBlank() ? ds.getHiveTable() : ds.getName();
+        var metadata = securityViewService.resolveColumns(ds, table);
+        String sanitizedRowFilter = securityViewService.sanitizeRowFilter(ds, originalRowFilter, metadata);
+        p.setRowFilter(sanitizedRowFilter); // USE SANITIZED FILTER HERE
         p.setDefaultMasking(Objects.toString(body.get("defaultMasking"), null));
         var saved = policyRepo.save(p);
         audit.audit("UPDATE", "catalog.accessPolicy", String.valueOf(datasetId));

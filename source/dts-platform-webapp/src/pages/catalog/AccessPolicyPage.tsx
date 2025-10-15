@@ -243,28 +243,6 @@ export default function AccessPolicyPage() {
     toast.info("已生成的 SQL 如下，可在工作台执行验证结果。");
   }, [previewSqlText]);
 
-  const handleDownloadSql = useCallback(() => {
-    if (!previewSqlText) {
-      toast.info("请先生成安全视图 SQL");
-      return;
-    }
-    try {
-      const blob = new Blob([previewSqlText], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = datasetId ? `policy-${datasetId}.sql` : "policy.sql";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast.success("已下载安全视图 SQL");
-    } catch (error) {
-      console.error(error);
-      toast.error("下载失败，请稍后重试");
-    }
-  }, [previewSqlText, datasetId]);
-
   return (
     <>
     <div className="space-y-5">
@@ -471,9 +449,6 @@ export default function AccessPolicyPage() {
               <Button variant="outline" onClick={handlePreviewResult}>
                 预览安全结果
               </Button>
-              {/* <Button variant="outline" onClick={handleDownloadSql}>
-                下载 SQL
-              </Button> */}
             </div>
             <Textarea
               rows={6}

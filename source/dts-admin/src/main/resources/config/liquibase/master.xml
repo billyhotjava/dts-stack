@@ -48,6 +48,7 @@
     <include file="config/liquibase/changelog/20251015-06_add_infra_audit_rules.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-07_add_audit_log_detail_rule.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-08_delete_all_secure_views.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-09_clean_secure_view_row_filters.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

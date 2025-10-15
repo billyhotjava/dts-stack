@@ -42,7 +42,7 @@ export function NavVerticalLayout({ data, className }: Props) {
 							<span aria-hidden className="text-red-500 text-2xl">
 								★
 							</span>
-							{(GLOBAL_CONFIG.appName || "BI数智平台").replace("管理", "", 1)}
+							{(GLOBAL_CONFIG.appName || "BI数智平台").replace("管理", "")}
 						</span>
 						<Badge variant="destructive" className="mt-1 !text-[13.2px] leading-none bg-red-500">
 							机密
