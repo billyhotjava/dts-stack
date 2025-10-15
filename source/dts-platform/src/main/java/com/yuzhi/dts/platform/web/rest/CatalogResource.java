@@ -6,8 +6,11 @@ import com.yuzhi.dts.platform.repository.catalog.*;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
+import com.yuzhi.dts.platform.security.DepartmentUtils;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import jakarta.validation.Valid;
+import java.lang.reflect.Array;
 import java.util.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
@@ -18,6 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.util.StringUtils;
 
 @RestController
 @RequestMapping("/api/catalog")
@@ -25,6 +29,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class CatalogResource {
 
     private static final String TYPE_INCEPTOR = "INCEPTOR";
+    private static final String CATALOG_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
 
     private final CatalogDomainRepository domainRepo;
     private final CatalogDatasetRepository datasetRepo;
@@ -39,6 +45,7 @@ public class CatalogResource {
     private final com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository columnRepo;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository rowFilterRepo;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository secureViewRepo;
+    private final CatalogDatasetGrantRepository grantRepo;
     private final InfraDataSourceRepository infraDataSourceRepository;
     private final CatalogFeatureProperties catalogFeatures;
 
@@ -56,6 +63,7 @@ public class CatalogResource {
         com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository columnRepo,
         com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository rowFilterRepo,
         com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository secureViewRepo,
+        CatalogDatasetGrantRepository grantRepo,
         InfraDataSourceRepository infraDataSourceRepository,
         CatalogFeatureProperties catalogFeatures
     ) {
@@ -72,6 +80,7 @@ public class CatalogResource {
         this.columnRepo = columnRepo;
         this.rowFilterRepo = rowFilterRepo;
         this.secureViewRepo = secureViewRepo;
+        this.grantRepo = grantRepo;
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.catalogFeatures = catalogFeatures;
     }
@@ -113,7 +122,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/domains")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<CatalogDomain> createDomain(@Valid @RequestBody CatalogDomain domain) {
         // support parentId mapping if provided
         if (domain.getParent() != null && domain.getParent().getId() != null) {
@@ -126,7 +135,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/domains/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<CatalogDomain> updateDomain(@PathVariable UUID id, @Valid @RequestBody CatalogDomain patch) {
         CatalogDomain existing = domainRepo.findById(id).orElseThrow();
         existing.setName(patch.getName());
@@ -145,7 +154,7 @@ public class CatalogResource {
     }
 
     @DeleteMapping("/domains/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteDomain(@PathVariable UUID id) {
         domainRepo.deleteById(id);
         audit.audit("DELETE", "catalog.domain", id.toString());
@@ -183,7 +192,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/domains/{id}/move")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<CatalogDomain> moveDomain(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
         CatalogDomain d = domainRepo.findById(id).orElseThrow();
         Object newParentId = body.get("newParentId");
@@ -209,22 +218,18 @@ public class CatalogResource {
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String classification,
         @RequestParam(required = false) String dataLevel,
-        @RequestParam(required = false) String scope,
         @RequestParam(required = false) String ownerDept,
-        @RequestParam(required = false) String shareScope,
         @RequestParam(required = false) String type,
         @RequestParam(required = false) String exposedBy,
         @RequestParam(required = false) String owner,
         @RequestParam(required = false) String tag,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "10") int size,
-        @RequestHeader(value = "X-Active-Scope", required = false) String activeScope,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdDate").descending());
         Page<CatalogDataset> p = datasetRepo.findAll(pageable);
         String effDept = activeDept != null ? activeDept : claim("dept_code");
-        String effScope = activeScope != null ? activeScope : ((effDept != null && !effDept.isBlank()) ? "DEPT" : "INST");
         List<Map<String, Object>> filtered = p
             .getContent()
             .stream()
@@ -238,32 +243,35 @@ public class CatalogResource {
             .filter(ds -> type == null || (ds.getType() != null && ds.getType().equalsIgnoreCase(type)))
             // ABAC filters (optional)
             .filter(ds -> dataLevel == null || (ds.getDataLevel() != null && ds.getDataLevel().equalsIgnoreCase(dataLevel)))
-            .filter(ds -> scope == null || (ds.getScope() != null && ds.getScope().equalsIgnoreCase(scope)))
             .filter(ds -> ownerDept == null || (ds.getOwnerDept() != null && ds.getOwnerDept().equalsIgnoreCase(ownerDept)))
-            .filter(ds -> shareScope == null || (ds.getShareScope() != null && ds.getShareScope().equalsIgnoreCase(shareScope)))
             .filter(ds -> exposedBy == null || (ds.getExposedBy() != null && ds.getExposedBy().equalsIgnoreCase(exposedBy)))
             .filter(ds -> owner == null || (ds.getOwner() != null && ds.getOwner().toLowerCase().contains(owner.toLowerCase())))
             .filter(ds -> tag == null || (ds.getTags() != null && ds.getTags().toLowerCase().contains(tag.toLowerCase())))
             // RBAC/level gate
             .filter(accessChecker::canRead)
-            // Scope gate using active context (headers injected by frontend)
-            .filter(ds -> accessChecker.scopeAllowed(ds,
-                effScope,
-                effDept))
+            // Department gate using active context (headers injected by frontend)
+            .filter(ds -> accessChecker.departmentAllowed(ds, effDept))
             .map(this::toDatasetDto)
             .toList();
         // Align with other list endpoints: total reflects the filtered list size
-        Map<String, Object> data = Map.of("content", filtered, "total", filtered.size());
+        long totalElements = p.getTotalElements();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("content", filtered);
+        data.put("total", totalElements);
+        data.put("page", p.getNumber());
+        data.put("size", p.getSize());
+        data.put("returned", filtered.size());
         audit.audit("READ", "catalog.dataset", "page=" + page);
         return ApiResponses.ok(data);
     }
 
     @GetMapping("/datasets/{id}")
-    public ApiResponse<Optional<Map<String, Object>>> getDataset(@PathVariable UUID id) {
-        Optional<Map<String, Object>> ds = datasetRepo
+    public ApiResponse<Map<String, Object>> getDataset(@PathVariable UUID id) {
+        Map<String, Object> ds = datasetRepo
             .findById(id)
             .filter(accessChecker::canRead)
-            .map(this::toDatasetDto);
+            .map(dataset -> toDatasetDto(dataset, true))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问"));
         audit.audit("READ", "catalog.dataset", id.toString());
         return ApiResponses.ok(ds);
     }
@@ -283,9 +291,10 @@ public class CatalogResource {
     }
 
     @PutMapping("/access-policies/{datasetId}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> upsertPolicy(@PathVariable UUID datasetId, @RequestBody Map<String, Object> body) {
         CatalogDataset ds = datasetRepo.findById(datasetId).orElseThrow();
+        ensureDatasetEditPermission(ds);
         var p = policyRepo.findByDataset(ds).orElseGet(() -> {
             com.yuzhi.dts.platform.domain.catalog.CatalogAccessPolicy np = new com.yuzhi.dts.platform.domain.catalog.CatalogAccessPolicy();
             np.setDataset(ds);
@@ -293,7 +302,7 @@ public class CatalogResource {
         });
         String rawRoles = Objects.toString(body.get("allowRoles"), null);
         // Normalize: uppercase, add ROLE_ prefix; align DEPT/INST role families to dataset scope
-        String normalizedRoles = com.yuzhi.dts.platform.security.RoleUtils.normalizeAndAlignToScope(rawRoles, ds.getScope());
+        String normalizedRoles = com.yuzhi.dts.platform.security.RoleUtils.normalizeCsv(rawRoles);
         p.setAllowRoles(normalizedRoles);
         p.setRowFilter(Objects.toString(body.get("rowFilter"), null));
         p.setDefaultMasking(Objects.toString(body.get("defaultMasking"), null));
@@ -310,23 +319,20 @@ public class CatalogResource {
     @GetMapping("/access-policies/{datasetId}/validate")
     public ApiResponse<Map<String, Object>> validatePolicy(@PathVariable UUID datasetId) {
         CatalogDataset ds = datasetRepo.findById(datasetId).orElseThrow();
-        // ABAC-aligned: ClassificationUtils now prefers personnel_level/person_security_level
-        boolean classificationOk = classificationUtils.canAccess(ds.getClassification());
-        var polOpt = policyRepo.findByDataset(ds);
-        boolean roleMatched = true;
-        String rolesCsv = polOpt.map(com.yuzhi.dts.platform.domain.catalog.CatalogAccessPolicy::getAllowRoles).orElse(null);
-        if (rolesCsv != null && !rolesCsv.isBlank()) {
-            String[] normalized = com.yuzhi.dts.platform.security.RoleUtils.toAuthorityArray(rolesCsv);
-            roleMatched = com.yuzhi.dts.platform.security.SecurityUtils.hasCurrentUserAnyOfAuthorities(normalized);
-        }
-        boolean allowed = classificationOk && roleMatched;
+        // 密级使用 AccessChecker 的 ABAC 判定；部门取当前上下文 dept_code
+        boolean classificationOk = accessChecker.canRead(ds);
+        String effDept = claim("dept_code");
+        boolean departmentOk = accessChecker.departmentAllowed(ds, effDept);
+        boolean allowed = classificationOk && departmentOk;
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("datasetId", datasetId);
         result.put("allowed", allowed);
         result.put("userMaxLevel", classificationUtils.getCurrentUserMaxLevel());
         result.put("datasetLevel", ds.getClassification());
         result.put("classificationOk", classificationOk);
-        result.put("roleMatched", roleMatched);
+        result.put("departmentOk", departmentOk);
+        result.put("userDept", effDept);
+        result.put("datasetOwnerDept", ds.getOwnerDept());
         audit.audit(allowed ? "ALLOW" : "DENY", "catalog.accessPolicy.validate", String.valueOf(datasetId));
         return ApiResponses.ok(result);
     }
@@ -349,21 +355,27 @@ public class CatalogResource {
     }
 
     @PostMapping("/security-views/{datasetId}/generate")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> generateSecurityViews(@PathVariable UUID datasetId, @RequestBody(required = false) Map<String, Object> body) {
         var ds = datasetRepo.findById(datasetId).orElseThrow();
         var policy = policyRepo.findByDataset(ds).orElse(null);
+        // We need metadata to sanitize the row filter.
+        // This is a bit of a hack, as previewViews already does this, but we need the sanitized filter for saving.
+        String table = ds.getHiveTable() != null && !ds.getHiveTable().isBlank() ? ds.getHiveTable() : ds.getName();
+        var metadata = securityViewService.resolveColumns(ds, table); // Get metadata for sanitization
+        String originalRowFilter = policy != null ? policy.getRowFilter() : null;
+        String sanitizedRowFilter = securityViewService.sanitizeRowFilter(ds, originalRowFilter, metadata); // Sanitize here
+
         var sqls = securityViewService.previewViews(ds, policy);
         java.util.List<String> levels = java.util.List.of("PUBLIC", "INTERNAL", "SECRET", "TOP_SECRET");
         java.util.List<com.yuzhi.dts.platform.domain.catalog.CatalogSecureView> toSave = new java.util.ArrayList<>();
         for (String lvl : levels) {
             com.yuzhi.dts.platform.domain.catalog.CatalogSecureView v = new com.yuzhi.dts.platform.domain.catalog.CatalogSecureView();
             v.setDataset(ds);
-            String table = ds.getHiveTable() != null && !ds.getHiveTable().isBlank() ? ds.getHiveTable() : ds.getName();
             v.setViewName("sv_" + table + "_" + lvl.toLowerCase());
             v.setLevel(lvl);
             v.setRefresh(Objects.toString(body != null ? body.get("refresh") : null, "NONE"));
-            v.setRowFilter(policy != null ? policy.getRowFilter() : null);
+            v.setRowFilter(sanitizedRowFilter); // USE SANITIZED FILTER HERE
             toSave.add(v);
         }
         secureViewRepo.saveAll(toSave);
@@ -372,7 +384,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/security-views/{datasetId}/rebuild")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> rebuildSecurityViews(@PathVariable UUID datasetId) {
         var ds = datasetRepo.findById(datasetId).orElseThrow();
         secureViewRepo.findByDataset(ds).forEach(v -> secureViewRepo.deleteById(v.getId()));
@@ -381,7 +393,7 @@ public class CatalogResource {
     }
 
     @DeleteMapping("/security-views/{datasetId}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> rollbackSecurityViews(@PathVariable UUID datasetId) {
         var ds = datasetRepo.findById(datasetId).orElseThrow();
         secureViewRepo.findByDataset(ds).forEach(v -> secureViewRepo.deleteById(v.getId()));
@@ -390,6 +402,10 @@ public class CatalogResource {
     }
 
     private Map<String, Object> toDatasetDto(CatalogDataset d) {
+        return toDatasetDto(d, false);
+    }
+
+    private Map<String, Object> toDatasetDto(CatalogDataset d, boolean includeMetadata) {
         UUID domainId = d.getDomain() != null ? d.getDomain().getId() : null;
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", d.getId());
@@ -399,36 +415,69 @@ public class CatalogResource {
         m.put("classification", d.getClassification());
         // ABAC fields (optional for backward compatibility)
         m.put("dataLevel", d.getDataLevel());
-        m.put("scope", d.getScope());
         m.put("ownerDept", d.getOwnerDept());
-        m.put("shareScope", d.getShareScope());
         m.put("owner", d.getOwner());
         m.put("hiveDatabase", d.getHiveDatabase());
         m.put("hiveTable", d.getHiveTable());
         m.put("trinoCatalog", d.getTrinoCatalog());
         m.put("tags", d.getTags());
         m.put("exposedBy", d.getExposedBy());
+        m.put("editable", canEditDataset(d));
+        if (includeMetadata) {
+            List<Map<String, Object>> tables = new ArrayList<>();
+            tableRepo
+                .findByDataset(d)
+                .stream()
+                .sorted(Comparator.comparing(table -> table.getName() != null ? table.getName().toLowerCase(Locale.ROOT) : ""))
+                .forEach(table -> {
+                    Map<String, Object> tableDto = new LinkedHashMap<>();
+                    tableDto.put("id", table.getId());
+                    tableDto.put("name", table.getName());
+                    tableDto.put("tableName", table.getName());
+                    List<Map<String, Object>> columnDtos = new ArrayList<>();
+                    List<CatalogColumnSchema> columns = columnRepo.findByTable(table);
+                    columns
+                        .stream()
+                        .sorted(Comparator.comparing(col -> col.getName() != null ? col.getName().toLowerCase(Locale.ROOT) : ""))
+                        .forEach(col -> {
+                            Map<String, Object> colDto = new LinkedHashMap<>();
+                            colDto.put("id", col.getId());
+                            colDto.put("name", col.getName());
+                            colDto.put("dataType", col.getDataType());
+                            colDto.put("nullable", col.getNullable());
+                            colDto.put("tags", col.getTags());
+                            colDto.put("sensitiveTags", col.getSensitiveTags());
+                            columnDtos.add(colDto);
+                        });
+                    tableDto.put("columns", columnDtos);
+                    tables.add(tableDto);
+                });
+            m.put("tables", tables);
+        }
         return m;
     }
 
     @PostMapping("/datasets")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<CatalogDataset> createDataset(@Valid @RequestBody CatalogDataset dataset) {
         applySourcePolicy(dataset);
-        validateAbacFields(dataset);
+        validateOwnerDepartment(dataset);
         ensurePrimarySourceIfRequired(dataset);
+        ensureDatasetEditPermission(dataset);
         CatalogDataset saved = datasetRepo.save(dataset);
         audit.audit("CREATE", "catalog.dataset", saved.getId().toString());
         return ApiResponses.ok(saved);
     }
 
     @PostMapping("/datasets/import")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> importDatasets(@RequestBody List<CatalogDataset> items) {
         List<CatalogDataset> prepared = new ArrayList<>(items.size());
         for (CatalogDataset item : items) {
             applySourcePolicy(item);
+            validateOwnerDepartment(item);
             ensurePrimarySourceIfRequired(item);
+            ensureDatasetEditPermission(item);
             prepared.add(item);
         }
         List<CatalogDataset> saved = datasetRepo.saveAll(prepared);
@@ -437,9 +486,10 @@ public class CatalogResource {
     }
 
     @PutMapping("/datasets/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<CatalogDataset> updateDataset(@PathVariable UUID id, @Valid @RequestBody CatalogDataset patch) {
         CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
+        ensureDatasetEditPermission(existing);
         existing.setName(patch.getName());
         existing.setType(patch.getType());
         // Keep dataset type normalization, but do not hard-require primary source when updating
@@ -450,10 +500,8 @@ public class CatalogResource {
         existing.setClassification(patch.getClassification());
         // ABAC fields
         existing.setDataLevel(patch.getDataLevel());
-        existing.setScope(patch.getScope());
         existing.setOwnerDept(patch.getOwnerDept());
-        existing.setShareScope(patch.getShareScope());
-        validateAbacFields(existing);
+        validateOwnerDepartment(existing);
         existing.setOwner(patch.getOwner());
         existing.setDomain(patch.getDomain());
         existing.setHiveDatabase(patch.getHiveDatabase());
@@ -466,28 +514,16 @@ public class CatalogResource {
         return ApiResponses.ok(saved);
     }
 
-    private void validateAbacFields(CatalogDataset d) {
-        String scope = Optional.ofNullable(d.getScope()).map(String::trim).map(String::toUpperCase).orElse("");
-        if (scope.isEmpty()) return; // backward compatible
-        switch (scope) {
-            case "DEPT" -> {
-                String dept = Optional.ofNullable(d.getOwnerDept()).map(String::trim).orElse("");
-                if (dept.isEmpty()) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当 scope=DEPT 时，ownerDept 不能为空");
-                }
-            }
-            case "INST" -> {
-                String share = Optional.ofNullable(d.getShareScope()).map(String::trim).map(String::toUpperCase).orElse("");
-                if (share.isEmpty()) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当 scope=INST 时，shareScope 不能为空");
-                }
-            }
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非法作用域: " + scope);
+    private void validateOwnerDepartment(CatalogDataset d) {
+        String ownerDept = Optional.ofNullable(d.getOwnerDept()).map(String::trim).orElse("");
+        if (ownerDept.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ownerDept 不能为空");
         }
+        d.setOwnerDept(ownerDept);
     }
 
     @DeleteMapping("/datasets/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteDataset(@PathVariable UUID id) {
         datasetRepo.deleteById(id);
         audit.audit("DELETE", "catalog.dataset", id.toString());
@@ -525,12 +561,11 @@ public class CatalogResource {
 
     private boolean hasPrimarySourceConfigured() {
         String defaultSource = defaultSourceType();
-        long matches = infraDataSourceRepository.countByTypeIgnoreCase(defaultSource);
-        if (matches > 0) {
+        if (hasActiveDataSource(defaultSource)) {
             return true;
         }
         if (TYPE_INCEPTOR.equals(defaultSource)) {
-            return infraDataSourceRepository.countByTypeIgnoreCase("HIVE") > 0;
+            return hasActiveDataSource("HIVE");
         }
         return false;
     }
@@ -547,9 +582,107 @@ public class CatalogResource {
             .filter(s -> !s.isBlank())
             .orElse(TYPE_INCEPTOR);
         if ("HIVE".equals(configured) || TYPE_INCEPTOR.equals(configured)) {
+            if (hasActiveDataSource(TYPE_INCEPTOR) || hasActiveDataSource("HIVE")) {
+                return TYPE_INCEPTOR;
+            }
+            if (hasActiveDataSource("POSTGRES")) {
+                return "POSTGRES";
+            }
             return TYPE_INCEPTOR;
         }
+        if (hasActiveDataSource(configured)) {
+            return configured;
+        }
+        if (hasActiveDataSource("POSTGRES")) {
+            return "POSTGRES";
+        }
         return configured;
+    }
+
+    private boolean hasActiveDataSource(String type) {
+        if (!StringUtils.hasText(type)) {
+            return false;
+        }
+        return infraDataSourceRepository
+            .findFirstByTypeIgnoreCaseAndStatusIgnoreCase(type, "ACTIVE")
+            .isPresent();
+    }
+
+    @GetMapping("/datasets/{id}/grants")
+    public ApiResponse<List<Map<String, Object>>> listDatasetGrants(@PathVariable UUID id) {
+        CatalogDataset dataset = datasetRepo.findById(id).orElseThrow();
+        ensureDatasetEditPermission(dataset);
+        List<Map<String, Object>> list = grantRepo
+            .findByDatasetIdOrderByCreatedDateAsc(id)
+            .stream()
+            .map(this::toGrantDto)
+            .toList();
+        audit.audit("READ", "catalog.dataset.grant", id.toString());
+        return ApiResponses.ok(list);
+    }
+
+    @PostMapping("/datasets/{id}/grants")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> createDatasetGrant(
+        @PathVariable UUID id,
+        @RequestBody(required = false) DatasetGrantRequest body
+    ) {
+        CatalogDataset dataset = datasetRepo.findById(id).orElseThrow();
+        ensureDatasetEditPermission(dataset);
+        if (!canManageGrants()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅研究所数据管理员可分配访问权限");
+        }
+        if (body == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求体不能为空");
+        }
+        String rawUsername = body.username();
+        if (!StringUtils.hasText(rawUsername)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "用户名不能为空");
+        }
+        final String username = rawUsername.trim();
+        String userId = StringUtils.hasText(body.userId()) ? body.userId().trim() : null;
+        final String normalizedUserId = userId;
+        final String normalizedUsername = username;
+        String displayName = StringUtils.hasText(body.displayName()) ? body.displayName().trim() : null;
+        String deptCode = StringUtils.hasText(body.deptCode()) ? body.deptCode().trim() : null;
+        if (grantRepo.existsForDatasetAndUser(id, normalizedUserId, normalizedUsername)) {
+            CatalogDatasetGrant existing = grantRepo
+                .findByDatasetIdOrderByCreatedDateAsc(id)
+                .stream()
+                .filter(g ->
+                    (normalizedUserId != null && normalizedUserId.equals(g.getGranteeId())) ||
+                    normalizedUsername.equalsIgnoreCase(g.getGranteeUsername())
+                )
+                .findFirst()
+                .orElse(null);
+            return ApiResponses.ok(existing != null ? toGrantDto(existing) : Map.of("username", normalizedUsername, "duplicate", Boolean.TRUE));
+        }
+        CatalogDatasetGrant grant = new CatalogDatasetGrant();
+        grant.setDataset(dataset);
+        grant.setGranteeId(normalizedUserId);
+        grant.setGranteeUsername(username);
+        grant.setGranteeName(displayName);
+        grant.setGranteeDept(deptCode);
+        CatalogDatasetGrant saved = grantRepo.save(grant);
+        audit.audit("CREATE", "catalog.dataset.grant", saved.getId().toString());
+        return ApiResponses.ok(toGrantDto(saved));
+    }
+
+    @DeleteMapping("/datasets/{datasetId}/grants/{grantId}")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Boolean> deleteDatasetGrant(@PathVariable UUID datasetId, @PathVariable UUID grantId) {
+        CatalogDatasetGrant grant = grantRepo.findById(grantId).orElseThrow();
+        CatalogDataset dataset = grant.getDataset();
+        if (dataset == null || dataset.getId() == null || !datasetId.equals(dataset.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "授权记录与数据集不匹配");
+        }
+        ensureDatasetEditPermission(dataset);
+        if (!canManageGrants()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅研究所数据管理员可修改访问权限");
+        }
+        grantRepo.deleteById(grantId);
+        audit.audit("DELETE", "catalog.dataset.grant", grantId.toString());
+        return ApiResponses.ok(Boolean.TRUE);
     }
 
     // Masking rules CRUD
@@ -561,7 +694,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/masking-rules")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<CatalogMaskingRule> createMasking(@Valid @RequestBody CatalogMaskingRule rule) {
         CatalogMaskingRule saved = maskingRepo.save(rule);
         audit.audit("CREATE", "catalog.masking", saved.getId().toString());
@@ -569,7 +702,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/masking-rules/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<CatalogMaskingRule> updateMasking(@PathVariable UUID id, @Valid @RequestBody CatalogMaskingRule patch) {
         CatalogMaskingRule existing = maskingRepo.findById(id).orElseThrow();
         existing.setColumn(patch.getColumn());
@@ -581,7 +714,7 @@ public class CatalogResource {
     }
 
     @DeleteMapping("/masking-rules/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteMasking(@PathVariable UUID id) {
         maskingRepo.deleteById(id);
         audit.audit("DELETE", "catalog.masking", id.toString());
@@ -612,7 +745,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/classification-mapping")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<List<CatalogClassificationMapping>> replaceMapping(
         @RequestBody List<CatalogClassificationMapping> items
     ) {
@@ -623,7 +756,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/classification-mapping/import")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> importMapping(@RequestBody List<CatalogClassificationMapping> items) {
         List<CatalogClassificationMapping> saved = mappingRepo.saveAll(items);
         audit.audit("CREATE", "catalog.classificationMapping", "import:" + saved.size());
@@ -654,7 +787,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/tables")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema> createTable(
         @Valid @RequestBody com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema table
     ) {
@@ -664,7 +797,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/tables/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema> updateTable(
         @PathVariable UUID id,
         @Valid @RequestBody com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema patch
@@ -681,7 +814,7 @@ public class CatalogResource {
     }
 
     @DeleteMapping("/tables/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteTable(@PathVariable UUID id) {
         tableRepo.deleteById(id);
         audit.audit("DELETE", "catalog.table", id.toString());
@@ -689,7 +822,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/tables/import")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> importTables(@RequestBody List<Map<String, Object>> payload) {
         int importedTables = 0;
         int importedColumns = 0;
@@ -748,7 +881,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/columns")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema> createColumn(
         @Valid @RequestBody com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema column
     ) {
@@ -758,7 +891,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/columns/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema> updateColumn(
         @PathVariable UUID id,
         @Valid @RequestBody com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema patch
@@ -775,7 +908,7 @@ public class CatalogResource {
     }
 
     @DeleteMapping("/columns/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteColumn(@PathVariable UUID id) {
         columnRepo.deleteById(id);
         audit.audit("DELETE", "catalog.column", id.toString());
@@ -792,7 +925,7 @@ public class CatalogResource {
     }
 
     @PostMapping("/row-filter-rules")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<com.yuzhi.dts.platform.domain.catalog.CatalogRowFilterRule> createRowFilter(
         @Valid @RequestBody com.yuzhi.dts.platform.domain.catalog.CatalogRowFilterRule rule
     ) {
@@ -802,7 +935,7 @@ public class CatalogResource {
     }
 
     @PutMapping("/row-filter-rules/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<com.yuzhi.dts.platform.domain.catalog.CatalogRowFilterRule> updateRowFilter(
         @PathVariable UUID id,
         @Valid @RequestBody com.yuzhi.dts.platform.domain.catalog.CatalogRowFilterRule patch
@@ -816,12 +949,73 @@ public class CatalogResource {
     }
 
     @DeleteMapping("/row-filter-rules/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteRowFilter(@PathVariable UUID id) {
         rowFilterRepo.deleteById(id);
         audit.audit("DELETE", "catalog.rowFilter", id.toString());
         return ApiResponses.ok(Boolean.TRUE);
     }
+
+    private boolean canManageGrants() {
+        return (
+            SecurityUtils.isOpAdminAccount() ||
+            SecurityUtils.hasCurrentUserAnyOfAuthorities(
+                AuthoritiesConstants.OP_ADMIN,
+                AuthoritiesConstants.ADMIN,
+                AuthoritiesConstants.CATALOG_ADMIN,
+                AuthoritiesConstants.INST_DATA_OWNER
+            )
+        );
+    }
+
+    private void ensureDatasetEditPermission(CatalogDataset dataset) {
+        if (canEditDataset(dataset)) {
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "当前用户无权编辑该数据集");
+    }
+
+    private boolean canEditDataset(CatalogDataset dataset) {
+        if (dataset == null) {
+            return false;
+        }
+        if (
+            SecurityUtils.isOpAdminAccount() ||
+            SecurityUtils.hasCurrentUserAnyOfAuthorities(
+                AuthoritiesConstants.OP_ADMIN,
+                AuthoritiesConstants.ADMIN,
+                AuthoritiesConstants.CATALOG_ADMIN
+            )
+        ) {
+            return true;
+        }
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INST_DATA_OWNER)) {
+            return true;
+        }
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPT_DATA_OWNER)) {
+            String userDept = claim("dept_code");
+            if (userDept == null || userDept.isBlank()) {
+                return false;
+            }
+            return DepartmentUtils.matches(dataset.getOwnerDept(), userDept);
+        }
+        return false;
+    }
+
+    private Map<String, Object> toGrantDto(CatalogDatasetGrant grant) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", grant.getId());
+        map.put("datasetId", grant.getDataset() != null ? grant.getDataset().getId() : null);
+        map.put("userId", grant.getGranteeId());
+        map.put("username", grant.getGranteeUsername());
+        map.put("displayName", grant.getGranteeName());
+        map.put("deptCode", grant.getGranteeDept());
+        map.put("createdBy", grant.getCreatedBy());
+        map.put("createdDate", grant.getCreatedDate());
+        return map;
+    }
+
+    private record DatasetGrantRequest(String userId, String username, String displayName, String deptCode) {}
 
 
     private String claim(String name) {
@@ -829,13 +1023,38 @@ public class CatalogResource {
             org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
             if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
                 Object v = token.getToken().getClaims().get(name);
-                return v == null ? null : String.valueOf(v);
+                return stringifyClaim(v);
             }
             if (auth != null && auth.getPrincipal() instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal principal) {
                 Object v = principal.getAttribute(name);
-                return v == null ? null : String.valueOf(v);
+                return stringifyClaim(v);
             }
         } catch (Exception ignored) {}
         return null;
+    }
+
+    private String stringifyClaim(Object raw) {
+        Object flattened = flattenClaim(raw);
+        if (flattened == null) return null;
+        String text = flattened.toString();
+        return text == null || text.isBlank() ? null : text;
+    }
+
+    private Object flattenClaim(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof java.util.Collection<?> collection) {
+            return collection.stream().filter(Objects::nonNull).findFirst().orElse(null);
+        }
+        if (raw.getClass().isArray()) {
+            int len = Array.getLength(raw);
+            for (int i = 0; i < len; i++) {
+                Object element = Array.get(raw, i);
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        return raw;
     }
 }

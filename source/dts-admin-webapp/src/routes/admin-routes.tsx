@@ -10,6 +10,8 @@ import UserManagementView from "@/admin/views/user-management";
 import UserDetailView from "@/admin/views/user-detail";
 import MyChangesView from "@/admin/views/my-changes";
 import RoleManagementView from "@/admin/views/role-management";
+import AdminDataSourcesView from "@/admin/views/system/data-sources";
+import AdminOtherConfigView from "@/admin/views/system/other-config";
 import { getMenusByRole } from "@/admin/config/menus";
 import { useAdminSession } from "@/admin/lib/session-context";
 
@@ -32,16 +34,19 @@ export const adminRoutes: RouteObject[] = [
     ),
 		children: [
 			{ index: true, element: <AdminIndexRedirect /> },
-			{ path: "orgs", element: <OrgManagementView /> },
-            { path: "users", element: <UserManagementView /> },
-            { path: "users/:id", element: <UserDetailView /> },
-            { path: "my-changes", element: <MyChangesView /> },
+			{ path: "my-changes", element: <MyChangesView /> },
+			{ path: "users", element: <UserManagementView /> },
+			{ path: "users/:id", element: <UserDetailView /> },
 			{ path: "roles", element: <RoleManagementView /> },
+			{ path: "portal-menus", element: <PortalMenusView /> },
+			{ path: "orgs", element: <OrgManagementView /> },
+			{ path: "system", element: <Navigate to="/admin/system/data-sources" replace /> },
+			{ path: "system/data-sources", element: <AdminDataSourcesView /> },
+			{ path: "system/other", element: <AdminOtherConfigView /> },
 			{ path: "approval", element: <ApprovalCenterView /> },
 			{ path: "audit", element: <AuditCenterView /> },
 			{ path: "ops", element: <OpsConfigView /> },
-            { path: "portal-menus", element: <PortalMenusView /> },
-            { path: "*", element: <Navigate to="/403" replace /> },
+			{ path: "*", element: <Navigate to="/403" replace /> },
 		],
 	},
 ];

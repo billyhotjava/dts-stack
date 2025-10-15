@@ -129,13 +129,14 @@
         "user_detail": "User Detail",
         "system": {
           "index": "System Management",
+          "my_changes": "My Requests",
           "user": "User Management",
-          "group": "Organization Management",
           "role": "Role Management",
           "permission": "Menu Management",
-          "approval": "Approval Management",
-          "my_changes": "My Change Requests",
-          "audit_log": "Audit Log"
+          "group": "Organization Management",
+          "system_config": "System Management",
+          "datasource": "Data Sources",
+          "other_config": "Other Settings"
         }
       },
       "toast": "Toast",
@@ -251,10 +252,8 @@
         "AUDITADMIN": "Audit Administrator",
         "DEPT_DATA_OWNER": "Department Data Administrator",
         "DEPT_DATA_DEV": "Department Data Developer",
-        "DEPT_DATA_VIEWER": "Department Data Viewer",
         "INST_DATA_OWNER": "Institute Data Administrator",
         "INST_DATA_DEV": "Institute Data Developer",
-        "INST_DATA_VIEWER": "Institute Data Viewer",
         "DATA_STEWARD": "Data Steward",
         "DATA_ANALYST": "Data Analyst"
       },
@@ -267,8 +266,11 @@
         "GENERAL": "General",
         "IMPORTANT": "Important",
         "CORE": "Core",
+        "PUBLIC": "Public",
+        "INTERNAL": "Internal",
         "TOP_SECRET": "Top Secret",
         "SECRET": "Secret",
+        "TOP-SECRET": "Top Secret",
         "NORMAL": "Normal",
         "UNKNOWN": "Unknown Sensitivity"
       }

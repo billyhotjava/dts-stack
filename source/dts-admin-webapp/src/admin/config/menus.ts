@@ -5,17 +5,25 @@ export interface AdminMenuItem {
 	label: string;
 	path: string;
 	icon?: string;
+	children?: AdminMenuItem[];
 }
 
 const sysadminMenus: AdminMenuItem[] = [
+	{ key: "mine", label: "我的申请", path: "/admin/my-changes", icon: "local:ic-mail" },
 	{ key: "users", label: "用户管理", path: "/admin/users", icon: "local:ic-users" },
-	{ key: "orgs", label: "组织管理", path: "/admin/orgs", icon: "local:ic-orgs" },
 	{ key: "roles", label: "角色管理", path: "/admin/roles", icon: "local:ic-roles" },
-	{ key: "approval", label: "任务审批", path: "/admin/approval", icon: "local:ic-approval" },
-    { key: "mine", label: "我的申请", path: "/admin/my-changes", icon: "local:ic-changes" },
-	{ key: "audit", label: "日志审计", path: "/admin/audit", icon: "local:ic-audit" },
-	{ key: "ops", label: "系统运维", path: "/admin/ops", icon: "local:ic-setting" },
 	{ key: "portal-menus", label: "菜单管理", path: "/admin/portal-menus", icon: "local:ic-menu" },
+	{ key: "orgs", label: "组织机构管理", path: "/admin/orgs", icon: "local:ic-orgs" },
+	{
+		key: "system",
+		label: "系统管理",
+		path: "/admin/system/data-sources",
+		icon: "local:ic-setting",
+		children: [
+			{ key: "system-data-sources", label: "数据源配置", path: "/admin/system/data-sources", icon: "local:ic-analysis" },
+			{ key: "system-other", label: "其他配置", path: "/admin/system/other", icon: "local:ic-setting" },
+		],
+	},
 ];
 
 const authadminMenus: AdminMenuItem[] = [

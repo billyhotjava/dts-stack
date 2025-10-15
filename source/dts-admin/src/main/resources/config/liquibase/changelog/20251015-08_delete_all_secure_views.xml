@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251015-08-delete-all-secure-views" author="gemini-cli">
+        <comment>Delete all existing CatalogSecureView entries to force regeneration with corrected rowFilter logic.</comment>
+
+        <delete tableName="catalog_secure_view"/>
+
+    </changeSet>
+</databaseChangeLog>

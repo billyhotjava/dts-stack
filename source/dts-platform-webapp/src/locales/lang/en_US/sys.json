@@ -112,8 +112,6 @@
     "exploreSharingCaption": "Controlled sharing with expiry and scoped visibility",
     "exploreExport": "Export center",
     "exploreExportCaption": "Export requests, approval status, and download history",
-    "visualization": "Data visualization",
-    "visualizationReports": "Data reports",
     "services": "Data services",
     "servicesApi": "API services",
     "servicesApiCaption": "REST catalog, online testing, and classification-aware views",
@@ -166,12 +164,7 @@
     "settingsNotifications": "Notification subscriptions",
     "settingsNotificationsCaption": "Subscribe to alerts, approvals, and job updates",
     "settingsGateway": "Gateway policies",
-    "settingsGatewayCaption": "Read-only rate limits and allowlists—edit in dts-admin",
-    "foundation": "Foundation data maintenance",
-    "foundationDataSources": "Data sources",
-    "foundationDataStorage": "Data storage",
-    "foundationTaskScheduling": "Task scheduling",
-    "foundationDataSettings": "Data settings"
+    "settingsGatewayCaption": "Read-only rate limits and allowlists—edit in dts-admin"
    },
    "dashboard": "Dashboard",
    "others": "Others",
@@ -351,8 +344,15 @@
     "DATA_ANALYST": "Data Analyst"
    },
    "sensitivity": {
-    "TOP_SECRET": "Top Secret",
+    "DATA_PUBLIC": "Public",
+    "DATA_INTERNAL": "Internal",
+    "DATA_SECRET": "Secret",
+    "DATA_TOP_SECRET": "Top Secret",
+    "PUBLIC": "Public",
+    "INTERNAL": "Internal",
     "SECRET": "Secret",
+    "TOP_SECRET": "Top Secret",
+    "TOP-SECRET": "Top Secret",
     "NORMAL": "Normal",
     "UNKNOWN": "Unknown Sensitivity"
    }

@@ -9,6 +9,10 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -24,14 +28,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.crypto.SecretKey;
+import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -83,6 +89,7 @@ public class AuditTrailService {
     private final AuditProperties properties;
     private final DtsCommonAuditClient auditClient;
     private final ObjectMapper objectMapper;
+    private final DataSource dataSource;
 
     private BlockingQueue<PendingAuditEvent> queue;
     private ScheduledExecutorService workerPool;
@@ -90,17 +97,22 @@ public class AuditTrailService {
     private SecretKey hmacKey;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicReference<String> lastChainSignature = new AtomicReference<>("");
+    private final AtomicBoolean tableReady = new AtomicBoolean(true);
+    private volatile Boolean tableExistsCache;
+    private volatile long lastTableCheck = 0L;
 
     public AuditTrailService(
         AuditEventRepository repository,
         AuditProperties properties,
         DtsCommonAuditClient auditClient,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        DataSource dataSource
     ) {
         this.repository = repository;
         this.properties = properties;
         this.auditClient = auditClient;
         this.objectMapper = objectMapper;
+        this.dataSource = dataSource;
     }
 
     @PostConstruct
@@ -118,20 +130,32 @@ public class AuditTrailService {
         this.workerPool = Executors.newScheduledThreadPool(1, factory);
         this.encryptionKey = AuditCrypto.buildKey(resolveEncryptionKey());
         this.hmacKey = AuditCrypto.buildMacKey(resolveHmacKey());
-        try {
-            this.lastChainSignature.set(repository.findTopByOrderByIdDesc().map(AuditEvent::getChainSignature).orElse(""));
-        } catch (Exception ex) {
-            // In case Liquibase hasn't created the table yet or DB is not ready, degrade gracefully.
-            log.warn("AuditTrailService could not fetch last chain signature (will retry later)", ex);
+        boolean tableExists = ensureTableExists();
+        if (tableExists) {
+            try {
+                this.lastChainSignature.set(repository.findTopByOrderByIdDesc().map(AuditEvent::getChainSignature).orElse(""));
+            } catch (InvalidDataAccessResourceUsageException ex) {
+                handleRepositoryAccessFailure("AuditTrailService could not fetch last chain signature (will retry later)", ex);
+                this.lastChainSignature.set("");
+            } catch (Exception ex) {
+                log.warn("AuditTrailService could not fetch last chain signature (will retry later)", ex);
+                this.lastChainSignature.set("");
+            }
+        } else {
+            log.info("AuditTrailService starting without audit_event table; buffering is disabled until Liquibase completes");
             this.lastChainSignature.set("");
         }
         running.set(true);
         workerPool.scheduleWithFixedDelay(this::drainQueue, 0, 500, TimeUnit.MILLISECONDS);
         Long existingCount = null;
-        try {
-            existingCount = repository.count();
-        } catch (Exception ex) {
-            log.warn("Failed to query existing audit event count", ex);
+        if (tableExists) {
+            try {
+                existingCount = repository.count();
+            } catch (InvalidDataAccessResourceUsageException ex) {
+                handleRepositoryAccessFailure("Failed to query existing audit event count", ex);
+            } catch (Exception ex) {
+                log.warn("Failed to query existing audit event count", ex);
+            }
         }
         if (existingCount != null) {
             log.info(
@@ -205,7 +229,20 @@ public class AuditTrailService {
     }
 
     public long purgeAll() {
-        long removed = repository.count();
+        if (!ensureTableExists()) {
+            if (queue != null) {
+                queue.clear();
+            }
+            lastChainSignature.set("");
+            return 0;
+        }
+        long removed;
+        try {
+            removed = repository.count();
+        } catch (InvalidDataAccessResourceUsageException ex) {
+            handleRepositoryAccessFailure("Failed to count audit events during purge", ex);
+            return 0;
+        }
         if (removed == 0) {
             if (queue != null) {
                 queue.clear();
@@ -213,8 +250,13 @@ public class AuditTrailService {
             lastChainSignature.set("");
             return 0;
         }
-        repository.deleteAllInBatch();
-        repository.flush();
+        try {
+            repository.deleteAllInBatch();
+            repository.flush();
+        } catch (InvalidDataAccessResourceUsageException ex) {
+            handleRepositoryAccessFailure("Failed to purge audit events", ex);
+            return 0;
+        }
         if (queue != null) {
             queue.clear();
         }
@@ -259,19 +301,91 @@ public class AuditTrailService {
         if (entities.isEmpty()) {
             return;
         }
-        repository.saveAll(entities);
-        lastChainSignature.set(previousChain);
-        if (properties.isForwardEnabled()) {
-            entities.forEach(auditClient::enqueue);
+        if (!ensureTableExists()) {
+            log.debug("Audit trail persistence skipped because audit_event table is unavailable");
+            return;
+        }
+        try {
+            repository.saveAll(entities);
+            lastChainSignature.set(previousChain);
+            if (properties.isForwardEnabled()) {
+                entities.forEach(auditClient::enqueue);
+            }
+        } catch (InvalidDataAccessResourceUsageException ex) {
+            handleRepositoryAccessFailure("Failed to persist audit batch (events dropped)", ex);
+        } catch (Exception ex) {
+            log.error("Failed to persist audit batch", ex);
         }
     }
 
     @Scheduled(cron = "0 30 2 * * *")
     public void purgeOldEvents() {
+        if (!ensureTableExists()) {
+            return;
+        }
         Instant threshold = Instant.now().minus(Duration.ofDays(properties.getRetentionDays()));
-        int purged = repository.deleteAllByOccurredAtBefore(threshold);
-        if (purged > 0) {
-            log.info("Purged {} audit events older than {}", purged, threshold);
+        try {
+            int purged = repository.deleteAllByOccurredAtBefore(threshold);
+            if (purged > 0) {
+                log.info("Purged {} audit events older than {}", purged, threshold);
+            }
+        } catch (InvalidDataAccessResourceUsageException ex) {
+            handleRepositoryAccessFailure("Failed to purge old audit events", ex);
+        }
+    }
+
+    private boolean ensureTableExists() {
+        if (Boolean.TRUE.equals(tableExistsCache) && tableReady.get()) {
+            return true;
+        }
+        long now = System.currentTimeMillis();
+        if (Boolean.FALSE.equals(tableExistsCache) && (now - lastTableCheck) < 5000L) {
+            return false;
+        }
+        lastTableCheck = now;
+        if (dataSource == null) {
+            tableExistsCache = Boolean.TRUE;
+            tableReady.set(true);
+            return true;
+        }
+        final String sql =
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE lower(table_name) = 'audit_event'
+            LIMIT 1
+            """;
+        try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement(sql)) {
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean exists = rs.next();
+                Boolean previous = tableExistsCache;
+                tableExistsCache = Boolean.valueOf(exists);
+                boolean wasReady = tableReady.get();
+                tableReady.set(exists);
+                if (exists && (previous == null || !previous) && !wasReady) {
+                    log.info("Detected audit_event table; audit trail persistence enabled");
+                }
+                return exists;
+            }
+        } catch (SQLException ex) {
+            tableReady.set(false);
+            tableExistsCache = Boolean.FALSE;
+            log.debug("Audit table existence check failed: {}", ex.getMessage());
+            return false;
+        }
+    }
+
+    private void handleRepositoryAccessFailure(String message, Exception ex) {
+        boolean tableMissing = ex instanceof InvalidDataAccessResourceUsageException
+            || (ex.getCause() instanceof InvalidDataAccessResourceUsageException);
+        if (tableMissing) {
+            tableReady.set(false);
+            tableExistsCache = Boolean.FALSE;
+            lastTableCheck = 0L;
+            log.info("{} (audit_event table unavailable)", message);
+            log.debug("Audit repository access failure", ex);
+        } else {
+            log.warn(message, ex);
         }
     }
 

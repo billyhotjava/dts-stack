@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import java.io.Serializable;
 import java.time.Instant;
 import org.springframework.data.annotation.CreatedBy;
@@ -71,5 +73,39 @@ public abstract class AbstractAuditingEntity<T> implements Serializable {
 
     public void setLastModifiedDate(Instant lastModifiedDate) {
         this.lastModifiedDate = lastModifiedDate;
+    }
+
+    @PrePersist
+    protected void prePersistAuditDefaults() {
+        if (this.createdBy == null || this.createdBy.isBlank()) {
+            try {
+                this.createdBy = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(com.yuzhi.dts.platform.config.Constants.SYSTEM);
+            } catch (Throwable ignored) {
+                this.createdBy = "system";
+            }
+        }
+        if (this.lastModifiedBy == null || this.lastModifiedBy.isBlank()) {
+            this.lastModifiedBy = this.createdBy;
+        }
+        if (this.createdDate == null) {
+            this.createdDate = Instant.now();
+        }
+        if (this.lastModifiedDate == null) {
+            this.lastModifiedDate = this.createdDate;
+        }
+    }
+
+    @PreUpdate
+    protected void preUpdateAuditDefaults() {
+        if (this.lastModifiedBy == null || this.lastModifiedBy.isBlank()) {
+            try {
+                this.lastModifiedBy = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(com.yuzhi.dts.platform.config.Constants.SYSTEM);
+            } catch (Throwable ignored) {
+                this.lastModifiedBy = "system";
+            }
+        }
+        if (this.lastModifiedDate == null) {
+            this.lastModifiedDate = Instant.now();
+        }
     }
 }

@@ -39,6 +39,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -157,14 +158,30 @@ public class AdminAuditService {
         this.workerPool = Executors.newScheduledThreadPool(1, factory);
         this.encryptionKey = AuditCrypto.buildKey(resolveEncryptionKey());
         this.hmacKey = AuditCrypto.buildMacKey(resolveHmacKey());
-        this.lastChainSignature.set(repository.findTopByOrderByIdDesc().map(AuditEvent::getChainSignature).orElse(""));
+        boolean historyAvailable = true;
+        String chainSeed = "";
+        try {
+            chainSeed = repository.findTopByOrderByIdDesc().map(AuditEvent::getChainSignature).orElse("");
+        } catch (InvalidDataAccessResourceUsageException ex) {
+            historyAvailable = false;
+            log.info(
+                "Audit event table not yet available; delaying chain seed until Liquibase completes ({})",
+                ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage()
+            );
+        } catch (Exception ex) {
+            historyAvailable = false;
+            log.warn("Failed to load existing audit chain signature; starting fresh", ex);
+        }
+        this.lastChainSignature.set(chainSeed);
         running.set(true);
         workerPool.scheduleWithFixedDelay(this::drainQueue, 0, 500, TimeUnit.MILLISECONDS);
         Long existingCount = null;
-        try {
-            existingCount = repository.count();
-        } catch (Exception ex) {
-            log.warn("Failed to query existing audit event count", ex);
+        if (historyAvailable) {
+            try {
+                existingCount = repository.count();
+            } catch (Exception ex) {
+                log.warn("Failed to query existing audit event count", ex);
+            }
         }
         if (existingCount != null) {
             log.info(
@@ -173,7 +190,10 @@ public class AdminAuditService {
                 existingCount
             );
         } else {
-            log.info("Audit writer started with capacity {}; existing count unavailable", properties.getQueueCapacity());
+            log.info(
+                "Audit writer started with capacity {}; existing audit history unavailable yet",
+                properties.getQueueCapacity()
+            );
         }
     }
 
@@ -394,11 +414,7 @@ public class AdminAuditService {
         entity.setEventType(mapEventCategory(pending.resourceType, pending.module, normalizedAction));
         entity.setResourceType(pending.resourceType);
         entity.setResourceId(pending.resourceId);
-        java.net.InetAddress ip = parseClientIp(pending.clientIp);
-        if (ip == null) {
-            try { ip = java.net.InetAddress.getByName("127.0.0.1"); } catch (Exception ignore) {}
-        }
-        entity.setClientIp(ip);
+        entity.setClientIp(parseClientIp(pending.clientIp));
         entity.setClientAgent(pending.clientAgent);
         entity.setRequestUri(pending.requestUri);
         entity.setHttpMethod(pending.httpMethod);
@@ -537,6 +553,20 @@ public class AdminAuditService {
             }
         } catch (Exception ex) {
             if (log.isDebugEnabled()) log.debug("Failed to build human-readable target_ref: {}", ex.toString());
+        }
+
+        // Expose HTTP status code for downstream rule matching (e.g., login success vs failure).
+        if (pending.payload instanceof java.util.Map<?, ?> payloadMap) {
+            Object statusObj = payloadMap.get("status");
+            if (statusObj == null) statusObj = payloadMap.get("httpStatus");
+            if (statusObj == null) statusObj = payloadMap.get("http_status");
+            if (statusObj != null) {
+                String statusText = String.valueOf(statusObj).trim();
+                if (!statusText.isEmpty()) {
+                    det.put("status_code", statusText);
+                    det.put("状态码", statusText);
+                }
+            }
         }
 
         det.put("请求ID", extractRequestId());
@@ -683,21 +713,47 @@ public class AdminAuditService {
         String name = e.getOperatorName() != null && !e.getOperatorName().isBlank() ? e.getOperatorName() : e.getActor();
         String actionDesc = e.getEventType() != null ? e.getEventType() : e.getAction();
         String resultText = (e.getResult() != null && e.getResult().equalsIgnoreCase("SUCCESS")) ? "成功" : (e.getResult() == null ? "" : "失败");
-        // Prefer中文详情键（兼容旧英文键）
+        // 从详情提取中文信息，避免泄露主键；优先 "目标引用"，不显示 ID
         String targetTable = null;
         String targetId = null;
+        String targetRef = null;
         try {
             if (e.getDetails() != null && !e.getDetails().isBlank()) {
                 var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(e.getDetails());
                 if (node.hasNonNull("源表")) targetTable = node.get("源表").asText();
-                if (node.hasNonNull("目标ID")) targetId = node.get("目标ID").asText();
+                if (node.hasNonNull("目标引用")) targetRef = node.get("目标引用").asText();
                 if (targetTable == null && node.hasNonNull("target_table")) targetTable = node.get("target_table").asText();
+                if (targetRef == null && node.hasNonNull("target_ref")) targetRef = node.get("target_ref").asText();
+                if (node.hasNonNull("目标ID")) targetId = node.get("目标ID").asText();
                 if (targetId == null && node.hasNonNull("target_id")) targetId = node.get("target_id").asText();
             }
         } catch (Exception ignore) {}
+        String method = e.getHttpMethod() == null ? "" : e.getHttpMethod().trim().toUpperCase(java.util.Locale.ROOT);
+        boolean isListQuery = "GET".equals(method) && (targetId == null || targetId.isBlank());
         String tableLabel = mapTableLabel(targetTable != null ? targetTable : e.getResourceType());
-        String target = (tableLabel == null ? "" : tableLabel) + (targetId == null || targetId.isBlank() ? "" : "(ID=" + targetId + ")");
-        return String.format("用户【%s】%s【%s】 %s", nullToEmpty(name), nullToEmpty(resultText), nullToEmpty(actionDesc), target);
+        String targetText = "";
+        if (tableLabel != null && hasChinese(tableLabel)) {
+            if (isListQuery) {
+                targetText = tableLabel + "列表";
+            } else if (targetRef != null && hasChinese(targetRef)) {
+                targetText = tableLabel + "（" + targetRef + "）";
+            } else {
+                targetText = tableLabel;
+            }
+        } else if (targetRef != null && hasChinese(targetRef)) {
+            targetText = targetRef; // 仅展示中文引用
+        }
+        String suffix = targetText.isBlank() ? "" : (" " + targetText);
+        return String.format("用户【%s】%s【%s】%s", nullToEmpty(name), nullToEmpty(resultText), nullToEmpty(actionDesc), suffix);
+    }
+
+    private boolean hasChinese(String s) {
+        if (s == null || s.isBlank()) return false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= '\u4e00' && c <= '\u9fa5') return true;
+        }
+        return false;
     }
 
     private String mapTableLabel(String key) {
@@ -1295,6 +1351,9 @@ public class AdminAuditService {
 
         InetAddress parsed = tryParseInet(candidate);
         if (parsed != null) {
+            if (parsed.isLoopbackAddress() || parsed.isAnyLocalAddress()) {
+                return null;
+            }
             return parsed;
         }
 
@@ -1302,6 +1361,9 @@ public class AdminAuditService {
             String inside = candidate.substring(1, candidate.indexOf(']'));
             parsed = tryParseInet(inside);
             if (parsed != null) {
+                if (parsed.isLoopbackAddress() || parsed.isAnyLocalAddress()) {
+                    return null;
+                }
                 return parsed;
             }
         }
@@ -1311,6 +1373,9 @@ public class AdminAuditService {
             String withoutPort = candidate.substring(0, lastColon);
             parsed = tryParseInet(withoutPort);
             if (parsed != null) {
+                if (parsed.isLoopbackAddress() || parsed.isAnyLocalAddress()) {
+                    return null;
+                }
                 return parsed;
             }
         }

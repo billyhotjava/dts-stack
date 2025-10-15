@@ -3,8 +3,6 @@
 
 export type SecurityLevel = "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET";
 export type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
-export type Scope = "DEPT" | "INST";
-export type ShareScope = "PRIVATE_DEPT" | "SHARE_INST" | "PUBLIC_INST";
 
 // SourceType values seen in backend/CSV imports use both HIVE and INCEPTOR; treat INCEPTOR as HIVE alias
 export type SourceType = "HIVE" | "INCEPTOR" | "TRINO" | "EXTERNAL" | "API";
@@ -19,12 +17,16 @@ export interface ColumnSchema {
 	id: string;
 	name: string;
 	dataType: string;
+	nullable?: boolean;
+	tags?: string[];
 	description?: string;
 	sensitiveTags?: string[]; // e.g., ["PII:phone", "PII:id"]
 }
 
 export interface TableSchema {
-	tableName: string;
+	id?: string;
+	name: string;
+	tableName?: string;
 	columns: ColumnSchema[];
 }
 
@@ -43,11 +45,10 @@ export interface DatasetAsset {
 	classification: SecurityLevel;
 	// ABAC fields (optional during transition)
 	dataLevel?: DataLevel;
-	scope?: Scope;
 	ownerDept?: string;
-	shareScope?: ShareScope;
     tags: string[];
 	description?: string;
+    editable?: boolean;
     // During transition, some screens submit/receive flattened source fields
     // Make both shapes acceptable to keep build stable.
     source?: DatasetSource;
@@ -57,8 +58,20 @@ export interface DatasetAsset {
     hiveTable?: string;
 	exposure: ExposureType[];
 	table?: TableSchema;
+	tables?: TableSchema[];
 	createdAt: string;
 	updatedAt: string;
+}
+
+export interface DatasetGrant {
+	id: string;
+	datasetId?: string;
+	userId?: string;
+	username: string;
+	displayName?: string;
+	deptCode?: string;
+	createdBy?: string;
+	createdDate?: string;
 }
 
 export interface RowFilterRule {

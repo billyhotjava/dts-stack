@@ -3,8 +3,14 @@ package com.yuzhi.dts.platform.service.infra;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
+import com.yuzhi.dts.platform.repository.catalog.CatalogAccessPolicyRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetGrantRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetJobRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
@@ -14,12 +20,15 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +51,14 @@ public class InceptorCatalogSyncService {
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogTableSchemaRepository tableRepository;
     private final CatalogColumnSchemaRepository columnRepository;
+    private final CatalogAccessPolicyRepository accessPolicyRepository;
+    private final CatalogRowFilterRuleRepository rowFilterRepository;
+    private final CatalogMaskingRuleRepository maskingRuleRepository;
+    private final CatalogSecureViewRepository secureViewRepository;
+    private final CatalogDatasetGrantRepository datasetGrantRepository;
+    private final CatalogDatasetJobRepository datasetJobRepository;
+    private final PostgresCatalogSyncService postgresCatalogSyncService;
+    private final com.yuzhi.dts.platform.config.CatalogFeatureProperties catalogFeatureProperties;
 
     @Value("${dts.jdbc.statement-timeout-seconds:30}")
     private int statementTimeoutSeconds;
@@ -51,19 +68,47 @@ public class InceptorCatalogSyncService {
         HiveConnectionService connectionService,
         CatalogDatasetRepository datasetRepository,
         CatalogTableSchemaRepository tableRepository,
-        CatalogColumnSchemaRepository columnRepository
+        CatalogColumnSchemaRepository columnRepository,
+        CatalogAccessPolicyRepository accessPolicyRepository,
+        CatalogRowFilterRuleRepository rowFilterRepository,
+        CatalogMaskingRuleRepository maskingRuleRepository,
+        CatalogSecureViewRepository secureViewRepository,
+        CatalogDatasetGrantRepository datasetGrantRepository,
+        CatalogDatasetJobRepository datasetJobRepository,
+        PostgresCatalogSyncService postgresCatalogSyncService,
+        com.yuzhi.dts.platform.config.CatalogFeatureProperties catalogFeatureProperties
     ) {
         this.registry = registry;
         this.connectionService = connectionService;
         this.datasetRepository = datasetRepository;
         this.tableRepository = tableRepository;
         this.columnRepository = columnRepository;
+        this.accessPolicyRepository = accessPolicyRepository;
+        this.rowFilterRepository = rowFilterRepository;
+        this.maskingRuleRepository = maskingRuleRepository;
+        this.secureViewRepository = secureViewRepository;
+        this.datasetGrantRepository = datasetGrantRepository;
+        this.datasetJobRepository = datasetJobRepository;
+        this.postgresCatalogSyncService = postgresCatalogSyncService;
+        this.catalogFeatureProperties = catalogFeatureProperties;
     }
 
     public CatalogSyncResult synchronize() {
+        if (catalogFeatureProperties != null && !catalogFeatureProperties.isInceptorSyncEnabled()) {
+            LOG.info("Inceptor catalog synchronization disabled via configuration. Using PostgreSQL metadata instead.");
+            if (postgresCatalogSyncService != null && postgresCatalogSyncService.isFallbackActive()) {
+                return postgresCatalogSyncService.synchronize();
+            }
+            return CatalogSyncResult.inactive();
+        }
+
         Optional<InceptorDataSourceState> stateOpt = registry.getActive();
         if (stateOpt.isEmpty()) {
-            LOG.warn("Skipping Inceptor catalog sync: no active data source in registry");
+            if (postgresCatalogSyncService != null && postgresCatalogSyncService.isFallbackActive()) {
+                LOG.info("No active Inceptor data source. Falling back to PostgreSQL catalog sync.");
+                return postgresCatalogSyncService.synchronize();
+            }
+            LOG.warn("Skipping catalog sync: no active Inceptor or PostgreSQL data source detected");
             return CatalogSyncResult.inactive();
         }
         InceptorDataSourceState state = stateOpt.orElseThrow();
@@ -74,11 +119,24 @@ public class InceptorCatalogSyncService {
             metadata = fetchMetadata(state, database);
         } catch (Exception ex) {
             LOG.error("Failed to enumerate tables from Inceptor: {}", ex.getMessage(), ex);
+            if (postgresCatalogSyncService != null && postgresCatalogSyncService.isFallbackActive()) {
+                LOG.warn("Falling back to PostgreSQL catalog sync due to Inceptor failure: {}", ex.getMessage());
+                return postgresCatalogSyncService.synchronize();
+            }
             return CatalogSyncResult.failed(ex.getMessage());
         }
 
         if (metadata.isEmpty()) {
-            LOG.info("Catalog sync completed: no tables discovered in database {}", database);
+            int datasetsRemoved = cleanupStaleDatasets(database, Collections.emptySet());
+            LOG.info(
+                "Catalog sync completed: no tables discovered in database {} (removed {} stale dataset(s))",
+                database,
+                datasetsRemoved
+            );
+            if (postgresCatalogSyncService != null && postgresCatalogSyncService.isFallbackActive()) {
+                LOG.info("Delegating to PostgreSQL catalog sync because Inceptor returned zero tables");
+                return postgresCatalogSyncService.synchronize();
+            }
             return new CatalogSyncResult(database, 0, 0, 0, 0, Collections.emptyList(), null);
         }
 
@@ -104,6 +162,7 @@ public class InceptorCatalogSyncService {
             dataset.setType(DATASET_TYPE);
             dataset.setName(defaultIfBlank(dataset.getName(), tableName));
             dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));
+            dataset.setDataLevel(defaultIfBlank(dataset.getDataLevel(), "DATA_INTERNAL"));
             dataset.setOwner(defaultIfBlank(dataset.getOwner(), DEFAULT_OWNER));
             dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
 
@@ -157,6 +216,16 @@ public class InceptorCatalogSyncService {
             tablesCreated,
             columnsImported
         );
+
+        Set<String> processedLower = processedTables
+            .stream()
+            .filter(Objects::nonNull)
+            .map(name -> name.trim().toLowerCase(Locale.ROOT))
+            .collect(Collectors.toCollection(HashSet::new));
+        int datasetsRemoved = cleanupStaleDatasets(database, processedLower);
+        if (datasetsRemoved > 0) {
+            LOG.info("Catalog sync cleanup: removed {} stale datasets in database {}", datasetsRemoved, database);
+        }
         return new CatalogSyncResult(
             database,
             metadata.size(),
@@ -180,20 +249,15 @@ public class InceptorCatalogSyncService {
                 }
             }
 
-            List<String> tables = new ArrayList<>();
+            java.util.LinkedHashSet<String> tableNames = new java.util.LinkedHashSet<>();
             try (Statement stmt = connection.createStatement()) {
                 try {
                     stmt.setQueryTimeout(Math.max(1, statementTimeoutSeconds));
                 } catch (Throwable ignored) {}
-                try (ResultSet rs = stmt.executeQuery("SHOW TABLES")) {
-                while (rs.next()) {
-                    String name = rs.getString(1);
-                    if (StringUtils.hasText(name)) {
-                        tables.add(name.trim());
-                    }
-                }
-                }
+                collectIdentifiers(stmt, "SHOW TABLES", tableNames);
+                collectIdentifiers(stmt, "SHOW VIEWS", tableNames);
             }
+            List<String> tables = new ArrayList<>(tableNames);
 
             Map<String, List<ColumnMeta>> metadata = new LinkedHashMap<>();
             for (String table : tables) {
@@ -232,6 +296,22 @@ public class InceptorCatalogSyncService {
         return columns;
     }
 
+    private void collectIdentifiers(Statement stmt, String sql, java.util.LinkedHashSet<String> target) {
+        if (stmt == null || target == null) {
+            return;
+        }
+        try (ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                String name = rs.getString(1);
+                if (StringUtils.hasText(name)) {
+                    target.add(name.trim());
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.debug("Hive metadata statement '{}' failed: {}", sql, ex.getMessage());
+        }
+    }
+
     private HiveConnectionTestRequest buildRequest(InceptorDataSourceState state) {
         HiveConnectionTestRequest request = new HiveConnectionTestRequest();
         request.setJdbcUrl(state.jdbcUrl());
@@ -267,6 +347,66 @@ public class InceptorCatalogSyncService {
 
     private record ColumnMeta(String name, String dataType, boolean nullable) {}
 
+    private int cleanupStaleDatasets(String database, Set<String> processedTablesLower) {
+        List<CatalogDataset> existingDatasets = datasetRepository.findByHiveDatabaseIgnoreCase(database);
+        if (existingDatasets.isEmpty()) {
+            return 0;
+        }
+        int removed = 0;
+        for (CatalogDataset dataset : existingDatasets) {
+            if (dataset.getId() == null) {
+                continue;
+            }
+            String datasetType = dataset.getType();
+            if (StringUtils.hasText(datasetType) && !DATASET_TYPE.equalsIgnoreCase(datasetType)) {
+                continue;
+            }
+            String tableName = dataset.getHiveTable();
+            if (!StringUtils.hasText(tableName)) {
+                continue;
+            }
+            if (processedTablesLower.contains(tableName.trim().toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            purgeDataset(dataset);
+            removed++;
+        }
+        return removed;
+    }
+
+    private void purgeDataset(CatalogDataset dataset) {
+        try {
+            accessPolicyRepository.findByDataset(dataset).ifPresent(accessPolicyRepository::delete);
+            var rowFilters = rowFilterRepository.findByDataset(dataset);
+            if (!rowFilters.isEmpty()) {
+                rowFilterRepository.deleteAll(rowFilters);
+            }
+            var maskingRules = maskingRuleRepository.findByDataset(dataset);
+            if (!maskingRules.isEmpty()) {
+                maskingRuleRepository.deleteAll(maskingRules);
+            }
+            var secureViews = secureViewRepository.findByDataset(dataset);
+            if (!secureViews.isEmpty()) {
+                secureViewRepository.deleteAll(secureViews);
+            }
+            if (dataset.getId() != null) {
+                datasetGrantRepository.deleteByDatasetId(dataset.getId());
+            }
+            datasetJobRepository.deleteByDataset(dataset);
+            List<CatalogTableSchema> tables = tableRepository.findByDataset(dataset);
+            for (CatalogTableSchema tableSchema : tables) {
+                columnRepository.deleteByTable(tableSchema);
+            }
+            if (!tables.isEmpty()) {
+                tableRepository.deleteAll(tables);
+            }
+            datasetRepository.delete(dataset);
+        } catch (Exception ex) {
+            LOG.warn("Failed to purge stale dataset {}({}): {}", dataset.getName(), dataset.getId(), ex.getMessage());
+            LOG.debug("Purge dataset stack", ex);
+        }
+    }
+
     public record CatalogSyncResult(
         String database,
         int tablesDiscovered,
@@ -276,11 +416,11 @@ public class InceptorCatalogSyncService {
         List<String> tableNames,
         String error
     ) {
-        private static CatalogSyncResult inactive() {
+        public static CatalogSyncResult inactive() {
             return new CatalogSyncResult(null, 0, 0, 0, 0, Collections.emptyList(), null);
         }
 
-        private static CatalogSyncResult failed(String error) {
+        public static CatalogSyncResult failed(String error) {
             return new CatalogSyncResult(null, 0, 0, 0, 0, Collections.emptyList(), error);
         }
     }

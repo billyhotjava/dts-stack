@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251220-04-audit-operation-mapping-patch" author="codex">
+        <comment>Add rules for change-requests approve, approval-requests actions, and menu tree</comment>
+
+        <!-- 变更申请审批：/api/admin/change-requests/{id}/{action} (approve/reject/...) -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/change-requests/{id}/{action}"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="处理变更申请：{rid|未知}"/>
+            <column name="source_table_template" value="变更申请"/>
+            <column name="param_extractors" value="{&quot;rid&quot;:&quot;path.id&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="9"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 审批请求动作：/api/approval-requests/{id}/{action} (approve/reject/...) -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/approval-requests/{id}/{action}"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="处理审批：{rid|未知}"/>
+            <column name="source_table_template" value="审批请求"/>
+            <column name="param_extractors" value="{&quot;rid&quot;:&quot;path.id&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="9"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 审批请求详情（兜底适配未被 GET 捕获的变体）：/api/approval-requests/{id} ALL->查询 -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/approval-requests/{id}"/>
+            <column name="http_method" value="ALL"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询审批请求：{rid|未知}"/>
+            <column name="source_table_template" value="审批请求"/>
+            <column name="param_extractors" value="{&quot;rid&quot;:&quot;path.id&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="13"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 门户菜单树：/api/menu/tree GET -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/menu/tree"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="菜单管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询门户菜单树"/>
+            <column name="source_table_template" value="门户菜单"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="12"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
+

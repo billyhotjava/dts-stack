@@ -8,6 +8,7 @@ import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Text } from "@/ui/typography";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/ui/tooltip";
 import { Icon } from "@/components/icon";
 import UserModal from "./user-management.modal";
 import { toast } from "sonner";
@@ -37,26 +38,39 @@ function toPersonnelLevelZh(raw?: string): string {
 
 // (deduped) helpers defined once above
 
-function collectRoleNames(user: KeycloakUser): string[] {
-  const names = new Set<string>();
-  // 1) backend may return a flat roles[] summary
-  (user.roles || []).forEach((r: string) => r && names.add(r));
-  // 2) realm roles (preferred when available)
-  (user.realmRoles || []).forEach((r: string) => r && names.add(r));
-  // 3) client roles (flatten)
-  if (user.clientRoles) {
-    (Object.values(user.clientRoles) as string[][]).forEach((arr: string[]) => arr?.forEach((r: string) => r && names.add(r)));
+type RoleChip = { code: string; label: string };
+
+function normalizeRoleCode(value?: string): string {
+  if (!value) return "";
+  let upper = String(value).trim().toUpperCase();
+  if (!upper) return "";
+  if (upper.startsWith("ROLE_")) {
+    upper = upper.slice(5);
+  } else if (upper.startsWith("ROLE-")) {
+    upper = upper.slice(5);
   }
-  // Hide built-in/default technical roles from list display
-  const raw = Array.from(names).map((n) => String(n || "").trim());
-  const filtered = raw.filter((n) => {
-    if (!n) return false;
-    if (GLOBAL_CONFIG.hideDefaultRoles && n.toLowerCase().startsWith("default-roles-")) return false;
-    const lower = n.toLowerCase();
-    if (GLOBAL_CONFIG.hideBuiltinRoles && (lower === "offline_access" || lower === "uma_authorization" || lower.startsWith("realm-management"))) return false;
-    return true;
-  });
-  return filtered;
+  upper = upper.replace(/[^A-Z0-9_]/g, "_").replace(/_+/g, "_");
+  return upper;
+}
+
+function collectRoleCodes(user: KeycloakUser): string[] {
+  const names = new Set<string>();
+  const push = (value?: string) => {
+    if (!value) return;
+    const raw = String(value).trim();
+    if (!raw) return;
+    const lower = raw.toLowerCase();
+    if (GLOBAL_CONFIG.hideDefaultRoles && lower.startsWith("default-roles-")) return;
+    if (GLOBAL_CONFIG.hideBuiltinRoles && (lower === "offline_access" || lower === "uma_authorization")) return;
+    const code = normalizeRoleCode(raw);
+    if (code) names.add(code);
+  };
+  (user.roles || []).forEach(push);
+  (user.realmRoles || []).forEach(push);
+  if (user.clientRoles) {
+    (Object.values(user.clientRoles) as string[][]).forEach((arr: string[]) => arr?.forEach(push));
+  }
+  return Array.from(names).filter(Boolean);
 }
 
 function resolveFullName(user: KeycloakUser): string {
@@ -70,13 +84,21 @@ function resolveFullName(user: KeycloakUser): string {
   return n;
 }
 
+const hasOwn = Object.prototype.hasOwnProperty;
+
 export default function UserManagementView() {
   const { push } = useRouter();
   const [list, setList] = useState<KeycloakUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [rolesMap, setRolesMap] = useState<Record<string, string[]>>({});
-  const [roleDisplayNameMap, setRoleDisplayNameMap] = useState<Record<string, string>>({});
+  const [roleDisplayNameMap, setRoleDisplayNameMap] = useState<Record<string, string>>({
+    SYSADMIN: "系统管理员",
+    AUTHADMIN: "授权管理员",
+    OPADMIN: "运维管理员",
+    AUDITADMIN: "安全审计员",
+  });
+  const [assignmentRoleMap, setAssignmentRoleMap] = useState<Record<string, { code: string; label: string }[]>>({});
   const [orgIndexById, setOrgIndexById] = useState<Record<string, OrganizationNode>>({});
   const [modalState, setModalState] = useState<{
     open: boolean;
@@ -84,6 +106,46 @@ export default function UserManagementView() {
     target?: KeycloakUser;
   }>({ open: false, mode: "create" });
   // no external toggling action here; enable/停用统一放入编辑弹窗
+
+  const loadRoleAssignments = useCallback(async () => {
+    try {
+      const assignments = await adminApi.getRoleAssignments();
+      const roleNameLookup: Record<string, string> = { ...roleDisplayNameMap };
+      const map: Record<string, { code: string; label: string }[]> = {};
+      const labelMap: Record<string, string> = {};
+      (assignments || []).forEach((item: any) => {
+        const username = (item?.username || "").toString().trim().toLowerCase();
+        const roleRaw = (item?.role || "").toString();
+        const displayNameRaw = (item?.displayName || "").toString();
+        const code = normalizeRoleCode(roleRaw);
+        if (!username || !code) return;
+        const normalizedKey = code;
+        const canonicalKey = `ROLE_${code}`;
+        const resolvedDisplay = roleNameLookup[normalizedKey] || roleNameLookup[canonicalKey] || displayNameRaw.trim() || roleRaw.trim() || code;
+        if (!map[username]) map[username] = [];
+        if (!map[username].some((entry) => entry.code === code)) {
+          map[username].push({ code, label: resolvedDisplay });
+        }
+        labelMap[code] = resolvedDisplay;
+        labelMap[`ROLE_${code}`] = resolvedDisplay;
+      });
+      setAssignmentRoleMap(map);
+      if (Object.keys(labelMap).length) {
+        setRoleDisplayNameMap((prev) => {
+          const next = { ...prev };
+          Object.entries(labelMap).forEach(([key, value]) => {
+            if (!next[key]) {
+              next[key] = value;
+            }
+          });
+          return next;
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load role assignments", error);
+      setAssignmentRoleMap({});
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,18 +155,171 @@ export default function UserManagementView() {
         : await KeycloakUserService.getAllUsers({ first: 0, max: 100 });
       setList(data || []);
       setRolesMap({});
+      await loadRoleAssignments();
     } catch (e: any) {
       toast.error(e?.message || "加载用户失败");
     } finally {
       setLoading(false);
     }
-  }, [searchValue]);
+  }, [searchValue, loadRoleAssignments]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   const toggleEnabled = useCallback(async () => {}, []);
+
+  const getRoleInfo = useCallback(
+    (record: KeycloakUser) => {
+      const key = String(record.id || record.username);
+      const loaded = hasOwn.call(rolesMap, key);
+      const usernameKey = (record.username || "").trim().toLowerCase();
+      const assigned = assignmentRoleMap[usernameKey] ?? [];
+      const fetched = loaded ? rolesMap[key] ?? [] : [];
+      const fallback = collectRoleCodes(record);
+      const seen = new Set<string>();
+      const roles: RoleChip[] = [];
+      const push = (code?: string, label?: string) => {
+        const normalized = normalizeRoleCode(code);
+        if (!normalized || seen.has(normalized)) return;
+        seen.add(normalized);
+        const resolvedLabel =
+          roleDisplayNameMap[normalized] ||
+          roleDisplayNameMap[`ROLE_${normalized}`] ||
+          label ||
+          normalized;
+        roles.push({ code: normalized, label: resolvedLabel });
+      };
+      assigned.forEach((entry) => push(entry.code, entry.label));
+      fetched.forEach((code) => push(code));
+      fallback.forEach((code) => push(code));
+      return { key, loaded, roles };
+    },
+    [rolesMap, assignmentRoleMap, roleDisplayNameMap]
+  );
+
+  const renderRolePreview = useCallback(
+    (roles: RoleChip[]) => {
+      if (!roles.length) return <span className="text-muted-foreground">--</span>;
+      const preview = roles.slice(0, 2);
+      const remaining = roles.slice(2);
+      return (
+        <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
+          {preview.map((role) => (
+            <Badge key={role.code} variant="outline" className="max-w-[120px] truncate">
+              {role.label}
+            </Badge>
+          ))}
+          {remaining.length > 0 ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="secondary">+{remaining.length}</Badge>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <div className="flex flex-wrap gap-1">
+                  {remaining.map((role) => (
+                    <Badge key={role.code} variant="outline" className="max-w-[140px] truncate">
+                      {role.label}
+                    </Badge>
+                  ))}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
+      );
+    },
+    []
+  );
+
+  const expandedRowRender = useCallback(
+    (record: KeycloakUser) => {
+      const { roles } = getRoleInfo(record);
+      const attrs = record.attributes || {};
+      const phone = getSingleAttr(attrs, "phone") || getSingleAttr(attrs, "mobile") || getSingleAttr(attrs, "telephone");
+      const title = getSingleAttr(attrs, "title") || getSingleAttr(attrs, "position");
+      const remark = getSingleAttr(attrs, "remark") || getSingleAttr(attrs, "description");
+      const department = getSingleAttr(attrs, "department") || getSingleAttr(attrs, "dept_name");
+      const securityLevel = toPersonnelLevelZh(
+        getSingleAttr(attrs, "personnel_security_level") ||
+          getSingleAttr(attrs, "person_security_level") ||
+          getSingleAttr(attrs, "personnel_level")
+      );
+
+      return (
+        <div className="grid gap-4 border-t border-muted pt-4 text-sm md:grid-cols-3">
+          <div className="space-y-2">
+            <Text variant="body3" className="text-muted-foreground">
+              基础信息
+            </Text>
+            <div className="space-y-1">
+              <div>
+                <span className="text-muted-foreground">用户名：</span>
+                <span>{record.username}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">姓名：</span>
+                <span>{resolveFullName(record) || "-"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">邮箱：</span>
+                <span>{record.email || "-"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">部门：</span>
+                <span>{department || "-"}</span>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Text variant="body3" className="text-muted-foreground">
+              联系方式
+            </Text>
+            <div className="space-y-1">
+              <div>
+                <span className="text-muted-foreground">电话：</span>
+                <span>{phone || "-"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">职务：</span>
+                <span>{title || "-"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">人员密级：</span>
+                <span>{securityLevel || "-"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">状态：</span>
+                <span className={record.enabled ? "text-emerald-600" : "text-red-600"}>
+                  {record.enabled ? "已启用" : "已停用"}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Text variant="body3" className="text-muted-foreground">
+              角色
+            </Text>
+            <div className="flex flex-wrap gap-1">
+              {roles.length ? (
+                roles.map((role) => (
+                  <Badge key={role.code} variant="outline" className="max-w-[160px] truncate">
+                    {role.label}
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-muted-foreground">未分配角色</span>
+              )}
+            </div>
+            {remark ? (
+              <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">备注：{remark}</div>
+            ) : null}
+          </div>
+        </div>
+      );
+    },
+    [getRoleInfo]
+  );
 
   // Build organization index once for dept_code -> name mapping
   useEffect(() => {
@@ -134,16 +349,28 @@ export default function UserManagementView() {
       try {
         const roles = await adminApi.getAdminRoles();
         const map: Record<string, string> = {};
+        const register = (key?: string, value?: string) => {
+          if (!key || !value) return;
+          const upper = String(key).trim().toUpperCase();
+          if (!upper) return;
+          const label = String(value);
+          if (!map[upper]) map[upper] = label;
+          const canonical = normalizeRoleCode(upper);
+          if (canonical && !map[canonical]) map[canonical] = label;
+          if (upper.startsWith("ROLE_")) {
+            const without = upper.slice(5);
+            if (without && !map[without]) map[without] = label;
+          }
+        };
         for (const r of roles || []) {
           const display = (r as any).nameZh || (r as any).displayName || (r as any).name || "";
-          const keys = [ (r as any).name, (r as any).code, (r as any).roleId, (r as any).legacyName ];
-          for (const k of keys) {
-            const key = (k || "").toString().trim().toUpperCase();
-            if (key && display) map[key] = String(display);
-          }
+          const keys = [(r as any).name, (r as any).code, (r as any).roleId, (r as any).legacyName];
+          keys.forEach((k) => register(k, display));
         }
         setRoleDisplayNameMap(map);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     })();
   }, []);
 
@@ -158,29 +385,33 @@ export default function UserManagementView() {
         while (i < entries.length) {
           const idx = i++;
           const u = entries[idx];
-          const id = String(u.id || u.username || idx);
-          if (rolesMap[id] !== undefined) continue;
+          const key = String(u.id || u.username || idx);
+          if (rolesMap[key] !== undefined) continue;
+          const userId = String(u.id || "").trim();
+          if (!userId) {
+            setRolesMap((prev) => ({ ...prev, [key]: [] }));
+            continue;
+          }
           try {
-            const key = String(u.id || u.username || idx);
-            const roles: KeycloakRole[] = await KeycloakUserService.getUserRoles(String(u.id || u.username || ""));
+            const roles: KeycloakRole[] = await KeycloakUserService.getUserRoles(userId);
             const filtered = (roles || []).filter((r) => {
               const name = (r?.name || "").toString();
               if (!name) return false;
               if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
-              // Only hide Keycloak built-in roles in the list view. Do NOT hide
-              // reserved business roles (e.g. SYSADMIN/OPADMIN) from display here,
-              // otherwise the “角色”列会被清空。
               if (GLOBAL_CONFIG.hideBuiltinRoles && isKeycloakBuiltInRole(r)) return false;
               return true;
             });
-            const names = filtered.map((r) => (r?.name || "").toString().trim().toUpperCase());
+            const names = filtered
+              .map((r) => normalizeRoleCode(r?.name))
+              .filter((code) => Boolean(code));
             setRolesMap((prev) => ({ ...prev, [key]: names }));
-          } catch {
-            setRolesMap((prev) => ({ ...prev, [id]: [] }));
+          } catch (error) {
+            console.error("Failed to load Keycloak roles", error);
+            setRolesMap((prev) => ({ ...prev, [key]: [] }));
           }
         }
       }
-  await Promise.all(Array.from({ length: Math.min(limit, entries.length) }, () => worker()));
+      await Promise.all(Array.from({ length: Math.min(limit, entries.length) }, () => worker()));
     })();
   }, [list]);
 
@@ -238,20 +469,11 @@ export default function UserManagementView() {
         key: "roles",
         onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => {
-          const id = String(record.id || record.username);
-          const names = rolesMap[id] ?? collectRoleNames(record).map((n) => n.toUpperCase());
-          if (names === undefined) return <span className="text-muted-foreground">加载中…</span>;
-          const roles = names || [];
-          return roles.length ? (
-            <div className="flex flex-wrap gap-1">
-              {roles.slice(0, 5).map((r) => (
-                <Badge key={r} variant="outline">{roleDisplayNameMap[r] || r}</Badge>
-              ))}
-              {roles.length > 5 ? <Badge variant="secondary">+{roles.length - 5}</Badge> : null}
-            </div>
-          ) : (
-            <span className="text-muted-foreground">--</span>
-          );
+          const info = getRoleInfo(record);
+          if (!info.loaded && info.roles.length === 0) {
+            return <span className="text-muted-foreground">加载中…</span>;
+          }
+          return renderRolePreview(info.roles);
         },
       },
       {
@@ -298,11 +520,12 @@ export default function UserManagementView() {
         ),
       },
     ],
-    [toggleEnabled, rolesMap, orgIndexById],
+    [toggleEnabled, orgIndexById, getRoleInfo, renderRolePreview],
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
+    <TooltipProvider>
+      <div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
       {/* 页面标题与操作区：老布局形态 */}
       <div className="flex flex-wrap items-center gap-3">
         <Text variant="body1" className="text-lg font-semibold">
@@ -352,6 +575,11 @@ export default function UserManagementView() {
             rowClassName={() => "text-sm"}
             tableLayout="fixed"
             scroll={{ x: 1400 }}
+            expandable={{
+              expandedRowRender,
+              expandRowByClick: true,
+              columnWidth: 48,
+            }}
           />
         </CardContent>
       </Card>
@@ -367,6 +595,7 @@ export default function UserManagementView() {
           load();
         }}
       />
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

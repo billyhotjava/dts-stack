@@ -1,0 +1,539 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251015-01-audit-operation-mapping-ensure-table" author="codex" runAlways="true">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="audit_operation_mapping"/>
+            </not>
+        </preConditions>
+        <comment>Ensure audit_operation_mapping table exists after data reset</comment>
+        <createTable tableName="audit_operation_mapping">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="url_pattern" type="VARCHAR(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="http_method" type="VARCHAR(16)" defaultValue="ALL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status_code_regex" type="VARCHAR(32)"/>
+            <column name="module_name" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action_type" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description_template" type="VARCHAR(1024)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_table_template" type="VARCHAR(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="param_extractors" type="TEXT"/>
+            <column name="event_class" type="VARCHAR(64)" defaultValue="AuditEvent"/>
+            <column name="order_value" type="INT" defaultValueNumeric="0"/>
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="version" type="VARCHAR(32)"/>
+            <column name="valid_from" type="TIMESTAMP"/>
+            <column name="valid_to" type="TIMESTAMP"/>
+            <column name="updated_by" type="VARCHAR(128)"/>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <createIndex indexName="idx_aom_enabled" tableName="audit_operation_mapping">
+            <column name="enabled"/>
+        </createIndex>
+        <createIndex indexName="idx_aom_method" tableName="audit_operation_mapping">
+            <column name="http_method"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251015-02-audit-operation-mapping-reseed" author="codex" runAlways="true">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="audit_operation_mapping"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(1) FROM audit_operation_mapping
+            </sqlCheck>
+        </preConditions>
+        <comment>Reseed audit operation mappings when table recreated</comment>
+
+        <!-- 用户管理 -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询用户列表"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="10"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询用户：{targetRef|未知}"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="9"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增用户：{targetRef|未知}"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="8"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改用户：{targetRef|未知}"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="8"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除用户：{targetRef|未知}"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="8"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 角色关联（简化为“修改用户角色”描述） -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users/{id}/roles"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改用户角色：{targetRef|未知}"/>
+            <column name="source_table_template" value="用户角色"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="7"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users/{id}/roles"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="删除用户角色：{targetRef|未知}"/>
+            <column name="source_table_template" value="用户角色"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="7"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 角色管理（Keycloak 角色实体） -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/roles"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询角色列表"/>
+            <column name="source_table_template" value="角色"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="6"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/roles/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询角色：{targetRef|未知}"/>
+            <column name="source_table_template" value="角色"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="5"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/roles"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增角色：{targetRef|未知}"/>
+            <column name="source_table_template" value="角色"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="5"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/roles/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改角色：{targetRef|未知}"/>
+            <column name="source_table_template" value="角色"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="5"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/roles/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除角色：{targetRef|未知}"/>
+            <column name="source_table_template" value="角色"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="5"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 审计日志导出 -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-logs/export"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审计日志"/>
+            <column name="action_type" value="导出"/>
+            <column name="description_template" value="导出审计日志"/>
+            <column name="source_table_template" value="审计日志"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="4"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 审批中心 -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/approval-requests"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询审批请求列表"/>
+            <column name="source_table_template" value="审批请求"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="12"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/approval-requests/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询审批请求：{targetRef|未知}"/>
+            <column name="source_table_template" value="审批请求"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="11"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/approvals/{id}/{action}"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="处理审批：{targetRef|未知}"/>
+            <column name="source_table_template" value="审批请求"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="10"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 部门管理（/api/admin） -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/orgs"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="部门管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询部门列表"/>
+            <column name="source_table_template" value="部门"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="12"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/orgs"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="部门管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新建部门"/>
+            <column name="source_table_template" value="部门"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="11"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/orgs/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="部门管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改部门"/>
+            <column name="source_table_template" value="部门"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="11"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/orgs/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="部门管理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除部门"/>
+            <column name="source_table_template" value="部门"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="11"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 门户菜单 -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/portal-menus"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="菜单管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询门户菜单列表"/>
+            <column name="source_table_template" value="门户菜单"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="12"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/portal-menus"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="菜单管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增门户菜单：{targetRef|未知}"/>
+            <column name="source_table_template" value="门户菜单"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="11"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/portal-menus/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="菜单管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改门户菜单：{targetRef|未知}"/>
+            <column name="source_table_template" value="门户菜单"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="11"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/portal-menus/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="菜单管理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除门户菜单：{targetRef|未知}"/>
+            <column name="source_table_template" value="门户菜单"/>
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="11"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 门户菜单可见性 -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/portal-menu-visibility"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="菜单管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询门户菜单可见性"/>
+            <column name="source_table_template" value="门户菜单可见性"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="10"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 平台：SQL 工作台与数据标准（事件由平台转发到管理端） -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/explore/execute"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据开发"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="执行SQL查询"/>
+            <column name="source_table_template" value="数据库查询"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="10"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/modeling/standards"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据标准"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询数据标准列表"/>
+            <column name="source_table_template" value="数据标准"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="9"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/modeling/standards/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据标准"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询数据标准"/>
+            <column name="source_table_template" value="数据标准"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="9"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/modeling/standards"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据标准"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增数据标准"/>
+            <column name="source_table_template" value="数据标准"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="9"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/modeling/standards/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="数据标准"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改数据标准"/>
+            <column name="source_table_template" value="数据标准"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="9"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/modeling/standards/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="数据标准"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除数据标准"/>
+            <column name="source_table_template" value="数据标准"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="9"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 兜底规则：所有未覆盖接口 -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/**"/>
+            <column name="http_method" value="ALL"/>
+            <column name="module_name" value="未知模块"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="执行了操作：{event.requestUri|未知}"/>
+            <column name="source_table_template" value="未知"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="10000"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 附加补丁：后续版本新增覆盖 -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/change-requests/{id}/{action}"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="处理变更申请：{rid|未知}"/>
+            <column name="source_table_template" value="变更申请"/>
+            <column name="param_extractors" value="{&quot;rid&quot;:&quot;path.id&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="9"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/approval-requests/{id}/{action}"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="处理审批：{rid|未知}"/>
+            <column name="source_table_template" value="审批请求"/>
+            <column name="param_extractors" value="{&quot;rid&quot;:&quot;path.id&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="9"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/approval-requests/{id}"/>
+            <column name="http_method" value="ALL"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询审批请求：{rid|未知}"/>
+            <column name="source_table_template" value="审批请求"/>
+            <column name="param_extractors" value="{&quot;rid&quot;:&quot;path.id&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="13"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/menu/tree"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="菜单管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询门户菜单树"/>
+            <column name="source_table_template" value="门户菜单"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="12"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/change-requests"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询变更申请列表"/>
+            <column name="source_table_template" value="变更申请"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="12"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/change-requests/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询变更申请"/>
+            <column name="source_table_template" value="变更申请"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="12"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/orgs/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="部门管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询部门"/>
+            <column name="source_table_template" value="部门"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="13"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

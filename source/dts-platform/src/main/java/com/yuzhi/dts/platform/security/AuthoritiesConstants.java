@@ -18,5 +18,41 @@ public final class AuthoritiesConstants {
     public static final String GOV_ADMIN = "ROLE_GOV_ADMIN";
     public static final String IAM_ADMIN = "ROLE_IAM_ADMIN";
 
+    // Organization-level data roles
+    public static final String INST_DATA_DEV = "ROLE_INST_DATA_DEV";
+    public static final String INST_DATA_OWNER = "ROLE_INST_DATA_OWNER";
+    public static final String DEPT_DATA_DEV = "ROLE_DEPT_DATA_DEV";
+    public static final String DEPT_DATA_OWNER = "ROLE_DEPT_DATA_OWNER";
+
+    // Aggregated role groups for access control annotations
+    public static final String[] DATA_MAINTAINER_ROLES = new String[] {
+        ADMIN,
+        OP_ADMIN,
+        INST_DATA_DEV,
+        INST_DATA_OWNER,
+        DEPT_DATA_DEV,
+        DEPT_DATA_OWNER
+    };
+
+    public static final String[] CATALOG_MAINTAINERS = new String[] {
+        CATALOG_ADMIN,
+        ADMIN,
+        OP_ADMIN,
+        INST_DATA_DEV,
+        INST_DATA_OWNER,
+        DEPT_DATA_DEV,
+        DEPT_DATA_OWNER
+    };
+
+    public static final String[] GOVERNANCE_MAINTAINERS = new String[] {
+        GOV_ADMIN,
+        ADMIN,
+        OP_ADMIN,
+        INST_DATA_DEV,
+        INST_DATA_OWNER,
+        DEPT_DATA_DEV,
+        DEPT_DATA_OWNER
+    };
+
     private AuthoritiesConstants() {}
 }

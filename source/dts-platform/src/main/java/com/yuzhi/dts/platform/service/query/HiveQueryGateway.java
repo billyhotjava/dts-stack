@@ -1,8 +1,10 @@
 package com.yuzhi.dts.platform.service.query;
 
+import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionService;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
+import com.yuzhi.dts.platform.service.infra.PostgresCatalogSyncService;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -15,12 +17,14 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import javax.sql.DataSource;
 
 @Service
 @Primary
@@ -31,17 +35,34 @@ public class HiveQueryGateway implements QueryGateway {
 
     private final HiveConnectionService connectionService;
     private final InceptorDataSourceRegistry registry;
+    private final PostgresCatalogSyncService postgresCatalogSyncService;
+    private final DataSource dataSource;
+    private final CatalogFeatureProperties catalogFeatureProperties;
 
-    public HiveQueryGateway(HiveConnectionService connectionService, InceptorDataSourceRegistry registry) {
+    public HiveQueryGateway(
+        HiveConnectionService connectionService,
+        InceptorDataSourceRegistry registry,
+        PostgresCatalogSyncService postgresCatalogSyncService,
+        DataSource dataSource,
+        CatalogFeatureProperties catalogFeatureProperties
+    ) {
         this.connectionService = connectionService;
         this.registry = registry;
+        this.postgresCatalogSyncService = postgresCatalogSyncService;
+        this.dataSource = dataSource;
+        this.catalogFeatureProperties = catalogFeatureProperties;
     }
 
     @Override
     public Map<String, Object> execute(String effectiveSql) {
-        InceptorDataSourceState state = registry
-            .getActive()
-            .orElseThrow(() -> new IllegalStateException("未检测到可用的 Inceptor 数据源，联系系统管理员"));
+        Optional<InceptorDataSourceState> stateOpt = registry.getActive();
+        if (stateOpt.isEmpty()) {
+            if (postgresCatalogSyncService != null && postgresCatalogSyncService.isFallbackActive()) {
+                return executeWithPostgres(effectiveSql);
+            }
+            throw new IllegalStateException("未检测到可用的数据源，请联系系统管理员");
+        }
+        InceptorDataSourceState state = stateOpt.orElseThrow();
 
         HiveConnectionTestRequest request = buildRequest(state);
         try {
@@ -103,6 +124,66 @@ public class HiveQueryGateway implements QueryGateway {
             LOG.error("Hive query failure. sql='{}', reason={}", effectiveSql, message, e);
             throw new IllegalStateException("Hive 查询失败: " + message, e);
         }
+    }
+
+    private Map<String, Object> executeWithPostgres(String effectiveSql) {
+        long connectStart = System.nanoTime();
+        try (java.sql.Connection connection = dataSource.getConnection()) {
+            long connectMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - connectStart);
+            long queryStart = System.nanoTime();
+
+            List<String> headers = new ArrayList<>();
+            List<Map<String, Object>> rows = new ArrayList<>();
+            try (Statement stmt = connection.createStatement()) {
+                stmt.setMaxRows(MAX_ROWS);
+                stmt.setFetchSize(2000);
+                try (ResultSet rs = stmt.executeQuery(effectiveSql)) {
+                    ResultSetMetaData meta = rs.getMetaData();
+                    int columnCount = meta.getColumnCount();
+                    for (int i = 1; i <= columnCount; i++) {
+                        headers.add(meta.getColumnLabel(i));
+                    }
+                    while (rs.next()) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int i = 1; i <= columnCount; i++) {
+                            row.put(headers.get(i - 1), readValue(rs, i));
+                        }
+                        rows.add(row);
+                    }
+                }
+            }
+
+            long queryMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - queryStart);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("headers", headers);
+            result.put("rows", rows);
+            result.put("rowCount", rows.size());
+            result.put("connectMillis", connectMillis);
+            result.put("queryMillis", queryMillis);
+            result.put("effectiveSql", effectiveSql);
+            result.put(
+                "executionContext",
+                Map.of(
+                    "database",
+                    sanitizeSchema(catalogFeatureProperties.getPostgresSchema()),
+                    "timestamp",
+                    Instant.now()
+                )
+            );
+            LOG.debug("PostgreSQL query executed. rows={}, connect={}ms, query={}ms", rows.size(), connectMillis, queryMillis);
+            return result;
+        } catch (SQLException e) {
+            String message = resolveMessage(e);
+            LOG.error("PostgreSQL query failure. sql='{}', reason={}", effectiveSql, message, e);
+            throw new IllegalStateException("PostgreSQL 查询失败: " + message, e);
+        }
+    }
+
+    private String sanitizeSchema(String schema) {
+        if (!StringUtils.hasText(schema)) {
+            return "public";
+        }
+        return schema.trim();
     }
 
     private HiveConnectionTestRequest buildRequest(InceptorDataSourceState state) {

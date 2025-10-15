@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251015-04-refactor-login-rules" author="gemini-cli">
+        <comment>Refactor hardcoded login audit rules from KeycloakApiResource.java into the rule engine</comment>
+
+        <addColumn tableName="audit_operation_mapping">
+            <column name="status_code_regex" type="VARCHAR(32)"/>
+        </addColumn>
+
+        <!-- 1. Admin Login Success -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/login"/>
+            <column name="http_method" value="POST"/>
+            <column name="status_code_regex" value="200"/>
+            <column name="module_name" value="登录管理"/>
+            <column name="action_type" value="登录"/>
+            <column name="description_template" value="用户登录成功（系统端）: {username}"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;request.username&quot;}"/>
+            <column name="event_class" value="SecurityEvent"/>
+            <column name="order_value" valueNumeric="4"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 2. Admin Login Failure -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/login"/>
+            <column name="http_method" value="POST"/>
+            <column name="status_code_regex" value="[45]\d{2}"/>
+            <column name="module_name" value="登录管理"/>
+            <column name="action_type" value="登录"/>
+            <column name="description_template" value="用户登录失败（系统端）: {username}"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;request.username&quot;}"/>
+            <column name="event_class" value="SecurityEvent"/>
+            <column name="order_value" valueNumeric="4"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 3. Platform Login Success -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/platform/login"/>
+            <column name="http_method" value="POST"/>
+            <column name="status_code_regex" value="200"/>
+            <column name="module_name" value="登录管理"/>
+            <column name="action_type" value="登录"/>
+            <column name="description_template" value="用户登录成功（平台端）: {username}"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;request.username&quot;}"/>
+            <column name="event_class" value="SecurityEvent"/>
+            <column name="order_value" valueNumeric="4"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 4. Platform Login Failure -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/platform/login"/>
+            <column name="http_method" value="POST"/>
+            <column name="status_code_regex" value="[45]\d{2}"/>
+            <column name="module_name" value="登录管理"/>
+            <column name="action_type" value="登录"/>
+            <column name="description_template" value="用户登录失败（平台端）: {username}"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;request.username&quot;}"/>
+            <column name="event_class" value="SecurityEvent"/>
+            <column name="order_value" valueNumeric="4"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+    </changeSet>
+
+</databaseChangeLog>

@@ -31,12 +31,11 @@ class CatalogResourceIT {
 
     @Test
     @WithMockUser(authorities = {"ROLE_CATALOG_ADMIN"})
-    void createDatasetShouldFailWhenDeptScopeMissingOwnerDept() throws Exception {
+    void createDatasetShouldFailWhenOwnerDeptMissing() throws Exception {
         Map<String, Object> payload = Map.of(
             "name", "dept_asset",
             "type", "TRINO",
-            "dataLevel", "DATA_INTERNAL",
-            "scope", "DEPT"
+            "dataLevel", "DATA_INTERNAL"
         );
         mockMvc
             .perform(
@@ -50,12 +49,12 @@ class CatalogResourceIT {
 
     @Test
     @WithMockUser(authorities = {"ROLE_CATALOG_ADMIN"})
-    void createDatasetShouldFailWhenInstScopeMissingShareScope() throws Exception {
+    void createDatasetShouldSucceedWithOwnerDept() throws Exception {
         Map<String, Object> payload = Map.of(
             "name", "inst_asset",
             "type", "TRINO",
             "dataLevel", "DATA_INTERNAL",
-            "scope", "INST"
+            "ownerDept", "D010"
         );
         mockMvc
             .perform(
@@ -64,7 +63,6 @@ class CatalogResourceIT {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(payload))
             )
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isOk());
     }
 }
-

@@ -1,0 +1,131 @@
+{
+  "version": "2025-10-09",
+  "description": "System-wide audit action catalog mapped to portal and admin menus. Each action describes human-readable display text, aggregation phases, and flow aggregation hints.",
+  "sections": [
+    {
+      "module": "catalog",
+      "title": "数据资产",
+      "entries": [
+        {
+          "key": "catalog.assets",
+          "title": "数据资产目录",
+          "actions": [
+            { "code": "CATALOG_ASSET_VIEW", "display": "查看数据资产", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "CATALOG_ASSET_EDIT", "display": "编辑数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "CATALOG_ASSET_PUBLISH", "display": "发布数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "catalog.accessPolicy",
+          "title": "分级保护与访问策略",
+          "actions": [
+            { "code": "CATALOG_ACCESS_POLICY_REVIEW", "display": "查看访问策略", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "CATALOG_ACCESS_POLICY_UPDATE", "display": "维护访问策略", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "CATALOG_ACCESS_POLICY_PUBLISH", "display": "发布访问策略", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "catalog.secureViews",
+          "title": "安全视图编排",
+          "actions": [
+            { "code": "CATALOG_SECURE_VIEW_BUILD", "display": "编排安全视图", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "CATALOG_SECURE_VIEW_APPROVE", "display": "审批安全视图", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "CATALOG_SECURE_VIEW_PUBLISH", "display": "发布安全视图", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "modeling",
+      "title": "模型与标准",
+      "entries": [
+        {
+          "key": "modeling.standards",
+          "title": "数据标准",
+          "actions": [
+            { "code": "MODELING_STANDARD_VIEW", "display": "查看数据标准", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_STANDARD_EDIT", "display": "维护数据标准", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_STANDARD_VERSION_PUBLISH", "display": "发布标准版本", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "governance",
+      "title": "治理与质量",
+      "entries": [
+        {
+          "key": "governance.rules",
+          "title": "质量规则",
+          "actions": [
+            { "code": "GOV_RULE_MANAGE", "display": "维护质量规则", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_RULE_EXECUTE", "display": "执行质量检测", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "governance.compliance",
+          "title": "合规检查",
+          "actions": [
+            { "code": "GOV_COMPLIANCE_PLAN", "display": "编排合规检查", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_COMPLIANCE_RUN", "display": "发起合规检查", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_COMPLIANCE_REVIEW", "display": "审核合规结果", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "explore",
+      "title": "数据开发",
+      "entries": [
+        {
+          "key": "explore.sql",
+          "title": "SQL 工作台",
+          "actions": [
+            { "code": "EXPLORE_SQL_OPEN", "display": "打开工作台", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "EXPLORE_SQL_RUN", "display": "执行查询", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "admin",
+      "title": "系统管理",
+      "entries": [
+        {
+          "key": "admin.users",
+          "title": "用户管理",
+          "actions": [
+            { "code": "ADMIN_USER_CREATE", "display": "新建用户", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_USER_UPDATE", "display": "修改用户", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_USER_DELETE", "display": "删除用户", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "admin.roles",
+          "title": "角色管理",
+          "actions": [
+            { "code": "ADMIN_ROLE_ASSIGN", "display": "授予角色", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_ROLE_REVOKE", "display": "撤销角色", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "admin.audit",
+          "title": "审计日志",
+          "actions": [
+            { "code": "ADMIN_AUDIT_PURGE", "display": "清理审计日志", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "admin.auth",
+          "title": "认证登录",
+          "actions": [
+            { "code": "ADMIN_AUTH_LOGIN", "display": "管理端登录", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_AUTH_LOGOUT", "display": "管理端登出", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_AUTH_REFRESH", "display": "刷新令牌", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

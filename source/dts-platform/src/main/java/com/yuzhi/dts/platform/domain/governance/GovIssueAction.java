@@ -12,6 +12,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.io.Serializable;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "gov_issue_action")
@@ -36,6 +38,7 @@ public class GovIssueAction extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "notes", length = 2048)
     private String notes;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "attachments_json", columnDefinition = "jsonb")
     private String attachmentsJson;
 
@@ -88,4 +91,3 @@ public class GovIssueAction extends AbstractAuditingEntity<UUID> implements Seri
         this.attachmentsJson = attachmentsJson;
     }
 }
-

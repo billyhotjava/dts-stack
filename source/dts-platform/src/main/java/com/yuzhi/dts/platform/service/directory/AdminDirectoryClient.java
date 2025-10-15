@@ -98,6 +98,9 @@ public class AdminDirectoryClient {
         if (StringUtils.hasText(props.getServiceToken())) {
             headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + props.getServiceToken());
         }
+        if (StringUtils.hasText(props.getServiceName())) {
+            headers.set("X-DTS-Service", props.getServiceName());
+        }
         HttpEntity<Void> request = new HttpEntity<>(headers);
         return restTemplate.exchange(uri, method, request, type);
     }

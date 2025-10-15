@@ -7,12 +7,10 @@ import { z } from "zod";
 import { adminApi } from "@/admin/api/adminApi";
 import { KeycloakGroupService, KeycloakUserService } from "@/api/services/keycloakService";
 import type { KeycloakUser } from "#/keycloak";
-import { useAdminLocale } from "@/admin/lib/locale";
 import type {
     OrganizationNode,
     OrganizationCreatePayload,
     OrganizationUpdatePayload,
-    OrgDataLevel,
 } from "@/admin/types";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -25,21 +23,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Text } from "@/ui/typography";
 import { Textarea } from "@/ui/textarea";
 
-const DATA_LEVEL_VALUES = ["DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_TOP_SECRET"] as const;
-const DATA_LEVEL_OPTIONS: { value: OrgDataLevel; label: string }[] = [
-	{ value: "DATA_PUBLIC", label: "公开" },
-	{ value: "DATA_INTERNAL", label: "内部" },
-	{ value: "DATA_SECRET", label: "秘密" },
-	{ value: "DATA_TOP_SECRET", label: "机密" },
-];
-
-const LEGACY_LEVEL_MAP: Record<string, OrgDataLevel> = {
-	TOP_SECRET: "DATA_TOP_SECRET",
-	SECRET: "DATA_SECRET",
-	NORMAL: "DATA_INTERNAL",
-	UNKNOWN: "DATA_INTERNAL",
-};
-
 const orgFormSchema = z.object({
     name: z.string().trim().min(1, "请输入部门名称"),
     description: z.preprocess((value) => {
@@ -50,7 +33,6 @@ const orgFormSchema = z.object({
         return value ?? undefined;
     }, z.string().max(2000, "部门说明过长").optional()),
     parentId: z.number().int().positive().nullable().optional(),
-    dataLevel: z.enum(DATA_LEVEL_VALUES, { required_error: "请选择部门最大数据密级" }),
 });
 
 type OrgFormValues = z.infer<typeof orgFormSchema>;
@@ -89,14 +71,14 @@ export default function OrgManagementView() {
 		open: false,
 		target: null,
 	});
-	const { translateSensitivity } = useAdminLocale();
-
 	const flattened = useMemo(() => flattenTree(tree), [tree]);
 	const filteredTree = useMemo(() => {
 		if (!search.trim()) return tree;
 		const keyword = search.trim().toLowerCase();
-		return filterTree(tree, keyword, translateSensitivity);
-	}, [search, tree, translateSensitivity]);
+		return filterTree(tree, keyword);
+	}, [search, tree]);
+
+	const totalOrg = useMemo(() => flattened.length, [flattened]);
 
 	const selected = useMemo(() => {
 		if (!selectedId) return null;
@@ -172,18 +154,6 @@ export default function OrgManagementView() {
         return () => { cancelled = true; };
     }, [selected?.keycloakGroupId]);
 
-	const stats = useMemo(() => {
-		const totalOrg = flattened.length;
-		const sensitiveOrgs = flattened.filter((item) => {
-			const level = normalizeDataLevel(item.dataLevel ?? item.sensitivity);
-			return level === "DATA_SECRET" || level === "DATA_TOP_SECRET";
-		}).length;
-		const topSecret = flattened.filter(
-			(item) => normalizeDataLevel(item.dataLevel ?? item.sensitivity) === "DATA_TOP_SECRET",
-		).length;
-		return { totalOrg, sensitiveOrgs, topSecret };
-	}, [flattened]);
-
     const createMutation = useMutation({
         mutationFn: (payload: OrganizationCreatePayload) => adminApi.createOrganization(payload),
         onSuccess: (tree) => {
@@ -251,31 +221,11 @@ export default function OrgManagementView() {
 
     const handleSubmitForm = async (values: OrgFormValues) => {
         const parentId = values.parentId ?? null;
-        // 友好校验：若选择了上级，子部门最大密级不得高于上级
-        if (parentId != null) {
-            const parent = flattened.find((n) => n.id === parentId);
-            if (parent) {
-                const levelRank = (v: OrgDataLevel) => ({
-                    DATA_PUBLIC: 1,
-                    DATA_INTERNAL: 2,
-                    DATA_SECRET: 3,
-                    DATA_TOP_SECRET: 4,
-                }[v] || 0);
-                const parentLevel = normalizeDataLevel((parent.dataLevel as string) ?? (parent.sensitivity as string));
-                if (levelRank(values.dataLevel) > levelRank(parentLevel)) {
-                    const parentText = getDataLevelFallback(parent.dataLevel ?? parent.sensitivity);
-                    const childText = getDataLevelFallback(values.dataLevel);
-                    toast.error(`所选最大数据密级（${childText}）不能高于上级部门（${parent.name} / ${parentText}）`);
-                    return;
-                }
-            }
-        }
         if (formState.mode === "create") {
             const payload: OrganizationCreatePayload = {
                 name: values.name,
                 description: values.description,
                 parentId,
-                dataLevel: values.dataLevel,
             };
             if (parentId == null && rootExists) {
                 toast.error("仅允许存在一个根部门");
@@ -298,7 +248,6 @@ export default function OrgManagementView() {
                 name: values.name,
                 description: values.description,
                 parentId,
-                dataLevel: values.dataLevel,
             };
             try {
                 await updateMutation.mutateAsync({ id: formState.target.id, payload });
@@ -331,24 +280,16 @@ export default function OrgManagementView() {
     };
 
     const editingNode = formState.mode === "edit" ? formState.target : null;
-    const defaultParentLevel = (() => {
-        const pid = formState.parentId ?? null;
-        if (pid == null) return "DATA_INTERNAL" as OrgDataLevel;
-        const parent = flattened.find((n) => n.id === pid);
-        return (parent?.dataLevel as OrgDataLevel) || (parent?.sensitivity as OrgDataLevel) || ("DATA_INTERNAL" as OrgDataLevel);
-    })();
     const initialValues: OrgFormValues = editingNode
         ? {
                 name: editingNode.name,
                 description: editingNode.description ?? "",
                 parentId: editingNode.parentId ?? null,
-                dataLevel: (editingNode.dataLevel as OrgDataLevel) || (editingNode.sensitivity as OrgDataLevel) || "DATA_INTERNAL",
             }
         : {
                 name: "",
                 description: "",
                 parentId: formState.parentId ?? null,
-                dataLevel: defaultParentLevel,
             };
 
 	const disabledParentIds = useMemo(() => {
@@ -386,16 +327,8 @@ export default function OrgManagementView() {
             </Button>
 					</div>
 					</div>
-					<Input
-						placeholder="搜索部门 / 数据密级"
-						value={search}
-						onChange={(event) => setSearch(event.target.value)}
-					/>
-					<div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-						<span>组织数：{stats.totalOrg}</span>
-						<span>涉敏部门：{stats.sensitiveOrgs}</span>
-						<span>机密部门：{stats.topSecret}</span>
-					</div>
+					<Input placeholder="搜索部门" value={search} onChange={(event) => setSearch(event.target.value)} />
+					<div className="text-sm text-muted-foreground">组织数：{totalOrg}</div>
 				</CardHeader>
 				<CardContent className="h-[560px] p-0">
 					{isLoading ? (
@@ -412,7 +345,6 @@ export default function OrgManagementView() {
 										tree={filteredTree}
 										onSelect={setSelectedId}
 										selectedId={selectedId}
-										translateLevel={translateSensitivity}
 									/>
 								)}
 							</div>
@@ -446,17 +378,9 @@ export default function OrgManagementView() {
 					<CardContent className="space-y-4 text-sm">
 						{selected ? (
 							<>
-								<div className="flex flex-wrap items-center gap-3">
-									<Text variant="body2" className="font-semibold">
-										{selected.name}
-									</Text>
-									<Badge variant={getDataLevelBadgeVariant(selected.dataLevel ?? selected.sensitivity)}>
-										{translateSensitivity(
-											selected.dataLevel ?? selected.sensitivity,
-											getDataLevelFallback(selected.dataLevel ?? selected.sensitivity),
-										)}
-									</Badge>
-								</div>
+								<Text variant="body2" className="font-semibold">
+									{selected.name}
+								</Text>
 								<p className="text-muted-foreground">部门编号：{selected.id}</p>
 								<p className="text-muted-foreground">
 									上级部门：{selected.path.slice(0, -1).join(" / ") || "无（一级部门）"}
@@ -575,20 +499,15 @@ function collectDescendantIds(node?: OrganizationNode | null): number[] {
 	return ids;
 }
 
-function filterTree(
-	tree: OrganizationNode[],
-	keyword: string,
-	translateLevel: (value?: string | null, fallback?: string) => string,
-): OrganizationNode[] {
+function filterTree(tree: OrganizationNode[], keyword: string): OrganizationNode[] {
 	const includesKeyword = (value?: string | null) => (value ? value.toLowerCase().includes(keyword) : false);
 	const matchNode = (node: OrganizationNode): OrganizationNode | null => {
-		const fallback = getDataLevelFallback(node.dataLevel ?? node.sensitivity);
-		const translated = translateLevel(node.dataLevel ?? node.sensitivity, fallback);
 		const hit =
 			includesKeyword(node.name) ||
-			includesKeyword(node.dataLevel ?? node.sensitivity) ||
-			includesKeyword(fallback) ||
-			includesKeyword(translated);
+			includesKeyword(node.description) ||
+			includesKeyword(node.id ? String(node.id) : undefined) ||
+			includesKeyword(node.groupPath) ||
+			includesKeyword(node.keycloakGroupId);
 		const children = node.children?.map(matchNode).filter((item): item is OrganizationNode => Boolean(item)) ?? [];
 		if (hit || children.length > 0) {
 			return { ...node, children };
@@ -598,43 +517,14 @@ function filterTree(
 	return tree.map(matchNode).filter((item): item is OrganizationNode => Boolean(item));
 }
 
-function getDataLevelFallback(level?: string | null) {
-	const normalized = normalizeDataLevel(level);
-	const option = DATA_LEVEL_OPTIONS.find((item) => item.value === normalized);
-	return option?.label ?? normalized;
-}
-
-function normalizeDataLevel(level?: string | null): OrgDataLevel {
-	if (!level) return "DATA_PUBLIC";
-	if (DATA_LEVEL_VALUES.includes(level as OrgDataLevel)) {
-		return level as OrgDataLevel;
-	}
-	return LEGACY_LEVEL_MAP[level] ?? "DATA_PUBLIC";
-}
-
-function getDataLevelBadgeVariant(level?: string | null) {
-	const normalized = normalizeDataLevel(level);
-	switch (normalized) {
-		case "DATA_TOP_SECRET":
-			return "destructive" as const;
-		case "DATA_SECRET":
-			return "secondary" as const;
-		case "DATA_INTERNAL":
-			return "default" as const;
-		default:
-			return "outline" as const;
-	}
-}
-
 interface TreeProps {
 	tree: OrganizationNode[];
 	onSelect: (id: number) => void;
 	selectedId: number | null;
 	depth?: number;
-	translateLevel: (value?: string | null, fallback?: string) => string;
 }
 
-function OrganizationTree({ tree, onSelect, selectedId, depth = 0, translateLevel }: TreeProps) {
+function OrganizationTree({ tree, onSelect, selectedId, depth = 0 }: TreeProps) {
 	return (
 		<ul className="space-y-1">
 			{tree.map((node) => {
@@ -651,13 +541,12 @@ function OrganizationTree({ tree, onSelect, selectedId, depth = 0, translateLeve
 						>
 							<div className="flex min-w-0 flex-1 flex-col">
 								<span className="truncate font-medium">{node.name}</span>
+								{node.description ? (
+									<span className={`truncate text-xs ${isActive ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+										{node.description}
+									</span>
+								) : null}
 							</div>
-							<Badge variant={getDataLevelBadgeVariant(node.dataLevel ?? node.sensitivity)} className="ml-2">
-								{translateLevel(
-									node.dataLevel ?? node.sensitivity,
-									getDataLevelFallback(node.dataLevel ?? node.sensitivity),
-								)}
-							</Badge>
 						</button>
 						{node.children?.length ? (
 							<div className="ml-2 border-l border-border pl-2">
@@ -666,7 +555,6 @@ function OrganizationTree({ tree, onSelect, selectedId, depth = 0, translateLeve
 									onSelect={onSelect}
 									selectedId={selectedId}
 									depth={depth + 1}
-									translateLevel={translateLevel}
 								/>
 							</div>
 						) : null}
@@ -739,30 +627,6 @@ function OrganizationFormDialog({
 										<Input placeholder="请输入部门名称" {...field} />
 									</FormControl>
 									<FormMessage />
-                        </FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="dataLevel"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>最大数据密级</FormLabel>
-                            <FormControl>
-                                <Select value={field.value} onValueChange={field.onChange}>
-                                    <SelectTrigger className="w-full justify-between">
-                                        <SelectValue placeholder="请选择部门可承载的最高数据密级" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {DATA_LEVEL_OPTIONS.map((opt) => (
-                                            <SelectItem key={opt.value} value={opt.value}>
-                                                {opt.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </FormControl>
-                            <FormMessage />
                         </FormItem>
                     )}
                 />

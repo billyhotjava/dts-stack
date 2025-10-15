@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.filter;
 
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditFlowManager;
 import com.yuzhi.dts.platform.service.audit.AuditTrailService;
@@ -12,7 +13,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -189,11 +192,8 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         // Derive a semantic action code instead of raw "METHOD URI"
         event.action = deriveActionCode(resourceType, request.getMethod());
         event.resourceId = uri;
-        String forwarded = request.getHeader("X-Forwarded-For");
-        String xfip = forwarded != null && !forwarded.isBlank() ? forwarded.split(",")[0].trim() : null;
-        String realIp = request.getHeader("X-Real-IP");
-        String remote = request.getRemoteAddr();
-        event.clientIp = firstNonBlank(xfip, realIp, remote, "127.0.0.1");
+        String[] ipCandidates = resolveClientIpCandidates(request);
+        event.clientIp = IpAddressUtils.resolveClientIp(ipCandidates);
         event.clientAgent = request.getHeader("User-Agent");
         event.requestUri = request.getRequestURI();
         event.httpMethod = request.getMethod();
@@ -217,6 +217,29 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         }
         String sanitized = uri.startsWith("/") ? uri.substring(1) : uri;
         return sanitized.split("/");
+    }
+
+    private String[] resolveClientIpCandidates(HttpServletRequest request) {
+        List<String> candidates = new ArrayList<>();
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(forwarded)) {
+            String[] parts = forwarded.split(",");
+            for (String part : parts) {
+                String trimmed = part == null ? null : part.trim();
+                if (StringUtils.hasText(trimmed)) {
+                    candidates.add(trimmed);
+                }
+            }
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (StringUtils.hasText(realIp)) {
+            candidates.add(realIp.trim());
+        }
+        String remote = request.getRemoteAddr();
+        if (StringUtils.hasText(remote)) {
+            candidates.add(remote.trim());
+        }
+        return candidates.toArray(new String[0]);
     }
 
     // Prefer the first meaningful segment as module; skip common prefixes like "api", "v1", "v2"
@@ -307,14 +330,6 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         } catch (Exception ignore) {
             return false;
         }
-    }
-
-    private static String firstNonBlank(String... vals) {
-        if (vals == null) return null;
-        for (String v : vals) {
-            if (v != null && !v.isBlank()) return v;
-        }
-        return null;
     }
 
     private String resolvePrimaryAuthority() {

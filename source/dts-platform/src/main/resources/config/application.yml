@@ -202,6 +202,10 @@ spring:
       thread-name-prefix: dts-platform-scheduling-
       pool:
         size: 2
+
+logging:
+  level:
+    com.yuzhi.dts.platform.service.security.AccessChecker: DEBUG
   thymeleaf:
     mode: HTML
   output:
@@ -228,6 +232,7 @@ dts:
     base-url: http://dts-admin:8081
     api-path: /api
     admin-api-path: /api/admin
+    service-name: ${DTS_ADMIN_SERVICE_NAME:dts-admin}
   platform:
     features:
       # Serve Keycloak localization resources from platform to avoid browser TLS trust issues to admin domain in dev
@@ -238,6 +243,10 @@ dts:
       username: ""
       password: ""
       tolerant: true
+    catalog:
+      # Enable Hive(Inceptor) metadata sync by default so datasets appear once a data source is published.
+      inceptor-sync-enabled: ${DTS_PLATFORM_CATALOG_INCEPTOR_SYNC_ENABLED:true}
+      postgres-schema: OLAP
       properties: {}
   jdbc:
     # Directory to search for external JDBC drivers (jar files) at runtime.

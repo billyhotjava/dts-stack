@@ -14,6 +14,11 @@ const axiosInstance = axios.create({
     headers: { "Content-Type": "application/json;charset=utf-8" },
 });
 
+const TEST_SESSION_ENABLED =
+  String(import.meta.env.VITE_TEST_LONG_SESSION ?? import.meta.env.VITE_TEST_SESSION ?? "false").toLowerCase() === "true";
+const TEST_SESSION_REFRESH_MS = Number(import.meta.env.VITE_TEST_SESSION_PING_MS ?? 5 * 60 * 1000);
+const TEST_SESSION_MAX_AGE_MS = Number(import.meta.env.VITE_TEST_SESSION_MAX_AGE_MS ?? 4 * 60 * 60 * 1000);
+
 // Token refresh coordination to avoid stampedes
 let refreshingPromise: Promise<void> | null = null;
 async function refreshTokenIfPossible(): Promise<boolean> {
@@ -61,6 +66,36 @@ async function refreshTokenIfPossible(): Promise<boolean> {
   }
 }
 
+let keepAliveTimer: number | null = null;
+function ensureKeepAliveTimer() {
+  if (!TEST_SESSION_ENABLED || typeof window === "undefined") {
+    return;
+  }
+  if (keepAliveTimer !== null) {
+    return;
+  }
+  keepAliveTimer = window.setInterval(async () => {
+    const { userToken } = userStore.getState();
+    if (!userToken?.refreshToken) {
+      return;
+    }
+    const loginTs = Number(localStorage.getItem("dts.session.loginTs") || "0");
+    if (loginTs > 0 && Date.now() - loginTs > TEST_SESSION_MAX_AGE_MS) {
+      return;
+    }
+    try {
+      await refreshTokenIfPossible();
+    } catch (error) {
+      console.warn("[session] keep-alive refresh failed", error);
+    }
+  }, TEST_SESSION_REFRESH_MS);
+}
+
+if (typeof window !== "undefined") {
+  ensureKeepAliveTimer();
+  window.addEventListener("focus", ensureKeepAliveTimer);
+}
+
 	axiosInstance.interceptors.request.use(
     (config) => {
         const { userToken } = userStore.getState();
@@ -81,15 +116,12 @@ async function refreshTokenIfPossible(): Promise<boolean> {
 		}
 
 
-        // Inject active scope/department headers for ABAC gates (non-auth endpoints)
+        // Inject active department header for ABAC gates (non-auth endpoints)
         if (!isAuthPath) {
             try {
                 const ctx = useContextStore.getState();
                 // Initialize defaults from user profile once
                 ctx.actions.initDefaults();
-                if (ctx.activeScope) {
-                    (config.headers as any)["X-Active-Scope"] = ctx.activeScope;
-                }
                 if (ctx.activeDept) {
                     (config.headers as any)["X-Active-Dept"] = ctx.activeDept;
                 } else {
@@ -224,14 +256,14 @@ axiosInstance.interceptors.response.use(
               return Promise.reject(error);
             }
           } catch {}
-          if (!import.meta.env?.DEV) {
+          if (!import.meta.env?.DEV && !TEST_SESSION_ENABLED) {
             userStore.getState().actions.clearUserInfoAndToken();
             try { localStorage.setItem("dts.session.logoutTs", String(Date.now())); } catch {}
             if (typeof window !== "undefined" && !isLoginRouteActive()) {
               location.replace(resolveLoginHref());
             }
           } else {
-            console.warn("[DEV] 401 after refresh; skipping auto logout");
+            console.warn("[DEV/TEST] 401 after refresh; skipping auto logout");
           }
         } else {
           if (!shouldSuppressAuthHandling && !isLoginRequest) {

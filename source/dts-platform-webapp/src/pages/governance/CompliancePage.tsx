@@ -31,6 +31,7 @@ import {
     updateComplianceItem,
 } from "@/api/platformApi";
 import { cn } from "@/utils";
+import { normalizeClassification, type ClassificationLevel } from "@/utils/classification";
 
 type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
 
@@ -40,15 +41,14 @@ const LEVEL_LABELS: Record<DataLevel, string> = {
     DATA_SECRET: "秘密 (DATA_SECRET)",
     DATA_TOP_SECRET: "机密 (DATA_TOP_SECRET)",
 };
-const toLegacy = (v: DataLevel): "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET" =>
+const toLegacy = (v: DataLevel): ClassificationLevel =>
     v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
 const fromLegacy = (v: string): DataLevel => {
-    const u = String(v || "").toUpperCase();
-    if (u === "PUBLIC") return "DATA_PUBLIC";
-    if (u === "INTERNAL") return "DATA_INTERNAL";
-    if (u === "SECRET") return "DATA_SECRET";
-    if (u === "TOP_SECRET") return "DATA_TOP_SECRET";
-    return "DATA_INTERNAL";
+    const normalized = normalizeClassification(v);
+    if (normalized === "PUBLIC") return "DATA_PUBLIC";
+    if (normalized === "INTERNAL") return "DATA_INTERNAL";
+    if (normalized === "SECRET") return "DATA_SECRET";
+    return "DATA_TOP_SECRET";
 };
 
 const SEVERITY_LABELS: Record<string, string> = {

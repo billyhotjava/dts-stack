@@ -12,4 +12,6 @@ import org.springframework.stereotype.Repository;
 public interface CatalogDatasetJobRepository extends JpaRepository<CatalogDatasetJob, UUID> {
     List<CatalogDatasetJob> findTop10ByDatasetOrderByCreatedDateDesc(CatalogDataset dataset);
     Optional<CatalogDatasetJob> findTopByDatasetAndJobTypeOrderByCreatedDateDesc(CatalogDataset dataset, String jobType);
+
+    void deleteByDataset(CatalogDataset dataset);
 }

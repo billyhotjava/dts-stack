@@ -4,6 +4,9 @@ export interface DirectoryRole {
   id?: string;
   name: string;
   description?: string;
+  scope?: string;
+  operations?: string[];
+  source?: string;
 }
 
 export interface OrgNode {
@@ -31,4 +34,3 @@ export default {
   listRoles,
   getOrgTree,
 };
-

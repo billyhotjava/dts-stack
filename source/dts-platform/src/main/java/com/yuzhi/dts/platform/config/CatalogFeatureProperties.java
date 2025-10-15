@@ -16,6 +16,17 @@ public class CatalogFeatureProperties {
      */
     private String defaultSourceType = "INCEPTOR";
 
+    /**
+     * Schema name in PostgreSQL used when platform falls back to its own OLAP workspace.
+     */
+    private String postgresSchema = "olap";
+
+    /**
+     * Whether to perform Inceptor catalog synchronization. When disabled, the platform
+     * falls back to the PostgreSQL metadata extractor.
+     */
+    private boolean inceptorSyncEnabled = false;
+
     public boolean isMultiSourceEnabled() {
         return multiSourceEnabled;
     }
@@ -30,5 +41,21 @@ public class CatalogFeatureProperties {
 
     public void setDefaultSourceType(String defaultSourceType) {
         this.defaultSourceType = defaultSourceType;
+    }
+
+    public String getPostgresSchema() {
+        return postgresSchema;
+    }
+
+    public void setPostgresSchema(String postgresSchema) {
+        this.postgresSchema = postgresSchema;
+    }
+
+    public boolean isInceptorSyncEnabled() {
+        return inceptorSyncEnabled;
+    }
+
+    public void setInceptorSyncEnabled(boolean inceptorSyncEnabled) {
+        this.inceptorSyncEnabled = inceptorSyncEnabled;
     }
 }

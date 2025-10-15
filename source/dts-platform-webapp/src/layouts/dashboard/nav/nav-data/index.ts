@@ -125,6 +125,9 @@ const filterItems = (
  * @returns 过滤后的导航数据
  */
 export const filterNavData = (permissions: string[], allowedRoutes: AllowedRouteIndex): NavProps["data"] => {
+	if (allowedRoutes.paths.size === 0 && allowedRoutes.codes.size === 0) {
+		return [];
+	}
 	return frontendNavData
 		.map((group) => {
 			const filteredItems = filterItems(group.items, permissions, allowedRoutes);

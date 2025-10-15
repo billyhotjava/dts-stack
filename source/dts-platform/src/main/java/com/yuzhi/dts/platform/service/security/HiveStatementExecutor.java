@@ -51,6 +51,10 @@ public class HiveStatementExecutor {
 
         InceptorDataSourceState state = inceptorRegistry.getActive().orElse(null);
         if (state != null) {
+            if (!state.isAvailable()) {
+                String reason = state.availabilityReason();
+                throw new IllegalStateException("Inceptor 数据源不可用: " + reason);
+            }
             return executeWithInceptor(state, entries, schemaHint);
         }
         return executeWithLegacyProperties(entries, schemaHint);
@@ -78,9 +82,18 @@ public class HiveStatementExecutor {
     private List<StatementExecutionResult> executeWithLegacyProperties(List<Entry<String, String>> entries, String schemaHint) {
         List<StatementExecutionResult> results = new ArrayList<>();
         if (!properties.isEnabled() || !StringUtils.hasText(properties.getJdbcUrl())) {
-            log.info("Hive execution disabled. Statements will be marked as skipped.");
+            String reason = "Hive 执行未配置：请先在管理端发布可用的 Inceptor 数据源或设置 dts.platform.hive.*";
+            log.warn(reason);
             for (Entry<String, String> entry : entries) {
-                results.add(new StatementExecutionResult(entry.getKey(), entry.getValue(), StatementExecutionResult.Status.SKIPPED, "Hive execution disabled"));
+                results.add(
+                    new StatementExecutionResult(
+                        entry.getKey(),
+                        entry.getValue(),
+                        StatementExecutionResult.Status.FAILED,
+                        reason,
+                        "CONFIG"
+                    )
+                );
             }
             return results;
         }

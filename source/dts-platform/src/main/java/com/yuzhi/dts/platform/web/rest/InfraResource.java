@@ -98,6 +98,15 @@ public class InfraResource {
         return ApiResponses.ok(saved);
     }
 
+    @PostMapping("/data-sources/postgres/activate")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    public ApiResponse<InfraDataSourceDto> activatePlatformPostgres() {
+        var user = SecurityUtils.getCurrentUserLogin().orElse("system");
+        var saved = managementService.activatePlatformPostgres(user);
+        audit.audit("PUBLISH", "infra.dataSource.postgres", String.valueOf(saved.id()));
+        return ApiResponses.ok(saved);
+    }
+
     @PutMapping("/data-sources/{id}")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<InfraDataSourceDto> updateDataSource(@PathVariable UUID id, @Valid @RequestBody DataSourceRequest request) {

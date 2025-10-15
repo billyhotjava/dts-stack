@@ -3,6 +3,7 @@ package com.yuzhi.dts.admin.web.rest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService.PendingAuditEvent;
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.Map;
@@ -71,7 +72,7 @@ public class AuditIngestResource {
             String xfip = StringUtils.hasText(forwarded) ? forwarded.split(",")[0].trim() : null;
             String realIp = request.getHeader("X-Real-IP");
             String remote = request.getRemoteAddr();
-            event.clientIp = firstNonBlank(bodyIp, xfip, realIp, remote, "127.0.0.1");
+            event.clientIp = IpAddressUtils.resolveClientIp(bodyIp, xfip, realIp, remote);
             event.clientAgent = request.getHeader("User-Agent");
             // Keep raw payload (if client sends extra fields)
             try { event.payload = objectMapper.writeValueAsBytes(body); } catch (Exception ignore) {}
@@ -101,11 +102,4 @@ public class AuditIngestResource {
         return v == null ? null : String.valueOf(v);
     }
 
-    private static String firstNonBlank(String... vals) {
-        if (vals == null) return null;
-        for (String v : vals) {
-            if (StringUtils.hasText(v)) return v;
-        }
-        return null;
-    }
 }

@@ -16,12 +16,15 @@ import {
   cleanupExpiredResultSets,
   listDatasets,
   updateSavedQuery,
+  getSavedQuery,
   type SavedQueryCreatePayload,
   type SavedQueryUpdatePayload,
 } from "@/api/platformApi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/ui/dialog";
-import { useActiveDept, useActiveScope } from "@/store/contextStore";
+import { useActiveDept } from "@/store/contextStore";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import { CLASSIFICATION_LABELS_ZH, normalizeClassification, type ClassificationLevel } from "@/utils/classification";
+import { useNavigate } from "react-router";
 
 const NONE_DATASET_VALUE = "__NONE__";
 
@@ -39,26 +42,14 @@ type ResultSet = {
   createdAt?: string;
 };
 
-const CLASSIFICATION_META = {
-  TOP_SECRET: { label: "机密", tone: "bg-rose-500/10 text-rose-500" },
-  SECRET: { label: "秘密", tone: "bg-amber-500/10 text-amber-500" },
-  INTERNAL: { label: "内部", tone: "bg-sky-500/10 text-sky-500" },
-  PUBLIC: { label: "公开", tone: "bg-emerald-500/10 text-emerald-600" },
-} as const;
-
-const CLASSIFICATION_LABEL_MAP: Record<string, Classification> = {
-  机密: "TOP_SECRET",
-  SECRET: "SECRET",
-  SECRET_LEVEL: "SECRET",
-  秘密: "SECRET",
-  INTERNAL: "INTERNAL",
-  内部: "INTERNAL",
-  PUBLIC: "PUBLIC",
-  公开: "PUBLIC",
-  TOP_SECRET: "TOP_SECRET",
+const CLASSIFICATION_META: Record<ClassificationLevel, { label: string; tone: string }> = {
+  TOP_SECRET: { label: CLASSIFICATION_LABELS_ZH.TOP_SECRET, tone: "bg-rose-500/10 text-rose-500" },
+  SECRET: { label: CLASSIFICATION_LABELS_ZH.SECRET, tone: "bg-amber-500/10 text-amber-500" },
+  INTERNAL: { label: CLASSIFICATION_LABELS_ZH.INTERNAL, tone: "bg-sky-500/10 text-sky-500" },
+  PUBLIC: { label: CLASSIFICATION_LABELS_ZH.PUBLIC, tone: "bg-emerald-500/10 text-emerald-600" },
 };
 
-type Classification = keyof typeof CLASSIFICATION_META;
+type Classification = ClassificationLevel;
 
 type Dataset = {
   id: string;
@@ -80,11 +71,11 @@ function toUiDataset(input: any): Dataset {
       ? "INTERNAL"
       : dl === "DATA_PUBLIC"
       ? "PUBLIC"
-      : String(input?.classification || "INTERNAL").toUpperCase();
+      : normalizeClassification(input?.classification);
   return {
     id: String(input?.id ?? ""),
     name: String(input?.name || input?.hiveTable || input?.id || "未知数据集"),
-    classification: (classification in CLASSIFICATION_META ? classification : "INTERNAL") as Classification,
+    classification: classification,
     trinoCatalog: input?.trinoCatalog,
     hiveDatabase: input?.hiveDatabase,
     hiveTable: input?.hiveTable,
@@ -104,19 +95,8 @@ function classificationBadge(level?: Classification) {
 
 function resolveClassification(value?: string): Classification | undefined {
   if (!value) return undefined;
-  const trimmed = String(value).trim();
-  if (!trimmed) return undefined;
-  const upper = trimmed.toUpperCase();
-  if (upper in CLASSIFICATION_META) {
-    return upper as Classification;
-  }
-  if (trimmed in CLASSIFICATION_LABEL_MAP) {
-    return CLASSIFICATION_LABEL_MAP[trimmed];
-  }
-  if (upper in CLASSIFICATION_LABEL_MAP) {
-    return CLASSIFICATION_LABEL_MAP[upper];
-  }
-  return undefined;
+  const normalized = normalizeClassification(value, undefined);
+  return normalized as Classification | undefined;
 }
 
 function formatDateTime(value?: string) {
@@ -129,8 +109,8 @@ function formatDateTime(value?: string) {
 }
 
 export default function SavedQueriesPage() {
-  const activeScope = useActiveScope();
   const activeDept = useActiveDept();
+  const navigate = useNavigate();
   const [items, setItems] = useState<SavedQuery[]>([]);
   const [resultSets, setResultSets] = useState<ResultSet[]>([]);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
@@ -240,7 +220,7 @@ export default function SavedQueriesPage() {
     }
   };
 
-  useEffect(() => { load(); }, [activeScope, activeDept]);
+  useEffect(() => { load(); }, [activeDept]);
 
   const handleCreate = async () => {
     if (!title.trim() || !sql.trim()) {
@@ -324,8 +304,30 @@ export default function SavedQueriesPage() {
 
   const handleRun = async (id: string) => {
     try {
-      await runSavedQuery(id);
+      const detail: any = await getSavedQuery(id);
+      const sqlText: string | undefined = detail?.sqlText ?? detail?.data?.sqlText;
+      const datasetId: string | undefined = detail?.datasetId ?? detail?.data?.datasetId;
+      const name: string | undefined = detail?.name ?? detail?.data?.name;
+      if (!sqlText) {
+        toast.error("未获取到 SQL 文本");
+        return;
+      }
+      try {
+        await runSavedQuery(id);
+      } catch (error) {
+        console.warn("runSavedQuery failed", error);
+      }
       toast.success("已执行保存的查询（查看工作台结果）");
+      navigate("/explore/workbench", {
+        state: {
+          runSavedQuery: {
+            id,
+            sqlText,
+            datasetId,
+            name,
+          },
+        },
+      });
     } catch (e) {
       console.error(e);
       toast.error("执行失败");
@@ -354,7 +356,7 @@ export default function SavedQueriesPage() {
     <div className="space-y-4">
       {showDatasetHint ? (
         <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          <span>当前尚未同步任何数据集，请先在「基础数据维护 &gt; 数据源」中完成配置。</span>
+          <span>当前尚未同步任何数据集，请联系管理员完成数据源配置。</span>
           <Button variant="ghost" size="sm" onClick={load}>
             重试
           </Button>

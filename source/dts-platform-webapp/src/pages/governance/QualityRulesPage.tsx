@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
@@ -30,6 +30,7 @@ import {
   triggerQualityRun,
   updateQualityRule,
 } from "@/api/platformApi";
+import { normalizeClassification, type ClassificationLevel } from "@/utils/classification";
 
 
 type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
@@ -103,15 +104,14 @@ const LEVEL_LABELS: Record<DataLevel, string> = {
   DATA_SECRET: "秘密 (DATA_SECRET)",
   DATA_TOP_SECRET: "机密 (DATA_TOP_SECRET)",
 };
-const toLegacy = (v: DataLevel): "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET" =>
+const toLegacy = (v: DataLevel): ClassificationLevel =>
   v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
 const fromLegacy = (v: string): DataLevel => {
-  const u = String(v || "").toUpperCase();
-  if (u === "PUBLIC") return "DATA_PUBLIC";
-  if (u === "INTERNAL") return "DATA_INTERNAL";
-  if (u === "SECRET") return "DATA_SECRET";
-  if (u === "TOP_SECRET") return "DATA_TOP_SECRET";
-  return "DATA_INTERNAL";
+  const normalized = normalizeClassification(v);
+  if (normalized === "PUBLIC") return "DATA_PUBLIC";
+  if (normalized === "INTERNAL") return "DATA_INTERNAL";
+  if (normalized === "SECRET") return "DATA_SECRET";
+  return "DATA_TOP_SECRET";
 };
 
 const SEVERITY_LABELS: Record<SeverityLevel, string> = {
@@ -134,13 +134,6 @@ const FREQUENCY_PRESETS: { preset: RuleForm["frequencyPreset"]; label: string; c
   { preset: "HOURLY", label: "小时级", cron: "0 0 * * * ?" },
   { preset: "DAILY", label: "日批", cron: "0 0 2 * * ?" },
   { preset: "CUSTOM", label: "自定义", cron: "" },
-];
-
-const DATA_LEVEL_OPTIONS: { value: DataLevel; label: string }[] = [
-  { value: "DATA_PUBLIC", label: "公开 (DATA_PUBLIC)" },
-  { value: "DATA_INTERNAL", label: "内部 (DATA_INTERNAL)" },
-  { value: "DATA_SECRET", label: "秘密 (DATA_SECRET)" },
-  { value: "DATA_TOP_SECRET", label: "机密 (DATA_TOP_SECRET)" },
 ];
 
 const SEVERITY_OPTIONS: { value: SeverityLevel; label: string }[] = [
@@ -177,6 +170,17 @@ const QualityRulesPage = () => {
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [formOpen, setFormOpen] = useState(false);
 
+  const inferDataLevel = useCallback(
+    (datasetId?: string): DataLevel => {
+      if (datasetId && datasetLookup.has(datasetId)) {
+        const classification = datasetLookup.get(datasetId)?.classification;
+        return fromLegacy(classification || "INTERNAL");
+      }
+      return "DATA_INTERNAL";
+    },
+    [datasetLookup],
+  );
+
   const refreshDatasets = async () => {
     try {
       const resp: any = await listDatasets({ page: 0, size: 200 });
@@ -192,9 +196,22 @@ const QualityRulesPage = () => {
       const map = new Map<string, DatasetOption>();
       list.forEach((d) => map.set(d.id, d));
       setDatasetLookup(map);
-      if (!form.datasetId && list.length) {
-        setForm((prev) => ({ ...prev, datasetId: list[0].id }));
-      }
+      setForm((prev) => {
+        const currentId = prev.datasetId;
+        const hasCurrent = Boolean(currentId) && map.has(currentId);
+        const fallbackDataset = list[0]?.id || "";
+        const nextId = hasCurrent ? (currentId as string) : fallbackDataset;
+        const nextLevel = hasCurrent
+          ? prev.dataLevel
+          : nextId
+            ? fromLegacy(map.get(nextId)?.classification || "INTERNAL")
+            : prev.dataLevel;
+        return {
+          ...prev,
+          datasetId: nextId,
+          dataLevel: nextLevel,
+        };
+      });
     } catch (error) {
       console.error(error);
       toast.error("加载数据集失败");
@@ -298,6 +315,7 @@ const QualityRulesPage = () => {
     setForm({
       ...INITIAL_FORM,
       datasetId: firstDataset,
+      dataLevel: inferDataLevel(firstDataset),
       customCron: FREQUENCY_PRESETS.find((p) => p.preset === "DAILY")?.cron ?? "0 0 2 * * ?",
     });
     setFormMode("create");
@@ -504,108 +522,85 @@ const QualityRulesPage = () => {
           <CardTitle>规则列表</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="hidden w-full flex-col gap-2 md:flex">
-            <div className="grid grid-cols-[2fr,1.2fr,1fr,1fr,1fr,160px] items-center gap-2 border-b pb-2 text-xs uppercase text-muted-foreground">
-              <span>名称 / 编码</span>
-              <span>数据集</span>
-              <span>数据密级</span>
-              <span>责任人</span>
-              <span>频率</span>
-              <span className="text-right">操作</span>
-            </div>
-            {rules.map((rule) => (
-              <div
-                key={rule.id}
-                className="grid grid-cols-[2fr,1.2fr,1fr,1fr,1fr,160px] items-center gap-2 rounded-md border px-3 py-2 text-sm transition hover:bg-muted/60"
-              >
-                <div className="flex flex-col">
-                  <span className="font-medium text-foreground">{rule.name}</span>
-                  <span className="text-xs text-muted-foreground">{rule.code || rule.id}</span>
-                </div>
-                <div className="text-sm text-muted-foreground truncate">
-                  {rule.datasetNames.length ? rule.datasetNames.join(", ") : "未绑定"}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{LEVEL_LABELS[rule.dataLevel ? rule.dataLevel as DataLevel : fromLegacy("INTERNAL")]}</Badge>
-                  {rule.severity && (
-                    <Badge variant={SEVERITY_BADGE[rule.severity]}>{SEVERITY_LABELS[rule.severity]}</Badge>
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground">{rule.owner || "-"}</div>
-                <div className="text-sm text-muted-foreground">{rule.frequencyLabel || "-"}</div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="icon" title="查看详情" onClick={() => openDetail(rule)}>
-                    <Icon name="Eye" className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" title="手动执行" onClick={() => handleManualRun(rule)}>
-                    <Icon name="Play" className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" title="启用/停用" onClick={() => handleToggle(rule)}>
-                    <Icon name={rule.enabled ? "Pause" : "PlayCircle"} className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" title="编辑" onClick={() => openEditForm(rule)}>
-                    <Icon name="Pencil" className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" title="删除" onClick={() => handleDelete(rule)}>
-                    <Icon name="Trash" className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {!ruleLoading && rules.length === 0 && (
-              <div className="rounded-md border border-dashed p-12 text-center text-sm text-muted-foreground">
-                暂无质量规则，点击右上角“新增规则”开始配置。
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col gap-3 md:hidden">
-            {rules.map((rule) => (
-              <Card key={rule.id} className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="font-medium text-foreground">{rule.name}</div>
-                    <div className="text-xs text-muted-foreground">{rule.code || rule.id}</div>
-                  </div>
-                  <div className="flex gap-1">
-                    <Badge variant="outline">{LEVEL_LABELS[rule.dataLevel ? (rule.dataLevel as DataLevel) : fromLegacy("INTERNAL")]}</Badge>
-                    {rule.severity && (
-                      <Badge variant={SEVERITY_BADGE[rule.severity]}>{SEVERITY_LABELS[rule.severity]}</Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                  <div>
-                    <span className="font-medium text-foreground">数据集：</span>
-                    {rule.datasetNames.length ? rule.datasetNames.join(", ") : "未绑定"}
-                  </div>
-                  <div>
-                    <span className="font-medium text-foreground">责任人：</span>
-                    {rule.owner || "-"}
-                  </div>
-                  <div>
-                    <span className="font-medium text-foreground">频率：</span>
-                    {rule.frequencyLabel || "-"}
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => openDetail(rule)}>
-                    查看
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleManualRun(rule)}>
-                    执行
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleToggle(rule)}>
-                    {rule.enabled ? "停用" : "启用"}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => openEditForm(rule)}>
-                    编辑
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleDelete(rule)}>
-                    删除
-                  </Button>
-                </div>
-              </Card>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="min-w-full table-auto border-collapse text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-3 text-left font-medium">名称 / 编码</th>
+                  <th className="px-3 py-3 text-left font-medium">数据集</th>
+                  <th className="px-3 py-3 text-left font-medium">数据密级</th>
+                  <th className="px-3 py-3 text-left font-medium">责任人</th>
+                  <th className="px-3 py-3 text-left font-medium">频率</th>
+                  <th className="px-3 py-3 text-right font-medium">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ruleLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                      正在加载质量规则...
+                    </td>
+                  </tr>
+                ) : rules.length ? (
+                  rules.map((rule) => (
+                    <tr key={rule.id} className="border-b last:border-none hover:bg-muted/60">
+                      <td className="px-3 py-3 align-top">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-foreground">{rule.name}</span>
+                          <span className="text-xs text-muted-foreground">{rule.code || rule.id}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 align-top text-sm text-muted-foreground">
+                        {rule.datasetNames.length ? rule.datasetNames.join(", ") : "未绑定"}
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">
+                            {
+                              LEVEL_LABELS[
+                                rule.dataLevel ? (rule.dataLevel as DataLevel) : fromLegacy("INTERNAL")
+                              ]
+                            }
+                          </Badge>
+                          {rule.severity && (
+                            <Badge variant={SEVERITY_BADGE[rule.severity]}>{SEVERITY_LABELS[rule.severity]}</Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 align-top text-sm text-muted-foreground">{rule.owner || "-"}</td>
+                      <td className="px-3 py-3 align-top text-sm text-muted-foreground">
+                        {rule.frequencyLabel || "-"}
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" title="查看详情" onClick={() => openDetail(rule)}>
+                            <Icon name="Eye" className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="手动执行" onClick={() => handleManualRun(rule)}>
+                            <Icon name="Play" className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="启用/停用" onClick={() => handleToggle(rule)}>
+                            <Icon name={rule.enabled ? "Pause" : "PlayCircle"} className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="编辑" onClick={() => openEditForm(rule)}>
+                            <Icon name="Pencil" className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="删除" onClick={() => handleDelete(rule)}>
+                            <Icon name="Trash" className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-12 text-center text-sm text-muted-foreground">
+                      暂无质量规则，点击右上角“新增规则”开始配置。
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>
@@ -700,7 +695,16 @@ const QualityRulesPage = () => {
             </div>
             <div className="space-y-2">
               <Label>数据集</Label>
-              <Select value={form.datasetId} onValueChange={(value) => setForm((prev) => ({ ...prev, datasetId: value }))}>
+              <Select
+                value={form.datasetId}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    datasetId: value,
+                    dataLevel: inferDataLevel(value),
+                  }))
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="选择数据集" />
                 </SelectTrigger>
@@ -708,24 +712,6 @@ const QualityRulesPage = () => {
                   {datasets.map((dataset) => (
                     <SelectItem key={dataset.id} value={dataset.id}>
                       {dataset.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>数据密级</Label>
-              <Select
-                value={form.dataLevel}
-                onValueChange={(value: DataLevel) => setForm((prev) => ({ ...prev, dataLevel: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DATA_LEVEL_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

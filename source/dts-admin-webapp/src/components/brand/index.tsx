@@ -5,10 +5,10 @@ import { useBilingualText } from "@/hooks/useBilingualText";
 
 export default function Brand() {
 	const bilingual = useBilingualText();
-	const classified = bilingual("sys.brand.classified") || "机密级";
-	const appName = (GLOBAL_CONFIG.appName || "数智管理平台")
+	const classified = bilingual("sys.brand.classified") || "机密";
+	const appName = (GLOBAL_CONFIG.appName || "BI数智平台")
 		.replace("系统端", "")
-		.replace(/[（(]机密级[)）]/g, "")
+		.replace(/[（(]机密[)）]/g, "")
 		.trim();
 	return (
 		<NavLink to="/" className="inline-flex items-start gap-2 select-none">

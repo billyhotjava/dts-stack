@@ -20,7 +20,13 @@ import tech.jhipster.config.DefaultProfileUtil;
 import tech.jhipster.config.JHipsterConstants;
 
 @SpringBootApplication
-@EnableConfigurationProperties({ LiquibaseProperties.class, ApplicationProperties.class, com.yuzhi.dts.admin.config.PkiAuthProperties.class })
+@EnableConfigurationProperties({
+    LiquibaseProperties.class,
+    ApplicationProperties.class,
+    com.yuzhi.dts.admin.config.PkiAuthProperties.class,
+    com.yuzhi.dts.admin.config.PlatformIntegrationProperties.class,
+    com.yuzhi.dts.admin.config.InfraSecurityProperties.class
+})
 public class DtsAdminApp {
 
     private static final Logger LOG = LoggerFactory.getLogger(DtsAdminApp.class);

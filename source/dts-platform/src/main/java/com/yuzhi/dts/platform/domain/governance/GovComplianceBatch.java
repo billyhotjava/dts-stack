@@ -15,6 +15,8 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "gov_compliance_batch")
@@ -61,6 +63,7 @@ public class GovComplianceBatch extends AbstractAuditingEntity<UUID> implements 
     @Column(name = "summary", length = 4096)
     private String summary;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "metadata_json", columnDefinition = "jsonb")
     private String metadataJson;
 
@@ -189,4 +192,3 @@ public class GovComplianceBatch extends AbstractAuditingEntity<UUID> implements 
         this.items = items;
     }
 }
-

@@ -261,6 +261,13 @@ public class DatasetJobService {
             Map<String, Object> result = new HashMap<>();
             try {
                 CatalogDataset dataset = datasetRepository.findById(job.getDataset().getId()).orElseThrow();
+                dataSourceRegistry
+                    .getActive()
+                    .ifPresent(state -> {
+                        if (!state.isAvailable()) {
+                            throw new IllegalStateException("Inceptor 数据源不可用: " + state.availabilityReason());
+                        }
+                    });
                 var policy = accessPolicyRepository.findByDataset(dataset).orElse(null);
                 var execution = securityViewService.applyViews(dataset, policy, refreshOption != null ? refreshOption : "NONE");
 
@@ -386,6 +393,9 @@ public class DatasetJobService {
             InceptorDataSourceState state = dataSourceRegistry
                 .getActive()
                 .orElseThrow(() -> new IllegalStateException("未检测到可用的 Inceptor 数据源，请联系系统管理员"));
+            if (!state.isAvailable()) {
+                throw new IllegalStateException("Inceptor 数据源不可用: " + state.availabilityReason());
+            }
 
             String tableName = resolveTableName(dataset);
             if (tableName == null) {

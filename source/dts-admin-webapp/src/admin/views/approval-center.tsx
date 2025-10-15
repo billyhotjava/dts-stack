@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactElement } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table } from "antd";
@@ -18,17 +18,17 @@ import { KeycloakUserService } from "@/api/services/keycloakService";
 import { useUserInfo } from "@/store/userStore";
 import { PERSON_SECURITY_LEVELS } from "@/constants/governance";
 
-type TaskCategory = "user" | "role";
+type TaskCategory = "user" | "role" | "menu";
 
 const CATEGORY_LABELS: Record<TaskCategory, string> = {
 	user: "用户管理",
 	role: "角色管理",
+	menu: "菜单管理",
 };
 
 const USER_RESOURCE_TYPES = new Set(["USER"]);
-// Include menu visibility changes in Role category so "绑定菜单" edits appear in approvals
-const ROLE_RESOURCE_TYPES = new Set(["ROLE", "CUSTOM_ROLE", "ROLE_ASSIGNMENT", "PORTAL_MENU"]);
-// 仅保留用户/角色类审批
+const ROLE_RESOURCE_TYPES = new Set(["ROLE", "CUSTOM_ROLE", "ROLE_ASSIGNMENT"]);
+const MENU_RESOURCE_TYPES = new Set(["PORTAL_MENU", "MENU"]);
 
 const ACTION_LABELS: Record<string, string> = {
 	CREATE: "新增",
@@ -82,9 +82,21 @@ type AugmentedChangeRequest = ChangeRequest & {
 	override?: DecisionRecord;
 };
 
-const CATEGORY_ORDER: TaskCategory[] = ["user", "role"];
+const CATEGORY_ORDER: TaskCategory[] = ["user", "role", "menu"];
 
-function resolveCategory(resourceType: string | null | undefined): TaskCategory | null {
+function resolveCategory(request: ChangeRequest): TaskCategory | null {
+	const categoryHint = request.category ? request.category.trim().toUpperCase() : null;
+	if (categoryHint === "USER_MANAGEMENT") {
+		return "user";
+	}
+	if (categoryHint === "ROLE_MANAGEMENT") {
+		return "role";
+	}
+	if (categoryHint === "MENU_MANAGEMENT") {
+		return "menu";
+	}
+
+	const resourceType = request.resourceType;
 	if (!resourceType) {
 		return null;
 	}
@@ -95,8 +107,11 @@ function resolveCategory(resourceType: string | null | undefined): TaskCategory 
 	if (ROLE_RESOURCE_TYPES.has(normalized)) {
 		return "role";
 	}
-    // 其余类型不再纳入审批列表
-    return null;
+	if (MENU_RESOURCE_TYPES.has(normalized)) {
+		return "menu";
+	}
+	// 其余类型不再纳入审批列表
+	return null;
 }
 
 function parseJson(value?: string | null): unknown {
@@ -494,7 +509,7 @@ function formatFriendlyValue(key: string, value: unknown, ctx?: DiffFormatContex
 
 function getActionText(request: ChangeRequest): string {
 	const actionLabel = ACTION_LABELS[request.action?.toUpperCase()] ?? request.action;
-	const category = resolveCategory(request.resourceType);
+	const category = resolveCategory(request);
 	const categoryLabel = category ? CATEGORY_LABELS[category] : request.resourceType;
 	return `${actionLabel || "操作"}${categoryLabel ? ` · ${categoryLabel}` : ""}`;
 }
@@ -547,6 +562,8 @@ export default function ApprovalCenterView() {
 		username: userInfo?.username || userInfo?.fullName || userInfo?.email,
 		email: userInfo?.email,
 	};
+	const normalizedRole = String(session.role ?? "").toUpperCase();
+	const isSysAdmin = normalizedRole === "SYSADMIN";
     const {
         data: changeRequests = [],
         isLoading,
@@ -558,6 +575,7 @@ export default function ApprovalCenterView() {
     const { data: adminUsers = [] } = useQuery<AdminUser[]>({
         queryKey: ["admin", "users"],
         queryFn: () => adminApi.getAdminUsers(),
+        enabled: isSysAdmin,
     });
 
     // 兼容性兜底：若后端仅返回“审批请求”而未返回“变更请求”，
@@ -621,6 +639,7 @@ export default function ApprovalCenterView() {
 
     const [decisions, setDecisions] = useState<Record<number, DecisionRecord>>({});
     const [categoryFilter, setCategoryFilter] = useState<TaskCategory>(CATEGORY_ORDER[0]);
+    const [categoryInitialized, setCategoryInitialized] = useState(false);
     const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
     const [decisionLoading, setDecisionLoading] = useState(false);
     const [operatorNameMap, setOperatorNameMap] = useState<Record<string, string>>({});
@@ -629,6 +648,7 @@ export default function ApprovalCenterView() {
 
     // 载入角色中文名映射（来自管理端角色目录）
     useEffect(() => {
+        if (!isSysAdmin) return;
         (async () => {
             try {
                 const roles = await adminApi.getAdminRoles();
@@ -755,9 +775,10 @@ export default function ApprovalCenterView() {
         const groups: Record<TaskCategory, AugmentedChangeRequest[]> = {
             user: [],
             role: [],
+            menu: [],
         };
         for (const item of augmentedRequests) {
-            const category = resolveCategory(item.resourceType);
+            const category = resolveCategory(item);
             if (!category) continue;
             if (
                 item.effectiveStatus === "APPROVED" ||
@@ -776,6 +797,7 @@ export default function ApprovalCenterView() {
         };
         groups.user.sort(byTimeDesc);
         groups.role.sort(byTimeDesc);
+        groups.menu.sort(byTimeDesc);
         return groups;
     }, [augmentedRequests]);
 
@@ -783,9 +805,10 @@ export default function ApprovalCenterView() {
         const groups: Record<TaskCategory, AugmentedChangeRequest[]> = {
             user: [],
             role: [],
+            menu: [],
         };
         for (const item of augmentedRequests) {
-            const category = resolveCategory(item.resourceType);
+            const category = resolveCategory(item);
             if (!category) continue;
             if (
                 item.effectiveStatus === "APPROVED" ||
@@ -804,26 +827,21 @@ export default function ApprovalCenterView() {
         };
         groups.user.sort(byTimeDesc);
         groups.role.sort(byTimeDesc);
+        groups.menu.sort(byTimeDesc);
         return groups;
     }, [augmentedRequests]);
 
-	const categoriesWithData = useMemo(() => {
-		return CATEGORY_ORDER.filter((category) => {
-			return pendingGroups[category].length > 0 || completedGroups[category].length > 0;
-		});
-	}, [pendingGroups, completedGroups]);
 
-	useEffect(() => {
-		if (categoriesWithData.length === 0) {
-			if (categoryFilter !== CATEGORY_ORDER[0]) {
-				setCategoryFilter(CATEGORY_ORDER[0]);
-			}
-			return;
-		}
-		if (!categoriesWithData.includes(categoryFilter)) {
-			setCategoryFilter(categoriesWithData[0]);
-		}
-	}, [categoriesWithData, categoryFilter]);
+    useEffect(() => {
+        if (categoryInitialized) return;
+        const firstWithData = CATEGORY_ORDER.find((category) => {
+            return (pendingGroups[category]?.length ?? 0) > 0 || (completedGroups[category]?.length ?? 0) > 0;
+        });
+        if (firstWithData && firstWithData !== categoryFilter) {
+            setCategoryFilter(firstWithData);
+        }
+        setCategoryInitialized(true);
+    }, [categoryInitialized, pendingGroups, completedGroups, categoryFilter]);
 
 	const selectedCategory = categoryFilter;
 	const selectedLabel = CATEGORY_LABELS[selectedCategory];
@@ -904,68 +922,62 @@ export default function ApprovalCenterView() {
                 render: (_: unknown, record) => getActionText(record),
             },
             {
-                title: "变更前",
-                dataIndex: "diffJson",
+                title: "变更摘要",
+                dataIndex: "summary",
                 ellipsis: true,
-                width: 280,
-                render: (_: unknown, record) => renderDiffSide(record, "before", { roleDisplay: roleDisplayNameMap, userDisplay: userDisplayMap }),
-            },
-            {
-                title: "变更后",
-                dataIndex: "diffJson2",
-                ellipsis: true,
-                width: 280,
-                render: (_: unknown, record) => renderDiffSide(record, "after", { roleDisplay: roleDisplayNameMap, userDisplay: userDisplayMap }),
+                render: (_: unknown, record) => (
+                    <span title={summarizeDetails(record)}>{summarizeDetails(record) || "—"}</span>
+                ),
             },
             {
                 title: "影响对象",
                 dataIndex: "resourceId",
-                width: 160,
+                width: 180,
                 render: (_: unknown, record) => resolveTarget(record, { userDisplay: userDisplayMap }),
             },
             {
-				title: "操作人",
-				dataIndex: "requestedBy",
-				width: 140,
-				render: (_: unknown, record) => (
-					<span className="text-xs">{resolveOperatorDisplayName(record.requestedBy, operatorNameMap)}</span>
-				),
-			},
-			{
-				title: "操作时间",
-				dataIndex: "requestedAt",
-				width: 180,
-				render: (_: unknown, record) => <span className="text-xs">{formatDateTime(record.requestedAt)}</span>,
-			},
-			{
-				title: "当前状态",
-				dataIndex: "effectiveStatus",
-				width: 140,
-				render: (_: unknown, record) => (
-					<Badge variant={getStatusBadgeVariant(record.effectiveStatus)}>
-						{getStatusLabel(record.effectiveStatus)}
-					</Badge>
-				),
-			},
-			{
-				title: "操作",
-				key: "actions",
-				width: 120,
-				fixed: "right" as const,
-				align: "right" as const,
-				render: (_: unknown, record) => (
-					<Button
-						size="sm"
-						variant="outline"
-						onClick={() => setActiveTaskId(record.id)}
-						disabled={decisionLoading && activeTaskId === record.id}
-					>
-						操作
-					</Button>
-				),
+                title: "提交人",
+                dataIndex: "requestedBy",
+                width: 140,
+                render: (_: unknown, record) => (
+                    <span className="text-xs">{resolveOperatorDisplayName(record.requestedBy, operatorNameMap)}</span>
+                ),
+            },
+            {
+                title: "提交时间",
+                dataIndex: "requestedAt",
+                width: 180,
+                render: (_: unknown, record) => <span className="text-xs">{formatDateTime(record.requestedAt)}</span>,
+            },
+            {
+                title: "当前状态",
+                dataIndex: "effectiveStatus",
+                width: 140,
+                render: (_: unknown, record) => (
+                    <Badge variant={getStatusBadgeVariant(record.effectiveStatus)}>
+                        {getStatusLabel(record.effectiveStatus)}
+                    </Badge>
+                ),
+            },
+            {
+                title: "操作",
+                key: "actions",
+                width: 120,
+                fixed: "right" as const,
+                align: "right" as const,
+                render: (_: unknown, record) => (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setActiveTaskId(record.id)}
+                        disabled={decisionLoading && activeTaskId === record.id}
+                    >
+                        操作
+                    </Button>
+                ),
             },
         ],
-        [activeTaskId, decisionLoading, operatorNameMap, roleDisplayNameMap, userDisplayMap],
+        [activeTaskId, decisionLoading, operatorNameMap, userDisplayMap],
     );
 
     const completedColumns = useMemo<ColumnsType<AugmentedChangeRequest>>(
@@ -983,55 +995,47 @@ export default function ApprovalCenterView() {
                 render: (_: unknown, record) => getActionText(record),
             },
             {
-                title: "变更前",
-                dataIndex: "diffJson",
+                title: "变更摘要",
+                dataIndex: "summary",
                 ellipsis: true,
-                width: 280,
-                render: (_: unknown, record) => renderDiffSide(record, "before", { roleDisplay: roleDisplayNameMap, userDisplay: userDisplayMap }),
-            },
-            {
-                title: "变更后",
-                dataIndex: "diffJson2",
-                ellipsis: true,
-                width: 280,
-                render: (_: unknown, record) => renderDiffSide(record, "after", { roleDisplay: roleDisplayNameMap, userDisplay: userDisplayMap }),
+                render: (_: unknown, record) => (
+                    <span title={summarizeDetails(record)}>{summarizeDetails(record) || "—"}</span>
+                ),
             },
             {
                 title: "影响对象",
                 dataIndex: "resourceId",
-                width: 160,
+                width: 180,
                 render: (_: unknown, record) => resolveTarget(record, { userDisplay: userDisplayMap }),
             },
             {
-                title: "操作人",
+                title: "审批人",
                 dataIndex: "effectiveDecidedBy",
                 width: 140,
-                render: (_: unknown, record) => {
-                    return (
-                        <span className="text-xs">
-                            {resolveOperatorDisplayName(record.effectiveDecidedBy, operatorNameMap)}
-                        </span>
-                    );
-                },
+                render: (_: unknown, record) => (
+                    <span className="text-xs">
+                        {resolveOperatorDisplayName(record.effectiveDecidedBy, operatorNameMap)}
+                    </span>
+                ),
             },
-			{
-				title: "操作时间",
-				dataIndex: "effectiveDecidedAt",
-				width: 180,
-				render: (_: unknown, record) => <span className="text-xs">{formatDateTime(record.effectiveDecidedAt)}</span>,
-			},
-			{
-				title: "处理结果",
-				dataIndex: "effectiveStatus",
-				width: 140,
-				render: (_: unknown, record) => (
-					<Badge variant={getStatusBadgeVariant(record.effectiveStatus)}>
-						{getStatusLabel(record.effectiveStatus)}
-					</Badge>
-				),
-			},
+            {
+                title: "审批时间",
+                dataIndex: "effectiveDecidedAt",
+                width: 180,
+                render: (_: unknown, record) => <span className="text-xs">{formatDateTime(record.effectiveDecidedAt)}</span>,
+            },
+            {
+                title: "处理结果",
+                dataIndex: "effectiveStatus",
+                width: 140,
+                render: (_: unknown, record) => (
+                    <Badge variant={getStatusBadgeVariant(record.effectiveStatus)}>
+                        {getStatusLabel(record.effectiveStatus)}
+                    </Badge>
+                ),
+            },
         ],
-        [operatorNameMap, roleDisplayNameMap, userDisplayMap],
+        [operatorNameMap, userDisplayMap],
     );
 
 
@@ -1108,6 +1112,106 @@ export default function ApprovalCenterView() {
         }
     };
 
+    const renderExpandedRow = useCallback(
+        (record: AugmentedChangeRequest) => {
+            const ctx: DiffFormatContext = { roleDisplay: roleDisplayNameMap, userDisplay: userDisplayMap };
+            const payload = asRecord(parseJson(record.payloadJson));
+            const diff = asRecord(parseJson(record.diffJson));
+            const hasBefore = diff && ((diff as any).before || (diff as any).items);
+            const hasAfter = diff && ((diff as any).after || (diff as any).items);
+            return (
+                <div className="border-t border-muted pt-4 text-sm">
+                    <div className="grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                            <Text variant="body3" className="text-muted-foreground">
+                                基础信息
+                            </Text>
+                            <div className="space-y-1 text-xs">
+                                <div>
+                                    <span className="text-muted-foreground">操作编号：</span>
+                                    CR-{record.id}
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">操作类型：</span>
+                                    {getActionText(record)}
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">影响对象：</span>
+                                    {resolveTarget(record, { userDisplay: userDisplayMap })}
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">提交人：</span>
+                                    {resolveOperatorDisplayName(record.requestedBy, operatorNameMap)}
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">提交时间：</span>
+                                    {formatDateTime(record.requestedAt)}
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">当前状态：</span>
+                                    {getStatusLabel(record.effectiveStatus)}
+                                </div>
+                                {record.effectiveDecidedBy ? (
+                                    <div>
+                                        <span className="text-muted-foreground">审批人：</span>
+                                        {resolveOperatorDisplayName(record.effectiveDecidedBy, operatorNameMap)}
+                                    </div>
+                                ) : null}
+                                {record.effectiveDecidedAt ? (
+                                    <div>
+                                        <span className="text-muted-foreground">审批时间：</span>
+                                        {formatDateTime(record.effectiveDecidedAt)}
+                                    </div>
+                                ) : null}
+                                {record.reason ? (
+                                    <div>
+                                        <span className="text-muted-foreground">备注：</span>
+                                        {record.reason}
+                                    </div>
+                                ) : null}
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Text variant="body3" className="text-muted-foreground">
+                                变更前
+                            </Text>
+                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs leading-5">
+                                {hasBefore ? (
+                                    renderDiffSide(record, "before", ctx)
+                                ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                )}
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Text variant="body3" className="text-muted-foreground">
+                                变更后
+                            </Text>
+                            <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs leading-5">
+                                {hasAfter ? (
+                                    renderDiffSide(record, "after", ctx)
+                                ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    {payload ? (
+                        <div className="mt-4 space-y-2">
+                            <Text variant="body3" className="text-muted-foreground">
+                                提交内容
+                            </Text>
+                            <pre className="max-h-56 overflow-auto rounded-md bg-muted/30 px-3 py-2 text-xs whitespace-pre-wrap">
+                                {formatJson(payload)}
+                            </pre>
+                        </div>
+                    ) : null}
+                </div>
+            );
+        },
+        [roleDisplayNameMap, userDisplayMap, operatorNameMap],
+    );
+
 	const handleCloseDialog = () => {
 		if (!decisionLoading) {
 			setActiveTaskId(null);
@@ -1165,22 +1269,27 @@ export default function ApprovalCenterView() {
 										暂无待审批条目。
 									</Text>
 								) : (
-                                <Table
-                                    rowKey="id"
-                                    columns={pendingColumns}
-                                    dataSource={selectedPending}
-                                    pagination={{
-                                        pageSize: 10,
-                                        showSizeChanger: true,
-                                        pageSizeOptions: [10, 20, 50, 100],
-                                        showQuickJumper: true,
-                                        showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
-                                    }}
-                                    size="small"
-                                    className="text-sm"
-                                    rowClassName={() => "text-sm"}
-                                    scroll={{ x: 1360 }}
-                                />
+                <Table
+                  rowKey="id"
+                  columns={pendingColumns}
+                  dataSource={selectedPending}
+                  pagination={{
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    pageSizeOptions: [10, 20, 50, 100],
+                    showQuickJumper: true,
+                    showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                  }}
+                  size="small"
+                  className="text-sm"
+                  rowClassName={() => "text-sm"}
+                  scroll={{ x: 1100 }}
+                  expandable={{
+                    expandedRowRender: renderExpandedRow,
+                    expandRowByClick: true,
+                    columnWidth: 48,
+                  }}
+                />
 								)}
 							</>
 						)}
@@ -1216,22 +1325,27 @@ export default function ApprovalCenterView() {
 										暂无历史审批记录。
 									</Text>
 								) : (
-                                <Table
-                                    rowKey="id"
-                                    columns={completedColumns}
-                                    dataSource={selectedCompleted}
-                                    pagination={{
-                                        pageSize: 10,
-                                        showSizeChanger: true,
-                                        pageSizeOptions: [10, 20, 50, 100],
-                                        showQuickJumper: true,
-                                        showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
-                                    }}
-                                    size="small"
-                                    className="text-sm"
-                                    rowClassName={() => "text-sm"}
-                                    scroll={{ x: 1360 }}
-                                />
+                <Table
+                  rowKey="id"
+                  columns={completedColumns}
+                  dataSource={selectedCompleted}
+                  pagination={{
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    pageSizeOptions: [10, 20, 50, 100],
+                    showQuickJumper: true,
+                    showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                  }}
+                  size="small"
+                  className="text-sm"
+                  rowClassName={() => "text-sm"}
+                  scroll={{ x: 1100 }}
+                  expandable={{
+                    expandedRowRender: renderExpandedRow,
+                    expandRowByClick: true,
+                    columnWidth: 48,
+                  }}
+                />
 								)}
 							</>
 						)}

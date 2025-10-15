@@ -2,6 +2,8 @@ package com.yuzhi.dts.platform.config;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.security.ServiceDependencyAuthenticationFilter;
 import com.yuzhi.dts.platform.security.session.PortalOpaqueTokenIntrospector;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import org.springframework.context.annotation.Bean;
@@ -30,7 +32,8 @@ public class SecurityConfiguration {
         HttpSecurity http,
         MvcRequestMatcher.Builder mvc,
         PortalOpaqueTokenIntrospector opaqueTokenIntrospector,
-        AuditLoggingFilter auditLoggingFilter
+        AuditLoggingFilter auditLoggingFilter,
+        ServiceDependencyAuthenticationFilter serviceDependencyAuthenticationFilter
     )
         throws Exception {
         http
@@ -57,6 +60,7 @@ public class SecurityConfiguration {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(opaque -> opaque.introspector(opaqueTokenIntrospector)))
             .oauth2Client(withDefaults());
+        http.addFilterBefore(serviceDependencyAuthenticationFilter, AnonymousAuthenticationFilter.class);
         http.addFilterAfter(auditLoggingFilter, AnonymousAuthenticationFilter.class);
         return http.build();
     }
@@ -64,6 +68,11 @@ public class SecurityConfiguration {
     @Bean
     MvcRequestMatcher.Builder mvc(HandlerMappingIntrospector introspector) {
         return new MvcRequestMatcher.Builder(introspector);
+    }
+
+    @Bean
+    ServiceDependencyAuthenticationFilter serviceDependencyAuthenticationFilter(DtsAdminProperties adminProperties) {
+        return new ServiceDependencyAuthenticationFilter(adminProperties);
     }
 
 }

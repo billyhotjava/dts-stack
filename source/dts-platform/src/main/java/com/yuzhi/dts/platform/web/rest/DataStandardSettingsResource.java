@@ -1,7 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.config.DataStandardProperties;
-import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.web.rest.dto.DataStandardSettingsDto;
 import com.yuzhi.dts.platform.web.rest.dto.DataStandardHealthDto;
@@ -27,6 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Transactional
 public class DataStandardSettingsResource {
 
+    private static final String MODELING_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+
     private final DataStandardProperties properties;
     private final AuditService audit;
 
@@ -45,7 +47,7 @@ public class DataStandardSettingsResource {
     }
 
     @PutMapping("/standards/settings")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<DataStandardSettingsDto> updateSettings(@Valid @RequestBody DataStandardSettingsDto dto) {
         if (dto.getMaxFileSize() > 512L * 1024 * 1024) {
             throw new IllegalArgumentException("文件大小上限不得超过 512MB");

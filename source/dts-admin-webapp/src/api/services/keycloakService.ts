@@ -360,7 +360,7 @@ export default {
  */
 export class KeycloakAbacService {
 	static setPersonLevel(userId: string, personLevel: Exclude<SecurityLevel, "NON_SECRET">) {
-		return apiClient.put<{ person_level: string; data_levels: string[] }>({
+		return apiClient.put<any>({
 			url: `/keycloak/users/${userId}/person-level`,
 			data: { person_level: personLevel },
 		});

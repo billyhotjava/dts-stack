@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useLocation, useNavigate } from "react-router";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Checkbox } from "@/ui/checkbox";
@@ -20,21 +21,22 @@ import {
 	listTablesByDataset,
 	listColumnsByTable,
 } from "@/api/platformApi";
+import { CLASSIFICATION_LABELS_ZH, normalizeClassification, type ClassificationLevel } from "@/utils/classification";
 import { GLOBAL_CONFIG } from "@/global-config";
-import { useActiveDept, useActiveScope } from "@/store/contextStore";
+import { useActiveDept } from "@/store/contextStore";
 import { SqlWorkbenchExperimental } from "@/components/sql/SqlWorkbenchExperimental";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/ui/tooltip";
 
-const CLASSIFICATION_META = {
-	TOP_SECRET: { label: "机密", tone: "bg-rose-500/10 text-rose-500" },
-	SECRET: { label: "秘密", tone: "bg-amber-500/10 text-amber-500" },
-	INTERNAL: { label: "内部", tone: "bg-sky-500/10 text-sky-500" },
-	PUBLIC: { label: "公开", tone: "bg-emerald-500/10 text-emerald-600" },
-} as const;
+const CLASSIFICATION_META: Record<ClassificationLevel, { label: string; tone: string }> = {
+	TOP_SECRET: { label: CLASSIFICATION_LABELS_ZH.TOP_SECRET, tone: "bg-rose-500/10 text-rose-500" },
+	SECRET: { label: CLASSIFICATION_LABELS_ZH.SECRET, tone: "bg-amber-500/10 text-amber-500" },
+	INTERNAL: { label: CLASSIFICATION_LABELS_ZH.INTERNAL, tone: "bg-sky-500/10 text-sky-500" },
+	PUBLIC: { label: CLASSIFICATION_LABELS_ZH.PUBLIC, tone: "bg-emerald-500/10 text-emerald-600" },
+};
 
-type Classification = keyof typeof CLASSIFICATION_META;
+type Classification = ClassificationLevel;
 
 type DatasetField = {
 	name: string;
@@ -57,28 +59,29 @@ type Dataset = {
 };
 
 function toUiDataset(apiItem: any): Dataset {
-    const dataLevel: string = String(apiItem.dataLevel || "").toUpperCase();
-    const derived: Classification =
-        dataLevel === "DATA_TOP_SECRET"
-            ? "TOP_SECRET"
-            : dataLevel === "DATA_SECRET"
-            ? "SECRET"
-            : dataLevel === "DATA_INTERNAL"
-            ? "INTERNAL"
-            : dataLevel === "DATA_PUBLIC"
-            ? "PUBLIC"
-            : (String(apiItem.classification || "INTERNAL").toUpperCase() as Classification);
-    return {
-        id: String(apiItem.id),
-        name: String(apiItem.hiveTable || apiItem.name || apiItem.id),
-        source: String(apiItem.trinoCatalog || "default"),
-        database: String(apiItem.trinoCatalog || ""),
-        schema: String(apiItem.hiveDatabase || ""),
-        classification: derived,
-        rowCount: 0,
-        description: undefined,
-        fields: [],
-    };
+	const dataLevel: string = String(apiItem.dataLevel || "").toUpperCase();
+	const fallback = normalizeClassification(apiItem.classification);
+	const derived: Classification =
+		dataLevel === "DATA_TOP_SECRET"
+			? "TOP_SECRET"
+			: dataLevel === "DATA_SECRET"
+			? "SECRET"
+			: dataLevel === "DATA_INTERNAL"
+			? "INTERNAL"
+			: dataLevel === "DATA_PUBLIC"
+			? "PUBLIC"
+			: fallback;
+	return {
+		id: String(apiItem.id),
+		name: String(apiItem.hiveTable || apiItem.name || apiItem.id),
+		source: String(apiItem.trinoCatalog || "default"),
+		database: String(apiItem.trinoCatalog || ""),
+		schema: String(apiItem.hiveDatabase || ""),
+		classification: derived,
+		rowCount: 0,
+		description: undefined,
+		fields: [],
+	};
 }
 
 type Aggregation = {
@@ -477,14 +480,18 @@ export default function QueryWorkbenchPage() {
 	const [remoteDatasets, setRemoteDatasets] = useState<Dataset[]>([]);
 	const [isDatasetsLoading, setDatasetsLoading] = useState<boolean>(false);
 	const [datasetsError, setDatasetsError] = useState<string | null>(null);
-	const [selectedSource, setSelectedSource] = useState<string>("");
 	const hasRemoteDatasets = remoteDatasets.length > 0;
 	const datasets = remoteDatasets;
-	const datasetsBySource = useMemo(
-		() => datasets.filter((dataset) => (selectedSource ? dataset.source === selectedSource : true)),
-		[datasets, selectedSource],
+	const defaultDataset = datasets[0]?.id ?? "";
+	const datasetRows = useMemo(
+		() =>
+			[...datasets].sort((a, b) => {
+				const sourceCompare = a.source.localeCompare(b.source);
+				if (sourceCompare !== 0) return sourceCompare;
+				return a.name.localeCompare(b.name);
+			}),
+		[datasets],
 	);
-	const defaultDataset = datasetsBySource[0]?.id ?? datasets[0]?.id ?? "";
 	const [selectedDatasetId, setSelectedDatasetId] = useState(defaultDataset);
 	const selectedDataset = useMemo(
 		() => datasets.find((dataset) => dataset.id === selectedDatasetId),
@@ -511,15 +518,18 @@ export default function QueryWorkbenchPage() {
 	const [drawerTab, setDrawerTab] = useState("history");
 	const [planSteps, setPlanSteps] = useState<string[]>([]);
 	const [execHistory, setExecHistory] = useState<ExecRecord[]>([]);
-	const [savedList, setSavedList] = useState<SavedQueryItem[]>([]);
-	const [lastExecId, setLastExecId] = useState<string | undefined>(undefined);
-	const [saveTtlDays, setSaveTtlDays] = useState<string>("7");
+const [savedList, setSavedList] = useState<SavedQueryItem[]>([]);
+const [lastExecId, setLastExecId] = useState<string | undefined>(undefined);
+const [saveTtlDays, setSaveTtlDays] = useState<string>("7");
+const location = useLocation();
+const navigate = useNavigate();
 
 	useEffect(() => {
-		setSelectedDatasetId(defaultDataset);
-	}, [defaultDataset]);
+		if (!selectedDatasetId && defaultDataset) {
+			setSelectedDatasetId(defaultDataset);
+		}
+	}, [defaultDataset, selectedDatasetId]);
 
-    const activeScope = useActiveScope();
     const activeDept = useActiveDept();
 
     const reloadDatasets = useCallback(async () => {
@@ -530,22 +540,13 @@ export default function QueryWorkbenchPage() {
             const list = Array.isArray(resp?.content) ? resp.content : [];
             const ui: Dataset[] = list.map(toUiDataset);
             setRemoteDatasets(ui);
-			if (ui.length) {
-				const existingSource =
-					selectedSource && ui.some((item) => item.source === selectedSource)
-						? selectedSource
-						: ui[0].source;
-				setSelectedSource(existingSource);
-            const candidates = ui.filter((item: Dataset) => !existingSource || item.source === existingSource);
-            const matchedDataset = ui.find(
-                (item: Dataset) => item.id === selectedDatasetId && (!existingSource || item.source === existingSource),
-            );
-				const nextDatasetId = matchedDataset?.id ?? candidates[0]?.id ?? ui[0].id;
-				setSelectedDatasetId(nextDatasetId ?? "");
-			} else {
-				setSelectedSource("");
-				setSelectedDatasetId("");
-			}
+            if (ui.length) {
+                const matchedDataset = ui.find((item: Dataset) => item.id === selectedDatasetId);
+                const nextDatasetId = matchedDataset?.id ?? ui[0].id;
+                setSelectedDatasetId(nextDatasetId ?? "");
+            } else {
+                setSelectedDatasetId("");
+            }
 		} catch (e: any) {
 			console.error(e);
 			const message = typeof e?.message === "string" ? e.message : "数据集加载失败";
@@ -553,11 +554,126 @@ export default function QueryWorkbenchPage() {
 		} finally {
 			setDatasetsLoading(false);
         }
-    }, [selectedDatasetId, selectedSource, activeScope, activeDept]);
+    }, [selectedDatasetId, activeDept]);
+
+	const runSql = useCallback(
+		async (sql: string, dataset?: Dataset | null) => {
+			if (!dataset) {
+				toast.error("请选择数据集");
+				return;
+			}
+			try {
+				setIsRunning(true);
+				const payload = { datasetId: dataset.id, sqlText: sql };
+				const resp: any = await executeExplore(payload as any);
+				const rawHeaders = Array.isArray(resp?.headers) ? resp.headers : [];
+				const headers = rawHeaders.map((item: any) => String(item));
+				const rawRows = Array.isArray(resp?.rows) ? resp.rows : [];
+				const rows = rawRows.map((row: any) => normalizeRow(row));
+				const resolvedHeaders = headers.length ? headers : rows.length ? Object.keys(rows[0]) : [];
+				const duration = toNumber(resp?.durationMs);
+				const connectMillis = toNumber(resp?.connectMillis);
+				const queryMillis = toNumber(resp?.queryMillis);
+				const executionId = typeof resp?.executionId === "string" ? resp.executionId : undefined;
+				const rowCount = toNumber(resp?.rowCount) ?? rows.length;
+				const effectiveSql = typeof resp?.effectiveSql === "string" ? resp.effectiveSql : sql;
+				setRunResult({
+					timestamp: new Date(),
+					durationMs: duration ?? connectMillis ?? queryMillis ?? 0,
+					connectMillis: connectMillis ?? undefined,
+					queryMillis: queryMillis ?? undefined,
+					rowCount,
+					headers: resolvedHeaders,
+					rows,
+					effectiveSql,
+					executionId,
+				});
+				setPageIndex(0);
+				setLastExecId(executionId);
+				toast.success("查询成功");
+				try {
+					const execs: any = await listQueryExecutions();
+					const list: ExecRecord[] = (Array.isArray(execs) ? execs : (execs?.data ?? [])).map((e: any) => ({
+						id: e.id,
+						status: e.status,
+						startedAt: e.startedAt,
+						finishedAt: e.finishedAt,
+						rowCount: e.rowCount,
+						datasetName: e.datasetName,
+						classification: e.classification,
+						durationMs: e.durationMs,
+						sqlText: e.sqlText,
+						executionId: e.executionId ?? e.id,
+					}));
+					setExecHistory(list);
+				} catch {
+					// ignore history reload failure
+				}
+			} catch (e) {
+				console.error(e);
+				toast.error("查询失败，请稍后重试");
+			} finally {
+				setIsRunning(false);
+			}
+		},
+		[listQueryExecutions, toast]
+	);
+
+useEffect(() => {
+	reloadDatasets();
+}, [reloadDatasets]);
 
 	useEffect(() => {
-		reloadDatasets();
-	}, [reloadDatasets]);
+		const state = location.state as { runSavedQuery?: { id: string; sqlText: string; datasetId?: string; name?: string } } | null;
+		const payload = state?.runSavedQuery;
+		if (!payload) return;
+		if (payload.datasetId && isDatasetsLoading) {
+			return;
+		}
+	const datasetFromId = payload.datasetId ? datasets.find((d) => d.id === payload.datasetId) : null;
+	const fallbackDataset: Dataset | null =
+		!datasetFromId && payload.datasetId
+			? {
+				id: payload.datasetId,
+				name: payload.name || payload.datasetId,
+				source: "",
+				database: "",
+				schema: "",
+				classification: "INTERNAL",
+				rowCount: 0,
+				description: undefined,
+				fields: [],
+			}
+			: null;
+	const targetDataset = datasetFromId ?? fallbackDataset ?? selectedDataset ?? null;
+		(async () => {
+			try {
+				setSqlText(payload.sqlText);
+				setManualSql(true);
+				if (datasetFromId) {
+					setSelectedDatasetId(datasetFromId.id);
+					setVisualQuery(createDefaultVisualState(datasetFromId));
+				} else if (fallbackDataset) {
+					setSelectedDatasetId(fallbackDataset.id);
+					setVisualQuery(createDefaultVisualState(fallbackDataset));
+				}
+				if (!targetDataset) {
+					toast.error("请选择可用的数据集后再执行查询");
+					return;
+				}
+				await runSql(payload.sqlText, targetDataset);
+		setDrawerOpen(false);
+		if (payload.name) {
+			toast.success(`已执行保存的查询：${payload.name}`);
+		}
+			} catch (error) {
+				console.error(error);
+				toast.error("执行保存的查询失败");
+			} finally {
+				navigate(location.pathname, { replace: true, state: null });
+			}
+		})();
+	}, [location.state, datasets, isDatasetsLoading, runSql, navigate, location.pathname, selectedDataset]);
 
 	// Load tables for selected dataset
 	useEffect(() => {
@@ -655,11 +771,6 @@ export default function QueryWorkbenchPage() {
 		})();
 	}, []);
 
-	const availableSources = useMemo(() => Array.from(new Set(datasets.map((dataset) => dataset.source))), [datasets]);
-	const dataSourceDatasets = useMemo(
-		() => datasets.filter((d) => d.source === selectedSource),
-		[datasets, selectedSource],
-	);
 
 	const visualFields = columns.length ? columns : (selectedDataset?.fields ?? []);
 
@@ -773,64 +884,9 @@ export default function QueryWorkbenchPage() {
 		toast.info("已同步可视化查询条件");
 	};
 
-	const handleRunQuery = async () => {
-		if (!selectedDataset) {
-			toast.error("请选择数据集");
-			return;
-		}
-		try {
-			setIsRunning(true);
-			const payload = { datasetId: selectedDataset.id, sqlText: sqlText };
-			const resp: any = await executeExplore(payload as any);
-			const rawHeaders = Array.isArray(resp?.headers) ? resp.headers : [];
-			const headers = rawHeaders.map((item: any) => String(item));
-			const rawRows = Array.isArray(resp?.rows) ? resp.rows : [];
-			const rows = rawRows.map((row: any) => normalizeRow(row));
-			const resolvedHeaders = headers.length ? headers : rows.length ? Object.keys(rows[0]) : [];
-			const duration = toNumber(resp?.durationMs);
-			const connectMillis = toNumber(resp?.connectMillis);
-			const queryMillis = toNumber(resp?.queryMillis);
-			const executionId = typeof resp?.executionId === "string" ? resp.executionId : undefined;
-			const rowCount = toNumber(resp?.rowCount) ?? rows.length;
-			const effectiveSql = typeof resp?.effectiveSql === "string" ? resp.effectiveSql : sqlText;
-			setRunResult({
-				timestamp: new Date(),
-				durationMs: duration ?? connectMillis ?? queryMillis ?? 0,
-				connectMillis: connectMillis ?? undefined,
-				queryMillis: queryMillis ?? undefined,
-				rowCount,
-				headers: resolvedHeaders,
-				rows,
-				effectiveSql,
-				executionId,
-			});
-			setPageIndex(0);
-			setLastExecId(executionId);
-			toast.success("查询成功");
-			// refresh history lazily
-			try {
-				const execs: any = await listQueryExecutions();
-				const list: ExecRecord[] = (Array.isArray(execs) ? execs : (execs?.data ?? [])).map((e: any) => ({
-					id: e.id,
-					status: e.status,
-					startedAt: e.startedAt,
-					finishedAt: e.finishedAt,
-					rowCount: e.rowCount,
-					datasetName: e.datasetName,
-					classification: e.classification,
-					durationMs: e.durationMs,
-					sqlText: e.sqlText,
-					executionId: e.executionId ?? e.id,
-				}));
-				setExecHistory(list);
-			} catch {}
-		} catch (e) {
-			console.error(e);
-			toast.error("查询失败，请稍后重试");
-		} finally {
-			setIsRunning(false);
-		}
-	};
+    const handleRunQuery = async () => {
+        await runSql(sqlText, selectedDataset);
+    };
 
 	const handleExplain = async () => {
 		try {
@@ -888,78 +944,90 @@ export default function QueryWorkbenchPage() {
 							) : null}
 							{showDatasetEmptyHint && !datasetsError && !isDatasetsLoading ? (
 								<div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-									<span>当前没有可用的数据集，请先在基础数据维护中配置数据源。</span>
+									<span>当前没有可用的数据集，请联系管理员完成数据源配置。</span>
 									<Button variant="ghost" size="sm" onClick={reloadDatasets}>
 										刷新
 									</Button>
 								</div>
 							) : null}
 						</div>
-						<div className="grid gap-3 lg:grid-cols-3">
+						<div className="space-y-4">
 							<div className="space-y-1">
-								<Label className="text-xs text-muted-foreground">数据源</Label>
-								<Select
-									value={selectedSource}
-									onValueChange={setSelectedSource}
-									disabled={isDatasetsLoading || showDatasetEmptyHint}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder={showDatasetEmptyHint ? "暂无数据源" : "选择数据源"} />
-									</SelectTrigger>
-									<SelectContent>
-										{availableSources.map((source) => (
-											<SelectItem key={source} value={source}>
-												{source}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-							<div className="space-y-1 lg:col-span-2">
-								<Label className="text-xs text-muted-foreground">数据集</Label>
-								<Select
-									value={selectedDatasetId}
-									onValueChange={setSelectedDatasetId}
-									disabled={isDatasetsLoading || showDatasetEmptyHint}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder={showDatasetEmptyHint ? "暂无数据集" : "选择数据集"} />
-									</SelectTrigger>
-									<SelectContent>
-										{dataSourceDatasets.map((dataset) => (
-											<SelectItem key={dataset.id} value={dataset.id}>
-												<div className="flex items-center gap-2">
-													{classificationBadge(dataset.classification)}
-													<span>{dataset.name}</span>
-												</div>
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								<Label className="text-xs text-muted-foreground">数据源 / 可访问数据集</Label>
+								<div className="overflow-hidden rounded-md border">
+									<table className="w-full table-fixed text-xs">
+										<thead className="bg-muted/40">
+											<tr className="text-left">
+												<th className="px-3 py-2 w-[140px]">数据源</th>
+												<th className="px-3 py-2">名称</th>
+												<th className="px-3 py-2 w-[90px]">密级</th>
+												<th className="px-3 py-2">库 / 表</th>
+												<th className="px-3 py-2 w-[72px] text-center">操作</th>
+											</tr>
+										</thead>
+										<tbody>
+											{datasetRows.map((dataset) => {
+												const isActive = dataset.id === selectedDatasetId;
+												const tableRef = buildTableReference(dataset) || dataset.name;
+												return (
+													<tr
+														key={dataset.id}
+														className={`cursor-pointer border-b last:border-b-0 transition-colors ${isActive ? "bg-primary/5" : "hover:bg-muted/30"}`}
+														onClick={() => setSelectedDatasetId(dataset.id)}
+													>
+														<td className="px-3 py-2 text-xs font-medium text-muted-foreground">{dataset.source}</td>
+														<td className="px-3 py-2 font-medium text-foreground">{dataset.name}</td>
+														<td className="px-3 py-2">{classificationBadge(dataset.classification)}</td>
+														<td className="px-3 py-2 text-xs text-muted-foreground">{tableRef || "-"}</td>
+														<td className="px-3 py-2 text-center">
+															<button
+																type="button"
+																onClick={(event) => {
+																	event.stopPropagation();
+																	setSelectedDatasetId(dataset.id);
+																}}
+																className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium transition ${isActive ? "border-primary bg-primary/10 text-primary" : "border-transparent bg-muted/50 text-muted-foreground hover:border-primary/40 hover:text-primary"}`}
+															>
+																使用
+															</button>
+														</td>
+													</tr>
+												);
+											})}
+											{!datasetRows.length && (
+												<tr>
+													<td className="px-3 py-4 text-center text-xs text-muted-foreground" colSpan={5}>
+														{isDatasetsLoading ? "加载中…" : "当前暂无可用数据集"}
+													</td>
+												</tr>
+											)}
+										</tbody>
+									</table>
+								</div>
 								{selectedDataset ? (
 									<p className="text-xs text-muted-foreground">
-										库表：{selectedTableReference || "未登记"}
+										已选：{selectedDataset.source} · {selectedDataset.name}（{selectedTableReference || "未登记"}）
 									</p>
 								) : null}
-								<div className="space-y-1">
-									<Label className="text-xs text-muted-foreground">表</Label>
-									<Select
-										value={selectedTableId}
-										onValueChange={setSelectedTableId}
-										disabled={isDatasetsLoading || !tables.length}
-									>
-                            <SelectTrigger>
-                                <SelectValue placeholder={tables.length ? "选择表" : "暂无可选表"} />
-                            </SelectTrigger>
-										<SelectContent>
-											{tables.map((t) => (
-												<SelectItem key={t.id} value={t.id}>
-													{t.name}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
+							</div>
+							<div className="space-y-1">
+								<Label className="text-xs text-muted-foreground">当前表</Label>
+								<Select
+									value={selectedTableId}
+									onValueChange={setSelectedTableId}
+									disabled={!tables.length}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder={tables.length ? "选择表" : "暂无可选表"} />
+									</SelectTrigger>
+									<SelectContent>
+										{tables.map((table) => (
+											<SelectItem key={table.id} value={table.id}>
+												{table.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 						</div>
 					</CardHeader>

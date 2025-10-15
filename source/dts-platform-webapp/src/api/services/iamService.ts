@@ -1,5 +1,6 @@
 import apiClient from "../apiClient";
 import { listDatasets as listCatalogDatasets } from "@/api/platformApi";
+import { classificationToLabelZh } from "@/utils/classification";
 
 export type UserClassificationItem = {
 	id: string;
@@ -61,13 +62,7 @@ async function getDatasets() {
     try {
         const resp: any = await listCatalogDatasets({ page: 0, size: 500 });
         const list: any[] = Array.isArray(resp?.content) ? resp.content : [];
-        const toCn = (l?: string): string => {
-            const v = String(l || "").toUpperCase();
-            if (v.includes("TOP_SECRET") || v === "TOP_SECRET") return "机密";
-            if (v.includes("SECRET") && !v.includes("TOP")) return "秘密";
-            if (v.includes("INTERNAL")) return "内部";
-            return "公开";
-        };
+        const toCn = (l?: string): string => classificationToLabelZh(l);
         return list.map((it) => ({
             id: String(it.id),
             name: String(it.name || ""),

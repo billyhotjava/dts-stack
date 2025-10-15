@@ -18,7 +18,7 @@ import apiService, {
 } from "@/api/services/apiServicesService";
 import { apiPublish, apiExecute } from "@/api/platformApi";
 import SensitiveNotice from "@/components/security/SensitiveNotice";
-import { useActiveDept, useActiveScope } from "@/store/contextStore";
+import { useActiveDept } from "@/store/contextStore";
 
 
 function LevelBadge({ level }: { level?: string | null }) {
@@ -44,7 +44,6 @@ export default function ApiServiceDetailPage() {
 	const params = useParams();
 	const router = useRouter();
 	const id = params.id as string;
-    const activeScope = useActiveScope();
     const activeDept = useActiveDept();
 	const [tab, setTab] = useState<"base" | "try" | "monitor">("base");
 
@@ -80,7 +79,7 @@ export default function ApiServiceDetailPage() {
 		return () => {
 			mounted = false;
 		};
-	}, [id, activeScope, activeDept]);
+	}, [id, activeDept]);
 
 	// Chart options (hooks must be called at top-level, not conditionally)
 	const lineOptions = useChart({ xaxis: { type: "datetime" }, stroke: { width: 2 } });

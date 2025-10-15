@@ -26,6 +26,7 @@ import {
 	deleteDomain as apiDeleteDomain,
 	updateDataset as apiUpdateDataset,
 } from "@/api/platformApi";
+import { normalizeClassification } from "@/utils/classification";
 
 type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
 const DATA_LEVELS = [
@@ -35,12 +36,11 @@ const DATA_LEVELS = [
 	{ value: "DATA_TOP_SECRET" as DataLevel, label: "机密 (DATA_TOP_SECRET)" },
 ] as const;
 const fromLegacy = (v: string): DataLevel => {
-	const u = String(v || "").toUpperCase();
-	if (u === "PUBLIC") return "DATA_PUBLIC";
-	if (u === "INTERNAL") return "DATA_INTERNAL";
-	if (u === "SECRET") return "DATA_SECRET";
-	if (u === "TOP_SECRET") return "DATA_TOP_SECRET";
-	return "DATA_INTERNAL";
+	const normalized = normalizeClassification(v);
+	if (normalized === "PUBLIC") return "DATA_PUBLIC";
+	if (normalized === "INTERNAL") return "DATA_INTERNAL";
+	if (normalized === "SECRET") return "DATA_SECRET";
+	return "DATA_TOP_SECRET";
 };
 
 type DomainNode = {

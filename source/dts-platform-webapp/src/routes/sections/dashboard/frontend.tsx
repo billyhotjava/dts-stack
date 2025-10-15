@@ -10,18 +10,10 @@ import DatasetDetailPage from "@/pages/catalog/DatasetDetailPage";
 import QueryWorkbenchPage from "@/pages/explore/QueryWorkbenchPage";
 import SavedQueriesPage from "@/pages/explore/SavedQueriesPage";
 import DataStandardsPage from "@/pages/modeling/DataStandardsPage";
+import DataStandardDetailPage from "@/pages/modeling/DataStandardDetailPage";
 import QualityRulesPage from "@/pages/governance/QualityRulesPage";
 import CompliancePage from "@/pages/governance/CompliancePage";
-import CockpitPage from "@/pages/visualization/CockpitPage";
-import DashboardsPage from "@/pages/visualization/DashboardsPage";
-import ProjectsSummaryPage from "@/pages/visualization/ProjectsSummaryPage";
-import FinanceSummaryPage from "@/pages/visualization/FinanceSummaryPage";
-import SupplyChainSummaryPage from "@/pages/visualization/SupplyChainSummaryPage";
-import HRSummaryPage from "@/pages/visualization/HRSummaryPage";
 import FeaturePlaceholder from "@/pages/common/FeaturePlaceholder";
-import DataSourcesPage from "@/pages/foundation/DataSourcesPage";
-import DataStoragePage from "@/pages/foundation/DataStoragePage";
-import TaskSchedulingPage from "@/pages/foundation/TaskSchedulingPage";
 
 export function getFrontendDashboardRoutes(): RouteObject[] {
     const sectionRoutes = PORTAL_NAV_SECTIONS.map((section) => {
@@ -42,19 +34,6 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 				explore: {
 					workbench: () => <QueryWorkbenchPage />,
 					savedQueries: () => <SavedQueriesPage />,
-				},
-				visualization: {
-					cockpit: () => <CockpitPage />,
-					dashboards: () => <DashboardsPage />,
-					projects: () => <ProjectsSummaryPage />,
-					finance: () => <FinanceSummaryPage />,
-					supplyChain: () => <SupplyChainSummaryPage />,
-					hr: () => <HRSummaryPage />,
-				},
-				foundation: {
-					dataSources: () => <DataSourcesPage />,
-					dataStorage: () => <DataStoragePage />,
-					taskScheduling: () => <TaskSchedulingPage />,
 				},
 			};
 
@@ -79,6 +58,9 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		const extraChildren: RouteObject[] = [];
 		if (section.key === "catalog") {
 			extraChildren.push({ path: "datasets/:id", element: <DatasetDetailPage /> });
+		}
+		if (section.key === "modeling") {
+			extraChildren.push({ path: "standards/:id", element: <DataStandardDetailPage /> });
 		}
 
 		return {

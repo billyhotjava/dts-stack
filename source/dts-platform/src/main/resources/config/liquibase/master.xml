@@ -2,7 +2,7 @@
 <databaseChangeLog
     xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
     <property name="now" value="current_timestamp" dbms="postgresql"/>
     <property name="floatType" value="float4" dbms="postgresql"/>
     <property name="clobType" value="clob" dbms="postgresql"/>
@@ -32,9 +32,12 @@
     <include file="config/liquibase/changelog/20251008_05_dataset_abac_fields.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251008_06_iam_dept.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251010_01_remove_demo_seed_data.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20250315_01_create_olap_schema.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->
     <include file="config/liquibase/changelog/20251012_03_access_policy_relax_defaults.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251012_02_access_policy_role_alignment.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251014_01_dataset_remove_scope.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251016_01_catalog_dataset_grant.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

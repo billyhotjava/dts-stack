@@ -15,17 +15,6 @@ export interface InfraDataSource {
 	hasSecrets: boolean;
 }
 
-export interface InfraDataStorage {
-	id: string;
-	name: string;
-	type: string;
-	location: string;
-	description?: string;
-	props: Record<string, any>;
-	createdAt?: string;
-	hasSecrets: boolean;
-}
-
 export interface ModuleStatus {
 	module: string;
 	status: string;
@@ -70,10 +59,17 @@ export interface ConnectionTestLog {
 	createdAt?: string;
 }
 
+export interface UpsertInfraDataSourcePayload {
+	name: string;
+	type: string;
+	jdbcUrl: string;
+	username?: string;
+	description?: string;
+	props?: Record<string, any>;
+	secrets?: Record<string, any>;
+}
+
 export const listInfraDataSources = () => api.get<InfraDataSource[]>({ url: "/infra/data-sources" });
-
-export const listInfraDataStorages = () => api.get<InfraDataStorage[]>({ url: "/infra/data-storages" });
-
 export const fetchInfraFeatures = () => api.get<InfraFeatureFlags>({ url: "/infra/features" });
 
 export const refreshInceptorRegistry = () =>
@@ -90,3 +86,9 @@ export const publishInceptorDataSource = (data: HiveConnectionPersistRequest) =>
 
 export const deleteInfraDataSource = (id: string) =>
 	api.delete<boolean>({ url: `/infra/data-sources/${id}` });
+
+export const createInfraDataSource = (data: UpsertInfraDataSourcePayload) =>
+	api.post<InfraDataSource>({ url: "/infra/data-sources", data });
+
+export const updateInfraDataSource = (id: string, data: UpsertInfraDataSourcePayload) =>
+	api.put<InfraDataSource>({ url: `/infra/data-sources/${id}`, data });

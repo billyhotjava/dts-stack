@@ -247,12 +247,26 @@ dts:
     # Default false to avoid startup failures when the client lacks admin privileges.
     # Enable by default; disable explicitly with DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED=false if KC admin perms not granted
     group-provisioning-enabled: ${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:false}
+  platform:
+    enabled: ${DTS_PLATFORM_SYNC_ENABLED:true}
+    base-url: ${DTS_PLATFORM_BASE_URL:http://dts-platform:8081}
+    api-path: ${DTS_PLATFORM_API_PATH:/api}
+    service-name: ${DTS_PLATFORM_SERVICE_NAME:dts-admin}
+  infra:
+    heartbeat:
+      enabled: ${DTS_INFRA_HEARTBEAT_ENABLED:true}
+      interval-ms: ${DTS_INFRA_HEARTBEAT_INTERVAL_MS:60000}
+      initial-delay-ms: ${DTS_INFRA_HEARTBEAT_INITIAL_DELAY_MS:15000}
+      timeout-ms: ${DTS_INFRA_HEARTBEAT_TIMEOUT_MS:5000}
   organization:
     default-root-name: ${DTS_ORG_DEFAULT_ROOT_NAME:}
     unassigned-name: ${DTS_ORG_UNASSIGNED_NAME:}
     unassigned-description: ${DTS_ORG_UNASSIGNED_DESCRIPTION:}
     unassigned-data-level: ${DTS_ORG_UNASSIGNED_DATA_LEVEL:}
   admin:
+    infra:
+      encryption-key: ${DTS_ADMIN_INFRA_ENCRYPTION_KEY:}
+      key-version: ${DTS_ADMIN_INFRA_KEY_VERSION:v1}
     require-approval:
       portal-menu:
         # 强约束字段（可见性/授权）变更是否必须走审批：visibilityRules/allowedRoles/allowedPermissions/maxDataLevel

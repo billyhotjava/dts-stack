@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251015-02-refactor-hardcoded-audit-rules" author="gemini-cli">
+        <comment>Refactor hardcoded audit rules from Java code into the rule engine</comment>
+
+        <!-- 1. Purge Audit Logs (from AuditLogResource.java) -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-logs"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="审计日志"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="清空全部审计日志"/>
+            <column name="source_table_template" value="审计日志"/>
+            <column name="order_value" valueNumeric="20"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 2. Create Role (from KeycloakApiResource.java) -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/roles"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新建角色"/>
+            <column name="source_table_template" value="角色"/>
+            <column name="order_value" valueNumeric="20"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 3. Delete Role (from KeycloakApiResource.java) -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/roles/{name}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除角色: {name}"/>
+            <column name="source_table_template" value="角色"/>
+            <column name="param_extractors" value="{&quot;name&quot;:&quot;path.name&quot;}"/>
+            <column name="order_value" valueNumeric="19"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 4. User Logout (from KeycloakApiResource.java) -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/logout"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="登录管理"/>
+            <column name="action_type" value="登出"/>
+            <column name="description_template" value="用户登出"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="event_class" value="SecurityEvent"/>
+            <column name="order_value" valueNumeric="5"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+    </changeSet>
+
+</databaseChangeLog>

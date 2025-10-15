@@ -14,6 +14,11 @@ export const getDataset = (id: string) => api.get({ url: `/catalog/datasets/${id
 export const createDataset = (data: any) => api.post({ url: "/catalog/datasets", data });
 export const updateDataset = (id: string, data: any) => api.put({ url: `/catalog/datasets/${id}`, data });
 export const deleteDataset = (id: string) => api.delete({ url: `/catalog/datasets/${id}` });
+export const listDatasetGrants = (datasetId: string) => api.get({ url: `/catalog/datasets/${datasetId}/grants` });
+export const createDatasetGrant = (datasetId: string, data: any) =>
+	api.post({ url: `/catalog/datasets/${datasetId}/grants`, data });
+export const deleteDatasetGrant = (datasetId: string, grantId: string) =>
+	api.delete({ url: `/catalog/datasets/${datasetId}/grants/${grantId}` });
 
 export const getDomainTree = () => api.get({ url: "/catalog/domains/tree" });
 export const moveDomain = (id: string, data: { newParentId?: string | null }) =>

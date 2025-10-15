@@ -5,9 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditActionCatalog;
 import com.yuzhi.dts.common.audit.AuditActionDefinition;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -144,11 +148,7 @@ public class AuditService {
             ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attrs != null && attrs.getRequest() != null) {
                 var req = attrs.getRequest();
-                String forwarded = req.getHeader("X-Forwarded-For");
-                String xfip = StringUtils.hasText(forwarded) ? forwarded.split(",")[0].trim() : null;
-                String realIp = req.getHeader("X-Real-IP");
-                String remote = req.getRemoteAddr();
-                event.clientIp = firstNonBlank(xfip, realIp, remote, "127.0.0.1");
+                event.clientIp = resolveClientIp(req);
                 event.clientAgent = req.getHeader("User-Agent");
                 event.requestUri = req.getRequestURI();
                 event.httpMethod = req.getMethod();
@@ -199,11 +199,7 @@ public class AuditService {
             ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attrs != null && attrs.getRequest() != null) {
                 var req = attrs.getRequest();
-                String forwarded = req.getHeader("X-Forwarded-For");
-                String xfip = StringUtils.hasText(forwarded) ? forwarded.split(",")[0].trim() : null;
-                String realIp = req.getHeader("X-Real-IP");
-                String remote = req.getRemoteAddr();
-                event.clientIp = firstNonBlank(xfip, realIp, remote, "127.0.0.1");
+                event.clientIp = resolveClientIp(req);
                 event.clientAgent = req.getHeader("User-Agent");
                 event.requestUri = req.getRequestURI();
                 event.httpMethod = req.getMethod();
@@ -218,12 +214,33 @@ public class AuditService {
         }
     }
 
-    private static String firstNonBlank(String... vals) {
-        if (vals == null) return null;
-        for (String v : vals) {
-            if (StringUtils.hasText(v)) return v;
+    private String resolveClientIp(HttpServletRequest request) {
+        if (request == null) {
+            return null;
         }
-        return null;
+        List<String> candidates = new ArrayList<>();
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(forwarded)) {
+            String[] parts = forwarded.split(",");
+            for (String part : parts) {
+                String trimmed = part == null ? null : part.trim();
+                if (StringUtils.hasText(trimmed)) {
+                    candidates.add(trimmed);
+                }
+            }
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (StringUtils.hasText(realIp)) {
+            candidates.add(realIp.trim());
+        }
+        String remote = request.getRemoteAddr();
+        if (StringUtils.hasText(remote)) {
+            candidates.add(remote.trim());
+        }
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        return IpAddressUtils.resolveClientIp(candidates.toArray(new String[0]));
     }
 
     private String serializeTags(Map<String, Object> tags) {

@@ -100,16 +100,14 @@ export interface PortalMenuCollection {
 	allMenus?: PortalMenuItem[];
 }
 
-export type OrgDataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
-
 export type SecurityLevel = "NON_SECRET" | "GENERAL" | "IMPORTANT" | "CORE";
+export type OrgDataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
 
 export type DataOperation = "read" | "write" | "export";
 
 export interface OrganizationNode {
 	id: number;
 	name: string;
-	dataLevel: OrgDataLevel;
 	parentId?: number | null;
 	contact?: string;
 	phone?: string;
@@ -130,14 +128,12 @@ export interface OrganizationCreatePayload {
     name: string;
     description?: string;
     parentId?: number | null;
-    dataLevel?: OrgDataLevel;
 }
 
 export interface OrganizationUpdatePayload {
     name?: string;
     description?: string;
     parentId?: number | null;
-    dataLevel?: OrgDataLevel;
 }
 
 export interface AdminUser {

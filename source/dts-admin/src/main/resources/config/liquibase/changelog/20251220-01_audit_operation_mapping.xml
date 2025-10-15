@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251220-01-audit-operation-mapping" author="codex">
+        <comment>Create table for audit operation rule engine mappings</comment>
+        <createTable tableName="audit_operation_mapping">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="url_pattern" type="VARCHAR(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="http_method" type="VARCHAR(16)" defaultValue="ALL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="module_name" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action_type" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description_template" type="VARCHAR(1024)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_table_template" type="VARCHAR(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="param_extractors" type="TEXT"/>
+            <column name="event_class" type="VARCHAR(64)" defaultValue="AuditEvent"/>
+            <column name="order_value" type="INT" defaultValueNumeric="0"/>
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="version" type="VARCHAR(32)"/>
+            <column name="valid_from" type="TIMESTAMP"/>
+            <column name="valid_to" type="TIMESTAMP"/>
+            <column name="updated_by" type="VARCHAR(128)"/>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <createIndex indexName="idx_aom_enabled" tableName="audit_operation_mapping">
+            <column name="enabled"/>
+        </createIndex>
+        <createIndex indexName="idx_aom_method" tableName="audit_operation_mapping">
+            <column name="http_method"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

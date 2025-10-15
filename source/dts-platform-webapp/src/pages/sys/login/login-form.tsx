@@ -30,8 +30,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	const form = useForm<SignInReq>({
 		defaultValues: {
-			username: "opadmin",
-			password: "sa",
+			username: "",
+			password: "",
 		},
 	});
 
@@ -126,8 +126,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		<div className={cn("flex flex-col gap-6", className)}>
 			<Form {...form} {...props}>
 				<form onSubmit={form.handleSubmit(handleFinish)} className="space-y-4">
-					<div className="flex flex-col items-center gap-2 text-center">
+					<div className="flex flex-col items-center gap-1 text-center">
 						<h1 className="text-2xl font-bold">{bilingual("sys.login.signInFormTitle")}</h1>
+						<p className="text-sm text-muted-foreground">(业务端)</p>
 						{/* <p className="text-balance text-sm text-muted-foreground">{bilingual("sys.login.signInFormDescription")}</p> */}
 					</div>
 

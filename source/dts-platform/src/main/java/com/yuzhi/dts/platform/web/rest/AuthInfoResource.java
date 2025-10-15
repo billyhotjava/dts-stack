@@ -16,7 +16,6 @@ public class AuthInfoResource {
 
     @GetMapping(value = "/auth-info", produces = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<Map<String, Object>> authInfo(
-        @RequestHeader(value = "X-Active-Scope", required = false) String activeScope,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         Map<String, Object> data = new LinkedHashMap<>();
@@ -51,10 +50,8 @@ public class AuthInfoResource {
             } catch (Exception ignored) {}
         }
         Map<String, Object> context = new LinkedHashMap<>();
-        if (activeScope != null) context.put("activeScope", activeScope);
         if (activeDept != null) context.put("activeDept", activeDept);
         data.put("context", context);
         return ApiResponses.ok(data);
     }
 }
-

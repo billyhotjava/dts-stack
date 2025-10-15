@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251015-01-audit-operation-mapping-governance" author="gemini-cli">
+        <comment>Seed readable rules for governance compliance checks</comment>
+
+        <!-- 合规检查 -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/compliance/batches"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据治理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="执行合规检查任务"/>
+            <column name="source_table_template" value="合规检查"/>
+            <column name="order_value" valueNumeric="15"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/compliance/batches"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据治理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询合规检查任务列表"/>
+            <column name="source_table_template" value="合规检查"/>
+            <column name="order_value" valueNumeric="15"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/compliance/batches/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据治理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询合规检查任务详情"/>
+            <column name="source_table_template" value="合规检查"/>
+            <column name="order_value" valueNumeric="14"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/compliance/items/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="数据治理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="更新合规检查项"/>
+            <column name="source_table_template" value="合规检查"/>
+            <column name="order_value" valueNumeric="14"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+    </changeSet>
+
+</databaseChangeLog>

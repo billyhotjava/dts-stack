@@ -56,7 +56,6 @@ export async function listDepartments(keyword?: string): Promise<DeptDto[]> {
       const raw = String(userToken?.accessToken || "").trim();
       if (raw) headers["Authorization"] = raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
       const ctx = useContextStore.getState();
-      if (ctx.activeScope) headers["X-Active-Scope"] = ctx.activeScope as any;
       if (ctx.activeDept) headers["X-Active-Dept"] = ctx.activeDept as any;
     } catch {}
     const { data } = await axios.get<any>(`${base}/directory/orgs`, { withCredentials: false, headers });

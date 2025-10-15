@@ -908,9 +908,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
                                             </Badge>
                                         ))}
 									</div>
-									<p className="text-xs text-muted-foreground mt-2">
-										治理角色与应用管理员角色互斥；数据密级角色由系统根据人员密级自动管理。
-									</p>
 								</div>
 							</CardContent>
 						</Card>

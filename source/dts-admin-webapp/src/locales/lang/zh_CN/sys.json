@@ -27,7 +27,7 @@
       "brandName": "机密",
       "brandIllustrationAlt": "科技氛围大数据平台插画",
       "backSignIn": "返回",
-      "signInFormTitle": "数智管理平台(管理端)",
+      "signInFormTitle": "BI数智平台",
       "mobileSignInFormTitle": "手机登录",
       "qrSignInFormTitle": "二维码登录",
       "signUpFormTitle": "注册",
@@ -71,7 +71,7 @@
       "noAccount": "没有账号？"
     },
     "brand": {
-      "classified": "机密级"
+      "classified": "机密"
     },
     "tab": {
       "fullscreen": "内容全屏",
@@ -99,13 +99,14 @@
         "user_detail": "用户详情",
         "system": {
           "index": "系统管理",
+          "my_changes": "我的申请",
           "user": "用户管理",
-          "group": "组织机构管理",
           "role": "角色管理",
           "permission": "菜单管理",
-          "approval": "审批管理",
-          "my_changes": "我的申请",
-          "audit_log": "日志审计"
+          "group": "组织机构管理",
+          "system_config": "系统管理",
+          "datasource": "数据源配置",
+          "other_config": "其他配置"
         }
       },
       "blog": "博客",
@@ -273,10 +274,8 @@
         "AUDITADMIN": "审计管理员",
         "DEPT_DATA_OWNER": "部门数据管理员",
         "DEPT_DATA_DEV": "部门数据开发员",
-        "DEPT_DATA_VIEWER": "部门数据查看员",
         "INST_DATA_OWNER": "研究所数据管理员",
         "INST_DATA_DEV": "研究所数据开发员",
-        "INST_DATA_VIEWER": "研究所数据查看员",
         "DATA_STEWARD": "数据管家",
         "DATA_ANALYST": "数据分析师"
       },
@@ -289,8 +288,11 @@
         "GENERAL": "一般",
         "IMPORTANT": "重要",
         "CORE": "核心",
+        "PUBLIC": "公开",
+        "INTERNAL": "内部",
+        "SECRET": "秘密",
         "TOP_SECRET": "机密",
-        "SECRET": "机密",
+        "TOP-SECRET": "机密",
         "NORMAL": "普通",
         "UNKNOWN": "未知敏感度"
       }

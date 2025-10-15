@@ -51,8 +51,10 @@ public class InfraManagementService {
     private final InfraSecurityProperties securityProperties;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final PostgresConnectionService postgresConnectionService;
 
     private static final String TYPE_INCEPTOR = "INCEPTOR";
+    private static final String TYPE_POSTGRES = "POSTGRES";
     private static final String STATUS_ACTIVE = "ACTIVE";
 
     public InfraManagementService(
@@ -62,7 +64,8 @@ public class InfraManagementService {
         InfraSecretService secretService,
         InfraSecurityProperties securityProperties,
         ObjectMapper objectMapper,
-        ApplicationEventPublisher eventPublisher
+        ApplicationEventPublisher eventPublisher,
+        PostgresConnectionService postgresConnectionService
     ) {
         this.dataSourceRepository = dataSourceRepository;
         this.storageRepository = storageRepository;
@@ -71,6 +74,7 @@ public class InfraManagementService {
         this.securityProperties = securityProperties;
         this.objectMapper = objectMapper;
         this.eventPublisher = eventPublisher;
+        this.postgresConnectionService = postgresConnectionService;
     }
 
     public List<InfraDataSourceDto> listDataSources() {
@@ -117,6 +121,45 @@ public class InfraManagementService {
         InfraDataSourceDto dto = toDto(saved);
         eventPublisher.publishEvent(new InceptorDataSourcePublishedEvent(dto));
         return dto;
+    }
+
+    @Transactional
+    public InfraDataSourceDto activatePlatformPostgres(String username) {
+        PostgresConnectionService.PostgresConnectionResult result = postgresConnectionService.verifyPlatformDatabase();
+        InfraDataSource entity = dataSourceRepository.findFirstByTypeIgnoreCase(TYPE_POSTGRES).orElseGet(InfraDataSource::new);
+        entity.setName(StringUtils.hasText(entity.getName()) ? entity.getName() : "平台 PostgreSQL");
+        entity.setDescription("Hive 不可用时的临时数据源，指向平台自用的 PostgreSQL。");
+        entity.setType(TYPE_POSTGRES);
+        entity.setJdbcUrl(result.jdbcUrl());
+        entity.setUsername(result.username());
+        entity.setProps(writeProps(result.props()));
+        secretService.applySecrets(entity, result.secrets());
+        entity.setLastVerifiedAt(Instant.now());
+        entity.setStatus(STATUS_ACTIVE);
+        entity.setLastModifiedBy(username);
+        entity.setCreatedBy(entity.getCreatedBy() == null ? username : entity.getCreatedBy());
+        InfraDataSource saved = dataSourceRepository.save(entity);
+        HiveConnectionTestResult auditResult = HiveConnectionTestResult.success(
+            "PostgreSQL 连接已激活",
+            result.elapsedMillis(),
+            result.databaseVersion(),
+            result.driverVersion(),
+            List.of()
+        );
+        recordConnectionTest(
+            saved.getId(),
+            Map.of(
+                "type",
+                TYPE_POSTGRES,
+                "jdbcUrl",
+                result.jdbcUrl(),
+                "username",
+                result.username()
+            ),
+            auditResult,
+            username
+        );
+        return toDto(saved);
     }
 
     @Transactional
@@ -319,9 +362,17 @@ public class InfraManagementService {
             entity.getDescription(),
             props,
             entity.getCreatedDate(),
+            entity.getLastModifiedDate(),
             entity.getLastVerifiedAt(),
             entity.getStatus(),
-            entity.getSecureProps() != null
+            entity.getSecureProps() != null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
         );
     }
 

@@ -1,22 +1,19 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetJob;
-import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
-import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
-import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.catalog.DatasetJobService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import com.yuzhi.dts.platform.service.security.DatasetSqlBuilder;
 import jakarta.validation.Valid;
+import java.lang.reflect.Array;
 import java.util.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,36 +27,36 @@ import org.springframework.web.bind.annotation.*;
 @Transactional
 public class AssetResource {
 
+    private static final String CATALOG_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+
     private final CatalogDatasetRepository datasetRepo;
-    private final CatalogTableSchemaRepository tableRepo;
-    private final CatalogColumnSchemaRepository columnRepo;
     private final CatalogRowFilterRuleRepository rowFilterRepo;
     private final CatalogMaskingRuleRepository maskingRepo;
     private final AccessChecker accessChecker;
     private final AuditService audit;
     private final DatasetJobService datasetJobService;
     private final QueryGateway queryGateway;
+    private final DatasetSqlBuilder datasetSqlBuilder;
 
     public AssetResource(
         CatalogDatasetRepository datasetRepo,
-        CatalogTableSchemaRepository tableRepo,
-        CatalogColumnSchemaRepository columnRepo,
         CatalogRowFilterRuleRepository rowFilterRepo,
         CatalogMaskingRuleRepository maskingRepo,
         AccessChecker accessChecker,
         AuditService audit,
         DatasetJobService datasetJobService,
-        QueryGateway queryGateway
+        QueryGateway queryGateway,
+        DatasetSqlBuilder datasetSqlBuilder
     ) {
         this.datasetRepo = datasetRepo;
-        this.tableRepo = tableRepo;
-        this.columnRepo = columnRepo;
         this.rowFilterRepo = rowFilterRepo;
         this.maskingRepo = maskingRepo;
         this.accessChecker = accessChecker;
         this.audit = audit;
         this.datasetJobService = datasetJobService;
         this.queryGateway = queryGateway;
+        this.datasetSqlBuilder = datasetSqlBuilder;
     }
 
     /**
@@ -67,7 +64,7 @@ public class AssetResource {
      * MVP: if dataset has no tables, create one using hiveTable/name and a few example columns.
      */
     @PostMapping("/datasets/{id}/sync-schema")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> syncSchema(@PathVariable UUID id, @RequestBody(required = false) Map<String, Object> body) {
         try {
             CatalogDatasetJob job = datasetJobService.submitSchemaSync(id, body != null ? body : Map.of(), SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
@@ -127,22 +124,22 @@ public class AssetResource {
     public ApiResponse<Map<String, Object>> preview(
         @PathVariable UUID id,
         @RequestParam(defaultValue = "50") int rows,
-        @RequestHeader(value = "X-Active-Scope", required = false) String activeScope,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset ds = datasetRepo.findById(id).orElseThrow();
-        String effScope = activeScope != null ? activeScope : "DEPT";
         String effDept = activeDept != null ? activeDept : claim("dept_code");
-        if (!accessChecker.canRead(ds) || !accessChecker.scopeAllowed(ds, effScope, effDept)) {
+        boolean read = accessChecker.canRead(ds);
+        boolean deptOk = accessChecker.departmentAllowed(ds, effDept);
+        if (!read || !deptOk) {
             audit.auditAction(
                 "CATALOG_ASSET_VIEW",
                 AuditStage.FAIL,
                 id.toString(),
-                Map.of("reason", !accessChecker.canRead(ds) ? "RBAC_DENY" : "SCOPE_MISMATCH")
+                Map.of("reason", !read ? "RBAC_DENY" : "INVALID_CONTEXT")
             );
-            String code = !accessChecker.canRead(ds)
+            String code = !read
                 ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY
-                : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.SCOPE_MISMATCH;
+                : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT;
             return ApiResponses.error(code, "Access denied for dataset");
         }
 
@@ -231,18 +228,7 @@ public class AssetResource {
     }
 
     private String buildPreviewSql(CatalogDataset dataset, int limit) {
-        String table = dataset.getHiveTable() != null && !dataset.getHiveTable().isBlank() ? dataset.getHiveTable().trim() : dataset.getName();
-        if (table == null || table.isBlank()) {
-            throw new IllegalStateException("数据集未配置 Hive 表名");
-        }
-        String database = dataset.getHiveDatabase();
-        StringBuilder builder = new StringBuilder("SELECT * FROM ");
-        if (database != null && !database.isBlank()) {
-            builder.append('`').append(database.replace("`", "``")).append('`').append('.');
-        }
-        builder.append('`').append(table.replace("`", "``")).append('`');
-        builder.append(" LIMIT ").append(limit);
-        return builder.toString();
+        return datasetSqlBuilder.buildSampleQuery(dataset, limit);
     }
 
     private List<String> extractHeaders(Object headersObj) {
@@ -285,13 +271,38 @@ public class AssetResource {
             org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
             if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
                 Object v = token.getToken().getClaims().get(name);
-                return v == null ? null : String.valueOf(v);
+                return stringifyClaim(v);
             }
             if (auth != null && auth.getPrincipal() instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal principal) {
                 Object v = principal.getAttribute(name);
-                return v == null ? null : String.valueOf(v);
+                return stringifyClaim(v);
             }
         } catch (Exception ignored) {}
         return null;
+    }
+
+    private String stringifyClaim(Object raw) {
+        Object flattened = flattenClaim(raw);
+        if (flattened == null) return null;
+        String text = flattened.toString();
+        return text == null || text.isBlank() ? null : text;
+    }
+
+    private Object flattenClaim(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof java.util.Collection<?> collection) {
+            return collection.stream().filter(Objects::nonNull).findFirst().orElse(null);
+        }
+        if (raw.getClass().isArray()) {
+            int len = Array.getLength(raw);
+            for (int i = 0; i < len; i++) {
+                Object element = Array.get(raw, i);
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        return raw;
     }
 }

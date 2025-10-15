@@ -31,5 +31,12 @@ public enum DataLevel {
             default -> null;
         };
     }
-}
 
+    /**
+     * 返回去掉 DATA_ 前缀后的密级名称，保持与表字段中常见的 PUBLIC/INTERNAL 等取值一致。
+     */
+    public String classification() {
+        String name = name();
+        return name.startsWith("DATA_") ? name.substring("DATA_".length()) : name;
+    }
+}

@@ -61,7 +61,6 @@ class ExploreAbacIT {
         ds.setName("orders_dept_priv");
         ds.setType("TRINO");
         ds.setDataLevel("DATA_INTERNAL");
-        ds.setScope("DEPT");
         ds.setOwnerDept("D001");
         ds.setHiveDatabase("mart");
         ds.setHiveTable("orders");
@@ -77,13 +76,12 @@ class ExploreAbacIT {
                 post("/api/explore/execute")
                     .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .header("X-Active-Scope", "DEPT")
                     .header("X-Active-Dept", "D002") // mismatch
                     .content(objectMapper.writeValueAsBytes(body))
             )
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(-1))
-            .andExpect(jsonPath("$.code").value("dts-sec-0002")); // SCOPE_MISMATCH
+            .andExpect(jsonPath("$.code").value("dts-sec-0006")); // INVALID_CONTEXT
     }
 
     @Test
@@ -93,7 +91,6 @@ class ExploreAbacIT {
         ds.setName("orders_dept_priv2");
         ds.setType("TRINO");
         ds.setDataLevel("DATA_PUBLIC");
-        ds.setScope("DEPT");
         ds.setOwnerDept("D001");
         ds.setHiveDatabase("mart");
         ds.setHiveTable("orders");
@@ -109,7 +106,6 @@ class ExploreAbacIT {
                 post("/api/explore/execute")
                     .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .header("X-Active-Scope", "DEPT")
                     .header("X-Active-Dept", "D001")
                     .content(objectMapper.writeValueAsBytes(body))
             )
@@ -120,8 +116,7 @@ class ExploreAbacIT {
 
         JsonNode payload = objectMapper.readTree(result.getResponse().getContentAsString());
         String effectiveSql = payload.path("data").path("effectiveSql").asText();
-        assertThat(effectiveSql).contains("WHERE (owner_dept = 'D001')");
-        assertThat(effectiveSql).startsWith("SELECT * FROM (");
+        assertThat(effectiveSql).isEqualTo("select id, owner_dept from mart.orders");
     }
 
     @Test
@@ -132,8 +127,7 @@ class ExploreAbacIT {
         ds.setName("finance_core");
         ds.setType("TRINO");
         ds.setDataLevel("DATA_INTERNAL");
-        ds.setScope("INST");
-        ds.setShareScope("PRIVATE_DEPT");
+        ds.setOwnerDept("D009");
         ds.setHiveDatabase("mart");
         ds.setHiveTable("finance_core");
         CatalogDataset saved = datasetRepository.saveAndFlush(ds);
@@ -149,11 +143,10 @@ class ExploreAbacIT {
                 post("/api/explore/saved-queries/" + savedQuery.getId() + "/run")
                     .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .header("X-Active-Scope", "INST")
+                    .header("X-Active-Dept", "D002")
             )
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(-1))
-            .andExpect(jsonPath("$.code").value("dts-sec-0002"));
+            .andExpect(jsonPath("$.code").value("dts-sec-0006"));
     }
 }
-

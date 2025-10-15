@@ -18,7 +18,9 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -45,7 +47,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/audit-logs")
-@PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.AUTH_ADMIN + "','" + AuthoritiesConstants.AUDITOR_ADMIN + "')")
+@PreAuthorize(
+    "hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.AUTH_ADMIN + "','" + AuthoritiesConstants.AUDITOR_ADMIN + "','AUTHADMIN','AUDITADMIN','AUDITOR_ADMIN','AUTH_ADMIN')"
+)
 public class AuditLogResource {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogResource.class);
@@ -53,11 +57,13 @@ public class AuditLogResource {
     private final AdminAuditService auditService;
     private final AuditActionCatalog actionCatalog;
     private final ObjectMapper objectMapper;
+    private final com.yuzhi.dts.admin.service.audit.OperationMappingEngine opMappingEngine;
 
-    public AuditLogResource(AdminAuditService auditService, ObjectMapper objectMapper, AuditActionCatalog actionCatalog) {
+    public AuditLogResource(AdminAuditService auditService, ObjectMapper objectMapper, AuditActionCatalog actionCatalog, com.yuzhi.dts.admin.service.audit.OperationMappingEngine opMappingEngine) {
         this.auditService = auditService;
         this.objectMapper = objectMapper;
         this.actionCatalog = actionCatalog;
+        this.opMappingEngine = opMappingEngine;
     }
 
     @GetMapping("/modules")
@@ -133,9 +139,9 @@ public class AuditLogResource {
             // sysadmin：不可查看任何审计记录
             pageResult = new PageImpl<>(java.util.List.of(), pageable, 0);
         } else if (isAuthAdmin) {
-            java.util.List<String> allowed = java.util.List.of(
-                AuthoritiesConstants.SYS_ADMIN,
-                AuthoritiesConstants.AUDITOR_ADMIN
+            // authadmin: 只能查看 auditadmin 的日志
+            List<String> allowedRoles = expandRoleVariants(
+                List.of(AuthoritiesConstants.AUDITOR_ADMIN)
             );
             String current = SecurityUtils.getCurrentUserLogin().orElse(null);
             java.util.List<String> excludedActors = current != null ? java.util.List.of(current.toLowerCase()) : java.util.List.of();
@@ -152,7 +158,7 @@ public class AuditLogResource {
                 fromDate,
                 toDate,
                 clientIp,
-                allowed,
+                allowedRoles,
                 pageable
             ) : auditService.searchAllowedRolesExcludeActors(
                 actor,
@@ -167,13 +173,14 @@ public class AuditLogResource {
                 fromDate,
                 toDate,
                 clientIp,
-                allowed,
+                allowedRoles,
                 excludedActors,
                 pageable
             );
         } else if (isAuditAdmin) {
             String current = SecurityUtils.getCurrentUserLogin().orElse(null);
             java.util.List<String> excludedActors = current != null ? java.util.List.of(current.toLowerCase()) : java.util.List.of();
+            List<String> excludedRoles = expandRoleVariants(List.of(AuthoritiesConstants.AUDITOR_ADMIN));
             pageResult = (excludedActors.isEmpty()) ? auditService.searchExcludeRoles(
                 actor,
                 module,
@@ -187,7 +194,7 @@ public class AuditLogResource {
                 fromDate,
                 toDate,
                 clientIp,
-                java.util.List.of(AuthoritiesConstants.AUDITOR_ADMIN),
+                excludedRoles,
                 pageable
             ) : auditService.searchExcludeRolesExcludeActors(
                 actor,
@@ -202,7 +209,7 @@ public class AuditLogResource {
                 fromDate,
                 toDate,
                 clientIp,
-                java.util.List.of(AuthoritiesConstants.AUDITOR_ADMIN),
+                excludedRoles,
                 excludedActors,
                 pageable
             );
@@ -263,6 +270,10 @@ public class AuditLogResource {
             // sysadmin：不可导出任何审计记录
             events = java.util.List.of();
         } else if (isAuthAdmin) {
+            // authadmin: 只能查看 auditadmin 的日志
+            List<String> allowedRoles = expandRoleVariants(
+                List.of(AuthoritiesConstants.AUDITOR_ADMIN)
+            );
             String current = SecurityUtils.getCurrentUserLogin().orElse(null);
             java.util.List<String> excludedActors = current != null ? java.util.List.of(current.toLowerCase()) : java.util.List.of();
             events = excludedActors.isEmpty()
@@ -279,7 +290,7 @@ public class AuditLogResource {
                     fromDate,
                     toDate,
                     clientIp,
-                    java.util.List.of(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN)
+                    allowedRoles
                 )
                 : auditService.findAllForExportAllowedRolesExcludeActors(
                     actor,
@@ -294,12 +305,13 @@ public class AuditLogResource {
                     fromDate,
                     toDate,
                     clientIp,
-                    java.util.List.of(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN),
+                    allowedRoles,
                     excludedActors
                 );
         } else if (isAuditAdmin) {
             String current = SecurityUtils.getCurrentUserLogin().orElse(null);
             java.util.List<String> excludedActors = current != null ? java.util.List.of(current.toLowerCase()) : java.util.List.of();
+            List<String> excludedRoles = expandRoleVariants(List.of(AuthoritiesConstants.AUDITOR_ADMIN));
             events = excludedActors.isEmpty()
                 ? auditService.findAllForExportExcludeRoles(
                     actor,
@@ -314,7 +326,7 @@ public class AuditLogResource {
                     fromDate,
                     toDate,
                     clientIp,
-                    java.util.List.of(AuthoritiesConstants.AUDITOR_ADMIN)
+                    excludedRoles
                 )
                 : auditService.findAllForExportExcludeRolesExcludeActors(
                     actor,
@@ -329,7 +341,7 @@ public class AuditLogResource {
                     fromDate,
                     toDate,
                     clientIp,
-                    java.util.List.of(AuthoritiesConstants.AUDITOR_ADMIN),
+                    excludedRoles,
                     excludedActors
                 );
         } else {
@@ -349,13 +361,18 @@ public class AuditLogResource {
             );
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("id,timestamp,source,event_class,event_type,module,action,summary,operator_id,operator_name,org_code,org_name,result,resource_type,resource_id,client_ip,client_agent,http_method,request_uri,来源系统,结果中文,目标表,目标ID\n");
+        sb.append("id,timestamp,source,event_class,event_type,module,action,summary,operator_id,operator_name,org_code,org_name,result,resource_type,resource_id,client_ip,client_agent,http_method,request_uri,来源系统,结果中文,目标表,目标ID,操作类型,操作内容,日志类型\n");
         for (AuditEvent event : events) {
-            String sourceText = mapSourceSystemText(event.getSourceSystem());
-            String resultText = mapResultText(event.getResult());
+            // Derive readable fields via the same logic as list view (rule engine + fallbacks)
+            AuditEventView view = toView(event);
+            String sourceText = view.sourceSystemText != null ? view.sourceSystemText : mapSourceSystemText(event.getSourceSystem());
+            String resultText = view.resultText != null ? view.resultText : mapResultText(event.getResult());
             java.util.Map<String, Object> details = parseDetails(event);
             String targetTable = details.getOrDefault("target_table", "").toString();
             String targetId = details.getOrDefault("target_id", "").toString();
+            String opType = view.operationType != null ? view.operationType : "";
+            String opContent = view.operationContent != null ? view.operationContent : "";
+            String logTypeText = view.logTypeText != null ? view.logTypeText : (event.getEventClass() != null && event.getEventClass().trim().equalsIgnoreCase("SecurityEvent") ? "安全审计" : "操作审计");
             sb
                 .append(event.getId()).append(',')
                 .append(event.getOccurredAt()).append(',')
@@ -379,7 +396,10 @@ public class AuditLogResource {
                 .append(escape(sourceText)).append(',')
                 .append(escape(resultText)).append(',')
                 .append(escape(targetTable)).append(',')
-                .append(escape(targetId))
+                .append(escape(targetId)).append(',')
+                .append(escape(opType)).append(',')
+                .append(escape(opContent)).append(',')
+                .append(escape(logTypeText))
                 .append('\n');
         }
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audits.csv");
@@ -399,9 +419,49 @@ public class AuditLogResource {
     @DeleteMapping
     public ResponseEntity<ApiResponse<Map<String, Object>>> purge() {
         long removed = auditService.purgeAll();
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        auditService.recordAction(actor, "ADMIN_AUDIT_PURGE", AuditStage.SUCCESS, "audit", Map.of("removed", removed));
         return ResponseEntity.ok(ApiResponse.ok(Map.of("removed", removed)));
+    }
+
+    private List<String> expandRoleVariants(List<String> baseRoles) {
+        LinkedHashSet<String> variants = new LinkedHashSet<>();
+        for (String role : baseRoles) {
+            if (!StringUtils.hasText(role)) {
+                continue;
+            }
+            String canonical = SecurityUtils.normalizeRole(role);
+            addRoleVariants(variants, canonical);
+            addRoleVariants(variants, role);
+        }
+        return variants
+            .stream()
+            .filter(StringUtils::hasText)
+            .collect(Collectors.toUnmodifiableList());
+    }
+
+    private void addRoleVariants(LinkedHashSet<String> target, String role) {
+        if (!StringUtils.hasText(role)) {
+            return;
+        }
+        String trimmed = role.trim();
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        target.add(trimmed);
+        target.add(upper);
+        target.add(trimmed.toLowerCase(Locale.ROOT));
+        target.add(trimmed.replace("_", ""));
+        target.add(trimmed.replace("_", "").toLowerCase(Locale.ROOT));
+        target.add(trimmed.replace("_", "").toUpperCase(Locale.ROOT));
+
+        String withoutPrefix = upper.startsWith("ROLE_") ? upper.substring(5) : upper;
+        if (!withoutPrefix.isEmpty()) {
+            target.add(withoutPrefix);
+            target.add(withoutPrefix.replace("_", ""));
+            target.add(withoutPrefix.replace("_", "").toLowerCase(Locale.ROOT));
+            target.add(withoutPrefix.replace("_", "").toUpperCase(Locale.ROOT));
+            target.add("ROLE_" + withoutPrefix);
+            target.add(("ROLE_" + withoutPrefix).toLowerCase(Locale.ROOT));
+            target.add("ROLE_" + withoutPrefix.replace("_", ""));
+            target.add(("ROLE_" + withoutPrefix.replace("_", "")).toLowerCase(Locale.ROOT));
+        }
     }
 
     private AuditEventView toView(AuditEvent event) {
@@ -463,84 +523,272 @@ public class AuditLogResource {
             }
         } catch (Exception ignore) {}
 
-        // Derived fields for presentation
-        view.logTypeText = (view.eventClass != null && view.eventClass.trim().equalsIgnoreCase("SecurityEvent")) ? "安全审计" : "操作审计";
-        String method = event.getHttpMethod() == null ? "" : event.getHttpMethod().trim().toUpperCase();
-        String actionRaw = event.getAction() == null ? "" : event.getAction().trim();
-        String actionUpper = actionRaw.toUpperCase(java.util.Locale.ROOT);
-        String actionLower = actionRaw.toLowerCase(java.util.Locale.ROOT);
-        // 更稳健的登录/登出识别：
-        // 1) 优先匹配登出（避免 LOGIN/OUT 等复合词干扰），支持英文与中文同义词
-        if (actionUpper.contains("LOGOUT") || actionUpper.contains("SIGNOUT") || actionUpper.contains("LOGOFF")
-            || actionLower.contains("登出") || actionLower.contains("退出")) {
-            view.operationType = "登出";
-        }
-        else if (actionUpper.contains("LOGIN") || actionUpper.contains("LOG IN")
-            || actionLower.contains("登录") || actionLower.contains("登入")) {
-            view.operationType = "登录";
-        }
-        else if ("GET".equals(method)) view.operationType = "查询";
-        else if ("PUT".equals(method)) view.operationType = "新增";
-        else if ("POST".equals(method)) view.operationType = "修改";
-        else if ("PATCH".equals(method)) view.operationType = "部分更新";
-        else if ("DELETE".equals(method)) view.operationType = "删除";
-        else {
-            // Fallback by action code when HTTP method is unavailable (recordAction)
-            if (actionUpper.contains("CREATE")) view.operationType = "新增";
-            else if (actionUpper.contains("UPDATE") || actionUpper.contains("ENABLE") || actionUpper.contains("DISABLE") || actionUpper.contains("RESET")) view.operationType = "修改";
-            else if (actionUpper.contains("DELETE") || actionUpper.contains("REMOVE")) view.operationType = "删除";
-            else if (actionUpper.contains("VIEW") || actionUpper.contains("LIST") || actionUpper.contains("SEARCH")) view.operationType = "查询";
-            else view.operationType = "操作";
-        }
-
-        String targetLabel = view.targetTableLabel != null ? view.targetTableLabel : mapTableLabel(view.resourceType);
-        if (!hasChinese(targetLabel)) {
-            targetLabel = null; // 禁止显示英文/数字等非中文名称
-        }
-        // Use approval record's 操作类型 as operationContent when applicable
+        // Rule engine: try mapping first (query-time rendering). Only uses event/requestUri/details; body/resp not persisted yet
+        boolean ruleHit = false;
         try {
-            if (isApprovalEvent(event)) {
-                // Extract type from details if present
-                String approvalType = null;
-                if (event.getDetails() != null && !event.getDetails().isBlank()) {
-                    Map<?,?> det = objectMapper.readValue(event.getDetails(), Map.class);
-                    Object t = det.get("type");
-                    if (t == null) t = det.get("approvalType");
-                    if (t != null) approvalType = String.valueOf(t);
-                }
-                String approvalText = mapApprovalTypeToContent(approvalType);
-                if (approvalText != null && !approvalText.isBlank()) {
-                    String nameSuffix = (view.targetRef != null && !view.targetRef.isBlank()) ? "（" + view.targetRef + "）" : "";
-                    view.operationContent = approvalText + nameSuffix;
-                    return view;
-                }
+            var mapped = opMappingEngine.resolve(event);
+            if (mapped.isPresent()) {
+                var m = mapped.get();
+                if (StringUtils.hasText(m.actionType)) view.operationType = m.actionType;
+                if (StringUtils.hasText(m.description)) view.operationContent = m.description;
+                ruleHit = true;
             }
         } catch (Exception ignore) {}
-        String nameSuffix = (hasChinese(view.targetRef)) ? "（" + view.targetRef + "）" : "";
-        if (view.operationType.equals("查询")) {
-            // 列表 vs 单个对象：GET 且无目标ID -> 视为“列表”查询
-            boolean isList = isListQuery(event, view);
-            if (isList) {
-                view.operationContent = (targetLabel == null) ? "查询" : ("查询了" + targetLabel + "列表");
-            } else {
-                view.operationContent = (targetLabel == null) ? "查询" : ("查询了" + targetLabel + nameSuffix);
-            }
-        } else if (view.operationType.equals("新增")) {
-            view.operationContent = (targetLabel == null) ? "新建" : ("新建了" + targetLabel + nameSuffix);
-        } else if (view.operationType.equals("修改")) {
-            view.operationContent = (targetLabel == null) ? "修改" : ("修改了" + targetLabel + nameSuffix);
-        } else if (view.operationType.equals("部分更新")) {
-            view.operationContent = (targetLabel == null) ? "部分更新" : ("部分更新了" + targetLabel + nameSuffix);
-        } else if (view.operationType.equals("删除")) {
-            view.operationContent = (targetLabel == null) ? "删除" : ("删除了" + targetLabel + nameSuffix);
-        } else if (view.operationType.equals("登录")) {
-            view.operationContent = "登录系统";
-        } else if (view.operationType.equals("登出")) {
-            view.operationContent = "登出系统";
-        } else {
-            view.operationContent = (targetLabel == null) ? "执行了操作" : ("操作了" + targetLabel + nameSuffix);
-        }
+
+        // Non-content derived field stays
+        view.logTypeText = (view.eventClass != null && view.eventClass.trim().equalsIgnoreCase("SecurityEvent")) ? "安全审计" : "操作审计";
+        applyFallbackOperationInfo(event, view);
         return view;
+    }
+
+    private void applyFallbackOperationInfo(AuditEvent event, AuditEventView view) {
+        boolean hasType = StringUtils.hasText(view.operationType);
+        boolean hasContent = StringUtils.hasText(view.operationContent);
+        if (hasType && hasContent) {
+            return;
+        }
+
+        String actionUpper = event.getAction() != null ? event.getAction().trim().toUpperCase(Locale.ROOT) : "";
+        String summary = event.getSummary() != null ? event.getSummary().trim() : "";
+        String method = event.getHttpMethod() != null ? event.getHttpMethod().trim().toUpperCase(Locale.ROOT) : "";
+
+        String fallbackType = hasType ? view.operationType : null;
+        String fallbackContent = hasContent ? view.operationContent : null;
+        String signalType = inferTypeFromSignal(actionUpper, summary);
+
+        if (!StringUtils.hasText(fallbackType) && StringUtils.hasText(signalType)) {
+            fallbackType = signalType;
+        }
+
+        if (!StringUtils.hasText(fallbackType)) {
+            fallbackType = inferTypeFromActionCode(view.extraTags);
+        }
+
+        if (!StringUtils.hasText(fallbackType) && containsLogin(actionUpper, summary)) {
+            fallbackType = "登录";
+        }
+
+        if (!StringUtils.hasText(fallbackType) && containsLogout(actionUpper, summary)) {
+            fallbackType = "登出";
+        }
+
+        if (!StringUtils.hasText(fallbackType)) {
+            fallbackType = inferTypeFromHttp(method, event, actionUpper, summary, signalType);
+        }
+
+        if (!StringUtils.hasText(fallbackContent) && StringUtils.hasText(summary) && shouldReuseSummary(fallbackType, summary)) {
+            fallbackContent = summary;
+        }
+
+        if (!StringUtils.hasText(fallbackContent) && StringUtils.hasText(fallbackType)) {
+            fallbackContent = buildOperationContent(fallbackType, event, view);
+        }
+
+        if (!StringUtils.hasText(fallbackContent) && StringUtils.hasText(summary)) {
+            fallbackContent = summary;
+        }
+
+        if (!StringUtils.hasText(view.operationType) && StringUtils.hasText(fallbackType)) {
+            view.operationType = fallbackType;
+        }
+
+        if (!StringUtils.hasText(view.operationContent) && StringUtils.hasText(fallbackContent)) {
+            view.operationContent = fallbackContent;
+        }
+    }
+
+    private boolean containsLogin(String actionUpper, String summary) {
+        if (!StringUtils.hasText(actionUpper) && !StringUtils.hasText(summary)) {
+            return false;
+        }
+        if (StringUtils.hasText(actionUpper) && (actionUpper.contains("LOGIN") || actionUpper.contains("SIGNIN") || actionUpper.contains("AUTH"))) {
+            return true;
+        }
+        return StringUtils.hasText(summary) && (summary.contains("登录") || summary.contains("登陆"));
+    }
+
+    private boolean containsLogout(String actionUpper, String summary) {
+        if (!StringUtils.hasText(actionUpper) && !StringUtils.hasText(summary)) {
+            return false;
+        }
+        if (StringUtils.hasText(actionUpper) && (actionUpper.contains("LOGOUT") || actionUpper.contains("SIGNOUT"))) {
+            return true;
+        }
+        return StringUtils.hasText(summary) && (summary.contains("退出") || summary.contains("登出"));
+    }
+
+    private String inferTypeFromSignal(String actionUpper, String summary) {
+        if (!StringUtils.hasText(actionUpper) && !StringUtils.hasText(summary)) return null;
+        String upper = actionUpper == null ? "" : actionUpper;
+        String text = summary == null ? "" : summary;
+        if (upper.contains("EXPORT") || text.contains("导出")) return "导出";
+        if (upper.contains("EXECUTE") || upper.contains("RUN") || text.contains("执行")) return "执行";
+        if (upper.contains("DELETE") || upper.contains("REMOVE") || upper.contains("DESTROY") || text.contains("删除") || text.contains("移除")) return "删除";
+        if (upper.contains("CREATE") || upper.contains("ADD") || upper.contains("REGISTER") || text.contains("新增") || text.contains("添加") || text.contains("新建")) return "新增";
+        if (upper.contains("PATCH")) return "部分更新";
+        if (upper.contains("UPDATE") || upper.contains("MODIFY") || upper.contains("RESET") || upper.contains("EDIT") || upper.contains("ENABLE") || upper.contains("DISABLE") || upper.contains("GRANT") || upper.contains("REVOKE") || text.contains("修改") || text.contains("更新") || text.contains("重置") || text.contains("授权") || text.contains("启用") || text.contains("禁用")) return "修改";
+        if (upper.contains("APPROVE") || text.contains("审批")) return "审批";
+        if (upper.contains("LIST") || upper.contains("SEARCH") || upper.contains("QUERY") || upper.contains("VIEW") || text.contains("查询") || text.contains("查看")) return "查询";
+        return null;
+    }
+
+    private String inferTypeFromHttp(String method, AuditEvent event, String actionUpper, String summary, String signalType) {
+        if (!StringUtils.hasText(method)) {
+            return likelyQuery(event, actionUpper) ? "查询" : null;
+        }
+        switch (method) {
+            case "GET":
+            case "HEAD":
+            case "OPTIONS":
+                return "查询";
+            case "POST":
+                if ("审批".equals(signalType)) return "审批";
+                if (likelyQuery(event, actionUpper)) return "查询";
+                return "新增";
+            case "PUT":
+                return "修改";
+            case "PATCH":
+                return "部分更新";
+            case "DELETE":
+                return "删除";
+            default:
+                return null;
+        }
+    }
+
+    private boolean shouldReuseSummary(String type, String summary) {
+        if (!StringUtils.hasText(summary)) return false;
+        if (!hasChinese(summary)) return false;
+        if (!StringUtils.hasText(type)) return true;
+        if ("登录".equals(type) || "登出".equals(type)) return true;
+        return summary.contains(type);
+    }
+
+    private String buildOperationContent(String type, AuditEvent event, AuditEventView view) {
+        String label = resolveResourceLabel(event, view);
+        String target = resolveTargetIndicator(view);
+        switch (type) {
+            case "查询":
+                if (isListQuery(event, view)) {
+                    return "查询" + label + "列表";
+                }
+                if (StringUtils.hasText(target)) {
+                    return "查看" + label + wrapTarget(target);
+                }
+                return "查询" + label;
+            case "新增":
+                if (StringUtils.hasText(target)) {
+                    return "新增" + label + wrapTarget(target);
+                }
+                return "新增" + label;
+            case "修改":
+                if (StringUtils.hasText(target)) {
+                    return "修改" + label + wrapTarget(target);
+                }
+                return "修改" + label;
+            case "部分更新":
+                if (StringUtils.hasText(target)) {
+                    return "部分更新" + label + wrapTarget(target);
+                }
+                return "部分更新" + label;
+            case "删除":
+                if (StringUtils.hasText(target)) {
+                    return "删除" + label + wrapTarget(target);
+                }
+                return "删除" + label;
+            case "导出":
+                return "导出" + label;
+            case "执行":
+                if (StringUtils.hasText(target)) {
+                    return "执行" + label + wrapTarget(target);
+                }
+                return "执行" + label;
+            case "审批":
+                if (StringUtils.hasText(target)) {
+                    return "审批" + label + wrapTarget(target);
+                }
+                return "处理" + label + "审批";
+            case "登录":
+                if (StringUtils.hasText(event.getSummary())) {
+                    return event.getSummary();
+                }
+                return "登录系统";
+            case "登出":
+                if (StringUtils.hasText(event.getSummary())) {
+                    return event.getSummary();
+                }
+                return "退出系统";
+            default:
+                return event.getSummary();
+        }
+    }
+
+    private String resolveResourceLabel(AuditEvent event, AuditEventView view) {
+        if (StringUtils.hasText(view.targetTableLabel)) {
+            return view.targetTableLabel;
+        }
+        if (StringUtils.hasText(view.targetTable)) {
+            String label = mapTableLabel(view.targetTable);
+            if (StringUtils.hasText(label)) {
+                return label;
+            }
+        }
+        if (StringUtils.hasText(event.getResourceType())) {
+            String label = mapTableLabel(event.getResourceType());
+            if (StringUtils.hasText(label)) {
+                return label;
+            }
+        }
+        if (StringUtils.hasText(view.module) && hasChinese(view.module)) {
+            return view.module;
+        }
+        if (StringUtils.hasText(event.getModule()) && hasChinese(event.getModule())) {
+            return event.getModule();
+        }
+        return "资源";
+    }
+
+    private String resolveTargetIndicator(AuditEventView view) {
+        if (StringUtils.hasText(view.targetRef)) {
+            return view.targetRef;
+        }
+        if (StringUtils.hasText(view.targetId)) {
+            return view.targetId;
+        }
+        if (StringUtils.hasText(view.resourceId)) {
+            return view.resourceId;
+        }
+        return null;
+    }
+
+    private String wrapTarget(String target) {
+        String trimmed = target == null ? "" : target.trim();
+        if (trimmed.startsWith("【") && trimmed.endsWith("】")) {
+            return trimmed;
+        }
+        return "【" + trimmed + "】";
+    }
+
+    /**
+     * 兼容历史事件：当 HTTP 方法缺失且动作未包含新增/修改/删除/登录/登出等强语义，
+     * 且请求路径/资源类型可识别时，将其视为“查询”。
+     */
+    private boolean likelyQuery(AuditEvent event, String actionUpper) {
+        // 明确排除：登录/登出/新增/修改/删除
+        if (actionUpper.contains("LOGIN") || actionUpper.contains("LOGOUT") || actionUpper.contains("CREATE") || actionUpper.contains("UPDATE") || actionUpper.contains("DELETE") || actionUpper.contains("REMOVE")) {
+            return false;
+        }
+        String method = event.getHttpMethod();
+        if (method != null && !method.isBlank()) {
+            return "GET".equalsIgnoreCase(method.trim());
+        }
+        // 方法未知：根据资源与请求路径启发判断
+        String uri = event.getRequestUri() == null ? "" : event.getRequestUri();
+        String rt = event.getResourceType() == null ? "" : event.getResourceType().toLowerCase(java.util.Locale.ROOT);
+        // 常见资源：用户/角色/菜单/部门/审批/模型/数据集 等，且 URI 指向 /api/**
+        boolean knownResource = rt.contains("user") || rt.contains("role") || rt.contains("menu") || rt.contains("org") || rt.contains("approval") || rt.contains("model") || rt.contains("catalog") || rt.contains("standard");
+        boolean looksApi = uri.startsWith("/api/") || uri.startsWith("/api");
+        return knownResource && looksApi;
     }
 
     private boolean hasChinese(String s) {
@@ -579,6 +827,22 @@ public class AuditLogResource {
         if (action.contains("APPROVAL")) return true;
         if (rt.equals("approvals") || rt.equals("approval") || rt.equals("approval_requests") || rt.equals("approval_request") || rt.equals("admin_approval_item")) return true;
         return false;
+    }
+
+    private String inferTypeFromActionCode(String extraTagsJson) {
+        try {
+            Map<?,?> tags = objectMapper.readValue(extraTagsJson, Map.class);
+            Object ac = tags.get("actionCode");
+            if (ac == null) return null;
+            String code = String.valueOf(ac).trim().toUpperCase(java.util.Locale.ROOT);
+            if (code.contains("VIEW") || code.contains("LIST") || code.contains("SEARCH") || code.contains("EXPORT")) return "查询";
+            if (code.contains("CREATE") || code.contains("ADD") || code.contains("NEW")) return "新增";
+            if (code.contains("UPDATE") || code.contains("EDIT") || code.contains("RESET") || code.contains("GRANT") || code.contains("REVOKE") || code.contains("ENABLE") || code.contains("DISABLE") || code.contains("SET") ) return "修改";
+            if (code.contains("DELETE") || code.contains("REMOVE")) return "删除";
+            if (code.contains("LOGIN")) return "登录";
+            if (code.contains("LOGOUT")) return "登出";
+        } catch (Exception ignore) {}
+        return null;
     }
 
     private String mapApprovalTypeToContent(String type) {

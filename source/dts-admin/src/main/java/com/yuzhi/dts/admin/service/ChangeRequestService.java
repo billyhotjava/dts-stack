@@ -63,8 +63,7 @@ public class ChangeRequestService {
         return switch (resourceType.toUpperCase()) {
             case "USER" -> "USER_MANAGEMENT";
             case "ROLE" -> "ROLE_MANAGEMENT";
-            // Treat menu visibility/bindings as part of role governance approvals
-            case "PORTAL_MENU" -> "ROLE_MANAGEMENT";
+            case "PORTAL_MENU" -> "MENU_MANAGEMENT";
             case "CONFIG" -> "SYSTEM_CONFIG";
             case "ORG" -> "ORGANIZATION";
             case "CUSTOM_ROLE" -> "CUSTOM_ROLE";

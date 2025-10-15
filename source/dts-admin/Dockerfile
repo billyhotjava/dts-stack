@@ -1,5 +1,5 @@
 # ---------- build stage ----------
-# Allow overriding the base image to point at an internal mirror registry
+# Back to JDK 17 to match downgraded pom <java.version>17>
 ARG BASE_IMAGE=openjdk:17-slim
 FROM ${BASE_IMAGE} AS build
 
@@ -43,7 +43,7 @@ RUN BUILD_POM=$(cat /workspace/.build-pom) && \
     mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package
 
 # ---------- runtime stage ----------
-# Reuse the same base image (can be overridden via BASE_IMAGE)
+# Use JRE 17 to run the compiled jar
 ARG BASE_IMAGE=openjdk:17-slim
 FROM ${BASE_IMAGE} AS runtime
 ENV TZ=Asia/Shanghai \

@@ -23,8 +23,8 @@ import tech.jhipster.config.JHipsterProperties;
 public class LoggingConfiguration {
 
     public LoggingConfiguration(
-        @Value("${spring.application.name}") String appName,
-        @Value("${server.port}") String serverPort,
+        @Value("${spring.application.name:dts-platform}") String appName,
+        @Value("${server.port:8080}") String serverPort,
         JHipsterProperties jHipsterProperties,
         ObjectProvider<BuildProperties> buildProperties,
         ObjectMapper mapper

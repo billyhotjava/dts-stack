@@ -265,6 +265,7 @@ export const useSignIn = () => {
 				console.warn("Failed to load Keycloak translations:", translationError);
 				// 不阻塞登录流程，即使翻译加载失败也继续
 			}
+			return adaptedUser;
 		} catch (err) {
 			toast.error(err.message, {
 				position: "top-center",

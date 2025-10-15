@@ -75,8 +75,8 @@ const useUserStore = create<UserStore>()(
 						useMenuStore.getState().clearMenus();
 						// Reset scoped context so the next user doesn't inherit prior dept/scope
 						const ctx = useContextStore.getState();
-						ctx.actions.setActiveDept(undefined);
-						ctx.actions.setActiveScope("DEPT");
+					ctx.actions.setActiveDept(undefined);
+						localStorage.removeItem("dts.session.loginTs");
 					} catch {
 						// ignore store access errors (e.g., during SSR)
 					}

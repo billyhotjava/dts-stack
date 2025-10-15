@@ -10,6 +10,7 @@ import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.web.rest.vm.AdminUserVM;
 import com.yuzhi.dts.admin.web.rest.vm.PagedResultVM;
 import com.yuzhi.dts.admin.web.rest.vm.UserRequestVM;
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
@@ -139,7 +140,6 @@ public class AdminUserResource {
         command.setEmail(request.getEmail());
         command.setPhone(request.getPhone());
         command.setPersonSecurityLevel(request.getPersonSecurityLevel());
-        command.setDataLevels(request.getDataLevels());
         command.setRealmRoles(request.getRealmRoles());
         command.setGroupPaths(request.getGroupPaths());
         command.setEnabled(request.getEnabled() == null ? Boolean.TRUE : request.getEnabled());
@@ -157,7 +157,6 @@ public class AdminUserResource {
         vm.setEmail(entity.getEmail());
         vm.setPhone(entity.getPhone());
         vm.setPersonSecurityLevel(entity.getPersonSecurityLevel());
-        vm.setDataLevels(entity.getDataLevels());
         vm.setRealmRoles(entity.getRealmRoles());
         vm.setGroupPaths(entity.getGroupPaths());
         vm.setEnabled(entity.isEnabled());
@@ -167,10 +166,10 @@ public class AdminUserResource {
 
     private String clientIp(HttpServletRequest request) {
         String header = request.getHeader("X-Forwarded-For");
-        if (StringUtils.isNotBlank(header)) {
-            return header.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+        String xfip = StringUtils.isNotBlank(header) ? header.split(",")[0].trim() : null;
+        String realIp = request.getHeader("X-Real-IP");
+        String remote = request.getRemoteAddr();
+        return IpAddressUtils.resolveClientIp(xfip, realIp, remote);
     }
 
     public static class DeleteUserRequestVM {

@@ -17,6 +17,8 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "gov_rule_version")
@@ -38,6 +40,7 @@ public class GovRuleVersion extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "status", length = 32)
     private String status;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "definition", columnDefinition = "jsonb")
     private String definition;
 
@@ -138,4 +141,3 @@ public class GovRuleVersion extends AbstractAuditingEntity<UUID> implements Seri
         this.bindings = bindings;
     }
 }
-

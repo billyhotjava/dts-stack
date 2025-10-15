@@ -65,32 +65,6 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 			{ key: "savedQueries", path: "saved-queries", titleKey: "sys.nav.portal.exploreSavedQueries" },
 		],
 	},
-	{
-		key: "visualization",
-		path: "visualization",
-    icon: "local:ic-analysis",
-		titleKey: "sys.nav.portal.visualization",
-		children: [
-			{ key: "dashboards", path: "dashboards", titleKey: "sys.nav.portal.visualizationDashboards" },
-			{ key: "cockpit", path: "cockpit", titleKey: "sys.nav.portal.visualizationCockpit" },
-			{ key: "projects", path: "projects", titleKey: "sys.nav.portal.visualizationProjects" },
-			{ key: "finance", path: "finance", titleKey: "sys.nav.portal.visualizationFinance" },
-			{ key: "supplyChain", path: "supply-chain", titleKey: "sys.nav.portal.visualizationSupplyChain" },
-			{ key: "hr", path: "hr", titleKey: "sys.nav.portal.visualizationHR" },
-		],
-	},
-	// 基础数据维护
-	{
-		key: "foundation",
-		path: "foundation",
-    icon: "local:ic-delivery",
-		titleKey: "sys.nav.portal.foundation",
-		children: [
-			{ key: "dataSources", path: "data-sources", titleKey: "sys.nav.portal.foundationDataSources" },
-			{ key: "dataStorage", path: "data-storage", titleKey: "sys.nav.portal.foundationDataStorage" },
-			{ key: "taskScheduling", path: "task-scheduling", titleKey: "sys.nav.portal.foundationTaskScheduling" },
-		],
-	},
 ];
 
 // Use a unified welcome route for all users

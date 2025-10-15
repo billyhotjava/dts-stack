@@ -41,6 +41,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Transactional
 public class GovernanceResource {
 
+    private static final String GOVERNANCE_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).GOVERNANCE_MAINTAINERS)";
+
     private final QualityRuleService qualityRuleService;
     private final QualityRunService qualityRunService;
     private final ComplianceService complianceService;
@@ -71,32 +74,32 @@ public class GovernanceResource {
     }
 
     @PostMapping("/quality/rules")
-    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<QualityRuleDto> createRule(@RequestBody QualityRuleUpsertRequest request) {
         return ApiResponses.ok(qualityRuleService.createRule(request, currentUser()));
     }
 
     @PostMapping("/rules")
-    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<QualityRuleDto> legacyCreateRule(@RequestBody QualityRuleUpsertRequest request) {
         return createRule(request);
     }
 
     @PutMapping("/quality/rules/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<QualityRuleDto> updateRule(@PathVariable UUID id, @RequestBody QualityRuleUpsertRequest request) {
         return ApiResponses.ok(qualityRuleService.updateRule(id, request, currentUser()));
     }
 
     @DeleteMapping("/quality/rules/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteRule(@PathVariable UUID id) {
         qualityRuleService.deleteRule(id);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
     @PostMapping("/quality/rules/{id}/toggle")
-    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<QualityRuleDto> toggleRule(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
         boolean enabled = Boolean.TRUE.equals(body.getOrDefault("enabled", Boolean.TRUE));
         return ApiResponses.ok(qualityRuleService.toggleRule(id, enabled));
@@ -130,7 +133,7 @@ public class GovernanceResource {
     // Compliance APIs --------------------------------------------------------
 
     @PostMapping("/compliance/batches")
-    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<ComplianceBatchDto> createComplianceBatch(@RequestBody ComplianceBatchRequest request) {
         return ApiResponses.ok(complianceService.createBatch(request, currentUser()));
     }
@@ -149,7 +152,7 @@ public class GovernanceResource {
     }
 
     @PutMapping("/compliance/items/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_GOV_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<ComplianceBatchItemDto> updateComplianceItem(
         @PathVariable UUID id,
         @RequestBody ComplianceItemUpdateRequest request

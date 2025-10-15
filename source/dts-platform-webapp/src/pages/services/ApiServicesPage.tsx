@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useActiveDept, useActiveScope } from "@/store/contextStore";
+import { useActiveDept } from "@/store/contextStore";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -48,7 +48,6 @@ function StatusBadge({ status }: { status: ApiServiceStatus }) {
 
 export default function ApiServicesPage() {
     const router = useRouter();
-    const activeScope = useActiveScope();
     const activeDept = useActiveDept();
 	const [list, setList] = useState<ApiServiceSummary[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -73,7 +72,7 @@ export default function ApiServicesPage() {
 
     useEffect(() => {
         void fetchList();
-    }, [activeScope, activeDept]);
+    }, [activeDept]);
 
 	const filtered = useMemo(() => {
 		const kw = keyword.trim().toLowerCase();

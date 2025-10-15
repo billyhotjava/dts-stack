@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251220-05-audit-operation-mapping-patch2" author="codex">
+        <comment>Add rules for /api/admin/orgs/{id} and /api/admin/change-requests</comment>
+
+        <!-- 部门管理：单个部门详情 GET /api/admin/orgs/{id} -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/orgs/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="部门管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询部门"/>
+            <column name="source_table_template" value="部门"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="13"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 变更申请列表 GET /api/admin/change-requests -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/change-requests"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询变更申请列表"/>
+            <column name="source_table_template" value="变更申请"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="12"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <!-- 变更申请详情 GET /api/admin/change-requests/{id} -->
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/change-requests/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询变更申请"/>
+            <column name="source_table_template" value="变更申请"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="12"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
+

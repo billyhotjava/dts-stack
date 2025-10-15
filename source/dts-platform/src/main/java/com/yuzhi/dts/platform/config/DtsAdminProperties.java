@@ -20,6 +20,9 @@ public class DtsAdminProperties {
     /** Optional bearer token when calling dts-admin. */
     private String serviceToken;
 
+    /** Logical service name expected on incoming internal calls. */
+    private String serviceName = "dts-admin";
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -59,5 +62,12 @@ public class DtsAdminProperties {
     public void setServiceToken(String serviceToken) {
         this.serviceToken = serviceToken;
     }
-}
 
+    public String getServiceName() {
+        return serviceName;
+    }
+
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
+    }
+}

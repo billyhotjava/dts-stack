@@ -4,27 +4,9 @@ This folder contains the default Keycloak realm export (`jhipster-realm.json`). 
 
 - Add realm roles used by this project: `ROLE_SYS_ADMIN`, `ROLE_AUTH_ADMIN`, `ROLE_SECURITY_AUDITOR`, `ROLE_OP_ADMIN`.
 - Ensure users carry a user attribute `person_level` (NON_SECRET|GENERAL|IMPORTANT|CORE).
-- Add a protocol mapper that derives `data_levels` array claim from `person_level`.
 
-## Example Script Mapper (Keycloak 22+)
-
-Mapper type: "Script Mapper"; Token Claim Name: `data_levels`; Claim JSON type: `String Array`; Add to access token.
-
-Script:
-```javascript
-var person = user.getFirstAttribute('person_level');
-if (!person) person = 'NON_SECRET';
-var map = {
-  NON_SECRET: ['DATA_PUBLIC'],
-  GENERAL: ['DATA_PUBLIC','DATA_INTERNAL'],
-  IMPORTANT: ['DATA_PUBLIC','DATA_INTERNAL','DATA_SECRET'],
-  CORE: ['DATA_PUBLIC','DATA_INTERNAL','DATA_SECRET','DATA_TOP_SECRET']
-};
-var list = map[person] || ['DATA_PUBLIC'];
-list;
-```
-
-Also add a simple mapper to pass-through `person_level`:
+> 自 2025-12 起，平台不再使用 `data_levels` Claim，Keycloak Token 中仅需保留 `person_level`。旧版脚本映射可安全移除。
+Add a simple mapper to pass-through `person_level`:
 - Mapper type: "User Attribute"; User Attribute: `person_level`; Token claim name: `person_level`; Add to access token; Claim JSON type: `String`.
 
 ## Client Access Policy

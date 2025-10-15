@@ -13,7 +13,6 @@ public class AdminUserVM {
     private String email;
     private String phone;
     private String personSecurityLevel;
-    private List<String> dataLevels = new ArrayList<>();
     private List<String> realmRoles = new ArrayList<>();
     private List<String> groupPaths = new ArrayList<>();
     private boolean enabled;
@@ -73,14 +72,6 @@ public class AdminUserVM {
 
     public void setPersonSecurityLevel(String personSecurityLevel) {
         this.personSecurityLevel = personSecurityLevel;
-    }
-
-    public List<String> getDataLevels() {
-        return dataLevels;
-    }
-
-    public void setDataLevels(List<String> dataLevels) {
-        this.dataLevels = dataLevels == null ? new ArrayList<>() : dataLevels;
     }
 
     public List<String> getRealmRoles() {

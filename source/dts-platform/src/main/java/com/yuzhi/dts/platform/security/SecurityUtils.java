@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -34,6 +35,53 @@ public final class SecurityUtils {
     public static Optional<String> getCurrentUserLogin() {
         SecurityContext securityContext = SecurityContextHolder.getContext();
         return Optional.ofNullable(extractPrincipal(securityContext.getAuthentication()));
+    }
+
+    /**
+     * Get the technical identifier (subject) of the current user if present.
+     *
+     * @return the subject/identifier of the current user.
+     */
+    public static Optional<String> getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return Optional.empty();
+        }
+        try {
+            if (authentication instanceof JwtAuthenticationToken token) {
+                String sub = token.getToken().getSubject();
+                if (sub == null) {
+                    Object claim = token.getToken().getClaims().get("sub");
+                    if (claim != null) {
+                        sub = String.valueOf(claim);
+                    }
+                }
+                return Optional.ofNullable(sub);
+            }
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof DefaultOidcUser oidcUser) {
+                Object sub = oidcUser.getAttributes().get("sub");
+                if (sub != null) {
+                    return Optional.of(String.valueOf(sub));
+                }
+            }
+            if (principal instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal oauth) {
+                String sub = oauth.getAttribute("sub");
+                if (sub != null && !sub.isBlank()) {
+                    return Optional.of(sub);
+                }
+            }
+        } catch (Exception ignored) {}
+        return Optional.empty();
+    }
+
+    public static boolean isOpAdminAccount() {
+        return getCurrentUserLogin()
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .map(String::toLowerCase)
+            .filter("opadmin"::equals)
+            .isPresent();
     }
 
     private static String extractPrincipal(Authentication authentication) {
@@ -125,6 +173,24 @@ public final class SecurityUtils {
     }
 
     private static List<GrantedAuthority> mapRolesToGrantedAuthorities(Collection<String> roles) {
-        return roles.stream().filter(role -> role.startsWith("ROLE_")).map(SimpleGrantedAuthority::new).collect(Collectors.toList());
+        return roles
+            .stream()
+            .map(role -> {
+                if (role == null) {
+                    return null;
+                }
+                String normalized = role.trim();
+                if (normalized.isEmpty()) {
+                    return null;
+                }
+                normalized = normalized.toUpperCase(Locale.ROOT);
+                if (!normalized.startsWith("ROLE_")) {
+                    normalized = "ROLE_" + normalized;
+                }
+                return new SimpleGrantedAuthority(normalized);
+            })
+            .filter(authority -> authority != null)
+            .distinct()
+            .collect(Collectors.toList());
     }
 }

@@ -112,7 +112,8 @@ services:
       AUDITING_FORWARD_ENABLED: "${AUDITING_FORWARD_ENABLED:-true}"
       DTS_COMMON_AUDIT_ENABLED: "${DTS_COMMON_AUDIT_ENABLED:-true}"
       # Admin API base (ingest endpoint is /api/audit-events under this base URL)
-      DTS_COMMON_AUDIT_BASE_URL: "https://${HOST_ADMIN_UI}"
+      # Use internal container URL to avoid TLS/trust issues in closed network
+      DTS_COMMON_AUDIT_BASE_URL: "http://dts-admin:8081"
       # Optional shared token for admin ingest validation; leave empty by default to avoid mismatches
       DTS_COMMON_AUDIT_TOKEN: "${DTS_COMMON_AUDIT_TOKEN:-}"
     volumes:

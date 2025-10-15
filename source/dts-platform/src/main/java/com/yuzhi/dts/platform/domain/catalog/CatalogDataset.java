@@ -33,14 +33,8 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "data_level", length = 32)
     private String dataLevel; // DATA_PUBLIC/DATA_INTERNAL/DATA_SECRET/DATA_TOP_SECRET
 
-    @Column(name = "scope", length = 16)
-    private String scope; // DEPT or INST
-
     @Column(name = "owner_dept", length = 64)
-    private String ownerDept; // department code for DEPT scoped resources
-
-    @Column(name = "share_scope", length = 16)
-    private String shareScope; // PRIVATE_DEPT/SHARE_INST/PUBLIC_INST
+    private String ownerDept; // owning department code
 
     @Column(name = "owner", length = 64)
     private String owner;
@@ -111,28 +105,12 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
         this.dataLevel = dataLevel;
     }
 
-    public String getScope() {
-        return scope;
-    }
-
-    public void setScope(String scope) {
-        this.scope = scope;
-    }
-
     public String getOwnerDept() {
         return ownerDept;
     }
 
     public void setOwnerDept(String ownerDept) {
         this.ownerDept = ownerDept;
-    }
-
-    public String getShareScope() {
-        return shareScope;
-    }
-
-    public void setShareScope(String shareScope) {
-        this.shareScope = shareScope;
     }
 
     public String getOwner() {

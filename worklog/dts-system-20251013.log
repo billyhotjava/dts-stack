@@ -208,3 +208,74 @@
 
 核对建议
 - 管理端与平台端各登录/登出一次，列表中应出现“登录系统/登出系统”各一条，对应“操作类型”为“登录/登出”。
+
+[2025-10-13 17:20] 引入“规则引擎 + 动态解析”以统一可读性转换（第一阶段：查询时渲染）
+
+目标
+- 把“技术操作（URI/方法）→ 可读中文描述（操作内容/操作类型/源表）”的口径集中到可配置规则中，减少启发式歧义，保证监管可读性。
+
+设计要点
+- 执行位置：仅在管理端统一执行（平台只转发原始事件）。
+- 生效时机：第一阶段在“查询时渲染”；第二阶段再前移到“持久化前填充”。
+- 匹配语法：Spring PathPattern（Ant 风格 ?/*/** + {id} 变量）。
+- 优先级：更具体优先（变量更少、通配符更少、字面量更长）；同等时按 order 排序；忽略 HEAD/OPTIONS。
+- 提取能力：首期支持 path.{var} / event.* / details.* / fixedValue:；模板支持 {var|默认} 管道默认值；缺失渲染为“未知”。
+- 回退链路：规则 → 动作字典（code→display）→ 启发式（方法+中文对象名）→ 兜底（“执行了操作：{URI}”）。
+
+落地与文件
+- 表结构：audit_operation_mapping（Liquibase）
+  • 变更：config/liquibase/changelog/20251220-01_audit_operation_mapping.xml
+  • 汇总：config/liquibase/master.xml 已包含
+- 规则引擎：OperationMappingEngine（查询时装配）
+  • 类：src/main/java/com/yuzhi/dts/admin/service/audit/OperationMappingEngine.java
+  • JPA：AuditOperationMapping + Repository
+- 对接：AuditLogResource.toView 首先尝试规则映射，未命中再回退。
+
+首批规则（种子）
+- 用户管理（/api/keycloak/users...）：列表/详情查询；新增/修改/删除；操作内容使用“新增用户/修改用户/删除用户/查询用户列表/查询用户”。
+- 角色管理（/api/keycloak/users/{id}/roles：POST/DELETE）：统一“修改用户角色”。
+- 审批管理：
+  • /api/approval-requests[/{id}] GET → “查询审批请求列表/查询审批请求”；
+  • /api/keycloak/approvals/{id}/{action} POST → “处理审批：{目标引用}”（后续第二阶段用 details.type 渲染更精细文案）。
+- 部门管理（/api/admin/orgs...）：列表查询、新建/修改/删除部门。
+- 菜单管理（/api/admin/portal/menus...）：列表查询、新建/修改/删除门户菜单。
+- 平台（经转发）：
+  • /api/explore/execute POST → “执行SQL查询”（第二阶段再补 SQL 摘要）；
+  • /api/modeling/standards* → “查询/新增/修改/删除数据标准”。
+- 兜底：/**（ALL）→ “执行了操作：{event.requestUri}”。
+  • 变更：config/liquibase/changelog/20251220-02_audit_operation_mapping_seed.xml（含上述全部种子与兜底）。
+
+后续计划（第二阶段）
+- 在“持久化前填充”阶段开启 JSONPath 提取（受体积阈值限制：请求 256KB、响应 512KB），丰富 {userName/roleName/sqlStatementSummary...} 动态占位；
+- 批量补齐平台治理/目录/接口等规则条目；
+- 增加一个管理端 UI（可选）用于 CRUD 规则并支持热更新（当前已 30s 定时扫描 + 仓库变更可触发 reload）。
+
+验收建议
+- 运行代表性操作（用户新增/修改、角色授予/撤销、审批处理、部门/菜单维护、SQL 执行、数据标准 CRUD），列表中“操作内容/操作类型/源表”应符合上表中文口径；
+- 未配置接口命中兜底规则，显示“执行了操作：/xxx/yyy”。
+
+[2025-10-13 22:45] 汇总与后续修复（导出统一 + JDK 版本对齐）
+
+目的
+- 保证“导出 CSV”与列表页口径一致（同样走规则引擎渲染出 操作类型/操作内容/日志类型）。
+- 消除 JDK 版本不一致导致的构建失败，将 admin/common 统一降低到 Java 17（兼容要求）。
+
+改动
+- 导出统一：
+  • 文件：source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AuditLogResource.java
+  • 调整 /api/audit-logs/export：在生成 CSV 时对每条记录调用 toView()，追加三列：操作类型、操作内容、日志类型（中文）。
+  • 继续保留原始技术字段与“来源系统/结果中文/目标表/目标ID”，便于追溯。
+- Java 版本对齐：
+  • dts-admin：pom.xml <java.version>17</java.version>；Jib 基础镜像改为 eclipse-temurin:17-jre；Dockerfile 使用 openjdk:17-slim。
+  • dts-common：pom.xml <java.version>17</java.version>；Dockerfile 从 temurin 21 切换到 temurin 17（build/runtime）。
+  • dts-platform：Jib 基础镜像改为 eclipse-temurin:17-jre（pom.xml），保持 <java.version>17。
+
+运行与配置确认
+- 平台默认转发：compose 中 AUDITING_FORWARD_ENABLED 和 DTS_COMMON_AUDIT_ENABLED 均默认 true；
+  • dev：DTS_COMMON_AUDIT_BASE_URL=http://dts-admin:8081
+  • app：DTS_COMMON_AUDIT_BASE_URL=https://${HOST_ADMIN_UI}
+- Token 可选：若未设置 DTS_COMMON_AUDIT_TOKEN，管理端接收端点 /api/audit-events 默认放行（封闭网络）；若设置，则需 Bearer/X-Audit-Token 校验。
+
+已知事项
+- 规则种子已覆盖用户/角色/审批/组织/菜单/平台 SQL&建模及导出动作，未覆盖的接口会命中兜底“执行了操作：{URI}”。
+- 第二阶段将把“可读化渲染”前移到持久化，加入请求/响应 JSONPath 提取并设置体积阈值（请求 256KB / 响应 512KB）。

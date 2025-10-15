@@ -2,7 +2,7 @@
 <databaseChangeLog
     xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
     <property name="now" value="current_timestamp" dbms="postgresql"/>
     <property name="floatType" value="float4" dbms="postgresql"/>
     <property name="clobType" value="clob" dbms="postgresql"/>
@@ -28,6 +28,26 @@
         <include file="config/liquibase/changelog/20251002-02_admin_custom_role_cleanup.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251210-01_portal_menu_visibility_role_user_cleanup.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251201-01_org_keycloak_mapping.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251220-01_audit_operation_mapping.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251220-02_audit_operation_mapping_seed.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-01_audit_operation_mapping_governance.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-02_refactor_hardcoded_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-03_refactor_admin_roles_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-04_refactor_login_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-05_add_platform_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251220-04_audit_operation_mapping_patch.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251220-05_audit_operation_mapping_patch2.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251230-01_drop_user_data_levels.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251230-02_remove_portal_viewer_roles.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-01_audit_operation_mapping_restore.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-02_organization_node_restore.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-03_remove_visualization_foundation_menus.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251016-02_infra_data_source.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251016-03_infra_data_source_audit_columns.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251016-04_infra_data_source_secrets.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-06_add_infra_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-07_add_audit_log_detail_rule.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-08_delete_all_secure_views.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

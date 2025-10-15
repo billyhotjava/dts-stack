@@ -1,138 +1,114 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" fill="none" role="img" aria-labelledby="title desc">
-  <title id="title">Tech Data Platform Background</title>
-  <desc id="desc">High‑tech big data platform abstract with neon grid, circuits, flowing connections, hex ring and soft glows.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" role="img" aria-labelledby="title desc">
+  <title id="title">Platform Login Illustration</title>
+  <desc id="desc">Blue crystalline core surrounded by translucent cubes with service icons on a deep gradient background.</desc>
   <defs>
-    <linearGradient id="bgGradient" x1="0" y1="0" x2="1200" y2="1200" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#071A2F" />
-      <stop offset="1" stop-color="#1B0F3A" />
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0E2F6B" />
+      <stop offset="1" stop-color="#0A1D47" />
     </linearGradient>
-    <radialGradient id="centerGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(600 620) scale(520)">
-      <stop offset="0" stop-color="#38BDF8" stop-opacity="0.70" />
-      <stop offset="0.55" stop-color="#0EA5E9" stop-opacity="0.15" />
-      <stop offset="1" stop-color="#041424" stop-opacity="0" />
-    </radialGradient>
-    <linearGradient id="gridStroke" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7DD3FC" stop-opacity="0" />
-      <stop offset="0.5" stop-color="#7DD3FC" stop-opacity="0.32" />
-      <stop offset="1" stop-color="#7DD3FC" stop-opacity="0" />
+    <linearGradient id="cubeCore" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#35D0FF" />
+      <stop offset="1" stop-color="#0583F2" />
     </linearGradient>
-    <linearGradient id="orbitStroke" x1="600" y1="220" x2="600" y2="980" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7C3AED" stop-opacity="0.08" />
-      <stop offset="0.5" stop-color="#A855F7" stop-opacity="0.5" />
-      <stop offset="1" stop-color="#22D3EE" stop-opacity="0.12" />
+    <linearGradient id="cubeSide" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1B74E4" stop-opacity="0.9" />
+      <stop offset="1" stop-color="#102A75" stop-opacity="0.9" />
     </linearGradient>
-    <linearGradient id="traceStroke" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#34D399" />
-      <stop offset="0.5" stop-color="#60A5FA" />
-      <stop offset="1" stop-color="#A855F7" />
+    <linearGradient id="cubeTop" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5AD8FF" stop-opacity="0.92" />
+      <stop offset="1" stop-color="#0F9CF7" stop-opacity="0.92" />
     </linearGradient>
-    <radialGradient id="nodeGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0) scale(18)">
-      <stop offset="0" stop-color="#E0F2FE" />
-      <stop offset="1" stop-color="#0284C7" stop-opacity="0" />
-    </radialGradient>
-    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="b"/>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="15" result="blur" />
       <feMerge>
-        <feMergeNode in="b"/>
-        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
       </feMerge>
     </filter>
-    <symbol id="hex" viewBox="-12 -12 24 24">
-      <polygon points="0,-10 8.66,-5 8.66,5 0,10 -8.66,5 -8.66,-5" fill="none" stroke="#22D3EE" stroke-width="1.5" opacity="0.65" />
+    <symbol id="cube" viewBox="-80 -80 160 160">
+      <polygon points="0,-74 64,-37 64,37 0,74 -64,37 -64,-37" fill="#ffffff" opacity="0.08" />
     </symbol>
   </defs>
 
-  <!-- Base -->
-  <rect width="1200" height="1200" rx="32" fill="url(#bgGradient)" />
-  <rect width="1200" height="1200" fill="url(#centerGlow)" />
+  <rect width="1200" height="1200" fill="url(#bgGradient)" />
 
-  <!-- Grid -->
-  <g stroke="url(#gridStroke)" stroke-width="1.25">
-    <path d="M120 0V1200" />
-    <path d="M240 0V1200" />
-    <path d="M360 0V1200" />
-    <path d="M480 0V1200" />
-    <path d="M600 0V1200" />
-    <path d="M720 0V1200" />
-    <path d="M840 0V1200" />
-    <path d="M960 0V1200" />
-    <path d="M0 200H1200" />
-    <path d="M0 360H1200" />
-    <path d="M0 520H1200" />
-    <path d="M0 680H1200" />
-    <path d="M0 840H1200" />
-    <path d="M0 1000H1200" />
+  <!-- Diagonal light streaks -->
+  <g stroke="#2265D6" stroke-opacity="0.25" stroke-width="2">
+    <path d="M120 240L1080 900" />
+    <path d="M260 140L1100 780" />
+    <path d="M160 960L880 420" />
+    <path d="M340 1040L960 580" />
   </g>
 
-  <!-- Orbits / Rings -->
-  <circle cx="600" cy="620" r="290" stroke="url(#orbitStroke)" stroke-width="2.5" />
-  <circle cx="600" cy="620" r="210" stroke="url(#orbitStroke)" stroke-width="2" stroke-dasharray="14 14" />
-  <circle cx="600" cy="620" r="140" stroke="#22D3EE" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="8 12" />
-
-  <!-- Data flows -->
-  <g opacity="0.9" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M300 500C420 400 520 380 620 420C720 460 840 560 900 640" stroke="#38BDF8" stroke-width="2.4" />
-    <path d="M260 700C340 600 460 560 580 580C700 600 820 680 900 780" stroke="#22D3EE" stroke-width="2" />
-    <path d="M360 860C420 760 520 720 640 720C760 720 880 780 940 860" stroke="#A855F7" stroke-opacity="0.6" stroke-width="2.4" />
+  <!-- Floating cubes -->
+  <g fill="none" filter="url(#softGlow)">
+    <use href="#cube" transform="translate(340 340) scale(1.6)" />
+    <use href="#cube" transform="translate(520 260) scale(1.3)" />
+    <use href="#cube" transform="translate(760 320) scale(1.4)" />
+    <use href="#cube" transform="translate(920 460) scale(1.2)" />
+    <use href="#cube" transform="translate(300 520) scale(1.25)" />
+    <use href="#cube" transform="translate(880 640) scale(1.35)" />
+    <use href="#cube" transform="translate(420 760) scale(1.4)" />
+    <use href="#cube" transform="translate(600 860) scale(1.1)" />
+    <use href="#cube" transform="translate(780 780) scale(1.25)" />
+    <use href="#cube" transform="translate(520 980) scale(0.9)" />
   </g>
 
-  <!-- Nodes -->
-  <g opacity="0.9">
-    <circle cx="300" cy="500" r="6" fill="#38BDF8" />
-    <circle cx="620" cy="420" r="8" fill="#22D3EE" />
-    <circle cx="900" cy="640" r="9" fill="#A855F7" />
-    <circle cx="260" cy="700" r="6" fill="#38BDF8" />
-    <circle cx="580" cy="580" r="9" fill="#22D3EE" />
-    <circle cx="900" cy="780" r="7" fill="#A855F7" />
-    <circle cx="360" cy="860" r="6" fill="#38BDF8" />
-    <circle cx="640" cy="720" r="9" fill="#22D3EE" />
-    <circle cx="940" cy="860" r="6" fill="#A855F7" />
+  <!-- Central core cube -->
+  <g transform="translate(600 540)" filter="url(#softGlow)">
+    <polygon points="0,-220 190,-110 190,110 0,220 -190,110 -190,-110" fill="url(#cubeTop)" opacity="0.95" />
+    <polygon points="0,220 -190,110 -190,-110 0,0" fill="url(#cubeCore)" />
+    <polygon points="0,220 190,110 190,-110 0,0" fill="url(#cubeSide)" />
   </g>
 
-  <!-- Node glows -->
-  <g opacity="0.8" filter="url(#softGlow)">
-    <circle cx="520" cy="520" r="18" fill="url(#nodeGlow)" />
-    <circle cx="600" cy="600" r="28" fill="url(#nodeGlow)" />
-    <circle cx="704" cy="516" r="16" fill="url(#nodeGlow)" />
-    <circle cx="632" cy="752" r="18" fill="url(#nodeGlow)" />
-    <circle cx="840" cy="520" r="20" fill="url(#nodeGlow)" />
-    <circle cx="760" cy="880" r="18" fill="url(#nodeGlow)" />
+  <!-- Service icons -->
+  <g fill="#FFFFFF" fill-opacity="0.85">
+    <g transform="translate(360 340) scale(1.15)">
+      <rect x="-52" y="-52" width="104" height="104" rx="16" fill="#ffffff" opacity="0.12" />
+      <path d="M-20 -6H20V6H-20zM-32 -28H32V-16H-32zM-32 16H32V28H-32z" />
+    </g>
+    <g transform="translate(820 320) scale(1.1)">
+      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0.12" />
+      <path d="M0 -28a18 18 0 0 1 18 18c0 10-8 18-18 18s-18-8-18-18a18 18 0 0 1 18-18zm0 52c8 0 16 4 16 10v10H-16v-10c0-6 8-10 16-10z" />
+    </g>
+    <g transform="translate(420 780) scale(1.2)">
+      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0.12" />
+      <path d="M-24 -16H12V-4H-24zM-24 4H0V16H-24zM18 -16H24V-4H18zM18 4H24V16H18z" />
+    </g>
+    <g transform="translate(780 780) scale(1.2)">
+      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0.12" />
+      <path d="M-24 -16H24V-4H-24zM-20 4H20V16H-20z" />
+      <path d="M-10 -28L-2 -40H-24V-52H16V-40H-4L6 -28H-10z" />
+    </g>
+    <g transform="translate(600 880) scale(1.25)">
+      <rect x="-56" y="-56" width="112" height="112" rx="18" fill="#ffffff" opacity="0.12" />
+      <path d="M-32 12c0-20 28-32 32-32s32 12 32 32v16H-32zM-20 12h40c0-8-20-16-20-16s-20 8-20 16z" />
+    </g>
+    <g transform="translate(720 220) scale(0.9)">
+      <rect x="-40" y="-40" width="80" height="80" rx="16" fill="#ffffff" opacity="0.12" />
+      <path d="M0 -22l12 20h-24zM-8 4h16v18h-16z" />
+    </g>
+    <g transform="translate(500 220) scale(0.9)">
+      <rect x="-40" y="-40" width="80" height="80" rx="16" fill="#ffffff" opacity="0.12" />
+      <path d="M-20 -6H20V6H-20zM-30 -24H30V-12H-30zM-30 12H30V24H-30z" />
+    </g>
+    <g transform="translate(340 520) scale(1)">
+      <rect x="-44" y="-44" width="88" height="88" rx="18" fill="#ffffff" opacity="0.12" />
+      <path d="M-8 -20h16l-4 14h-8zM-16 0h32l-6 18h-20zM-4 20h8l-2 8H-2z" />
+    </g>
+    <g transform="translate(880 640) scale(1)">
+      <rect x="-44" y="-44" width="88" height="88" rx="18" fill="#ffffff" opacity="0.12" />
+      <path d="M-20 -12h40M-24 12h48" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" />
+      <path d="M-28 -20l12 -12v24zM28 20l-12 12v-24z" />
+    </g>
   </g>
 
-  <!-- Circuit traces -->
-  <g opacity="0.9" stroke="url(#traceStroke)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M500 520L600 600L720 520" />
-    <path d="M500 520L500 660L640 800" />
-    <path d="M720 520L880 520" />
-    <path d="M640 800L780 920" />
-  </g>
-
-  <!-- Hex ring -->
-  <g transform="translate(600 620)">
-    <use href="#hex" transform="rotate(0) translate(0 -260)" />
-    <use href="#hex" transform="rotate(30) translate(0 -260)" />
-    <use href="#hex" transform="rotate(60) translate(0 -260)" />
-    <use href="#hex" transform="rotate(90) translate(0 -260)" />
-    <use href="#hex" transform="rotate(120) translate(0 -260)" />
-    <use href="#hex" transform="rotate(150) translate(0 -260)" />
-    <use href="#hex" transform="rotate(180) translate(0 -260)" />
-    <use href="#hex" transform="rotate(210) translate(0 -260)" />
-    <use href="#hex" transform="rotate(240) translate(0 -260)" />
-    <use href="#hex" transform="rotate(270) translate(0 -260)" />
-    <use href="#hex" transform="rotate(300) translate(0 -260)" />
-    <use href="#hex" transform="rotate(330) translate(0 -260)" />
-  </g>
-
-  <!-- Accent dots -->
-  <g fill="#7DD3FC" opacity="0.45">
-    <circle cx="140" cy="180" r="2" />
-    <circle cx="220" cy="260" r="1.5" />
-    <circle cx="340" cy="200" r="2" />
-    <circle cx="980" cy="260" r="2" />
-    <circle cx="1060" cy="180" r="2" />
-    <circle cx="1040" cy="360" r="1.5" />
-    <circle cx="160" cy="360" r="1.5" />
-    <circle cx="280" cy="1040" r="2" />
-    <circle cx="920" cy="1040" r="1.5" />
+  <!-- Small floating cubes -->
+  <g fill="#5EA9F8" opacity="0.4">
+    <rect x="196" y="280" width="24" height="24" rx="6" />
+    <rect x="980" y="360" width="18" height="18" rx="4" />
+    <rect x="260" y="820" width="18" height="18" rx="5" />
+    <rect x="960" y="760" width="20" height="20" rx="6" />
+    <rect x="420" y="180" width="18" height="18" rx="4" />
   </g>
 </svg>

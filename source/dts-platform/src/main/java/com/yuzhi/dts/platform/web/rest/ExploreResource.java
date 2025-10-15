@@ -17,7 +17,9 @@ import com.yuzhi.dts.platform.service.explore.dto.CreateSavedQueryRequest;
 import com.yuzhi.dts.platform.service.explore.dto.UpdateSavedQueryRequest;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import com.yuzhi.dts.platform.service.security.DatasetSqlBuilder;
 import jakarta.validation.Valid;
+import java.lang.reflect.Array;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -32,6 +34,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -60,6 +64,7 @@ public class ExploreResource {
     private final AuditService audit;
     private final ObjectMapper objectMapper;
     private final QueryGateway queryGateway;
+    private final DatasetSqlBuilder datasetSqlBuilder;
 
     public ExploreResource(
         ExploreSavedQueryRepository savedRepo,
@@ -69,7 +74,8 @@ public class ExploreResource {
         AccessChecker accessChecker,
         AuditService audit,
         ObjectMapper objectMapper,
-        QueryGateway queryGateway
+        QueryGateway queryGateway,
+        DatasetSqlBuilder datasetSqlBuilder
     ) {
         this.savedRepo = savedRepo;
         this.executionRepo = executionRepo;
@@ -79,12 +85,12 @@ public class ExploreResource {
         this.audit = audit;
         this.objectMapper = objectMapper;
         this.queryGateway = queryGateway;
+        this.datasetSqlBuilder = datasetSqlBuilder;
     }
 
     @PostMapping("/query/preview")
     public ApiResponse<Map<String, Object>> preview(
         @RequestBody Map<String, Object> body,
-        @RequestHeader(value = "X-Active-Scope", required = false) String activeScope,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset dataset = resolveDataset(body.get("datasetId"));
@@ -93,20 +99,19 @@ public class ExploreResource {
             return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
         }
         if (dataset != null) {
-            String effScope = activeScope != null ? activeScope : "DEPT";
             String effDept = activeDept != null ? activeDept : claim("dept_code");
             boolean read = accessChecker.canRead(dataset);
-            boolean scopeOk = accessChecker.scopeAllowed(dataset, effScope, effDept);
-            if (!read || !scopeOk) {
+            boolean deptOk = accessChecker.departmentAllowed(dataset, effDept);
+            if (!read || !deptOk) {
                 audit.audit("DENY", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
-                String code = !scopeOk
-                    ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.SCOPE_MISMATCH
+                String code = !deptOk
+                    ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT
                     : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY;
                 return ApiResponses.error(code, "Access denied for dataset");
             }
         }
         try {
-            Map<String, Object> payload = generateResult(dataset, extractSql(body), false, activeScope, activeDept);
+            Map<String, Object> payload = generateResult(dataset, extractSql(body), false, activeDept);
             audit.audit("EXECUTE", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
             return ApiResponses.ok(payload);
         } catch (IllegalStateException ex) {
@@ -123,7 +128,6 @@ public class ExploreResource {
     @PostMapping("/execute")
     public ApiResponse<Map<String, Object>> execute(
         @RequestBody Map<String, Object> body,
-        @RequestHeader(value = "X-Active-Scope", required = false) String activeScope,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset dataset = resolveDataset(body.get("datasetId"));
@@ -132,20 +136,19 @@ public class ExploreResource {
             return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
         }
         if (dataset != null) {
-            String effScope = activeScope != null ? activeScope : "DEPT";
             String effDept = activeDept != null ? activeDept : claim("dept_code");
             boolean read = accessChecker.canRead(dataset);
-            boolean scopeOk = accessChecker.scopeAllowed(dataset, effScope, effDept);
-            if (!read || !scopeOk) {
+            boolean deptOk = accessChecker.departmentAllowed(dataset, effDept);
+            if (!read || !deptOk) {
                 audit.audit("DENY", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
-                String code = !scopeOk
-                    ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.SCOPE_MISMATCH
+                String code = !deptOk
+                    ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT
                     : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY;
                 return ApiResponses.error(code, "Access denied for dataset");
             }
         }
         try {
-            Map<String, Object> payload = generateResult(dataset, extractSql(body), true, activeScope, activeDept);
+            Map<String, Object> payload = generateResult(dataset, extractSql(body), true, activeDept);
             audit.audit("EXECUTE", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
             return ApiResponses.ok(payload);
         } catch (IllegalStateException ex) {
@@ -419,7 +422,6 @@ public class ExploreResource {
     @PostMapping("/saved-queries/{id}/run")
     public ApiResponse<Map<String, Object>> runSaved(
         @PathVariable UUID id,
-        @RequestHeader(value = "X-Active-Scope", required = false) String activeScope,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         var q = savedRepo.findById(id).orElseThrow();
@@ -431,14 +433,13 @@ public class ExploreResource {
                 return ApiResponses.error("Access denied for dataset");
             }
             // Enforce scope gate similar to preview/execute
-            String effScope = activeScope != null ? activeScope : "DEPT";
             String effDept = activeDept != null ? activeDept : claim("dept_code");
             boolean read = accessChecker.canRead(dataset);
-            boolean scopeOk = accessChecker.scopeAllowed(dataset, effScope, effDept);
-            if (!read || !scopeOk) {
+            boolean deptOk = accessChecker.departmentAllowed(dataset, effDept);
+            if (!read || !deptOk) {
                 audit.audit("DENY", "explore.savedQuery.run", id.toString());
-                String code = !scopeOk
-                    ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.SCOPE_MISMATCH
+                String code = !deptOk
+                    ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT
                     : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY;
                 return ApiResponses.error(code, "Access denied for dataset");
             }
@@ -448,7 +449,6 @@ public class ExploreResource {
                 dataset,
                 Optional.ofNullable(q.getSqlText()).orElse(""),
                 true,
-                activeScope,
                 activeDept
             );
             audit.audit("EXECUTE", "explore.savedQuery.run", id.toString());
@@ -500,13 +500,12 @@ public class ExploreResource {
         }
     }
 
-    private Map<String, Object> generateResult(CatalogDataset dataset, String sqlText, boolean persist, String activeScope, String activeDept) {
+    private Map<String, Object> generateResult(CatalogDataset dataset, String sqlText, boolean persist, String activeDept) {
         String effectiveSql = prepareSql(sqlText, dataset);
-        // Minimal row-level filter pushdown based on active scope/dept when dataset is present
+        // Minimal row-level filter pushdown based on active department when dataset is present
         if (dataset != null) {
-            String effScope = activeScope != null ? activeScope : "DEPT";
             String effDept = activeDept != null ? activeDept : claim("dept_code");
-            effectiveSql = applyRowFilter(effectiveSql, dataset, effScope, effDept);
+            effectiveSql = applyRowFilter(effectiveSql, dataset, effDept);
         }
         Map<String, Object> queryResult = queryGateway.execute(effectiveSql);
 
@@ -562,47 +561,38 @@ public class ExploreResource {
      * Wrap the SQL with a WHERE clause enforcing minimal row visibility by scope/dept.
      * Implemented generically as SELECT * FROM (sql) t WHERE ...
      */
-    private String applyRowFilter(String sql, CatalogDataset dataset, String activeScope, String activeDept) {
+    private static final Pattern LIMIT_PATTERN = Pattern.compile("(?is)\\s+limit\\s+(\\d+)\\s*;?\\s*$");
+
+    private String applyRowFilter(String sql, CatalogDataset dataset, String activeDept) {
         if (sql == null || sql.isBlank()) return sql;
-        String dsScope = Optional.ofNullable(dataset.getScope()).orElse("").trim().toUpperCase(Locale.ROOT);
-        String dsShare = Optional.ofNullable(dataset.getShareScope()).orElse("").trim().toUpperCase(Locale.ROOT);
-        // Backward-compatible: if dataset not annotated with scope, don't alter SQL
-        if (dsScope.isEmpty()) return sql;
-        // Heuristic guard: only push down department predicate when the query result
-        // contains an owner_dept column. Many legacy/ODS表并不包含 owner_dept 字段，盲目
-        // 追加 WHERE owner_dept = 'XXX' 会导致编译失败（如本次用户反馈）。
-        // 为了兼容：若 SQL 未显式引用 owner_dept，则仅依赖上游的 scopeAllowed() 门禁放行，
-        // 不再强行注入行级条件。这样既不破坏已有 DEPT 数据集的访问控制（数据集级门禁已生效），
-        // 也能兼容不含 owner_dept 的表结构。测试用例中显式选择了 owner_dept，仍会命中过滤。
-        String normalized = sql.toLowerCase(Locale.ROOT);
-        boolean resultHasOwnerDept = normalized.matches("(?s).*\\bower_dept\\b.*");
-        String where;
-        if ("DEPT".equalsIgnoreCase(activeScope)) {
-            if (!"DEPT".equals(dsScope)) {
-                // no rows should match if scopes mismatch
-                where = "1=0";
-            } else {
-                String dept = activeDept == null ? "" : activeDept.trim();
-                if (dept.isEmpty()) return sql; // can't enforce without dept
-                if (!resultHasOwnerDept) {
-                    // Skip predicate when result set doesn't expose owner_dept
-                    return sql;
-                }
-                where = "owner_dept = '" + dept.replace("'", "''") + "'";
+        if (dataset == null) return sql;
+        // When dataset carries an owner department but the current context is missing or mismatched,
+        // terminate early to avoid accidental data exposure.
+        if (StringUtils.hasText(dataset.getOwnerDept())) {
+            if (!accessChecker.departmentAllowed(dataset, activeDept)) {
+                return "SELECT * FROM (" + sql + ") t WHERE 1=0";
             }
-        } else if ("INST".equalsIgnoreCase(activeScope)) {
-            if (!"INST".equals(dsScope)) {
-                where = "1=0";
-            } else {
-                // If dataset share_scope unset, do not restrict (legacy)
-                if (dsShare.isEmpty()) return sql;
-                where = "share_scope IN ('SHARE_INST','PUBLIC_INST')";
-            }
-        } else {
-            // Unknown active scope → do not alter SQL
+        }
+        String innerSql = sql.trim();
+        String limitSuffix = null;
+        Matcher matcher = LIMIT_PATTERN.matcher(innerSql);
+        if (matcher.find()) {
+            limitSuffix = matcher.group(1);
+            innerSql = innerSql.substring(0, matcher.start()).trim();
+        }
+        List<String> predicates = new ArrayList<>();
+        datasetSqlBuilder.resolveDataLevelPredicate(dataset, "t").ifPresent(predicates::add);
+        if (predicates.isEmpty()) {
             return sql;
         }
-        return "SELECT * FROM (" + sql + ") t WHERE (" + where + ")";
+        StringBuilder builder = new StringBuilder("SELECT * FROM (\n")
+            .append(innerSql)
+            .append("\n) t\nWHERE ")
+            .append(String.join(" AND ", predicates));
+        if (limitSuffix != null && !limitSuffix.isBlank()) {
+            builder.append("\nLIMIT ").append(limitSuffix.trim());
+        }
+        return builder.toString();
     }
 
     private String prepareSql(String sqlText, CatalogDataset dataset) {
@@ -610,8 +600,8 @@ public class ExploreResource {
         if (!candidate.isEmpty()) {
             return candidate;
         }
-        if (dataset != null && StringUtils.hasText(dataset.getHiveDatabase()) && StringUtils.hasText(dataset.getHiveTable())) {
-            return "SELECT * FROM " + dataset.getHiveDatabase() + "." + dataset.getHiveTable() + " LIMIT 100";
+        if (dataset != null) {
+            return datasetSqlBuilder.buildSampleQuery(dataset, 100);
         }
         return "SELECT 1";
     }
@@ -857,14 +847,39 @@ public class ExploreResource {
             org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
             if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
                 Object v = token.getToken().getClaims().get(name);
-                return v == null ? null : String.valueOf(v);
+                return stringifyClaim(v);
             }
             if (auth != null && auth.getPrincipal() instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal principal) {
                 Object v = principal.getAttribute(name);
-                return v == null ? null : String.valueOf(v);
+                return stringifyClaim(v);
             }
         } catch (Exception ignored) {}
         return null;
+    }
+
+    private String stringifyClaim(Object raw) {
+        Object flattened = flattenClaim(raw);
+        if (flattened == null) return null;
+        String text = flattened.toString();
+        return text == null || text.isBlank() ? null : text;
+    }
+
+    private Object flattenClaim(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof java.util.Collection<?> collection) {
+            return collection.stream().filter(Objects::nonNull).findFirst().orElse(null);
+        }
+        if (raw.getClass().isArray()) {
+            int len = Array.getLength(raw);
+            for (int i = 0; i < len; i++) {
+                Object element = Array.get(raw, i);
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        return raw;
     }
 
     private record DatasetAssociationResult(boolean success, CatalogDataset dataset, String message, String auditHint) {

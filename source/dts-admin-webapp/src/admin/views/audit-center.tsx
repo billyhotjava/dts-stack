@@ -45,8 +45,6 @@ export default function AuditCenterView() {
 	const [page, setPage] = useState(0);
 	const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
 	const [totalElements, setTotalElements] = useState(0);
-    // totalPages not displayed in UI; omit to satisfy TS noUnusedLocals
-	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 	const [exporting, setExporting] = useState(false);
     const [rowDetails, setRowDetails] = useState<Record<number, AuditLogDetail | null>>({});
     const [rowLoading, setRowLoading] = useState<Record<number, boolean>>({});
@@ -283,48 +281,6 @@ export default function AuditCenterView() {
             </Card>
 		</div>
 	);
-}
-
-function CollapsibleText({
-    text,
-    expanded,
-    onToggle,
-  }: {
-    text: string
-    expanded: boolean
-    onToggle: () => void
-  }) {
-  const tooLong = text && text.length > 160;
-  return (
-    <div className="space-y-1">
-      <pre
-        className="whitespace-pre-wrap break-words font-mono"
-        style={
-          expanded
-            ? undefined
-            : {
-                display: "-webkit-box",
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: "vertical" as any,
-                overflow: "hidden",
-              }
-        }
-      >
-        {text}
-      </pre>
-      {tooLong && (
-        <button
-          type="button"
-          className="text-primary hover:underline text-[12px]"
-          onClick={onToggle}
-          aria-expanded={expanded}
-          aria-label={expanded ? "收起" : "展开"}
-        >
-          {expanded ? "−" : "+"}
-        </button>
-      )}
-    </div>
-  );
 }
 
 // mergeModuleOptionLists removed (unused)

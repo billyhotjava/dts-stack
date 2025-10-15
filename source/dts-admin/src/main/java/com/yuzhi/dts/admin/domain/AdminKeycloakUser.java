@@ -42,10 +42,6 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
     private String personSecurityLevel;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "data_levels", nullable = false, columnDefinition = "jsonb")
-    private List<String> dataLevels = new ArrayList<>();
-
-    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "realm_roles", columnDefinition = "jsonb")
     private List<String> realmRoles = new ArrayList<>();
 
@@ -114,14 +110,6 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
 
     public void setPersonSecurityLevel(String personSecurityLevel) {
         this.personSecurityLevel = personSecurityLevel;
-    }
-
-    public List<String> getDataLevels() {
-        return dataLevels;
-    }
-
-    public void setDataLevels(List<String> dataLevels) {
-        this.dataLevels = dataLevels == null ? new ArrayList<>() : dataLevels;
     }
 
     public List<String> getRealmRoles() {

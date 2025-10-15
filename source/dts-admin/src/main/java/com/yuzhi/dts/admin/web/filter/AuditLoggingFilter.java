@@ -3,6 +3,7 @@ package com.yuzhi.dts.admin.web.filter;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService.PendingAuditEvent;
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -116,8 +117,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         String xfip = (forwarded != null && !forwarded.isBlank()) ? forwarded.split(",")[0].trim() : null;
         String realIp = request.getHeader("X-Real-IP");
         String remote = request.getRemoteAddr();
-        String ip = firstNonBlank(xfip, realIp, remote, "127.0.0.1");
-        event.clientIp = ip;
+        event.clientIp = IpAddressUtils.resolveClientIp(xfip, realIp, remote);
         event.clientAgent = request.getHeader("User-Agent");
         event.requestUri = request.getRequestURI();
         event.httpMethod = request.getMethod();
@@ -229,11 +229,4 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         }
     }
 
-    private static String firstNonBlank(String... vals) {
-        if (vals == null) return null;
-        for (String v : vals) {
-            if (v != null && !v.isBlank()) return v;
-        }
-        return null;
-    }
 }

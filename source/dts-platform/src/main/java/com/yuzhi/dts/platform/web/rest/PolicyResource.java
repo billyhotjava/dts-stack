@@ -8,15 +8,17 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository;
-import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.DatasetJobService;
+import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry;
 import com.yuzhi.dts.platform.service.security.SecurityViewService;
 import java.util.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Policy and secure view APIs: effective, apply, rebuild.
@@ -26,6 +28,9 @@ import org.springframework.web.bind.annotation.*;
 @Transactional
 public class PolicyResource {
 
+    private static final String CATALOG_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+
     private final CatalogDatasetRepository datasetRepo;
     private final CatalogAccessPolicyRepository policyRepo;
     private final CatalogRowFilterRuleRepository rowRepo;
@@ -34,6 +39,7 @@ public class PolicyResource {
     private final SecurityViewService securityViewService;
     private final DatasetJobService datasetJobService;
     private final AuditService audit;
+    private final InceptorDataSourceRegistry dataSourceRegistry;
 
     public PolicyResource(
         CatalogDatasetRepository datasetRepo,
@@ -43,7 +49,8 @@ public class PolicyResource {
         CatalogSecureViewRepository viewRepo,
         SecurityViewService securityViewService,
         DatasetJobService datasetJobService,
-        AuditService audit
+        AuditService audit,
+        InceptorDataSourceRegistry dataSourceRegistry
     ) {
         this.datasetRepo = datasetRepo;
         this.policyRepo = policyRepo;
@@ -53,6 +60,7 @@ public class PolicyResource {
         this.securityViewService = securityViewService;
         this.datasetJobService = datasetJobService;
         this.audit = audit;
+        this.dataSourceRegistry = dataSourceRegistry;
     }
 
     /**
@@ -87,10 +95,20 @@ public class PolicyResource {
      * Generate/refresh secure view entities based on SecurityViewService preview.
      */
     @PostMapping("/policy/{datasetId}/apply")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> apply(@PathVariable UUID datasetId, @RequestBody(required = false) Map<String, Object> body) {
         Map<String, Object> requestBody = body != null ? body : Map.of();
         String refresh = Objects.toString(requestBody.getOrDefault("refresh", "NONE"));
+        dataSourceRegistry
+            .getActive()
+            .ifPresent(state -> {
+                if (!state.isAvailable()) {
+                    throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "Inceptor 数据源不可用: " + state.availabilityReason()
+                    );
+                }
+            });
         try {
             var job = datasetJobService.submitPolicyApply(datasetId, refresh, requestBody, SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
             audit.audit("SUBMIT", "policy.apply", datasetId + ":job=" + job.getId());
@@ -106,7 +124,7 @@ public class PolicyResource {
      * Rebuild a single secure view using current policy (returns DDL for operators to apply).
      */
     @PostMapping("/secure-views/{id}/rebuild")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> rebuild(@PathVariable UUID id) {
         CatalogSecureView v = viewRepo.findById(id).orElseThrow();
         CatalogDataset ds = v.getDataset();

@@ -1,6 +1,10 @@
 package com.yuzhi.dts.platform.security;
 
+import com.yuzhi.dts.platform.security.policy.PersonnelLevel;
+import java.lang.reflect.Array;
+import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.core.env.Environment;
 import org.springframework.security.core.Authentication;
@@ -67,26 +71,47 @@ public class ClassificationUtils {
             if (auth instanceof JwtAuthenticationToken token) {
                 Object v = token.getToken().getClaims().get("personnel_level");
                 if (v == null) v = token.getToken().getClaims().get("person_security_level");
-                if (v instanceof String s) return mapPersonnelToClassification(s);
+                String text = firstTextValue(v);
+                if (text != null) return mapPersonnelToClassification(text);
             }
             Object principal = auth.getPrincipal();
             if (principal instanceof OAuth2AuthenticatedPrincipal p) {
-                String v = p.getAttribute("personnel_level");
+                Object v = p.getAttribute("personnel_level");
                 if (v == null) v = p.getAttribute("person_security_level");
-                if (v != null && !v.isBlank()) return mapPersonnelToClassification(v);
+                String text = firstTextValue(v);
+                if (text != null) return mapPersonnelToClassification(text);
             }
         } catch (Exception ignored) {}
         return null;
     }
 
     private String mapPersonnelToClassification(String level) {
-        if (level == null) return null;
-        String v = level.trim().toUpperCase();
-        return switch (v) {
-            case "CORE" -> "TOP_SECRET";
-            case "IMPORTANT" -> "SECRET";
-            case "GENERAL" -> "INTERNAL";
-            default -> null;
-        };
+        PersonnelLevel personnel = PersonnelLevel.normalize(level);
+        return personnel != null ? personnel.maxClassification() : null;
+    }
+
+    private String firstTextValue(Object raw) {
+        Object flattened = flatten(raw);
+        if (flattened == null) return null;
+        String text = flattened.toString();
+        return text == null || text.isBlank() ? null : text;
+    }
+
+    private Object flatten(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof Collection<?> collection) {
+            return collection.stream().filter(Objects::nonNull).findFirst().orElse(null);
+        }
+        if (raw.getClass().isArray()) {
+            int len = Array.getLength(raw);
+            for (int i = 0; i < len; i++) {
+                Object element = Array.get(raw, i);
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        return raw;
     }
 }

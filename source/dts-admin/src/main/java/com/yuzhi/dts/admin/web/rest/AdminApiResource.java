@@ -46,6 +46,7 @@ import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.common.audit.AuditStage;
@@ -250,10 +251,8 @@ public class AdminApiResource {
     private static final Map<String, String> ROLE_ALIASES = Map.ofEntries(
         Map.entry("DEPT_OWNER", "DEPT_DATA_OWNER"),
         Map.entry("DEPT_EDITOR", "DEPT_DATA_DEV"),
-        Map.entry("DEPT_VIEWER", "DEPT_DATA_VIEWER"),
         Map.entry("INST_OWNER", "INST_DATA_OWNER"),
-        Map.entry("INST_EDITOR", "INST_DATA_DEV"),
-        Map.entry("INST_VIEWER", "INST_DATA_VIEWER")
+        Map.entry("INST_EDITOR", "INST_DATA_DEV")
     );
 
     private static final Map<String, String> ROLE_REVERSE_ALIASES;
@@ -290,16 +289,6 @@ public class AdminApiResource {
             )
         ),
         Map.entry(
-            "DEPT_DATA_VIEWER",
-            new BuiltinRoleSpec(
-                "DEPARTMENT",
-                List.of("read"),
-                "部门数据查看员",
-                "department data viewer",
-                "浏览本部门密级不超的数据；无写入、导出或授权能力。"
-            )
-        ),
-        Map.entry(
             "INST_DATA_OWNER",
             new BuiltinRoleSpec(
                 "INSTITUTE",
@@ -317,16 +306,6 @@ public class AdminApiResource {
                 "研究所数据开发员",
                 "institute data developer",
                 "在全所共享区开展数据开发；可读取共享区密级不超的数据并写入共享区；无密级或共享策略调整、授权能力；导出受策略限制。"
-            )
-        ),
-        Map.entry(
-            "INST_DATA_VIEWER",
-            new BuiltinRoleSpec(
-                "INSTITUTE",
-                List.of("read"),
-                "研究所数据查看员",
-                "institute data viewer",
-                "浏览全所共享且密级不超的数据；无写入、导出或授权能力。"
             )
         )
     );
@@ -740,7 +719,6 @@ public class AdminApiResource {
         String name = trimToNull(payload.get("name"));
         Long parentId = payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString());
         String description = trimToNull(payload.get("description"));
-        String dataLevel = trimToNull(payload.get("dataLevel"));
         String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
         String parentRef = parentId == null ? "root" : String.valueOf(parentId);
         Map<String, Object> auditDetail = new LinkedHashMap<>();
@@ -750,9 +728,6 @@ public class AdminApiResource {
         }
         if (StringUtils.hasText(description)) {
             auditDetail.put("description", description);
-        }
-        if (StringUtils.hasText(dataLevel)) {
-            auditDetail.put("dataLevel", dataLevel);
         }
 
         if (!StringUtils.hasText(name)) {
@@ -764,7 +739,7 @@ public class AdminApiResource {
 
         auditService.recordAction(actor, "ADMIN_ORG_CREATE", AuditStage.BEGIN, parentRef, auditDetail);
         try {
-            OrganizationNode created = orgService.create(name, parentId, description, dataLevel);
+            OrganizationNode created = orgService.create(name, parentId, description);
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("name", created.getName());
             if (created.getParent() != null) {
@@ -773,7 +748,6 @@ public class AdminApiResource {
             if (StringUtils.hasText(description)) {
                 detail.put("description", description);
             }
-            detail.put("dataLevel", created.getDataLevel());
             detail.put("created", Map.of("id", created.getId(), "name", created.getName()));
             auditService.recordAction(actor, "ADMIN_ORG_CREATE", AuditStage.SUCCESS, String.valueOf(created.getId()), detail);
 
@@ -802,14 +776,12 @@ public class AdminApiResource {
         if (StringUtils.hasText(existing.getDescription())) {
             beforeView.put("description", existing.getDescription());
         }
-        beforeView.put("dataLevel", existing.getDataLevel());
 
         String name = payload.containsKey("name") ? trimToNull(payload.get("name")) : existing.getName();
         String description = payload.containsKey("description") ? trimToNull(payload.get("description")) : existing.getDescription();
         Long parentId = payload.containsKey("parentId")
             ? (payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString()))
             : (existing.getParent() == null ? null : existing.getParent().getId());
-        String dataLevel = payload.containsKey("dataLevel") ? trimToNull(payload.get("dataLevel")) : null;
 
         if (!StringUtils.hasText(name)) {
             Map<String, Object> failure = new LinkedHashMap<>();
@@ -827,9 +799,6 @@ public class AdminApiResource {
         if (StringUtils.hasText(description)) {
             requestView.put("description", description);
         }
-        if (StringUtils.hasText(dataLevel)) {
-            requestView.put("dataLevel", dataLevel);
-        }
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("before", beforeView);
         auditDetail.put("request", requestView);
@@ -839,7 +808,7 @@ public class AdminApiResource {
 
         Optional<OrganizationNode> updated;
         try {
-            updated = orgService.update(id, name, description, parentId, dataLevel);
+            updated = orgService.update(id, name, description, parentId);
         } catch (IllegalArgumentException ex) {
             Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
             failure.put("error", ex.getMessage());
@@ -860,7 +829,6 @@ public class AdminApiResource {
         if (StringUtils.hasText(updatedNode.getDescription())) {
             afterView.put("description", updatedNode.getDescription());
         }
-        afterView.put("dataLevel", updatedNode.getDataLevel());
         Map<String, Object> successDetail = new LinkedHashMap<>();
         successDetail.put("before", beforeView);
         successDetail.put("after", afterView);
@@ -934,13 +902,6 @@ public class AdminApiResource {
     @GetMapping("/custom-roles")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> customRoles() {
         var list = customRoleRepo.findAll().stream().map(this::toCustomRoleVM).toList();
-        auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
-            "ADMIN_CUSTOM_ROLE_VIEW",
-            AuditStage.SUCCESS,
-            "custom-roles",
-            Map.of("count", list.size())
-        );
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
 
@@ -1000,19 +961,13 @@ public class AdminApiResource {
             null,
             Objects.toString(payload.get("reason"), null)
         );
-        auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-            "ADMIN_CUSTOM_ROLE_REQUEST",
-            AuditStage.SUCCESS,
-            normalizedName,
-            Map.of("changeRequestId", cr.getId())
-        );
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
     @GetMapping("/role-assignments")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> roleAssignments() {
-        var list = roleAssignRepo.findAll().stream().map(this::toRoleAssignmentVM).toList();
+        Map<String, String> roleLabels = buildRoleDisplayNameMap();
+        var list = roleAssignRepo.findAll().stream().map(a -> toRoleAssignmentVM(a, roleLabels)).toList();
         auditService.recordAction(
             SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
             "ADMIN_ROLE_ASSIGNMENT_VIEW",
@@ -1170,7 +1125,7 @@ public class AdminApiResource {
             String resolved = switch (type == null ? "" : type.toUpperCase(java.util.Locale.ROOT)) {
                 case "USER" -> "USER_MANAGEMENT";
                 case "ROLE" -> "ROLE_MANAGEMENT";
-                case "PORTAL_MENU" -> "ROLE_MANAGEMENT";
+                case "PORTAL_MENU" -> "MENU_MANAGEMENT";
                 case "CONFIG" -> "SYSTEM_CONFIG";
                 case "ORG" -> "ORGANIZATION";
                 case "CUSTOM_ROLE" -> "CUSTOM_ROLE";
@@ -1350,13 +1305,6 @@ public class AdminApiResource {
 
         list.sort(Comparator.comparing(o -> Objects.toString(o.get("name"), "")));
 
-        auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
-            "ADMIN_ROLE_VIEW",
-            AuditStage.SUCCESS,
-            "admin-roles",
-            Map.of("count", list.size())
-        );
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
 
@@ -1426,13 +1374,6 @@ public class AdminApiResource {
         } catch (Exception ex) {
             out.put("assignments", 0);
         }
-        auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
-            "ADMIN_ROLE_VIEW",
-            AuditStage.SUCCESS,
-            normalized,
-            out
-        );
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
@@ -1492,8 +1433,6 @@ public class AdminApiResource {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", e.getId());
         m.put("name", e.getName());
-        m.put("dataLevel", e.getDataLevel());
-        m.put("sensitivity", e.getDataLevel());
         m.put("parentId", e.getParent() != null ? e.getParent().getId() : null);
         m.put("contact", e.getContact());
         m.put("phone", e.getPhone());
@@ -1519,7 +1458,6 @@ public class AdminApiResource {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", node.getId());
         m.put("name", node.getName());
-        m.put("dataLevel", node.getDataLevel());
         m.put("parentId", node.getParent() != null ? node.getParent().getId() : null);
         m.put("contact", node.getContact());
         m.put("phone", node.getPhone());
@@ -2717,6 +2655,9 @@ public class AdminApiResource {
         if (type.startsWith("ROLE_")) {
             return "ROLE_MANAGEMENT";
         }
+        if (type.startsWith("MENU_") || "MENU_MANAGEMENT".equalsIgnoreCase(type)) {
+            return "MENU_MANAGEMENT";
+        }
         return "USER_MANAGEMENT";
     }
 
@@ -3077,12 +3018,23 @@ public class AdminApiResource {
         return 0;
     }
 
-    private Map<String, Object> toRoleAssignmentVM(AdminRoleAssignment a) {
+    private Map<String, Object> toRoleAssignmentVM(AdminRoleAssignment a, Map<String, String> roleLabels) {
         Map<String, Object> m = new LinkedHashMap<>();
+        String rawRole = a.getRole();
+        String canonical = stripRolePrefix(rawRole);
+        String normalized = canonical == null ? null : "ROLE_" + canonical;
+        String displayLabel = firstNonBlank(
+            a.getDisplayName(),
+            normalized != null ? roleLabels.get(normalized) : null,
+            canonical != null ? roleLabels.get(canonical) : null,
+            canonical,
+            rawRole
+        );
         m.put("id", a.getId());
-        m.put("role", a.getRole());
+        m.put("role", rawRole);
         m.put("username", a.getUsername());
-        m.put("displayName", a.getDisplayName());
+        m.put("displayName", displayLabel);
+        m.put("roleDisplayName", displayLabel);
         m.put("userSecurityLevel", a.getUserSecurityLevel());
         m.put("scopeOrgId", a.getScopeOrgId());
         m.put("scopeOrgName", resolveOrgName(a.getScopeOrgId()));
@@ -3091,6 +3043,61 @@ public class AdminApiResource {
         m.put("grantedBy", a.getCreatedBy());
         m.put("grantedAt", a.getCreatedDate() != null ? a.getCreatedDate().toString() : null);
         return m;
+    }
+
+    private Map<String, String> buildRoleDisplayNameMap() {
+        Map<String, String> labels = new LinkedHashMap<>();
+        // Governance triad
+        labels.put(AuthoritiesConstants.SYS_ADMIN, "系统管理员");
+        labels.put(stripRolePrefix(AuthoritiesConstants.SYS_ADMIN), "系统管理员");
+        labels.put(AuthoritiesConstants.AUTH_ADMIN, "授权管理员");
+        labels.put(stripRolePrefix(AuthoritiesConstants.AUTH_ADMIN), "授权管理员");
+        labels.put(AuthoritiesConstants.AUDITOR_ADMIN, "安全审计员");
+        labels.put(stripRolePrefix(AuthoritiesConstants.AUDITOR_ADMIN), "安全审计员");
+        labels.put(AuthoritiesConstants.OP_ADMIN, "运维管理员");
+        labels.put(stripRolePrefix(AuthoritiesConstants.OP_ADMIN), "运维管理员");
+
+        // Built-in data roles
+        for (Map.Entry<String, BuiltinRoleSpec> entry : BUILTIN_DATA_ROLES.entrySet()) {
+            String canonical = entry.getKey();
+            String label = entry.getValue().titleCn();
+            labels.putIfAbsent(canonical, label);
+            labels.putIfAbsent("ROLE_" + canonical, label);
+        }
+
+        // Custom roles from repository
+        for (AdminCustomRole role : customRoleRepo.findAll()) {
+            String canonical = stripRolePrefix(role.getName());
+            if (StringUtils.hasText(canonical)) {
+                String label = firstNonBlank(role.getDescription(), role.getName(), canonical);
+                labels.putIfAbsent(canonical, label);
+                labels.putIfAbsent("ROLE_" + canonical, label);
+            }
+        }
+
+        // Realm roles from Keycloak (attributes may contain localized names)
+        try {
+            for (KeycloakRoleDTO dto : adminUserService.listRealmRoles()) {
+                String canonical = stripRolePrefix(dto.getName());
+                if (!StringUtils.hasText(canonical)) {
+                    continue;
+                }
+                Map<String, String> attributes = dto.getAttributes();
+                String label = firstNonBlank(
+                    attributes != null ? attributes.get("displayName") : null,
+                    attributes != null ? attributes.get("titleCn") : null,
+                    attributes != null ? attributes.get("nameZh") : null,
+                    dto.getDescription(),
+                    canonical
+                );
+                labels.putIfAbsent(canonical, label);
+                labels.putIfAbsent("ROLE_" + canonical, label);
+            }
+        } catch (Exception ignored) {
+            // Fallback to existing labels when Keycloak lookup fails
+        }
+
+        return labels;
     }
 
     private String resolveOrgName(Long orgId) {

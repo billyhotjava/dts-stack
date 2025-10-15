@@ -5,18 +5,28 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.HiveExecutionProperties;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.service.infra.AdminInfraClient;
+import com.yuzhi.dts.platform.service.infra.AdminInfraClient.AdminInceptorConfig;
 import com.yuzhi.dts.platform.service.infra.event.InceptorDataSourcePublishedEvent;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.annotation.PostConstruct;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -34,8 +44,12 @@ public class InceptorDataSourceRegistry {
     private final InfraSecretService secretService;
     private final ObjectMapper objectMapper;
     private final HiveExecutionProperties hiveExecutionProperties;
+    private final AdminInfraClient adminInfraClient;
+    private final DataSource dataSource;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final AtomicBoolean repositoryAvailable = new AtomicBoolean(true);
+    private volatile Boolean tableAvailable;
 
     private volatile InceptorDataSourceState cached;
 
@@ -43,12 +57,16 @@ public class InceptorDataSourceRegistry {
         InfraDataSourceRepository repository,
         InfraSecretService secretService,
         ObjectMapper objectMapper,
-        HiveExecutionProperties hiveExecutionProperties
+        HiveExecutionProperties hiveExecutionProperties,
+        AdminInfraClient adminInfraClient,
+        DataSource dataSource
     ) {
         this.repository = repository;
         this.secretService = secretService;
         this.objectMapper = objectMapper;
         this.hiveExecutionProperties = hiveExecutionProperties;
+        this.adminInfraClient = adminInfraClient;
+        this.dataSource = dataSource;
     }
 
     @PostConstruct
@@ -74,41 +92,101 @@ public class InceptorDataSourceRegistry {
     public void refresh() {
         lock.writeLock().lock();
         try {
-            repository
-                .findFirstByTypeIgnoreCaseAndStatusIgnoreCase(TYPE_INCEPTOR, STATUS_ACTIVE)
-                .ifPresentOrElse(
-                    entity -> toState(entity)
-                        .ifPresentOrElse(
-                            state -> {
-                                cached = state;
-                                syncHiveExecutionProperties(state);
-                                LOG.info(
-                                    "Updated Inceptor registry with data source {} (verified at {}).",
-                                    state.id(),
-                                    state.lastVerifiedAt()
-                                );
-                            },
-                            () -> {
-                                cached = null;
-                                syncHiveExecutionProperties(null);
-                                LOG.warn(
-                                    "Active Inceptor data source {} is missing required credentials. Runtime services will stay disabled.",
-                                    entity.getId()
-                                );
-                            }
-                        ),
-                    () -> {
-                        LOG.info("No active Inceptor data source found. Clearing runtime registry state.");
-                        cached = null;
-                        syncHiveExecutionProperties(null);
-                    }
-                );
+            if (!repositoryAvailable.get()) {
+                if (loadFromAdmin("local repository unavailable")) {
+                    return;
+                }
+                clearCachedState("local infra repository unavailable");
+                return;
+            }
+            if (!isTableAvailable()) {
+                repositoryAvailable.set(false);
+                if (loadFromAdmin("infra_data_source table not present")) {
+                    return;
+                }
+                LOG.info("Infra data source table not present; registry stays empty until Liquibase completes");
+                clearCachedState("infra_data_source table not present");
+                return;
+            }
+            Optional<InfraDataSource> optional = repository.findFirstByTypeIgnoreCaseAndStatusIgnoreCase(TYPE_INCEPTOR, STATUS_ACTIVE);
+            if (optional.isPresent()) {
+                applyEntity(optional.orElseThrow());
+                return;
+            }
+            if (loadFromAdmin("no local Inceptor data source")) {
+                return;
+            }
+            LOG.info("No active Inceptor data source found. Clearing runtime registry state.");
+            clearCachedState("no active local or remote Inceptor data source");
+        } catch (InvalidDataAccessResourceUsageException ex) {
+            repositoryAvailable.set(false);
+            tableAvailable = Boolean.FALSE;
+            if (loadFromAdmin("infra_data_source table unavailable")) {
+                return;
+            }
+            LOG.warn(
+                "Disabling Inceptor registry refresh: infra_data_source table unavailable ({})",
+                ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage()
+            );
+            clearCachedState("infra_data_source table unavailable");
+            LOG.debug("Registry refresh failure stacktrace", ex);
         } catch (Exception ex) {
             LOG.warn("Failed to refresh Inceptor data source registry: {}", ex.getMessage());
             LOG.debug("Registry refresh failure stacktrace", ex);
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    private boolean isTableAvailable() {
+        Boolean known = tableAvailable;
+        if (known != null) {
+            return known.booleanValue();
+        }
+        if (dataSource == null) {
+            tableAvailable = Boolean.TRUE;
+            return true;
+        }
+        final String sql =
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE lower(table_name) = 'infra_data_source'
+            LIMIT 1
+            """;
+        try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement(sql)) {
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean exists = rs.next();
+                tableAvailable = Boolean.valueOf(exists);
+                return exists;
+            }
+        } catch (SQLException ex) {
+            LOG.debug("Table existence check failed: {}", ex.getMessage());
+            tableAvailable = Boolean.FALSE;
+            return false;
+        }
+    }
+
+    private void applyEntity(InfraDataSource entity) {
+        toState(entity)
+            .ifPresentOrElse(
+                state -> {
+                    cached = state;
+                    syncHiveExecutionProperties(state);
+                    LOG.info(
+                        "Updated Inceptor registry with data source {} (verified at {}).",
+                        state.id(),
+                        state.lastVerifiedAt()
+                    );
+                },
+                () -> {
+                    LOG.warn(
+                        "Active Inceptor data source {} is missing required credentials. Runtime services will stay disabled.",
+                        entity.getId()
+                    );
+                    clearCachedState("local data source missing credentials");
+                }
+            );
     }
 
     private Optional<InceptorDataSourceState> toState(InfraDataSource entity) {
@@ -174,11 +252,90 @@ public class InceptorDataSourceRegistry {
             stringVal(props.get("engineVersion")),
             stringVal(props.get("driverVersion")),
             entity.getLastVerifiedAt(),
-            entity.getLastModifiedDate()
+            entity.getLastModifiedDate(),
+            null,
+            null,
+            null,
+            stringVal(props.get("lastError"))
         );
 
         if (!state.isUsable()) {
             LOG.warn("Inceptor data source {} is not usable; required credentials incomplete", entity.getId());
+            return Optional.empty();
+        }
+        return Optional.of(state);
+    }
+
+    private Optional<InceptorDataSourceState> toState(AdminInceptorConfig config) {
+        if (config == null) {
+            return Optional.empty();
+        }
+        String jdbcUrl = config.getJdbcUrl();
+        String loginPrincipal = config.getLoginPrincipal();
+        if (!StringUtils.hasText(jdbcUrl) || !StringUtils.hasText(loginPrincipal)) {
+            LOG.warn("Admin Inceptor config missing jdbcUrl or loginPrincipal");
+            return Optional.empty();
+        }
+        HiveConnectionTestRequest.AuthMethod authMethod = HiveConnectionTestRequest.AuthMethod.KEYTAB;
+        if (StringUtils.hasText(config.getAuthMethod())) {
+            try {
+                authMethod = HiveConnectionTestRequest.AuthMethod.valueOf(config.getAuthMethod());
+            } catch (IllegalArgumentException ex) {
+                LOG.warn("Unsupported auth method from admin config: {}", config.getAuthMethod());
+            }
+        }
+        String krb5Conf = config.getKrb5Conf();
+        String keytabBase64 = config.getKeytabBase64();
+        String password = config.getPassword();
+        if (authMethod == HiveConnectionTestRequest.AuthMethod.KEYTAB) {
+            if (!StringUtils.hasText(krb5Conf) || !StringUtils.hasText(keytabBase64)) {
+                LOG.warn("Admin Inceptor config missing Kerberos artifacts for keytab login");
+                return Optional.empty();
+            }
+        } else if (authMethod == HiveConnectionTestRequest.AuthMethod.PASSWORD) {
+            if (!StringUtils.hasText(krb5Conf) || !StringUtils.hasText(password)) {
+                LOG.warn("Admin Inceptor config missing password credentials");
+                return Optional.empty();
+            }
+        }
+
+        Map<String, String> jdbcProperties = new HashMap<>(config.getJdbcProperties());
+
+        InceptorDataSourceState state = new InceptorDataSourceState(
+            config.getId() != null ? config.getId() : UUID.randomUUID(),
+            config.getName(),
+            config.getDescription(),
+            jdbcUrl,
+            loginPrincipal,
+            authMethod,
+            keytabBase64,
+            config.getKeytabFileName(),
+            password,
+            krb5Conf,
+            jdbcProperties,
+            config.getProxyUser(),
+            config.getServicePrincipal(),
+            config.getHost(),
+            config.getPort(),
+            config.getDatabase(),
+            Boolean.TRUE.equals(config.getUseHttpTransport()),
+            config.getHttpPath(),
+            Boolean.TRUE.equals(config.getUseSsl()),
+            Boolean.TRUE.equals(config.getUseCustomJdbc()),
+            config.getCustomJdbcUrl(),
+            config.getLastTestElapsedMillis(),
+            config.getEngineVersion(),
+            config.getDriverVersion(),
+            config.getLastVerifiedAt(),
+            config.getLastUpdatedAt(),
+            config.getLastHeartbeatAt(),
+            config.getHeartbeatStatus(),
+            config.getHeartbeatFailureCount(),
+            config.getLastError()
+        );
+
+        if (!state.isUsable()) {
+            LOG.warn("Admin Inceptor config is not usable; required credentials incomplete");
             return Optional.empty();
         }
         return Optional.of(state);
@@ -253,6 +410,25 @@ public class InceptorDataSourceRegistry {
         return out;
     }
 
+    private void clearCachedState(String reason) {
+        cached = null;
+        syncHiveExecutionProperties(null);
+        LOG.debug("Cleared Inceptor registry cache ({})", reason);
+    }
+
+    private boolean loadFromAdmin(String reason) {
+        return adminInfraClient
+            .fetchActiveInceptor()
+            .flatMap(this::toState)
+            .map(state -> {
+                cached = state;
+                syncHiveExecutionProperties(state);
+                LOG.info("Loaded Inceptor configuration from admin service ({})", reason);
+                return true;
+            })
+            .orElse(false);
+    }
+
     private static String stringVal(Object value) {
         return value == null ? null : value.toString();
     }
@@ -315,7 +491,11 @@ public class InceptorDataSourceRegistry {
         String engineVersion,
         String driverVersion,
         Instant lastVerifiedAt,
-        Instant lastUpdatedAt
+        Instant lastUpdatedAt,
+        Instant lastHeartbeatAt,
+        String heartbeatStatus,
+        Integer heartbeatFailureCount,
+        String lastError
     ) {
         public boolean isUsable() {
             if (!StringUtils.hasText(jdbcUrl) || !StringUtils.hasText(loginPrincipal)) {
@@ -328,6 +508,35 @@ public class InceptorDataSourceRegistry {
                 return StringUtils.hasText(password) && StringUtils.hasText(krb5Conf);
             }
             return false;
+        }
+
+        public boolean isAvailable() {
+            if (!isUsable()) {
+                return false;
+            }
+            if (heartbeatStatus != null && !heartbeatStatus.isBlank()) {
+                String normalized = heartbeatStatus.trim().toUpperCase(Locale.ROOT);
+                if (!"UP".equals(normalized) && !"UNKNOWN".equals(normalized)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public String availabilityReason() {
+            if (!isUsable()) {
+                return "凭据缺失或 Kerberos 配置不完整";
+            }
+            if (heartbeatStatus != null && !heartbeatStatus.isBlank()) {
+                String normalized = heartbeatStatus.trim().toUpperCase(Locale.ROOT);
+                if (!"UP".equals(normalized) && !"UNKNOWN".equals(normalized)) {
+                    return "心跳状态=" + normalized;
+                }
+            }
+            if (lastError != null && !lastError.isBlank()) {
+                return lastError;
+            }
+            return "未知原因";
         }
     }
 }

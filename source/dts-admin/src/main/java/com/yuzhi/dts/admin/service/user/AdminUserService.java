@@ -54,7 +54,6 @@ public class AdminUserService {
 
     private static final Set<String> SUPPORTED_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> FORBIDDEN_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET");
-    private static final Set<String> SUPPORTED_DATA_LEVELS = Set.of("DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_TOP_SECRET");
     private static final Map<String, String> SECURITY_LEVEL_ALIASES = Map.ofEntries(
         Map.entry("NONE_SECRET", "NON_SECRET"),
         Map.entry("NON_SECRET", "NON_SECRET"),
@@ -69,26 +68,6 @@ public class AdminUserService {
         Map.entry("CORE", "CORE"),
         Map.entry("CO", "CORE"),
         Map.entry("C", "CORE")
-    );
-    private static final Map<String, String> DATA_LEVEL_ALIASES = Map.ofEntries(
-        Map.entry("PUBLIC", "DATA_PUBLIC"),
-        Map.entry("DATA_PUBLIC", "DATA_PUBLIC"),
-        Map.entry("INTERNAL", "DATA_INTERNAL"),
-        Map.entry("DATA_INTERNAL", "DATA_INTERNAL"),
-        Map.entry("SECRET", "DATA_SECRET"),
-        Map.entry("DATA_SECRET", "DATA_SECRET"),
-        Map.entry("TOP_SECRET", "DATA_TOP_SECRET"),
-        Map.entry("DATA_TOP_SECRET", "DATA_TOP_SECRET")
-    );
-    private static final Map<String, String> INTERNAL_TO_KEYCLOAK_DATA_LEVEL = Map.of(
-        "DATA_PUBLIC",
-        "PUBLIC",
-        "DATA_INTERNAL",
-        "INTERNAL",
-        "DATA_SECRET",
-        "SECRET",
-        "DATA_TOP_SECRET",
-        "TOP_SECRET"
     );
 
     private final AdminKeycloakUserRepository userRepository;
@@ -107,6 +86,7 @@ public class AdminUserService {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
+    private static final String DEFAULT_INITIAL_PASSWORD = "sa";
 
     public AdminUserService(
         AdminKeycloakUserRepository userRepository,
@@ -436,7 +416,6 @@ public class AdminUserService {
     public ApprovalDTOs.ApprovalRequestDetail submitSetPersonLevel(
         String username,
         String personLevel,
-        List<String> dataLevels,
         String requester,
         String ip,
         String reason
@@ -452,22 +431,19 @@ public class AdminUserService {
         payload.put("action", "setPersonLevel");
         payload.put("username", username);
         payload.put("personSecurityLevel", normalizedPersonLevel);
-        payload.put("dataLevels", dataLevels == null ? Collections.emptyList() : new ArrayList<>(dataLevels));
         payload.put("currentPersonSecurityLevel", snapshot.getPersonSecurityLevel());
         if (snapshot.getKeycloakId() != null) {
             payload.put("keycloakId", snapshot.getKeycloakId());
         }
-        payload.put("currentDataLevels", snapshot.getDataLevels());
         Map<String, Object> before = new LinkedHashMap<>();
         if (snapshot.getPersonSecurityLevel() != null) {
             before.put("personSecurityLevel", snapshot.getPersonSecurityLevel());
         }
-        before.put("dataLevels", copyList(snapshot.getDataLevels()));
         ChangeRequest changeRequest = createChangeRequest("USER", "SET_PERSON_LEVEL", username, payload, before, reason);
         payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
-        recordAudit(requester, "USER_SET_PERSON_LEVEL_REQUEST", username, ip, Map.of("personLevel", personLevel, "dataLevels", dataLevels));
+        recordAudit(requester, "USER_SET_PERSON_LEVEL_REQUEST", username, ip, Map.of("personLevel", personLevel));
         return toDetailDto(approval);
     }
 
@@ -492,21 +468,6 @@ public class AdminUserService {
             throw new IllegalArgumentException("不支持的用户密级: " + request.getPersonSecurityLevel());
         }
         ensureAllowedSecurityLevel(normalizedSecurity, "人员密级不允许为非密");
-        if (request.getDataLevels() != null) {
-            List<String> normalizedLevels = new ArrayList<>();
-            for (String level : request.getDataLevels()) {
-                if (StringUtils.isBlank(level)) {
-                    continue;
-                }
-                String normalized = normalizeDataLevel(level);
-                if (!SUPPORTED_DATA_LEVELS.contains(normalized)) {
-                    throw new IllegalArgumentException("不支持的数据密级: " + level);
-                }
-                normalizedLevels.add(normalized);
-                break;
-            }
-            request.setDataLevels(normalizedLevels);
-        }
     }
 
     private AdminApprovalRequest buildApprovalSkeleton(String requester, String reason, String type) {
@@ -561,7 +522,6 @@ public class AdminUserService {
         String normalizedPersonLevel = normalizeSecurityLevel(request.getPersonSecurityLevel());
         ensureAllowedSecurityLevel(normalizedPersonLevel, "人员密级不允许为非密");
         payload.put("personSecurityLevel", normalizedPersonLevel);
-        payload.put("dataLevels", request.getDataLevels());
         payload.put("realmRoles", request.getRealmRoles());
         payload.put("groupPaths", request.getGroupPaths());
         payload.put("enabled", request.getEnabled());
@@ -577,7 +537,6 @@ public class AdminUserService {
         payload.put("email", snapshot.getEmail());
         payload.put("phone", snapshot.getPhone());
         payload.put("personSecurityLevel", snapshot.getPersonSecurityLevel());
-        payload.put("dataLevels", snapshot.getDataLevels());
         payload.put("realmRoles", snapshot.getRealmRoles());
         payload.put("groupPaths", snapshot.getGroupPaths());
         payload.put("enabled", snapshot.isEnabled());
@@ -676,46 +635,6 @@ public class AdminUserService {
         return SECURITY_LEVEL_ALIASES.getOrDefault(normalized, normalized);
     }
 
-    private String normalizeDataLevel(String level) {
-        if (level == null) {
-            return null;
-        }
-        String cleaned = level.trim().toUpperCase().replace('-', '_').replace(' ', '_');
-        return DATA_LEVEL_ALIASES.getOrDefault(cleaned, cleaned);
-    }
-
-    private List<String> toInternalDataLevels(List<String> source) {
-        if (source == null || source.isEmpty()) {
-            return List.of();
-        }
-        List<String> results = new ArrayList<>();
-        for (String level : source) {
-            String normalized = normalizeDataLevel(level);
-            if (normalized != null && SUPPORTED_DATA_LEVELS.contains(normalized)) {
-                results.add(normalized);
-                break;
-            }
-        }
-        return results;
-    }
-
-    private List<String> toKeycloakDataLevels(List<String> source) {
-        if (source == null || source.isEmpty()) {
-            return List.of();
-        }
-        List<String> results = new ArrayList<>();
-        for (String level : source) {
-            String normalized = normalizeDataLevel(level);
-            if (normalized == null) {
-                continue;
-            }
-            String mapped = INTERNAL_TO_KEYCLOAK_DATA_LEVEL.getOrDefault(normalized, normalized);
-            results.add(mapped);
-            break;
-        }
-        return results;
-    }
-
     private AdminKeycloakUser ensureSnapshot(String username) {
         return userRepository
             .findByUsernameIgnoreCase(username)
@@ -736,18 +655,12 @@ public class AdminUserService {
         entity.setEnabled(Boolean.TRUE.equals(dto.getEnabled()));
         String securityLevel = normalizeSecurityLevel(extractSingle(dto, "person_security_level"));
         entity.setPersonSecurityLevel(securityLevel);
-        entity.setDataLevels(toInternalDataLevels(extractList(dto, "data_levels")));
         entity.setRealmRoles(dto.getRealmRoles());
         entity.setGroupPaths(dto.getGroups());
         entity.setPhone(extractSingle(dto, "phone"));
         entity.setLastSyncAt(Instant.now());
         if (!SUPPORTED_SECURITY_LEVELS.contains(securityLevel)) {
             throw new IllegalStateException("用户密级无效: " + securityLevel);
-        }
-        for (String level : entity.getDataLevels()) {
-            if (!SUPPORTED_DATA_LEVELS.contains(level)) {
-                throw new IllegalStateException("数据密级无效: " + level);
-            }
         }
     }
 
@@ -875,6 +788,9 @@ public class AdminUserService {
         }
         if (type.startsWith("ROLE_")) {
             return "ROLE_MANAGEMENT";
+        }
+        if (type.startsWith("MENU_") || "MENU_MANAGEMENT".equalsIgnoreCase(type)) {
+            return "MENU_MANAGEMENT";
         }
         return "USER_MANAGEMENT";
     }
@@ -1565,6 +1481,18 @@ public class AdminUserService {
                     }
                 }
             }
+            if (target == null || target.getId() == null || target.getId().isBlank()) {
+                throw new IllegalStateException("Keycloak 未返回用户标识，无法设置默认口令");
+            }
+            try {
+                keycloakAdminClient.resetPassword(target.getId(), DEFAULT_INITIAL_PASSWORD, false, accessToken);
+                detail.put("defaultPasswordApplied", true);
+            } catch (Exception passwordEx) {
+                detail.put("defaultPasswordApplied", false);
+                detail.put("defaultPasswordError", passwordEx.getMessage());
+                throw new IllegalStateException("设置默认口令失败: " + passwordEx.getMessage(), passwordEx);
+            }
+
             // Apply roles via role-mappings if provided in payload (split into realm/client)
             List<String> requestedRoles = stringList(payload.get("realmRoles"));
             if (requestedRoles != null && !requestedRoles.isEmpty()) {
@@ -1925,11 +1853,9 @@ public class AdminUserService {
         String auditAction = "USER_SET_PERSON_LEVEL_EXECUTE";
         String level = stringValue(payload.get("personSecurityLevel"));
         String normalizedLevel = normalizeSecurityLevel(level);
-        List<String> requestedDataLevels = stringList(payload.get("dataLevels"));
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("payload", payload);
         detail.put("personLevel", normalizedLevel == null ? level : normalizedLevel);
-        detail.put("dataLevels", requestedDataLevels);
         try {
             String keycloakId = stringValue(payload.get("keycloakId"));
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
@@ -1940,12 +1866,7 @@ public class AdminUserService {
                 attributes.put("person_level", List.of(normalizedLevel));
                 attributes.put("person_security_level", List.of(normalizedLevel));
             }
-            List<String> dataLevels = toKeycloakDataLevels(requestedDataLevels);
-            if (!dataLevels.isEmpty()) {
-                attributes.put("data_levels", dataLevels);
-            } else {
-                attributes.remove("data_levels");
-            }
+            attributes.remove("data_levels");
             existing.setAttributes(attributes);
             KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
             syncSnapshot(updated);
@@ -2036,10 +1957,6 @@ public class AdminUserService {
             }
             // If explicit value not provided, leave unset here. applyCreate/applyUpdate will
             // derive dept_code from the selected group (dts_org_id) using Keycloak metadata.
-        }
-        List<String> dataLevels = toKeycloakDataLevels(stringList(payload.get("dataLevels")));
-        if (!dataLevels.isEmpty()) {
-            attributes.put("data_levels", dataLevels);
         }
         dto.setAttributes(attributes);
         return dto;

@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Text } from "@/ui/typography";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/ui/tooltip";
 import { Textarea } from "@/ui/textarea";
 import { toast } from "sonner";
 import { GLOBAL_CONFIG } from "@/global-config";
@@ -344,47 +345,81 @@ export default function RoleManagementView() {
                 },
             },
             // 隐藏操作权限列，角色默认仅具备读取权限
-            {
-                title: "绑定菜单",
-                dataIndex: "menuLabels",
-                key: "menus",
-                width: 220,
-                onCell: () => ({ style: { verticalAlign: "middle" } }),
-                render: (menus: string[]) =>
-                    menus.length ? (
-                        <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
-                            {menus.slice(0, 3).map((menu) => (
-                                <Badge key={menu} variant="outline">
-                                    {menu}
-                                </Badge>
-                            ))}
-                            {menus.length > 3 ? (
-                                <Badge variant="secondary">+{menus.length - 3}</Badge>
-                            ) : null}
-                        </div>
-                    ) : (
-                        <Text variant="body3" className="text-muted-foreground">未绑定</Text>
-                    ),
-            },
-            {
-                title: "成员",
-                key: "members",
-                width: 220,
-                onCell: () => ({ style: { verticalAlign: "middle" } }),
-                render: (_value, record) => {
-                    const total = Math.max(record.kcMemberCount ?? 0, record.assignments.length);
-                    return (
-                        <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
-                            <Badge variant="secondary">{total} 人</Badge>
-                            {record.assignments.slice(0, 2).map((assignment) => (
-                                <Badge key={assignment.id} variant="outline">
-                                    {assignment.displayName || assignment.username}
-                                </Badge>
-                            ))}
-                        </div>
-                    );
-                },
-            },
+			{
+				title: "绑定菜单",
+				dataIndex: "menuLabels",
+				key: "menus",
+				width: 220,
+				onCell: () => ({ style: { verticalAlign: "middle" } }),
+				render: (menus: string[]) => {
+					const list = menus ?? [];
+					if (!list.length) {
+						return <Text variant="body3" className="text-muted-foreground">未绑定</Text>;
+					}
+					const preview = list.slice(0, 3);
+					const remaining = list.slice(3);
+					return (
+						<div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
+							{preview.map((menu) => (
+								<Badge key={menu} variant="outline" className="max-w-[140px] truncate">
+									{menu}
+								</Badge>
+							))}
+							{remaining.length > 0 ? (
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Badge variant="secondary">+{remaining.length}</Badge>
+									</TooltipTrigger>
+									<TooltipContent className="max-w-sm">
+										<div className="max-h-48 space-y-1 overflow-auto pr-1 text-xs">
+											{remaining.map((menu) => (
+												<div key={menu} className="truncate">{menu}</div>
+											))}
+										</div>
+									</TooltipContent>
+								</Tooltip>
+							) : null}
+						</div>
+					);
+				},
+			},
+			{
+				title: "成员",
+				key: "members",
+				width: 220,
+				onCell: () => ({ style: { verticalAlign: "middle" } }),
+				render: (_value, record) => {
+					const total = Math.max(record.kcMemberCount ?? 0, record.assignments.length);
+					const preview = record.assignments.slice(0, 2);
+					const remaining = record.assignments.slice(2);
+					return (
+						<div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
+							<Badge variant="secondary">{total} 人</Badge>
+							{preview.map((assignment) => (
+								<Badge key={assignment.id} variant="outline" className="max-w-[140px] truncate">
+									{assignment.displayName || assignment.username}
+								</Badge>
+							))}
+							{remaining.length > 0 ? (
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Badge variant="outline">+{remaining.length}</Badge>
+									</TooltipTrigger>
+									<TooltipContent className="max-w-sm">
+										<div className="max-h-48 space-y-1 overflow-auto pr-1 text-xs">
+											{remaining.map((assignment) => (
+												<div key={assignment.id} className="truncate">
+													{assignment.displayName || assignment.username}
+												</div>
+											))}
+										</div>
+									</TooltipContent>
+								</Tooltip>
+							) : null}
+						</div>
+					);
+				},
+			},
             {
                 title: "操作",
                 key: "actions",
@@ -421,8 +456,65 @@ export default function RoleManagementView() {
         ];
     }, []);
 
+    const expandedRowRender = useCallback(
+        (record: RoleRow) => {
+            const scopeLabel = record.scope ? SCOPE_LABELS[record.scope] : "未设置";
+            const operations = record.operations?.length ? record.operations.join("，") : "默认查询";
+            const members = record.assignments || [];
+            return (
+                <div className="grid gap-4 border-t border-muted pt-4 text-sm md:grid-cols-3">
+                    <div className="space-y-2">
+                        <Text variant="body3" className="text-muted-foreground">
+                            角色信息
+                        </Text>
+                        <div className="space-y-1">
+                            <div>编码：{record.code || record.canonical}</div>
+                            <div>作用域：{scopeLabel}</div>
+                            <div>描述：{record.description || "未填写"}</div>
+                            <div>操作权限：{operations}</div>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Text variant="body3" className="text-muted-foreground">
+                            绑定菜单
+                        </Text>
+                        <div className="flex flex-wrap gap-1">
+                            {record.menuLabels?.length ? (
+                                record.menuLabels.map((menu) => (
+                                    <Badge key={menu} variant="outline" className="max-w-[160px] truncate">
+                                        {menu}
+                                    </Badge>
+                                ))
+                            ) : (
+                                <span className="text-muted-foreground">未绑定</span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Text variant="body3" className="text-muted-foreground">
+                            成员列表
+                        </Text>
+                        <div className="flex flex-wrap gap-1">
+                            {members.length ? (
+                                members.map((member) => (
+                                    <Badge key={member.id} variant="outline" className="max-w-[160px] truncate">
+                                        {member.displayName || member.username}
+                                    </Badge>
+                                ))
+                            ) : (
+                                <span className="text-muted-foreground">暂无成员</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        },
+        []
+    );
+
     return (
-        <div className="mx-auto w-full max-w-[1200px] space-y-6">
+        <TooltipProvider>
+            <div className="mx-auto w-full max-w-[1200px] space-y-6">
             <Card>
                 <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div className="space-y-1">
@@ -457,6 +549,11 @@ export default function RoleManagementView() {
                             rowClassName={() => "text-sm"}
                             tableLayout="fixed"
                             scroll={{ x: 1400 }}
+                            expandable={{
+                                expandedRowRender,
+                                expandRowByClick: true,
+                                columnWidth: 48,
+                            }}
                         />
                     )}
                 </CardContent>
@@ -487,7 +584,8 @@ export default function RoleManagementView() {
                 menuRoleMap={menuRoleMap}
             />
             <MembersDialog target={memberTarget} onClose={() => setMemberTarget(null)} />
-        </div>
+            </div>
+        </TooltipProvider>
     );
 }
 
@@ -504,7 +602,6 @@ interface CreateRoleDialogProps {
 function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRoleMap, menuParentMap, menuChildrenMap }: CreateRoleDialogProps) {
     const [name, setName] = useState("");
     const [displayName, setDisplayName] = useState("");
-    const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
     const [allowDesensitize, setAllowDesensitize] = useState(true);
     const [description, setDescription] = useState("");
     const [reason, setReason] = useState("");
@@ -513,7 +610,6 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
 
     const resetState = useCallback(() => {
         setName("");
-        setScope("DEPARTMENT");
         setDisplayName("");
         setAllowDesensitize(true);
         setDescription("");
@@ -598,7 +694,7 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
             const trimmedReason = reason.trim() || undefined;
             const payload = {
                 name: trimmedName.toUpperCase(),
-                scope,
+                scope: "DEPARTMENT" as const,
                 operations: ["read"] as DataOperation[],
                 allowDesensitizeJson: allowDesensitize,
                 description: trimmedDescription,
@@ -694,29 +790,7 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                             onChange={(event) => setDescription(event.target.value)}
                         />
                     </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                            <label className="font-medium" htmlFor="role-scope">
-                                作用域
-                            </label>
-                            <Select value={scope} onValueChange={(value) => setScope(value as "DEPARTMENT" | "INSTITUTE")}> 
-                                <SelectTrigger id="role-scope">
-                                    <SelectValue placeholder="请选择作用域" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="DEPARTMENT">部门</SelectItem>
-                                    <SelectItem value="INSTITUTE">全所共享区</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {/* <div className="space-y-2">
-                            <span className="font-medium">脱敏策略</span>
-                            <label className="flex items-center gap-2 text-sm">
-                                <Checkbox checked={allowDesensitize} onCheckedChange={(value) => setAllowDesensitize(value === true)} />
-                                需脱敏 JSON 输出
-                            </label>
-                        </div> */}
-                    </div>
+                    {/* 作用域固定为部门，审批逻辑改为后台默认，保留操作权限说明 */}
                     <div className="space-y-2">
                         <span className="font-medium">操作权限</span>
                         <Text variant="body3" className="text-muted-foreground">

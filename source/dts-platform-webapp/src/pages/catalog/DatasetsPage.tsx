@@ -10,11 +10,10 @@ import { Textarea } from "@/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { toast } from "sonner";
 import { createDataset, getCatalogConfig, listDatasets, previewDataset } from "@/api/platformApi";
-import { listInfraDataSources, refreshInceptorRegistry, fetchInfraFeatures } from "@/api/services/infraService";
+import { listInfraDataSources } from "@/api/services/infraService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import { renderDataLevelLabel } from "@/constants/governance";
 import { useUserInfo } from "@/store/userStore";
-import { useActiveDept, useActiveScope, useContextActions } from "@/store/contextStore";
 
 // Legacy display classification removed in favor of DATA_* levels
 
@@ -25,30 +24,47 @@ const DATA_LEVELS = [
   { value: "DATA_TOP_SECRET", label: "机密 (DATA_TOP_SECRET)" },
 ] as const;
 type DataLevel = (typeof DATA_LEVELS)[number]["value"];
-type Scope = "DEPT" | "INST";
-type ShareScope = "PRIVATE_DEPT" | "SHARE_INST" | "PUBLIC_INST";
 
 type ListItem = {
 	id: string;
 	name: string;
 	owner: string;
 	dataLevel?: string;
-	scope?: string;
 	ownerDept?: string;
-	shareScope?: string;
 	domainId: string;
 	type: string;
 	tags?: string[];
     description?: string;
+    editable?: boolean;
 };
 
 export default function DatasetsPage() {
 	const router = useRouter();
-	const activeScope = useActiveScope();
-	const activeDept = useActiveDept();
-	// Keep ABAC上下文与列表筛选在本页面内同步，供筛选器回填与交互使用
-	const { setActiveScope, setActiveDept } = useContextActions();
-	const { roles = [] } = useUserInfo();
+	const userInfo = useUserInfo() as any;
+	const roles: string[] = useMemo(() => {
+		const raw = userInfo?.roles;
+		if (!Array.isArray(raw)) return [];
+		return raw.map((r: any) => String(r ?? "").toUpperCase()).filter(Boolean);
+	}, [userInfo]);
+	const roleSet = useMemo(() => new Set(roles), [roles]);
+	const hasInstOwnerRole = useMemo(
+		() => roleSet.has("INST_DATA_OWNER") || roleSet.has("ROLE_INST_DATA_OWNER"),
+		[roleSet],
+	);
+	const preferredUsername = useMemo(() => {
+		const candidates = [
+			userInfo?.preferred_username,
+			userInfo?.username,
+			userInfo?.fullName,
+		];
+		for (const c of candidates) {
+			if (typeof c === "string" && c.trim()) {
+				return c.trim();
+			}
+		}
+		return "";
+	}, [userInfo]);
+	const isOpadmin = useMemo(() => preferredUsername.toLowerCase() === "opadmin", [preferredUsername]);
 	const [items, setItems] = useState<ListItem[]>([]);
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(false);
@@ -56,17 +72,14 @@ export default function DatasetsPage() {
 	const [size] = useState(10);
 	const [keyword, setKeyword] = useState("");
 	const [dataLevelFilter, setDataLevelFilter] = useState<string>("all");
-	const [scopeFilter, setScopeFilter] = useState<string>("all");
-	const [deptFilter, setDeptFilter] = useState<string>("");
-	const [sourceFilter, setSourceFilter] = useState<string>("all");
+const [deptFilter, setDeptFilter] = useState<string>("");
+	const [instOwnerInitialized, setInstOwnerInitialized] = useState(false);
 	const [open, setOpen] = useState(false);
 	const [form, setForm] = useState({
 		name: "",
 		owner: "",
 		dataLevel: "DATA_INTERNAL" as DataLevel,
-		scope: "DEPT" as Scope,
 		ownerDept: "",
-		shareScope: "SHARE_INST" as ShareScope,
 		tags: "",
 		description: "",
 		sourceType: "INCEPTOR",
@@ -74,8 +87,16 @@ export default function DatasetsPage() {
 		hiveTable: "",
 	});
 	const [deptOptions, setDeptOptions] = useState<DeptDto[]>([]);
-	const nonRootDeptOptions = useMemo(() => deptOptions.filter((d) => d.parentId != null && d.parentId !== 0), [deptOptions]);
-	const [deptLoading, setDeptLoading] = useState(false);
+const sortedDeptOptions = useMemo(
+	() =>
+		[...deptOptions].sort(
+			(a, b) =>
+				((a.parentId ?? 0) - (b.parentId ?? 0)) || String(a.code).localeCompare(String(b.code)),
+		),
+	[deptOptions],
+);
+const nonRootDeptOptions = useMemo(() => sortedDeptOptions.filter((d) => d.parentId != null && d.parentId !== 0), [sortedDeptOptions]);
+const [deptLoading, setDeptLoading] = useState(false);
 	const [catalogConfig, setCatalogConfig] = useState({
 		multiSourceEnabled: false,
 		defaultSourceType: "INCEPTOR",
@@ -86,12 +107,16 @@ export default function DatasetsPage() {
 	const [multiSourceUnlocked, setMultiSourceUnlocked] = useState(false);
 	    const [refreshing, setRefreshing] = useState(false);
     // Preview dialog state
-    const [previewOpen, setPreviewOpen] = useState(false);
-    const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
-    const [previewRows, setPreviewRows] = useState<any[]>([]);
-    const [previewTitle, setPreviewTitle] = useState<string>("");
-    const [previewLevel, setPreviewLevel] = useState<string | undefined>(undefined);
-    const [previewScope, setPreviewScope] = useState<string | undefined>(undefined);
+const [previewOpen, setPreviewOpen] = useState(false);
+const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
+const [previewRows, setPreviewRows] = useState<any[]>([]);
+const [previewTitle, setPreviewTitle] = useState<string>("");
+const [previewLevel, setPreviewLevel] = useState<string | undefined>(undefined);
+const sourceTypeUpper = (form.sourceType || "").toUpperCase();
+const isInceptorSource = sourceTypeUpper === "INCEPTOR" || sourceTypeUpper === "HIVE";
+const isPostgresSource = sourceTypeUpper === "POSTGRES";
+const databaseLabel = isPostgresSource ? "Schema" : "Hive Database";
+const tableLabel = isPostgresSource ? "Table" : "Hive Table";
 // Note: import-from-file feature removed in this build; re-enable when UI wires the input
 
 // const levels = SECURITY_LEVELS; // removed
@@ -109,21 +134,56 @@ const primarySourceLabel = useMemo(
 	[catalogConfig.primarySourceType, resolvedDefaultSource, normalizeSourceType],
 );
 const multiSourceAllowed = catalogConfig.multiSourceEnabled || multiSourceUnlocked;
-const hasPrimarySource = useMemo(() => {
-	if (catalogConfig.hasPrimarySource) return true;
-	return dataSources.some((ds) => normalizeSourceType(String(ds?.type || "")) === resolvedDefaultSource);
-}, [catalogConfig.hasPrimarySource, dataSources, resolvedDefaultSource, normalizeSourceType]);
+const fallbackEditable = useMemo(() => {
+	if (isOpadmin) return true;
+	return (
+		roleSet.has("OPADMIN") ||
+		roleSet.has("ROLE_OP_ADMIN") ||
+		roleSet.has("ROLE_ADMIN") ||
+		roleSet.has("ROLE_CATALOG_ADMIN") ||
+		roleSet.has("ROLE_INST_DATA_OWNER") ||
+		roleSet.has("ROLE_DEPT_DATA_OWNER")
+	);
+}, [roleSet, isOpadmin]);
 
-const sources = useMemo(() => {
+const availableSourceTypes = useMemo(() => {
 	const set = new Set<string>();
+	dataSources.forEach((ds) => {
+		const typ = normalizeSourceType(String(ds?.type || ""));
+		if (typ) set.add(typ);
+	});
 	items.forEach((it) => {
-		const t = normalizeSourceType(String(it.type || ""));
-		if (t) set.add(t);
+		const typ = normalizeSourceType(String(it.type || ""));
+		if (typ) set.add(typ);
 	});
 	set.add(resolvedDefaultSource);
 	return Array.from(set);
-}, [items, resolvedDefaultSource, normalizeSourceType]);
+}, [dataSources, items, normalizeSourceType, resolvedDefaultSource]);
 
+	useEffect(() => {
+	if (!hasInstOwnerRole) {
+			if (instOwnerInitialized) {
+				setInstOwnerInitialized(false);
+			}
+			return;
+		}
+		if (!instOwnerInitialized) {
+			if (deptFilter !== "") {
+				setDeptFilter("");
+			}
+			if (page !== 0) {
+				setPage(0);
+			}
+			setInstOwnerInitialized(true);
+		}
+	}, [hasInstOwnerRole, instOwnerInitialized, deptFilter, page, setDeptFilter, setInstOwnerInitialized, setPage]);
+const hasPrimarySource = useMemo(() => {
+	if (multiSourceAllowed) {
+		return availableSourceTypes.length > 0;
+	}
+	if (catalogConfig.hasPrimarySource) return true;
+	return dataSources.some((ds) => normalizeSourceType(String(ds?.type || "")) === resolvedDefaultSource);
+}, [availableSourceTypes, catalogConfig.hasPrimarySource, dataSources, multiSourceAllowed, normalizeSourceType, resolvedDefaultSource]);
 const deptLabelMap = useMemo(() => {
   const map = new Map<string, string>();
   for (const d of deptOptions) {
@@ -146,6 +206,9 @@ const renderSourceLabel = (value: string) => {
 			return "TDS Inceptor";
 		case "TRINO":
 			return "Trino Catalog";
+		case "POSTGRES":
+		case "POSTGRESQL":
+			return "平台 PostgreSQL";
 			case "API":
 				return "API 服务";
 			case "EXTERNAL":
@@ -155,21 +218,7 @@ const renderSourceLabel = (value: string) => {
 		}
 };
 
-// Chinese labels for scope
-const SCOPE_LABELS: Record<string, string> = { DEPT: "部门", INST: "研究所" };
-const renderScopeLabel = (v?: string) => (v ? SCOPE_LABELS[String(v).toUpperCase()] || v : "-");
-const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : it.scope === "INST" ? "研究所" : "-");
-
     // Simple role check: OPADMIN or ROLE_OP_ADMIN can编辑
-    const canEdit = useMemo(() => {
-      try {
-        const set = new Set<string>((Array.isArray(roles) ? roles : [] as any[]).map((r) => String(r || "").toUpperCase()));
-        return set.has("OPADMIN") || set.has("ROLE_OP_ADMIN");
-      } catch {
-        return false;
-      }
-    }, [roles]);
-
     // Badge for DATA_* levels with tones aligned to Explore pages
     const dataLevelBadge = (level?: string) => {
       const key = String(level || "").toUpperCase();
@@ -202,11 +251,10 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 	const fetchList = async () => {
 		setLoading(true);
 		try {
-				const params: any = { page, size, keyword };
-				if (dataLevelFilter !== "all") params.dataLevel = dataLevelFilter;
-				if (scopeFilter !== "all") params.scope = scopeFilter;
-				if (deptFilter.trim()) params.ownerDept = deptFilter.trim();
-				const resp = (await listDatasets(params)) as any;
+			const params: any = { page, size, keyword };
+			if (dataLevelFilter !== "all") params.dataLevel = dataLevelFilter;
+			if (deptFilter.trim()) params.ownerDept = deptFilter.trim();
+			const resp = (await listDatasets(params)) as any;
 			const content = (resp && resp.content) || [];
 			const mapped: ListItem[] = content.map((it: any) => {
 				const rawType = String(it.type || "").trim().toUpperCase();
@@ -219,19 +267,18 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 							.map((s: string) => s.trim())
 							.filter(Boolean)
 					: [];
-						return {
-							id: String(it.id),
-							name: it.name,
-							owner: it.owner || "",
-							dataLevel: it.dataLevel || undefined,
-							scope: it.scope || undefined,
-							ownerDept: it.ownerDept || undefined,
-							shareScope: it.shareScope || undefined,
-							domainId: String(it.domainId || ""),
-							type: normalizeSourceType(rawType || resolvedDefaultSource),
-							tags,
-                            description: typeof it.description === "string" ? it.description : "",
-						};
+				return {
+					id: String(it.id),
+					name: it.name,
+					owner: it.owner || "",
+					dataLevel: it.dataLevel || undefined,
+					ownerDept: it.ownerDept || undefined,
+					domainId: String(it.domainId || ""),
+					type: normalizeSourceType(rawType || resolvedDefaultSource),
+					tags,
+					description: typeof it.description === "string" ? it.description : "",
+					editable: typeof it.editable === "boolean" ? it.editable : fallbackEditable,
+				};
 				});
 			setItems(mapped);
 			setTotal(Number(resp?.total || mapped.length));
@@ -256,12 +303,6 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 		};
 	}, []);
 
-	// Keep shareScope sane when switching scope in the creation dialog
-	useEffect(() => {
-		if (form.scope === "INST" && form.shareScope === "PRIVATE_DEPT") {
-			setForm((f) => ({ ...f, shareScope: "SHARE_INST" }));
-		}
-	}, [form.scope, form.shareScope]);
 
 	useEffect(() => {
 		const loadBasics = async () => {
@@ -290,9 +331,9 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 		void loadBasics();
 	}, []);
 
-	useEffect(() => {
+useEffect(() => {
 		void fetchList();
-	}, [page, size, resolvedDefaultSource, dataLevelFilter, scopeFilter, deptFilter, keyword, activeScope, activeDept]);
+	}, [page, size, resolvedDefaultSource, dataLevelFilter, deptFilter, keyword]);
 
 	// In keep-alive/multi-tab layouts, the list view may not unmount when navigating
 	// to the detail page. Refresh the list on window focus/history navigation.
@@ -327,58 +368,51 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 		}
 	}, [multiSourceAllowed, resolvedDefaultSource]);
 
-	const filtered = useMemo(() => {
-		return items.filter((it) => {
-			if (sourceFilter !== "all" && normalizeSourceType(it.type) !== sourceFilter) return false;
-			if (keyword && !it.name.toLowerCase().includes(keyword.toLowerCase())) return false;
-			return true;
-		});
-	}, [items, sourceFilter, keyword, normalizeSourceType]);
+const filtered = useMemo(() => {
+	return items.filter((it) => {
+		if (keyword && !it.name.toLowerCase().includes(keyword.toLowerCase())) return false;
+		return true;
+	});
+}, [items, keyword]);
 
 	const totalPages = useMemo(() => Math.max(1, Math.ceil(total / size)), [total, size]);
 
-    const handleRefresh = async () => {
-        setRefreshing(true);
-        try {
-            // Keep behavior consistent with data sources page: trigger registry refresh
-            try {
-                await refreshInceptorRegistry();
-            } catch (e: any) {
-                // Non-OP_ADMIN will get 403; fall back to a lightweight features sync
-                try {
-                    await fetchInfraFeatures();
-                    toast.info("无权执行刷新，已改为状态同步");
-                } catch {
-                    throw e;
-                }
-            }
-            // Reload config to reflect any primary source changes
-            try {
-                const cfg = (await getCatalogConfig()) as any;
-                if (cfg) {
-                    setCatalogConfig({
-                        multiSourceEnabled: Boolean(cfg.multiSourceEnabled),
-                        defaultSourceType: String(cfg.defaultSourceType || "HIVE"),
-                        hasPrimarySource: Boolean(cfg.hasPrimarySource),
-                        primarySourceType: String(cfg.primarySourceType || "HIVE"),
-                    });
-                }
-            } catch {}
-            await fetchList();
-            toast.success("Inceptor 状态已重新同步");
-        } catch (error: any) {
-            console.error(error);
-            toast.error(error?.message || "刷新失败");
-        } finally {
-            setRefreshing(false);
-        }
-    };
+	const handleRefresh = async () => {
+		setRefreshing(true);
+		try {
+			await fetchList();
+			try {
+				const [cfg, ds] = await Promise.all([
+					getCatalogConfig().catch(() => undefined),
+					listInfraDataSources().catch(() => undefined),
+				]);
+				if (cfg) {
+					setCatalogConfig({
+						multiSourceEnabled: Boolean((cfg as any)?.multiSourceEnabled),
+						defaultSourceType: String((cfg as any)?.defaultSourceType || "HIVE"),
+						hasPrimarySource: Boolean((cfg as any)?.hasPrimarySource),
+						primarySourceType: String((cfg as any)?.primarySourceType || "HIVE"),
+					});
+				}
+				if (Array.isArray(ds)) {
+					setDataSources(ds);
+				}
+			} catch (reloadError) {
+				console.warn("刷新数据目录基础信息失败", reloadError);
+			}
+			toast.success("已刷新数据目录");
+		} catch (error: any) {
+			console.error(error);
+			toast.error(error?.message || "刷新失败");
+		} finally {
+			setRefreshing(false);
+		}
+	};
 
     const openPreview = async (item: ListItem) => {
       try {
         setPreviewTitle(item.name);
         setPreviewLevel(item.dataLevel);
-        setPreviewScope(item.scope);
         const resp: any = await previewDataset(item.id, 50);
         const headers: string[] = Array.isArray(resp?.headers) ? resp.headers : [];
         const rows: any[] = Array.isArray(resp?.rows) ? resp.rows : [];
@@ -390,76 +424,72 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
       }
     };
 
-	const onCreate = async () => {
-		if (!hasPrimarySource) {
-			toast.error("请先在基础管理中完善默认数据源连接");
-			return;
-		}
-		if (!form.name.trim()) {
-			toast.error("请填写数据集名称");
-			return;
-		}
-		// Scope-dependent validation to align with backend checks
-		if (form.scope === "DEPT" && !String(form.ownerDept || "").trim()) {
-			toast.error("当作用域为 DEPT 时，必须选择所属部门");
-			return;
-		}
-		if (form.scope === "INST" && !form.shareScope) {
-			toast.error("当作用域为 INST 时，必须选择共享范围");
-			return;
-		}
-		try {
-			const selectedSourceType = normalizeSourceType(
-				(multiSourceAllowed ? form.sourceType : resolvedDefaultSource) || resolvedDefaultSource,
-			);
-			const tagsList = form.tags
-				.split(",")
-				.map((s) => s.trim())
-				.filter(Boolean);
-			const hiveDatabase = form.hiveDatabase.trim();
-			const hiveTable = form.hiveTable.trim();
-				// 兼容后端旧字段：按 DATA_* 推导 legacy classification（仅用于兼容，UI 不再展示）
-				const legacyClassification = (
-					form.dataLevel === "DATA_PUBLIC"
-						? "PUBLIC"
-						: form.dataLevel === "DATA_INTERNAL"
-						? "INTERNAL"
-						: form.dataLevel === "DATA_SECRET"
-						? "SECRET"
-						: "TOP_SECRET"
-				) as string;
+const onCreate = async () => {
+	if (!hasPrimarySource) {
+		toast.error("请先在基础管理中完善默认数据源连接");
+		return;
+	}
+	if (!form.name.trim()) {
+		toast.error("请填写数据集名称");
+		return;
+	}
+	const ownerDeptValue = form.ownerDept ? form.ownerDept.trim() : "";
+	if (!ownerDeptValue) {
+		toast.error("请选择所属部门");
+		return;
+	}
+	try {
+		const selectedSourceType = normalizeSourceType(
+			(multiSourceAllowed ? form.sourceType : resolvedDefaultSource) || resolvedDefaultSource,
+		);
+		const tagsList = form.tags
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean);
+		const hiveDatabase = form.hiveDatabase.trim();
+		const hiveTable = form.hiveTable.trim();
+		const shouldPersistLocation = selectedSourceType === "INCEPTOR" || selectedSourceType === "POSTGRES";
+		const locationDatabase = shouldPersistLocation && hiveDatabase ? hiveDatabase : undefined;
+		const locationTable = shouldPersistLocation && hiveTable ? hiveTable : undefined;
+		const legacyClassification = (
+			form.dataLevel === "DATA_PUBLIC"
+				? "PUBLIC"
+				: form.dataLevel === "DATA_INTERNAL"
+				? "INTERNAL"
+				: form.dataLevel === "DATA_SECRET"
+				? "SECRET"
+				: "TOP_SECRET"
+		) as string;
 
-				const payload = {
-					name: form.name.trim(),
-					owner: form.owner.trim(),
-					classification: legacyClassification,
-					dataLevel: form.dataLevel,
-					scope: form.scope,
-					ownerDept: form.scope === "DEPT" ? (form.ownerDept || undefined) : undefined,
-					shareScope: form.scope === "INST" ? form.shareScope : undefined,
-					tags: tagsList,
-					description: form.description.trim(),
-					type: selectedSourceType,
-					hiveDatabase: selectedSourceType === "INCEPTOR" ? hiveDatabase || undefined : undefined,
-					hiveTable: selectedSourceType === "INCEPTOR" ? hiveTable || undefined : undefined,
-					source: {
-						sourceType: selectedSourceType,
-						hiveDatabase: selectedSourceType === "INCEPTOR" ? hiveDatabase || undefined : undefined,
-						hiveTable: selectedSourceType === "INCEPTOR" ? hiveTable || undefined : undefined,
-					},
-				exposure: ["VIEW"],
-			};
-			const created = (await createDataset(payload)) as any;
-			toast.success("已创建");
-			setOpen(false);
-			setPage(0);
-			await fetchList();
-			if (created?.id) router.push(`/catalog/datasets/${created.id}`);
-		} catch (e) {
-			console.error(e);
-			toast.error("创建失败");
-		}
-	};
+		const payload = {
+			name: form.name.trim(),
+			owner: form.owner.trim(),
+			classification: legacyClassification,
+			dataLevel: form.dataLevel,
+			ownerDept: ownerDeptValue,
+			tags: tagsList,
+			description: form.description.trim(),
+			type: selectedSourceType,
+			hiveDatabase: locationDatabase,
+			hiveTable: locationTable,
+			source: {
+				sourceType: selectedSourceType,
+				hiveDatabase: locationDatabase,
+				hiveTable: locationTable,
+			},
+			exposure: ["VIEW"],
+		};
+		const created = (await createDataset(payload)) as any;
+		toast.success("已创建");
+		setOpen(false);
+		setPage(0);
+		await fetchList();
+		if (created?.id) router.push(`/catalog/datasets/${created.id}`);
+	} catch (e) {
+		console.error(e);
+		toast.error("创建失败");
+	}
+};
 
 
 
@@ -492,7 +522,10 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 		for (const r of rows) {
 			try {
 				const candidate = String((r.sourceType || "").toString().trim() || "").toUpperCase();
-				const sourceType = normalizeSourceType(multiSourceAllowed && candidate ? candidate : resolvedDefaultSource);
+                const sourceType = normalizeSourceType(multiSourceAllowed && candidate ? candidate : resolvedDefaultSource);
+                const shouldPersistLocation = sourceType === "INCEPTOR" || sourceType === "POSTGRES";
+                const locationDatabase = shouldPersistLocation && r.hiveDatabase ? r.hiveDatabase : undefined;
+                const locationTable = shouldPersistLocation && r.hiveTable ? r.hiveTable : undefined;
 					// 兼容：尝试以数据密级推导 legacy classification；若无则回退
 					const legacyClassification = r.dataLevel
 						? (String(r.dataLevel).toUpperCase() === "DATA_PUBLIC"
@@ -514,10 +547,10 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 										.map((s: string) => s.trim())
 										.filter(Boolean)
 								: [],
-						type: sourceType,
-						hiveDatabase: sourceType === "INCEPTOR" ? r.hiveDatabase || undefined : undefined,
-						hiveTable: sourceType === "INCEPTOR" ? r.hiveTable || undefined : undefined,
-						source: { sourceType },
+                    type: sourceType,
+                    hiveDatabase: locationDatabase,
+                    hiveTable: locationTable,
+                    source: { sourceType, hiveDatabase: locationDatabase, hiveTable: locationTable },
 						exposure: ["VIEW"],
 					});
 				ok += 1;
@@ -546,20 +579,7 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 							className="w-[200px]"
 						/>
 						{/* 统一为 DATA_* 过滤，移除 legacy 密级过滤 */}
-						<Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v)}>
-							<SelectTrigger className="w-[140px]">
-								<SelectValue placeholder="来源" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">全部来源</SelectItem>
-								{sources.map((s) => (
-									<SelectItem key={s} value={s}>
-										{renderSourceLabel(s)}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-						<Button variant="outline" onClick={handleRefresh} disabled={loading || refreshing}>
+					<Button variant="outline" onClick={handleRefresh} disabled={loading || refreshing}>
 							{refreshing ? "同步中…" : "刷新"}
 						</Button>
 						{/* 需求：隐藏批量导入与新建入口（仅保留查询/刷新/筛选） */}
@@ -581,58 +601,29 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 									</SelectContent>
 								</Select>
 							</div>
-							<div>
-                            <Label>作用域</Label>
-                            <Select
-                                value={scopeFilter}
-                                onValueChange={(v) => {
-                                    setScopeFilter(v);
-                                    // 同步到全局上下文，仅当用户明确选择具体作用域时生效
-                                    if (v === "DEPT" || v === "INST") {
-                                        try { setActiveScope(v as any); } catch {}
-                                    }
-                                }}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="全部" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">全部</SelectItem>
-                                    <SelectItem value="DEPT">部门</SelectItem>
-                                    <SelectItem value="INST">研究所</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div>
-                            <Label>
-                              所属部门{activeScope === "DEPT" ? <span className="ml-1 text-[11px] text-muted-foreground">（当前上下文）</span> : null}
-                            </Label>
-                            <Select
-                                value={deptFilter || "all"}
-                                onValueChange={(v) => {
-                                    const next = v === "all" ? "" : v;
-                                    setDeptFilter(next);
-                                    if (next) {
-                                        try { setActiveDept(next); } catch {}
-                                    }
-                                }}
-                                disabled={activeScope === "INST"}
-                            >
-									<SelectTrigger>
-                                    <SelectValue placeholder={deptLoading ? "加载中…" : activeScope === "DEPT" ? "全部（本部门）" : "全部"} />
-									</SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">{activeScope === "DEPT" ? "全部（本部门）" : "全部"}</SelectItem>
-                                    {[...deptOptions]
-                                      .sort((a, b) => ((a.parentId ?? 0) - (b.parentId ?? 0)))
-                                      .map((d) => (
-                                        <SelectItem key={d.code} value={d.code}>
-                                            {d.nameZh || d.nameEn || d.code}
-                                        </SelectItem>
-                                      ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+		<div>
+			<Label>所属部门</Label>
+			<Select
+				value={deptFilter || "all"}
+				onValueChange={(v) => {
+					const next = v === "all" ? "" : v;
+					setDeptFilter(next);
+					setPage(0);
+				}}
+			>
+				<SelectTrigger>
+					<SelectValue placeholder={deptLoading ? "加载中…" : "全部"} />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="all">全部</SelectItem>
+					{sortedDeptOptions.map((d) => (
+						<SelectItem key={d.code} value={d.code}>
+							{d.nameZh || d.nameEn || d.code}
+						</SelectItem>
+					  ))}
+				</SelectContent>
+			</Select>
+		</div>
 						</div>
 					{!hasPrimarySource && (
 						<Alert variant="destructive">
@@ -645,44 +636,39 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 					<div className="overflow-hidden rounded-md border">
 						<table className="w-full min-w-[820px] table-fixed text-sm">
 							<thead className="bg-muted/50">
-								<tr className="text-left">
-									<th className="px-3 py-2 w-[32px]">#</th>
-									<th className="px-3 py-2">数据集名称</th>
-                                <th className="px-3 py-2">数据域</th>
-                                <th className="px-3 py-2">所属部门</th>
-                                <th className="px-3 py-2">数据密级</th>
-                                <th className="px-3 py-2">描述</th>
-                                <th className="px-3 py-2">操作</th>
-								</tr>
+							<tr className="text-left">
+								<th className="px-3 py-2 w-[32px]">#</th>
+								<th className="px-3 py-2">数据集名称</th>
+								<th className="px-3 py-2">所属部门</th>
+								<th className="px-3 py-2">数据密级</th>
+								<th className="px-3 py-2">描述</th>
+								<th className="px-3 py-2">操作</th>
+							</tr>
 							</thead>
 							<tbody>
 								{filtered.map((d, idx) => (
 									<tr key={d.id} className="border-b last:border-b-0">
 										<td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
 										<td className="px-3 py-2 font-medium">{d.name}</td>
-                                <td className="px-3 py-2 text-xs">{renderDomainForRow(d)}</td>
-                                <td className="px-3 py-2 text-xs">{renderDept(d.ownerDept)}</td>
-                                <td className="px-3 py-2 text-xs">{dataLevelBadge(d.dataLevel)}</td>
-                                <td className="px-3 py-2 text-xs truncate" title={d.description || "-"}>{d.description || "-"}</td>
-										<td className="px-3 py-2 space-x-1">
-											<Button variant="outline" size="sm" onClick={() => openPreview(d)}>
-												预览
-											</Button>
-                                        {canEdit && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => router.push(`/catalog/datasets/${d.id}`)}
-                                            >
-                                                编辑
-                                            </Button>
-                                        )}
+							<td className="px-3 py-2 text-xs">{renderDept(d.ownerDept)}</td>
+							<td className="px-3 py-2 text-xs">{dataLevelBadge(d.dataLevel)}</td>
+							<td className="px-3 py-2 text-xs truncate" title={d.description || "-"}>{d.description || "-"}</td>
+										<td className="px-3 py-2">
+											{d.editable ? (
+												<button
+													type="button"
+													onClick={() => router.push(`/catalog/datasets/${d.id}`)}
+													className="inline-flex items-center rounded-md border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring"
+												>
+													编辑
+												</button>
+											) : null}
 										</td>
 									</tr>
 								))}
 								{!filtered.length && (
                                 <tr>
-                                    <td colSpan={7} className="px-3 py-6 text-center text-xs text-muted-foreground">
+							<td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">
                                         {loading ? "加载中…" : "暂无数据"}
                                     </td>
                                 </tr>
@@ -749,51 +735,24 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 									</SelectContent>
 								</Select>
 							</div>
-							<div className="grid gap-2">
-								<Label>作用域</Label>
-								<Select value={form.scope} onValueChange={(v: Scope) => setForm((f) => ({ ...f, scope: v }))}>
-									<SelectTrigger>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="DEPT">DEPT（部门）</SelectItem>
-										<SelectItem value="INST">INST（研究所）</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
-							{form.scope === "DEPT" ? (
-								<div className="grid gap-2">
-									<Label>所属部门</Label>
-									<Select
-										value={form.ownerDept || undefined}
-										onValueChange={(v) => setForm((f) => ({ ...f, ownerDept: v }))}
-									>
-										<SelectTrigger>
-											<SelectValue placeholder={deptLoading ? "加载中…" : "选择部门…"} />
-										</SelectTrigger>
-										<SelectContent>
-											{nonRootDeptOptions.map((d) => (
-												<SelectItem key={d.code} value={d.code}>
-													{d.nameZh || d.nameEn || d.code}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-							) : (
-								<div className="grid gap-2">
-									<Label>共享范围（INST）</Label>
-									<Select value={form.shareScope} onValueChange={(v: ShareScope) => setForm((f) => ({ ...f, shareScope: v }))}>
-										<SelectTrigger>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="SHARE_INST">SHARE_INST（所内共享）</SelectItem>
-											<SelectItem value="PUBLIC_INST">PUBLIC_INST（所内公开）</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
-							)}
+				<div className="grid gap-2">
+					<Label>所属部门 *</Label>
+					<Select
+						value={form.ownerDept || undefined}
+						onValueChange={(v) => setForm((f) => ({ ...f, ownerDept: v }))}
+					>
+						<SelectTrigger>
+							<SelectValue placeholder={deptLoading ? "加载中…" : "选择部门…"} />
+						</SelectTrigger>
+						<SelectContent>
+							{nonRootDeptOptions.map((d) => (
+								<SelectItem key={d.code} value={d.code}>
+									{d.nameZh || d.nameEn || d.code}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
 						<div className="grid gap-2">
 							<Label>标签（用逗号分隔）</Label>
 							<Input value={form.tags} onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} />
@@ -831,7 +790,7 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 										{renderSourceLabel(resolvedDefaultSource)}
 									</SelectItem>
 									{multiSourceAllowed &&
-										["TRINO", "API", "EXTERNAL"]
+										availableSourceTypes
 											.filter((option) => option !== resolvedDefaultSource)
 											.map((option) => (
 												<SelectItem key={option} value={option}>
@@ -848,24 +807,44 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 								</Alert>
 							)}
 						</div>
-						{form.sourceType === "HIVE" && (
-							<div className="grid grid-cols-2 gap-3">
-								<div className="grid gap-2">
-									<Label>Hive Database</Label>
-									<Input
-										value={form.hiveDatabase}
-										onChange={(e) => setForm((f) => ({ ...f, hiveDatabase: e.target.value }))}
-									/>
-								</div>
-								<div className="grid gap-2">
-									<Label>Hive Table</Label>
-									<Input
-										value={form.hiveTable}
-										onChange={(e) => setForm((f) => ({ ...f, hiveTable: e.target.value }))}
-									/>
-								</div>
-							</div>
-						)}
+                        {isInceptorSource && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="grid gap-2">
+                                    <Label>{databaseLabel}</Label>
+                                    <Input
+                                        value={form.hiveDatabase}
+                                        onChange={(e) => setForm((f) => ({ ...f, hiveDatabase: e.target.value }))}
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>{tableLabel}</Label>
+                                    <Input
+                                        value={form.hiveTable}
+                                        onChange={(e) => setForm((f) => ({ ...f, hiveTable: e.target.value }))}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        {isPostgresSource && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="grid gap-2">
+                                    <Label>{databaseLabel}</Label>
+                                    <Input
+                                        placeholder="OLAP"
+                                        value={form.hiveDatabase}
+                                        onChange={(e) => setForm((f) => ({ ...f, hiveDatabase: e.target.value }))}
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>{tableLabel}</Label>
+                                    <Input
+                                        placeholder="sample_orders"
+                                        value={form.hiveTable}
+                                        onChange={(e) => setForm((f) => ({ ...f, hiveTable: e.target.value }))}
+                                    />
+                                </div>
+                            </div>
+                        )}
 					</div>
 					<DialogFooter>
 						<Button variant="ghost" onClick={() => setOpen(false)}>
@@ -880,13 +859,10 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 			<Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
 				<DialogContent className="max-w-4xl">
 						<DialogHeader>
-							<DialogTitle className="flex items-center gap-2">
-								<span>{previewTitle || "数据预览"}</span>
-								{dataLevelBadge(previewLevel)}
-                            <span className="ml-2 inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                              {renderScopeLabel(previewScope)}
-                            </span>
-							</DialogTitle>
+					<DialogTitle className="flex items-center gap-2">
+						<span>{previewTitle || "数据预览"}</span>
+						{dataLevelBadge(previewLevel)}
+					</DialogTitle>
 						</DialogHeader>
 						<div className="space-y-3">
 							<div className="overflow-auto rounded-md border">
@@ -919,10 +895,10 @@ const renderDomainForRow = (it: ListItem) => (it.scope === "DEPT" ? "部门" : i
 					</div>
 						<DialogFooter>
                             <div className="mr-auto text-xs text-muted-foreground">
-                              {(() => {
-                                const lvl = renderDataLevelLabel(previewLevel);
-                                return lvl && lvl !== "-" ? `本数据属于【${lvl}】级，仅限授权人员查看，不得外传。` : "本数据受密级与作用域控制，未经授权不得外传。";
-                              })()}
+	                              {(() => {
+	                                const lvl = renderDataLevelLabel(previewLevel);
+	                                return lvl && lvl !== "-" ? `本数据属于【${lvl}】级，仅限授权人员查看，不得外传。` : "本数据受密级与部门权限控制，未经授权不得外传。";
+	                              })()}
                             </div>
                             <Button variant="ghost" onClick={() => setPreviewOpen(false)}>关闭</Button>
                         </DialogFooter>

@@ -13,6 +13,8 @@ import jakarta.persistence.Table;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "gov_quality_run")
@@ -74,6 +76,7 @@ public class GovQualityRun extends AbstractAuditingEntity<UUID> implements Seria
     @Column(name = "message", length = 4096)
     private String message;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "metrics_json", columnDefinition = "jsonb")
     private String metricsJson;
 
@@ -214,4 +217,3 @@ public class GovQualityRun extends AbstractAuditingEntity<UUID> implements Seria
         this.metricsJson = metricsJson;
     }
 }
-

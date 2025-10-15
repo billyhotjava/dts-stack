@@ -11,7 +11,6 @@ import com.yuzhi.dts.platform.service.modeling.dto.DataStandardAttachmentContent
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardAttachmentDto;
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardDto;
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardVersionDto;
-import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import jakarta.validation.Valid;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -46,6 +45,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/modeling")
 @Transactional
 public class ModelingResource {
+
+    private static final String MODELING_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
 
     private final DataStandardService standards;
     private final DataStandardAttachmentService attachments;
@@ -96,7 +98,7 @@ public class ModelingResource {
     }
 
     @PostMapping("/standards")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<DataStandardDto> create(@Valid @RequestBody DataStandardUpsertRequest request) {
         try {
             DataStandardDto saved = standards.create(request);
@@ -109,7 +111,7 @@ public class ModelingResource {
     }
 
     @PutMapping("/standards/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<DataStandardDto> update(@PathVariable UUID id, @Valid @RequestBody DataStandardUpsertRequest request) {
         try {
             DataStandardDto saved = standards.update(id, request);
@@ -122,7 +124,7 @@ public class ModelingResource {
     }
 
     @DeleteMapping("/standards/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> delete(@PathVariable UUID id) {
         standards.delete(id);
         audit.audit("DELETE", "modeling.standard", id.toString());
@@ -144,7 +146,7 @@ public class ModelingResource {
     }
 
     @PostMapping(value = "/standards/{id}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<DataStandardAttachmentDto> uploadAttachment(
         @PathVariable UUID id,
         @RequestPart("file") MultipartFile file,
@@ -177,7 +179,7 @@ public class ModelingResource {
     }
 
     @DeleteMapping("/standards/{id}/attachments/{attachmentId}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteAttachment(@PathVariable UUID id, @PathVariable UUID attachmentId) {
         attachments.delete(id, attachmentId);
         audit.audit("DELETE", "modeling.standard.attachment", id + ":" + attachmentId);

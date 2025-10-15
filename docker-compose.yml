@@ -23,6 +23,7 @@ services:
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.forwardedHeaders.insecure=true"
       - "--ping=${TRAEFIK_ENABLE_PING}"
       - "--entrypoints.metrics.address=:${TRAEFIK_METRICS_PORT}"
       - "--accesslog=true"

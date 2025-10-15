@@ -6,7 +6,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
-import java.util.LinkedHashMap;
+import com.yuzhi.dts.platform.service.security.MaskingFunctions;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -58,9 +58,11 @@ public class SqlResource {
         if (!usingRanger && policy != null && policy.getRowFilter() != null && !policy.getRowFilter().isBlank()) {
             effectiveSql = "SELECT * FROM (" + sql + ") t WHERE (" + policy.getRowFilter() + ")";
         }
-
         try {
             Map<String, Object> result = queryGateway.execute(effectiveSql);
+            if (policy != null) {
+                applyDefaultMasking(policy, result);
+            }
             audit.audit("EXECUTE", "sql.query", String.valueOf(datasetId));
             return ApiResponses.ok(result);
         } catch (IllegalStateException ex) {
@@ -75,5 +77,26 @@ public class SqlResource {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void applyDefaultMasking(com.yuzhi.dts.platform.domain.catalog.CatalogAccessPolicy policy, Map<String, Object> payload) {
+        if (payload == null) {
+            return;
+        }
+        String strategy = Objects.toString(policy.getDefaultMasking(), "").trim();
+        if (strategy.isEmpty() || "NONE".equalsIgnoreCase(strategy)) {
+            return;
+        }
+        Object rowsObj = payload.get("rows");
+        if (rowsObj instanceof Iterable<?>) {
+            for (Object rowObj : (Iterable<?>) rowsObj) {
+                if (rowObj instanceof Map<?, ?> map) {
+                    Map<String, Object> row = (Map<String, Object>) map;
+                    row.replaceAll((key, value) -> MaskingFunctions.apply(value, strategy));
+                }
+            }
+        }
+        payload.put("defaultMasking", strategy.toUpperCase());
     }
 }

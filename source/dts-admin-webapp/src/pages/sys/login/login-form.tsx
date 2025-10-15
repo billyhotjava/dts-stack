@@ -5,6 +5,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { SignInReq } from "@/api/services/userService";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { resolveHomePathForRoles } from "@/routes/sections/dashboard";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import { useSignIn } from "@/store/userStore";
 import { Button } from "@/ui/button";
@@ -36,9 +37,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	const handleFinish = async (values: SignInReq) => {
 		setLoading(true);
 		try {
-			await signIn(values);
-			// 登录成功后跳转到默认页面
-			navigate(GLOBAL_CONFIG.defaultRoute, { replace: true });
+			const user = await signIn(values);
+			const roles = Array.isArray(user?.roles) ? (user.roles as string[]) : [];
+			const targetRoute = resolveHomePathForRoles(roles);
+			navigate(targetRoute || GLOBAL_CONFIG.defaultRoute, { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});
@@ -54,9 +56,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		<div className={cn("flex flex-col gap-6", className)}>
 			<Form {...form} {...props}>
 				<form onSubmit={form.handleSubmit(handleFinish)} className="space-y-4">
-					<div className="flex flex-col items-center gap-2 text-center">
+					<div className="flex flex-col items-center gap-1 text-center">
 						<h1 className="text-2xl font-bold">{bilingual("sys.login.signInFormTitle")}</h1>
-						{/* <p className="text-balance text-sm text-muted-foreground">{bilingual("sys.login.signInFormDescription")}</p> */}
+						<p className="text-sm text-muted-foreground">(管理端)</p>
 					</div>
 
 					<FormField

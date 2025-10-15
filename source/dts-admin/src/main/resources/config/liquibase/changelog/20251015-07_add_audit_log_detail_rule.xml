@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251015-07-add-audit-log-detail-rule" author="gemini-cli">
+        <comment>Add audit operation mapping rule for viewing audit log details.</comment>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-logs/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审计日志"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看审计日志详情: {id}"/>
+            <column name="source_table_template" value="审计日志"/>
+            <column name="param_extractors" value="{&quot;id&quot;:&quot;path.id&quot;}"/>
+            <column name="order_value" valueNumeric="20"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+    </changeSet>
+</databaseChangeLog>

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
 import { Button } from "@/ui/button";
 import { Badge } from "@/ui/badge";
+import { Input } from "@/ui/input";
 import { toast } from "sonner";
 
 export default function PortalMenusView() {
@@ -22,6 +23,33 @@ export default function PortalMenusView() {
   const [pending, setPending] = useState<Record<number, boolean>>({});
   const [resetting, setResetting] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [keyword, setKeyword] = useState("");
+
+  const filteredTreeMenus = useMemo(() => {
+    const trimmed = keyword.trim();
+    if (!trimmed) return treeMenus;
+    return filterMenusByKeyword(treeMenus, trimmed);
+  }, [keyword, treeMenus]);
+
+  const menuStats = useMemo(() => {
+    let total = 0;
+    let disabled = 0;
+    const walk = (items: PortalMenuItem[] = []) => {
+      items.forEach((item) => {
+        if (!item) return;
+        const children = Array.isArray(item.children) ? item.children : [];
+        if (children.length) {
+          walk(children);
+        } else {
+          total += 1;
+          if (item.deleted) disabled += 1;
+        }
+      });
+    };
+    walk(treeMenus);
+    const active = total - disabled;
+    return { total, active, disabled };
+  }, [treeMenus]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -40,6 +68,11 @@ export default function PortalMenusView() {
     }
     setExpanded(next);
   }, [treeMenus]);
+
+  useEffect(() => {
+    if (!keyword.trim()) return;
+    setExpanded(collectFolderIds(filteredTreeMenus));
+  }, [keyword, filteredTreeMenus]);
 
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
@@ -116,15 +149,51 @@ export default function PortalMenusView() {
         </Button>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card>
+          <CardContent className="flex flex-col gap-1 px-4 py-3">
+            <Text variant="body3" className="text-muted-foreground">
+              菜单总数
+            </Text>
+            <span className="text-2xl font-semibold">{menuStats.total}</span>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex flex-col gap-1 px-4 py-3">
+            <Text variant="body3" className="text-muted-foreground">
+              已启用
+            </Text>
+            <span className="text-2xl font-semibold text-emerald-600">{menuStats.active}</span>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex flex-col gap-1 px-4 py-3">
+            <Text variant="body3" className="text-muted-foreground">
+              已禁用
+            </Text>
+            <span className="text-2xl font-semibold text-red-500">{menuStats.disabled}</span>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2">
             <CardTitle className="mr-2">菜单编辑器</CardTitle>
             <div className="ml-auto flex items-center gap-2">
+              <Input
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="按名称搜索菜单"
+                className="w-56"
+              />
+              {keyword ? (
+                <Button size="sm" variant="ghost" onClick={() => setKeyword("")}>清除</Button>
+              ) : null}
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setExpanded(collectFolderIds(treeMenus))}
+                onClick={() => setExpanded(collectFolderIds(filteredTreeMenus))}
               >
                 全部展开
               </Button>
@@ -137,17 +206,17 @@ export default function PortalMenusView() {
             说明：父节点仅用于分组，不提供启用/禁用按钮；叶子节点可切换状态
           </Text>
           <Text variant="body3" color="warning" className="mt-1">
-            提示：禁用此项会引起角色变更申请，请谨慎处理
+            提示：禁用此项会触发菜单管理审批，请谨慎处理
           </Text>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <Text variant="body3">加载中..</Text>
-          ) : treeMenus.length === 0 ? (
+          ) : filteredTreeMenus.length === 0 ? (
             <Text variant="body3">暂无菜单数据</Text>
           ) : (
             <div className="space-y-2">
-              {treeMenus.map((item) => (
+              {filteredTreeMenus.map((item) => (
                 <MenuRow
                   key={item.id}
                   item={item}
@@ -157,6 +226,7 @@ export default function PortalMenusView() {
                   setExpanded={setExpanded}
                   pending={pending}
                   onToggle={handleToggle}
+                  keyword={keyword}
                 />
               ))}
             </div>
@@ -175,9 +245,10 @@ type MenuRowProps = {
   setExpanded: (next: Set<number>) => void;
   pending: Record<number, boolean>;
   onToggle: (id: number, currentlyDeleted: boolean) => void;
+  keyword: string;
 };
 
-function MenuRow({ item, level, pathNames, expanded, setExpanded, pending, onToggle }: MenuRowProps) {
+function MenuRow({ item, level, pathNames, expanded, setExpanded, pending, onToggle, keyword }: MenuRowProps) {
   const id = item.id as number | undefined;
   if (id == null) return null;
   const baseName = item.displayName ?? item.name ?? String(id);
@@ -213,18 +284,20 @@ function MenuRow({ item, level, pathNames, expanded, setExpanded, pending, onTog
           {isFolder ? (isExpanded ? "▾" : "▸") : "·"}
         </button>
         <div style={{ marginLeft: level * 14 }} className="-ml-1" />
-        <div className="min-w-0 flex-1 truncate font-semibold">{name}</div>
+        <div className="min-w-0 flex-1 truncate font-semibold">{highlightKeyword(name, keyword)}</div>
         <div className="text-xs text-muted-foreground">/{fullPath.join("/")}</div>
         <div className="ml-2 flex items-center gap-2">
           {isFolder ? (
             <Badge variant="outline">目录</Badge>
           ) : (
             <>
-              <Badge variant={isDeleted ? "error" : "success"}>{isDeleted ? "已禁用" : "已启用"}</Badge>
+              <Badge variant="outline" className={isDeleted ? "border-red-200 text-red-600" : "border-emerald-200 text-emerald-600"}>
+                {isDeleted ? "已禁用" : "已启用"}
+              </Badge>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => onToggle(id, true)}
+                onClick={() => onToggle(id, isDeleted)}
                 disabled={busy || !isDeleted}
               >
                 启用
@@ -232,7 +305,7 @@ function MenuRow({ item, level, pathNames, expanded, setExpanded, pending, onTog
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => onToggle(id, false)}
+                onClick={() => onToggle(id, isDeleted)}
                 disabled={busy || isDeleted}
               >
                 禁用
@@ -254,12 +327,52 @@ function MenuRow({ item, level, pathNames, expanded, setExpanded, pending, onTog
               setExpanded={setExpanded}
               pending={pending}
               onToggle={onToggle}
+              keyword={keyword}
             />)
           )}
         </div>
       )}
     </div>
   );
+}
+
+function highlightKeyword(text: string, keyword: string) {
+  if (!keyword) return text;
+  const lower = text.toLowerCase();
+  const target = keyword.toLowerCase();
+  const index = lower.indexOf(target);
+  if (index === -1) return text;
+  const before = text.slice(0, index);
+  const match = text.slice(index, index + keyword.length);
+  const after = text.slice(index + keyword.length);
+  return (
+    <span>
+      {before}
+      <span className="text-primary font-semibold">{match}</span>
+      {after}
+    </span>
+  );
+}
+
+function filterMenusByKeyword(items: PortalMenuItem[], keyword: string): PortalMenuItem[] {
+  if (!keyword) return items;
+  const lower = keyword.toLowerCase();
+  const walk = (nodes: PortalMenuItem[] = [], trail: string[] = []): PortalMenuItem[] => {
+    const result: PortalMenuItem[] = [];
+    nodes.forEach((node) => {
+      if (!node) return;
+      const label = (node.displayName || node.name || "").toString();
+      const idName = `id${node.id ?? ""}-${label}`;
+      const children = Array.isArray(node.children) ? node.children : [];
+      const filteredChildren = walk(children, [...trail, label]);
+      const match = label.toLowerCase().includes(lower) || idName.toLowerCase().includes(lower);
+      if (match || filteredChildren.length > 0) {
+        result.push({ ...node, children: filteredChildren });
+      }
+    });
+    return result;
+  };
+  return walk(items);
 }
 
 function collectFolderIds(items: PortalMenuItem[]): Set<number> {

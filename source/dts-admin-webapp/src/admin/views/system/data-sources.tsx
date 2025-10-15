@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { HiveConnectionPersistRequest, HiveConnectionTestResult } from "#/infra";
 import {
 	type ConnectionTestLog,
+	createInfraDataSource,
 	deleteInfraDataSource,
 	fetchInfraFeatures,
 	type InfraDataSource,
@@ -16,6 +17,8 @@ import {
 	refreshInceptorRegistry,
 	testHiveConnection,
 	type ModuleStatus,
+	updateInfraDataSource,
+	type UpsertInfraDataSourcePayload,
 } from "@/api/services/infraService";
 import { Icon } from "@/components/icon";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
@@ -30,6 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/ui/switch";
 import { Textarea } from "@/ui/textarea";
 import { cn } from "@/utils";
+import { GenericDataSourceDialog } from "./GenericDataSourceDialog";
 
 const formSchema = z
 	.object({
@@ -117,7 +121,7 @@ const defaultValues: FormValues = {
 	customJdbcUrl: "",
 };
 
-export default function DataSourcesPage() {
+export default function AdminDataSourcesView() {
 	const form = useForm<FormValues>({
 		resolver: zodResolver(formSchema),
 		defaultValues,
@@ -143,6 +147,10 @@ export default function DataSourcesPage() {
 	const [refreshing, setRefreshing] = useState(false);
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 	const [featurePolls, setFeaturePolls] = useState(0);
+	const [genericDialogOpen, setGenericDialogOpen] = useState(false);
+	const [genericDialogMode, setGenericDialogMode] = useState<"create" | "edit">("create");
+	const [genericEditing, setGenericEditing] = useState<InfraDataSource | null>(null);
+	const [savingGeneric, setSavingGeneric] = useState(false);
 
 	const resolveModuleLabel = (module: string) => {
 		switch (module) {
@@ -167,6 +175,7 @@ export default function DataSourcesPage() {
 		}
 	};
 
+	const multiSourceEnabled = features?.multiSourceEnabled ?? false;
 	const hasInceptor = features?.hasActiveInceptor ?? false;
 	const inceptorStatusLabel = hasInceptor ? "Inceptor 数据源已就绪" : "Inceptor 数据源未配置";
 	const activeInceptor = useMemo(
@@ -195,26 +204,19 @@ export default function DataSourcesPage() {
 		setLoadingSources(true);
 		try {
 			const data = await listInfraDataSources();
-			const map = new Map<string, InfraDataSource>();
-			for (const item of data) {
-				const key = (item.type || "").toUpperCase();
-				if (!key) {
-					const fallbackKey = item.id ? String(item.id) : `__ANON_${Math.random()}`;
-					map.set(fallbackKey, item);
-					continue;
-				}
-				const existing = map.get(key);
-				if (!existing) {
-					map.set(key, item);
-					continue;
-				}
-				const existingTs = existing.lastVerifiedAt ? Date.parse(existing.lastVerifiedAt) : 0;
-				const currentTs = item.lastVerifiedAt ? Date.parse(item.lastVerifiedAt) : 0;
-				if (currentTs >= existingTs) {
-					map.set(key, item);
-				}
-			}
-			setSources(Array.from(map.values()));
+			const sorted = [...data].sort((a, b) => {
+				const typeA = (a.type || "").toUpperCase();
+				const typeB = (b.type || "").toUpperCase();
+				if (typeA === "INCEPTOR" && typeB !== "INCEPTOR") return -1;
+				if (typeA !== "INCEPTOR" && typeB === "INCEPTOR") return 1;
+				const typeCompare = typeA.localeCompare(typeB);
+				if (typeCompare !== 0) return typeCompare;
+				const tsA = a.lastVerifiedAt ? Date.parse(a.lastVerifiedAt) : 0;
+				const tsB = b.lastVerifiedAt ? Date.parse(b.lastVerifiedAt) : 0;
+				if (tsA !== tsB) return tsB - tsA;
+				return (a.name || "").localeCompare(b.name || "");
+			});
+			setSources(sorted);
 		} finally {
 			setLoadingSources(false);
 		}
@@ -259,6 +261,59 @@ export default function DataSourcesPage() {
 			toast.error(error?.message || "删除失败");
 		} finally {
 			setDeletingId(null);
+		}
+	};
+
+	const openGenericCreate = () => {
+		setGenericDialogMode("create");
+		setGenericEditing(null);
+		setGenericDialogOpen(true);
+	};
+
+	const openGenericEdit = (item: InfraDataSource) => {
+		setGenericDialogMode("edit");
+		setGenericEditing(item);
+		setGenericDialogOpen(true);
+	};
+
+	const closeGenericDialog = () => {
+		if (savingGeneric) {
+			return;
+		}
+		setGenericDialogOpen(false);
+		setGenericEditing(null);
+	};
+
+	const handleGenericSubmit = async (payload: UpsertInfraDataSourcePayload) => {
+		if (savingGeneric) return;
+		const normalizedType = payload.type.trim().toUpperCase();
+		if (normalizedType === "INCEPTOR") {
+			toast.error("Inceptor 数据源需通过上方流程配置");
+			return;
+		}
+		const requestBody: UpsertInfraDataSourcePayload = {
+			...payload,
+			type: normalizedType,
+			props: payload.props && Object.keys(payload.props).length ? payload.props : undefined,
+			secrets: payload.secrets && Object.keys(payload.secrets).length ? payload.secrets : undefined,
+		};
+		setSavingGeneric(true);
+		try {
+			if (genericDialogMode === "create") {
+				await createInfraDataSource(requestBody);
+				toast.success("数据源已创建");
+			} else if (genericDialogMode === "edit" && genericEditing?.id) {
+				await updateInfraDataSource(genericEditing.id, requestBody);
+				toast.success("数据源已更新");
+			}
+			await Promise.all([loadSources(), loadFeatures()]);
+			setGenericDialogOpen(false);
+			setGenericEditing(null);
+		} catch (error: any) {
+			const fallback = genericDialogMode === "create" ? "创建失败" : "更新失败";
+			toast.error(error?.message || fallback);
+		} finally {
+			setSavingGeneric(false);
 		}
 	};
 
@@ -783,7 +838,7 @@ export default function DataSourcesPage() {
 
 							{activeInceptor && (
 								<Alert>
-									<AlertTitle>当前已绑定星环 Inceptor</AlertTitle>
+									<AlertTitle>当前已绑定 Inceptor</AlertTitle>
 									<AlertDescription className="text-xs text-muted-foreground">
 										平台仅维护一个 Inceptor 数据库连接。再次“测试并覆盖”会复用并更新现有配置，如需全新连接请先删除列表中的数据源。
 									</AlertDescription>
@@ -842,19 +897,21 @@ export default function DataSourcesPage() {
 						<CardTitle className="text-base">基础能力开关</CardTitle>
 						<CardDescription>多源支持等基础能力状态来自后端配置。</CardDescription>
 					</div>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						onClick={handleRegistryRefresh}
-						disabled={loadingFeatures || refreshing}
-					>
-						<Icon
-							icon="solar:refresh-bold"
-							className={cn("mr-1 h-4 w-4", refreshing ? "animate-spin" : "")}
-						/>
-						{refreshing ? "同步中…" : "重新同步"}
-					</Button>
+					<div className="flex w-full flex-col gap-2 md:w-auto md:flex-row">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={handleRegistryRefresh}
+							disabled={loadingFeatures || refreshing}
+						>
+							<Icon
+								icon="solar:refresh-bold"
+								className={cn("mr-1 h-4 w-4", refreshing ? "animate-spin" : "")}
+							/>
+							{refreshing ? "同步中…" : "重新同步"}
+						</Button>
+					</div>
 				</CardHeader>
 				<CardContent className="space-y-3 text-sm">
 					<div className="flex flex-wrap items-center gap-2">
@@ -918,14 +975,27 @@ export default function DataSourcesPage() {
 
 			<div className="grid gap-4 lg:grid-cols-2">
 				<Card>
-					<CardHeader className="flex flex-row items-center justify-between">
+					<CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
 						<div>
 							<CardTitle className="text-base">已登记数据源</CardTitle>
 							<CardDescription>展示后端注册的数据源摘要（不包含敏感信息）。</CardDescription>
 						</div>
-						<Button type="button" variant="ghost" size="sm" onClick={loadSources} disabled={loadingSources}>
-							<Icon icon="solar:refresh-bold" className="mr-1 h-4 w-4" /> 刷新
-						</Button>
+						<div className="flex items-center gap-2">
+							<Button
+								type="button"
+								size="sm"
+								onClick={openGenericCreate}
+								disabled={savingGeneric || loadingSources || !multiSourceEnabled}
+								variant={multiSourceEnabled ? "default" : "outline"}
+								title={multiSourceEnabled ? undefined : "启用多数据源后可在此配置普通数据源"}
+							>
+								<Icon icon="solar:add-circle-bold" className="mr-1 h-4 w-4" />
+								新增数据源
+							</Button>
+							<Button type="button" variant="ghost" size="sm" onClick={loadSources} disabled={loadingSources}>
+								<Icon icon="solar:refresh-bold" className="mr-1 h-4 w-4" /> 刷新
+							</Button>
+						</div>
 					</CardHeader>
 					<CardContent className="space-y-3">
 						<div className="max-h-[280px] overflow-y-auto rounded-md border">
@@ -958,16 +1028,30 @@ export default function DataSourcesPage() {
 												<Badge variant="outline">{item.hasSecrets ? "已加密" : "未配置"}</Badge>
 											</td>
 											<td className="px-3 py-2 text-right">
-												<Button
-													type="button"
-													variant="ghost"
-													size="sm"
-													onClick={() => handleDeleteSource(item)}
-													disabled={deletingId === item.id || refreshing}
-												>
-													<Icon icon="solar:trash-bin-trash-bold" className="mr-1 h-4 w-4" />
-													{deletingId === item.id ? "删除中" : "删除"}
-												</Button>
+												<div className="flex flex-wrap items-center justify-end gap-1">
+													{(item.type || "").toUpperCase() !== "INCEPTOR" && (
+														<Button
+															type="button"
+															variant="ghost"
+															size="sm"
+															onClick={() => openGenericEdit(item)}
+															disabled={refreshing || loadingSources}
+														>
+															<Icon icon="solar:pen-bold" className="mr-1 h-4 w-4" />
+															编辑
+														</Button>
+													)}
+													<Button
+														type="button"
+														variant="ghost"
+														size="sm"
+														onClick={() => handleDeleteSource(item)}
+														disabled={deletingId === item.id || refreshing}
+													>
+														<Icon icon="solar:trash-bin-trash-bold" className="mr-1 h-4 w-4" />
+														{deletingId === item.id ? "删除中" : "删除"}
+													</Button>
+												</div>
 											</td>
 										</tr>
 									))}
@@ -982,7 +1066,7 @@ export default function DataSourcesPage() {
 							</table>
 						</div>
 						<p className="text-xs text-muted-foreground">
-							该列表仅展示概要信息，如需新增/编辑数据源，请通过后端 API 或配置文件管理。
+							提示：编辑时需重新填写密码或密钥，留空将清除既有敏感配置。
 						</p>
 					</CardContent>
 				</Card>
@@ -1032,6 +1116,14 @@ export default function DataSourcesPage() {
 					</CardContent>
 				</Card>
 			</div>
+			<GenericDataSourceDialog
+				open={genericDialogOpen}
+				mode={genericDialogMode}
+				submitting={savingGeneric}
+				source={genericEditing ?? undefined}
+				onClose={closeGenericDialog}
+				onSubmit={handleGenericSubmit}
+			/>
 		</div>
 	);
 }

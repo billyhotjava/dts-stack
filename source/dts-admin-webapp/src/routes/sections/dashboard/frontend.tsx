@@ -11,7 +11,7 @@ import PortalMenusView from "@/admin/views/portal-menus";
 
 export function getFrontendDashboardRoutes(): RouteObject[] {
     const frontendDashboardRoutes: RouteObject[] = [
-        { path: "workbench", element: Component("/pages/dashboard/workbench") },
+        { path: "workbench", element: <Navigate to="/admin/my-changes" replace /> },
         {
             path: "management",
             children: [

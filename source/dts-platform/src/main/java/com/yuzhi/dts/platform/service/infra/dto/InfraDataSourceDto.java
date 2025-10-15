@@ -13,7 +13,15 @@ public record InfraDataSourceDto(
     String description,
     Map<String, Object> props,
     Instant createdAt,
+    Instant lastUpdatedAt,
     Instant lastVerifiedAt,
     String status,
-    boolean hasSecrets
+    boolean hasSecrets,
+    String engineVersion,
+    String driverVersion,
+    Long lastTestElapsedMillis,
+    Instant lastHeartbeatAt,
+    String heartbeatStatus,
+    Integer heartbeatFailureCount,
+    String lastError
 ) {}
