@@ -11,11 +11,13 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import {
 	cleanupExpiredResultSets,
 	deleteResultSet,
+	getDataset,
 	listDatasets,
 	listResultSets,
 	previewResultSet,
 } from "@/api/platformApi";
 import { useActiveDept } from "@/store/contextStore";
+import { normalizeColumnKey } from "@/utils/columnName";
 type Dataset = {
 	id: string;
 	name: string;
@@ -33,6 +35,18 @@ type ResultSet = {
 };
 
 const SOON_EXPIRE_DAYS = 7;
+
+const pickFirstText = (...values: unknown[]): string | undefined => {
+	for (const value of values) {
+		if (typeof value === "string") {
+			const trimmed = value.trim();
+			if (trimmed.length > 0) {
+				return trimmed;
+			}
+		}
+	}
+	return undefined;
+};
 
 function toUiDataset(input: any): Dataset {
 	return {
@@ -87,8 +101,10 @@ export default function SavedQueriesPage() {
 	const [onlySoonExpire, setOnlySoonExpire] = useState(false);
 	const [previewOpen, setPreviewOpen] = useState(false);
 	const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
+	const [previewHeaderLabels, setPreviewHeaderLabels] = useState<string[]>([]);
 	const [previewRows, setPreviewRows] = useState<any[]>([]);
 	const [previewMasking, setPreviewMasking] = useState<any>(null);
+	const [datasetColumnLabels, setDatasetColumnLabels] = useState<Record<string, Record<string, string>>>({});
 
 	const load = async () => {
 		setLoading(true);
@@ -176,7 +192,55 @@ export default function SavedQueriesPage() {
 			const resp: any = await previewResultSet(id, 10);
 			const headers: string[] = Array.isArray(resp?.headers) ? resp.headers : [];
 			const rows: any[] = Array.isArray(resp?.rows) ? resp.rows : [];
+			const target = resultSets.find((item) => item.id === id);
+			const datasetId = target?.datasetId;
+			let displayMap: Record<string, string> | undefined = datasetId ? datasetColumnLabels[datasetId] : undefined;
+			if (datasetId && !displayMap) {
+				try {
+					const detail: any = await getDataset(datasetId);
+					const tables: any[] = Array.isArray(detail?.tables) ? detail.tables : [];
+					const built: Record<string, string> = {};
+					for (const table of tables) {
+						const columnList = Array.isArray(table?.columns) ? table.columns : [];
+						for (const column of columnList) {
+							const columnName = String(column?.name ?? column?.columnName ?? "").trim();
+							if (!columnName) continue;
+							const key = normalizeColumnKey(columnName);
+							if (!key || built[key]) continue;
+							const label = pickFirstText(
+								column?.displayName,
+								column?.alias,
+								column?.label,
+								column?.bizName,
+								column?.bizLabel,
+								column?.cnName,
+								column?.zhName,
+								column?.nameZh,
+								column?.nameCn,
+								column?.comment,
+							);
+							if (label) {
+								built[key] = label;
+							}
+						}
+					}
+					setDatasetColumnLabels((prev) => ({ ...prev, [datasetId]: built }));
+					displayMap = built;
+				} catch (error) {
+					console.error("加载数据集列信息失败", error);
+				}
+			}
 			setPreviewHeaders(headers);
+			if (displayMap) {
+				setPreviewHeaderLabels(
+					headers.map((header) => {
+						const key = normalizeColumnKey(header);
+						return key && displayMap ? displayMap[key] ?? header : header;
+					}),
+				);
+			} else {
+				setPreviewHeaderLabels(headers);
+			}
 			setPreviewRows(rows);
 			setPreviewMasking(resp?.masking ?? null);
 			setPreviewOpen(true);
@@ -382,11 +446,14 @@ export default function SavedQueriesPage() {
 							<table className="w-full border-collapse text-xs">
 								<thead className="bg-muted/50">
 									<tr>
-										{previewHeaders.map((header) => (
-											<th key={header} className="border-b px-2 py-1 text-left font-medium">
-												{header}
+										{previewHeaders.map((header, idx) => {
+											const label = previewHeaderLabels[idx] ?? header;
+											return (
+												<th key={header} className="border-b px-2 py-1 text-left font-medium">
+													{label}
 											</th>
-										))}
+											);
+										})}
 									</tr>
 								</thead>
 								<tbody>

@@ -183,6 +183,19 @@ public class InceptorCatalogSyncService {
                 tablesCreated++;
             }
 
+            Map<String, String> legacyComments = columnRepository
+                .findByTable(tableSchema)
+                .stream()
+                .filter(existing -> existing.getName() != null && StringUtils.hasText(existing.getComment()))
+                .collect(
+                    Collectors.toMap(
+                        existing -> existing.getName().trim().toLowerCase(Locale.ROOT),
+                        CatalogColumnSchema::getComment,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                    )
+                );
+
             columnRepository.deleteByTable(tableSchema);
             if (!columns.isEmpty()) {
                 List<CatalogColumnSchema> columnEntities = new ArrayList<>(columns.size());
@@ -192,7 +205,11 @@ public class InceptorCatalogSyncService {
                     entity.setName(column.name());
                     entity.setDataType(column.dataType());
                     entity.setNullable(column.nullable());
-                    entity.setComment(column.comment());
+                    String comment = column.comment();
+                    if (!StringUtils.hasText(comment)) {
+                        comment = legacyComments.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
+                    }
+                    entity.setComment(comment);
                     columnEntities.add(entity);
                 }
                 columnRepository.saveAll(columnEntities);
@@ -281,11 +298,32 @@ public class InceptorCatalogSyncService {
                 if (columnName.startsWith("#")) {
                     break; // reached partition or metadata section
                 }
-                columns.add(new ColumnMeta(columnName, safeDataType(dataType), true, StringUtils.hasText(columnComment) ? columnComment.trim() : null));
+                columns.add(
+                    new ColumnMeta(
+                        columnName,
+                        safeDataType(dataType),
+                        true,
+                        normalizeComment(columnComment)
+                    )
+                );
             }
             }
         } catch (SQLException e) {
             LOG.warn("Failed to describe table {}: {}", table, e.getMessage());
+        }
+        if (columns.stream().anyMatch(col -> !StringUtils.hasText(col.comment()))) {
+            Map<String, String> ddlComments = HiveColumnCommentResolver.fetchColumnComments(connection, table, statementTimeoutSeconds);
+            if (!ddlComments.isEmpty()) {
+                List<ColumnMeta> enriched = new ArrayList<>(columns.size());
+                for (ColumnMeta col : columns) {
+                    String comment = col.comment();
+                    if (!StringUtils.hasText(comment)) {
+                        comment = ddlComments.getOrDefault(col.name().toLowerCase(Locale.ROOT), null);
+                    }
+                    enriched.add(new ColumnMeta(col.name(), col.dataType(), col.nullable(), normalizeComment(comment)));
+                }
+                columns = enriched;
+            }
         }
         return columns;
     }
@@ -337,6 +375,10 @@ public class InceptorCatalogSyncService {
 
     private String safeDataType(String type) {
         return StringUtils.hasText(type) ? type.trim().toLowerCase(Locale.ROOT) : "string";
+    }
+
+    private String normalizeComment(String raw) {
+        return HiveColumnCommentResolver.normalizeComment(raw);
     }
 
     private record ColumnMeta(String name, String dataType, boolean nullable, String comment) {}

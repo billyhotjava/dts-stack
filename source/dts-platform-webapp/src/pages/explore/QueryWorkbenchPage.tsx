@@ -28,6 +28,7 @@ import { SqlWorkbenchExperimental } from "@/components/sql/SqlWorkbenchExperimen
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/ui/tooltip";
+import { normalizeColumnKey } from "@/utils/columnName";
 
 const CLASSIFICATION_META: Record<ClassificationLevel, { label: string; tone: string }> = {
 	TOP_SECRET: { label: CLASSIFICATION_LABELS_ZH.TOP_SECRET, tone: "bg-rose-500/10 text-rose-500" },
@@ -41,6 +42,7 @@ type Classification = ClassificationLevel;
 type DatasetField = {
 	name: string;
 	type: string;
+	displayName?: string;
 	description?: string;
 	lineage?: string;
 	term?: string;
@@ -1079,6 +1081,7 @@ useEffect(() => {
 							return {
 								name: columnName,
 								type: String(col?.dataType ?? "string"),
+								displayName: readableName,
 								description: pickFirstText(readableName, tagsText),
 							} satisfies DatasetField;
 						})
@@ -1221,6 +1224,36 @@ useEffect(() => {
 		}
 		return Object.keys(runResult.rows[0] ?? {});
 	}, [runResult]);
+
+	const columnFieldMap = useMemo(() => {
+		const map = new Map<string, DatasetField>();
+		const candidates: DatasetField[] = [];
+		if (Array.isArray(columns)) {
+			candidates.push(...columns);
+		}
+		if (selectedDataset?.fields?.length) {
+			candidates.push(...selectedDataset.fields);
+		}
+		const tableSpecific = selectedTableId ? tableColumnsMap[selectedTableId] : undefined;
+		if (tableSpecific?.length) {
+			candidates.push(...tableSpecific);
+		}
+		for (const field of candidates) {
+			if (!field || !field.name) continue;
+			const key = normalizeColumnKey(field.name);
+			if (!key || map.has(key)) continue;
+			map.set(key, field);
+		}
+		return map;
+	}, [columns, selectedDataset?.fields, selectedTableId, tableColumnsMap]);
+
+	const resolveFieldMeta = useCallback(
+		(column: string) => {
+			const key = normalizeColumnKey(column);
+			return key ? columnFieldMap.get(key) : undefined;
+		},
+		[columnFieldMap],
+	);
 
 	const handleToggleField = (field: string, checked: boolean) => {
 		setVisualQuery((prev) => {
@@ -1621,26 +1654,33 @@ useEffect(() => {
 									<table className="w-full border-collapse text-sm">
 										<thead className="bg-muted/50">
 											<tr>
-												{columnOrder.map((column) => (
-													<th key={column} className="border-b px-3 py-2 text-left font-medium">
-														<Tooltip>
-															<TooltipTrigger className="cursor-help">{column}</TooltipTrigger>
-															<TooltipContent>
-																<div className="space-y-1">
-																	<p className="text-xs font-medium">数据血缘</p>
-																	<p className="text-xs text-muted-foreground">
-																		{selectedDataset?.fields.find((field) => field.name === column)?.lineage ??
-																			"血缘未登记"}
-																	</p>
-																	<p className="text-xs font-medium">业务术语</p>
-																	<p className="text-xs text-muted-foreground">
-																		{selectedDataset?.fields.find((field) => field.name === column)?.term ?? "暂未关联"}
-																	</p>
-																</div>
-															</TooltipContent>
-														</Tooltip>
-													</th>
-												))}
+												{columnOrder.map((column) => {
+													const fieldMeta = resolveFieldMeta(column);
+													const displayLabel = pickFirstText(fieldMeta?.displayName, fieldMeta?.description) ?? column;
+													return (
+														<th key={column} className="border-b px-3 py-2 text-left font-medium">
+															<Tooltip>
+																<TooltipTrigger className="cursor-help">
+																	{displayLabel}
+																</TooltipTrigger>
+																<TooltipContent>
+																	<div className="space-y-1">
+																		<p className="text-xs font-medium">{displayLabel}</p>
+																		<p className="text-xs text-muted-foreground">字段：{column}</p>
+																		<p className="text-xs font-medium">数据血缘</p>
+																		<p className="text-xs text-muted-foreground">
+																			{fieldMeta?.lineage ?? "血缘未登记"}
+																		</p>
+																		<p className="text-xs font-medium">业务术语</p>
+																		<p className="text-xs text-muted-foreground">
+																			{fieldMeta?.term ?? "暂未关联"}
+																		</p>
+																	</div>
+																</TooltipContent>
+															</Tooltip>
+														</th>
+													);
+												})}
 											</tr>
 										</thead>
 										<tbody>

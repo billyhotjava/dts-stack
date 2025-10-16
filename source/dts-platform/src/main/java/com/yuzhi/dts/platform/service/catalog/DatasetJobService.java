@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetJobRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.infra.HiveColumnCommentResolver;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionService;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
@@ -335,6 +336,20 @@ public class DatasetJobService {
                 }
                 if (specs.isEmpty()) {
                     throw new IllegalStateException("源表 " + tableName + " 未返回任何列信息");
+                }
+                if (specs.stream().anyMatch(spec -> !org.springframework.util.StringUtils.hasText(spec.comment()))) {
+                    Map<String, String> ddlComments = HiveColumnCommentResolver.fetchColumnComments(connection, tableName, 30);
+                    if (!ddlComments.isEmpty()) {
+                        List<ColumnSpec> enriched = new ArrayList<>(specs.size());
+                        for (ColumnSpec spec : specs) {
+                            String comment = spec.comment();
+                            if (!org.springframework.util.StringUtils.hasText(comment)) {
+                                comment = ddlComments.getOrDefault(spec.name().toLowerCase(java.util.Locale.ROOT), null);
+                            }
+                            enriched.add(new ColumnSpec(spec.name(), spec.dataType(), spec.nullable(), normalizeComment(comment)));
+                        }
+                        specs = enriched;
+                    }
                 }
                 return specs;
             });

@@ -29,6 +29,7 @@ import { renderDataLevelLabel } from "@/constants/governance";
 import { useUserInfo } from "@/store/userStore";
 import { cn } from "@/utils";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { normalizeColumnKey } from "@/utils/columnName";
 
 const parseStringList = (value: unknown): string[] => {
 	if (Array.isArray(value)) {
@@ -548,6 +549,24 @@ export default function DatasetDetailPage() {
 		return Array.isArray(raw) ? (raw as TableSchema[]) : [];
 	}, [dataset]);
 
+	const columnLabelMap = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const table of tables) {
+			const columnList = Array.isArray(table?.columns) ? table.columns : [];
+			for (const column of columnList) {
+				const columnName = String(column?.name ?? "").trim();
+				if (!columnName) continue;
+				const key = normalizeColumnKey(columnName);
+				if (!key || map.has(key)) continue;
+				const label = column.displayName || column.description;
+				if (label) {
+					map.set(key, label);
+				}
+			}
+		}
+		return map;
+	}, [tables]);
+
 	if (loading) return <div className="text-sm text-muted-foreground">加载中…</div>;
 	if (!dataset) return <div className="text-sm text-muted-foreground">未找到该数据集</div>;
 
@@ -781,11 +800,14 @@ export default function DatasetDetailPage() {
 											<table className="w-full min-w-[640px] table-fixed border-collapse text-sm">
 												<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
 													<tr>
-														{sampleData.headers.map((header) => (
-															<th key={header} className="px-3 py-2">
-																{header}
-															</th>
-														))}
+														{sampleData.headers.map((header) => {
+															const label = columnLabelMap.get(normalizeColumnKey(header)) ?? header;
+															return (
+																<th key={header} className="px-3 py-2">
+																	{label}
+																</th>
+															);
+														})}
 													</tr>
 												</thead>
 												<tbody>
