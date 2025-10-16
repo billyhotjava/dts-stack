@@ -299,7 +299,7 @@ public class ExploreResource {
                     .orElse(null);
                 if (execution == null) {
                     audit.audit("WARN", "explore.result.sql", id + ":missing-execution");
-                    return ApiResponses.error("未找到结果集关联的查询记录");
+                    return ApiResponses.<Map<String, Object>>error("未找到结果集关联的查询记录");
                 }
                 CatalogDataset dataset = execution.getDatasetId() != null
                     ? datasetRepo.findById(execution.getDatasetId()).orElse(null)
@@ -315,7 +315,7 @@ public class ExploreResource {
                 audit.audit("READ", "explore.result.sql", id.toString());
                 return ApiResponses.ok(resp);
             })
-            .orElseGet(() -> ApiResponses.error("Result set not found"));
+            .orElseGet(() -> ApiResponses.<Map<String, Object>>error("Result set not found"));
     }
 
     @DeleteMapping("/result-sets/{id}")

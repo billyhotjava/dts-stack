@@ -39,6 +39,19 @@ const CLASSIFICATION_META: Record<ClassificationLevel, { label: string; tone: st
 
 type Classification = ClassificationLevel;
 
+const SECURITY_COLUMN_CANDIDATES = [
+	"data_level",
+	"data_security_level",
+	"data_secret_level",
+	"security_level",
+	"secret_level",
+	"classification_level",
+	"class_level",
+	"protect_level",
+	"data_protect_level",
+	"level",
+];
+
 type DatasetField = {
 	name: string;
 	type: string;
@@ -245,10 +258,42 @@ function buildAggregationExpression(aggregation: Aggregation, fallbackField: str
 	}
 }
 
+function normalizeColumnName(input: string) {
+	const cleaned = input.replace(/[`"'\\s]/g, "").toLowerCase();
+	const segments = cleaned.split(".");
+	return segments[segments.length - 1] ?? cleaned;
+}
+
+function matchColumn(columns: string[], target: string) {
+	const normalizedTarget = normalizeColumnName(target);
+	return columns.some((column) => normalizeColumnName(column) === normalizedTarget);
+}
+
+function pickSecurityColumn(dataset?: Dataset) {
+	if (!dataset || !dataset.fields?.length) return undefined;
+	const candidates = dataset.fields.map((field) => field.name);
+	for (const guard of SECURITY_COLUMN_CANDIDATES) {
+		const matched = candidates.find((field) => normalizeColumnName(field) === guard);
+		if (matched) {
+			return matched;
+		}
+	}
+	return undefined;
+}
+
 function generateSQLFromVisual(state: VisualQueryState, dataset?: Dataset) {
 	if (!dataset) return "";
 	const tableRef = buildTableReference(dataset) || dataset.name || dataset.schema || "";
-	const selectFragments = state.fields.length ? state.fields : ["*"];
+	const baseSelectFragments = state.fields.length ? state.fields : ["*"];
+	const guardColumn = pickSecurityColumn(dataset);
+	const selectFragments = [...baseSelectFragments];
+	const guardShouldAppend =
+		guardColumn &&
+		!selectFragments.includes("*") &&
+		!matchColumn(selectFragments, guardColumn);
+	if (guardShouldAppend && guardColumn) {
+		selectFragments.push(guardColumn);
+	}
 	const fallbackForAgg =
 		state.fields[0] ??
 		state.groupings[0] ??
@@ -257,7 +302,13 @@ function generateSQLFromVisual(state: VisualQueryState, dataset?: Dataset) {
 	const selectClause = [...selectFragments, ...aggFragments].join(", \n    ");
 	const filters = state.filters.map((filter) => `${filter.field} ${filter.operator} '${filter.value}'`).join(" AND ");
 	const orderClause = state.sorters.map((sorter) => `${sorter.field} ${sorter.direction}`).join(", ");
-	const groupSource = state.groupings.length ? state.groupings : state.fields;
+	const groupSourceRaw = state.groupings.length ? state.groupings : state.fields;
+	const groupSource = [...groupSourceRaw];
+	if (guardShouldAppend && guardColumn && state.aggregations.length) {
+		if (!matchColumn(groupSource, guardColumn)) {
+			groupSource.push(guardColumn);
+		}
+	}
 	const groupClause =
 		state.aggregations.length && groupSource.length
 			? Array.from(

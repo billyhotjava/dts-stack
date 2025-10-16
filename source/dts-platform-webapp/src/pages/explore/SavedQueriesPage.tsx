@@ -171,77 +171,56 @@ export default function SavedQueriesPage() {
 
 	const handlePreview = async (id: string) => {
 		try {
-			const resp: any = await previewResultSet(id, 10);
-			const headers: string[] = Array.isArray(resp?.headers) ? resp.headers : [];
-			const rows: any[] = Array.isArray(resp?.rows) ? resp.rows : [];
+			const resp: any = await previewResultSet(id);
+			const sqlText = typeof resp?.sqlText === "string" ? resp.sqlText.trim() : "";
 			const target = resultSets.find((item) => item.id === id);
-			const datasetId = target?.datasetId;
-			let displayMap: Record<string, string> | undefined = datasetId ? datasetColumnLabels[datasetId] : undefined;
-			if (datasetId && !displayMap) {
-				try {
-					const detail: any = await getDataset(datasetId);
-					const tables: any[] = Array.isArray(detail?.tables) ? detail.tables : [];
-					const built: Record<string, string> = {};
-					for (const table of tables) {
-						const columnList = Array.isArray(table?.columns) ? table.columns : [];
-						for (const column of columnList) {
-							const columnName = String(column?.name ?? column?.columnName ?? "").trim();
-							if (!columnName) continue;
-							const key = normalizeColumnKey(columnName);
-							if (!key || built[key]) continue;
-							const label = pickFirstText(
-								column?.displayName,
-								column?.alias,
-								column?.label,
-								column?.bizName,
-								column?.bizLabel,
-								column?.cnName,
-								column?.zhName,
-								column?.nameZh,
-								column?.nameCn,
-								column?.comment,
-							);
-							if (label) {
-								built[key] = label;
-							}
-						}
-					}
-					setDatasetColumnLabels((prev) => ({ ...prev, [datasetId]: built }));
-					displayMap = built;
-				} catch (error) {
-					console.error("加载数据集列信息失败", error);
-				}
-			}
-			setPreviewHeaders(headers);
-			if (displayMap) {
-				setPreviewHeaderLabels(
-					headers.map((header) => {
-						const key = normalizeColumnKey(header);
-						return key && displayMap ? displayMap[key] ?? header : header;
-					}),
-				);
-			} else {
-				setPreviewHeaderLabels(headers);
-			}
-			setPreviewRows(rows);
-			setPreviewMasking(resp?.masking ?? null);
+			setPreviewSql(sqlText || "未找到保存时的 SQL");
+			const resolvedRowCount =
+				typeof resp?.rowCount === "number"
+					? resp.rowCount
+					: typeof resp?.rowCount === "string" && !Number.isNaN(Number(resp.rowCount))
+					? Number(resp.rowCount)
+					: undefined;
+			setPreviewMeta({
+				datasetName: resp?.datasetName || target?.datasetName,
+				rowCount: resolvedRowCount ?? target?.rowCount,
+				engine: typeof resp?.engine === "string" ? resp.engine : undefined,
+				finishedAt: typeof resp?.finishedAt === "string" ? resp.finishedAt : undefined,
+			});
 			setPreviewOpen(true);
 		} catch (e) {
 			console.error(e);
-			toast.error("预览失败");
+			toast.error("加载 SQL 失败");
+		}
+	};
+
+	const handleCopySql = async () => {
+		if (!previewSql) {
+			toast.error("暂无可复制的 SQL");
+			return;
+		}
+		try {
+			if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(previewSql);
+			} else {
+				const textarea = document.createElement("textarea");
+				textarea.value = previewSql;
+				textarea.setAttribute("readonly", "");
+				textarea.style.position = "absolute";
+				textarea.style.left = "-9999px";
+				document.body.appendChild(textarea);
+				textarea.select();
+				document.execCommand("copy");
+				document.body.removeChild(textarea);
+			}
+			toast.success("SQL 已复制");
+		} catch (error) {
+			console.error(error);
+			toast.error("复制失败，请手动复制");
 		}
 	};
 
 	const showDatasetHint = !isLoading && !datasets.length && !loadError;
-
-	const maskMode = previewMasking?.mode ?? (Array.isArray(previewMasking?.maskedColumns) ? "heuristic" : undefined);
-	const maskColumns = Array.isArray(previewMasking?.columns)
-		? previewMasking.columns
-		: Array.isArray(previewMasking?.maskedColumns)
-		? previewMasking.maskedColumns
-		: [];
-	const maskRules = Array.isArray(previewMasking?.rules) ? previewMasking.rules : [];
-	const maskDefault = previewMasking?.default;
 
 	return (
 		<>
@@ -367,7 +346,7 @@ export default function SavedQueriesPage() {
 													<td className="px-3 py-2 text-xs text-muted-foreground">{formatExpiryDetail(item.expiresAt)}</td>
 													<td className="px-3 py-2 space-x-2 text-nowrap">
 														<Button size="sm" variant="outline" onClick={() => handlePreview(item.id)} disabled={isLoading}>
-															预览
+															查看 SQL
 														</Button>
 														<Button
 															size="sm"
@@ -405,51 +384,22 @@ export default function SavedQueriesPage() {
 			<Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
 				<DialogContent className="max-w-3xl">
 					<DialogHeader>
-						<DialogTitle>结果集预览</DialogTitle>
+						<DialogTitle>查看 SQL</DialogTitle>
 					</DialogHeader>
-					<div className="space-y-3">
-						{previewMasking ? (
-							<div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-								{maskMode === "policy" ? (
-									<div>
-										<p className="font-medium">按策略脱敏</p>
-										{maskRules.length ? <p>规则：{maskRules.map((r: any) => `${r.column}:${r.fn}`).join(", ")}</p> : null}
-										{maskDefault ? <p>默认：{maskDefault}</p> : null}
-									</div>
-								) : (
-									<div>
-										<p className="font-medium">启发式脱敏</p>
-										{maskColumns.length ? <p>列：{maskColumns.join(", ")}</p> : <p>未识别到敏感列</p>}
-									</div>
-								)}
-							</div>
-						) : null}
-						<div className="overflow-auto rounded-md border">
-							<table className="w-full border-collapse text-xs">
-								<thead className="bg-muted/50">
-									<tr>
-										{previewHeaders.map((header, idx) => {
-											const label = previewHeaderLabels[idx] ?? header;
-											return (
-												<th key={header} className="border-b px-2 py-1 text-left font-medium">
-													{label}
-											</th>
-											);
-										})}
-									</tr>
-								</thead>
-								<tbody>
-									{previewRows.map((row, index) => (
-										<tr key={`row-${index}`} className="border-b last:border-b-0">
-											{previewHeaders.map((header) => (
-												<td key={header} className="px-2 py-1">
-													{String(row[header] ?? "")}
-												</td>
-											))}
-										</tr>
-									))}
-								</tbody>
-							</table>
+					<div className="space-y-4">
+						<div className="rounded-md border border-dashed border-muted-foreground/40 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+							<p>所属数据集：{previewMeta?.datasetName || "未关联"}</p>
+							<p>行数：{typeof previewMeta?.rowCount === "number" ? previewMeta.rowCount : "-"}</p>
+							<p>执行引擎：{previewMeta?.engine ?? "-"}</p>
+							<p>完成时间：{formatDateTime(previewMeta?.finishedAt)}</p>
+						</div>
+						<div className="rounded-md border bg-black/90 p-3 text-xs text-white">
+							<pre className="whitespace-pre-wrap font-mono leading-relaxed">{previewSql || "未找到保存时的 SQL"}</pre>
+						</div>
+						<div className="flex items-center justify-end gap-2">
+							<Button variant="outline" size="sm" onClick={handleCopySql} disabled={!previewSql}>
+								复制 SQL
+							</Button>
 						</div>
 					</div>
 					<DialogFooter>
