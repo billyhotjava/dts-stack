@@ -25,28 +25,49 @@ const ROLE_LABEL_MAP: Record<string, string> = {
 	INST_EDITOR: "研究所数据开发员",
 };
 
+const HIDDEN_ROLE_PREFIXES = ["ROLE_DEFAULT", "DEFAULT-ROLES", "ROLE_UMA_AUTHORIZATION", "ROLE_OFFLINE_ACCESS"];
+const HIDDEN_ROLE_EXACT = new Set(["offline_access", "uma_authorization"]);
+
 function resolveRoleLabels(roles: unknown): string[] {
-	if (!Array.isArray(roles) || roles.length === 0) {
-		return [];
-	}
+  if (!Array.isArray(roles) || roles.length === 0) {
+    return [];
+  }
 
-	return roles
-		.map((role) => {
-			if (typeof role === "string") {
-				return ROLE_LABEL_MAP[role] ?? role;
-			}
+  return roles
+    .map((role) => {
+      if (typeof role === "string") {
+        const trimmed = role.trim();
+        if (!trimmed) return undefined;
+        const upper = trimmed.toUpperCase();
+        const lower = trimmed.toLowerCase();
+        if (HIDDEN_ROLE_PREFIXES.some((prefix) => upper.startsWith(prefix))) return undefined;
+        if (HIDDEN_ROLE_EXACT.has(lower)) return undefined;
+        return (
+          ROLE_LABEL_MAP[upper] ||
+          ROLE_LABEL_MAP[upper.replace(/^ROLE_/, "")] ||
+          trimmed
+        );
+      }
 
-			if (role && typeof role === "object") {
-				const maybeRole = role as { code?: string; name?: string };
-				const key = maybeRole.code || maybeRole.name;
-				if (key) {
-					return ROLE_LABEL_MAP[key] ?? key;
-				}
-			}
+      if (role && typeof role === "object") {
+        const maybeRole = role as { code?: string; name?: string };
+        const key = (maybeRole.code || maybeRole.name || "").trim();
+        if (key) {
+          const upper = key.toUpperCase();
+          const lower = key.toLowerCase();
+          if (HIDDEN_ROLE_PREFIXES.some((prefix) => upper.startsWith(prefix))) return undefined;
+          if (HIDDEN_ROLE_EXACT.has(lower)) return undefined;
+          return (
+            ROLE_LABEL_MAP[upper] ||
+            ROLE_LABEL_MAP[upper.replace(/^ROLE_/, "")] ||
+            key
+          );
+        }
+      }
 
-			return undefined;
-		})
-		.filter((item): item is string => Boolean(item));
+      return undefined;
+    })
+    .filter((item): item is string => Boolean(item));
 }
 
 const USERNAME_FALLBACK_NAME: Record<string, string> = {

@@ -29,8 +29,7 @@ public final class DataLevelSqlHelper {
         Set<String> tokens = new LinkedHashSet<>();
         for (DataLevel level : allowedLevels) {
             if (level == null) continue;
-            tokens.add(level.name());
-            tokens.add(level.classification());
+            tokens.addAll(level.tokens());
         }
         tokens.removeIf(Objects::isNull);
         if (tokens.isEmpty()) {

@@ -5,14 +5,13 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <changeSet id="20251017-01-remove-security-view-audit" author="codex">
-        <comment>Remove obsolete security view audit mappings after feature deprecation</comment>
-
         <preConditions onFail="MARK_RAN" onError="MARK_RAN">
             <and>
                 <tableExists tableName="portal_menu"/>
                 <tableExists tableName="audit_operation_mapping"/>
             </and>
         </preConditions>
+        <comment>Remove obsolete security view audit mappings after feature deprecation</comment>
 
         <delete tableName="audit_operation_mapping">
             <where>url_pattern like '/api/catalog/security-views%'</where>

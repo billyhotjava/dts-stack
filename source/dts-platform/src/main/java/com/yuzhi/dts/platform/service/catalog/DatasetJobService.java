@@ -191,6 +191,19 @@ public class DatasetJobService {
                 boolean newTable = table.getId() == null;
                 table = tableRepository.save(table);
 
+                Map<String, String> legacyComments = columnRepository
+                    .findByTable(table)
+                    .stream()
+                    .filter(existing -> existing.getName() != null && org.springframework.util.StringUtils.hasText(existing.getComment()))
+                    .collect(
+                        java.util.stream.Collectors.toMap(
+                            existing -> existing.getName().trim().toLowerCase(java.util.Locale.ROOT),
+                            existing -> existing.getComment(),
+                            (left, right) -> left,
+                            java.util.LinkedHashMap::new
+                        )
+                    );
+
                 columnRepository.deleteByTable(table);
                 List<com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema> columns = new ArrayList<>();
                 for (ColumnSpec spec : plan.columns()) {
@@ -199,6 +212,11 @@ public class DatasetJobService {
                     column.setName(spec.name());
                     column.setDataType(spec.dataType());
                     column.setNullable(spec.nullable());
+                    String comment = normalizeComment(spec.comment());
+                    if (!org.springframework.util.StringUtils.hasText(comment)) {
+                        comment = legacyComments.getOrDefault(spec.name().trim().toLowerCase(java.util.Locale.ROOT), null);
+                    }
+                    column.setComment(comment);
                     columns.add(column);
                 }
                 columnRepository.saveAll(columns);
@@ -267,7 +285,11 @@ public class DatasetJobService {
                 String type = Objects.toString(map.get("dataType"), "string");
                 Object nullableObj = map.get("nullable");
                 boolean nullable = nullableObj == null || Boolean.parseBoolean(String.valueOf(nullableObj));
-                specs.add(new ColumnSpec(name, normalizeDataType(type), nullable));
+                String comment = normalizeComment(Objects.toString(map.get("comment"), null));
+                if (!org.springframework.util.StringUtils.hasText(comment)) {
+                    comment = normalizeComment(Objects.toString(map.get("description"), null));
+                }
+                specs.add(new ColumnSpec(name, normalizeDataType(type), nullable, comment));
             }
             return specs;
         }
@@ -299,6 +321,7 @@ public class DatasetJobService {
                     while (rs.next()) {
                         String columnName = rs.getString(1);
                         String dataType = rs.getString(2);
+                        String columnComment = rs.getString(3);
                         if (!org.springframework.util.StringUtils.hasText(columnName)) {
                             continue;
                         }
@@ -306,7 +329,8 @@ public class DatasetJobService {
                         if (columnName.startsWith("#")) {
                             break;
                         }
-                        specs.add(new ColumnSpec(columnName, normalizeDataType(dataType), true));
+                        String comment = normalizeComment(columnComment);
+                        specs.add(new ColumnSpec(columnName, normalizeDataType(dataType), true, comment));
                     }
                 }
                 if (specs.isEmpty()) {
@@ -359,7 +383,18 @@ public class DatasetJobService {
             return identifier.replace("`", "``");
         }
 
-        private record ColumnSpec(String name, String dataType, boolean nullable) {}
+        private String normalizeComment(String raw) {
+            if (!org.springframework.util.StringUtils.hasText(raw)) {
+                return null;
+            }
+            String trimmed = raw.trim();
+            if (trimmed.equalsIgnoreCase("null") || trimmed.equalsIgnoreCase("\\n") || trimmed.equalsIgnoreCase("n/a")) {
+                return null;
+            }
+            return trimmed;
+        }
+
+        private record ColumnSpec(String name, String dataType, boolean nullable, String comment) {}
 
         private record ColumnSyncPlan(List<ColumnSpec> columns, String source, String database) {}
     }

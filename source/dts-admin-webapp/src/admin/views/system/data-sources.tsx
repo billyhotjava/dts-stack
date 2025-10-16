@@ -829,8 +829,8 @@ export default function AdminDataSourcesView() {
 								render={({ field }) => (
 									<FormItem>
 										<FormLabel>验证 SQL</FormLabel>
-										<FormControl>
-											<Input {...field} placeholder="SELECT 1" />
+											<FormControl>
+												<Input {...field} placeholder="SELECT 1" readOnly />
 										</FormControl>
 									</FormItem>
 								)}

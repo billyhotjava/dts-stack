@@ -37,6 +37,9 @@ public class CatalogColumnSchema extends AbstractAuditingEntity<UUID> implements
     @Column(name = "sensitive_tags", length = 1024)
     private String sensitiveTags;
 
+    @Column(name = "comment", length = 1024)
+    private String comment;
+
     @Override
     public UUID getId() {
         return id;
@@ -92,5 +95,13 @@ public class CatalogColumnSchema extends AbstractAuditingEntity<UUID> implements
 
     public void setSensitiveTags(String sensitiveTags) {
         this.sensitiveTags = sensitiveTags;
+    }
+
+    public String getComment() {
+        return comment;
+    }
+
+    public void setComment(String comment) {
+        this.comment = comment;
     }
 }

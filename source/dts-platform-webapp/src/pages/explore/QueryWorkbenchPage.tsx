@@ -500,33 +500,35 @@ function VisualQueryBuilder({
 							</Badge>
 						</div>
 					</div>
-					<ScrollArea className="h-48">
-						{filteredFields.length ? (
-							<div className="space-y-2">
-								{filteredFields.map((field) => (
-									<label key={field.name} className="flex items-start gap-2">
-										<Checkbox
-											checked={state.fields.includes(field.name)}
-											onCheckedChange={(checked) => onToggleField(field.name, Boolean(checked))}
-										/>
-										<div className="space-y-1">
-											<div className="flex items-center gap-2 text-sm font-medium text-text-primary">
-												{field.name}
-												<span className="text-xs text-muted-foreground">{field.type}</span>
+					<div className="rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
+						<ScrollArea className="h-72 lg:h-[420px]">
+							{filteredFields.length ? (
+								<div className="space-y-2">
+									{filteredFields.map((field) => (
+										<label key={field.name} className="flex items-start gap-2">
+											<Checkbox
+												checked={state.fields.includes(field.name)}
+												onCheckedChange={(checked) => onToggleField(field.name, Boolean(checked))}
+											/>
+											<div className="space-y-1">
+												<div className="flex items-center gap-2 text-sm font-medium text-text-primary">
+													{field.name}
+													<span className="text-xs text-muted-foreground">{field.type}</span>
+												</div>
+												<p className="text-xs text-muted-foreground line-clamp-2">
+													{field.description ?? field.term ?? "暂无字段描述"}
+												</p>
 											</div>
-											<p className="text-xs text-muted-foreground line-clamp-2">
-												{field.description ?? field.term ?? "暂无字段描述"}
-											</p>
-										</div>
-									</label>
-								))}
-							</div>
-						) : (
-							<div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
-								未匹配到字段，请调整检索条件
-							</div>
-						)}
-					</ScrollArea>
+										</label>
+									))}
+								</div>
+							) : (
+								<div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
+									未匹配到字段，请调整检索条件
+								</div>
+							)}
+						</ScrollArea>
+					</div>
 				</CardContent>
 			</Card>
 			<div className="space-y-4">

@@ -192,6 +192,7 @@ public class InceptorCatalogSyncService {
                     entity.setName(column.name());
                     entity.setDataType(column.dataType());
                     entity.setNullable(column.nullable());
+                    entity.setComment(column.comment());
                     columnEntities.add(entity);
                 }
                 columnRepository.saveAll(columnEntities);
@@ -272,6 +273,7 @@ public class InceptorCatalogSyncService {
             while (rs.next()) {
                 String columnName = rs.getString(1);
                 String dataType = rs.getString(2);
+                String columnComment = rs.getString(3);
                 if (!StringUtils.hasText(columnName)) {
                     continue;
                 }
@@ -279,7 +281,7 @@ public class InceptorCatalogSyncService {
                 if (columnName.startsWith("#")) {
                     break; // reached partition or metadata section
                 }
-                columns.add(new ColumnMeta(columnName, safeDataType(dataType), true));
+                columns.add(new ColumnMeta(columnName, safeDataType(dataType), true, StringUtils.hasText(columnComment) ? columnComment.trim() : null));
             }
             }
         } catch (SQLException e) {
@@ -337,7 +339,7 @@ public class InceptorCatalogSyncService {
         return StringUtils.hasText(type) ? type.trim().toLowerCase(Locale.ROOT) : "string";
     }
 
-    private record ColumnMeta(String name, String dataType, boolean nullable) {}
+    private record ColumnMeta(String name, String dataType, boolean nullable, String comment) {}
 
     private int cleanupStaleDatasets(String database, Set<String> processedTablesLower) {
         List<CatalogDataset> existingDatasets = datasetRepository.findByHiveDatabaseIgnoreCase(database);

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { toast } from "sonner";
-import { createDataset, getCatalogConfig, listDatasets, previewDataset } from "@/api/platformApi";
+import { createDataset, getCatalogConfig, listDatasets } from "@/api/platformApi";
 import { listInfraDataSources, refreshInceptorRegistry } from "@/api/services/infraService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import { renderDataLevelLabel } from "@/constants/governance";
@@ -124,11 +124,6 @@ const [deptLoading, setDeptLoading] = useState(false);
 	const [multiSourceUnlocked, setMultiSourceUnlocked] = useState(false);
 	    const [refreshing, setRefreshing] = useState(false);
     // Preview dialog state
-const [previewOpen, setPreviewOpen] = useState(false);
-const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
-const [previewRows, setPreviewRows] = useState<any[]>([]);
-const [previewTitle, setPreviewTitle] = useState<string>("");
-const [previewLevel, setPreviewLevel] = useState<string | undefined>(undefined);
 const sourceTypeUpper = (form.sourceType || "").toUpperCase();
 const isInceptorSource = sourceTypeUpper === "INCEPTOR" || sourceTypeUpper === "HIVE";
 const isPostgresSource = sourceTypeUpper === "POSTGRES";
@@ -152,7 +147,7 @@ const primarySourceLabel = useMemo(
 );
 const multiSourceAllowed = catalogConfig.multiSourceEnabled || multiSourceUnlocked;
 const fallbackEditable = useMemo(() => isOpadmin || hasDataMaintainerRole, [isOpadmin, hasDataMaintainerRole]);
-const canSyncInfra = true; // 所有登录用户均可触发刷新
+const canSyncInfra = true; // 放开刷新，前端不再限制角色
 
 const availableSourceTypes = useMemo(() => {
 	const set = new Set<string>();
@@ -435,21 +430,6 @@ const filtered = useMemo(() => {
 		}
 	};
 
-    const openPreview = async (item: ListItem) => {
-      try {
-        setPreviewTitle(item.name);
-        setPreviewLevel(item.dataLevel);
-        const resp: any = await previewDataset(item.id, 50);
-        const headers: string[] = Array.isArray(resp?.headers) ? resp.headers : [];
-        const rows: any[] = Array.isArray(resp?.rows) ? resp.rows : [];
-        setPreviewHeaders(headers);
-        setPreviewRows(rows);
-        setPreviewOpen(true);
-      } catch (e) {
-        console.error("preview failed", e);
-      }
-    };
-
 const onCreate = async () => {
 	if (!hasPrimarySource) {
 		toast.error("请先在基础管理中完善默认数据源连接");
@@ -680,24 +660,19 @@ const onCreate = async () => {
 							<td className="px-3 py-2 text-xs">{dataLevelBadge(d.dataLevel)}</td>
 							<td className="px-3 py-2 text-xs truncate" title={d.description || "-"}>{d.description || "-"}</td>
 										<td className="px-3 py-2">
-											<div className="flex flex-wrap items-center gap-2">
-												<button
-													type="button"
-													onClick={() => void openPreview(d)}
-													className="inline-flex items-center rounded-md border border-muted-foreground/30 bg-muted/20 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring"
-												>
-													预览
-												</button>
-												{d.editable ? (
-													<button
-														type="button"
-														onClick={() => router.push(`/catalog/datasets/${d.id}`)}
-														className="inline-flex items-center rounded-md border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring"
-													>
-														编辑
-													</button>
-												) : null}
-											</div>
+												<div className="flex flex-wrap items-center gap-2">
+													{d.editable ? (
+														<button
+															type="button"
+															onClick={() => router.push(`/catalog/datasets/${d.id}`)}
+															className="inline-flex items-center rounded-md border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring"
+														>
+															编辑
+														</button>
+													) : (
+														<span className="text-xs text-muted-foreground">-</span>
+													)}
+												</div>
 										</td>
 									</tr>
 								))}
@@ -890,55 +865,6 @@ const onCreate = async () => {
 				</DialogContent>
 			</Dialog>
 
-			{/* Dataset preview dialog */}
-			<Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-				<DialogContent className="max-w-4xl">
-						<DialogHeader>
-					<DialogTitle className="flex items-center gap-2">
-						<span>{previewTitle || "数据预览"}</span>
-						{dataLevelBadge(previewLevel)}
-					</DialogTitle>
-						</DialogHeader>
-						<div className="space-y-3">
-							<div className="overflow-auto rounded-md border">
-								<table className="w-full border-collapse text-xs">
-								<thead className="bg-muted/50">
-									<tr>
-										{previewHeaders.map((h) => (
-											<th key={h} className="border-b px-2 py-1 text-left font-medium">{h}</th>
-										))}
-									</tr>
-								</thead>
-								<tbody>
-									{previewRows.map((row, i) => (
-										<tr key={`r-${i}`} className="border-b last:border-b-0">
-											{previewHeaders.map((h) => (
-												<td key={h} className="px-2 py-1">{String(row?.[h] ?? "")}</td>
-											))}
-										</tr>
-									))}
-									{previewRows.length === 0 && (
-										<tr>
-											<td className="px-3 py-6 text-center text-xs text-muted-foreground" colSpan={Math.max(1, previewHeaders.length)}>
-												暂无数据
-											</td>
-										</tr>
-									)}
-								</tbody>
-							</table>
-						</div>
-					</div>
-						<DialogFooter>
-                            <div className="mr-auto text-xs text-muted-foreground">
-	                              {(() => {
-	                                const lvl = renderDataLevelLabel(previewLevel);
-	                                return lvl && lvl !== "-" ? `本数据属于【${lvl}】级，仅限授权人员查看，不得外传。` : "本数据受密级与部门权限控制，未经授权不得外传。";
-	                              })()}
-                            </div>
-                            <Button variant="ghost" onClick={() => setPreviewOpen(false)}>关闭</Button>
-                        </DialogFooter>
-				</DialogContent>
-			</Dialog>
 		</div>
 	);
 }

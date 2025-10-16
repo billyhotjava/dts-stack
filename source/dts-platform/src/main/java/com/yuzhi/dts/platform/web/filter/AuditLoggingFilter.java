@@ -47,6 +47,22 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         "/api/keycloak/localization"
     };
 
+    private static final boolean AUDIT_CONTEXT_PRESENT;
+    private static final Class<?> AUDIT_CONTEXT_CLASS;
+
+    static {
+        boolean present;
+        Class<?> ctxClass = null;
+        try {
+            ctxClass = Class.forName("com.yuzhi.dts.platform.service.audit.AuditRequestContext");
+            present = true;
+        } catch (ClassNotFoundException | NoClassDefFoundError ex) {
+            present = false;
+        }
+        AUDIT_CONTEXT_PRESENT = present;
+        AUDIT_CONTEXT_CLASS = ctxClass;
+    }
+
     private final ObjectProvider<AuditTrailService> auditServiceProvider;
     private final AuditFlowManager flowManager;
     private final boolean accessLogEnabled;
@@ -81,7 +97,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         long start = System.nanoTime();
         ContentCachingRequestWrapper wrapper = new ContentCachingRequestWrapper(request);
         ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
-        com.yuzhi.dts.platform.service.audit.AuditRequestContext.clear();
+        clearAuditContext();
         String actionHeader = wrapper.getHeader("X-Audit-Action");
         String flowHeader = wrapper.getHeader("X-Audit-Flow");
         String stageHeader = wrapper.getHeader("X-Audit-Stage");
@@ -110,7 +126,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         } finally {
             try { responseWrapper.copyBodyToResponse(); } catch (Exception ignore) {}
             try {
-                boolean alreadyAudited = com.yuzhi.dts.platform.service.audit.AuditRequestContext.wasDomainAudited();
+                boolean alreadyAudited = wasDomainAuditMarked();
                 PendingAuditEvent event = buildEvent(wrapper, responseWrapper, System.nanoTime() - start);
                 if (!alreadyAudited) {
                     AuditTrailService svc = auditServiceProvider.getIfAvailable();
@@ -157,6 +173,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                 if (accessLogEnabled && log.isInfoEnabled()) {
                     String user = event.actor == null || event.actor.isBlank() ? "anonymous" : event.actor;
                     String uri = event.requestUri == null ? wrapper.getRequestURI() : event.requestUri;
+                    String safeIp = (event.clientIp == null || event.clientIp.isBlank()) ? "-" : event.clientIp;
                     log.info(
                         "[access] {} {} status={} user={} ua=\"{}\" ip={} dur={}ms",
                         wrapper.getMethod(),
@@ -164,7 +181,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                         responseWrapper.getStatus(),
                         user,
                         safeHeader(wrapper, "User-Agent"),
-                        event.clientIp,
+                        safeIp,
                         event.latencyMs
                     );
                 }
@@ -176,6 +193,34 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                 }
             }
         }
+    }
+
+    private void clearAuditContext() {
+        if (!AUDIT_CONTEXT_PRESENT) {
+            return;
+        }
+        try {
+            if (AUDIT_CONTEXT_CLASS != null) {
+                AUDIT_CONTEXT_CLASS.getMethod("clear").invoke(null);
+            }
+        } catch (ReflectiveOperationException | NoClassDefFoundError ignored) {}
+    }
+
+    private boolean wasDomainAuditMarked() {
+        if (!AUDIT_CONTEXT_PRESENT) {
+            return false;
+        }
+        try {
+            if (AUDIT_CONTEXT_CLASS != null) {
+                Object result = AUDIT_CONTEXT_CLASS.getMethod("wasDomainAudited").invoke(null);
+                if (result instanceof Boolean b) {
+                    return b.booleanValue();
+                }
+            }
+        } catch (ReflectiveOperationException | NoClassDefFoundError ignored) {
+            return false;
+        }
+        return false;
     }
 
     private PendingAuditEvent buildEvent(ContentCachingRequestWrapper request, ContentCachingResponseWrapper response, long elapsedNanos) {

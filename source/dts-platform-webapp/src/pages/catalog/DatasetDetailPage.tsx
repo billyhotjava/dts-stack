@@ -249,7 +249,7 @@ export default function DatasetDetailPage() {
 		[nonRootDeptOptions],
 	);
 	const fetchSample = useCallback(
-		async (rows = 5, options?: { silent?: boolean }) => {
+		async (rows = 10, options?: { silent?: boolean }) => {
 			setSampleLoading(true);
 			const silent = Boolean(options?.silent);
 			try {
@@ -268,9 +268,9 @@ export default function DatasetDetailPage() {
 			} finally {
 				setSampleLoading(false);
 			}
-		},
-		[id],
-	);
+			},
+			[id],
+		);
 	const formatDateTime = useCallback((value?: string) => {
 		if (!value) return "-";
 		try {
@@ -561,7 +561,7 @@ export default function DatasetDetailPage() {
 							variant="outline"
 							onClick={() => {
 								setActiveTab("sample");
-								void fetchSample(5);
+								void fetchSample(10);
 							}}
 							disabled={sampleLoading}
 						>
@@ -771,13 +771,8 @@ export default function DatasetDetailPage() {
 							</div>
 						</TabsContent>
 						<TabsContent value="sample">
-							<div className="space-y-3">
-								<div className="flex items-center justify-between">
-									<p className="text-sm text-muted-foreground">默认展示前 5 条数据</p>
-									<Button variant="outline" size="sm" onClick={() => fetchSample(5)} disabled={sampleLoading}>
-										{sampleLoading ? "刷新中…" : "重新采样"}
-									</Button>
-								</div>
+								<div className="space-y-3">
+									<p className="text-sm text-muted-foreground">默认展示前 10 条数据</p>
 								{sampleLoading ? (
 									<div className="text-sm text-muted-foreground">加载中…</div>
 								) : sampleData && sampleData.headers.length ? (

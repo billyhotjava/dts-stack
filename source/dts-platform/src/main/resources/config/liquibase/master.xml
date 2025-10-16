@@ -40,4 +40,5 @@
     <include file="config/liquibase/changelog/20251012_02_access_policy_role_alignment.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251014_01_dataset_remove_scope.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251016_01_catalog_dataset_grant.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251018_01_catalog_column_comment.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

@@ -20,5 +20,13 @@ public final class AuthoritiesConstants {
     // Application operator (not allowed on admin API by default)
     public static final String OP_ADMIN = "ROLE_OP_ADMIN";
 
+    // Data governance roles (shared with platform)
+    public static final String INST_DATA_OWNER = "ROLE_INST_DATA_OWNER";
+    public static final String INST_DATA_DEV = "ROLE_INST_DATA_DEV";
+    public static final String INST_DATA_VIEWER = "ROLE_INST_DATA_VIEWER";
+    public static final String DEPT_DATA_OWNER = "ROLE_DEPT_DATA_OWNER";
+    public static final String DEPT_DATA_DEV = "ROLE_DEPT_DATA_DEV";
+    public static final String DEPT_DATA_VIEWER = "ROLE_DEPT_DATA_VIEWER";
+
     private AuthoritiesConstants() {}
 }

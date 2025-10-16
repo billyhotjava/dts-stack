@@ -18,6 +18,11 @@ import com.yuzhi.dts.platform.service.explore.dto.UpdateSavedQueryRequest;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.DatasetSqlBuilder;
+import com.yuzhi.dts.platform.service.security.DatasetSecurityMetadataResolver;
+import com.yuzhi.dts.platform.service.security.SecurityGuardException;
+import com.yuzhi.dts.platform.service.security.SecuritySqlRewriter;
+import com.yuzhi.dts.platform.service.security.SecuritySqlRewriter;
+import com.yuzhi.dts.platform.security.policy.DataLevel;
 import jakarta.validation.Valid;
 import java.lang.reflect.Array;
 import java.time.Instant;
@@ -34,8 +39,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -65,6 +68,8 @@ public class ExploreResource {
     private final ObjectMapper objectMapper;
     private final QueryGateway queryGateway;
     private final DatasetSqlBuilder datasetSqlBuilder;
+    private final DatasetSecurityMetadataResolver metadataResolver;
+    private final SecuritySqlRewriter securitySqlRewriter;
 
     public ExploreResource(
         ExploreSavedQueryRepository savedRepo,
@@ -75,7 +80,9 @@ public class ExploreResource {
         AuditService audit,
         ObjectMapper objectMapper,
         QueryGateway queryGateway,
-        DatasetSqlBuilder datasetSqlBuilder
+        DatasetSqlBuilder datasetSqlBuilder,
+        DatasetSecurityMetadataResolver metadataResolver,
+        SecuritySqlRewriter securitySqlRewriter
     ) {
         this.savedRepo = savedRepo;
         this.executionRepo = executionRepo;
@@ -86,6 +93,8 @@ public class ExploreResource {
         this.objectMapper = objectMapper;
         this.queryGateway = queryGateway;
         this.datasetSqlBuilder = datasetSqlBuilder;
+        this.metadataResolver = metadataResolver;
+        this.securitySqlRewriter = securitySqlRewriter;
     }
 
     @PostMapping("/query/preview")
@@ -111,9 +120,13 @@ public class ExploreResource {
             }
         }
         try {
-            Map<String, Object> payload = generateResult(dataset, extractSql(body), false, activeDept);
+            Map<String, Object> payload = generateResult(dataset, extractSql(body), false);
             audit.audit("EXECUTE", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
             return ApiResponses.ok(payload);
+        } catch (SecurityGuardException ex) {
+            LOG.warn("Explore preview denied: {}", ex.getMessage());
+            audit.audit("DENY", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
+            return ApiResponses.error(ex.getMessage());
         } catch (IllegalStateException ex) {
             LOG.warn("Explore preview failed: {}", ex.getMessage());
             audit.audit("ERROR", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
@@ -148,9 +161,13 @@ public class ExploreResource {
             }
         }
         try {
-            Map<String, Object> payload = generateResult(dataset, extractSql(body), true, activeDept);
+            Map<String, Object> payload = generateResult(dataset, extractSql(body), true);
             audit.audit("EXECUTE", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
             return ApiResponses.ok(payload);
+        } catch (SecurityGuardException ex) {
+            LOG.warn("Explore execute denied: {}", ex.getMessage());
+            audit.audit("DENY", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
+            return ApiResponses.error(ex.getMessage());
         } catch (IllegalStateException ex) {
             LOG.warn("Explore execute failed: {}", ex.getMessage());
             audit.audit("ERROR", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
@@ -448,11 +465,14 @@ public class ExploreResource {
             Map<String, Object> payload = generateResult(
                 dataset,
                 Optional.ofNullable(q.getSqlText()).orElse(""),
-                true,
-                activeDept
+                true
             );
             audit.audit("EXECUTE", "explore.savedQuery.run", id.toString());
             return ApiResponses.ok(payload);
+        } catch (SecurityGuardException ex) {
+            LOG.warn("Saved query run denied: {}", ex.getMessage());
+            audit.audit("DENY", "explore.savedQuery.run", id.toString());
+            return ApiResponses.error(ex.getMessage());
         } catch (IllegalStateException ex) {
             LOG.warn("Saved query run failed: {}", ex.getMessage());
             audit.audit("ERROR", "explore.savedQuery.run", id.toString());
@@ -500,13 +520,9 @@ public class ExploreResource {
         }
     }
 
-    private Map<String, Object> generateResult(CatalogDataset dataset, String sqlText, boolean persist, String activeDept) {
+    private Map<String, Object> generateResult(CatalogDataset dataset, String sqlText, boolean persist) {
         String effectiveSql = prepareSql(sqlText, dataset);
-        // Minimal row-level filter pushdown based on active department when dataset is present
-        if (dataset != null) {
-            String effDept = activeDept != null ? activeDept : claim("dept_code");
-            effectiveSql = applyRowFilter(effectiveSql, dataset, effDept);
-        }
+        effectiveSql = securitySqlRewriter.guard(effectiveSql, dataset);
         Map<String, Object> queryResult = queryGateway.execute(effectiveSql);
 
         List<String> headers = extractHeaders(queryResult);
@@ -517,6 +533,8 @@ public class ExploreResource {
         if (headers.isEmpty()) {
             headers = buildHeaders(dataset);
         }
+
+        applyDataLevelRowFilter(dataset, headers, rows);
 
         Map<String, Object> masking = buildMasking(headers);
         long connectMillis = numberOrDefault(queryResult.get("connectMillis"), -1L);
@@ -534,7 +552,7 @@ public class ExploreResource {
             }
         }
 
-        long rowCount = numberOrDefault(queryResult.get("rowCount"), rows.size());
+        long rowCount = Math.min(numberOrDefault(queryResult.get("rowCount"), rows.size()), rows.size());
 
         Map<String, Object> payload = new LinkedHashMap<>(queryResult);
         payload.put("effectiveSql", effectiveSql);
@@ -555,54 +573,6 @@ public class ExploreResource {
             payload.put("executionId", executionId.toString());
         }
         return payload;
-    }
-
-    /**
-     * Wrap the SQL with a WHERE clause enforcing minimal row visibility by scope/dept.
-     * Implemented generically as SELECT * FROM (sql) t WHERE ...
-     */
-    private static final Pattern LIMIT_PATTERN = Pattern.compile("(?is)\\s+limit\\s+(\\d+)\\s*;?\\s*$");
-
-    private String applyRowFilter(String sql, CatalogDataset dataset, String activeDept) {
-        if (sql == null || sql.isBlank()) return sql;
-        if (dataset == null) return sql;
-
-        if (StringUtils.hasText(dataset.getOwnerDept())) {
-            if (!accessChecker.departmentAllowed(dataset, activeDept)) {
-                return "SELECT 1 WHERE 1=0";
-            }
-        }
-
-        // Get predicate for the base table (no alias)
-        Optional<String> predicateOpt = datasetSqlBuilder.resolveDataLevelPredicate(dataset, null);
-
-        if (predicateOpt.isEmpty()) {
-            return sql;
-        }
-        String predicate = predicateOpt.get();
-
-        String db = dataset.getHiveDatabase();
-        String table = dataset.getHiveTable();
-        if (!StringUtils.hasText(table)) {
-            return sql; // Cannot proceed
-        }
-
-        String quotedDb = StringUtils.hasText(db) ? "`" + db.trim().replace("`", "``") + "`" : null;
-        String quotedTable = "`" + table.trim().replace("`", "``") + "`";
-        String fqn = quotedDb != null ? quotedDb + "." + quotedTable : quotedTable;
-
-        String subqueryAlias = "`" + table.trim().replaceAll("[^a-zA-Z0-9_]", "") + "_security_filter`";
-        String subquery = "(SELECT * FROM " + fqn + " WHERE " + predicate + ") AS " + subqueryAlias;
-
-        String rawFqn = (StringUtils.hasText(db) ? db.trim() + "." : "") + table.trim();
-
-        // This is a simple replacement and might not work for queries with aliases on the main table.
-        String newSql = sql.replace(fqn, subquery);
-        if (newSql.equals(sql)) {
-            newSql = sql.replace(rawFqn, subquery);
-        }
-
-        return newSql;
     }
 
     private String prepareSql(String sqlText, CatalogDataset dataset) {
@@ -655,6 +625,118 @@ public class ExploreResource {
             }
         }
         return rows;
+    }
+
+    private void applyDataLevelRowFilter(CatalogDataset dataset, List<String> headers, List<Map<String, Object>> rows) {
+        if (dataset == null || rows == null || rows.isEmpty()) {
+            return;
+        }
+        Optional<String> columnOpt = metadataResolver.findDataLevelColumn(dataset);
+        if (columnOpt.isEmpty()) {
+            return;
+        }
+        List<DataLevel> allowedLevelsList = accessChecker.resolveAllowedDataLevels();
+        if (allowedLevelsList == null || allowedLevelsList.isEmpty()) {
+            rows.clear();
+            return;
+        }
+        Set<DataLevel> allowedLevels = allowedLevelsList.stream().filter(Objects::nonNull).collect(Collectors.toCollection(LinkedHashSet::new));
+        if (allowedLevels.isEmpty()) {
+            rows.clear();
+            return;
+        }
+        Set<String> allowedTokens = allowedLevels
+            .stream()
+            .flatMap(level -> level.tokens().stream())
+            .map(token -> token.toUpperCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        String dataLevelColumn = columnOpt.get();
+        int headerIndex = resolveHeaderIndex(headers, dataLevelColumn);
+
+        rows.removeIf(row -> !isRowLevelAllowed(row, headers, headerIndex, dataLevelColumn, allowedLevels, allowedTokens));
+    }
+
+    private int resolveHeaderIndex(List<String> headers, String columnName) {
+        if (headers == null || columnName == null) {
+            return -1;
+        }
+        for (int i = 0; i < headers.size(); i++) {
+            String header = headers.get(i);
+            if (header != null && header.trim().equalsIgnoreCase(columnName)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private boolean isRowLevelAllowed(
+        Map<String, Object> row,
+        List<String> headers,
+        int headerIndex,
+        String columnName,
+        Set<DataLevel> allowedLevels,
+        Set<String> allowedTokens
+    ) {
+        if (row == null || row.isEmpty()) {
+            return false;
+        }
+        Object rawValue = lookupValue(row, columnName);
+        if (rawValue == null && headerIndex >= 0 && headers != null && headerIndex < headers.size()) {
+            rawValue = lookupValue(row, headers.get(headerIndex));
+        }
+        if (rawValue == null) {
+            return false;
+        }
+        String text = rawValue.toString().trim();
+        if (text.isEmpty()) {
+            return false;
+        }
+        DataLevel level = DataLevel.normalize(text);
+        if (level != null) {
+            return allowedLevels.contains(level);
+        }
+        for (String token : expandValueVariants(text)) {
+            if (allowedTokens.contains(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Object lookupValue(Map<String, Object> row, String key) {
+        if (key == null) {
+            return null;
+        }
+        if (row.containsKey(key)) {
+            return row.get(key);
+        }
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(key)) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private Set<String> expandValueVariants(String raw) {
+        Set<String> variants = new LinkedHashSet<>();
+        if (raw == null) {
+            return variants;
+        }
+        String base = raw.trim();
+        if (base.isEmpty()) {
+            return variants;
+        }
+        String upper = base.toUpperCase(Locale.ROOT);
+        variants.add(upper);
+        variants.add(upper.replace('-', '_'));
+        variants.add(upper.replace('_', '-'));
+        variants.add(upper.replace(' ', '_'));
+        variants.add(upper.replace(' ', '-'));
+        variants.add(upper.replace('-', ' '));
+        variants.add(upper.replace('_', ' '));
+        return variants;
     }
 
     private long numberOrDefault(Object value, long defaultValue) {

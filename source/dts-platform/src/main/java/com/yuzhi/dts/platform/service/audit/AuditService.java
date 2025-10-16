@@ -29,6 +29,22 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 public class AuditService {
     private static final Logger log = LoggerFactory.getLogger(AuditService.class);
 
+    private static final boolean AUDIT_CONTEXT_PRESENT;
+    private static final Class<?> AUDIT_CONTEXT_CLASS;
+
+    static {
+        boolean present;
+        Class<?> ctxClass = null;
+        try {
+            ctxClass = Class.forName("com.yuzhi.dts.platform.service.audit.AuditRequestContext");
+            present = true;
+        } catch (ClassNotFoundException | NoClassDefFoundError ex) {
+            present = false;
+        }
+        AUDIT_CONTEXT_PRESENT = present;
+        AUDIT_CONTEXT_CLASS = ctxClass;
+    }
+
     private final ObjectProvider<AuditTrailService> auditTrailServiceProvider;
     private final AuditActionCatalog actionCatalog;
     private final ObjectMapper objectMapper;
@@ -154,7 +170,7 @@ public class AuditService {
                 event.httpMethod = req.getMethod();
             }
         } catch (Exception ignore) {}
-        com.yuzhi.dts.platform.service.audit.AuditRequestContext.markDomainAudit();
+        markDomainAuditSafe();
         AuditTrailService svc = auditTrailServiceProvider.getIfAvailable();
         if (svc != null) {
             svc.record(event);
@@ -205,7 +221,7 @@ public class AuditService {
                 event.httpMethod = req.getMethod();
             }
         } catch (Exception ignore) {}
-        com.yuzhi.dts.platform.service.audit.AuditRequestContext.markDomainAudit();
+        markDomainAuditSafe();
         AuditTrailService svc = auditTrailServiceProvider.getIfAvailable();
         if (svc != null) {
             svc.record(event);
@@ -252,6 +268,22 @@ public class AuditService {
         } catch (JsonProcessingException ex) {
             log.warn("Failed to serialize audit extra tags", ex);
             return null;
+        }
+    }
+
+    private void markDomainAuditSafe() {
+        if (!AUDIT_CONTEXT_PRESENT) {
+            return;
+        }
+        try {
+            if (AUDIT_CONTEXT_CLASS != null) {
+                AUDIT_CONTEXT_CLASS.getMethod("markDomainAudit").invoke(null);
+            }
+        } catch (ReflectiveOperationException | NoClassDefFoundError ex) {
+            // tolerate missing context helper at runtime
+            if (log.isDebugEnabled()) {
+                log.debug("AuditRequestContext not available: {}", ex.getMessage());
+            }
         }
     }
 

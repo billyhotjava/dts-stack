@@ -2065,6 +2065,7 @@ public class AdminApiResource {
         } else if ("BATCH_UPDATE".equalsIgnoreCase(action) || "BULK_UPDATE".equalsIgnoreCase(action)) {
             // Expect payload: { updates: [ { id: number, allowedRoles: string[], allowedPermissions?: string[], maxDataLevel?: string } ] }
             Object rawItems = payload.get("updates");
+            java.util.Set<Long> touchedMenuIds = new java.util.LinkedHashSet<>();
             if (rawItems instanceof java.util.Collection<?> col) {
                 for (Object it : col) {
                     if (!(it instanceof java.util.Map<?, ?> m)) {
@@ -2092,8 +2093,22 @@ public class AdminApiResource {
                             if (m.containsKey("visibilityRules")) updatePayload.put("visibilityRules", m.get("visibilityRules"));
                             java.util.List<PortalMenuVisibility> updatedVisibilities = buildVisibilityEntities(updatePayload, target);
                             portalMenuService.replaceVisibilities(target, updatedVisibilities);
+                            touchedMenuIds.add(target.getId());
                         });
                 }
+            }
+            if (!touchedMenuIds.isEmpty()) {
+                try {
+                    notifyClient.trySend(
+                        "portal_menu_updated",
+                        java.util.Map.of(
+                            "action",
+                            "binding-update",
+                            "ids",
+                            touchedMenuIds.stream().map(String::valueOf).toList()
+                        )
+                    );
+                } catch (Exception ignored) {}
             }
         } else if ("DELETE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());

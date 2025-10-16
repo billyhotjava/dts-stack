@@ -54,7 +54,7 @@ SELECT 'log006', 'userC', '2023-10-26 10:25:00', 'add_to_cart', 'prod103', 'cat0
 UNION ALL
 SELECT 'log007', 'userA', '2023-10-26 10:30:00', 'view', 'prod104', 'cat004', 300.00, 1, '192.168.1.1', 'Chrome', 'PUBLIC'
 UNION ALL
-SELECT 'log008', 'userD', '2023-10-26 10:35:00', 'purchase', 'prod105', 'cat005', 150.00, 1, '192.168.1.4', 'Edge', 'TOP-SECRET'
+SELECT 'log008', 'userD', '2023-10-26 10:35:00', 'purchase', 'prod105', 'cat005', 150.00, 1, '192.168.1.4', 'Edge', 'TOP_SECRET'
 UNION ALL
 SELECT 'log009', 'userD', '2023-10-26 10:40:00', 'view', 'prod102', 'cat002', 200.00, 1, '192.168.1.4', 'Edge', 'PUBLIC'
 UNION ALL
@@ -112,7 +112,7 @@ SELECT 'userB', 'Female', '18-24', '2022-03-15', 'PUBLIC'
 UNION ALL
 SELECT 'userC', 'Male', '35-44', '2021-11-20', 'PUBLIC'
 UNION ALL
-SELECT 'userD', 'Female', '25-34', '2023-05-10', 'TOP-SECRET';
+SELECT 'userD', 'Female', '25-34', '2023-05-10', 'TOP_SECRET';
 
 
 -- 删除并创建 fact_user_events (用户事件事实表)
@@ -145,10 +145,10 @@ SELECT
     -- data_secret_level 聚合：对于同一用户同一商品同一天的所有行为，取最高密级
     -- 使用 CASE WHEN 来定义密级等级以便比较
     CASE
-        WHEN MAX(CASE WHEN t.data_secret_level = 'TOP-SECRET' THEN 4
+        WHEN MAX(CASE WHEN t.data_secret_level = 'TOP_SECRET' THEN 4
                       WHEN t.data_secret_level = 'SECRET' THEN 3
                       WHEN t.data_secret_level = 'INTERNAL' THEN 2
-                      WHEN t.data_secret_level = 'PUBLIC' THEN 1 ELSE 0 END) = 4 THEN 'TOP-SECRET'
+                      WHEN t.data_secret_level = 'PUBLIC' THEN 1 ELSE 0 END) = 4 THEN 'TOP_SECRET'
         WHEN MAX(CASE WHEN t.data_secret_level = 'TOP-SECRET' THEN 4
                       WHEN t.data_secret_level = 'SECRET' THEN 3
                       WHEN t.data_secret_level = 'INTERNAL' THEN 2

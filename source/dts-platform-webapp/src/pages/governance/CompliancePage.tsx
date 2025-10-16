@@ -21,6 +21,7 @@ import {
     listQualityRules,
     deleteComplianceBatch,
     updateComplianceItem,
+    getQualityRun,
 } from "@/api/platformApi";
 import { cn } from "@/utils";
 import { normalizeClassification, type ClassificationLevel } from "@/utils/classification";
@@ -166,6 +167,22 @@ interface ComplianceBatch {
     items: ComplianceBatchItem[];
 }
 
+interface QualityRunDetail {
+    id: string;
+    status?: string;
+    severity?: string;
+    startedAt?: string | null;
+    finishedAt?: string | null;
+    durationMs?: number | null;
+    message?: string | null;
+    ruleId?: string;
+    ruleName?: string;
+    datasetId?: string;
+    datasetAlias?: string;
+    metrics?: Record<string, unknown> | null;
+    raw?: any;
+}
+
 interface BatchForm {
     name: string;
     templateCode: string;
@@ -184,6 +201,14 @@ interface ItemDialogState {
     submitting: boolean;
 }
 
+interface QualityRunDialogState {
+    open: boolean;
+    loading: boolean;
+    runId?: string;
+    run: QualityRunDetail | null;
+    error: string | null;
+}
+
 const INITIAL_BATCH_FORM: BatchForm = {
     name: "",
     templateCode: "",
@@ -200,6 +225,14 @@ const INITIAL_ITEM_DIALOG: ItemDialogState = {
     conclusion: "",
     evidenceRef: "",
     submitting: false,
+};
+
+const INITIAL_QUALITY_RUN_DIALOG: QualityRunDialogState = {
+    open: false,
+    loading: false,
+    runId: undefined,
+    run: null,
+    error: null,
 };
 
 const severityOrder = { CRITICAL: 5, HIGH: 4, MEDIUM: 3, LOW: 2, INFO: 1 } as const;
@@ -287,6 +320,31 @@ function normalizeItem(raw: any): ComplianceBatchItem {
     };
 }
 
+function normalizeQualityRun(raw: any): QualityRunDetail {
+    const duration =
+        Number.isFinite(raw?.durationMs) && raw?.durationMs !== null
+            ? Number(raw.durationMs)
+            : Number.isFinite(raw?.elapsedMs)
+            ? Number(raw.elapsedMs)
+            : null;
+    return {
+        id: String(raw?.id ?? ""),
+        status: raw?.status ?? raw?.runStatus ?? undefined,
+        severity: raw?.severity ?? raw?.ruleSeverity ?? undefined,
+        startedAt: raw?.startedAt ?? raw?.startTime ?? raw?.createdAt ?? null,
+        finishedAt: raw?.finishedAt ?? raw?.endTime ?? raw?.finishTime ?? null,
+        durationMs: duration,
+        message: raw?.message ?? raw?.summary ?? raw?.errorMessage ?? null,
+        ruleId: raw?.ruleId ? String(raw.ruleId) : undefined,
+        ruleName: raw?.ruleName ?? raw?.qualityRuleName ?? undefined,
+        datasetId: raw?.datasetId ? String(raw.datasetId) : undefined,
+        datasetAlias: raw?.datasetAlias ?? raw?.datasetName ?? undefined,
+        metrics:
+            raw?.metrics && typeof raw.metrics === "object" && !Array.isArray(raw.metrics) ? (raw.metrics as Record<string, unknown>) : null,
+        raw,
+    };
+}
+
 function isUrl(value?: string | null): boolean {
     if (!value) return false;
     return /^https?:\/\//i.test(value);
@@ -340,6 +398,7 @@ export default function CompliancePage() {
     const [itemDialog, setItemDialog] = useState<ItemDialogState>(INITIAL_ITEM_DIALOG);
     const [ruleKeyword, setRuleKeyword] = useState("");
     const [ruleSeverityFilter, setRuleSeverityFilter] = useState<string>("ALL");
+    const [qualityRunDialog, setQualityRunDialog] = useState<QualityRunDialogState>(INITIAL_QUALITY_RUN_DIALOG);
 
     const filteredBatches = useMemo(() => {
         const keyword = searchKeyword.trim().toLowerCase();
@@ -453,6 +512,23 @@ export default function CompliancePage() {
             setDetailLoading(false);
         }
     }
+
+    async function openQualityRunDetail(runId: string) {
+        setQualityRunDialog({ open: true, loading: true, runId, run: null, error: null });
+        try {
+            const data: any = await getQualityRun(runId);
+            setQualityRunDialog({ open: true, loading: false, runId, run: normalizeQualityRun(data), error: null });
+        } catch (error: any) {
+            console.error(error);
+            const message = error?.message || "加载质量运行详情失败";
+            setQualityRunDialog({ open: true, loading: false, runId, run: null, error: message });
+            toast.error(message);
+        }
+    }
+
+    const closeQualityRunDetail = () => {
+        setQualityRunDialog(INITIAL_QUALITY_RUN_DIALOG);
+    };
 
     const handleCreateOpenChange = (open: boolean) => {
         setCreateOpen(open);
@@ -998,7 +1074,7 @@ export default function CompliancePage() {
                                                                                 <Button
                                                                                     variant="ghost"
                                                                                     size="sm"
-                                                                                    onClick={() => toast.info("质量运行详情即将上线")}
+                                                                                    onClick={() => void openQualityRunDetail(item.qualityRunId!)}
                                                                                 >
                                                                                     查看质量运行
                                                                                 </Button>
@@ -1171,6 +1247,86 @@ export default function CompliancePage() {
                         <Button onClick={() => void handleCreateSubmit()} disabled={creating}>
                             {creating ? "创建中..." : "创建"}
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={qualityRunDialog.open}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        closeQualityRunDetail();
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>质量运行详情</DialogTitle>
+                        <DialogDescription>查看质量检测的执行状态、耗时和相关说明。</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 text-sm">
+                        {qualityRunDialog.loading ? (
+                            <div className="text-muted-foreground">正在加载质量运行详情...</div>
+                        ) : qualityRunDialog.error ? (
+                            <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive">
+                                {qualityRunDialog.error}
+                            </div>
+                        ) : qualityRunDialog.run ? (
+                            <div className="space-y-3">
+                                <div>
+                                    <div className="text-xs text-muted-foreground">运行 ID</div>
+                                    <div className="font-mono text-xs text-foreground">
+                                        {qualityRunDialog.run.id || qualityRunDialog.runId}
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    <span className="text-muted-foreground">状态</span>
+                                    <Badge variant="outline">{qualityRunDialog.run.status || "未知"}</Badge>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    <span className="text-muted-foreground">严重程度</span>
+                                    <span>{qualityRunDialog.run.severity || "-"}</span>
+                                </div>
+                                <div className="space-y-1 text-xs text-muted-foreground">
+                                    <div>开始：{formatDateTime(qualityRunDialog.run.startedAt)}</div>
+                                    <div>结束：{formatDateTime(qualityRunDialog.run.finishedAt)}</div>
+                                    <div>耗时：{formatDuration(qualityRunDialog.run.durationMs) ?? "-"}</div>
+                                </div>
+                                {(qualityRunDialog.run.ruleName || qualityRunDialog.run.ruleId) && (
+                                    <div className="text-xs text-muted-foreground">
+                                        关联规则：{qualityRunDialog.run.ruleName || qualityRunDialog.run.ruleId}
+                                    </div>
+                                )}
+                                {(qualityRunDialog.run.datasetAlias || qualityRunDialog.run.datasetId) && (
+                                    <div className="text-xs text-muted-foreground">
+                                        关联数据集：{qualityRunDialog.run.datasetAlias || qualityRunDialog.run.datasetId}
+                                    </div>
+                                )}
+                                <div className="space-y-1 text-xs">
+                                    <div className="text-muted-foreground">说明</div>
+                                    <div className="whitespace-pre-wrap break-all text-muted-foreground">
+                                        {qualityRunDialog.run.message || "暂无说明"}
+                                    </div>
+                                </div>
+                                {qualityRunDialog.run.metrics && (
+                                    <div className="space-y-1 text-xs">
+                                        <div className="text-muted-foreground">指标输出</div>
+                                        <ScrollArea className="max-h-40 rounded-md border bg-muted/30 p-3">
+                                            <pre className="whitespace-pre-wrap break-all">
+                                                {JSON.stringify(qualityRunDialog.run.metrics, null, 2)}
+                                            </pre>
+                                        </ScrollArea>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-muted-foreground">暂无质量运行数据。</div>
+                        )}
+                    </div>
+                    <DialogFooter className="border-t bg-muted/30">
+                        <DialogClose asChild>
+                            <Button variant="outline">关闭</Button>
+                        </DialogClose>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

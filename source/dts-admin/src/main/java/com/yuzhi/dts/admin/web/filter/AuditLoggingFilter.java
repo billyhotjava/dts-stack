@@ -112,7 +112,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         // Normalize action to a semantic code, not raw "METHOD URI"
         event.action = deriveActionCode(resourceType, request.getMethod());
         event.resourceId = uri;
-        // IP 获取：XFF 首段 -> X-Real-IP -> remoteAddr -> 127.0.0.1
+        // IP 获取：XFF 首段 -> X-Real-IP -> remoteAddr（跳过回环/内网地址）
         String forwarded = request.getHeader("X-Forwarded-For");
         String xfip = (forwarded != null && !forwarded.isBlank()) ? forwarded.split(",")[0].trim() : null;
         String realIp = request.getHeader("X-Real-IP");

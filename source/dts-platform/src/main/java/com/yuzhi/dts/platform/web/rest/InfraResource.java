@@ -188,7 +188,6 @@ public class InfraResource {
     }
 
     @PostMapping("/data-sources/inceptor/refresh")
-    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> refreshInceptorDataSource() {
         inceptorRegistry.refresh();
         // Run catalog synchronization asynchronously to avoid blocking request threads if Hive hangs

@@ -7,14 +7,19 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.security.DatasetSecurityMetadataResolver;
+import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.catalog.DatasetJobService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.DatasetSqlBuilder;
+import com.yuzhi.dts.platform.service.security.SecurityGuardException;
+import com.yuzhi.dts.platform.service.security.SecuritySqlRewriter;
 import jakarta.validation.Valid;
 import java.lang.reflect.Array;
 import java.util.*;
+import java.util.stream.Collectors;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -38,6 +43,8 @@ public class AssetResource {
     private final DatasetJobService datasetJobService;
     private final QueryGateway queryGateway;
     private final DatasetSqlBuilder datasetSqlBuilder;
+    private final DatasetSecurityMetadataResolver metadataResolver;
+    private final SecuritySqlRewriter securitySqlRewriter;
 
     public AssetResource(
         CatalogDatasetRepository datasetRepo,
@@ -47,7 +54,9 @@ public class AssetResource {
         AuditService audit,
         DatasetJobService datasetJobService,
         QueryGateway queryGateway,
-        DatasetSqlBuilder datasetSqlBuilder
+        DatasetSqlBuilder datasetSqlBuilder,
+        DatasetSecurityMetadataResolver metadataResolver,
+        SecuritySqlRewriter securitySqlRewriter
     ) {
         this.datasetRepo = datasetRepo;
         this.rowFilterRepo = rowFilterRepo;
@@ -57,6 +66,8 @@ public class AssetResource {
         this.datasetJobService = datasetJobService;
         this.queryGateway = queryGateway;
         this.datasetSqlBuilder = datasetSqlBuilder;
+        this.metadataResolver = metadataResolver;
+        this.securitySqlRewriter = securitySqlRewriter;
     }
 
     /**
@@ -64,8 +75,17 @@ public class AssetResource {
      * MVP: if dataset has no tables, create one using hiveTable/name and a few example columns.
      */
     @PostMapping("/datasets/{id}/sync-schema")
-    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> syncSchema(@PathVariable UUID id, @RequestBody(required = false) Map<String, Object> body) {
+        CatalogDataset dataset = datasetRepo.findById(id).orElse(null);
+        if (dataset == null) {
+            audit.auditAction(
+                "CATALOG_ASSET_EDIT",
+                AuditStage.FAIL,
+                id.toString(),
+                Map.of("reason", "DATASET_NOT_FOUND")
+            );
+            return ApiResponses.error("数据集不存在或已被删除");
+        }
         try {
             CatalogDatasetJob job = datasetJobService.submitSchemaSync(id, body != null ? body : Map.of(), SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
             audit.auditAction(
@@ -126,10 +146,10 @@ public class AssetResource {
         @RequestParam(defaultValue = "50") int rows,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        CatalogDataset ds = datasetRepo.findById(id).orElseThrow();
+        CatalogDataset dataset = datasetRepo.findById(id).orElseThrow();
         String effDept = activeDept != null ? activeDept : claim("dept_code");
-        boolean read = accessChecker.canRead(ds);
-        boolean deptOk = accessChecker.departmentAllowed(ds, effDept);
+        boolean read = accessChecker.canRead(dataset);
+        boolean deptOk = accessChecker.departmentAllowed(dataset, effDept);
         if (!read || !deptOk) {
             audit.auditAction(
                 "CATALOG_ASSET_VIEW",
@@ -146,7 +166,16 @@ public class AssetResource {
         int safeRows = Math.max(1, Math.min(rows, 500));
         String sql;
         try {
-            sql = buildPreviewSql(ds, safeRows);
+            sql = buildPreviewSql(dataset, safeRows);
+            sql = securitySqlRewriter.guard(sql, dataset);
+        } catch (SecurityGuardException ex) {
+            audit.auditAction(
+                "CATALOG_ASSET_VIEW",
+                AuditStage.FAIL,
+                id.toString(),
+                Map.of("reason", ex.getMessage())
+            );
+            return ApiResponses.error(ex.getMessage());
         } catch (IllegalStateException ex) {
             audit.auditAction(
                 "CATALOG_ASSET_VIEW",
@@ -161,9 +190,12 @@ public class AssetResource {
             Map<String, Object> queryResult = queryGateway.execute(sql);
             List<String> headers = extractHeaders(queryResult.get("headers"));
             List<Map<String, Object>> rowsData = extractRows(queryResult.get("rows"), headers);
+            if (!rowsData.isEmpty()) {
+                applyDataLevelFilter(dataset, headers, rowsData);
+            }
             Map<String, String> maskingMap = new HashMap<>();
             maskingRepo
-                .findByDataset(ds)
+                .findByDataset(dataset)
                 .forEach(rule -> maskingMap.put(rule.getColumn(), rule.getFunction()));
             if (!maskingMap.isEmpty()) {
                 for (Map<String, Object> row : rowsData) {
@@ -263,6 +295,120 @@ public class AssetResource {
             return rows;
         }
         return List.of();
+    }
+
+    private void applyDataLevelFilter(CatalogDataset dataset, List<String> headers, List<Map<String, Object>> rows) {
+        if (dataset == null || rows == null || rows.isEmpty()) {
+            return;
+        }
+        Optional<String> columnOpt = metadataResolver.findDataLevelColumn(dataset);
+        if (columnOpt.isEmpty()) {
+            return;
+        }
+        List<DataLevel> allowedList = accessChecker.resolveAllowedDataLevels();
+        if (allowedList == null || allowedList.isEmpty()) {
+            rows.clear();
+            return;
+        }
+        Set<DataLevel> allowedLevels = allowedList
+            .stream()
+            .filter(Objects::nonNull)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (allowedLevels.isEmpty()) {
+            rows.clear();
+            return;
+        }
+        Set<String> allowedTokens = allowedLevels
+            .stream()
+            .flatMap(level -> level.tokens().stream())
+            .map(token -> token.toUpperCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        String columnName = columnOpt.get();
+        int headerIndex = resolveHeaderIndex(headers, columnName);
+        rows.removeIf(row -> !isRowAllowed(row, headers, headerIndex, columnName, allowedLevels, allowedTokens));
+    }
+
+    private int resolveHeaderIndex(List<String> headers, String columnName) {
+        if (headers == null || columnName == null) {
+            return -1;
+        }
+        for (int i = 0; i < headers.size(); i++) {
+            String header = headers.get(i);
+            if (header != null && header.trim().equalsIgnoreCase(columnName)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private boolean isRowAllowed(
+        Map<String, Object> row,
+        List<String> headers,
+        int headerIndex,
+        String columnName,
+        Set<DataLevel> allowedLevels,
+        Set<String> allowedTokens
+    ) {
+        if (row == null || row.isEmpty()) {
+            return false;
+        }
+        Object rawValue = lookupValue(row, columnName);
+        if (rawValue == null && headerIndex >= 0 && headers != null && headerIndex < headers.size()) {
+            rawValue = lookupValue(row, headers.get(headerIndex));
+        }
+        if (rawValue == null) {
+            return false;
+        }
+        String text = rawValue.toString().trim();
+        if (text.isEmpty()) {
+            return false;
+        }
+        DataLevel normalized = DataLevel.normalize(text);
+        if (normalized != null) {
+            return allowedLevels.contains(normalized);
+        }
+        for (String variant : expandValueVariants(text)) {
+            if (allowedTokens.contains(variant)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Object lookupValue(Map<String, Object> row, String key) {
+        if (key == null) {
+            return null;
+        }
+        if (row.containsKey(key)) {
+            return row.get(key);
+        }
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(key)) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private Set<String> expandValueVariants(String raw) {
+        Set<String> variants = new LinkedHashSet<>();
+        if (raw == null) {
+            return variants;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return variants;
+        }
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        variants.add(upper);
+        variants.add(upper.replace('-', '_'));
+        variants.add(upper.replace('_', '-'));
+        variants.add(upper.replace(' ', '_'));
+        variants.add(upper.replace(' ', '-'));
+        variants.add(upper.replace('-', ' '));
+        variants.add(upper.replace('_', ' '));
+        return variants;
     }
 
 

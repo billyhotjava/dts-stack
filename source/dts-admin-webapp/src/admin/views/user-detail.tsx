@@ -110,9 +110,16 @@ export default function UserDetailView() {
       } catch (e) { /* ignore */ }
       // Hide Keycloak 内置/默认角色（如 default-roles-*、offline_access、uma_authorization、realm-management 等）
       const filtered = (mergedRoles || []).filter((r) => {
-        const name = (r?.name || "").toString();
-        if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
+        const name = (r?.name || "").toString().trim();
+        if (!name) return false;
+        const lower = name.toLowerCase();
+        if (GLOBAL_CONFIG.hideDefaultRoles && lower.startsWith("default-roles-")) return false;
         if (GLOBAL_CONFIG.hideBuiltinRoles && isKeycloakBuiltInRole(r as any)) return false;
+        if (name.startsWith("ROLE_")) {
+          const withoutPrefix = name.slice(5);
+          if (withoutPrefix === withoutPrefix.toUpperCase()) return false;
+        }
+        if (lower.startsWith("offline_access") || lower.startsWith("uma_authorization")) return false;
         return true;
       });
       setUserRoles(filtered);
@@ -260,7 +267,24 @@ export default function UserDetailView() {
     getSingleAttributeValue(user?.attributes, "phone_number") ||
     getSingleAttributeValue(user?.attributes, "mobile") ||
     getSingleAttributeValue(user?.attributes, "mobile_number");
-  const fullName = user?.firstName || user?.lastName || user?.attributes?.fullName?.[0] || "";
+  const fullName = (() => {
+    const attrs = user?.attributes || {};
+    const first = (user?.firstName || attrs?.firstName?.[0] || "").toString().trim();
+    const last = (user?.lastName || attrs?.lastName?.[0] || "").toString().trim();
+    const combined = `${first}${last}`.trim();
+    if (combined) return combined;
+    const candidates: Array<string | undefined> = [
+      user?.fullName as string | undefined,
+      attrs?.fullName?.[0],
+      attrs?.full_name?.[0],
+      attrs?.display_name?.[0],
+    ];
+    for (const value of candidates) {
+      const text = (value || "").toString().trim();
+      if (text) return text;
+    }
+    return "";
+  })();
   const email = user?.email || "";
 
   const getFilteredUserAttributes = () => {

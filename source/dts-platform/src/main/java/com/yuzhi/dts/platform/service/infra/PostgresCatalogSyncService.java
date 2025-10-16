@@ -166,6 +166,7 @@ public class PostgresCatalogSyncService {
                     entity.setName(column.name());
                     entity.setDataType(column.dataType());
                     entity.setNullable(column.nullable());
+                    entity.setComment(column.comment());
                     columnEntities.add(entity);
                 }
                 columnRepository.saveAll(columnEntities);
@@ -245,9 +246,19 @@ public class PostgresCatalogSyncService {
     private List<ColumnMeta> fetchColumns(Connection connection, String schema, String table) throws SQLException {
         String columnSql =
             """
-            SELECT column_name, data_type, is_nullable
-            FROM information_schema.columns
-            WHERE LOWER(table_schema) = LOWER(?) AND LOWER(table_name) = LOWER(?)
+            SELECT cols.column_name,
+                   cols.data_type,
+                   cols.is_nullable,
+                   pgd.description AS column_comment
+            FROM information_schema.columns cols
+            LEFT JOIN pg_catalog.pg_class c
+                ON c.relname = cols.table_name
+            LEFT JOIN pg_catalog.pg_namespace n
+                ON n.oid = c.relnamespace
+            LEFT JOIN pg_catalog.pg_description pgd
+                ON pgd.objoid = c.oid AND pgd.objsubid = cols.ordinal_position
+            WHERE LOWER(cols.table_schema) = LOWER(?) AND LOWER(cols.table_name) = LOWER(?)
+              AND (n.nspname IS NULL OR LOWER(n.nspname) = LOWER(cols.table_schema))
             ORDER BY ordinal_position
             """;
         List<ColumnMeta> columns = new ArrayList<>();
@@ -262,7 +273,15 @@ public class PostgresCatalogSyncService {
                     }
                     String dataType = defaultIfBlank(rs.getString("data_type"), "text");
                     String nullable = rs.getString("is_nullable");
-                    columns.add(new ColumnMeta(columnName.trim(), dataType.toLowerCase(Locale.ROOT), !"NO".equalsIgnoreCase(nullable)));
+                    String columnComment = rs.getString("column_comment");
+                    columns.add(
+                        new ColumnMeta(
+                            columnName.trim(),
+                            dataType.toLowerCase(Locale.ROOT),
+                            !"NO".equalsIgnoreCase(nullable),
+                            StringUtils.hasText(columnComment) ? columnComment.trim() : null
+                        )
+                    );
                 }
             }
         }
@@ -273,7 +292,7 @@ public class PostgresCatalogSyncService {
         return StringUtils.hasText(current) ? current : fallback;
     }
 
-    private record ColumnMeta(String name, String dataType, boolean nullable) {}
+    private record ColumnMeta(String name, String dataType, boolean nullable, String comment) {}
 
     private CatalogDomain resolveOrCreateDomain(String schema) {
         try {

@@ -670,15 +670,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         dto.setPath(stringValue(map.get("path")));
         dto.setDescription(stringValue(map.get("description")));
         Map<String, List<String>> attributes = stringListMap(map.get("attributes"));
-        if ((dto.getFullName() == null || dto.getFullName().isBlank()) && attributes != null) {
-            String attrFullName = firstAttribute(attributes, "fullName");
-            if (attrFullName == null) {
-                attrFullName = firstAttribute(attributes, "fullname");
-            }
-            if (attrFullName != null && !attrFullName.isBlank()) {
-                dto.setFullName(attrFullName);
-            }
-        }
+
         dto.setAttributes(attributes);
         dto.setRealmRoles(stringList(map.get("realmRoles")));
         dto.setClientRoles(stringListMap(map.get("clientRoles")));

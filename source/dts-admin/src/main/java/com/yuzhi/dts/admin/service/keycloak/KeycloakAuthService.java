@@ -329,11 +329,11 @@ public class KeycloakAuthService {
         );
         String givenName = firstNonBlank(user.get("given_name"), claims.get("given_name"), username);
         String familyName = firstNonBlank(user.get("family_name"), claims.get("family_name"));
-        String fullName = firstNonBlank(
-            user.get("fullName"),
-            claims.get("fullName"),
-            user.get("fullname"),
+String fullName = firstNonBlank(
             claims.get("fullname"),
+            user.get("fullname"),
+            claims.get("fullName"),
+            user.get("fullName"),
             user.get("name"),
             claims.get("name"),
             givenName,

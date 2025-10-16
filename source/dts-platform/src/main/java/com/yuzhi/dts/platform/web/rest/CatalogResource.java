@@ -312,6 +312,12 @@ public class CatalogResource {
                             colDto.put("nullable", col.getNullable());
                             colDto.put("tags", col.getTags());
                             colDto.put("sensitiveTags", col.getSensitiveTags());
+                            String columnComment = StringUtils.hasText(col.getComment()) ? col.getComment().trim() : null;
+                            colDto.put("comment", columnComment);
+                            colDto.put("description", columnComment);
+                            if (columnComment != null) {
+                                colDto.put("displayName", columnComment);
+                            }
                             columnDtos.add(colDto);
                         });
                     tableDto.put("columns", columnDtos);
@@ -718,6 +724,14 @@ public class CatalogResource {
                     Object nullable = cm.get("nullable");
                     col.setNullable(nullable == null || Boolean.parseBoolean(String.valueOf(nullable)));
                     col.setTags(Objects.toString(cm.get("tags"), null));
+                    String comment = Objects.toString(cm.get("displayName"), null);
+                    if (!StringUtils.hasText(comment)) {
+                        comment = Objects.toString(cm.get("comment"), null);
+                    }
+                    if (!StringUtils.hasText(comment)) {
+                        comment = Objects.toString(cm.get("description"), null);
+                    }
+                    col.setComment(StringUtils.hasText(comment) ? comment : null);
                     col.setSensitiveTags(Objects.toString(cm.get("sensitiveTags"), null));
                     columnRepo.save(col);
                     importedColumns++;
@@ -738,7 +752,8 @@ public class CatalogResource {
             .filter(c -> keyword == null || keyword.isBlank() ||
                 (c.getName() != null && c.getName().toLowerCase().contains(keyword.toLowerCase())) ||
                 (c.getTags() != null && c.getTags().toLowerCase().contains(keyword.toLowerCase())) ||
-                (c.getSensitiveTags() != null && c.getSensitiveTags().toLowerCase().contains(keyword.toLowerCase()))
+                (c.getSensitiveTags() != null && c.getSensitiveTags().toLowerCase().contains(keyword.toLowerCase())) ||
+                (c.getComment() != null && c.getComment().toLowerCase().contains(keyword.toLowerCase()))
             )
             .toList();
         audit.audit("READ", "catalog.column", String.valueOf(tableId));
@@ -766,6 +781,7 @@ public class CatalogResource {
         existing.setDataType(patch.getDataType());
         existing.setNullable(patch.getNullable());
         existing.setTags(patch.getTags());
+        existing.setComment(patch.getComment());
         existing.setSensitiveTags(patch.getSensitiveTags());
         var saved = columnRepo.save(existing);
         audit.audit("UPDATE", "catalog.column", id.toString());

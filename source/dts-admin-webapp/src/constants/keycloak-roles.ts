@@ -1,33 +1,17 @@
 import type { KeycloakRole } from "#/keycloak";
 
 // Reserved business roles to hide from assignment UIs (canonical names only)
-const RESERVED_ROLE_NAMES = new Set<string>([
-  "ROLE_SYS_ADMIN",
-  "ROLE_AUTH_ADMIN",
-  "ROLE_OP_ADMIN",
-  "ROLE_SECURITY_AUDITOR",
-]);
+const RESERVED_ROLE_PREFIXES = ["ROLE_SYS_ADMIN", "ROLE_AUTH_ADMIN", "ROLE_OP_ADMIN", "ROLE_SECURITY_AUDITOR"];
+const RESERVED_BUSINESS_ROLE_CODES = new Set(["SYSADMIN", "AUTHADMIN", "OPADMIN", "AUDITADMIN", "SECURITYAUDITOR"]);
 
-// Legacy code aliases kept only for filtering compatibility; UI will display canonical names.
-const RESERVED_ROLE_CODES = new Set<string>([
-  "SYSADMIN",
-  "AUTHADMIN",
-  "OPADMIN",
-  "SECURITYAUDITOR",
-  "AUDITORADMIN",
-]);
-
-function canonicalRole(value: string | null | undefined): string {
-  if (!value) return "";
-  return value.trim().toUpperCase().replace(/^ROLE[_-]?/, "").replace(/_/g, "");
-}
-
-export function isReservedBusinessRoleName(name: string | null | undefined): boolean {
-  if (!name) return false;
-  const upper = name.trim().toUpperCase();
-  if (RESERVED_ROLE_NAMES.has(upper)) return true;
-  return RESERVED_ROLE_CODES.has(canonicalRole(upper));
-}
+const normalizeReservedRole = (name: string | undefined | null): string => {
+  if (!name) return "";
+  const trimmed = name.trim();
+  if (!trimmed) return "";
+  const upper = trimmed.toUpperCase().replace(/[-\s]+/g, "_");
+  const withoutPrefix = upper.startsWith("ROLE_") ? upper.substring(5) : upper;
+  return withoutPrefix.replace(/_/g, "");
+};
 
 export function isKeycloakBuiltInRole(role: Pick<KeycloakRole, "name" | "clientRole" | "containerId">): boolean {
   const name = (role.name || "").trim();
@@ -45,5 +29,20 @@ export function isKeycloakBuiltInRole(role: Pick<KeycloakRole, "name" | "clientR
 }
 
 export function shouldHideRole(role: KeycloakRole): boolean {
-  return isReservedBusinessRoleName(role.name) || isKeycloakBuiltInRole(role);
+  const name = (role?.name || "").toString().trim().toUpperCase();
+  if (!name) return true;
+  if (RESERVED_ROLE_PREFIXES.some((prefix) => name === prefix || name === prefix.replace(/^ROLE_/, ""))) {
+    return true;
+  }
+  if (name.startsWith("ROLE_")) {
+    const body = name.slice(5);
+    if (body === body.toUpperCase()) return true;
+  }
+  return isKeycloakBuiltInRole(role);
+}
+
+export function isReservedBusinessRoleName(name: string | undefined | null): boolean {
+  const canonical = normalizeReservedRole(name);
+  if (!canonical) return false;
+  return RESERVED_BUSINESS_ROLE_CODES.has(canonical);
 }

@@ -12,7 +12,7 @@ import DataStandardDetailPage from "@/pages/modeling/DataStandardDetailPage";
 import QualityRulesPage from "@/pages/governance/QualityRulesPage";
 import CompliancePage from "@/pages/governance/CompliancePage";
 import FeaturePlaceholder from "@/pages/common/FeaturePlaceholder";
-import ProfilePage from "@/pages/account/ProfilePage";
+import PersonalProfilePage from "@/pages/settings/profile";
 
 export function getFrontendDashboardRoutes(): RouteObject[] {
     const sectionRoutes = PORTAL_NAV_SECTIONS.map((section) => {
@@ -83,7 +83,7 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
         path: "settings",
         children: [
             { index: true, element: <Navigate to="profile" replace /> },
-            { path: "profile", element: <ProfilePage /> },
+            { path: "profile", element: <PersonalProfilePage /> },
         ],
     });
 

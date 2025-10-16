@@ -28,18 +28,21 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
-import org.springframework.beans.factory.annotation.Qualifier;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class QualityRunService {
@@ -57,6 +60,7 @@ public class QualityRunService {
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final GovernanceProperties properties;
+    private final TransactionTemplate runTransactionTemplate;
 
     public QualityRunService(
         GovRuleRepository ruleRepository,
@@ -68,7 +72,8 @@ public class QualityRunService {
         HiveStatementExecutor hiveExecutor,
         AuditService auditService,
         ObjectMapper objectMapper,
-        GovernanceProperties properties
+        GovernanceProperties properties,
+        PlatformTransactionManager transactionManager
     ) {
         this.ruleRepository = ruleRepository;
         this.versionRepository = versionRepository;
@@ -80,6 +85,9 @@ public class QualityRunService {
         this.auditService = auditService;
         this.objectMapper = objectMapper;
         this.properties = properties;
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.runTransactionTemplate = template;
     }
 
     @Transactional
@@ -121,11 +129,19 @@ public class QualityRunService {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        dispatchIds.forEach(id -> taskExecutor.execute(() -> executeRun(id, params)));
+                        dispatchIds.forEach(id ->
+                            taskExecutor.execute(() ->
+                                runTransactionTemplate.executeWithoutResult(status -> doExecuteRun(id, params))
+                            )
+                        );
                     }
                 });
             } else {
-                dispatchIds.forEach(id -> taskExecutor.execute(() -> executeRun(id, params)));
+                dispatchIds.forEach(id ->
+                    taskExecutor.execute(() ->
+                        runTransactionTemplate.executeWithoutResult(status -> doExecuteRun(id, params))
+                    )
+                );
             }
         }
         auditService.audit("EXECUTE", "governance.quality.run",
@@ -171,8 +187,7 @@ public class QualityRunService {
             .collect(Collectors.toList());
     }
 
-    @Transactional
-    protected void executeRun(UUID runId, Map<String, Object> params) {
+    private void doExecuteRun(UUID runId, Map<String, Object> params) {
         GovQualityRun run = runRepository.findById(runId).orElseThrow(EntityNotFoundException::new);
         Instant start = Instant.now();
         run.setStatus("RUNNING");
