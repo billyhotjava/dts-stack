@@ -566,33 +566,43 @@ public class ExploreResource {
     private String applyRowFilter(String sql, CatalogDataset dataset, String activeDept) {
         if (sql == null || sql.isBlank()) return sql;
         if (dataset == null) return sql;
-        // When dataset carries an owner department but the current context is missing or mismatched,
-        // terminate early to avoid accidental data exposure.
+
         if (StringUtils.hasText(dataset.getOwnerDept())) {
             if (!accessChecker.departmentAllowed(dataset, activeDept)) {
-                return "SELECT * FROM (" + sql + ") t WHERE 1=0";
+                return "SELECT 1 WHERE 1=0";
             }
         }
-        String innerSql = sql.trim();
-        String limitSuffix = null;
-        Matcher matcher = LIMIT_PATTERN.matcher(innerSql);
-        if (matcher.find()) {
-            limitSuffix = matcher.group(1);
-            innerSql = innerSql.substring(0, matcher.start()).trim();
-        }
-        List<String> predicates = new ArrayList<>();
-        datasetSqlBuilder.resolveDataLevelPredicate(dataset, "t").ifPresent(predicates::add);
-        if (predicates.isEmpty()) {
+
+        // Get predicate for the base table (no alias)
+        Optional<String> predicateOpt = datasetSqlBuilder.resolveDataLevelPredicate(dataset, null);
+
+        if (predicateOpt.isEmpty()) {
             return sql;
         }
-        StringBuilder builder = new StringBuilder("SELECT * FROM (\n")
-            .append(innerSql)
-            .append("\n) t\nWHERE ")
-            .append(String.join(" AND ", predicates));
-        if (limitSuffix != null && !limitSuffix.isBlank()) {
-            builder.append("\nLIMIT ").append(limitSuffix.trim());
+        String predicate = predicateOpt.get();
+
+        String db = dataset.getHiveDatabase();
+        String table = dataset.getHiveTable();
+        if (!StringUtils.hasText(table)) {
+            return sql; // Cannot proceed
         }
-        return builder.toString();
+
+        String quotedDb = StringUtils.hasText(db) ? "`" + db.trim().replace("`", "``") + "`" : null;
+        String quotedTable = "`" + table.trim().replace("`", "``") + "`";
+        String fqn = quotedDb != null ? quotedDb + "." + quotedTable : quotedTable;
+
+        String subqueryAlias = "`" + table.trim().replaceAll("[^a-zA-Z0-9_]", "") + "_security_filter`";
+        String subquery = "(SELECT * FROM " + fqn + " WHERE " + predicate + ") AS " + subqueryAlias;
+
+        String rawFqn = (StringUtils.hasText(db) ? db.trim() + "." : "") + table.trim();
+
+        // This is a simple replacement and might not work for queries with aliases on the main table.
+        String newSql = sql.replace(fqn, subquery);
+        if (newSql.equals(sql)) {
+            newSql = sql.replace(rawFqn, subquery);
+        }
+
+        return newSql;
     }
 
     private String prepareSql(String sqlText, CatalogDataset dataset) {

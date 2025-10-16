@@ -20,26 +20,6 @@ import { apiPublish, apiExecute } from "@/api/platformApi";
 import SensitiveNotice from "@/components/security/SensitiveNotice";
 import { useActiveDept } from "@/store/contextStore";
 
-
-function LevelBadge({ level }: { level?: string | null }) {
-	if (!level) {
-		return <Badge variant="outline" className="border border-dashed text-muted-foreground">未设置</Badge>;
-	}
-	const color =
-		level === "机密"
-			? "bg-rose-100 text-rose-700 border-rose-300"
-			: level === "秘密"
-				? "bg-red-100 text-red-700 border-red-300"
-				: level === "内部"
-					? "bg-amber-100 text-amber-800 border-amber-300"
-					: "bg-slate-100 text-slate-700 border-slate-300";
-	return (
-		<Badge variant="outline" className={`border ${color}`}>
-			{level}
-		</Badge>
-	);
-}
-
 export default function ApiServiceDetailPage() {
 	const params = useParams();
 	const router = useRouter();
@@ -55,7 +35,6 @@ export default function ApiServiceDetailPage() {
 	const [formValues, setFormValues] = useState<Record<string, string>>({});
 	const [simType, setSimType] = useState<"user" | "role">("user");
 	const [simIdentity, setSimIdentity] = useState<string>("");
-	const [simLevel, setSimLevel] = useState<string>("内部");
     const [tryRes, setTryRes] = useState<TryInvokeResponse | null>(null);
     const [publishing, setPublishing] = useState(false);
     const [execRes, setExecRes] = useState<any | null>(null);
@@ -83,14 +62,14 @@ export default function ApiServiceDetailPage() {
 
 	// Chart options (hooks must be called at top-level, not conditionally)
 	const lineOptions = useChart({ xaxis: { type: "datetime" }, stroke: { width: 2 } });
-	const pieOptions = useChart({ chart: { type: "pie" } });
 
 	const onTry = async () => {
 		setTrying(true);
 		try {
+			const level = detail?.classification ?? "内部";
 			const data = await apiService.tryInvoke(id, {
 				params: formValues,
-				identity: { type: simType, id: simIdentity, level: simLevel },
+				identity: { type: simType, id: simIdentity, level },
 			});
 			setTryRes(data);
 		} finally {
@@ -119,11 +98,10 @@ export default function ApiServiceDetailPage() {
 						{detail.lastPublishedAt && <span>最近发布：{new Date(detail.lastPublishedAt).toLocaleString()}</span>}
 					</div>
 				</div>
-                <div className="flex items-center gap-3">
-                    <LevelBadge level={detail.classification} />
-                    <Badge variant="outline">
-                        QPS {detail.qps}/{detail.qpsLimit}
-                    </Badge>
+		<div className="flex items-center gap-3">
+			<Badge variant="outline">
+				QPS {detail.qps}/{detail.qpsLimit}
+			</Badge>
                     <Button variant="outline" onClick={() => router.push("/services/api")}>
                         返回列表
                     </Button>
@@ -214,15 +192,11 @@ export default function ApiServiceDetailPage() {
 								<CardHeader>
 									<CardTitle className="text-base">策略摘要</CardTitle>
 								</CardHeader>
-							<CardContent className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                            <span>最低数据密级：</span>
-                            <LevelBadge level={detail.policy?.minLevel} />
-                        </div>
-								<div>
-									列掩码：
-									{detail.policy?.maskedColumns?.length ? detail.policy.maskedColumns.join("、") : "-"}
-								</div>
+					<CardContent className="space-y-2 text-sm">
+						<div>
+							列掩码：
+							{detail.policy?.maskedColumns?.length ? detail.policy.maskedColumns.join("、") : "-"}
+						</div>
 								<div>
 									行过滤：{" "}
 									{detail.policy?.rowFilter ? (
@@ -300,7 +274,7 @@ export default function ApiServiceDetailPage() {
 								</div>
 								<div className="space-y-2">
 									<Label className="text-xs text-muted-foreground">模拟身份（治理可见）</Label>
-									<div className="flex items-center gap-2">
+									<div className="flex flex-wrap items-center gap-2">
 										<Select value={simType} onValueChange={(v) => setSimType(v as any)}>
 											<SelectTrigger className="w-[120px]">
 												<SelectValue />
@@ -316,34 +290,24 @@ export default function ApiServiceDetailPage() {
 											value={simIdentity}
 											onChange={(e) => setSimIdentity(e.target.value)}
 										/>
-										<Select value={simLevel} onValueChange={setSimLevel}>
-											<SelectTrigger className="w-[120px]">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="公开">公开</SelectItem>
-												<SelectItem value="内部">内部</SelectItem>
-												<SelectItem value="秘密">秘密</SelectItem>
-												<SelectItem value="机密">机密</SelectItem>
-											</SelectContent>
-										</Select>
-                                <Button onClick={onTry} disabled={trying || !simIdentity}>
-                                    {trying ? "试调中…" : "执行"}
-                                </Button>
-                                <Button
-                                    variant="secondary"
-                                    onClick={async () => {
-                                        try {
-                                            const r = (await apiExecute(id, { params: formValues })) as any;
-                                            setExecRes(r);
-                                        } catch (e) {
-                                            console.error(e);
-                                            toast.error("在线执行失败");
-                                        }
-                                    }}
-                                >
-                                    在线执行
-                                </Button>
+										<Button onClick={onTry} disabled={trying || !simIdentity}>
+											{trying ? "试调中…" : "执行"}
+										</Button>
+										<Button
+											variant="secondary"
+											onClick={async () => {
+												try {
+													const r = (await apiExecute(id, { params: formValues })) as any;
+													setExecRes(r);
+												} catch (e) {
+													console.error(e);
+													toast.error("在线执行失败");
+												}
+											}}
+											disabled={trying}
+										>
+											在线执行
+										</Button>
 									</div>
 								</div>
 							</div>
@@ -439,22 +403,6 @@ export default function ApiServiceDetailPage() {
 								)}
 							</CardContent>
 						</Card>
-						<Card>
-							<CardHeader>
-                            <CardTitle className="text-base">不同数据密级用户调用占比</CardTitle>
-							</CardHeader>
-							<CardContent>
-								{metrics ? (
-									<Chart
-										height={280}
-										series={metrics.levelDistribution.map((d) => d.value)}
-										options={{ ...pieOptions, labels: metrics.levelDistribution.map((d) => d.label) }}
-									/>
-								) : (
-									<div className="text-sm text-muted-foreground">加载中…</div>
-								)}
-							</CardContent>
-						</Card>
 					</div>
 
 					<Card>
@@ -467,22 +415,18 @@ export default function ApiServiceDetailPage() {
 									<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
 										<tr>
 											<th className="px-3 py-2 font-medium">用户</th>
-                                    <th className="px-3 py-2 font-medium">数据密级</th>
 											<th className="px-3 py-2 font-medium">出行数</th>
 											<th className="px-3 py-2 font-medium">策略命中</th>
 										</tr>
 									</thead>
 									<tbody>
-										{metrics.recentCalls.map((c, idx) => (
-											<tr key={idx} className="border-b last:border-b-0">
-												<td className="px-3 py-2">{c.user}</td>
-												<td className="px-3 py-2">
-													<LevelBadge level={c.level} />
-												</td>
-												<td className="px-3 py-2">{c.rowCount}</td>
-												<td className="px-3 py-2">{c.policy}</td>
-											</tr>
-										))}
+								{metrics.recentCalls.map((c, idx) => (
+									<tr key={idx} className="border-b last:border-b-0">
+										<td className="px-3 py-2">{c.user}</td>
+										<td className="px-3 py-2">{c.rowCount}</td>
+										<td className="px-3 py-2">{c.policy}</td>
+									</tr>
+								))}
 									</tbody>
 								</table>
 							) : (

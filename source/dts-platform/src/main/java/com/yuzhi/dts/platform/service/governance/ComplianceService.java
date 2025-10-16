@@ -214,6 +214,12 @@ public class ComplianceService {
         batchRepository.save(batch);
     }
 
+    public void deleteBatch(UUID batchId, String actor) {
+        GovComplianceBatch batch = batchRepository.findById(batchId).orElseThrow(EntityNotFoundException::new);
+        batchRepository.delete(batch);
+        auditService.audit("DELETE", "governance.compliance.batch", actor + ":" + batchId);
+    }
+
     private List<String> normalizeStatuses(List<String> statuses) {
         if (statuses == null || statuses.isEmpty()) {
             return Collections.emptyList();

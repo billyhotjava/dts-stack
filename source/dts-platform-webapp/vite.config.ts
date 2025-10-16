@@ -118,7 +118,7 @@ export default defineConfig(({ mode }) => {
 		},
 
 		build: {
-			target: "esnext",
+			target: "chrome98",
 			minify: "esbuild",
 			sourcemap: !isProduction,
 			cssCodeSplit: true,
@@ -143,7 +143,7 @@ export default defineConfig(({ mode }) => {
 		esbuild: {
 			drop: isProduction ? ["console", "debugger"] : [],
 			legalComments: "none",
-			target: "esnext",
+			target: "chrome98",
 		},
 
     // Do not attempt to resolve absolute container paths in CSS urls

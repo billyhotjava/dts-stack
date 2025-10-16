@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { Button } from "@/ui/button";
+import { Badge } from "@/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
@@ -14,8 +15,6 @@ import { toast } from "sonner";
 import {
 	getDataset,
 	updateDataset,
-	getAccessPolicy,
-	upsertAccessPolicy,
 	previewDataset,
 	listDatasetGrants,
 	createDatasetGrant,
@@ -26,16 +25,10 @@ import deptService, { type DeptDto } from "@/api/services/deptService";
 import userDirectoryService, { type UserDirectoryEntry } from "@/api/services/userDirectoryService";
 import { useRouter } from "@/routes/hooks";
 import { normalizeClassification } from "@/utils/classification";
+import { renderDataLevelLabel } from "@/constants/governance";
 import { useUserInfo } from "@/store/userStore";
 import { cn } from "@/utils";
 import { Check, ChevronsUpDown } from "lucide-react";
-
-const DATA_LEVELS = [
-  { value: "DATA_PUBLIC", label: "公开 (DATA_PUBLIC)" },
-  { value: "DATA_INTERNAL", label: "内部 (DATA_INTERNAL)" },
-  { value: "DATA_SECRET", label: "秘密 (DATA_SECRET)" },
-  { value: "DATA_TOP_SECRET", label: "机密 (DATA_TOP_SECRET)" },
-] as const;
 
 const parseStringList = (value: unknown): string[] => {
 	if (Array.isArray(value)) {
@@ -52,32 +45,53 @@ const parseStringList = (value: unknown): string[] => {
 	return [];
 };
 
-const EMPTY_DEPT_VALUE = "__EMPTY__";
-const normalizeRoleName = (name: string): string => {
-	const trimmed = (name || "").trim();
-	if (!trimmed) return "";
-	const upper = trimmed.toUpperCase();
-	return upper.startsWith("ROLE_") ? upper : `ROLE_${upper}`;
+const pickFirstString = (...values: unknown[]): string | undefined => {
+	for (const value of values) {
+		if (typeof value === "string") {
+			const trimmed = value.trim();
+			if (trimmed.length > 0) {
+				return trimmed;
+			}
+		}
+	}
+	return undefined;
 };
 
-const parseAllowRoles = (raw: unknown): string[] => {
-	const result: string[] = [];
-	const push = (value: string) => {
-		const normalized = normalizeRoleName(value);
-		if (!normalized) return;
-		if (!result.includes(normalized)) result.push(normalized);
-	};
-	if (Array.isArray(raw)) {
-		raw.forEach((item) => push(String(item ?? "")));
-	} else if (typeof raw === "string") {
-		raw
-			.split(/[,，\s]+/)
-			.map((token) => token.trim())
-			.filter(Boolean)
-			.forEach(push);
+const resolveColumnDisplayName = (column: any): string | undefined => {
+	const direct = pickFirstString(
+		column?.displayName,
+		column?.alias,
+		column?.label,
+		column?.bizName,
+		column?.bizLabel,
+		column?.cnName,
+		column?.zhName,
+		column?.nameZh,
+		column?.nameCn,
+		column?.chineseName,
+		column?.description,
+		column?.comment,
+	);
+	if (direct) {
+		return direct;
 	}
-	return result;
+	if (column?.metadata && typeof column.metadata === "object" && column.metadata !== null) {
+		return pickFirstString(
+			(column.metadata as any).displayName,
+			(column.metadata as any).alias,
+			(column.metadata as any).label,
+			(column.metadata as any).cnName,
+			(column.metadata as any).zhName,
+			(column.metadata as any).nameZh,
+			(column.metadata as any).nameCn,
+			(column.metadata as any).description,
+			(column.metadata as any).comment,
+		);
+	}
+	return undefined;
 };
+
+const EMPTY_DEPT_VALUE = "__EMPTY__";
 
 export default function DatasetDetailPage() {
 	const params = useParams();
@@ -97,6 +111,23 @@ export default function DatasetDetailPage() {
 		}
 		return set;
 	}, [userRoles]);
+	const hasDataMaintainerRole = useMemo(() => {
+		const maintainers = [
+			"ROLE_OP_ADMIN",
+			"OPADMIN",
+			"ROLE_ADMIN",
+			"ADMIN",
+			"ROLE_INST_DATA_OWNER",
+			"INST_DATA_OWNER",
+			"ROLE_INST_DATA_DEV",
+			"INST_DATA_DEV",
+			"ROLE_DEPT_DATA_OWNER",
+			"DEPT_DATA_OWNER",
+			"ROLE_DEPT_DATA_DEV",
+			"DEPT_DATA_DEV",
+		];
+		return maintainers.some((role) => normalizedRoleSet.has(role));
+	}, [normalizedRoleSet]);
 	const currentUsername = useMemo(() => {
 		const candidates = [
 			(userInfo as any)?.preferred_username,
@@ -109,15 +140,7 @@ export default function DatasetDetailPage() {
 		return "";
 	}, [userInfo]);
 	const isOpadmin = useMemo(() => currentUsername.toLowerCase() === "opadmin", [currentUsername]);
-	const canManageGrants = useMemo(
-		() =>
-			isOpadmin ||
-			normalizedRoleSet.has("ROLE_OP_ADMIN") ||
-			normalizedRoleSet.has("ROLE_ADMIN") ||
-			normalizedRoleSet.has("ROLE_CATALOG_ADMIN") ||
-			normalizedRoleSet.has("ROLE_INST_DATA_OWNER"),
-		[isOpadmin, normalizedRoleSet],
-	);
+	const canManageGrants = useMemo(() => isOpadmin || hasDataMaintainerRole, [hasDataMaintainerRole, isOpadmin]);
 	const [grants, setGrants] = useState<DatasetGrant[]>([]);
 	const [grantLoading, setGrantLoading] = useState(false);
 	const [grantDialogOpen, setGrantDialogOpen] = useState(false);
@@ -132,18 +155,8 @@ export default function DatasetDetailPage() {
 		if (dataset && "editable" in dataset) {
 			return Boolean((dataset as any).editable);
 		}
-		return (
-			isOpadmin ||
-			normalizedRoleSet.has("ROLE_OP_ADMIN") ||
-			normalizedRoleSet.has("ROLE_ADMIN") ||
-			normalizedRoleSet.has("ROLE_CATALOG_ADMIN") ||
-			normalizedRoleSet.has("ROLE_INST_DATA_OWNER") ||
-			normalizedRoleSet.has("ROLE_DEPT_DATA_OWNER")
-		);
-	}, [dataset, isOpadmin, normalizedRoleSet]);
-	const [allowRoles, setAllowRoles] = useState<string[]>([]);
-	const [rowFilter, setRowFilter] = useState("");
-	const [defaultMasking, setDefaultMasking] = useState("NONE");
+		return isOpadmin || hasDataMaintainerRole;
+	}, [dataset, hasDataMaintainerRole, isOpadmin]);
 	const [activeTab, setActiveTab] = useState("overview");
 	const [sampleData, setSampleData] = useState<{ headers: string[]; rows: any[] } | null>(null);
 	const [sampleLoading, setSampleLoading] = useState(false);
@@ -367,13 +380,16 @@ export default function DatasetDetailPage() {
                                       if (!columnName) {
                                           return null;
                                       }
+                                      const localizedName = resolveColumnDisplayName(col);
                                       return {
                                           id: String(col?.id ?? columnName),
                                           name: columnName,
+                                          displayName: localizedName,
                                           dataType: String(col?.dataType ?? "").toUpperCase(),
                                           nullable: col?.nullable !== false,
                                           tags: parseStringList(col?.tags),
                                           sensitiveTags: parseStringList(col?.sensitiveTags),
+                                          description: pickFirstString(col?.description, col?.comment),
                                       };
                                   })
                                   .filter(Boolean)
@@ -392,17 +408,6 @@ export default function DatasetDetailPage() {
             normalized.owner = String((data as any)?.owner || "");
             normalized.description = String((data as any)?.description || "");
             setDataset(normalized);
-            try {
-                const p = (await getAccessPolicy(id)) as any;
-                if (p) {
-                    const parsedRoles = parseAllowRoles(p.allowRoles);
-                    setAllowRoles(parsedRoles);
-                    setRowFilter(p.rowFilter || "");
-                    setDefaultMasking(p.defaultMasking || "NONE");
-                }
-            } catch (inner) {
-                console.warn("Failed to load policy", inner);
-            }
         } catch (e) {
             console.error(e);
             toast.error("加载失败");
@@ -512,21 +517,21 @@ export default function DatasetDetailPage() {
 	};
 	delete payload.scope;
 	delete payload.shareScope;
- const normalizedRoles = allowRoles.map(normalizeRoleName).filter(Boolean);
-        setSaving(true);
-        try {
-            await updateDataset(dataset.id, payload);
-            await upsertAccessPolicy(dataset.id, { allowRoles: normalizedRoles.join(","), rowFilter, defaultMasking });
-            setAllowRoles(normalizedRoles);
-            toast.success("已保存");
-            // 返回目录列表
-            try { router.push("/catalog/assets"); } catch {}
-        } catch (e) {
-            console.error(e);
-            toast.error("保存失败");
-        } finally {
-            setSaving(false);
-        }
+	setSaving(true);
+	try {
+		await updateDataset(dataset.id, payload);
+		toast.success("已保存");
+		try {
+			router.push("/catalog/assets");
+		} catch {
+			// ignore navigation errors
+		}
+	} catch (e) {
+		console.error(e);
+		toast.error("保存失败");
+	} finally {
+		setSaving(false);
+	}
     };
 
     // Legacy classification UI removed; only DATA_* is used going forward
@@ -607,24 +612,12 @@ export default function DatasetDetailPage() {
 								</div>
 								<div className="grid gap-2">
 									<Label>数据密级</Label>
-									<Select
-										value={(dataset.dataLevel as DataLevel) || "DATA_INTERNAL"}
-										disabled={!editable}
-										onValueChange={(v: DataLevel) =>
-											setDataset({ ...(dataset as DatasetAsset), dataLevel: v })
-										}
-									>
-										<SelectTrigger>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{DATA_LEVELS.map((l) => (
-												<SelectItem key={l.value} value={l.value}>
-													{l.label}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
+									<div className="flex items-center gap-2 rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-2">
+										<Badge variant="outline">
+											{renderDataLevelLabel((dataset.dataLevel as DataLevel) || "DATA_INTERNAL")}
+										</Badge>
+										<span className="text-xs text-muted-foreground">密级由系统自动判定</span>
+									</div>
 								</div>
 								<div className="grid gap-2">
 									<Label>所属部门 *</Label>
@@ -727,6 +720,7 @@ export default function DatasetDetailPage() {
 														<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
 															<tr>
 																<th className="px-3 py-2">列名</th>
+																<th className="px-3 py-2">中文名</th>
 																<th className="px-3 py-2">类型</th>
 																<th className="px-3 py-2">可为空</th>
 																<th className="px-3 py-2">标签</th>
@@ -747,6 +741,9 @@ export default function DatasetDetailPage() {
 																		className="border-b border-border/40 last:border-b-0"
 																	>
 																		<td className="px-3 py-2 text-xs font-medium">{column.name}</td>
+																		<td className="px-3 py-2 text-xs text-muted-foreground">
+																			{column.displayName || "-"}
+																		</td>
 																		<td className="px-3 py-2 text-xs">{column.dataType || "-"}</td>
 																		<td className="px-3 py-2 text-xs">
 																			{column.nullable === false ? "否" : "是"}

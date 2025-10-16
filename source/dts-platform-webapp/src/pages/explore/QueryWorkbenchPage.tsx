@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation, useNavigate } from "react-router";
+import { Icon } from "@/components/icon";
+import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Checkbox } from "@/ui/checkbox";
@@ -12,14 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
 import {
 	executeExplore,
-	explainExplore,
 	saveExploreResult,
 	listQueryExecutions,
 	listSavedQueries,
 	getSavedQuery,
 	listDatasets,
-	listTablesByDataset,
-	listColumnsByTable,
+	getDataset,
 } from "@/api/platformApi";
 import { CLASSIFICATION_LABELS_ZH, normalizeClassification, type ClassificationLevel } from "@/utils/classification";
 import { GLOBAL_CONFIG } from "@/global-config";
@@ -84,10 +84,24 @@ function toUiDataset(apiItem: any): Dataset {
 	};
 }
 
+type AggregationFunction =
+	| "SUM"
+	| "AVG"
+	| "COUNT"
+	| "COUNT_DISTINCT"
+	| "MIN"
+	| "MAX"
+	| "STDDEV_SAMP"
+	| "STDDEV_POP"
+	| "VARIANCE_SAMP"
+	| "VARIANCE_POP"
+	| "COLLECT_SET"
+	| "COLLECT_LIST";
+
 type Aggregation = {
 	id: string;
 	field: string;
-	fn: "SUM" | "AVG" | "MIN" | "MAX" | "COUNT";
+	fn: AggregationFunction;
 };
 
 type FilterOperator = "=" | ">" | ">=" | "<" | "<=" | "<>" | "LIKE";
@@ -107,6 +121,7 @@ type VisualSort = {
 
 type VisualQueryState = {
 	fields: string[];
+	groupings: string[];
 	aggregations: Aggregation[];
 	filters: VisualFilter[];
 	sorters: VisualSort[];
@@ -147,17 +162,27 @@ const QUOTA_USAGE = [
 	{ name: "当前会话资源组", value: "analysis-medium" },
 ];
 
-function createDefaultVisualState(dataset?: Dataset): VisualQueryState {
-	const fields = dataset ? dataset.fields.slice(0, 3).map((field) => field.name) : [];
+const AGGREGATION_FUNCTION_OPTIONS: Array<{ value: AggregationFunction; label: string; hint: string }> = [
+	{ value: "SUM", label: "SUM", hint: "求和" },
+	{ value: "AVG", label: "AVG", hint: "平均值" },
+	{ value: "COUNT", label: "COUNT", hint: "总行数" },
+	{ value: "COUNT_DISTINCT", label: "COUNT_DISTINCT", hint: "去重计数" },
+	{ value: "MAX", label: "MAX", hint: "最大值" },
+	{ value: "MIN", label: "MIN", hint: "最小值" },
+	{ value: "STDDEV_SAMP", label: "STDDEV_SAMP", hint: "样本标准差" },
+	{ value: "STDDEV_POP", label: "STDDEV_POP", hint: "总体标准差" },
+	{ value: "VARIANCE_SAMP", label: "VARIANCE_SAMP", hint: "样本方差" },
+	{ value: "VARIANCE_POP", label: "VARIANCE_POP", hint: "总体方差" },
+	{ value: "COLLECT_SET", label: "COLLECT_SET", hint: "去重列表" },
+	{ value: "COLLECT_LIST", label: "COLLECT_LIST", hint: "全量列表" },
+];
+
+function createDefaultVisualState(): VisualQueryState {
+	const fields: string[] = [];
 	return {
 		fields,
-		aggregations:
-			dataset && dataset.fields.some((field) => field.name === "amount")
-				? [
-						{ id: "agg-1", field: "amount", fn: "SUM" },
-						{ id: "agg-2", field: "quantity", fn: "SUM" },
-					]
-				: [],
+		groupings: [],
+		aggregations: [],
 		filters: [],
 		sorters: [],
 		limit: 100,
@@ -173,15 +198,6 @@ function classificationBadge(level: Classification) {
 	);
 }
 
-function formatSQL(query: string) {
-	return query
-		.split("\n")
-		.map((line) => line.trim())
-		.filter(Boolean)
-		.join("\n")
-		.trim();
-}
-
 function buildTableReference(dataset: Dataset) {
 	const segments = [dataset.database, dataset.schema, dataset.name]
 		.map((segment) => (segment ?? "").trim())
@@ -192,16 +208,65 @@ function buildTableReference(dataset: Dataset) {
 	return segments.join(".");
 }
 
+function sanitizeAliasCore(raw: string) {
+	return raw.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^_+|_+$/g, "") || "col";
+}
+
+function buildAggregationExpression(aggregation: Aggregation, fallbackField: string): string {
+	const rawField = aggregation.field && aggregation.field.trim().length ? aggregation.field.trim() : "*";
+	const fallbackCandidate = fallbackField && fallbackField.trim().length ? fallbackField.trim() : "1";
+	const fallback = fallbackCandidate === "*" ? "1" : fallbackCandidate;
+	const expressionField = rawField === "*" ? fallback : rawField;
+	const aliasSeed = rawField === "*" ? (fallback === "1" ? "value" : fallback) : rawField;
+	const alias = `${aggregation.fn.toLowerCase()}_${sanitizeAliasCore(aliasSeed === "*" ? "all" : aliasSeed)}`;
+
+	switch (aggregation.fn) {
+		case "COUNT":
+			return `${rawField === "*" ? "COUNT(*)" : `COUNT(${expressionField})`} AS ${alias}`;
+		case "COUNT_DISTINCT": {
+			if (rawField === "*" || expressionField.trim().length === 0) {
+				return `COUNT(*) AS ${alias}`;
+			}
+			return `COUNT(DISTINCT ${expressionField}) AS ${alias}`;
+		}
+		case "COLLECT_SET":
+			return `COLLECT_SET(${expressionField === "*" ? fallback : expressionField}) AS ${alias}`;
+		case "COLLECT_LIST":
+			return `COLLECT_LIST(${expressionField === "*" ? fallback : expressionField}) AS ${alias}`;
+		case "STDDEV_SAMP":
+		case "STDDEV_POP":
+		case "VARIANCE_SAMP":
+		case "VARIANCE_POP":
+			return `${aggregation.fn}(${expressionField === "*" ? fallback : expressionField}) AS ${alias}`;
+		default:
+			return `${aggregation.fn}(${expressionField === "*" ? fallback : expressionField}) AS ${alias}`;
+	}
+}
+
 function generateSQLFromVisual(state: VisualQueryState, dataset?: Dataset) {
 	if (!dataset) return "";
 	const tableRef = buildTableReference(dataset) || dataset.name || dataset.schema || "";
 	const selectFragments = state.fields.length ? state.fields : ["*"];
-	const aggFragments = state.aggregations.map(
-		(aggregation) => `${aggregation.fn}(${aggregation.field}) AS ${aggregation.fn.toLowerCase()}_${aggregation.field}`,
-	);
+	const fallbackForAgg =
+		state.fields[0] ??
+		state.groupings[0] ??
+		(dataset.fields.find((field) => field.name)?.name ?? dataset.fields[0]?.name ?? "1");
+	const aggFragments = state.aggregations.map((aggregation) => buildAggregationExpression(aggregation, fallbackForAgg || "*"));
 	const selectClause = [...selectFragments, ...aggFragments].join(", \n    ");
 	const filters = state.filters.map((filter) => `${filter.field} ${filter.operator} '${filter.value}'`).join(" AND ");
 	const orderClause = state.sorters.map((sorter) => `${sorter.field} ${sorter.direction}`).join(", ");
+	const groupSource = state.groupings.length ? state.groupings : state.fields;
+	const groupClause =
+		state.aggregations.length && groupSource.length
+			? Array.from(
+					new Set(
+						groupSource
+							.map((item) => item.trim())
+							.filter((item) => item.length > 0)
+							.filter((item) => item !== "*"),
+					),
+			  )
+			: [];
 	if (!tableRef) {
 		return "SELECT 1";
 	}
@@ -209,6 +274,7 @@ function generateSQLFromVisual(state: VisualQueryState, dataset?: Dataset) {
 		`SELECT\n    ${selectClause || "*"}`,
 		`FROM ${tableRef}`,
 		filters ? `WHERE ${filters}` : null,
+		groupClause.length ? `GROUP BY ${groupClause.join(", ")}` : null,
 		orderClause ? `ORDER BY ${orderClause}` : null,
 		`LIMIT ${state.limit}`,
 	]
@@ -258,8 +324,28 @@ function toNumber(value: unknown): number | undefined {
 	return undefined;
 }
 
+function extractErrorInfo(error: any): { message: string; detail?: string } {
+	if (!error) {
+		return { message: "查询失败，请稍后重试" };
+	}
+	const response = (error as any)?.response;
+	const data = response?.data;
+	const messageSources = [
+		data?.message,
+		data?.error,
+		(error as any)?.message,
+	];
+	const message =
+		messageSources.find((item) => typeof item === "string" && item.trim().length > 0)?.trim() ??
+		"查询失败，请稍后重试";
+	const detailSources = [data?.detail, data?.cause, data?.stack, response?.statusText];
+	const detail = detailSources.find((item) => typeof item === "string" && item.trim().length > 0)?.trim();
+	return { message, detail };
+}
+
 type VisualBuilderProps = {
 	fields: DatasetField[];
+	dataset?: Dataset | null;
 	state: VisualQueryState;
 	onToggleField: (field: string, checked: boolean) => void;
 	onAggregationChange: (id: string, patch: Partial<Aggregation>) => void;
@@ -272,10 +358,14 @@ type VisualBuilderProps = {
 	onSortChange: (id: string, patch: Partial<VisualSort>) => void;
 	onSortRemove: (id: string) => void;
 	onLimitChange: (limit: number) => void;
+	onGroupingToggle: (field: string, checked: boolean) => void;
+	onGroupingsSync: () => void;
+	onGroupingsClear: () => void;
 };
 
 function VisualQueryBuilder({
 	fields,
+	dataset,
 	state,
 	onToggleField,
 	onAggregationAdd,
@@ -288,32 +378,154 @@ function VisualQueryBuilder({
 	onSortChange,
 	onSortRemove,
 	onLimitChange,
+	onGroupingToggle,
+	onGroupingsSync,
+	onGroupingsClear,
 }: VisualBuilderProps) {
+	const [fieldKeyword, setFieldKeyword] = useState("");
+	const normalizedKeyword = fieldKeyword.trim().toLowerCase();
+	const filteredFields = useMemo(() => {
+		if (!normalizedKeyword) {
+			return fields;
+		}
+		return fields.filter((field) => {
+			const nameHit = field.name.toLowerCase().includes(normalizedKeyword);
+			const typeHit = field.type.toLowerCase().includes(normalizedKeyword);
+			const descHit = field.description?.toLowerCase().includes(normalizedKeyword);
+			const termHit = field.term?.toLowerCase().includes(normalizedKeyword);
+			return Boolean(nameHit || typeHit || descHit || termHit);
+		});
+	}, [fields, normalizedKeyword]);
+	const focusFields = normalizedKeyword ? filteredFields : fields;
+	const selectedInFocus = focusFields.filter((field) => state.fields.includes(field.name)).length;
+	const allSelected = focusFields.length > 0 && selectedInFocus === focusFields.length;
+	const hasSelection = selectedInFocus > 0;
+	const toggleAllCheckedState = allSelected ? true : hasSelection ? "indeterminate" : false;
+	const aggregationFieldOptions = useMemo(() => {
+		const options = new Set<string>();
+		options.add("*");
+		fields.forEach((field) => options.add(field.name));
+		state.aggregations.forEach((aggregation) => {
+			if (aggregation.field) {
+				options.add(aggregation.field);
+			}
+		});
+		return Array.from(options);
+	}, [fields, state.aggregations]);
+
+	const handleToggleAllFields = (checked: boolean | "indeterminate") => {
+		const nextChecked = checked === "indeterminate" ? true : Boolean(checked);
+		const targetFields = focusFields;
+		if (nextChecked) {
+			targetFields.forEach((field) => {
+				if (!state.fields.includes(field.name)) {
+					onToggleField(field.name, true);
+				}
+			});
+			return;
+		}
+		targetFields.forEach((field) => {
+			if (state.fields.includes(field.name)) {
+				onToggleField(field.name, false);
+			}
+		});
+	};
+
+	const generatedSql = useMemo(() => generateSQLFromVisual(state, dataset ?? undefined), [state, dataset]);
+	const canCopySql = generatedSql.trim().length > 0;
+	const datasetClassificationLabel =
+		dataset && dataset.classification ? CLASSIFICATION_META[dataset.classification]?.label ?? dataset.classification : null;
+	const handleCopySql = useCallback(async () => {
+		if (!canCopySql) {
+			return;
+		}
+		try {
+			if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(generatedSql);
+			} else if (typeof document !== "undefined") {
+				const textarea = document.createElement("textarea");
+				textarea.value = generatedSql;
+				textarea.setAttribute("readonly", "");
+				textarea.style.position = "absolute";
+				textarea.style.left = "-9999px";
+				document.body.appendChild(textarea);
+				textarea.select();
+				document.execCommand("copy");
+				document.body.removeChild(textarea);
+			}
+			toast.success("SQL 已复制到剪贴板");
+		} catch (error) {
+			console.error(error);
+			toast.error("复制失败，请手动复制");
+		}
+	}, [canCopySql, generatedSql]);
+
 	return (
 		<div className="grid gap-4 lg:grid-cols-2">
 			<Card>
-				<CardHeader>
+				<CardHeader className="flex flex-row items-center justify-between gap-4">
 					<CardTitle className="text-sm font-semibold">字段选择</CardTitle>
+					<label className="flex items-center gap-2 text-xs text-muted-foreground">
+						<Checkbox
+							checked={toggleAllCheckedState}
+							onCheckedChange={handleToggleAllFields}
+							aria-label="选择全部字段"
+						/>
+						<span>选择全部</span>
+					</label>
 				</CardHeader>
 				<CardContent>
-					<ScrollArea className="h-48">
-						<div className="space-y-2">
-							{fields.map((field) => (
-								<label key={field.name} className="flex items-start gap-2">
-									<Checkbox
-										checked={state.fields.includes(field.name)}
-										onCheckedChange={(checked) => onToggleField(field.name, Boolean(checked))}
-									/>
-									<div className="space-y-1">
-										<div className="flex items-center gap-2 text-sm font-medium text-text-primary">
-											{field.name}
-											<span className="text-xs text-muted-foreground">{field.type}</span>
-										</div>
-										<p className="text-xs text-muted-foreground">{field.description ?? ""}</p>
-									</div>
-								</label>
-							))}
+					<div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<Input
+							placeholder="搜索字段 / 类型 / 业务术语"
+							value={fieldKeyword}
+							onChange={(event) => setFieldKeyword(event.target.value)}
+							className="h-8 w-full sm:w-64"
+						/>
+						<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+							<Badge variant="outline" className="font-normal">
+								已选字段 {state.fields.length}
+							</Badge>
+							<Badge variant="outline" className="font-normal">
+								聚合 {state.aggregations.length}
+							</Badge>
+							<Badge variant="outline" className="font-normal">
+								筛选 {state.filters.length}
+							</Badge>
+							<Badge variant="outline" className="font-normal">
+								排序 {state.sorters.length}
+							</Badge>
+							<Badge variant="outline" className="font-normal">
+								分组 {state.groupings.length || state.fields.length || 0}
+							</Badge>
 						</div>
+					</div>
+					<ScrollArea className="h-48">
+						{filteredFields.length ? (
+							<div className="space-y-2">
+								{filteredFields.map((field) => (
+									<label key={field.name} className="flex items-start gap-2">
+										<Checkbox
+											checked={state.fields.includes(field.name)}
+											onCheckedChange={(checked) => onToggleField(field.name, Boolean(checked))}
+										/>
+										<div className="space-y-1">
+											<div className="flex items-center gap-2 text-sm font-medium text-text-primary">
+												{field.name}
+												<span className="text-xs text-muted-foreground">{field.type}</span>
+											</div>
+											<p className="text-xs text-muted-foreground line-clamp-2">
+												{field.description ?? field.term ?? "暂无字段描述"}
+											</p>
+										</div>
+									</label>
+								))}
+							</div>
+						) : (
+							<div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
+								未匹配到字段，请调整检索条件
+							</div>
+						)}
 					</ScrollArea>
 				</CardContent>
 			</Card>
@@ -333,9 +545,9 @@ function VisualQueryBuilder({
 										<SelectValue placeholder="字段" />
 									</SelectTrigger>
 									<SelectContent>
-										{fields.map((field) => (
-											<SelectItem key={field.name} value={field.name}>
-												{field.name}
+										{aggregationFieldOptions.map((fieldName) => (
+											<SelectItem key={fieldName} value={fieldName}>
+												{fieldName === "*" ? "* (全部)" : fieldName}
 											</SelectItem>
 										))}
 									</SelectContent>
@@ -345,12 +557,12 @@ function VisualQueryBuilder({
 									onValueChange={(value) => onAggregationChange(aggregation.id, { fn: value as Aggregation["fn"] })}
 								>
 									<SelectTrigger>
-										<SelectValue placeholder="选择数据源" />
+										<SelectValue placeholder="选择聚合函数" />
 									</SelectTrigger>
 									<SelectContent>
-										{["SUM", "AVG", "COUNT", "MIN", "MAX"].map((fn) => (
-											<SelectItem key={fn} value={fn}>
-												{fn}
+										{AGGREGATION_FUNCTION_OPTIONS.map((option) => (
+											<SelectItem key={option.value} value={option.value}>
+												{option.label} · {option.hint}
 											</SelectItem>
 										))}
 									</SelectContent>
@@ -363,6 +575,44 @@ function VisualQueryBuilder({
 						<Button variant="outline" size="sm" onClick={onAggregationAdd}>
 							新增聚合
 						</Button>
+						<div className="space-y-2 rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
+							<div className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium text-text-primary">
+								<span>分组维度（GROUP BY）</span>
+								<div className="flex flex-wrap items-center gap-2 text-xs">
+									<Button variant="ghost" size="sm" onClick={onGroupingsSync} className="h-7 px-2">
+										与已选字段同步
+									</Button>
+									<Button variant="ghost" size="sm" onClick={onGroupingsClear} className="h-7 px-2">
+										清空
+									</Button>
+								</div>
+							</div>
+							<ScrollArea className="h-32">
+								<div className="space-y-2">
+									{fields.length ? (
+										fields.map((field) => (
+											<label key={field.name} className="flex items-center gap-2 rounded-md border border-transparent px-2 py-1 hover:border-primary/40">
+												<Checkbox
+													checked={state.groupings.includes(field.name)}
+													onCheckedChange={(checked) => onGroupingToggle(field.name, Boolean(checked))}
+												/>
+												<div className="flex flex-col">
+													<span className="text-sm font-medium text-text-primary">{field.name}</span>
+													<span className="text-xs text-muted-foreground">
+														{field.term ?? field.description ?? "未登记字段描述"}
+													</span>
+												</div>
+											</label>
+										))
+									) : (
+										<div className="flex h-24 items-center justify-center text-xs text-muted-foreground">暂无字段可选</div>
+									)}
+								</div>
+							</ScrollArea>
+							<p className="text-xs text-muted-foreground">
+								未选择时默认按照上方字段分组；如需单指标汇总，可清空分组仅保留聚合函数。
+							</p>
+						</div>
 					</CardContent>
 				</Card>
 				<Card>
@@ -468,9 +718,87 @@ function VisualQueryBuilder({
 					</CardContent>
 				</Card>
 			</div>
+			<Card className="lg:col-span-2">
+				<CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+					<div className="space-y-1">
+						<CardTitle className="text-sm font-semibold">SQL 预览</CardTitle>
+						<p className="text-xs text-muted-foreground">实时映射当前的可视化配置，已适配 Hive 语法。</p>
+					</div>
+					<div className="flex flex-wrap items-center gap-2">
+						{dataset ? (
+							<>
+								<Badge variant="outline" className="font-normal">
+									数据集：{dataset.name}
+								</Badge>
+								{datasetClassificationLabel ? (
+									<Badge variant="outline" className="font-normal">
+										敏感度：{datasetClassificationLabel}
+									</Badge>
+								) : null}
+							</>
+						) : (
+							<Badge variant="outline" className="font-normal text-muted-foreground">
+								未选择数据集
+							</Badge>
+						)}
+						<Badge variant="secondary" className="font-normal bg-emerald-500/10 text-emerald-600">
+							Hive 兼容
+						</Badge>
+						<Button size="sm" variant="outline" onClick={handleCopySql} disabled={!canCopySql}>
+							<Icon icon="Copy" size={14} className="mr-1" />
+							复制 SQL
+						</Button>
+					</div>
+				</CardHeader>
+				<CardContent className="space-y-3">
+					<div className="rounded-md border bg-muted/40">
+						<ScrollArea className="max-h-[220px]">
+							<pre className="whitespace-pre-wrap break-words p-3 font-mono text-xs leading-6 text-text-primary">
+								{canCopySql ? generatedSql : "请选择数据集并配置字段后自动生成 SQL 语句"}
+							</pre>
+						</ScrollArea>
+					</div>
+						<div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+							<span>字段 {state.fields.length}</span>
+							<span>聚合 {state.aggregations.length}</span>
+							<span>分组 {state.groupings.length ? state.groupings.length : state.fields.length}</span>
+							<span>筛选 {state.filters.length}</span>
+							<span>排序 {state.sorters.length}</span>
+							<span>LIMIT {state.limit}</span>
+							{dataset ? <span>目标表 {buildTableReference(dataset) || dataset.name}</span> : null}
+						</div>
+				</CardContent>
+			</Card>
 		</div>
 	);
 }
+
+const pickFirstText = (...values: unknown[]): string | undefined => {
+	for (const value of values) {
+		if (typeof value === "string") {
+			const trimmed = value.trim();
+			if (trimmed.length > 0) {
+				return trimmed;
+			}
+		}
+	}
+	return undefined;
+};
+
+const normalizeTagsText = (tags: unknown): string | undefined => {
+	if (Array.isArray(tags)) {
+		const joined = tags
+			.map((item) => (typeof item === "string" ? item.trim() : String(item ?? "").trim()))
+			.filter((token) => token.length > 0)
+			.join(", ");
+		return joined.length > 0 ? joined : undefined;
+	}
+	if (typeof tags === "string") {
+		const trimmed = tags.trim();
+		return trimmed.length > 0 ? trimmed : undefined;
+	}
+	return undefined;
+};
 
 export default function QueryWorkbenchPage() {
 	if (GLOBAL_CONFIG.enableSqlWorkbench) {
@@ -504,10 +832,9 @@ export default function QueryWorkbenchPage() {
 	const [tables, setTables] = useState<TableItem[]>([]);
 	const [selectedTableId, setSelectedTableId] = useState<string>("");
 	const [columns, setColumns] = useState<DatasetField[]>([]);
-	const [visualQuery, setVisualQuery] = useState<VisualQueryState>(() => createDefaultVisualState(selectedDataset));
-	const [sqlText, setSqlText] = useState(() => generateSQLFromVisual(visualQuery, selectedDataset));
-	const [sqlMode, setSqlMode] = useState<"sql" | "visual">("sql");
-	const [manualSql, setManualSql] = useState(false);
+	const [tableColumnsMap, setTableColumnsMap] = useState<Record<string, DatasetField[]>>({});
+	const [visualQuery, setVisualQuery] = useState<VisualQueryState>(() => createDefaultVisualState());
+	const visualSql = useMemo(() => generateSQLFromVisual(visualQuery, selectedDataset), [visualQuery, selectedDataset]);
 	const [isRunning, setIsRunning] = useState(false);
 	const [runResult, setRunResult] = useState<RunResult | null>(null);
 	const [pageIndex, setPageIndex] = useState(0);
@@ -516,13 +843,14 @@ export default function QueryWorkbenchPage() {
 	const showDatasetEmptyHint = !isDatasetsLoading && !hasRemoteDatasets;
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const [drawerTab, setDrawerTab] = useState("history");
-	const [planSteps, setPlanSteps] = useState<string[]>([]);
 	const [execHistory, setExecHistory] = useState<ExecRecord[]>([]);
 const [savedList, setSavedList] = useState<SavedQueryItem[]>([]);
 const [lastExecId, setLastExecId] = useState<string | undefined>(undefined);
 const [saveTtlDays, setSaveTtlDays] = useState<string>("7");
-const location = useLocation();
-const navigate = useNavigate();
+	const [saveName, setSaveName] = useState<string>("");
+	const location = useLocation();
+	const navigate = useNavigate();
+	const [runStatus, setRunStatus] = useState<{ type: "success" | "error"; message: string; sql?: string; detail?: string } | null>(null);
 
 	useEffect(() => {
 		if (!selectedDatasetId && defaultDataset) {
@@ -563,6 +891,7 @@ const navigate = useNavigate();
 				return;
 			}
 			try {
+				setRunStatus(null);
 				setIsRunning(true);
 				const payload = { datasetId: dataset.id, sqlText: sql };
 				const resp: any = await executeExplore(payload as any);
@@ -590,6 +919,11 @@ const navigate = useNavigate();
 				});
 				setPageIndex(0);
 				setLastExecId(executionId);
+				setRunStatus({
+					type: "success",
+					message: `查询成功 · 返回 ${rowCount} 行`,
+					sql: effectiveSql,
+				});
 				toast.success("查询成功");
 				try {
 					const execs: any = await listQueryExecutions();
@@ -611,7 +945,14 @@ const navigate = useNavigate();
 				}
 			} catch (e) {
 				console.error(e);
-				toast.error("查询失败，请稍后重试");
+				const errorInfo = extractErrorInfo(e);
+				setRunStatus({
+					type: "error",
+					message: errorInfo.message,
+					detail: errorInfo.detail,
+					sql,
+				});
+				toast.error(errorInfo.message);
 			} finally {
 				setIsRunning(false);
 			}
@@ -622,6 +963,16 @@ const navigate = useNavigate();
 useEffect(() => {
 	reloadDatasets();
 }, [reloadDatasets]);
+
+	useEffect(() => {
+		if (exportDialogOpen) {
+			const timestamp = new Date().toLocaleString();
+			const defaultName = selectedDataset ? `${selectedDataset.name}-${timestamp}` : `查询结果-${timestamp}`;
+			setSaveName((prev) => (prev ? prev : defaultName));
+		} else {
+			setSaveName("");
+		}
+	}, [exportDialogOpen, selectedDataset]);
 
 	useEffect(() => {
 		const state = location.state as { runSavedQuery?: { id: string; sqlText: string; datasetId?: string; name?: string } } | null;
@@ -648,24 +999,22 @@ useEffect(() => {
 	const targetDataset = datasetFromId ?? fallbackDataset ?? selectedDataset ?? null;
 		(async () => {
 			try {
-				setSqlText(payload.sqlText);
-				setManualSql(true);
 				if (datasetFromId) {
 					setSelectedDatasetId(datasetFromId.id);
-					setVisualQuery(createDefaultVisualState(datasetFromId));
+					setVisualQuery(createDefaultVisualState());
 				} else if (fallbackDataset) {
 					setSelectedDatasetId(fallbackDataset.id);
-					setVisualQuery(createDefaultVisualState(fallbackDataset));
+					setVisualQuery(createDefaultVisualState());
 				}
 				if (!targetDataset) {
 					toast.error("请选择可用的数据集后再执行查询");
 					return;
 				}
 				await runSql(payload.sqlText, targetDataset);
-		setDrawerOpen(false);
-		if (payload.name) {
-			toast.success(`已执行保存的查询：${payload.name}`);
-		}
+				setDrawerOpen(false);
+				if (payload.name) {
+					toast.success(`已执行保存的查询：${payload.name}`);
+				}
 			} catch (error) {
 				console.error(error);
 				toast.error("执行保存的查询失败");
@@ -675,63 +1024,121 @@ useEffect(() => {
 		})();
 	}, [location.state, datasets, isDatasetsLoading, runSql, navigate, location.pathname, selectedDataset]);
 
-	// Load tables for selected dataset
+	const updateDatasetFields = useCallback(
+		(datasetId: string, fields: DatasetField[]) => {
+			setRemoteDatasets((prev) =>
+				prev.map((dataset) => (dataset.id === datasetId ? { ...dataset, fields } : dataset)),
+			);
+		},
+		[setRemoteDatasets],
+	);
+
 	useEffect(() => {
+		let cancelled = false;
 		(async () => {
 			if (!selectedDatasetId) {
-				setTables([]);
-				setSelectedTableId("");
-				setColumns([]);
+				if (!cancelled) {
+					setTables([]);
+					setSelectedTableId("");
+					setColumns([]);
+					setTableColumnsMap({});
+				}
 				return;
 			}
 			try {
-				const resp: any = await listTablesByDataset(selectedDatasetId);
-				const list = Array.isArray(resp?.content) ? resp.content : [];
-				const mapped: TableItem[] = list.map((t: any) => ({ id: String(t.id), name: String(t.name || t.id) }));
-				setTables(mapped);
-				const first = mapped[0]?.id || "";
-				setSelectedTableId(first);
-			} catch (e) {
-				console.error(e);
+				const detail: any = await getDataset(selectedDatasetId);
+				const rawTables: any[] = Array.isArray(detail?.tables) ? detail.tables : [];
+				const mappedTables: TableItem[] = [];
+				const columnsMap: Record<string, DatasetField[]> = {};
+
+				for (const table of rawTables) {
+					const tableId = String(table?.id ?? table?.tableName ?? table?.name ?? "").trim();
+					if (!tableId) continue;
+					const tableName = String(table?.name ?? table?.tableName ?? tableId);
+					mappedTables.push({ id: tableId, name: tableName });
+					const columnList = Array.isArray(table?.columns) ? table.columns : [];
+					const mappedColumns: DatasetField[] = columnList
+						.map((col: any) => {
+							const columnName = String(col?.name ?? col?.columnName ?? "").trim();
+							if (!columnName) return null;
+							const readableName = pickFirstText(
+								col?.displayName,
+								col?.alias,
+								col?.label,
+								col?.bizName,
+								col?.bizLabel,
+								col?.cnName,
+								col?.zhName,
+								col?.nameZh,
+								col?.nameCn,
+								col?.comment,
+							);
+							const tagsText = normalizeTagsText(col?.tags);
+							return {
+								name: columnName,
+								type: String(col?.dataType ?? "string"),
+								description: pickFirstText(readableName, tagsText),
+							} satisfies DatasetField;
+						})
+						.filter(Boolean) as DatasetField[];
+					columnsMap[tableId] = mappedColumns;
+				}
+
+				if (cancelled) {
+					return;
+				}
+
+				setTables(mappedTables);
+				setTableColumnsMap(columnsMap);
+				const matched = mappedTables.find((item) => item.id === selectedTableId)?.id;
+				const fallback = mappedTables[0]?.id ?? "";
+				const activeTableId = String(matched ?? fallback ?? "");
+				if (activeTableId) {
+					if (activeTableId !== selectedTableId) {
+						setSelectedTableId(activeTableId);
+					}
+					const activeColumns = columnsMap[activeTableId] ?? [];
+					setColumns(activeColumns);
+					updateDatasetFields(selectedDatasetId, activeColumns);
+				} else {
+					setSelectedTableId("");
+					setColumns([]);
+					updateDatasetFields(selectedDatasetId, []);
+				}
+			} catch (error: any) {
+				if (cancelled) {
+					return;
+				}
+				console.error(error);
 				setTables([]);
 				setSelectedTableId("");
+				setColumns([]);
+				setTableColumnsMap({});
+				updateDatasetFields(selectedDatasetId, []);
+				const status = error?.response?.status;
+				if (status === 403) {
+					toast.error("无权获取该数据集的列信息");
+				} else {
+					toast.error("加载列信息失败");
+				}
 			}
 		})();
-	}, [selectedDatasetId]);
-
-	// Load columns for selected table
-	useEffect(() => {
-		(async () => {
-			if (!selectedTableId) {
-				setColumns([]);
-				return;
-			}
-			try {
-				const resp: any = await listColumnsByTable(selectedTableId);
-				const list = Array.isArray(resp?.content) ? resp.content : [];
-				const mapped: DatasetField[] = list.map((c: any) => ({
-					name: String(c.name),
-					type: String(c.dataType || "string"),
-					description: c.tags || undefined,
-				}));
-				setColumns(mapped);
-			} catch (e) {
-				console.error(e);
-				setColumns([]);
-			}
-		})();
-	}, [selectedTableId]);
+		return () => {
+			cancelled = true;
+		};
+	}, [selectedDatasetId, selectedTableId, updateDatasetFields]);
 
 	useEffect(() => {
-		setVisualQuery(createDefaultVisualState(selectedDataset));
-		setManualSql(false);
-	}, [selectedDataset]);
-
-	useEffect(() => {
-		if (!manualSql) {
-			setSqlText(generateSQLFromVisual(visualQuery, selectedDataset));
+		const currentColumns = tableColumnsMap[selectedTableId] ?? [];
+		setColumns(currentColumns);
+		if (selectedDatasetId) {
+			updateDatasetFields(selectedDatasetId, currentColumns);
 		}
-	}, [visualQuery, selectedDataset, manualSql]);
+	}, [selectedTableId, tableColumnsMap, selectedDatasetId, updateDatasetFields]);
+
+	useEffect(() => {
+		setVisualQuery(createDefaultVisualState());
+	}, [selectedDataset]);
 
 	useEffect(() => {
 		if (runResult) {
@@ -774,6 +1181,31 @@ useEffect(() => {
 
 	const visualFields = columns.length ? columns : (selectedDataset?.fields ?? []);
 
+	useEffect(() => {
+		if (!visualFields.length) {
+			return;
+		}
+		const available = new Set(visualFields.map((field) => field.name));
+		setVisualQuery((prev) => {
+			const filteredFields = prev.fields.filter((name) => available.has(name));
+			const filteredGroupings = prev.groupings.filter((name) => available.has(name));
+			const fieldsChanged =
+				filteredFields.length !== prev.fields.length ||
+				filteredFields.some((name, index) => name !== prev.fields[index]);
+			const groupingsChanged =
+				filteredGroupings.length !== prev.groupings.length ||
+				filteredGroupings.some((name, index) => name !== prev.groupings[index]);
+			if (!fieldsChanged && !groupingsChanged) {
+				return prev;
+			}
+			return {
+				...prev,
+				fields: filteredFields,
+				groupings: filteredGroupings,
+			};
+		});
+	}, [visualFields]);
+
 	const currentPageRows = useMemo(() => {
 		if (!runResult) return [];
 		const start = pageIndex * pageSize;
@@ -788,15 +1220,51 @@ useEffect(() => {
 		return Object.keys(runResult.rows[0] ?? {});
 	}, [runResult]);
 
-	const detectedParameters = useMemo(() => {
-		const matches = sqlText.match(/:[a-zA-Z_][a-zA-Z0-9_]*/g) ?? [];
-		return Array.from(new Set(matches.map((match) => match.slice(1))));
-	}, [sqlText]);
-
 	const handleToggleField = (field: string, checked: boolean) => {
+		setVisualQuery((prev) => {
+			const nextFields = checked ? [...prev.fields, field] : prev.fields.filter((item) => item !== field);
+			const candidateGroups = checked
+				? [...prev.groupings, field]
+				: prev.groupings.filter((item) => item !== field);
+			const deduped = Array.from(new Set(candidateGroups));
+			const orderedGroups = [
+				...nextFields.filter((item) => deduped.includes(item)),
+				...deduped.filter((item) => !nextFields.includes(item)),
+			];
+			return {
+				...prev,
+				fields: nextFields,
+				groupings: orderedGroups,
+			};
+		});
+	};
+
+	const handleToggleGrouping = (field: string, checked: boolean) => {
+		setVisualQuery((prev) => {
+			const candidate = checked ? [...prev.groupings, field] : prev.groupings.filter((item) => item !== field);
+			const deduped = Array.from(new Set(candidate));
+			const ordered = [
+				...prev.fields.filter((item) => deduped.includes(item)),
+				...deduped.filter((item) => !prev.fields.includes(item)),
+			];
+			return {
+				...prev,
+				groupings: ordered,
+			};
+		});
+	};
+
+	const handleSyncGroupings = () => {
 		setVisualQuery((prev) => ({
 			...prev,
-			fields: checked ? [...prev.fields, field] : prev.fields.filter((item) => item !== field),
+			groupings: [...prev.fields],
+		}));
+	};
+
+	const handleClearGroupings = () => {
+		setVisualQuery((prev) => ({
+			...prev,
+			groupings: [],
 		}));
 	};
 
@@ -824,9 +1292,14 @@ useEffect(() => {
 	};
 
 	const handleAddAggregation = () => {
+		const defaultField = visualFields[0]?.name?.trim() ?? "*";
 		setVisualQuery((prev) => ({
 			...prev,
-			aggregations: [...prev.aggregations, { id: `agg-${Date.now()}`, field: visualFields[0]?.name ?? "", fn: "SUM" }],
+			aggregations: [
+				...prev.aggregations,
+				{ id: `agg-${Date.now()}`, field: defaultField === "" ? "*" : defaultField, fn: "SUM" },
+			],
+			groupings: prev.aggregations.length === 0 && prev.groupings.length === 0 ? [...prev.fields] : prev.groupings,
 		}));
 	};
 
@@ -872,43 +1345,30 @@ useEffect(() => {
 		setVisualQuery((prev) => ({ ...prev, limit }));
 	};
 
-	const handleFormatSql = () => {
-		setSqlText((prev) => formatSQL(prev));
-		toast.success("SQL 已格式化");
-		setManualSql(true);
-	};
-
-	const handleResetSql = () => {
-		setManualSql(false);
-		setSqlText(generateSQLFromVisual(visualQuery, selectedDataset));
-		toast.info("已同步可视化查询条件");
-	};
-
     const handleRunQuery = async () => {
-        await runSql(sqlText, selectedDataset);
-    };
-
-	const handleExplain = async () => {
-		try {
-			const resp = await explainExplore({ sqlText });
-			const steps = (resp as any)?.steps as string[] | undefined;
-			setPlanSteps(steps && steps.length ? steps : [String((resp as any)?.effectiveSql ?? "EXPLAIN")]);
-			setDrawerOpen(true);
-			setDrawerTab("plan");
-		} catch (e) {
-			console.error(e);
-			toast.error("获取执行计划失败");
+		const sql = visualSql?.trim();
+		if (!sql) {
+			toast.error("请先通过可视化查询器生成查询条件");
+			return;
 		}
-	};
+        await runSql(sql, selectedDataset);
+    };
 
 	const handleSaveResult = async () => {
 		if (!lastExecId) {
 			toast.error("请先运行查询");
 			return;
 		}
+		if (!saveName.trim()) {
+			toast.error("请输入结果集名称");
+			return;
+		}
 		try {
 			const ttl = parseInt(saveTtlDays || "7", 10);
-			await saveExploreResult(lastExecId, { ttlDays: Number.isNaN(ttl) ? 7 : ttl });
+			await saveExploreResult(lastExecId, {
+				name: saveName.trim(),
+				ttlDays: Number.isNaN(ttl) ? 7 : ttl,
+			});
 			toast.success("已保存结果集");
 			setExportDialogOpen(false);
 		} catch (e) {
@@ -1031,109 +1491,108 @@ useEffect(() => {
 							</div>
 						</div>
 					</CardHeader>
-					<CardContent>
-						<Tabs
-							value={sqlMode}
-							onValueChange={(value) => setSqlMode(value as "sql" | "visual")}
-							className="space-y-4"
-						>
-							<TabsList>
-								<TabsTrigger value="sql">SQL 编辑器</TabsTrigger>
-								<TabsTrigger value="visual">可视化查询器</TabsTrigger>
-							</TabsList>
-							<TabsContent value="sql" className="space-y-3">
-								<div className="flex items-center justify-between">
-									<div className="flex items-center gap-2">
-									<Button size="sm" onClick={handleRunQuery} disabled={isRunning || !selectedDataset || isDatasetsLoading}>
-										{isRunning ? "运行中..." : "运行"}
-									</Button>
-										<Button size="sm" variant="outline" onClick={() => setIsRunning(false)} disabled={!isRunning}>
-											停止
-										</Button>
-									<Button size="sm" variant="outline" onClick={handleExplain} disabled={!selectedDataset}>
-											执行计划
-										</Button>
-										<Button
-											size="sm"
-											variant="outline"
-											onClick={() => setExportDialogOpen(true)}
-											disabled={!lastExecId}
-										>
-											保存结果集
-										</Button>
-									</div>
-									<div className="flex items-center gap-2 text-xs text-muted-foreground">
-										<span>并发配额：中等</span>
-										<span>超时：120s</span>
-									</div>
-								</div>
-								<Textarea
-									value={sqlText}
-									onChange={(event) => {
-										setSqlText(event.target.value);
-										setManualSql(true);
-									}}
-									className="min-h-[280px] font-mono text-sm"
-									placeholder="在此编写 SQL，支持 :start_date 参数"
-								/>
-								<div className="flex items-center justify-between text-xs">
-									<div className="flex items-center gap-2">
-										<Button variant="outline" size="sm" onClick={handleFormatSql}>
-											格式化
-										</Button>
-										<Button variant="ghost" size="sm" onClick={handleResetSql}>
-											同步可视化条件
-										</Button>
-									</div>
-									<div className="flex items-center gap-2 text-muted-foreground">
-										{detectedParameters.length ? (
-											<>
-												<span>参数：</span>
-												{detectedParameters.map((parameter) => (
-													<span key={parameter} className="rounded bg-muted px-1.5 py-0.5">
-														:{parameter}
-													</span>
-												))}
-											</>
-										) : (
-											<span>暂无参数</span>
-										)}
-									</div>
-								</div>
-							</TabsContent>
-							<TabsContent value="visual" className="space-y-4">
-								<VisualQueryBuilder
-									fields={visualFields}
-									state={visualQuery}
-									onToggleField={handleToggleField}
-									onAggregationAdd={handleAddAggregation}
-									onAggregationChange={handleAggregationChange}
-									onAggregationRemove={handleRemoveAggregation}
-									onFilterAdd={handleAddFilter}
-									onFilterChange={handleFilterChange}
-									onFilterRemove={handleRemoveFilter}
-									onSortAdd={handleAddSort}
-									onSortChange={handleSortChange}
-									onSortRemove={handleRemoveSort}
-									onLimitChange={handleLimitChange}
-								/>
-							</TabsContent>
-						</Tabs>
+					<CardContent className="space-y-4">
+						<div className="flex flex-wrap items-center justify-between gap-2">
+							<div className="flex items-center gap-2">
+								<Button
+									size="sm"
+									onClick={handleRunQuery}
+									disabled={isRunning || !selectedDataset || isDatasetsLoading}
+								>
+									{isRunning ? "运行中..." : "运行"}
+								</Button>
+								<Button size="sm" variant="outline" onClick={() => setIsRunning(false)} disabled={!isRunning}>
+									停止
+								</Button>
+								<Button
+									size="sm"
+									variant="outline"
+									onClick={() => setExportDialogOpen(true)}
+									disabled={!lastExecId}
+								>
+									保存结果集
+								</Button>
+							</div>
+							<div className="flex items-center gap-2 text-xs text-muted-foreground">
+								<span>并发配额：中等</span>
+								<span>超时：120s</span>
+							</div>
+						</div>
+						<VisualQueryBuilder
+							fields={visualFields}
+							dataset={selectedDataset}
+							state={visualQuery}
+							onToggleField={handleToggleField}
+							onAggregationAdd={handleAddAggregation}
+							onAggregationChange={handleAggregationChange}
+							onAggregationRemove={handleRemoveAggregation}
+							onFilterAdd={handleAddFilter}
+							onFilterChange={handleFilterChange}
+							onFilterRemove={handleRemoveFilter}
+							onSortAdd={handleAddSort}
+							onSortChange={handleSortChange}
+							onSortRemove={handleRemoveSort}
+							onLimitChange={handleLimitChange}
+							onGroupingToggle={handleToggleGrouping}
+							onGroupingsSync={handleSyncGroupings}
+							onGroupingsClear={handleClearGroupings}
+						/>
 					</CardContent>
 				</Card>
 
 				<Card>
-					<CardHeader className="flex items-center justify-between">
-						<CardTitle className="text-base font-semibold">结果集</CardTitle>
-						<div className="flex items-center gap-2">
-							<Button size="sm" variant="outline" disabled={!runResult} onClick={() => setExportDialogOpen(true)}>
-								导出
-							</Button>
-							<Button size="sm" variant="outline" disabled={!runResult}>
-								保存为模板
-							</Button>
+					<CardHeader className="flex flex-wrap items-center justify-between gap-2">
+						<CardTitle className="text-base font-semibold">运行状态</CardTitle>
+						<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+							{selectedDataset ? (
+								<>
+									{classificationBadge(selectedDataset.classification)}
+									<span>Hive 表：{selectedTableReference || "未登记"}</span>
+								</>
+							) : (
+								<span>未选择数据集</span>
+							)}
 						</div>
 					</CardHeader>
+					<CardContent className="space-y-3">
+						{runStatus ? (
+							<div
+								className={`rounded-md border px-3 py-2 text-sm ${
+									runStatus.type === "success"
+										? "border-emerald-200 bg-emerald-50 text-emerald-700"
+										: "border-rose-200 bg-rose-50 text-rose-700"
+									}`}
+							>
+								{runStatus.message}
+							</div>
+						) : (
+							<p className="text-sm text-muted-foreground">尚未执行查询。</p>
+						)}
+						{runStatus?.detail ? (
+							<div className="space-y-1">
+								<p className="text-xs text-muted-foreground">失败详情</p>
+								<pre className="whitespace-pre-wrap rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
+									{runStatus.detail}
+								</pre>
+							</div>
+						) : null}
+						{runStatus?.sql ? (
+							<div className="space-y-1">
+								<p className="text-xs text-muted-foreground">
+									{runStatus.type === "error" ? "最后执行 SQL" : "有效 SQL"}
+								</p>
+								<pre className="whitespace-pre-wrap rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+									{runStatus.sql}
+								</pre>
+							</div>
+						) : null}
+					</CardContent>
+				</Card>
+
+				<Card>
+				<CardHeader className="flex items-center justify-between">
+					<CardTitle className="text-base font-semibold">结果集</CardTitle>
+				</CardHeader>
 					<CardContent className="space-y-3">
 						{runResult ? (
 							<>
@@ -1255,6 +1714,10 @@ useEffect(() => {
 						<div className="space-y-4 text-sm">
 							<p>保存将登记结果集并设置有效期，支持预览与删除。</p>
 							<div className="space-y-2">
+								<Label>结果集名称</Label>
+								<Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="例如：销售看板-本周明细" />
+							</div>
+							<div className="space-y-2">
 								<Label>保存天数（TTL）</Label>
 								<Input type="number" min={1} value={saveTtlDays} onChange={(e) => setSaveTtlDays(e.target.value)} />
 							</div>
@@ -1275,7 +1738,7 @@ useEffect(() => {
 				<Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
 					<DrawerContent>
 						<DrawerHeader>
-							<DrawerTitle>历史记录 / 保存查询 / 执行计划</DrawerTitle>
+							<DrawerTitle>历史记录 / 保存查询</DrawerTitle>
 							<DrawerDescription>基于当前账号权限展示，仅供参考。</DrawerDescription>
 						</DrawerHeader>
 						<div className="px-6 pb-6">
@@ -1283,7 +1746,6 @@ useEffect(() => {
 								<TabsList>
 									<TabsTrigger value="history">历史记录</TabsTrigger>
 									<TabsTrigger value="saved">已保存查询</TabsTrigger>
-									<TabsTrigger value="plan">执行计划</TabsTrigger>
 									<TabsTrigger value="quota">资源配额</TabsTrigger>
 								</TabsList>
 								<TabsContent value="history">
@@ -1327,20 +1789,39 @@ useEffect(() => {
 																const detail = await getSavedQuery(query.id);
 																const sql = (detail as any)?.sqlText ?? (detail as any)?.data?.sqlText;
 																const dsId = (detail as any)?.datasetId ?? (detail as any)?.data?.datasetId;
-																if (sql) {
-																	setSqlText(sql);
-																	setManualSql(true);
-																	toast.success("已加载保存的查询");
-																	if (dsId) {
-																		const ds = datasets.find((d) => d.id === dsId);
-																		if (ds) {
-																			setSelectedDatasetId(ds.id);
-																			setVisualQuery(createDefaultVisualState(ds));
-																		}
-																	}
-																} else {
+																if (!sql) {
 																	toast.error("未获取到 SQL 文本");
+																	return;
 																}
+																let targetDataset: Dataset | null = selectedDataset ?? null;
+																if (dsId) {
+																	const matched = datasets.find((d) => d.id === dsId) ?? null;
+																	if (matched) {
+																		targetDataset = matched;
+																		setSelectedDatasetId(matched.id);
+																		setVisualQuery(createDefaultVisualState());
+																	} else {
+																		targetDataset = {
+																			id: dsId,
+																			name: query.name || dsId,
+																			source: "",
+																			database: "",
+																			schema: "",
+																			classification: "INTERNAL",
+																			rowCount: 0,
+																			description: undefined,
+																			fields: [],
+																		};
+																	}
+																}
+																if (!targetDataset) {
+																	toast.error("请先选择可用的数据集后再执行查询");
+																	return;
+																}
+																await runSql(sql, targetDataset);
+																toast.success("已执行保存的查询");
+																setDrawerOpen(false);
+																setDrawerTab("history");
 															} catch (e) {
 																console.error(e);
 																toast.error("加载失败");
@@ -1352,24 +1833,6 @@ useEffect(() => {
 												</li>
 											))}
 										</ul>
-									</ScrollArea>
-								</TabsContent>
-								<TabsContent value="plan">
-									<ScrollArea className="h-64">
-										<ol className="space-y-3 text-sm">
-											{planSteps.length ? (
-												planSteps.map((step, index) => (
-													<li key={`${index}-${step}`} className="rounded-md border px-3 py-2">
-														<p className="font-medium text-text-primary">Step {index + 1}</p>
-														<p className="text-xs text-muted-foreground">{step}</p>
-													</li>
-												))
-											) : (
-												<li className="rounded-md border px-3 py-2 text-xs text-muted-foreground">
-													暂无计划，请点击“执行计划”获取
-												</li>
-											)}
-										</ol>
 									</ScrollArea>
 								</TabsContent>
 								<TabsContent value="quota">

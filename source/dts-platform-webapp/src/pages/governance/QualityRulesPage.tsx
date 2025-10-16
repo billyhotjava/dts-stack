@@ -4,16 +4,7 @@ import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/ui/drawer";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { ScrollArea } from "@/ui/scroll-area";
@@ -70,6 +61,12 @@ interface RuleRow {
   sqlPreview?: string;
   createdAt?: string;
   updatedAt?: string;
+  lastRunStatus?: string;
+  lastRunFinishedAt?: string;
+  lastRunDurationMs?: number;
+  lastRunMessage?: string | null;
+  runSuccessRate?: number | null;
+  totalRuns?: number | null;
   raw: any;
 }
 
@@ -98,12 +95,6 @@ interface RuleForm {
   description?: string;
 }
 
-const LEVEL_LABELS: Record<DataLevel, string> = {
-  DATA_PUBLIC: "公开 (DATA_PUBLIC)",
-  DATA_INTERNAL: "内部 (DATA_INTERNAL)",
-  DATA_SECRET: "秘密 (DATA_SECRET)",
-  DATA_TOP_SECRET: "机密 (DATA_TOP_SECRET)",
-};
 const toLegacy = (v: DataLevel): ClassificationLevel =>
   v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
 const fromLegacy = (v: string): DataLevel => {
@@ -157,6 +148,91 @@ const INITIAL_FORM: RuleForm = {
   description: "",
 };
 
+type SqlTemplateId = "daily_null_ratio" | "duplicate_check" | "negative_amount" | "freshness_check";
+
+const SQL_TEMPLATES: Array<{
+  id: SqlTemplateId;
+  label: string;
+  description: string;
+  severity: SeverityLevel;
+  preset: RuleForm["frequencyPreset"];
+  cron?: string;
+  build: (dataset?: DatasetOption) => string;
+}> = [
+  {
+    id: "daily_null_ratio",
+    label: "字段空值占比（日批）",
+    description: "检测关键字段空值占比是否超过 5%",
+    severity: "HIGH",
+    preset: "DAILY",
+    cron: "0 5 2 * * ?",
+    build: (dataset) => {
+      const table = dataset?.hiveTable || dataset?.name || "target_table";
+      return `WITH base AS (
+    SELECT
+        COUNT(*) AS total_cnt,
+        SUM(CASE WHEN critical_field IS NULL THEN 1 ELSE 0 END) AS null_cnt
+    FROM ${table}
+    WHERE dt = DATE_FORMAT(DATE_SUB(CURRENT_DATE, 1), 'yyyyMMdd')
+)
+SELECT
+    total_cnt,
+    null_cnt,
+    CASE WHEN total_cnt = 0 THEN 0 ELSE null_cnt / total_cnt END AS null_ratio
+FROM base
+WHERE CASE WHEN total_cnt = 0 THEN 0 ELSE null_cnt / total_cnt END > 0.05;`;
+    },
+  },
+  {
+    id: "duplicate_check",
+    label: "主键重复校验（小时）",
+    description: "校验主键组合在最近一小时是否存在重复",
+    severity: "CRITICAL",
+    preset: "HOURLY",
+    cron: "0 0/30 * * * ?",
+    build: (dataset) => {
+      const table = dataset?.hiveTable || dataset?.name || "target_table";
+      return `SELECT business_key, COUNT(*) AS dup_cnt
+FROM ${table}
+WHERE event_time >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+GROUP BY business_key
+HAVING COUNT(*) > 1;`;
+    },
+  },
+  {
+    id: "negative_amount",
+    label: "金额为负检查（日批）",
+    description: "金额字段出现负值时触发",
+    severity: "MEDIUM",
+    preset: "DAILY",
+    cron: "0 30 2 * * ?",
+    build: (dataset) => {
+      const table = dataset?.hiveTable || dataset?.name || "target_table";
+      return `SELECT order_id, amount, updated_at
+FROM ${table}
+WHERE dt = DATE_FORMAT(DATE_SUB(CURRENT_DATE, 1), 'yyyyMMdd')
+  AND amount < 0;`;
+    },
+  },
+  {
+    id: "freshness_check",
+    label: "数据新鲜度（自定义 Cron）",
+    description: "检测最近分区是否在 2 小时内更新",
+    severity: "HIGH",
+    preset: "CUSTOM",
+    cron: "0 0/20 * * * ?",
+    build: (dataset) => {
+      const table = dataset?.hiveTable || dataset?.name || "target_table";
+      return `WITH latest AS (
+    SELECT MAX(updated_at) AS max_time FROM ${table}
+)
+SELECT max_time
+FROM latest
+WHERE max_time < DATE_SUB(NOW(), INTERVAL 2 HOUR);`;
+    },
+  },
+];
+
 const QualityRulesPage = () => {
   const [rules, setRules] = useState<RuleRow[]>([]);
   const [ruleLoading, setRuleLoading] = useState(false);
@@ -169,6 +245,10 @@ const QualityRulesPage = () => {
   const [form, setForm] = useState<RuleForm>(INITIAL_FORM);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [formOpen, setFormOpen] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [severityFilter, setSeverityFilter] = useState<SeverityLevel | "ALL">("ALL");
+  const [datasetFilter, setDatasetFilter] = useState<string>("ALL");
+  const [enabledFilter, setEnabledFilter] = useState<"ALL" | "ENABLED" | "DISABLED">("ALL");
 
   const inferDataLevel = useCallback(
     (datasetId?: string): DataLevel => {
@@ -238,6 +318,25 @@ const QualityRulesPage = () => {
     const def = safeParseJson(raw?.latestVersion?.definition);
     const sqlPreview = extractSql(def);
     const cron = raw?.frequencyCron || raw?.frequency || raw?.latestVersion?.frequencyCron;
+    const latestRun =
+      raw?.latestRun ||
+      raw?.lastRun ||
+      (Array.isArray(raw?.recentRuns) && raw.recentRuns.length ? raw.recentRuns[0] : null) ||
+      (Array.isArray(raw?.executions) && raw.executions.length ? raw.executions[0] : null);
+    const runStats = raw?.runStats || raw?.statistics || raw?.metrics;
+    const successRate =
+      typeof runStats?.successRate === "number"
+        ? runStats.successRate
+        : typeof runStats?.successRatePct === "number"
+        ? runStats.successRatePct / 100
+        : null;
+    const totalRuns = Number.isFinite(runStats?.totalRuns)
+      ? Number(runStats.totalRuns)
+      : Number.isFinite(runStats?.runs)
+      ? Number(runStats.runs)
+      : latestRun && Array.isArray(raw?.recentRuns)
+      ? raw.recentRuns.length
+      : null;
     return {
       id: String(raw.id),
       code: raw.code,
@@ -256,6 +355,17 @@ const QualityRulesPage = () => {
       sqlPreview,
       createdAt: raw.createdDate,
       updatedAt: raw.lastModifiedDate,
+      lastRunStatus: latestRun?.status ? String(latestRun.status).toUpperCase() : undefined,
+      lastRunFinishedAt: latestRun?.finishedAt || latestRun?.endedAt || latestRun?.createdDate,
+      lastRunDurationMs: Number.isFinite(latestRun?.durationMs)
+        ? Number(latestRun.durationMs)
+        : Number.isFinite(latestRun?.elapsedMs)
+        ? Number(latestRun.elapsedMs)
+        : undefined,
+      lastRunMessage: latestRun?.message || latestRun?.resultMessage || latestRun?.detail,
+      runSuccessRate:
+        successRate !== null && !Number.isNaN(successRate) ? Math.max(0, Math.min(1, successRate)) : null,
+      totalRuns,
       raw,
     };
   };
@@ -279,6 +389,11 @@ const QualityRulesPage = () => {
     refreshDatasets();
     refreshRules();
   }, []);
+
+  useEffect(() => {
+    if (!datasetLookup.size || !rules.length) return;
+    setRules((prev) => prev.map((rule) => mapRule(rule.raw)));
+  }, [datasetLookup]);
 
   useEffect(() => {
     if (!detailRule) {
@@ -345,6 +460,31 @@ const QualityRulesPage = () => {
     setFormOpen(true);
   };
 
+  const handleApplyTemplate = (templateId: SqlTemplateId) => {
+    const template = SQL_TEMPLATES.find((item) => item.id === templateId);
+    if (!template) {
+      return;
+    }
+    setForm((prev) => {
+      const dataset = prev.datasetId ? datasetLookup.get(prev.datasetId) : undefined;
+      const cronValue =
+        template.preset === "CUSTOM"
+          ? template.cron || prev.customCron || "0 0/30 * * * ?"
+          : template.cron ||
+            FREQUENCY_PRESETS.find((item) => item.preset === template.preset)?.cron ||
+            prev.customCron ||
+            "0 0 2 * * ?";
+      return {
+        ...prev,
+        severity: template.severity,
+        frequencyPreset: template.preset,
+        customCron: cronValue,
+        sql: template.build(dataset),
+      };
+    });
+    toast.success(`已套用模板：${template.label}`);
+  };
+
   const handleSubmit = async () => {
     if (!form.name.trim()) {
       toast.error("请输入规则名称");
@@ -354,7 +494,8 @@ const QualityRulesPage = () => {
       toast.error("请选择目标数据集");
       return;
     }
-    if (!form.sql.trim()) {
+    const trimmedSql = form.sql.trim();
+    if (!trimmedSql) {
       toast.error("请填写质量检测 SQL 或表达式");
       return;
     }
@@ -366,13 +507,14 @@ const QualityRulesPage = () => {
       return;
     }
     const dataset = datasetLookup.get(form.datasetId);
+    const owner = form.owner.trim() || "data_quality";
     const payload = {
       code: form.code?.trim() || undefined,
       name: form.name.trim(),
       type: "CUSTOM_SQL",
       category: "QUALITY",
       description: form.description?.trim(),
-      owner: form.owner.trim(),
+      owner,
       severity: form.severity,
       dataLevel: toLegacy(form.dataLevel),
       frequencyCron: cron,
@@ -380,7 +522,7 @@ const QualityRulesPage = () => {
       datasetId: form.datasetId,
       definition: {
         type: "SQL",
-        sql: form.sql,
+        sql: trimmedSql,
       },
       bindings: [
         {
@@ -434,18 +576,29 @@ const QualityRulesPage = () => {
   };
 
   const handleManualRun = async (rule: RuleRow) => {
+    setRunLoading(true);
     try {
       const bindingId = rule.bindings[0]?.id;
-      if (!bindingId) {
-        toast.error("该规则尚未配置绑定");
+      const datasetId = rule.datasetIds[0];
+      if (!bindingId && !datasetId) {
+        toast.error("该规则缺少绑定对象，请先配置数据集");
         return;
       }
-      await triggerQualityRun({ ruleId: rule.id, bindingId, triggerType: "MANUAL" });
+      const payload: any = { ruleId: rule.id, triggerType: "MANUAL" };
+      if (bindingId) {
+        payload.bindingId = bindingId;
+      }
+      if (datasetId) {
+        payload.datasetId = datasetId;
+      }
+      await triggerQualityRun(payload);
       toast.success("已提交检测任务");
       refreshRunsForRule(rule.id);
     } catch (error) {
       console.error(error);
       toast.error("触发检测失败");
+    } finally {
+      setRunLoading(false);
     }
   };
 
@@ -487,6 +640,46 @@ const QualityRulesPage = () => {
     return unique.size;
   }, [rules]);
 
+  const filteredRules = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase();
+    const filtered = rules.filter((rule) => {
+      const matchKeyword =
+        !keyword ||
+        rule.name.toLowerCase().includes(keyword) ||
+        (rule.code ?? "").toLowerCase().includes(keyword) ||
+        (rule.owner ?? "").toLowerCase().includes(keyword) ||
+        rule.datasetNames.some((name) => name.toLowerCase().includes(keyword));
+      const matchSeverity = severityFilter === "ALL" || rule.severity === severityFilter;
+      const matchDataset = datasetFilter === "ALL" || rule.datasetIds.includes(datasetFilter);
+      const matchEnabled =
+        enabledFilter === "ALL" ||
+        (enabledFilter === "ENABLED" ? rule.enabled : !rule.enabled);
+      return matchKeyword && matchSeverity && matchDataset && matchEnabled;
+    });
+    return filtered.sort((a, b) => {
+      const severityScore = (value?: SeverityLevel) =>
+        value === "CRITICAL"
+          ? 5
+          : value === "HIGH"
+          ? 4
+          : value === "MEDIUM"
+          ? 3
+          : value === "LOW"
+          ? 2
+          : 1;
+      const diff = severityScore(b.severity) - severityScore(a.severity);
+      if (diff !== 0) return diff;
+      return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+    });
+  }, [rules, searchKeyword, severityFilter, datasetFilter, enabledFilter]);
+
+  const datasetFilterOptions = useMemo(() => {
+    return datasets.map((dataset) => ({
+      value: dataset.id,
+      label: dataset.name,
+    }));
+  }, [datasets]);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -522,65 +715,155 @@ const QualityRulesPage = () => {
           <CardTitle>规则列表</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <Input
+              placeholder="搜索规则 / 责任人 / 数据集"
+              value={searchKeyword}
+              onChange={(event) => setSearchKeyword(event.target.value)}
+              className="min-w-[220px] flex-1"
+            />
+            <div className="w-full sm:w-[160px]">
+              <Select value={severityFilter} onValueChange={(value) => setSeverityFilter(value as SeverityLevel | "ALL")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="严重程度" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">全部严重程度</SelectItem>
+                  {SEVERITY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-full sm:w-[180px]">
+              <Select value={datasetFilter} onValueChange={(value) => setDatasetFilter(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="数据集" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value="ALL">全部数据集</SelectItem>
+                  {datasetFilterOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-full sm:w-[160px]">
+              <Select value={enabledFilter} onValueChange={(value) => setEnabledFilter(value as "ALL" | "ENABLED" | "DISABLED")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="启停状态" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">全部状态</SelectItem>
+                  <SelectItem value="ENABLED">仅启用</SelectItem>
+                  <SelectItem value="DISABLED">仅停用</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full table-auto border-collapse text-sm">
               <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-3 text-left font-medium">名称 / 编码</th>
-                  <th className="px-3 py-3 text-left font-medium">数据集</th>
-                  <th className="px-3 py-3 text-left font-medium">数据密级</th>
-                  <th className="px-3 py-3 text-left font-medium">责任人</th>
-                  <th className="px-3 py-3 text-left font-medium">频率</th>
+                  <th className="px-3 py-3 text-left font-medium">规则信息</th>
+                  <th className="px-3 py-3 text-left font-medium">绑定信息</th>
+                  <th className="px-3 py-3 text-left font-medium">执行情况</th>
                   <th className="px-3 py-3 text-right font-medium">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {ruleLoading ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    <td colSpan={4} className="px-3 py-6 text-center text-sm text-muted-foreground">
                       正在加载质量规则...
                     </td>
                   </tr>
-                ) : rules.length ? (
-                  rules.map((rule) => (
+                ) : filteredRules.length ? (
+                  filteredRules.map((rule) => (
                     <tr key={rule.id} className="border-b last:border-none hover:bg-muted/60">
                       <td className="px-3 py-3 align-top">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{rule.name}</span>
-                          <span className="text-xs text-muted-foreground">{rule.code || rule.id}</span>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground">{rule.name}</span>
+                            {rule.severity && (
+                              <Badge variant={SEVERITY_BADGE[rule.severity]}>{SEVERITY_LABELS[rule.severity]}</Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            编码：{rule.code || rule.id} · 责任人：{rule.owner || "-"}
+                          </div>
+                          {rule.description ? (
+                            <div className="text-xs text-muted-foreground line-clamp-2">{rule.description}</div>
+                          ) : null}
                         </div>
-                      </td>
-                      <td className="px-3 py-3 align-top text-sm text-muted-foreground">
-                        {rule.datasetNames.length ? rule.datasetNames.join(", ") : "未绑定"}
                       </td>
                       <td className="px-3 py-3 align-top">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">
-                            {
-                              LEVEL_LABELS[
-                                rule.dataLevel ? (rule.dataLevel as DataLevel) : fromLegacy("INTERNAL")
-                              ]
-                            }
-                          </Badge>
-                          {rule.severity && (
-                            <Badge variant={SEVERITY_BADGE[rule.severity]}>{SEVERITY_LABELS[rule.severity]}</Badge>
-                          )}
+						<div className="space-y-1 text-xs text-muted-foreground">
+							<div>
+								<span className="text-muted-foreground">数据集：</span>
+								{rule.datasetNames.length ? rule.datasetNames.join(", ") : "未绑定"}
+							</div>
+							<div>
+								<span className="text-muted-foreground">频率：</span>
+								{rule.frequencyLabel || rule.frequencyCron || "-"}
+							</div>
+                          <div>
+                            <span className="text-muted-foreground">状态：</span>
+                            <Badge variant={rule.enabled ? "outline" : "secondary"}>
+                              {rule.enabled ? "启用" : "停用"}
+                            </Badge>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-3 py-3 align-top text-sm text-muted-foreground">{rule.owner || "-"}</td>
-                      <td className="px-3 py-3 align-top text-sm text-muted-foreground">
-                        {rule.frequencyLabel || "-"}
+                      <td className="px-3 py-3 align-top">
+                        <div className="space-y-1 text-xs text-muted-foreground">
+                          <div>
+                            最近执行：
+                            {rule.lastRunStatus ? (
+                              <Badge
+                                variant="outline"
+                                className={
+                                  rule.lastRunStatus === "SUCCESS" || rule.lastRunStatus === "PASSED"
+                                    ? "border-emerald-300 text-emerald-600"
+                                    : rule.lastRunStatus === "FAILED"
+                                    ? "border-red-300 text-red-600"
+                                    : "border-muted-foreground text-muted-foreground"
+                                }
+                              >
+                                {rule.lastRunStatus}
+                              </Badge>
+                            ) : (
+                              "暂无记录"
+                            )}
+                          </div>
+                          <div>完成时间：{formatTime(rule.lastRunFinishedAt)}</div>
+                          <div>耗时：{rule.lastRunDurationMs ? formatDuration(rule.lastRunDurationMs) : "-"}</div>
+                          {rule.lastRunMessage ? (
+                            <div className="truncate text-xs text-muted-foreground">
+                              结果：{rule.lastRunMessage}
+                            </div>
+                          ) : null}
+                          {rule.runSuccessRate !== null && rule.runSuccessRate !== undefined ? (
+                            <div>
+                              成功率 {(rule.runSuccessRate * 100).toFixed(0)}%（共 {rule.totalRuns ?? "-"} 次）
+                            </div>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-3 py-3 align-top">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="icon" title="查看详情" onClick={() => openDetail(rule)}>
                             <Icon name="Eye" className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" title="手动执行" onClick={() => handleManualRun(rule)}>
-                            <Icon name="Play" className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" title="启用/停用" onClick={() => handleToggle(rule)}>
+                          <Button variant="ghost" size="icon" title={rule.enabled ? "停用规则" : "启用规则"} onClick={() => handleToggle(rule)}>
                             <Icon name={rule.enabled ? "Pause" : "PlayCircle"} className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="手动检测" onClick={() => handleManualRun(rule)}>
+                            <Icon name="Play" className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" title="编辑" onClick={() => openEditForm(rule)}>
                             <Icon name="Pencil" className="h-4 w-4" />
@@ -594,8 +877,8 @@ const QualityRulesPage = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-3 py-12 text-center text-sm text-muted-foreground">
-                      暂无质量规则，点击右上角“新增规则”开始配置。
+                    <td colSpan={4} className="px-3 py-12 text-center text-sm text-muted-foreground">
+                      未找到匹配的质量规则，请调整筛选条件或点击“新增规则”。
                     </td>
                   </tr>
                 )}
@@ -605,20 +888,19 @@ const QualityRulesPage = () => {
         </CardContent>
       </Card>
 
-      <Drawer open={detailDrawerOpen} onOpenChange={(open) => (open ? setDetailDrawerOpen(true) : closeDetail())}>
-        <DrawerContent className="max-h-[90vh]">
-          <DrawerHeader className="flex flex-col items-start gap-2 text-left">
-            <DrawerTitle>{detailRule?.name}</DrawerTitle>
-            <DrawerDescription className="whitespace-pre-line text-sm">
+      <Dialog open={detailDrawerOpen} onOpenChange={(open) => (open ? setDetailDrawerOpen(true) : closeDetail())}>
+        <DialogContent className="mx-auto max-h-[85vh] w-full max-w-4xl overflow-y-auto rounded-xl border bg-background shadow-xl">
+          <DialogHeader className="flex flex-col items-start gap-2 text-left">
+            <DialogTitle>{detailRule?.name}</DialogTitle>
+            <DialogDescription className="whitespace-pre-line text-sm">
               规则编码：{detailRule?.code || detailRule?.id}
-            </DrawerDescription>
-          </DrawerHeader>
+            </DialogDescription>
+          </DialogHeader>
           <div className="grid grid-cols-1 gap-6 px-6 pb-6 lg:grid-cols-2">
             <section className="space-y-4">
               <h3 className="text-sm font-semibold text-muted-foreground">基础信息</h3>
               <div className="space-y-2 text-sm">
                 <InfoRow label="责任人" value={detailRule?.owner || "-"} />
-                <InfoRow label="数据密级" value={detailRule ? LEVEL_LABELS[detailRule.dataLevel || "DATA_INTERNAL"] : "-"} />
                 <InfoRow
                   label="严重程度"
                   value={detailRule?.severity ? SEVERITY_LABELS[detailRule.severity] : "-"}
@@ -627,6 +909,22 @@ const QualityRulesPage = () => {
                 <InfoRow
                   label="绑定数据集"
                   value={detailRule?.datasetNames.length ? detailRule.datasetNames.join(", ") : "未绑定"}
+                />
+                <InfoRow
+                  label="最近执行"
+                  value={
+                    detailRule?.lastRunStatus
+                      ? `${detailRule.lastRunStatus} · ${formatTime(detailRule.lastRunFinishedAt)}`
+                      : "暂无执行记录"
+                  }
+                />
+                <InfoRow
+                  label="成功率"
+                  value={
+                    detailRule?.runSuccessRate !== null && detailRule?.runSuccessRate !== undefined
+                      ? `${(detailRule.runSuccessRate * 100).toFixed(0)}%（共 ${detailRule?.totalRuns ?? "-"} 次）`
+                      : "暂未统计"
+                  }
                 />
               </div>
               <div className="space-y-2 text-sm">
@@ -667,17 +965,17 @@ const QualityRulesPage = () => {
               </div>
             </section>
           </div>
-          <DrawerFooter className="flex flex-row items-center justify-between border-t bg-muted/30 px-6 py-4">
+          <DialogFooter className="flex flex-row items-center justify-between border-t bg-muted/30 px-6 py-4">
             <div className="text-xs text-muted-foreground">
               创建：{formatTime(detailRule?.createdAt)}
               {" "}· 更新：{formatTime(detailRule?.updatedAt)}
             </div>
-            <DrawerClose asChild>
+            <DialogClose asChild>
               <Button variant="outline">关闭</Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-3xl">
@@ -772,6 +1070,25 @@ const QualityRulesPage = () => {
             <div className="flex items-center gap-2">
               <Switch checked={form.enabled} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, enabled: checked }))} />
               <Label>启用规则</Label>
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <Label>快速模板</Label>
+              <div className="flex flex-wrap gap-2">
+                {SQL_TEMPLATES.map((template) => (
+                  <Button
+                    key={template.id}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleApplyTemplate(template.id)}
+                  >
+                    {template.label}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                根据数据集快速套用常见检测逻辑，套用后可在下方 SQL 文本框继续调整。
+              </p>
             </div>
             <div className="md:col-span-2 space-y-2">
               <Label>质量检测 SQL</Label>

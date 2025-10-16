@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251017-01-remove-security-view-audit" author="codex">
+        <comment>Remove obsolete security view audit mappings after feature deprecation</comment>
+
+        <delete tableName="audit_operation_mapping">
+            <where>url_pattern like '/api/catalog/security-views%'</where>
+        </delete>
+        <delete tableName="audit_operation_mapping">
+            <where>url_pattern like '/api/catalog/access-policies%'</where>
+        </delete>
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="portal_menu"/>
+        </preConditions>
+        <sql dbms="postgresql" splitStatements="false">
+            DO $do$
+            DECLARE
+                doomed_ids INTEGER[];
+            BEGIN
+                SELECT array_agg(id)
+                INTO doomed_ids
+                FROM portal_menu
+                WHERE metadata::text LIKE '%安全视图%'
+                   OR metadata::text LIKE '%分级保护%'
+                   OR metadata::text LIKE '%访问策略%';
+
+                IF doomed_ids IS NOT NULL AND array_length(doomed_ids, 1) &gt; 0 THEN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_name = 'portal_menu_visibility'
+                    ) THEN
+                        DELETE FROM portal_menu_visibility WHERE menu_id = ANY(doomed_ids);
+                    END IF;
+                    DELETE FROM portal_menu WHERE id = ANY(doomed_ids);
+                END IF;
+            END;
+            $do$;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

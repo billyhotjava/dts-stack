@@ -1,26 +1,22 @@
 import { useMemo, useState } from "react";
 import { Tree, TreeSelect } from "antd";
 import type { DataNode, TreeProps } from "antd/es/tree";
-import clsx from "clsx";
 import { toast } from "sonner";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Checkbox } from "@/ui/checkbox";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/ui/drawer";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { ScrollArea } from "@/ui/scroll-area";
 import { Textarea } from "@/ui/textarea";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { useEffect } from "react";
 import {
 	listDatasets as apiListDatasets,
 	getDomainTree,
 	moveDomain,
-	getAccessPolicy,
-	upsertAccessPolicy,
-	previewSecurityViews,
 	createDomain as apiCreateDomain,
 	updateDomain as apiUpdateDomain,
 	deleteDomain as apiDeleteDomain,
@@ -29,12 +25,6 @@ import {
 import { normalizeClassification } from "@/utils/classification";
 
 type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
-const DATA_LEVELS = [
-	{ value: "DATA_PUBLIC" as DataLevel, label: "公开 (DATA_PUBLIC)" },
-	{ value: "DATA_INTERNAL" as DataLevel, label: "内部 (DATA_INTERNAL)" },
-	{ value: "DATA_SECRET" as DataLevel, label: "秘密 (DATA_SECRET)" },
-	{ value: "DATA_TOP_SECRET" as DataLevel, label: "机密 (DATA_TOP_SECRET)" },
-] as const;
 const fromLegacy = (v: string): DataLevel => {
 	const normalized = normalizeClassification(v);
 	if (normalized === "PUBLIC") return "DATA_PUBLIC";
@@ -190,26 +180,6 @@ function countDatasetsByDomain(domains: DomainNode[], datasets: Dataset[]): Reco
 	});
 	return counts;
 }
-
-
-function DomainBadge({ level }: { level: DataLevel }) {
-	const meta = DATA_LEVELS.find((item) => item.value === level);
-	if (!meta) return null;
-	const tone =
-		level === "DATA_TOP_SECRET"
-			? "bg-rose-500/10 text-rose-500"
-			: level === "DATA_SECRET"
-				? "bg-amber-500/10 text-amber-500"
-				: level === "DATA_INTERNAL"
-					? "bg-sky-500/10 text-sky-500"
-					: "bg-emerald-500/10 text-emerald-600";
-	return (
-		<span className={clsx("inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold", tone)}>
-			{meta.label}
-		</span>
-	);
-}
-
 export default function DataDomainManagementPage() {
 	const [domains, setDomains] = useState<DomainNode[]>(INITIAL_DOMAINS);
 	const [datasets, setDatasets] = useState<Dataset[]>(INITIAL_DATASETS);
@@ -217,17 +187,11 @@ export default function DataDomainManagementPage() {
 	const [searchKeyword, setSearchKeyword] = useState("");
 	const [datasetKeyword, setDatasetKeyword] = useState("");
 	const [ownerFilter, setOwnerFilter] = useState("all");
-	const [levelFilter, setLevelFilter] = useState("all");
 	const [sourceFilter, setSourceFilter] = useState("all");
 	const [expandedKeys, setExpandedKeys] = useState<string[]>(() => collectExpandedKeys(INITIAL_DOMAINS));
 	const [autoExpandParent, setAutoExpandParent] = useState(true);
 	const [selectedDatasetIds, setSelectedDatasetIds] = useState<string[]>([]);
 	const [formOpen, setFormOpen] = useState(false);
-	const [policyOpen, setPolicyOpen] = useState(false);
-	const [policyDatasetId, setPolicyDatasetId] = useState<string>("");
-	const [policyRoles, setPolicyRoles] = useState<string>("ROLE_PUBLIC,ROLE_INTERNAL");
-	const [policyRowFilter, setPolicyRowFilter] = useState<string>("");
-	const [policyPreview, setPolicyPreview] = useState<Record<string, string> | null>(null);
 	const [formMode, setFormMode] = useState<"create" | "edit">("create");
 	const [editingNode, setEditingNode] = useState<DomainNode | null>(null);
 	const [formState, setFormState] = useState({
@@ -314,7 +278,6 @@ export default function DataDomainManagementPage() {
 					title: (
 						<div className="flex items-center justify-between gap-2 pr-2">
 							<div className="flex flex-1 items-center gap-2 overflow-hidden">
-								<DomainBadge level={node.classification} />
 								<span className="truncate text-sm font-medium text-text-primary">
 									{highlight(node.name, searchKeyword)}
 								</span>
@@ -331,7 +294,6 @@ export default function DataDomainManagementPage() {
 	}, [domains, datasetCounts, searchKeyword]);
 
 	const owners = useMemo(() => Array.from(new Set(datasets.map((item) => item.owner))), [datasets]);
-const levels = DATA_LEVELS.map((item) => item);
 	const sources = useMemo(() => Array.from(new Set(datasets.map((item) => item.sourceSystem))), [datasets]);
 
 	const selectedDomainMeta = selectedDomainKey ? domainMeta[selectedDomainKey] : undefined;
@@ -344,11 +306,10 @@ const levels = DATA_LEVELS.map((item) => item);
 			if (!belongsToDomain) return false;
 			if (datasetKeyword && !dataset.name.toLowerCase().includes(datasetKeyword.toLowerCase())) return false;
 			if (ownerFilter !== "all" && dataset.owner !== ownerFilter) return false;
-			if (levelFilter !== "all" && dataset.classification !== (levelFilter as DataLevel)) return false;
 			if (sourceFilter !== "all" && dataset.sourceSystem !== sourceFilter) return false;
 			return true;
 		});
-	}, [datasets, domainMeta, selectedDomainKey, datasetKeyword, ownerFilter, levelFilter, sourceFilter]);
+	}, [datasets, domainMeta, selectedDomainKey, datasetKeyword, ownerFilter, sourceFilter]);
 
 	const handleExpand: TreeProps["onExpand"] = (keys) => {
 		setExpandedKeys(keys as string[]);
@@ -660,7 +621,7 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 								</label>
 							</div>
 						</CardTitle>
-						<div className="grid gap-3 lg:grid-cols-4">
+						<div className="grid gap-3 lg:grid-cols-3">
 							<Input
 								value={datasetKeyword}
 								onChange={(event) => setDatasetKeyword(event.target.value)}
@@ -676,19 +637,6 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 									{owners.map((owner) => (
 										<SelectItem key={owner} value={owner}>
 											{owner}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<Select value={levelFilter} onValueChange={setLevelFilter}>
-								<SelectTrigger>
-									<SelectValue placeholder="数据密级" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">数据密级筛选</SelectItem>
-									{levels.map((item) => (
-										<SelectItem key={item.value} value={item.value}>
-											{item.label}
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -722,10 +670,8 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 										<th className="border-b px-3 py-2">数据集</th>
 										<th className="border-b px-3 py-2">所属域/主题</th>
 										<th className="border-b px-3 py-2">负责人</th>
-									<th className="border-b px-3 py-2">数据密级</th>
 										<th className="border-b px-3 py-2">来源系统</th>
 										<th className="border-b px-3 py-2">最近更新</th>
-										<th className="border-b px-3 py-2">策略</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -749,42 +695,14 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 													{meta ? formatPath(meta.pathNames) : "已失联"}
 												</td>
 												<td className="px-3 py-2 text-sm text-text-secondary">{dataset.owner}</td>
-												<td className="px-3 py-2">
-													<DomainBadge level={dataset.classification} />
-												</td>
 												<td className="px-3 py-2 text-sm text-text-secondary">{dataset.sourceSystem}</td>
 												<td className="px-3 py-2 text-sm text-text-secondary">{dataset.lastUpdated}</td>
-												<td className="px-3 py-2 text-sm">
-													<Button
-														size="sm"
-														variant="outline"
-														onClick={async () => {
-															setPolicyDatasetId(dataset.id);
-															setPolicyPreview(null);
-															try {
-																const p = (await getAccessPolicy(dataset.id)) as any;
-																if (p && p.allowRoles !== undefined) {
-																	setPolicyRoles(p.allowRoles || "");
-																	setPolicyRowFilter(p.rowFilter || "");
-																} else {
-																	setPolicyRoles("ROLE_PUBLIC,ROLE_INTERNAL");
-																	setPolicyRowFilter("");
-																}
-																setPolicyOpen(true);
-															} catch (e) {
-																setPolicyOpen(true);
-															}
-														}}
-													>
-														访问策略
-													</Button>
-												</td>
 											</tr>
 										);
 									})}
 									{filteredDatasets.length === 0 ? (
 										<tr>
-											<td colSpan={8} className="px-3 py-6 text-center text-sm text-text-tertiary">
+											<td colSpan={6} className="px-3 py-6 text-center text-sm text-text-tertiary">
 												暂无数据集
 											</td>
 										</tr>
@@ -821,27 +739,6 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 							/>
 						</div>
 						<div className="grid gap-2">
-							<Label>默认密级</Label>
-							<Select
-								value={formState.classification}
-								onValueChange={(value: DataLevel) => setFormState((prev) => ({ ...prev, classification: value }))}
-							>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectGroup>
-										<SelectLabel>数据密级</SelectLabel>
-										{DATA_LEVELS.map((item) => (
-											<SelectItem key={item.value} value={item.value}>
-												{item.label}
-											</SelectItem>
-										))}
-									</SelectGroup>
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="grid gap-2">
 							<Label>来源系统</Label>
 							<Input
 								value={formState.sourceSystem}
@@ -866,71 +763,6 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
-
-			<Dialog open={policyOpen} onOpenChange={setPolicyOpen}>
-				<DialogContent className="max-w-2xl">
-					<DialogHeader>
-						<DialogTitle>访问策略</DialogTitle>
-						<DialogDescription>为该数据集配置允许访问的角色集合与可选的行级过滤条件（视图路线）。</DialogDescription>
-					</DialogHeader>
-					<div className="grid gap-3">
-						<div className="grid gap-2">
-							<Label>允许角色（逗号分隔）</Label>
-							<Input value={policyRoles} onChange={(e) => setPolicyRoles(e.target.value)} />
-						</div>
-						<div className="grid gap-2">
-							<Label>行级过滤（可选）</Label>
-							<Textarea value={policyRowFilter} onChange={(e) => setPolicyRowFilter(e.target.value)} rows={3} />
-						</div>
-						<div className="flex items-center gap-2">
-							<Button
-								variant="outline"
-								onClick={async () => {
-									try {
-										const data = (await previewSecurityViews(policyDatasetId)) as any;
-										setPolicyPreview(data || {});
-									} catch (e) {
-										console.error(e);
-										toast.error("获取预览失败");
-									}
-								}}
-							>
-								预览安全视图SQL
-							</Button>
-						</div>
-						{policyPreview && (
-							<div className="max-h-60 overflow-auto rounded border bg-muted/30 p-2 font-mono text-xs">
-								{Object.entries(policyPreview).map(([k, v]) => (
-									<div key={k} className="mb-3">
-										<div className="mb-1 font-semibold">{k}</div>
-										<pre className="whitespace-pre-wrap">{String(v)}</pre>
-									</div>
-								))}
-							</div>
-						)}
-					</div>
-					<DialogFooter>
-						<Button variant="ghost" onClick={() => setPolicyOpen(false)}>
-							取消
-						</Button>
-						<Button
-							onClick={async () => {
-								try {
-									await upsertAccessPolicy(policyDatasetId, { allowRoles: policyRoles, rowFilter: policyRowFilter });
-									toast.success("已保存访问策略");
-									setPolicyOpen(false);
-								} catch (e) {
-									console.error(e);
-									toast.error("保存失败");
-								}
-							}}
-						>
-							保存
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-
 			<Dialog open={migrationOpen} onOpenChange={setMigrationOpen}>
 				<DialogContent className="max-w-md">
 					<DialogHeader>

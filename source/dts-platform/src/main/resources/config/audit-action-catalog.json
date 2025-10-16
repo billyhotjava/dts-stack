@@ -14,24 +14,6 @@
             { "code": "CATALOG_ASSET_EDIT", "display": "编辑数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "CATALOG_ASSET_PUBLISH", "display": "发布数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
-        },
-        {
-          "key": "catalog.accessPolicy",
-          "title": "分级保护与访问策略",
-          "actions": [
-            { "code": "CATALOG_ACCESS_POLICY_REVIEW", "display": "查看访问策略", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "CATALOG_ACCESS_POLICY_UPDATE", "display": "维护访问策略", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "CATALOG_ACCESS_POLICY_PUBLISH", "display": "发布访问策略", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "catalog.secureViews",
-          "title": "安全视图编排",
-          "actions": [
-            { "code": "CATALOG_SECURE_VIEW_BUILD", "display": "编排安全视图", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "CATALOG_SECURE_VIEW_APPROVE", "display": "审批安全视图", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "CATALOG_SECURE_VIEW_PUBLISH", "display": "发布安全视图", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
         }
       ]
     },
@@ -128,4 +110,3 @@
     }
   ]
 }
-

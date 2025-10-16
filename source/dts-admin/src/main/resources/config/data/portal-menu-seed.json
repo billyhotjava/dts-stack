@@ -12,18 +12,6 @@
           "path": "assets",
           "titleKey": "sys.nav.portal.catalogAssetsDirectory",
           "title": "数据资产目录"
-        },
-        {
-          "key": "accessPolicy",
-          "path": "access-policy",
-          "titleKey": "sys.nav.portal.catalogAccessPolicy",
-          "title": "分级保护与访问策略"
-        },
-        {
-          "key": "secureViews",
-          "path": "secure-views",
-          "titleKey": "sys.nav.portal.catalogSecureViews",
-          "title": "安全视图编排"
         }
       ]
     },

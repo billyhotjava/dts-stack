@@ -156,18 +156,15 @@ export default function DataPreviewPage() {
 
 	return (
 		<div className="space-y-4">
-			<div className="flex flex-wrap items-center gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-				<span aria-hidden className="text-red-500 text-lg">
-					★
-				</span>
-            <span className="font-semibold">此功能涉及密级数据，请注意保密！</span>
-				<Badge variant="secondary" className="bg-red-100 text-red-700">
-                    默认数据密级：DATA_SECRET（示例）
-				</Badge>
-				<Badge variant="outline" className="border-red-300 text-red-700">
-					导出需审批，禁自建渠道
-				</Badge>
-			</div>
+		<div className="flex flex-wrap items-center gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+			<span aria-hidden className="text-red-500 text-lg">
+				★
+			</span>
+	            <span className="font-semibold">此功能涉及敏感数据，请注意保密！</span>
+			<Badge variant="outline" className="border-red-300 text-red-700">
+				导出需审批，禁自建渠道
+			</Badge>
+		</div>
 
 			<div className="grid gap-4 xl:grid-cols-[320px,1fr]">
 				<Card className="h-[calc(100vh-240px)]">

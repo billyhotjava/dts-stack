@@ -3,7 +3,6 @@ package com.yuzhi.dts.admin.domain;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import java.io.Serializable;
 import java.time.Instant;
@@ -76,11 +75,11 @@ public class InfraDataSource extends AbstractAuditingEntity<UUID> implements Ser
     @Column(name = "updated_at")
     private Instant updatedAt;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "secure_props")
     private byte[] secureProps;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "secure_iv")
     private byte[] secureIv;
 

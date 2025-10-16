@@ -79,11 +79,7 @@ public class InfraManagementService {
 
     public List<InfraDataSourceDto> listDataSources() {
         try {
-            boolean canViewAll = SecurityUtils.hasCurrentUserAnyOfAuthorities(
-                AuthoritiesConstants.ADMIN,
-                AuthoritiesConstants.CATALOG_ADMIN,
-                AuthoritiesConstants.OP_ADMIN
-            );
+            boolean canViewAll = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DATA_MAINTAINER_ROLES);
             List<InfraDataSource> sources = canViewAll
                 ? dataSourceRepository.findAll()
                 : dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);

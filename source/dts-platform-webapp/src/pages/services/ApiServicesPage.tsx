@@ -17,23 +17,6 @@ import { Chart } from "@/components/chart/chart";
 import { useChart } from "@/components/chart/useChart";
 import SensitiveNotice from "@/components/security/SensitiveNotice";
 
-
-function LevelBadge({ level }: { level?: string }) {
-	const color =
-		level === "机密"
-			? "bg-rose-100 text-rose-700 border-rose-300"
-			: level === "秘密"
-				? "bg-red-100 text-red-700 border-red-300"
-				: level === "内部"
-					? "bg-amber-100 text-amber-800 border-amber-300"
-					: "bg-slate-100 text-slate-700 border-slate-300";
-	return (
-		<Badge variant="outline" className={`border ${color}`}>
-			{level}
-		</Badge>
-	);
-}
-
 function StatusBadge({ status }: { status: ApiServiceStatus }) {
 	const map: Record<ApiServiceStatus, string> = {
 		PUBLISHED: "bg-emerald-100 text-emerald-700",
@@ -143,9 +126,8 @@ export default function ApiServicesPage() {
 								<th className="px-3 py-2 font-medium">API 名称</th>
 								<th className="px-3 py-2 font-medium">绑定数据集/视图</th>
 								<th className="px-3 py-2 font-medium w-[90px]">方法</th>
-								<th className="px-3 py-2 font-medium">路径</th>
-                        <th className="px-3 py-2 font-medium w-[140px]">最低数据密级</th>
-								<th className="px-3 py-2 font-medium w-[140px]">QPS 配额</th>
+						<th className="px-3 py-2 font-medium">路径</th>
+						<th className="px-3 py-2 font-medium w-[140px]">QPS 配额</th>
 								<th className="px-3 py-2 font-medium w-[160px]">最近调用量</th>
 								<th className="px-3 py-2 font-medium w-[90px]">状态</th>
 								<th className="px-3 py-2 font-medium w-[160px]">操作</th>
@@ -180,13 +162,10 @@ export default function ApiServicesPage() {
 									<td className="px-3 py-2">
 										<Badge variant="outline">{it.method}</Badge>
 									</td>
-									<td className="px-3 py-2 font-mono text-xs">{it.path}</td>
-									<td className="px-3 py-2">
-										<LevelBadge level={it.classification} />
-									</td>
-									<td className="px-3 py-2">
-										{it.qps} / {it.qpsLimit}
-									</td>
+					<td className="px-3 py-2 font-mono text-xs">{it.path}</td>
+					<td className="px-3 py-2">
+						{it.qps} / {it.qpsLimit}
+					</td>
 									<td className="px-3 py-2">
 										<Chart height={40} series={[{ name: "calls", data: it.sparkline }]} options={sparkOptions} />
 									</td>
@@ -207,7 +186,7 @@ export default function ApiServicesPage() {
 							))}
 							{!filtered.length && (
 								<tr>
-									<td colSpan={9} className="px-3 py-8 text-center text-xs text-muted-foreground">
+					<td colSpan={8} className="px-3 py-8 text-center text-xs text-muted-foreground">
 										{loading ? "加载中…" : "暂无符合条件的 API 服务"}
 									</td>
 								</tr>

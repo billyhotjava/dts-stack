@@ -5,6 +5,9 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <changeSet id="20251015-09-clean-secure-view-row-filters" author="gemini-cli">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="catalog_secure_view"/>
+        </preConditions>
         <comment>Clean up existing CatalogSecureView row_filter entries that contain forbidden tokens (scope, share_scope).</comment>
 
         <sql>

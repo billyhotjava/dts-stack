@@ -1,10 +1,8 @@
 import { useMemo, useState } from "react";
 import clsx from "clsx";
 import { Icon } from "@/components/icon";
-import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
-import { Checkbox } from "@/ui/checkbox";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { ScrollArea } from "@/ui/scroll-area";
@@ -21,13 +19,6 @@ const MASKING_OPERATORS = [
 	{ value: "NULL", label: "置空" },
 	{ value: "REGEX", label: "正则替换" },
 	{ value: "CUSTOM", label: "自定义函数" },
-] as const;
-
-const CLASSIFICATION_LEVELS = [
-	{ value: "PUBLIC", label: "公开" },
-	{ value: "INTERNAL", label: "内部" },
-	{ value: "SECRET", label: "秘密" },
-	{ value: "TOP_SECRET", label: "机密" },
 ] as const;
 
 type MaskingOperator = (typeof MASKING_OPERATORS)[number]["value"];
@@ -132,14 +123,12 @@ const INITIAL_ROW_POLICIES: RowPolicy[] = [
 
 type ScopeConfig = {
 	priority: number;
-	classifications: string[];
 	roles: string[];
 	organizations: string[];
 };
 
 const INITIAL_SCOPE: ScopeConfig = {
 	priority: 10,
-	classifications: ["秘密", "机密"],
 	roles: ["DATA_STEWARD"],
 	organizations: ["数据资产中心"],
 };
@@ -147,7 +136,6 @@ const INITIAL_SCOPE: ScopeConfig = {
 type SimulationInput = {
 	user: string;
 	role: string;
-	classification: string;
 	datasetId: string;
 };
 
@@ -197,7 +185,6 @@ export default function MaskingPoliciesPage() {
 	const [simulation, setSimulation] = useState<SimulationInput>({
 		user: "analyst.chen",
 		role: "DATA_ANALYST",
-		classification: "内部",
 		datasetId: DATASETS[0]?.id ?? "",
 	});
 
@@ -253,7 +240,7 @@ export default function MaskingPoliciesPage() {
 			<SensitiveNotice />
 			<div className="flex flex-wrap items-center gap-2 rounded-md border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700">
 				<Icon icon="solar:shield-bold" size={18} />
-				治理策略落地列级/行级访问控制，可按数据密级、角色、组织叠加覆盖并提供模拟验证。
+				治理策略落地列级/行级访问控制，可按角色、组织等维度叠加覆盖并提供模拟验证。
 			</div>
 
 			<div className="grid gap-4 2xl:grid-cols-[400px,1fr]">
@@ -285,8 +272,7 @@ export default function MaskingPoliciesPage() {
 									<tr>
 										<th className="px-4 py-2">字段名</th>
 										<th className="px-4 py-2">类型</th>
-										<th className="px-4 py-2">数据密级</th>
-										<th className="px-4 py-2">当前策略</th>
+									<th className="px-4 py-2">当前策略</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -300,10 +286,7 @@ export default function MaskingPoliciesPage() {
 														默认：{field.masking} · 当前：{policy.masking}
 													</p>
 												</td>
-												<td className="px-4 py-3 text-xs text-muted-foreground">{field.type}</td>
-												<td className="px-4 py-3 text-xs">
-													<Badge variant="outline">{field.classification}</Badge>
-												</td>
+							<td className="px-4 py-3 text-xs text-muted-foreground">{field.type}</td>
 												<td className="px-4 py-3">
 													<Select
 														value={policy.masking}
@@ -416,31 +399,6 @@ export default function MaskingPoliciesPage() {
 								/>
 							</div>
 							<div className="space-y-2">
-								<Label className="text-xs text-muted-foreground">数据密级</Label>
-								<Select value="multi" onValueChange={() => undefined} open={false}>
-									<SelectTrigger className="justify-start">
-									<SelectValue placeholder="选择数据密级" />
-									</SelectTrigger>
-								</Select>
-								<div className="flex flex-wrap gap-2">
-									{CLASSIFICATION_LEVELS.map((level) => (
-										<label key={level.value} className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs">
-											<Checkbox
-												checked={scopeConfig.classifications.includes(level.label)}
-												onCheckedChange={(checked) => {
-													updateScopeConfig({
-														classifications: checked
-															? [...scopeConfig.classifications, level.label]
-															: scopeConfig.classifications.filter((item) => item !== level.label),
-													});
-												}}
-											/>
-											<span>{level.label}</span>
-										</label>
-									))}
-								</div>
-							</div>
-							<div className="space-y-2">
 								<Label className="text-xs text-muted-foreground">角色</Label>
 								<Textarea
 									rows={2}
@@ -473,7 +431,7 @@ export default function MaskingPoliciesPage() {
 								/>
 							</div>
 							<p className="text-xs text-muted-foreground">
-								策略叠加遵循：优先级 &lt; 数据密级 &lt; 角色/组织，覆盖冲突时按照优先级较小者生效。
+								策略叠加遵循：优先级 &lt; 角色/组织，覆盖冲突时按照优先级较小者生效。
 							</p>
 						</CardContent>
 					</Card>
@@ -509,21 +467,6 @@ export default function MaskingPoliciesPage() {
 										<SelectItem value="DATA_ANALYST">DATA_ANALYST</SelectItem>
 										<SelectItem value="DATA_STEWARD">DATA_STEWARD</SelectItem>
 										<SelectItem value="RISK_MANAGER">RISK_MANAGER</SelectItem>
-									</SelectContent>
-								</Select>
-								<Select
-									value={simulation.classification}
-									onValueChange={(value) => setSimulation((prev) => ({ ...prev, classification: value }))}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder="数据密级" />
-									</SelectTrigger>
-									<SelectContent>
-										{CLASSIFICATION_LEVELS.map((level) => (
-											<SelectItem key={level.value} value={level.label}>
-												{level.label}
-											</SelectItem>
-										))}
 									</SelectContent>
 								</Select>
 								<Select

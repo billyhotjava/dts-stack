@@ -135,8 +135,7 @@
           "permission": "Menu Management",
           "group": "Organization Management",
           "system_config": "System Management",
-          "datasource": "Data Sources",
-          "other_config": "Other Settings"
+          "datasource": "Data Sources"
         }
       },
       "toast": "Toast",

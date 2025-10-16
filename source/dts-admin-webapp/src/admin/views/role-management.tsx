@@ -459,7 +459,6 @@ export default function RoleManagementView() {
     const expandedRowRender = useCallback(
         (record: RoleRow) => {
             const scopeLabel = record.scope ? SCOPE_LABELS[record.scope] : "未设置";
-            const operations = record.operations?.length ? record.operations.join("，") : "默认查询";
             const members = record.assignments || [];
             return (
                 <div className="grid gap-4 border-t border-muted pt-4 text-sm md:grid-cols-3">
@@ -471,7 +470,7 @@ export default function RoleManagementView() {
                             <div>编码：{record.code || record.canonical}</div>
                             <div>作用域：{scopeLabel}</div>
                             <div>描述：{record.description || "未填写"}</div>
-                            <div>操作权限：{operations}</div>
+                            <div>操作权限：系统默认（读取 / 写入 / 导出）</div>
                         </div>
                     </div>
                     <div className="space-y-2">
@@ -790,11 +789,10 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                             onChange={(event) => setDescription(event.target.value)}
                         />
                     </div>
-                    {/* 作用域固定为部门，审批逻辑改为后台默认，保留操作权限说明 */}
                     <div className="space-y-2">
                         <span className="font-medium">操作权限</span>
                         <Text variant="body3" className="text-muted-foreground">
-                            默认仅授予读取权限
+                            系统默认启用读取 / 写入 / 导出，无需额外勾选
                         </Text>
                     </div>
                     <div className="space-y-2">

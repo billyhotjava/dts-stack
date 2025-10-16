@@ -10,7 +10,7 @@ import { Textarea } from "@/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { toast } from "sonner";
 import { createDataset, getCatalogConfig, listDatasets, previewDataset } from "@/api/platformApi";
-import { listInfraDataSources } from "@/api/services/infraService";
+import { listInfraDataSources, refreshInceptorRegistry } from "@/api/services/infraService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import { renderDataLevelLabel } from "@/constants/governance";
 import { useUserInfo } from "@/store/userStore";
@@ -51,6 +51,23 @@ export default function DatasetsPage() {
 		() => roleSet.has("INST_DATA_OWNER") || roleSet.has("ROLE_INST_DATA_OWNER"),
 		[roleSet],
 	);
+	const hasDataMaintainerRole = useMemo(() => {
+		const maintainers = [
+			"ROLE_OP_ADMIN",
+			"OPADMIN",
+			"ROLE_ADMIN",
+			"ADMIN",
+			"ROLE_INST_DATA_OWNER",
+			"INST_DATA_OWNER",
+			"ROLE_INST_DATA_DEV",
+			"INST_DATA_DEV",
+			"ROLE_DEPT_DATA_OWNER",
+			"DEPT_DATA_OWNER",
+			"ROLE_DEPT_DATA_DEV",
+			"DEPT_DATA_DEV",
+		];
+		return maintainers.some((role) => roleSet.has(role));
+	}, [roleSet]);
 	const preferredUsername = useMemo(() => {
 		const candidates = [
 			userInfo?.preferred_username,
@@ -134,17 +151,8 @@ const primarySourceLabel = useMemo(
 	[catalogConfig.primarySourceType, resolvedDefaultSource, normalizeSourceType],
 );
 const multiSourceAllowed = catalogConfig.multiSourceEnabled || multiSourceUnlocked;
-const fallbackEditable = useMemo(() => {
-	if (isOpadmin) return true;
-	return (
-		roleSet.has("OPADMIN") ||
-		roleSet.has("ROLE_OP_ADMIN") ||
-		roleSet.has("ROLE_ADMIN") ||
-		roleSet.has("ROLE_CATALOG_ADMIN") ||
-		roleSet.has("ROLE_INST_DATA_OWNER") ||
-		roleSet.has("ROLE_DEPT_DATA_OWNER")
-	);
-}, [roleSet, isOpadmin]);
+const fallbackEditable = useMemo(() => isOpadmin || hasDataMaintainerRole, [isOpadmin, hasDataMaintainerRole]);
+const canSyncInfra = true; // 所有登录用户均可触发刷新
 
 const availableSourceTypes = useMemo(() => {
 	const set = new Set<string>();
@@ -379,28 +387,46 @@ const filtered = useMemo(() => {
 
 	const handleRefresh = async () => {
 		setRefreshing(true);
+		let registrySynced = false;
+		if (canSyncInfra) {
+				try {
+					await refreshInceptorRegistry();
+					registrySynced = true;
+				} catch (error: any) {
+					console.error(error);
+					if (error?.response?.status !== 403) {
+						toast.error(error?.message || "同步失败");
+						setRefreshing(false);
+						return;
+					}
+				}
+		}
 		try {
 			await fetchList();
-			try {
-				const [cfg, ds] = await Promise.all([
-					getCatalogConfig().catch(() => undefined),
-					listInfraDataSources().catch(() => undefined),
-				]);
-				if (cfg) {
-					setCatalogConfig({
-						multiSourceEnabled: Boolean((cfg as any)?.multiSourceEnabled),
-						defaultSourceType: String((cfg as any)?.defaultSourceType || "HIVE"),
-						hasPrimarySource: Boolean((cfg as any)?.hasPrimarySource),
-						primarySourceType: String((cfg as any)?.primarySourceType || "HIVE"),
-					});
+			if (registrySynced) {
+				try {
+					const [cfg, ds] = await Promise.all([
+						getCatalogConfig().catch(() => undefined),
+						listInfraDataSources().catch(() => undefined),
+					]);
+					if (cfg) {
+						setCatalogConfig({
+							multiSourceEnabled: Boolean((cfg as any)?.multiSourceEnabled),
+							defaultSourceType: String((cfg as any)?.defaultSourceType || "HIVE"),
+							hasPrimarySource: Boolean((cfg as any)?.hasPrimarySource),
+							primarySourceType: String((cfg as any)?.primarySourceType || "HIVE"),
+						});
+					}
+					if (Array.isArray(ds)) {
+						setDataSources(ds);
+					}
+				} catch (reloadError) {
+					console.warn("刷新数据目录基础信息失败", reloadError);
 				}
-				if (Array.isArray(ds)) {
-					setDataSources(ds);
-				}
-			} catch (reloadError) {
-				console.warn("刷新数据目录基础信息失败", reloadError);
+				toast.success("数据目录已重新同步最新数据源状态");
+			} else {
+				toast.success("数据资产列表已刷新");
 			}
-			toast.success("已刷新数据目录");
 		} catch (error: any) {
 			console.error(error);
 			toast.error(error?.message || "刷新失败");

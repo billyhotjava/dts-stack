@@ -82,15 +82,11 @@ export default function ProfileTab({ detail, pickAttributeValue }: ProfileTabPro
 	const accountStatus = detail?.enabled ?? enabled;
 	const accountId = detail?.id || id || "-";
 	const fallbackName = USERNAME_FALLBACK_NAME[resolvedUsername?.toLowerCase() ?? ""] || "";
-	const normalizedAttributeFullName = attributeFullName && attributeFullName.toLowerCase() !== resolvedUsername.toLowerCase() ? attributeFullName : "";
-	const normalizedDetailFullName = detail?.fullName && detail.fullName.toLowerCase() !== resolvedUsername.toLowerCase() ? detail.fullName : "";
-	const normalizedStoreFullName = fullName && fullName.toLowerCase() !== resolvedUsername.toLowerCase() ? fullName : "";
-	const normalizedStoreFirstName = firstName && firstName.toLowerCase() !== resolvedUsername.toLowerCase() ? firstName : "";
+
 	const resolvedName = (
-		normalizedAttributeFullName ||
-		normalizedDetailFullName?.trim() ||
-		normalizedStoreFullName?.trim() ||
-		normalizedStoreFirstName?.trim() ||
+		fullName?.trim() || // Prioritize the corrected fullName from backend
+		firstName?.trim() ||
+		attributeFullName || // Fallback to attributes if fullName is still not good
 		fallbackName ||
 		resolvedUsername
 	);

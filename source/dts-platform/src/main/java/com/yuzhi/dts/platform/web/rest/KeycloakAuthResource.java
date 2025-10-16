@@ -389,15 +389,15 @@ public class KeycloakAuthResource {
                     yield true;
                 }
                 case "CATALOG_ADMIN", "CATALOGADMIN" -> {
-                    mapped.add(AuthoritiesConstants.CATALOG_ADMIN);
+                    mapped.add(AuthoritiesConstants.INST_DATA_OWNER);
                     yield true;
                 }
                 case "GOV_ADMIN", "GOVERNANCE_ADMIN", "GOVADMIN" -> {
-                    mapped.add(AuthoritiesConstants.GOV_ADMIN);
+                    mapped.add(AuthoritiesConstants.INST_DATA_OWNER);
                     yield true;
                 }
                 case "IAM_ADMIN", "IAMADMIN" -> {
-                    mapped.add(AuthoritiesConstants.IAM_ADMIN);
+                    mapped.add(AuthoritiesConstants.INST_DATA_OWNER);
                     yield true;
                 }
                 case "ADMIN" -> {

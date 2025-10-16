@@ -13,18 +13,13 @@ public final class AuthoritiesConstants {
 
     public static final String ANONYMOUS = "ROLE_ANONYMOUS";
 
-    // Module-specific admin roles
-    public static final String CATALOG_ADMIN = "ROLE_CATALOG_ADMIN";
-    public static final String GOV_ADMIN = "ROLE_GOV_ADMIN";
-    public static final String IAM_ADMIN = "ROLE_IAM_ADMIN";
-
-    // Organization-level data roles
+    // Organization-level数据角色，与 Admin 服务保持一致
     public static final String INST_DATA_DEV = "ROLE_INST_DATA_DEV";
     public static final String INST_DATA_OWNER = "ROLE_INST_DATA_OWNER";
     public static final String DEPT_DATA_DEV = "ROLE_DEPT_DATA_DEV";
     public static final String DEPT_DATA_OWNER = "ROLE_DEPT_DATA_OWNER";
 
-    // Aggregated role groups for access control annotations
+    // 平台模块统一的维护者角色集合（含 OP 与机构/部门数据角色）
     public static final String[] DATA_MAINTAINER_ROLES = new String[] {
         ADMIN,
         OP_ADMIN,
@@ -34,25 +29,11 @@ public final class AuthoritiesConstants {
         DEPT_DATA_OWNER
     };
 
-    public static final String[] CATALOG_MAINTAINERS = new String[] {
-        CATALOG_ADMIN,
-        ADMIN,
-        OP_ADMIN,
-        INST_DATA_DEV,
-        INST_DATA_OWNER,
-        DEPT_DATA_DEV,
-        DEPT_DATA_OWNER
-    };
-
-    public static final String[] GOVERNANCE_MAINTAINERS = new String[] {
-        GOV_ADMIN,
-        ADMIN,
-        OP_ADMIN,
-        INST_DATA_DEV,
-        INST_DATA_OWNER,
-        DEPT_DATA_DEV,
-        DEPT_DATA_OWNER
-    };
+    // 以下聚合常量便于 SpEL 引用，内容与 DATA_MAINTAINER_ROLES 保持一致
+    public static final String[] CATALOG_MAINTAINERS = DATA_MAINTAINER_ROLES;
+    public static final String[] GOVERNANCE_MAINTAINERS = DATA_MAINTAINER_ROLES;
+    public static final String[] IAM_MAINTAINERS = DATA_MAINTAINER_ROLES;
+    public static final String[] INFRA_MAINTAINERS = DATA_MAINTAINER_ROLES;
 
     private AuthoritiesConstants() {}
 }

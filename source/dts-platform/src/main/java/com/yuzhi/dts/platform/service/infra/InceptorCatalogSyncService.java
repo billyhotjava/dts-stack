@@ -3,14 +3,12 @@ package com.yuzhi.dts.platform.service.infra;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
-import com.yuzhi.dts.platform.repository.catalog.CatalogAccessPolicyRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetGrantRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetJobRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
@@ -51,10 +49,8 @@ public class InceptorCatalogSyncService {
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogTableSchemaRepository tableRepository;
     private final CatalogColumnSchemaRepository columnRepository;
-    private final CatalogAccessPolicyRepository accessPolicyRepository;
     private final CatalogRowFilterRuleRepository rowFilterRepository;
     private final CatalogMaskingRuleRepository maskingRuleRepository;
-    private final CatalogSecureViewRepository secureViewRepository;
     private final CatalogDatasetGrantRepository datasetGrantRepository;
     private final CatalogDatasetJobRepository datasetJobRepository;
     private final PostgresCatalogSyncService postgresCatalogSyncService;
@@ -69,10 +65,8 @@ public class InceptorCatalogSyncService {
         CatalogDatasetRepository datasetRepository,
         CatalogTableSchemaRepository tableRepository,
         CatalogColumnSchemaRepository columnRepository,
-        CatalogAccessPolicyRepository accessPolicyRepository,
         CatalogRowFilterRuleRepository rowFilterRepository,
         CatalogMaskingRuleRepository maskingRuleRepository,
-        CatalogSecureViewRepository secureViewRepository,
         CatalogDatasetGrantRepository datasetGrantRepository,
         CatalogDatasetJobRepository datasetJobRepository,
         PostgresCatalogSyncService postgresCatalogSyncService,
@@ -83,10 +77,8 @@ public class InceptorCatalogSyncService {
         this.datasetRepository = datasetRepository;
         this.tableRepository = tableRepository;
         this.columnRepository = columnRepository;
-        this.accessPolicyRepository = accessPolicyRepository;
         this.rowFilterRepository = rowFilterRepository;
         this.maskingRuleRepository = maskingRuleRepository;
-        this.secureViewRepository = secureViewRepository;
         this.datasetGrantRepository = datasetGrantRepository;
         this.datasetJobRepository = datasetJobRepository;
         this.postgresCatalogSyncService = postgresCatalogSyncService;
@@ -376,7 +368,6 @@ public class InceptorCatalogSyncService {
 
     private void purgeDataset(CatalogDataset dataset) {
         try {
-            accessPolicyRepository.findByDataset(dataset).ifPresent(accessPolicyRepository::delete);
             var rowFilters = rowFilterRepository.findByDataset(dataset);
             if (!rowFilters.isEmpty()) {
                 rowFilterRepository.deleteAll(rowFilters);
@@ -384,10 +375,6 @@ public class InceptorCatalogSyncService {
             var maskingRules = maskingRuleRepository.findByDataset(dataset);
             if (!maskingRules.isEmpty()) {
                 maskingRuleRepository.deleteAll(maskingRules);
-            }
-            var secureViews = secureViewRepository.findByDataset(dataset);
-            if (!secureViews.isEmpty()) {
-                secureViewRepository.deleteAll(secureViews);
             }
             if (dataset.getId() != null) {
                 datasetGrantRepository.deleteByDatasetId(dataset.getId());

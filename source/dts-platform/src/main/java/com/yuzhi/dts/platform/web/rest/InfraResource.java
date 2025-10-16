@@ -36,6 +36,9 @@ import org.springframework.web.bind.annotation.*;
 @Transactional
 public class InfraResource {
 
+    private static final String INFRA_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
+
     private final InfraTaskScheduleRepository schedRepo;
     private final AuditService audit;
     private final InfraManagementService managementService;
@@ -71,7 +74,7 @@ public class InfraResource {
     }
 
     @PostMapping("/data-sources/test-connection")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<HiveConnectionTestResult> testDataSourceConnection(@Valid @RequestBody HiveConnectionTestRequest request) {
         var result = hiveConnectionService.testConnection(request);
         var user = SecurityUtils.getCurrentUserLogin().orElse("system");
@@ -81,7 +84,7 @@ public class InfraResource {
     }
 
     @PostMapping("/data-sources")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<InfraDataSourceDto> createDataSource(@Valid @RequestBody DataSourceRequest request) {
         var user = SecurityUtils.getCurrentUserLogin().orElse("system");
         var saved = managementService.createDataSource(request, user);
@@ -99,7 +102,7 @@ public class InfraResource {
     }
 
     @PostMapping("/data-sources/postgres/activate")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<InfraDataSourceDto> activatePlatformPostgres() {
         var user = SecurityUtils.getCurrentUserLogin().orElse("system");
         var saved = managementService.activatePlatformPostgres(user);
@@ -108,7 +111,7 @@ public class InfraResource {
     }
 
     @PutMapping("/data-sources/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<InfraDataSourceDto> updateDataSource(@PathVariable UUID id, @Valid @RequestBody DataSourceRequest request) {
         var user = SecurityUtils.getCurrentUserLogin().orElse("system");
         var saved = managementService.updateDataSource(id, request, user);
@@ -117,7 +120,7 @@ public class InfraResource {
     }
 
     @DeleteMapping("/data-sources/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteDataSource(@PathVariable UUID id) {
         managementService.deleteDataSource(id);
         audit.audit("DELETE", "infra.dataSource", String.valueOf(id));
@@ -133,7 +136,7 @@ public class InfraResource {
     }
 
     @PostMapping("/data-storages")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<InfraDataStorageDto> createDataStorage(@Valid @RequestBody DataStorageRequest request) {
         var user = SecurityUtils.getCurrentUserLogin().orElse("system");
         var saved = managementService.createDataStorage(request, user);
@@ -142,7 +145,7 @@ public class InfraResource {
     }
 
     @PutMapping("/data-storages/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<InfraDataStorageDto> updateDataStorage(@PathVariable UUID id, @Valid @RequestBody DataStorageRequest request) {
         var user = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("system");
         var saved = managementService.updateDataStorage(id, request, user);
@@ -151,7 +154,7 @@ public class InfraResource {
     }
 
     @DeleteMapping("/data-storages/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteDataStorage(@PathVariable UUID id) {
         managementService.deleteDataStorage(id);
         audit.audit("DELETE", "infra.dataStorage", String.valueOf(id));
@@ -215,7 +218,7 @@ public class InfraResource {
     }
 
     @PostMapping("/schedules")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<InfraTaskSchedule> createSchedule(@Valid @RequestBody InfraTaskSchedule sc) {
         var saved = schedRepo.save(sc);
         audit.audit("CREATE", "infra.schedule", String.valueOf(saved.getId()));
@@ -223,7 +226,7 @@ public class InfraResource {
     }
 
     @PutMapping("/schedules/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<InfraTaskSchedule> updateSchedule(@PathVariable UUID id, @Valid @RequestBody InfraTaskSchedule patch) {
         var existing = schedRepo.findById(id).orElseThrow();
         existing.setName(patch.getName());
@@ -237,7 +240,7 @@ public class InfraResource {
     }
 
     @DeleteMapping("/schedules/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.CATALOG_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteSchedule(@PathVariable UUID id) {
         schedRepo.deleteById(id);
         audit.audit("DELETE", "infra.schedule", String.valueOf(id));

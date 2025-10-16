@@ -22,19 +22,6 @@ function StatusBadge({ status }: { status?: string }) {
 	return <Badge className={cls}>{status}</Badge>;
 }
 
-function LevelBadge({ level }: { level?: string }) {
-	if (!level) return <Badge variant="outline">未分类</Badge>;
-	const cls =
-		level === "机密"
-			? "bg-rose-100 text-rose-700"
-			: level === "秘密"
-				? "bg-red-100 text-red-700"
-				: level === "内部"
-					? "bg-amber-100 text-amber-800"
-					: "bg-slate-100 text-slate-700";
-	return <Badge className={cls}>{level}</Badge>;
-}
-
 function ProductCard({ item, active, onSelect }: { item: DataProductSummary; active: boolean; onSelect: (id: string) => void }) {
 	return (
 		<button
@@ -250,7 +237,6 @@ export default function DataProductsPage() {
 									<div className="flex flex-wrap items-center gap-3">
 										<h3 className="text-lg font-semibold">{detail.name}</h3>
 										<Badge variant="outline">{detail.productType || "未分类"}</Badge>
-										<LevelBadge level={detail.classification} />
 										<StatusBadge status={detail.status} />
 									</div>
 									<div className="grid gap-3 md:grid-cols-3 text-xs">

@@ -16,6 +16,7 @@
 
     <changeSet id="20251005-02-portal-menu-seed" author="codex">
         <validCheckSum>9:b225c668dd83a77546ca4430cf7def28</validCheckSum>
+        <validCheckSum>9:3b5035fe4c1706d36ec9fb5cbca7c5f1</validCheckSum>
         <preConditions onFail="MARK_RAN">
             <tableIsEmpty tableName="portal_menu"/>
         </preConditions>
@@ -78,22 +79,6 @@
             <column name="parent_id" valueNumeric="1"/>
             <column name="sort_order" valueNumeric="10"/>
             <column name="metadata"><![CDATA[{"sectionKey":"catalog","entryKey":"assets","titleKey":"sys.nav.portal.catalogAssetsDirectory","title":"数据资产目录"}]]></column>
-        </insert>
-        <insert tableName="portal_menu">
-            <column name="id" valueNumeric="102"/>
-            <column name="name" value="sys.nav.portal.catalogAccessPolicy"/>
-            <column name="path" value="access-policy"/>
-            <column name="parent_id" valueNumeric="1"/>
-            <column name="sort_order" valueNumeric="20"/>
-            <column name="metadata"><![CDATA[{"sectionKey":"catalog","entryKey":"accessPolicy","titleKey":"sys.nav.portal.catalogAccessPolicy","title":"分级保护与访问策略"}]]></column>
-        </insert>
-        <insert tableName="portal_menu">
-            <column name="id" valueNumeric="103"/>
-            <column name="name" value="sys.nav.portal.catalogSecureViews"/>
-            <column name="path" value="secure-views"/>
-            <column name="parent_id" valueNumeric="1"/>
-            <column name="sort_order" valueNumeric="30"/>
-            <column name="metadata"><![CDATA[{"sectionKey":"catalog","entryKey":"secureViews","titleKey":"sys.nav.portal.catalogSecureViews","title":"安全视图编排"}]]></column>
         </insert>
 
         <!-- Children for modeling -->

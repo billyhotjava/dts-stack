@@ -51,12 +51,6 @@ export const frontendNavData: NavProps["data"] = [
 						icon: <Icon icon="local:ic-analysis" size={18} />,
 						auth: SYSADMIN_ROLES,
 					},
-					{
-						title: "sys.nav.usermgmt.system.other_config",
-						path: "/admin/system/other",
-						icon: <Icon icon="local:ic-setting" size={18} />,
-						auth: SYSADMIN_ROLES,
-					},
 				],
 			},
 			{

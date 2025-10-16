@@ -7,7 +7,6 @@ import com.yuzhi.dts.platform.domain.explore.ResultSet;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogAccessPolicyRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.domain.catalog.CatalogMaskingRule;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -32,7 +31,6 @@ public class ExploreExecResource {
     private final AccessChecker accessChecker;
     private final QueryExecutionRepository executionRepository;
     private final ResultSetRepository resultSetRepository;
-    private final CatalogAccessPolicyRepository policyRepository;
     private final CatalogMaskingRuleRepository maskingRepository;
 
     public ExploreExecResource(
@@ -42,7 +40,6 @@ public class ExploreExecResource {
         AccessChecker accessChecker,
         QueryExecutionRepository executionRepository,
         ResultSetRepository resultSetRepository,
-        CatalogAccessPolicyRepository policyRepository,
         CatalogMaskingRuleRepository maskingRepository
     ) {
         this.queryGateway = queryGateway;
@@ -51,7 +48,6 @@ public class ExploreExecResource {
         this.accessChecker = accessChecker;
         this.executionRepository = executionRepository;
         this.resultSetRepository = resultSetRepository;
-        this.policyRepository = policyRepository;
         this.maskingRepository = maskingRepository;
     }
 
@@ -73,17 +69,6 @@ public class ExploreExecResource {
 
         // Simple variable substitution: ${var} and :var
         String effective = applyVariables(sql, req.variables);
-        // Row filter pushdown when a dataset and policy are present (and not using RANGER)
-        if (req.datasetId != null) {
-            CatalogDataset ds = datasetRepo.findById(req.datasetId).orElse(null);
-            if (ds != null) {
-                var policy = policyRepository.findByDataset(ds).orElse(null);
-                boolean usingRanger = "RANGER".equalsIgnoreCase(java.util.Objects.toString(ds.getExposedBy(), ""));
-                if (!usingRanger && policy != null && policy.getRowFilter() != null && !policy.getRowFilter().isBlank()) {
-                    effective = "SELECT * FROM (" + effective + ") t WHERE (" + policy.getRowFilter() + ")";
-                }
-            }
-        }
         if (!isReadOnlyQuery(effective)) {
             audit.audit("DENY", "explore.execute", "write-operation");
             return ApiResponses.error("Only read-only queries are allowed");
@@ -208,13 +193,11 @@ public class ExploreExecResource {
             var ds = datasetRepo.findById(effectiveDatasetId).orElse(null);
             if (ds != null) {
                 var rules = maskingRepository.findByDataset(ds);
-                String defaultMask = policyRepository.findByDataset(ds).map(com.yuzhi.dts.platform.domain.catalog.CatalogAccessPolicy::getDefaultMasking).orElse(null);
-                data = applyMasking(data, headers, rules, defaultMask);
-                maskingMeta.put("mode", "policy");
+                data = applyMasking(data, headers, rules, null);
+                maskingMeta.put("mode", "rules");
                 List<Map<String, String>> ruleList = new ArrayList<>();
                 if (rules != null) for (var rr : rules) ruleList.add(Map.of("column", String.valueOf(rr.getColumn()), "fn", String.valueOf(rr.getFunction())));
                 maskingMeta.put("rules", ruleList);
-                if (defaultMask != null && !defaultMask.isBlank()) maskingMeta.put("default", defaultMask);
             }
         } else {
             data = applyHeuristicMasking(data, headers);

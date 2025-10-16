@@ -48,8 +48,6 @@ public class PortalMenuService {
     private static final Set<String> IAM_SECTIONS = Set.of();
     private static final Map<String, String> MENU_COMPONENTS = Map.ofEntries(
         Map.entry("catalog.assets", "/pages/catalog/DatasetsPage"),
-        Map.entry("catalog.accessPolicy", "/pages/catalog/AccessPolicyPage"),
-        Map.entry("catalog.secureViews", "/pages/catalog/SecureViewsPage"),
         Map.entry("modeling.standards", "/pages/modeling/DataStandardsPage"),
         Map.entry("governance.rules", "/pages/governance/QualityRulesPage"),
         Map.entry("governance.compliance", "/pages/governance/CompliancePage"),

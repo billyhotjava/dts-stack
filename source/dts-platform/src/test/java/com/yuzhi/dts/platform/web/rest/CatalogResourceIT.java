@@ -30,7 +30,7 @@ class CatalogResourceIT {
     private ObjectMapper objectMapper;
 
     @Test
-    @WithMockUser(authorities = {"ROLE_CATALOG_ADMIN"})
+    @WithMockUser(authorities = {"ROLE_INST_DATA_OWNER"})
     void createDatasetShouldFailWhenOwnerDeptMissing() throws Exception {
         Map<String, Object> payload = Map.of(
             "name", "dept_asset",
@@ -48,7 +48,7 @@ class CatalogResourceIT {
     }
 
     @Test
-    @WithMockUser(authorities = {"ROLE_CATALOG_ADMIN"})
+    @WithMockUser(authorities = {"ROLE_INST_DATA_OWNER"})
     void createDatasetShouldSucceedWithOwnerDept() throws Exception {
         Map<String, Object> payload = Map.of(
             "name", "inst_asset",

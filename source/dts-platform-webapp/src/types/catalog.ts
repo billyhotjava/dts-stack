@@ -11,11 +11,11 @@ export type ExposureType = "VIEW" | "RANGER" | "API" | "DIRECT";
 
 export type MaskingStrategy = "PARTIAL" | "HASH" | "TOKENIZE" | "CUSTOM" | "NONE";
 
-export type SecureViewRefresh = "NONE" | "SCHEDULED" | "ON_DEMAND";
 
 export interface ColumnSchema {
 	id: string;
 	name: string;
+	displayName?: string;
 	dataType: string;
 	nullable?: boolean;
 	tags?: string[];
@@ -85,23 +85,6 @@ export interface MaskingRule {
 	column: string; // column name
 	strategy: MaskingStrategy;
 	params?: Record<string, string>;
-}
-
-export interface AccessPolicy {
-	datasetId: string;
-	allowRoles: string[]; // allowed Keycloak roles
-	rowFilters: RowFilterRule[];
-	maskingRules: MaskingRule[];
-	defaultMasking?: MaskingStrategy; // fallback for unspecified sensitive columns
-}
-
-export interface SecureViewDefinition {
-	viewName: string;
-	level: SecurityLevel;
-	rowFilter?: string;
-	maskColumns?: string[];
-	refresh: SecureViewRefresh;
-	cron?: string;
 }
 
 export type DatasetJobStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";

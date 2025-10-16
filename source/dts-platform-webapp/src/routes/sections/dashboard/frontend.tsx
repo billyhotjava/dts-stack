@@ -4,8 +4,6 @@ import type { ReactElement } from "react";
 import Workbench from "@/pages/dashboard/workbench";
 import { PORTAL_NAV_SECTIONS } from "@/constants/portal-navigation";
 import DatasetsPage from "@/pages/catalog/DatasetsPage";
-import AccessPolicyPage from "@/pages/catalog/AccessPolicyPage";
-import SecureViewsPage from "@/pages/catalog/SecureViewsPage";
 import DatasetDetailPage from "@/pages/catalog/DatasetDetailPage";
 import QueryWorkbenchPage from "@/pages/explore/QueryWorkbenchPage";
 import SavedQueriesPage from "@/pages/explore/SavedQueriesPage";
@@ -14,6 +12,7 @@ import DataStandardDetailPage from "@/pages/modeling/DataStandardDetailPage";
 import QualityRulesPage from "@/pages/governance/QualityRulesPage";
 import CompliancePage from "@/pages/governance/CompliancePage";
 import FeaturePlaceholder from "@/pages/common/FeaturePlaceholder";
+import ProfilePage from "@/pages/account/ProfilePage";
 
 export function getFrontendDashboardRoutes(): RouteObject[] {
     const sectionRoutes = PORTAL_NAV_SECTIONS.map((section) => {
@@ -21,8 +20,6 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 			const FEATURE_COMPONENTS: Record<string, Record<string, () => ReactElement>> = {
 				catalog: {
 					assets: () => <DatasetsPage />,
-					accessPolicy: () => <AccessPolicyPage />,
-					secureViews: () => <SecureViewsPage />,
 				},
 				modeling: {
 					standards: () => <DataStandardsPage />,
@@ -79,6 +76,14 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
         children: [
             { index: true, element: <Navigate to="workbench" replace /> },
             { path: "workbench", element: <Workbench /> },
+        ],
+    });
+
+    sectionRoutes.push({
+        path: "settings",
+        children: [
+            { index: true, element: <Navigate to="profile" replace /> },
+            { path: "profile", element: <ProfilePage /> },
         ],
     });
 

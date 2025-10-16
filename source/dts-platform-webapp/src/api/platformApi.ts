@@ -24,13 +24,6 @@ export const getDomainTree = () => api.get({ url: "/catalog/domains/tree" });
 export const moveDomain = (id: string, data: { newParentId?: string | null }) =>
 	api.post({ url: `/catalog/domains/${id}/move`, data });
 
-export const getAccessPolicy = (datasetId: string) =>
-	api.get({ url: "/catalog/access-policies", params: { datasetId } });
-export const upsertAccessPolicy = (datasetId: string, data: any) =>
-	api.put({ url: `/catalog/access-policies/${datasetId}`, data });
-export const previewSecurityViews = (datasetId: string) =>
-    api.get({ url: `/catalog/security-views/${datasetId}/preview` });
-
 // Asset extras (tasks)
 export const syncDatasetSchema = (datasetId: string, data?: any) =>
     api.post({ url: `/datasets/${datasetId}/sync-schema`, data });
@@ -50,12 +43,6 @@ export const replaceClassificationMapping = (data: any[]) => api.put({ url: "/ca
 export const importClassificationMapping = (data: any[]) =>
 	api.post({ url: "/catalog/classification-mapping/import", data });
 export const exportClassificationMapping = () => api.get({ url: "/catalog/classification-mapping/export" });
-
-// Policy extras (tasks)
-export const getEffectivePolicy = (datasetId: string) => api.get({ url: "/policy/effective", params: { datasetId } });
-export const applyPolicy = (datasetId: string, data?: any) => api.post({ url: `/policy/${datasetId}/apply`, data });
-export const rebuildSecureView = (id: string) => api.post({ url: `/secure-views/${id}/rebuild` });
-export const listSecurityViews = (datasetId: string) => api.get({ url: `/catalog/security-views/${datasetId}` });
 
 // Modeling
 export const listStandards = (params: any = {}) => api.get({ url: "/modeling/standards", params });
@@ -92,6 +79,7 @@ export const createComplianceBatch = (data: any) => api.post({ url: "/governance
 export const listComplianceBatches = (params: any = {}) => api.get({ url: "/governance/compliance/batches", params });
 export const getComplianceBatch = (id: string) => api.get({ url: `/governance/compliance/batches/${id}` });
 export const updateComplianceItem = (id: string, data: any) => api.put({ url: `/governance/compliance/items/${id}`, data });
+export const deleteComplianceBatch = (id: string) => api.delete({ url: `/governance/compliance/batches/${id}` });
 
 export const listIssues = () => api.get({ url: "/governance/issues" });
 export const createIssue = (data: any) => api.post({ url: "/governance/issues", data });

@@ -42,17 +42,6 @@ entity MenuItem {
   requireRoles String
 }
 
-entity AccessPolicy {
-  createdBy String required,
-  createdDate Instant required,
-  lastModifiedBy String,
-  lastModifiedDate Instant,
-  datasetCode String required,
-  allowRoles String required,
-  rowFilter String,
-  maskColumns String
-}
-
 relationship OneToMany {
   Menu{items} to MenuItem{menu}
 }

@@ -38,6 +38,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class QualityRunService {
@@ -94,6 +96,7 @@ public class QualityRunService {
 
         Map<String, Object> params = request.getParameters() != null ? request.getParameters() : Collections.emptyMap();
         List<QualityRunDto> runs = new ArrayList<>();
+        List<UUID> runIds = new ArrayList<>();
         for (GovRuleBinding binding : bindings) {
             GovQualityRun run = new GovQualityRun();
             run.setRule(rule);
@@ -108,8 +111,22 @@ public class QualityRunService {
             run.setScheduledAt(Instant.now());
             runRepository.save(run);
 
-            taskExecutor.execute(() -> executeRun(run.getId(), params));
+            runIds.add(run.getId());
             runs.add(GovernanceMapper.toDto(run, Collections.emptyList()));
+        }
+
+        if (!runIds.isEmpty()) {
+            List<UUID> dispatchIds = List.copyOf(runIds);
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        dispatchIds.forEach(id -> taskExecutor.execute(() -> executeRun(id, params)));
+                    }
+                });
+            } else {
+                dispatchIds.forEach(id -> taskExecutor.execute(() -> executeRun(id, params)));
+            }
         }
         auditService.audit("EXECUTE", "governance.quality.run",
             rule.getId() + ":" + runs.stream().map(dto -> dto.getId().toString()).collect(Collectors.joining(",")));

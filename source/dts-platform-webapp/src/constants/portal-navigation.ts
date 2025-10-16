@@ -26,11 +26,7 @@ export const PORTAL_NAV_SECTIONS: PortalNavSectionDefinition[] = [
 		path: "catalog",
     icon: "local:ic-management",
 		titleKey: "sys.nav.portal.catalog",
-		children: [
-			{ key: "assets", path: "assets", titleKey: "sys.nav.portal.catalogAssetsDirectory" },
-			{ key: "accessPolicy", path: "access-policy", titleKey: "sys.nav.portal.catalogAccessPolicy" },
-			{ key: "secureViews", path: "secure-views", titleKey: "sys.nav.portal.catalogSecureViews" },
-		],
+		children: [{ key: "assets", path: "assets", titleKey: "sys.nav.portal.catalogAssetsDirectory" }],
 	},
 	{
 		key: "modeling",

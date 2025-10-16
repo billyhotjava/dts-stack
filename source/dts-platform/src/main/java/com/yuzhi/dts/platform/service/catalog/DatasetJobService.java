@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetJob;
 import com.yuzhi.dts.platform.domain.catalog.DatasetJobStatus;
-import com.yuzhi.dts.platform.repository.catalog.CatalogAccessPolicyRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetJobRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
@@ -14,8 +13,6 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionService;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
-import com.yuzhi.dts.platform.service.security.SecurityViewService;
-import com.yuzhi.dts.platform.service.security.dto.StatementExecutionResult;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import java.time.Instant;
 import java.sql.ResultSet;
@@ -67,19 +64,6 @@ public class DatasetJobService {
         jobRepository.save(job);
 
         taskExecutor.execute(() -> worker.runSchemaSync(job.getId(), payload));
-        return job;
-    }
-
-    public CatalogDatasetJob submitPolicyApply(UUID datasetId, String refreshOption, Map<String, Object> requestBody, String actor) {
-        CatalogDataset dataset = datasetRepository.findById(datasetId).orElseThrow();
-        Map<String, Object> payload = new HashMap<>(requestBody != null ? requestBody : Map.of());
-        if (refreshOption != null) {
-            payload.put("refresh", refreshOption);
-        }
-        CatalogDatasetJob job = initializeJob(dataset, "APPLY_POLICY", actor, payload);
-        jobRepository.save(job);
-
-        taskExecutor.execute(() -> worker.runPolicyApply(job.getId(), refreshOption));
         return job;
     }
 
@@ -147,8 +131,6 @@ public class DatasetJobService {
         private final CatalogDatasetRepository datasetRepository;
         private final CatalogTableSchemaRepository tableRepository;
         private final CatalogColumnSchemaRepository columnRepository;
-        private final CatalogAccessPolicyRepository accessPolicyRepository;
-        private final SecurityViewService securityViewService;
         private final AuditService auditService;
         private final ObjectMapper objectMapper;
         private final HiveConnectionService hiveConnectionService;
@@ -159,8 +141,6 @@ public class DatasetJobService {
             CatalogDatasetRepository datasetRepository,
             CatalogTableSchemaRepository tableRepository,
             CatalogColumnSchemaRepository columnRepository,
-            CatalogAccessPolicyRepository accessPolicyRepository,
-            SecurityViewService securityViewService,
             AuditService auditService,
             ObjectMapper objectMapper,
             HiveConnectionService hiveConnectionService,
@@ -170,8 +150,6 @@ public class DatasetJobService {
             this.datasetRepository = datasetRepository;
             this.tableRepository = tableRepository;
             this.columnRepository = columnRepository;
-            this.accessPolicyRepository = accessPolicyRepository;
-            this.securityViewService = securityViewService;
             this.auditService = auditService;
             this.objectMapper = objectMapper;
             this.hiveConnectionService = hiveConnectionService;
@@ -248,101 +226,6 @@ public class DatasetJobService {
                 auditService.audit("ERROR", "dataset.schema", job.getDataset().getId() + ":" + truncate(ex.getMessage()));
             }
         }
-
-        @Transactional
-        public void runPolicyApply(UUID jobId, String refreshOption) {
-            CatalogDatasetJob job = jobRepository.findById(jobId).orElseThrow();
-            job.setStatus(DatasetJobStatus.RUNNING.name());
-            job.setStartedAt(Instant.now());
-            job.setMessage("正在生成安全视图");
-            jobRepository.save(job);
-            auditService.audit("START", "policy.apply", job.getDataset().getId() + ":" + job.getId());
-
-            Map<String, Object> result = new HashMap<>();
-            try {
-                CatalogDataset dataset = datasetRepository.findById(job.getDataset().getId()).orElseThrow();
-                dataSourceRegistry
-                    .getActive()
-                    .ifPresent(state -> {
-                        if (!state.isAvailable()) {
-                            throw new IllegalStateException("Inceptor 数据源不可用: " + state.availabilityReason());
-                        }
-                    });
-                var policy = accessPolicyRepository.findByDataset(dataset).orElse(null);
-                var execution = securityViewService.applyViews(dataset, policy, refreshOption != null ? refreshOption : "NONE");
-
-                var executionResults = execution.executionResults();
-                long failed = executionResults.stream().filter(r -> r.status() == StatementExecutionResult.Status.FAILED).count();
-                long skipped = executionResults.stream().filter(r -> r.status() == StatementExecutionResult.Status.SKIPPED).count();
-                long succeeded = executionResults.stream().filter(r -> r.status() == StatementExecutionResult.Status.SUCCEEDED).count();
-
-                result.put("statements", execution.statements());
-                result.put("executionResults", executionResults);
-                result.put("persistedViews", execution.persistedViews());
-                result.put(
-                    "summary",
-                    Map.of(
-                        "total",
-                        executionResults.size(),
-                        "succeeded",
-                        succeeded,
-                        "skipped",
-                        skipped,
-                        "failed",
-                        failed
-                    )
-                );
-                if (failed > 0) {
-                    result.put(
-                        "failures",
-                        executionResults
-                            .stream()
-                            .filter(r -> r.status() == StatementExecutionResult.Status.FAILED)
-                            .map(r -> Map.of(
-                                    "key",
-                                    r.key(),
-                                    "message",
-                                    r.message(),
-                                    "errorCode",
-                                    r.errorCode()
-                                ))
-                            .toList()
-                    );
-                }
-                job.setDetailPayload(writeResult(result));
-                job.setFinishedAt(Instant.now());
-
-                boolean success = execution.success();
-                job.setStatus(success ? DatasetJobStatus.SUCCEEDED.name() : DatasetJobStatus.FAILED.name());
-                if (success) {
-                    job.setMessage("安全视图已发布 (" + execution.persistedViews() + " 条)");
-                } else {
-                    String failureHint = executionResults
-                        .stream()
-                        .filter(r -> r.status() == StatementExecutionResult.Status.FAILED)
-                        .map(r -> r.key() + ": " + r.message())
-                        .findFirst()
-                        .orElse("执行失败");
-                    job.setMessage("安全视图执行失败: " + truncate(failureHint));
-                }
-                jobRepository.save(job);
-                auditService.audit(
-                    success ? "SUCCESS" : "ERROR",
-                    "policy.apply",
-                    dataset.getId() + ":" + (success ? execution.persistedViews() : ("failed=" + failed))
-                );
-            } catch (Exception ex) {
-                workerLog.error("Policy apply job failed: {}", ex.getMessage());
-                job.setStatus(DatasetJobStatus.FAILED.name());
-                job.setMessage("安全视图执行失败: " + truncate(ex.getMessage()));
-                job.setFinishedAt(Instant.now());
-                result.put("error", truncate(ex.getMessage()));
-                job.setDetailPayload(writeResult(result));
-                jobRepository.save(job);
-                auditService.audit("ERROR", "policy.apply", job.getDataset().getId() + ":" + truncate(ex.getMessage()));
-            }
-        }
-
         private String writeResult(Map<String, Object> result) {
             try {
                 return objectMapper.writeValueAsString(result);

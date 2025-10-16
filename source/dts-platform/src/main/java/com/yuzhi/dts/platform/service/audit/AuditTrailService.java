@@ -515,7 +515,7 @@ public class AuditTrailService {
         if (key.startsWith("explore")) return "数据开发";
         if (key.equals("catalog_dataset_job") || key.contains("schedule") || key.contains("foundation")) return "数据开发";
         if (key.startsWith("visualization")) return "数据可视化";
-        if (key.startsWith("catalog") || key.equals("catalog_table_schema") || key.equals("catalog_secure_view") || key.equals("catalog_row_filter_rule") || key.equals("catalog_access_policy")) return "数据资产";
+        if (key.startsWith("catalog")) return "数据资产";
         if (key.startsWith("svc") || key.startsWith("api")) return "数据资产";
         return "数据资产";
     }
@@ -588,14 +588,8 @@ public class AuditTrailService {
         if (r.equals("catalog.table") || r.equals("catalog.tableschema") || r.equals("catalog.table.schema")) {
             return "catalog_table_schema";
         }
-        if (r.equals("catalog.secureview") || r.equals("catalog.secure_view")) {
-            return "catalog_secure_view";
-        }
         if (r.equals("catalog.rowfilter") || r.equals("catalog.row_filter_rule")) {
             return "catalog_row_filter_rule";
-        }
-        if (r.equals("catalog.accesspolicy") || r.equals("catalog.access_policy")) {
-            return "catalog_access_policy";
         }
         if (r.equals("catalog.dataset.job") || r.equals("catalog.datasetjob")) {
             return "catalog_dataset_job";
@@ -724,9 +718,7 @@ public class AuditTrailService {
         if (k.equals("iam_permission")) return "权限";
         if (k.equals("iam_user_classification")) return "用户分级";
         if (k.equals("catalog_table_schema")) return "目录表";
-        if (k.equals("catalog_secure_view")) return "安全视图";
         if (k.equals("catalog_row_filter_rule")) return "行过滤规则";
-        if (k.equals("catalog_access_policy")) return "访问控制策略";
         if (k.equals("catalog_dataset_job")) return "目录作业";
         return key;
     }

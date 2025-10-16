@@ -105,8 +105,7 @@
           "permission": "菜单管理",
           "group": "组织机构管理",
           "system_config": "系统管理",
-          "datasource": "数据源配置",
-          "other_config": "其他配置"
+          "datasource": "数据源配置"
         }
       },
       "blog": "博客",

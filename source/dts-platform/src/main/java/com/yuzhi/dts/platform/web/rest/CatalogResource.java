@@ -38,13 +38,10 @@ public class CatalogResource {
     private final CatalogClassificationMappingRepository mappingRepo;
     private final AuditService audit;
     private final ClassificationUtils classificationUtils;
-    private final com.yuzhi.dts.platform.repository.catalog.CatalogAccessPolicyRepository policyRepo;
     private final com.yuzhi.dts.platform.service.security.AccessChecker accessChecker;
-    private final com.yuzhi.dts.platform.service.security.SecurityViewService securityViewService;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository tableRepo;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository columnRepo;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository rowFilterRepo;
-    private final com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository secureViewRepo;
     private final CatalogDatasetGrantRepository grantRepo;
     private final InfraDataSourceRepository infraDataSourceRepository;
     private final CatalogFeatureProperties catalogFeatures;
@@ -56,13 +53,10 @@ public class CatalogResource {
         CatalogClassificationMappingRepository mappingRepo,
         AuditService audit,
         ClassificationUtils classificationUtils,
-        com.yuzhi.dts.platform.repository.catalog.CatalogAccessPolicyRepository policyRepo,
         com.yuzhi.dts.platform.service.security.AccessChecker accessChecker,
-        com.yuzhi.dts.platform.service.security.SecurityViewService securityViewService,
         com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository tableRepo,
         com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository columnRepo,
         com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository rowFilterRepo,
-        com.yuzhi.dts.platform.repository.catalog.CatalogSecureViewRepository secureViewRepo,
         CatalogDatasetGrantRepository grantRepo,
         InfraDataSourceRepository infraDataSourceRepository,
         CatalogFeatureProperties catalogFeatures
@@ -73,13 +67,10 @@ public class CatalogResource {
         this.mappingRepo = mappingRepo;
         this.audit = audit;
         this.classificationUtils = classificationUtils;
-        this.policyRepo = policyRepo;
         this.accessChecker = accessChecker;
-        this.securityViewService = securityViewService;
         this.tableRepo = tableRepo;
         this.columnRepo = columnRepo;
         this.rowFilterRepo = rowFilterRepo;
-        this.secureViewRepo = secureViewRepo;
         this.grantRepo = grantRepo;
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.catalogFeatures = catalogFeatures;
@@ -275,138 +266,6 @@ public class CatalogResource {
         audit.audit("READ", "catalog.dataset", id.toString());
         return ApiResponses.ok(ds);
     }
-
-    // Access Policy CRUD (minimal)
-    @GetMapping("/access-policies")
-    public ApiResponse<Optional<Map<String, Object>>> getPolicy(@RequestParam UUID datasetId) {
-        Optional<CatalogDataset> ds = datasetRepo.findById(datasetId);
-        Optional<Map<String, Object>> resp = ds.flatMap(policyRepo::findByDataset).map(p -> Map.of(
-            "datasetId", datasetId,
-            "allowRoles", p.getAllowRoles(),
-            "rowFilter", p.getRowFilter(),
-            "defaultMasking", p.getDefaultMasking()
-        ));
-        audit.audit("READ", "catalog.accessPolicy", String.valueOf(datasetId));
-        return ApiResponses.ok(resp);
-    }
-
-    @PutMapping("/access-policies/{datasetId}")
-    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
-    public ApiResponse<Map<String, Object>> upsertPolicy(@PathVariable UUID datasetId, @RequestBody Map<String, Object> body) {
-        CatalogDataset ds = datasetRepo.findById(datasetId).orElseThrow();
-        ensureDatasetEditPermission(ds);
-        var p = policyRepo.findByDataset(ds).orElseGet(() -> {
-            com.yuzhi.dts.platform.domain.catalog.CatalogAccessPolicy np = new com.yuzhi.dts.platform.domain.catalog.CatalogAccessPolicy();
-            np.setDataset(ds);
-            return np;
-        });
-        String rawRoles = Objects.toString(body.get("allowRoles"), null);
-        // Normalize: uppercase, add ROLE_ prefix; align DEPT/INST role families to dataset scope
-        String normalizedRoles = com.yuzhi.dts.platform.security.RoleUtils.normalizeCsv(rawRoles);
-        p.setAllowRoles(normalizedRoles);
-        // Sanitize rowFilter before saving to CatalogAccessPolicy
-        String originalRowFilter = Objects.toString(body.get("rowFilter"), null);
-        // Need metadata to sanitize row filter.
-        String table = ds.getHiveTable() != null && !ds.getHiveTable().isBlank() ? ds.getHiveTable() : ds.getName();
-        var metadata = securityViewService.resolveColumns(ds, table);
-        String sanitizedRowFilter = securityViewService.sanitizeRowFilter(ds, originalRowFilter, metadata);
-        p.setRowFilter(sanitizedRowFilter); // USE SANITIZED FILTER HERE
-        p.setDefaultMasking(Objects.toString(body.get("defaultMasking"), null));
-        var saved = policyRepo.save(p);
-        audit.audit("UPDATE", "catalog.accessPolicy", String.valueOf(datasetId));
-        return ApiResponses.ok(Map.of(
-            "datasetId", datasetId,
-            "allowRoles", saved.getAllowRoles(),
-            "rowFilter", saved.getRowFilter(),
-            "defaultMasking", saved.getDefaultMasking()
-        ));
-    }
-
-    @GetMapping("/access-policies/{datasetId}/validate")
-    public ApiResponse<Map<String, Object>> validatePolicy(@PathVariable UUID datasetId) {
-        CatalogDataset ds = datasetRepo.findById(datasetId).orElseThrow();
-        // 密级使用 AccessChecker 的 ABAC 判定；部门取当前上下文 dept_code
-        boolean classificationOk = accessChecker.canRead(ds);
-        String effDept = claim("dept_code");
-        boolean departmentOk = accessChecker.departmentAllowed(ds, effDept);
-        boolean allowed = classificationOk && departmentOk;
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("datasetId", datasetId);
-        result.put("allowed", allowed);
-        result.put("userMaxLevel", classificationUtils.getCurrentUserMaxLevel());
-        result.put("datasetLevel", ds.getClassification());
-        result.put("classificationOk", classificationOk);
-        result.put("departmentOk", departmentOk);
-        result.put("userDept", effDept);
-        result.put("datasetOwnerDept", ds.getOwnerDept());
-        audit.audit(allowed ? "ALLOW" : "DENY", "catalog.accessPolicy.validate", String.valueOf(datasetId));
-        return ApiResponses.ok(result);
-    }
-
-    @GetMapping("/security-views/{datasetId}/preview")
-    public ApiResponse<Map<String, String>> previewSecurityViews(@PathVariable UUID datasetId) {
-        CatalogDataset ds = datasetRepo.findById(datasetId).orElseThrow();
-        var policy = policyRepo.findByDataset(ds).orElse(null);
-        var sqls = securityViewService.previewViews(ds, policy);
-        audit.audit("READ", "catalog.securityView.preview", String.valueOf(datasetId));
-        return ApiResponses.ok(sqls);
-    }
-
-    @GetMapping("/security-views/{datasetId}")
-    public ApiResponse<List<com.yuzhi.dts.platform.domain.catalog.CatalogSecureView>> listSecurityViews(@PathVariable UUID datasetId) {
-        var ds = datasetRepo.findById(datasetId).orElseThrow();
-        var list = secureViewRepo.findByDataset(ds);
-        audit.audit("READ", "catalog.securityView", String.valueOf(datasetId));
-        return ApiResponses.ok(list);
-    }
-
-    @PostMapping("/security-views/{datasetId}/generate")
-    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
-    public ApiResponse<Map<String, Object>> generateSecurityViews(@PathVariable UUID datasetId, @RequestBody(required = false) Map<String, Object> body) {
-        var ds = datasetRepo.findById(datasetId).orElseThrow();
-        var policy = policyRepo.findByDataset(ds).orElse(null);
-        // We need metadata to sanitize the row filter.
-        // This is a bit of a hack, as previewViews already does this, but we need the sanitized filter for saving.
-        String table = ds.getHiveTable() != null && !ds.getHiveTable().isBlank() ? ds.getHiveTable() : ds.getName();
-        var metadata = securityViewService.resolveColumns(ds, table); // Get metadata for sanitization
-        String originalRowFilter = policy != null ? policy.getRowFilter() : null;
-        String sanitizedRowFilter = securityViewService.sanitizeRowFilter(ds, originalRowFilter, metadata); // Sanitize here
-
-        var sqls = securityViewService.previewViews(ds, policy);
-        java.util.List<String> levels = java.util.List.of("PUBLIC", "INTERNAL", "SECRET", "TOP_SECRET");
-        java.util.List<com.yuzhi.dts.platform.domain.catalog.CatalogSecureView> toSave = new java.util.ArrayList<>();
-        for (String lvl : levels) {
-            com.yuzhi.dts.platform.domain.catalog.CatalogSecureView v = new com.yuzhi.dts.platform.domain.catalog.CatalogSecureView();
-            v.setDataset(ds);
-            v.setViewName("sv_" + table + "_" + lvl.toLowerCase());
-            v.setLevel(lvl);
-            v.setRefresh(Objects.toString(body != null ? body.get("refresh") : null, "NONE"));
-            v.setRowFilter(sanitizedRowFilter); // USE SANITIZED FILTER HERE
-            toSave.add(v);
-        }
-        secureViewRepo.saveAll(toSave);
-        audit.audit("CREATE", "catalog.securityView.generate", String.valueOf(datasetId));
-        return ApiResponses.ok(Map.of("generated", toSave.size(), "sql", sqls));
-    }
-
-    @PostMapping("/security-views/{datasetId}/rebuild")
-    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
-    public ApiResponse<Map<String, Object>> rebuildSecurityViews(@PathVariable UUID datasetId) {
-        var ds = datasetRepo.findById(datasetId).orElseThrow();
-        secureViewRepo.findByDataset(ds).forEach(v -> secureViewRepo.deleteById(v.getId()));
-        audit.audit("DELETE", "catalog.securityView.rollback", String.valueOf(datasetId));
-        return generateSecurityViews(datasetId, Map.of());
-    }
-
-    @DeleteMapping("/security-views/{datasetId}")
-    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
-    public ApiResponse<Boolean> rollbackSecurityViews(@PathVariable UUID datasetId) {
-        var ds = datasetRepo.findById(datasetId).orElseThrow();
-        secureViewRepo.findByDataset(ds).forEach(v -> secureViewRepo.deleteById(v.getId()));
-        audit.audit("DELETE", "catalog.securityView.rollback", String.valueOf(datasetId));
-        return ApiResponses.ok(Boolean.TRUE);
-    }
-
     private Map<String, Object> toDatasetDto(CatalogDataset d) {
         return toDatasetDto(d, false);
     }
@@ -966,10 +825,7 @@ public class CatalogResource {
         return (
             SecurityUtils.isOpAdminAccount() ||
             SecurityUtils.hasCurrentUserAnyOfAuthorities(
-                AuthoritiesConstants.OP_ADMIN,
-                AuthoritiesConstants.ADMIN,
-                AuthoritiesConstants.CATALOG_ADMIN,
-                AuthoritiesConstants.INST_DATA_OWNER
+                AuthoritiesConstants.DATA_MAINTAINER_ROLES
             )
         );
     }
@@ -988,9 +844,7 @@ public class CatalogResource {
         if (
             SecurityUtils.isOpAdminAccount() ||
             SecurityUtils.hasCurrentUserAnyOfAuthorities(
-                AuthoritiesConstants.OP_ADMIN,
-                AuthoritiesConstants.ADMIN,
-                AuthoritiesConstants.CATALOG_ADMIN
+                AuthoritiesConstants.DATA_MAINTAINER_ROLES
             )
         ) {
             return true;

@@ -74,17 +74,6 @@ entity ColumnSchema {
   remark String                        // 可写 PII:phone / ID 等标签
 }
 
-entity AccessPolicy {
-  createdBy String required,
-  createdDate Instant required,
-  lastModifiedBy String,
-  lastModifiedDate Instant,
-
-  allowRoles String required,           // 允许访问的角色集合（逗号分隔）
-  defaultMasking MaskingStrategy,       // 默认列脱敏策略（兜底）
-  notes String                          // 备注
-}
-
 entity RowFilterRule {
   createdBy String required,
   createdDate Instant required,
@@ -105,22 +94,6 @@ entity MaskingRule {
   columnName String required,
   strategy MaskingStrategy required,    // PARTIAL/HASH/TOKENIZE/...
   params String                         // JSON参数：保留几位等
-}
-
-entity SecureView {
-  createdBy String required,
-  createdDate Instant required,
-  lastModifiedBy String,
-  lastModifiedDate Instant,
-
-  dbName String,
-  viewName String required,
-  level SecurityLevel required,         // 该视图对应密级
-  rowFilter String,                     // 物化后的行过滤（记录用于追溯）
-  maskColumns String,                   // 列脱敏清单（记录用于追溯）
-  refresh RefreshType required,         // NONE/SCHEDULED/ON_DEMAND
-  cronExp String,                       // 定时刷新表达式（可选）
-  enabled Boolean required
 }
 
 entity DataQualityRule {
@@ -264,15 +237,11 @@ entity ChartRef {
 
 relationship OneToMany {
   Dataset{columns}        to ColumnSchema{dataset},
-  Dataset{policies}       to AccessPolicy{dataset},
   Dataset{rules}          to DataQualityRule{dataset},
   Dataset{runs}           to DataQualityRun{dataset},
-  Dataset{views}          to SecureView{dataset},
   Dataset{apis}           to ApiSpec{dataset},
   ETLJob{tasks}           to ETLTask{job},
-  Dashboard{charts}       to ChartRef{dashboard},
-  AccessPolicy{maskings}  to MaskingRule{policy},
-  AccessPolicy{rowRules}  to RowFilterRule{policy}
+  Dashboard{charts}       to ChartRef{dashboard}
 }
 
 dto * with mapstruct

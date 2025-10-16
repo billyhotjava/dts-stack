@@ -18,22 +18,19 @@ public class DatasetSqlBuilder {
     private static final int LIMIT_MIN = 1;
     private static final int LIMIT_MAX = 500;
 
-    private final SecureViewResolver secureViewResolver;
     private final AccessChecker accessChecker;
     private final DatasetSecurityMetadataResolver metadataResolver;
 
     public DatasetSqlBuilder(
-        SecureViewResolver secureViewResolver,
         AccessChecker accessChecker,
         DatasetSecurityMetadataResolver metadataResolver
     ) {
-        this.secureViewResolver = secureViewResolver;
         this.accessChecker = accessChecker;
         this.metadataResolver = metadataResolver;
     }
 
     /**
-     * 基于数据集信息构造安全的预览 SQL。优先使用安全视图，随后回退到原始表并附带密级过滤。
+     * 基于数据集信息构造带密级过滤的预览 SQL，直接访问底表并附带权限约束。
      */
     public String buildSampleQuery(CatalogDataset dataset, int requestedLimit) {
         if (dataset == null) {
@@ -41,12 +38,6 @@ public class DatasetSqlBuilder {
         }
         int limit = sanitizeLimit(requestedLimit);
         String type = resolveType(dataset);
-
-        // 优先使用安全视图
-        Optional<String> secureView = secureViewResolver.resolve(dataset);
-        if (secureView.isPresent()) {
-            return "SELECT * FROM " + secureView.orElseThrow() + " LIMIT " + limit;
-        }
 
         if ("POSTGRES".equals(type)) {
             return buildPostgresSelect(dataset, limit);
@@ -86,7 +77,7 @@ public class DatasetSqlBuilder {
         }
         String qualified = qualifyHive(dataset.getHiveDatabase(), table);
         StringBuilder builder = new StringBuilder("SELECT * FROM ").append(qualified);
-        resolveDataLevelPredicate(dataset, null, QuoteDialect.HIVE).ifPresent(predicate -> builder.append(" WHERE ").append(predicate));
+        // resolveDataLevelPredicate(dataset, null, QuoteDialect.HIVE).ifPresent(predicate -> builder.append(" WHERE ").append(predicate));
         builder.append(" LIMIT ").append(limit);
         return builder.toString();
     }
@@ -102,7 +93,7 @@ public class DatasetSqlBuilder {
         }
         String qualified = qualifyPostgres(schema, table);
         StringBuilder builder = new StringBuilder("SELECT * FROM ").append(qualified);
-        resolveDataLevelPredicate(dataset, null, QuoteDialect.POSTGRES).ifPresent(predicate -> builder.append(" WHERE ").append(predicate));
+        // resolveDataLevelPredicate(dataset, null, QuoteDialect.POSTGRES).ifPresent(predicate -> builder.append(" WHERE ").append(predicate));
         builder.append(" LIMIT ").append(limit);
         return builder.toString();
     }

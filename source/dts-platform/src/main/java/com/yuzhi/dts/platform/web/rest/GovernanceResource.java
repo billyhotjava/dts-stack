@@ -151,6 +151,13 @@ public class GovernanceResource {
         return ApiResponses.ok(complianceService.getBatch(id));
     }
 
+    @DeleteMapping("/compliance/batches/{id}")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Boolean> deleteComplianceBatch(@PathVariable UUID id) {
+        complianceService.deleteBatch(id, currentUser());
+        return ApiResponses.ok(Boolean.TRUE);
+    }
+
     @PutMapping("/compliance/items/{id}")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<ComplianceBatchItemDto> updateComplianceItem(

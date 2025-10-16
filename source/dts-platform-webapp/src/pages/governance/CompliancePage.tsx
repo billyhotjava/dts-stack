@@ -1,20 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/icon";
 import { useRouter } from "@/routes/hooks";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
-import {
-    Drawer,
-    DrawerClose,
-    DrawerContent,
-    DrawerDescription,
-    DrawerFooter,
-    DrawerHeader,
-    DrawerTitle,
-} from "@/ui/drawer";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { ScrollArea } from "@/ui/scroll-area";
@@ -28,6 +19,7 @@ import {
     getComplianceBatch,
     listComplianceBatches,
     listQualityRules,
+    deleteComplianceBatch,
     updateComplianceItem,
 } from "@/api/platformApi";
 import { cn } from "@/utils";
@@ -35,12 +27,6 @@ import { normalizeClassification, type ClassificationLevel } from "@/utils/class
 
 type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
 
-const LEVEL_LABELS: Record<DataLevel, string> = {
-    DATA_PUBLIC: "公开 (DATA_PUBLIC)",
-    DATA_INTERNAL: "内部 (DATA_INTERNAL)",
-    DATA_SECRET: "秘密 (DATA_SECRET)",
-    DATA_TOP_SECRET: "机密 (DATA_TOP_SECRET)",
-};
 const toLegacy = (v: DataLevel): ClassificationLevel =>
     v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
 const fromLegacy = (v: string): DataLevel => {
@@ -159,6 +145,8 @@ interface ComplianceBatch {
     progressPct: number;
     evidenceRequired: boolean;
     dataLevel: DataLevel;
+    topSeverity?: string | null;
+    datasetAliases: string[];
     scheduledAt?: string | null;
     startedAt?: string | null;
     finishedAt?: string | null;
@@ -220,6 +208,24 @@ function normalizeBatch(raw: any, includeItems: boolean): ComplianceBatch {
     const status = String(raw?.status ?? "RUNNING").toUpperCase();
     const dataLevel = fromLegacy(String(raw?.dataLevel ?? "INTERNAL"));
     const items = includeItems && Array.isArray(raw?.items) ? raw.items.map(normalizeItem) : [];
+    const maxSeverityFromItems = items.reduce((acc: string | null, item: ComplianceBatchItem) => {
+        const severity = item.severity ? String(item.severity).toUpperCase() : null;
+        if (!severity) return acc;
+        const severityScore = (level: string | null | undefined) => {
+            if (!level) return 0;
+            const value = severityOrder[level as keyof typeof severityOrder];
+            return typeof value === "number" ? value : 0;
+        };
+        if (!acc) return severity;
+        return severityScore(severity) > severityScore(acc) ? severity : acc;
+    }, null);
+    const datasets = Array.isArray(raw?.datasets)
+        ? raw.datasets.map((d: any) => d?.alias || d?.name || d?.datasetAlias || d?.datasetId).filter(Boolean)
+        : Array.isArray(raw?.items)
+        ? raw.items
+              .map((item: any) => item?.datasetAlias || item?.datasetId)
+              .filter((value: any) => typeof value === "string")
+        : [];
     return {
         id: String(raw?.id ?? ""),
         name: raw?.name ?? "-",
@@ -228,6 +234,10 @@ function normalizeBatch(raw: any, includeItems: boolean): ComplianceBatch {
         progressPct: Number.isFinite(raw?.progressPct) ? Number(raw.progressPct) : 0,
         evidenceRequired: Boolean(raw?.evidenceRequired),
         dataLevel,
+        topSeverity: (raw?.maxSeverity || raw?.severity || maxSeverityFromItems || null)
+            ? String(raw?.maxSeverity || raw?.severity || maxSeverityFromItems).toUpperCase()
+            : null,
+        datasetAliases: Array.from(new Set(datasets.map((item: any) => String(item)))),
         scheduledAt: raw?.scheduledAt ?? null,
         startedAt: raw?.startedAt ?? null,
         finishedAt: raw?.finishedAt ?? null,
@@ -314,6 +324,8 @@ function formatDuration(ms?: number | null): string | null {
 export default function CompliancePage() {
     const router = useRouter();
     const [statusFilter, setStatusFilter] = useState<string>("ALL");
+    const [searchKeyword, setSearchKeyword] = useState<string>("");
+    const [severityFilter, setSeverityFilter] = useState<string>("ALL");
     const [loading, setLoading] = useState(false);
     const [batches, setBatches] = useState<ComplianceBatch[]>([]);
     const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
@@ -326,6 +338,36 @@ export default function CompliancePage() {
     const [ruleOptions, setRuleOptions] = useState<RuleOption[]>([]);
     const [rulesLoading, setRulesLoading] = useState(false);
     const [itemDialog, setItemDialog] = useState<ItemDialogState>(INITIAL_ITEM_DIALOG);
+    const [ruleKeyword, setRuleKeyword] = useState("");
+    const [ruleSeverityFilter, setRuleSeverityFilter] = useState<string>("ALL");
+
+    const filteredBatches = useMemo(() => {
+        const keyword = searchKeyword.trim().toLowerCase();
+        return batches.filter((batch) => {
+            const matchKeyword =
+                !keyword ||
+                batch.name.toLowerCase().includes(keyword) ||
+                (batch.templateCode ?? "").toLowerCase().includes(keyword) ||
+                batch.datasetAliases.some((alias) => alias.toLowerCase().includes(keyword));
+            const matchSeverity = severityFilter === "ALL" || batch.topSeverity === severityFilter;
+            return matchKeyword && matchSeverity;
+        });
+    }, [batches, searchKeyword, severityFilter]);
+
+    const filteredRuleOptions = useMemo(() => {
+        const keyword = ruleKeyword.trim().toLowerCase();
+        return ruleOptions.filter((rule) => {
+            const matchKeyword =
+                !keyword ||
+                rule.name.toLowerCase().includes(keyword) ||
+                (rule.code ?? "").toLowerCase().includes(keyword) ||
+                rule.bindings.some((binding) =>
+                    (binding.datasetAlias ?? binding.datasetId ?? "").toLowerCase().includes(keyword),
+                );
+            const matchSeverity = ruleSeverityFilter === "ALL" || rule.severity === ruleSeverityFilter;
+            return matchKeyword && matchSeverity;
+        });
+    }, [ruleOptions, ruleKeyword, ruleSeverityFilter]);
 
     useEffect(() => {
         void fetchRules();
@@ -417,6 +459,8 @@ export default function CompliancePage() {
         if (!open) {
             setBatchForm(INITIAL_BATCH_FORM);
             setCreating(false);
+            setRuleKeyword("");
+            setRuleSeverityFilter("ALL");
         }
     };
 
@@ -439,12 +483,36 @@ export default function CompliancePage() {
         await loadBatchDetail(batchId, { silent: false });
     };
 
+    const handleDeleteBatch = async (batchId: string, batchName: string) => {
+        if (!window.confirm(`确定删除合规批次「${batchName || batchId}」吗？`)) {
+            return;
+        }
+        try {
+            await deleteComplianceBatch(batchId);
+            toast.success("已删除合规批次");
+            if (detailBatchId === batchId) {
+                setDetailDrawerOpen(false);
+                setDetailBatch(null);
+                setDetailBatchId(null);
+            }
+            await refreshBatches();
+        } catch (error) {
+            console.error(error);
+            toast.error("删除合规批次失败");
+        }
+    };
+
     async function handleCreateSubmit() {
         if (!batchForm.name.trim()) {
             toast.error("请填写批次名称");
             return;
         }
         if (!batchForm.ruleIds.length) {
+            toast.error("请选择至少一个质量规则");
+            return;
+        }
+        const uniqueRuleIds = Array.from(new Set(batchForm.ruleIds));
+        if (!uniqueRuleIds.length) {
             toast.error("请选择至少一个质量规则");
             return;
         }
@@ -470,7 +538,7 @@ export default function CompliancePage() {
                 dataLevel: toLegacy(batchForm.dataLevel),
                 evidenceRequired: batchForm.evidenceRequired,
                 metadata: metadataPayload,
-                ruleIds: batchForm.ruleIds,
+                ruleIds: uniqueRuleIds,
             });
             toast.success("已创建合规批次");
             handleCreateOpenChange(false);
@@ -525,32 +593,52 @@ export default function CompliancePage() {
             </Card>
 
             <Card>
-                <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                            <Label className="text-sm text-muted-foreground">状态筛选</Label>
-                            <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                <SelectTrigger className="w-40">
-                                    <SelectValue placeholder="全部状态" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {BATCH_STATUS_OPTIONS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                <CardHeader className="flex flex-col gap-4">
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        <Input
+                            placeholder="搜索批次名称 / 模板 / 数据集"
+                            value={searchKeyword}
+                            onChange={(event) => setSearchKeyword(event.target.value)}
+                        />
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="状态筛选" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {BATCH_STATUS_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Select value={severityFilter} onValueChange={setSeverityFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="按严重程度" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">全部严重程度</SelectItem>
+                                {Object.entries(SEVERITY_LABELS).map(([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                        {label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <Button variant="outline" onClick={() => refreshBatches()} disabled={loading}>
-                            <Icon icon="solar:refresh-circle-broken" className={cn("mr-2 h-4 w-4", loading && "animate-spin")}
-                            />重新加载
-                        </Button>
-                        <Button onClick={() => handleCreateOpenChange(true)}>
-                            <Icon icon="solar:add-circle-bold" className="mr-2 h-4 w-4" />新建合规批次
-                        </Button>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-xs text-muted-foreground">
+                            当前展示 {filteredBatches.length} / {batches.length} 个批次
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <Button variant="outline" onClick={() => refreshBatches()} disabled={loading}>
+                                <Icon icon="solar:refresh-circle-broken" className={cn("mr-2 h-4 w-4", loading && "animate-spin")}
+                                />重新加载
+                            </Button>
+                            <Button onClick={() => handleCreateOpenChange(true)}>
+                                <Icon icon="solar:add-circle-bold" className="mr-2 h-4 w-4" />新建合规批次
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -559,11 +647,11 @@ export default function CompliancePage() {
                             <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                                 <tr>
                                     <th className="px-3 py-2 font-medium">批次名称</th>
-                <th className="px-3 py-2 font-medium">数据密级</th>
                                     <th className="px-3 py-2 font-medium">进度</th>
                                     <th className="px-3 py-2 font-medium">统计</th>
                                     <th className="px-3 py-2 font-medium">触发</th>
                                     <th className="px-3 py-2 font-medium">状态</th>
+                                    <th className="px-3 py-2 font-medium text-right">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -573,8 +661,8 @@ export default function CompliancePage() {
                                             正在加载合规批次...
                                         </td>
                                     </tr>
-                                ) : batches.length ? (
-                                    batches.map((batch) => {
+                                ) : filteredBatches.length ? (
+                                    filteredBatches.map((batch) => {
                                         const statusMeta = selectedBatchStatus(batch.status);
                                         return (
                                             <tr
@@ -583,15 +671,25 @@ export default function CompliancePage() {
                                                 onClick={() => openBatchDetail(batch.id)}
                                             >
                                                 <td className="px-3 py-3">
-                                                    <div className="font-medium text-foreground">{batch.name}</div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="font-medium text-foreground">{batch.name}</div>
+                                                        {batch.topSeverity && (
+                                                            <Badge className={SEVERITY_BADGE_CLASS[batch.topSeverity] ?? "bg-slate-100 text-slate-600"}>
+                                                                {SEVERITY_LABELS[batch.topSeverity] ?? batch.topSeverity}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                     {batch.summary && (
                                                         <div className="mt-1 text-xs text-muted-foreground line-clamp-2">
                                                             {batch.summary}
                                                         </div>
                                                     )}
-                                                </td>
-                                                <td className="px-3 py-3">
-                                                    <Badge variant="outline">{LEVEL_LABELS[batch.dataLevel] ?? batch.dataLevel}</Badge>
+                                                    {batch.datasetAliases.length ? (
+                                                        <div className="mt-1 text-xs text-muted-foreground">
+                                                            覆盖数据集：{batch.datasetAliases.slice(0, 3).join("、")}
+                                                            {batch.datasetAliases.length > 3 ? "…" : ""}
+                                                        </div>
+                                                    ) : null}
                                                 </td>
                                                 <td className="px-3 py-3">
                                                     <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
@@ -614,13 +712,42 @@ export default function CompliancePage() {
                                                 <td className="px-3 py-3">
                                                     <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
                                                 </td>
+                                                <td className="px-3 py-3">
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                void openBatchDetail(batch.id);
+                                                            }}
+                                                        >
+                                                            <Icon name="Eye" className="mr-1 h-4 w-4" />
+                                                            查看
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-destructive hover:text-destructive"
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                void handleDeleteBatch(batch.id, batch.name);
+                                                            }}
+                                                        >
+                                                            <Icon name="Trash2" className="mr-1 h-4 w-4" />
+                                                            删除
+                                                        </Button>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         );
                                     })
                                 ) : (
                                     <tr>
                                         <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
-                                            暂无合规批次记录，点击右上角「新建合规批次」。
+                                            {batches.length
+                                                ? "没有符合筛选条件的批次，请调整筛选项。"
+                                                : "暂无合规批次记录，点击右上角「新建合规批次」。"}
                                         </td>
                                     </tr>
                                 )}
@@ -630,20 +757,23 @@ export default function CompliancePage() {
                 </CardContent>
             </Card>
 
-            <Drawer open={detailDrawerOpen} onOpenChange={(open) => {
-                setDetailDrawerOpen(open);
-                if (!open) {
-                    setDetailBatch(null);
-                    setDetailBatchId(null);
-                }
-            }}>
-                <DrawerContent className="sm:max-w-5xl">
-                    <DrawerHeader>
-                        <DrawerTitle>{detailBatch?.name ?? "合规批次详情"}</DrawerTitle>
-                        <DrawerDescription>
+            <Dialog
+                open={detailDrawerOpen}
+                onOpenChange={(open) => {
+                    setDetailDrawerOpen(open);
+                    if (!open) {
+                        setDetailBatch(null);
+                        setDetailBatchId(null);
+                    }
+                }}
+            >
+                <DialogContent className="mx-auto max-h-[85vh] w-full max-w-5xl overflow-y-auto rounded-xl border bg-background shadow-xl">
+                    <DialogHeader>
+                        <DialogTitle>{detailBatch?.name ?? "合规批次详情"}</DialogTitle>
+                        <DialogDescription>
                             {detailBatch?.summary || "查看批次中各检查项的执行状态和证据信息"}
-                        </DrawerDescription>
-                    </DrawerHeader>
+                        </DialogDescription>
+                    </DialogHeader>
                     <div className="flex flex-col gap-4 px-4 pb-6">
                         {detailLoading ? (
                             <div className="py-12 text-center text-muted-foreground">正在加载...</div>
@@ -653,7 +783,6 @@ export default function CompliancePage() {
                                     <Badge variant={selectedBatchStatus(detailBatch.status).variant}>
                                         {selectedBatchStatus(detailBatch.status).label}
                                     </Badge>
-                        <Badge variant="outline">数据密级{LEVEL_LABELS[detailBatch.dataLevel] ?? detailBatch.dataLevel}</Badge>
                                     {detailBatch.evidenceRequired ? (
                                         <Badge variant="secondary">需提交证据</Badge>
                                     ) : (
@@ -898,13 +1027,13 @@ export default function CompliancePage() {
                             </div>
                         )}
                     </div>
-                    <DrawerFooter className="border-t bg-background">
-                        <DrawerClose asChild>
+                    <DialogFooter className="border-t bg-background">
+                        <DialogClose asChild>
                             <Button variant="outline">关闭</Button>
-                        </DrawerClose>
-                    </DrawerFooter>
-                </DrawerContent>
-            </Drawer>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={createOpen} onOpenChange={handleCreateOpenChange}>
                 <DialogContent className="sm:max-w-3xl">
@@ -933,26 +1062,6 @@ export default function CompliancePage() {
                                     }
                                     placeholder="例如：QC_Q1"
                                 />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>数据密级</Label>
-                                <Select
-                                    value={batchForm.dataLevel}
-                                    onValueChange={(value) =>
-                                        setBatchForm((prev) => ({ ...prev, dataLevel: value as DataLevel }))
-                                    }
-                                >
-                                    <SelectTrigger>
-                                    <SelectValue placeholder="选择数据密级" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {(Object.keys(LEVEL_LABELS) as DataLevel[]).map((level) => (
-                                            <SelectItem key={level} value={level}>
-                                                {LEVEL_LABELS[level]}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
                             </div>
                             <div className="space-y-2">
                                 <Label className="flex items-center justify-between">
@@ -985,12 +1094,37 @@ export default function CompliancePage() {
                                     已选择 {batchForm.ruleIds.length} / {ruleOptions.length}
                                 </span>
                             </div>
-                            <ScrollArea className="h-56 rounded-md border">
+                            <ScrollArea className="h-64 rounded-md border">
+                                <div className="border-b bg-muted/20 p-3">
+                                    <div className="grid gap-2 md:grid-cols-2">
+                                        <Input
+                                            placeholder="搜索质量规则 / 数据集"
+                                            value={ruleKeyword}
+                                            onChange={(event) => setRuleKeyword(event.target.value)}
+                                        />
+                                        <Select value={ruleSeverityFilter} onValueChange={setRuleSeverityFilter}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="严重程度" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="ALL">全部严重程度</SelectItem>
+                                                {Object.entries(SEVERITY_LABELS).map(([value, label]) => (
+                                                    <SelectItem key={value} value={value}>
+                                                        {label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="mt-2 text-xs text-muted-foreground">
+                                        筛选结果 {filteredRuleOptions.length} / {ruleOptions.length}
+                                    </div>
+                                </div>
                                 <div className="divide-y">
                                     {rulesLoading ? (
                                         <div className="p-4 text-sm text-muted-foreground">正在加载质量规则...</div>
-                                    ) : ruleOptions.length ? (
-                                        ruleOptions.map((rule) => (
+                                    ) : filteredRuleOptions.length ? (
+                                        filteredRuleOptions.map((rule) => (
                                             <label key={rule.id} className="flex items-start gap-3 p-3">
                                                 <Checkbox
                                                     className="mt-1"
@@ -1000,15 +1134,14 @@ export default function CompliancePage() {
                                                 <div className="flex-1 space-y-1">
                                                     <div className="flex flex-wrap items-center gap-2 text-sm">
                                                         <span className="font-medium text-foreground">{rule.name}</span>
-                                                        <span className={cn(
-                                                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px]",
-                                                            SEVERITY_BADGE_CLASS[rule.severity] ?? "bg-slate-100 text-slate-600",
-                                                        )}>
+                                                        <span
+                                                            className={cn(
+                                                                "inline-flex items-center rounded-full px-2 py-0.5 text-[11px]",
+                                                                SEVERITY_BADGE_CLASS[rule.severity] ?? "bg-slate-100 text-slate-600",
+                                                            )}
+                                                        >
                                                             {SEVERITY_LABELS[rule.severity] ?? rule.severity}
                                                         </span>
-                                                        <Badge variant="outline">
-                                                            {LEVEL_LABELS[rule.dataLevel] ?? rule.dataLevel}
-                                                        </Badge>
                                                     </div>
                                                     <div className="text-xs text-muted-foreground">
                                                         {rule.bindings.length
@@ -1022,7 +1155,9 @@ export default function CompliancePage() {
                                         ))
                                     ) : (
                                         <div className="p-4 text-sm text-muted-foreground">
-                                            暂无可用的质量规则，请先在「质量规则」页面创建。
+                                            {ruleOptions.length
+                                                ? "没有符合筛选条件的质量规则，请调整筛选项。"
+                                                : "暂无可用的质量规则，请先在「质量规则」页面创建。"}
                                         </div>
                                     )}
                                 </div>
