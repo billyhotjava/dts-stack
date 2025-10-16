@@ -392,7 +392,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
             const normalizedAttributes = normalizeAttributesForState(user.attributes || {}, resolvedLevel);
             const initialFormData: FormData = {
                 username: user.username || "",
-                fullName: (user.fullName || user.firstName || user.lastName || user.attributes?.fullname?.[0] || "").trim(),
+                fullName: (user.fullName || user.firstName || user.lastName || user.attributes?.fullName?.[0] || "").trim(),
                 email: user.email || "",
                 enabled: user.enabled ?? true,
                 emailVerified: user.emailVerified ?? false,

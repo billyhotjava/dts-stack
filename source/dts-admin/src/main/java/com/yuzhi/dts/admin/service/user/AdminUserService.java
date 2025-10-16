@@ -1935,7 +1935,7 @@ public class AdminUserService {
         dto.setGroups(new ArrayList<>(stringList(payload.get("groupPaths"))));
         Map<String, List<String>> attributes = stringListMap(payload.get("attributes"));
         if (fullName != null && !fullName.isBlank()) {
-            attributes.put("fullname", List.of(fullName));
+            attributes.put("fullName", List.of(fullName));
         }
         String phone = stringValue(payload.get("phone"));
         if (phone != null && !phone.isBlank()) {
@@ -2033,6 +2033,7 @@ public class AdminUserService {
                 result.put(entry.getKey().toString(), stringList(entry.getValue()));
             }
         }
+        normalizeFullNameAttribute(result);
         return result;
     }
 
@@ -2046,6 +2047,28 @@ public class AdminUserService {
         if (value instanceof Boolean b) return b;
         if (value instanceof String s) return Boolean.parseBoolean(s);
         return null;
+    }
+
+    private void normalizeFullNameAttribute(Map<String, List<String>> attributes) {
+        if (attributes == null) {
+            return;
+        }
+        List<String> legacy = attributes.remove("fullname");
+        if (legacy != null && !legacy.isEmpty()) {
+            List<String> current = attributes.get("fullName");
+            List<String> normalized = current == null ? new ArrayList<>() : new ArrayList<>(current);
+            for (String value : legacy) {
+                if (value == null) continue;
+                String trimmed = value.trim();
+                if (trimmed.isEmpty()) continue;
+                if (normalized.stream().noneMatch(trimmed::equals)) {
+                    normalized.add(trimmed);
+                }
+            }
+            if (!normalized.isEmpty()) {
+                attributes.put("fullName", normalized);
+            }
+        }
     }
 
     private void ensureDbAssignments(String username, List<String> dataRoles, KeycloakUserDTO user) {

@@ -67,8 +67,8 @@ export default function ProfileTab({ detail, pickAttributeValue }: ProfileTabPro
 	const detailAttributes = detail?.attributes as AttributeMap;
 	const storeAttributes = attributes as AttributeMap;
 
-	const attributeFullName =
-		pickAttributeValue(detailAttributes, ["fullName", "fullname"]) || pickAttributeValue(storeAttributes, ["fullName", "fullname"]);
+	const attributefullName =
+		pickAttributeValue(detailAttributes, ["fullName", "fullName"]) || pickAttributeValue(storeAttributes, ["fullName", "fullName"]);
 	const resolvedUsername = detail?.username || username || "-";
 	const resolvedEmail = detail?.email || email || "-";
 	const roleLabels = useMemo(() => {
@@ -82,17 +82,17 @@ export default function ProfileTab({ detail, pickAttributeValue }: ProfileTabPro
 	const accountStatus = detail?.enabled ?? enabled;
 	const accountId = detail?.id || id || "-";
 	const fallbackName = USERNAME_FALLBACK_NAME[resolvedUsername?.toLowerCase() ?? ""] || "";
-
-	const resolvedName = (
-		fullName?.trim() || // Prioritize the corrected fullName from backend
-		firstName?.trim() ||
-		attributeFullName || // Fallback to attributes if fullName is still not good
+fullNamefullName
+	const resolvedName = (fullNamefullNamefullNamefullName
+		fullName?.trim() || // PfullNamee the correcfullNameName from bacfullNamefullName
+		firstName?.trim() ||fullNamefullNamefullNamefullName
+		attributeFullName ||fullNamebacfullNameribufullNameullName is still not goodfullName
 		fallbackName ||
 		resolvedUsername
-	);
-
-	const basicInfo = [
-		{ label: "姓名", value: resolvedName || "-", key: "name" },
+	);fullName
+fullName
+	const basicInfo =fullName
+		{ label: "姓名", fullNameesolvedName || "-", key: "name" },
 		{ label: "用户名", value: resolvedUsername || "-", key: "username" },
 		{ label: "邮箱", value: resolvedEmail || "-", key: "email" },
 		{ label: "角色", value: roleLabels.length ? roleLabels.join("、") : "-", key: "roles" },

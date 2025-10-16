@@ -29,18 +29,18 @@ function PersonalProfilePage() {
 	const detailAttributes = undefined as AttributeMap;
 	const storeAttributes = attributes as AttributeMap;
 
-	const attributeFullName =
-		pickAttributeValue(detailAttributes, ["fullName", "fullname"]) || pickAttributeValue(storeAttributes, ["fullName", "fullname"]);
-	const normalizedAttributeFullName =
-		attributeFullName && attributeFullName.toLowerCase() !== username?.toLowerCase() ? attributeFullName : "";
-	const normalizedDetailFullName = "";
-	const normalizedStoreFullName = fullName && fullName.toLowerCase() !== username?.toLowerCase() ? fullName : "";
+	const attributefullName =
+		pickAttributeValue(detailAttributes, ["fullName", "fullName"]) || pickAttributeValue(storeAttributes, ["fullName", "fullName"]);
+	const normalizedAttributefullName =
+		attributefullName && attributefullName.toLowerCase() !== username?.toLowerCase() ? attributefullName : "";
+	const normalizedDetailfullName = "";
+	const normalizedStorefullName = fullName && fullName.toLowerCase() !== username?.toLowerCase() ? fullName : "";
 	const normalizedStoreFirstName = firstName && firstName.toLowerCase() !== username?.toLowerCase() ? firstName : "";
 	const fallbackName = username ? USERNAME_FALLBACK_NAME[username.toLowerCase()] : "";
 	const resolvedName = (
-		normalizedAttributeFullName ||
-		normalizedDetailFullName ||
-		normalizedStoreFullName ||
+		normalizedAttributefullName ||
+		normalizedDetailfullName ||
+		normalizedStorefullName ||
 		normalizedStoreFirstName ||
 		fallbackName ||
 		username ||

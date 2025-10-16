@@ -118,7 +118,7 @@ export default function OrgManagementView() {
                             const u = byUsername.get(uname);
                             return {
                                 username: uname,
-                                fullName: (u?.fullName || u?.firstName || u?.lastName || u?.attributes?.fullname?.[0]) as string | undefined,
+                                fullName: (u?.fullName || u?.firstName || u?.lastName || u?.attributes?.fullName?.[0]) as string | undefined,
                             };
                         })
                         .filter((x) => x.username);
@@ -136,7 +136,7 @@ export default function OrgManagementView() {
                         });
                         result = matched.map((u) => ({
                             username: u.username || (u.id as string),
-                            fullName: (u.fullName || u.firstName || u.lastName || u.attributes?.fullname?.[0]) as string | undefined,
+                            fullName: (u.fullName || u.firstName || u.lastName || u.attributes?.fullName?.[0]) as string | undefined,
                         }));
                     } catch (scanErr) {
                         console.warn("fallback scan users failed", scanErr);

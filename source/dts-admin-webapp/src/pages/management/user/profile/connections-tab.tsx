@@ -59,11 +59,11 @@ export default function ConnectionsTab() {
 	}
 
 	const normalizeDisplayName = (user: KeycloakUser) => {
-		const attributeFullName = Array.isArray(user.attributes?.fullName)
+		const attributefullName = Array.isArray(user.attributes?.fullName)
 			? user.attributes?.fullName.find((item) => item?.trim()) || user.attributes?.fullName[0]
 			: undefined;
-		if (attributeFullName) {
-			return attributeFullName;
+		if (attributefullName) {
+			return attributefullName;
 		}
 		const composedName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
 		if (composedName) {

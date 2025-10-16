@@ -34,7 +34,7 @@ export default function ProfilePage() {
 			if (Array.isArray(value) && value.length) candidateList.push(value[0]);
 			else if (value) candidateList.push(value);
 		};
-		pushAttr(attrs?.fullname);
+		pushAttr(attrs?.fullName);
 		pushAttr(attrs?.full_name);
 		pushAttr(attrs?.display_name);
 		for (const candidate of candidateList) {

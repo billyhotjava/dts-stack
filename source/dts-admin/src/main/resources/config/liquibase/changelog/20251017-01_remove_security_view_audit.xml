@@ -7,16 +7,19 @@
     <changeSet id="20251017-01-remove-security-view-audit" author="codex">
         <comment>Remove obsolete security view audit mappings after feature deprecation</comment>
 
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <and>
+                <tableExists tableName="portal_menu"/>
+                <tableExists tableName="audit_operation_mapping"/>
+            </and>
+        </preConditions>
+
         <delete tableName="audit_operation_mapping">
             <where>url_pattern like '/api/catalog/security-views%'</where>
         </delete>
         <delete tableName="audit_operation_mapping">
             <where>url_pattern like '/api/catalog/access-policies%'</where>
         </delete>
-
-        <preConditions onFail="MARK_RAN">
-            <tableExists tableName="portal_menu"/>
-        </preConditions>
         <sql dbms="postgresql" splitStatements="false">
             DO $do$
             DECLARE

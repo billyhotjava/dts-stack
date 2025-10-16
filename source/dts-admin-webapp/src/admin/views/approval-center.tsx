@@ -351,7 +351,7 @@ const FIELD_LABELS: Record<string, string> = {
     "attributes.person_level": "人员密级",
     "attributes.person_security_level": "人员密级",
     "attributes.data_levels": "数据密级",
-    "attributes.fullname": "姓名",
+    "attributes.fullName": "姓名",
     maxDataLevel: "最大数据密级",
     maxDataLevels: "最大数据密级",
     dataOperations: "数据操作",
@@ -716,7 +716,7 @@ export default function ApprovalCenterView() {
                     const list = await KeycloakUserService.searchUsers(u);
                     const match = (list || []).find((x) => (x?.username || "").toLowerCase() === u.toLowerCase());
                     const name =
-                        (match?.fullName || match?.firstName || match?.lastName || match?.attributes?.fullname?.[0] || u).toString();
+                        (match?.fullName || match?.firstName || match?.lastName || match?.attributes?.fullName?.[0] || u).toString();
                     updates[u] = name;
                     updates[u.toLowerCase()] = name;
                 } catch {

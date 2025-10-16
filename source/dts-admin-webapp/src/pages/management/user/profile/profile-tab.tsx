@@ -60,9 +60,9 @@ export default function ProfileTab({ detail, resolveAttributeValue }: ProfileTab
 	const detailAttributes = detail?.attributes as Record<string, string[]> | undefined;
 	const storeAttributes = attributes as Record<string, string[]> | undefined;
 
-	const attributeFullName =
-		resolveAttributeValue(detailAttributes, ["fullName", "fullname"]) ||
-		resolveAttributeValue(storeAttributes, ["fullName", "fullname"]);
+	const attributefullName =
+		resolveAttributeValue(detailAttributes, ["fullName", "fullName"]) ||
+		resolveAttributeValue(storeAttributes, ["fullName", "fullName"]);
 	const resolvedUsername = detail?.username || username || "-";
 	const resolvedEmail = detail?.email || email || "-";
 	const roleLabels = useMemo(() => {
@@ -76,17 +76,17 @@ export default function ProfileTab({ detail, resolveAttributeValue }: ProfileTab
 	const accountStatus = detail?.enabled ?? enabled;
 	const accountId = detail?.id || id || "-";
 	const fallbackName = USERNAME_FALLBACK_NAME[resolvedUsername?.toLowerCase() ?? ""] || "";
-	const normalizedAttributeFullName =
-		attributeFullName && attributeFullName.toLowerCase() !== resolvedUsername.toLowerCase() ? attributeFullName : "";
-	const normalizedDetailFullName =
+	const normalizedAttributefullName =
+		attributefullName && attributefullName.toLowerCase() !== resolvedUsername.toLowerCase() ? attributefullName : "";
+	const normalizedDetailfullName =
 		detail?.fullName && detail.fullName.toLowerCase() !== resolvedUsername.toLowerCase() ? detail.fullName : "";
-	const normalizedStoreFullName = fullName && fullName.toLowerCase() !== resolvedUsername.toLowerCase() ? fullName : "";
+	const normalizedStorefullName = fullName && fullName.toLowerCase() !== resolvedUsername.toLowerCase() ? fullName : "";
 	const normalizedStoreFirstName =
 		firstName && firstName.toLowerCase() !== resolvedUsername.toLowerCase() ? firstName : "";
 	const resolvedName =
-		normalizedAttributeFullName ||
-		normalizedDetailFullName?.trim() ||
-		normalizedStoreFullName?.trim() ||
+		normalizedAttributefullName ||
+		normalizedDetailfullName?.trim() ||
+		normalizedStorefullName?.trim() ||
 		normalizedStoreFirstName?.trim() ||
 		fallbackName ||
 		resolvedUsername;

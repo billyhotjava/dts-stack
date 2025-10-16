@@ -25,7 +25,7 @@ const RESERVED_PROFILE_ATTRIBUTES = new Set<string>([
   "firstName",
   "lastName",
   "locale",
-  "fullname",
+  "fullName",
   ...CUSTOM_USER_ATTRIBUTE_KEYS,
   // 合并人员密级显示：排除 person_security_level，避免动态区域重复
   "person_security_level",
@@ -260,7 +260,7 @@ export default function UserDetailView() {
     getSingleAttributeValue(user?.attributes, "phone_number") ||
     getSingleAttributeValue(user?.attributes, "mobile") ||
     getSingleAttributeValue(user?.attributes, "mobile_number");
-  const fullName = user?.firstName || user?.lastName || user?.attributes?.fullname?.[0] || "";
+  const fullName = user?.firstName || user?.lastName || user?.attributes?.fullName?.[0] || "";
   const email = user?.email || "";
 
   const getFilteredUserAttributes = () => {

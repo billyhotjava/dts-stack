@@ -313,21 +313,21 @@
               "realm-management": [
                 "manage-authorization",
                 "view-clients",
-                "query-groups",
                 "view-users",
-                "manage-clients",
+                "query-groups",
                 "manage-realm",
+                "manage-clients",
                 "create-client",
                 "query-realms",
-                "view-authorization",
                 "view-identity-providers",
+                "view-authorization",
                 "manage-events",
                 "manage-users",
                 "query-users",
                 "view-events",
                 "view-realm",
-                "impersonation",
                 "manage-identity-providers",
+                "impersonation",
                 "query-clients"
               ]
             }
@@ -346,16 +346,7 @@
           "attributes": {}
         }
       ],
-      "admin-permissions": [
-        {
-          "id": "ee0a75c5-09bb-417d-892a-372af122875c",
-          "name": "uma_protection",
-          "composite": false,
-          "clientRole": true,
-          "containerId": "0e961d8c-e487-4fd6-ab68-6c17dd514dd5",
-          "attributes": {}
-        }
-      ],
+      "admin-permissions": [],
       "security-admin-console": [],
       "dts-system": [],
       "admin-cli": [],
@@ -537,27 +528,6 @@
   "webAuthnPolicyPasswordlessExtraOrigins": [],
   "users": [
     {
-      "id": "e496a4f1-3cdc-462a-b484-13899416adb6",
-      "username": "service-account-admin-permissions",
-      "emailVerified": false,
-      "enabled": true,
-      "createdTimestamp": 1760246279310,
-      "totp": false,
-      "serviceAccountClientId": "admin-permissions",
-      "disableableCredentialTypes": [],
-      "requiredActions": [],
-      "realmRoles": [
-        "default-roles-s10"
-      ],
-      "clientRoles": {
-        "admin-permissions": [
-          "uma_protection"
-        ]
-      },
-      "notBefore": 0,
-      "groups": []
-    },
-    {
       "id": "54dd9ce8-32a0-4e1a-8042-31accffea022",
       "username": "service-account-dts-system",
       "emailVerified": false,
@@ -570,45 +540,6 @@
       "realmRoles": [
         "default-roles-s10"
       ],
-      "clientRoles": {
-        "realm-management": [
-          "manage-authorization",
-          "view-clients",
-          "manage-clients",
-          "query-realms",
-          "view-authorization",
-          "manage-users",
-          "view-events",
-          "view-realm",
-          "realm-admin",
-          "manage-identity-providers",
-          "view-users",
-          "query-groups",
-          "manage-realm",
-          "create-client",
-          "view-identity-providers",
-          "manage-events",
-          "query-users",
-          "impersonation",
-          "query-clients"
-        ],
-        "admin-permissions": [
-          "uma_protection"
-        ],
-        "broker": [
-          "read-token"
-        ],
-        "account": [
-          "manage-account",
-          "delete-account",
-          "manage-consent",
-          "manage-account-links",
-          "view-consent",
-          "view-applications",
-          "view-groups",
-          "view-profile"
-        ]
-      },
       "notBefore": 0,
       "groups": []
     }
@@ -734,8 +665,7 @@
       "protocol": "openid-connect",
       "attributes": {
         "realm_client": "false",
-        "client.use.lightweight.access.token.enabled": "true",
-        "post.logout.redirect.uris": "+"
+        "client.use.lightweight.access.token.enabled": "true"
       },
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": true,
@@ -766,14 +696,12 @@
       "protocol": "openid-connect",
       "attributes": {
         "realm_client": "false",
-        "client.secret.creation.time": "1760246277"
+        "client.secret.creation.time": "1760097353"
       },
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": true,
       "nodeReRegistrationTimeout": -1,
-      "defaultClientScopes": [
-        "service_account"
-      ],
+      "defaultClientScopes": [],
       "optionalClientScopes": [],
       "authorizationSettings": {
         "allowRemoteResourceManagement": true,
@@ -784,42 +712,21 @@
         "decisionStrategy": "UNANIMOUS",
         "authorizationSchema": {
           "resourceTypes": {
-            "Roles": {
-              "type": "Roles",
-              "scopes": [
-                "map-role",
-                "map-role-composite",
-                "map-role-client-scope"
-              ],
-              "scopeAliases": {}
-            },
-            "Groups": {
-              "type": "Groups",
-              "scopes": [
-                "view-members",
-                "manage-members",
-                "manage-membership",
-                "view",
-                "manage",
-                "impersonate-members"
-              ],
-              "scopeAliases": {}
-            },
             "Users": {
               "type": "Users",
               "scopes": [
-                "manage-group-membership",
-                "view",
-                "map-roles",
                 "manage",
+                "map-roles",
+                "view",
+                "manage-group-membership",
                 "impersonate"
               ],
               "scopeAliases": {
-                "impersonate": [
-                  "impersonate-members"
-                ],
                 "manage": [
                   "manage-members"
+                ],
+                "impersonate": [
+                  "impersonate-members"
                 ],
                 "view": [
                   "view-members"
@@ -827,13 +734,34 @@
               },
               "groupType": "Groups"
             },
+            "Groups": {
+              "type": "Groups",
+              "scopes": [
+                "manage",
+                "view",
+                "manage-membership",
+                "manage-members",
+                "view-members",
+                "impersonate-members"
+              ],
+              "scopeAliases": {}
+            },
+            "Roles": {
+              "type": "Roles",
+              "scopes": [
+                "map-role-composite",
+                "map-role",
+                "map-role-client-scope"
+              ],
+              "scopeAliases": {}
+            },
             "Clients": {
               "type": "Clients",
               "scopes": [
-                "view",
-                "map-roles-client-scope",
-                "map-roles",
                 "manage",
+                "map-roles",
+                "map-roles-client-scope",
+                "view",
                 "map-roles-composite"
               ],
               "scopeAliases": {}
@@ -863,8 +791,7 @@
       "frontchannelLogout": false,
       "protocol": "openid-connect",
       "attributes": {
-        "realm_client": "true",
-        "post.logout.redirect.uris": "+"
+        "realm_client": "true"
       },
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": false,
@@ -907,7 +834,6 @@
         "client.secret.creation.time": "1760097381",
         "backchannel.logout.session.required": "true",
         "standard.token.exchange.enabled": "false",
-        "post.logout.redirect.uris": "+",
         "oauth2.device.authorization.grant.enabled": "false",
         "backchannel.logout.revoke.offline.tokens": "false"
       },
@@ -953,8 +879,7 @@
       "frontchannelLogout": false,
       "protocol": "openid-connect",
       "attributes": {
-        "realm_client": "true",
-        "post.logout.redirect.uris": "+"
+        "realm_client": "true"
       },
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": false,
@@ -1820,14 +1745,14 @@
         "subComponents": {},
         "config": {
           "allowed-protocol-mapper-types": [
-            "oidc-usermodel-attribute-mapper",
-            "saml-role-list-mapper",
             "oidc-usermodel-property-mapper",
             "saml-user-attribute-mapper",
-            "oidc-sha256-pairwise-sub-mapper",
+            "saml-role-list-mapper",
             "saml-user-property-mapper",
-            "oidc-full-name-mapper",
-            "oidc-address-mapper"
+            "oidc-usermodel-attribute-mapper",
+            "oidc-sha256-pairwise-sub-mapper",
+            "oidc-address-mapper",
+            "oidc-full-name-mapper"
           ]
         }
       },
@@ -1842,11 +1767,11 @@
             "oidc-full-name-mapper",
             "saml-role-list-mapper",
             "oidc-usermodel-property-mapper",
-            "saml-user-property-mapper",
-            "oidc-address-mapper",
+            "oidc-usermodel-attribute-mapper",
             "oidc-sha256-pairwise-sub-mapper",
             "saml-user-attribute-mapper",
-            "oidc-usermodel-attribute-mapper"
+            "oidc-address-mapper",
+            "saml-user-property-mapper"
           ]
         }
       },

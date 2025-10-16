@@ -104,20 +104,20 @@ function UserProfile() {
 	const detailAttributes = detail?.attributes as Record<string, string[]> | undefined;
 	const storeAttributes = attributes as Record<string, string[]> | undefined;
 
-	const attributeFullName =
-		pickAttributeValue(detailAttributes, ["fullName", "fullname"]) ||
-		pickAttributeValue(storeAttributes, ["fullName", "fullname"]);
-	const normalizedAttributeFullName =
-		attributeFullName && attributeFullName.toLowerCase() !== username?.toLowerCase() ? attributeFullName : "";
-	const normalizedDetailFullName =
+	const attributefullName =
+		pickAttributeValue(detailAttributes, ["fullName", "fullName"]) ||
+		pickAttributeValue(storeAttributes, ["fullName", "fullName"]);
+	const normalizedAttributefullName =
+		attributefullName && attributefullName.toLowerCase() !== username?.toLowerCase() ? attributefullName : "";
+	const normalizedDetailfullName =
 		detail?.fullName && detail.fullName.toLowerCase() !== username?.toLowerCase() ? detail.fullName : "";
-	const normalizedStoreFullName = fullName && fullName.toLowerCase() !== username?.toLowerCase() ? fullName : "";
+	const normalizedStorefullName = fullName && fullName.toLowerCase() !== username?.toLowerCase() ? fullName : "";
 	const normalizedStoreFirstName = firstName && firstName.toLowerCase() !== username?.toLowerCase() ? firstName : "";
 	const fallbackName = USERNAME_FALLBACK_NAME[username?.toLowerCase() ?? ""] || "";
 	const resolvedName = (
-		normalizedAttributeFullName ||
-		normalizedDetailFullName ||
-		normalizedStoreFullName ||
+		normalizedAttributefullName ||
+		normalizedDetailfullName ||
+		normalizedStorefullName ||
 		normalizedStoreFirstName ||
 		fallbackName ||
 		username ||

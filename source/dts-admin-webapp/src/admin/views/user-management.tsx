@@ -73,12 +73,12 @@ function collectRoleCodes(user: KeycloakUser): string[] {
   return Array.from(names).filter(Boolean);
 }
 
-function resolveFullName(user: KeycloakUser): string {
+function resolvefullName(user: KeycloakUser): string {
   const n = (
     user.fullName ||
     user.firstName ||
     user.lastName ||
-    (Array.isArray(user.attributes?.fullname) ? user.attributes?.fullname?.[0] : undefined) ||
+    (Array.isArray(user.attributes?.fullName) ? user.attributes?.fullName?.[0] : undefined) ||
     ""
   ).toString().trim();
   return n;
@@ -259,7 +259,7 @@ export default function UserManagementView() {
               </div>
               <div>
                 <span className="text-muted-foreground">姓名：</span>
-                <span>{resolveFullName(record) || "-"}</span>
+                <span>{resolvefullName(record) || "-"}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">邮箱：</span>
@@ -426,7 +426,7 @@ export default function UserManagementView() {
         ellipsis: true,
         onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => {
-          const name = resolveFullName(record);
+          const name = resolvefullName(record);
           return name ? name : <span className="text-muted-foreground">-</span>;
         },
       },

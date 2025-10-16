@@ -649,8 +649,9 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
                     }
                 });
         }
+        normalizeFullNameAttribute(attributes);
         if (dto.getFullName() != null && !dto.getFullName().isBlank()) {
-            attributes.put("fullname", List.of(dto.getFullName()));
+            attributes.put("fullName", List.of(dto.getFullName()));
         }
         if (!attributes.isEmpty()) rep.put("attributes", attributes);
         // Important: Do NOT include role/group assignments in the user representation payload.
@@ -668,7 +669,17 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         dto.setName(stringValue(map.get("name")));
         dto.setPath(stringValue(map.get("path")));
         dto.setDescription(stringValue(map.get("description")));
-        dto.setAttributes(stringListMap(map.get("attributes")));
+        Map<String, List<String>> attributes = stringListMap(map.get("attributes"));
+        if ((dto.getFullName() == null || dto.getFullName().isBlank()) && attributes != null) {
+            String attrFullName = firstAttribute(attributes, "fullName");
+            if (attrFullName == null) {
+                attrFullName = firstAttribute(attributes, "fullname");
+            }
+            if (attrFullName != null && !attrFullName.isBlank()) {
+                dto.setFullName(attrFullName);
+            }
+        }
+        dto.setAttributes(attributes);
         dto.setRealmRoles(stringList(map.get("realmRoles")));
         dto.setClientRoles(stringListMap(map.get("clientRoles")));
         Object subGroups = map.get("subGroups");
@@ -743,6 +754,7 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
                 result.put(key, stringList(entry.getValue()));
             }
         }
+        normalizeFullNameAttribute(result);
         return result;
     }
 
@@ -757,6 +769,40 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
             list.add(value.toString());
         }
         return list;
+    }
+
+    private void normalizeFullNameAttribute(Map<String, List<String>> attributes) {
+        if (attributes == null) {
+            return;
+        }
+        List<String> legacy = attributes.remove("fullname");
+        if (legacy != null && !legacy.isEmpty()) {
+            List<String> existing = attributes.get("fullName");
+            List<String> normalized = existing == null ? new ArrayList<>() : new ArrayList<>(existing);
+            for (String value : legacy) {
+                if (value == null) continue;
+                String trimmed = value.trim();
+                if (trimmed.isEmpty()) continue;
+                if (normalized.stream().noneMatch(trimmed::equals)) {
+                    normalized.add(trimmed);
+                }
+            }
+            if (!normalized.isEmpty()) {
+                attributes.put("fullName", normalized);
+            }
+        }
+    }
+
+    private String firstAttribute(Map<String, List<String>> attributes, String key) {
+        if (attributes == null || key == null) return null;
+        List<String> values = attributes.get(key);
+        if (values == null || values.isEmpty()) return null;
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     @Override
