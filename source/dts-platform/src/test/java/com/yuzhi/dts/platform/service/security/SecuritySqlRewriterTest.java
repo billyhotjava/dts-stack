@@ -43,11 +43,30 @@ class SecuritySqlRewriterTest {
 
         String rewritten = rewriter.guard("SELECT id, amount FROM ods_orders WHERE status = 'DONE';", dataset);
 
-        assertThat(rewritten).startsWith("SELECT * FROM (SELECT id, amount FROM ods_orders WHERE status = 'DONE')");
+        assertThat(rewritten).contains("SELECT id, amount, `data_level` FROM ods_orders WHERE status = 'DONE'");
         assertThat(rewritten).contains("WHERE");
         assertThat(rewritten).contains("UPPER(TRIM(");
         assertThat(rewritten).contains("TOP_SECRET");
         assertThat(rewritten).doesNotEndWith(";");
+    }
+
+    @Test
+    void guardShouldInjectGuardColumnWhenProjectionMissing() {
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"));
+        dataset.setHiveTable("ods_orders");
+
+        when(accessChecker.resolveAllowedDataLevels()).thenReturn(List.of(DataLevel.DATA_INTERNAL));
+        when(metadataResolver.findDataLevelColumn(dataset)).thenReturn(Optional.of("data_level"));
+
+        String rewritten = rewriter.guard(
+            "SELECT category_id, COUNT(*) FROM ods_orders GROUP BY category_id",
+            dataset
+        );
+
+        assertThat(rewritten).contains("SELECT category_id, COUNT(*), `data_level` FROM ods_orders");
+        assertThat(rewritten).contains("GROUP BY category_id, `data_level`");
+        assertThat(rewritten).contains("UPPER(TRIM(");
     }
 
     @Test
@@ -67,5 +86,19 @@ class SecuritySqlRewriterTest {
     void guardShouldTrimTrailingSemicolonsForAdhocSql() {
         String rewritten = rewriter.guard("SELECT 1;;", null);
         assertThat(rewritten).isEqualTo("SELECT 1");
+    }
+
+    @Test
+    void guardShouldFallbackWhenColumnMissing() {
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(UUID.randomUUID());
+        dataset.setHiveTable("ods_orders");
+
+        when(accessChecker.resolveAllowedDataLevels()).thenReturn(List.of(DataLevel.DATA_INTERNAL));
+        when(metadataResolver.findDataLevelColumn(dataset)).thenReturn(Optional.empty());
+
+        String rewritten = rewriter.guard("SELECT id FROM ods_orders", dataset);
+
+        assertThat(rewritten).isEqualTo("SELECT id FROM ods_orders");
     }
 }

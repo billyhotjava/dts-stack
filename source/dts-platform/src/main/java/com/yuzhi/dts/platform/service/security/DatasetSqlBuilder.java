@@ -53,6 +53,13 @@ public class DatasetSqlBuilder {
         return resolveDataLevelPredicate(dataset, tableAlias, dialect);
     }
 
+    public String quoteColumn(CatalogDataset dataset, String columnName) {
+        if (!StringUtils.hasText(columnName)) {
+            return columnName;
+        }
+        return quoteIdentifier(columnName, resolveDialect(dataset));
+    }
+
     private int sanitizeLimit(int limit) {
         if (limit <= 0) {
             return LIMIT_MIN;

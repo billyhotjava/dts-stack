@@ -3,9 +3,13 @@ package com.yuzhi.dts.platform.service.security;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -16,6 +20,9 @@ import org.springframework.util.StringUtils;
 public class SecuritySqlRewriter {
 
     private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("[^a-zA-Z0-9_]");
+    private static final Pattern SELECT_CLAUSE_PATTERN = Pattern.compile("(?is)^\\s*select\\s+(.*?)\\s+from\\s+", Pattern.DOTALL);
+    private static final Pattern GROUP_BY_PATTERN = Pattern.compile("(?is)\\bgroup\\s+by\\s+(.*?)(?=\\border\\s+by\\b|\\blimit\\b|\\bhaving\\b|\\bunion\\b|$)", Pattern.DOTALL);
+    private static final Logger LOG = LoggerFactory.getLogger(SecuritySqlRewriter.class);
 
     private final AccessChecker accessChecker;
     private final DatasetSecurityMetadataResolver metadataResolver;
@@ -51,17 +58,26 @@ public class SecuritySqlRewriter {
         if (allowedLevels == null || allowedLevels.isEmpty()) {
             throw new SecurityGuardException("当前账号未配置可访问的数据密级，无法执行查询");
         }
-        if (metadataResolver.findDataLevelColumn(dataset).isEmpty()) {
-            throw new SecurityGuardException("当前数据集未配置密级字段，无法执行查询");
+        String sanitizedSql = stripTrailingSemicolon(rawSql);
+        Optional<String> guardColumnOpt = metadataResolver.findDataLevelColumn(dataset);
+        if (guardColumnOpt.isEmpty()) {
+            LOG.debug("Dataset {} missing data-level column, skip guard rewrite", dataset.getId());
+            return sanitizedSql;
         }
 
         String alias = resolveAlias(dataset);
         Optional<String> predicateOpt = datasetSqlBuilder.resolveDataLevelPredicate(dataset, alias);
         if (predicateOpt.isEmpty()) {
-            throw new SecurityGuardException("无法构建密级过滤条件，请联系管理员检查数据集配置");
+            LOG.warn("Unable to build data-level predicate for dataset {}, skip guard rewrite", dataset.getId());
+            return sanitizedSql;
         }
 
-        String sanitizedSql = stripTrailingSemicolon(rawSql);
+        String guardColumn = guardColumnOpt.get();
+        ProjectionAdjustment adjustment = ensureGuardColumnProjection(sanitizedSql, guardColumn, dataset);
+        sanitizedSql = adjustment.sql();
+        if (adjustment.columnAdded()) {
+            sanitizedSql = ensureGroupByContainsGuard(sanitizedSql, guardColumn, dataset);
+        }
         return "SELECT * FROM (" + sanitizedSql + ") " + alias + " WHERE " + predicateOpt.get();
     }
 
@@ -99,4 +115,83 @@ public class SecuritySqlRewriter {
         }
         return candidate;
     }
+
+    private ProjectionAdjustment ensureGuardColumnProjection(String sql, String columnName, CatalogDataset dataset) {
+        if (!StringUtils.hasText(sql) || !StringUtils.hasText(columnName)) {
+            return new ProjectionAdjustment(sql, false);
+        }
+        Matcher matcher = SELECT_CLAUSE_PATTERN.matcher(sql);
+        if (!matcher.find()) {
+            return new ProjectionAdjustment(sql, false);
+        }
+        String selectBody = matcher.group(1);
+        if (containsWildcard(selectBody) || containsColumnReference(selectBody, columnName, dataset)) {
+            return new ProjectionAdjustment(sql, false);
+        }
+        String guardExpression = datasetSqlBuilder.quoteColumn(dataset, columnName);
+        String appended = selectBody.trim().isEmpty() ? guardExpression : selectBody + ", " + guardExpression;
+        String rebuilt = sql.substring(0, matcher.start(1)) + appended + sql.substring(matcher.end(1));
+        return new ProjectionAdjustment(rebuilt, true);
+    }
+
+    private String ensureGroupByContainsGuard(String sql, String columnName, CatalogDataset dataset) {
+        if (!StringUtils.hasText(sql) || !StringUtils.hasText(columnName)) {
+            return sql;
+        }
+        Matcher matcher = GROUP_BY_PATTERN.matcher(sql);
+        if (!matcher.find()) {
+            return sql;
+        }
+        String groupBody = matcher.group(1);
+        if (containsColumnReference(groupBody, columnName, dataset)) {
+            return sql;
+        }
+        String guardExpression = datasetSqlBuilder.quoteColumn(dataset, columnName);
+        String trimmed = groupBody.trim();
+        String appended = trimmed.isEmpty() ? guardExpression : trimmed + ", " + guardExpression;
+        return sql.substring(0, matcher.start(1)) + appended + sql.substring(matcher.end(1));
+    }
+
+    private boolean containsWildcard(String selectBody) {
+        return selectBody != null && selectBody.contains("*");
+    }
+
+    private boolean containsColumnReference(String fragment, String columnName, CatalogDataset dataset) {
+        if (!StringUtils.hasText(fragment) || !StringUtils.hasText(columnName)) {
+            return false;
+        }
+        String normalizedFragment = normalizeSqlFragment(fragment);
+        String normalizedColumn = normalizeSqlFragment(columnName);
+        if (normalizedFragment.contains(normalizedColumn)) {
+            return true;
+        }
+        String quoted = datasetSqlBuilder.quoteColumn(dataset, columnName);
+        String normalizedQuoted = normalizeSqlFragment(quoted);
+        if (normalizedFragment.contains(normalizedQuoted)) {
+            return true;
+        }
+        return false;
+    }
+
+    private String normalizeSqlFragment(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text
+            .replace("`", "")
+            .replace("\"", "")
+            .replace("[", "")
+            .replace("]", "")
+            .replace("(", "")
+            .replace(")", "")
+            .replace(".", "")
+            .replace(",", "")
+            .replace("\n", "")
+            .replace("\r", "")
+            .replace("\t", "")
+            .replace(" ", "")
+            .toLowerCase(Locale.ROOT);
+    }
+
+    private record ProjectionAdjustment(String sql, boolean columnAdded) {}
 }
