@@ -120,8 +120,7 @@ export const executeExplore = (data: any) => api.post({ url: "/explore/execute",
 export const explainExplore = (data: any) => api.post({ url: "/explore/explain", data });
 export const saveExploreResult = (executionId: string, data?: any) =>
   api.post({ url: `/explore/save-result/${executionId}`, data });
-export const previewResultSet = (resultSetId: string, rows = 100) =>
-  api.get({ url: `/explore/result-preview/${resultSetId}`, params: { rows } });
+export const previewResultSet = (resultSetId: string) => api.get({ url: `/explore/result-preview/${resultSetId}` });
 export const deleteResultSet = (id: string) => api.delete({ url: `/explore/result-sets/${id}` });
 
 // Explore (CRUD for generated entities)

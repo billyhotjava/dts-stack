@@ -206,6 +206,12 @@ public class ExploreResource {
                         ttlDays = Math.max(1, Integer.parseInt(String.valueOf(body.get("ttlDays"))));
                     } catch (NumberFormatException ignored) {}
                 }
+                String requestedName = body != null ? trimToLength(asText(body.get("name")), 128) : null;
+                if (requestedName != null && !requestedName.isBlank()) {
+                    record.setName(requestedName);
+                } else if (record.getName() == null || record.getName().isBlank()) {
+                    record.setName("临时结果集");
+                }
                 Instant now = Instant.now();
                 record.setTtlDays(ttlDays);
                 record.setExpiresAt(now.plus(ttlDays, ChronoUnit.DAYS));
@@ -214,6 +220,7 @@ public class ExploreResource {
                 audit.audit("UPDATE", "explore.result.save", executionId.toString());
                 Map<String, Object> resp = new LinkedHashMap<>();
                 resp.put("id", executionId);
+                resp.put("name", record.getName());
                 resp.put("expiresAt", Optional.ofNullable(record.getExpiresAt()).map(Instant::toString).orElse(null));
                 resp.put("storageUri", record.getStorageUri());
                 return ApiResponses.ok(resp);
@@ -281,24 +288,31 @@ public class ExploreResource {
     }
 
     @GetMapping("/result-preview/{id}")
-    public ApiResponse<Map<String, Object>> previewResultSet(
-        @PathVariable UUID id,
-        @RequestParam(name = "rows", defaultValue = "50") int rowsLimit
-    ) {
+    public ApiResponse<Map<String, Object>> previewResultSet(@PathVariable UUID id) {
         return resultSetRepo
             .findById(id)
             .map(record -> {
-                List<String> headers = parseColumns(record.getColumns());
-                PreviewPayload preview = readPreview(record.getPreviewColumns());
-                List<Map<String, Object>> rows = preview.hasRows()
-                    ? cloneRows(preview.getRows(), rowsLimit)
-                    : generateFallbackRows(headers, rowsLimit);
+                QueryExecution execution = executionRepo
+                    .findByResultSetId(record.getId())
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+                if (execution == null) {
+                    audit.audit("WARN", "explore.result.sql", id + ":missing-execution");
+                    return ApiResponses.error("未找到结果集关联的查询记录");
+                }
+                CatalogDataset dataset = execution.getDatasetId() != null
+                    ? datasetRepo.findById(execution.getDatasetId()).orElse(null)
+                    : null;
                 Map<String, Object> resp = new LinkedHashMap<>();
-                resp.put("headers", headers);
-                resp.put("rows", rows);
+                resp.put("sqlText", execution.getSqlText());
+                resp.put("datasetId", execution.getDatasetId());
+                resp.put("datasetName", dataset != null ? dataset.getName() : null);
                 resp.put("rowCount", record.getRowCount());
-                resp.put("masking", Optional.ofNullable(preview.getMasking()).orElseGet(() -> buildMasking(headers)));
-                audit.audit("READ", "explore.result.preview", id.toString());
+                resp.put("engine", execution.getEngine() != null ? execution.getEngine().name() : null);
+                resp.put("finishedAt", execution.getFinishedAt());
+                resp.put("limitApplied", execution.getLimitApplied());
+                audit.audit("READ", "explore.result.sql", id.toString());
                 return ApiResponses.ok(resp);
             })
             .orElseGet(() -> ApiResponses.error("Result set not found"));
@@ -761,6 +775,13 @@ public class ExploreResource {
         long rowCount
     ) {
         ResultSet resultSet = new ResultSet();
+        String defaultName = null;
+        if (dataset != null && dataset.getName() != null && !dataset.getName().isBlank()) {
+            defaultName = dataset.getName();
+        } else if (sqlText != null && !sqlText.isBlank()) {
+            defaultName = sqlText.replaceAll("\\s+", " ");
+        }
+        resultSet.setName(trimToLength(defaultName != null ? defaultName : "临时结果集", 128));
         resultSet.setStorageUri("memory://result/" + UUID.randomUUID());
         resultSet.setStorageFormat(StorageFormat.PARQUET);
         resultSet.setColumns(String.join(",", headers));
@@ -816,6 +837,17 @@ public class ExploreResource {
     private Map<String, Object> toResultSetMap(ResultSet record, QueryExecution execution, CatalogDataset dataset) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", record.getId().toString());
+        String name = record.getName();
+        if (name == null || name.isBlank()) {
+            if (dataset != null && dataset.getName() != null && !dataset.getName().isBlank()) {
+                name = dataset.getName();
+            } else if (execution != null && execution.getDatasource() != null && !execution.getDatasource().isBlank()) {
+                name = execution.getDatasource();
+            } else {
+                name = "临时结果集";
+            }
+        }
+        map.put("name", name);
         map.put("columns", parseColumns(record.getColumns()));
         map.put("rowCount", record.getRowCount());
         map.put("createdAt", Optional.ofNullable(record.getCreatedDate()).map(Instant::toString).orElse(null));

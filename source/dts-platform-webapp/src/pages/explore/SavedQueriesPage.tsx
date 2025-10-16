@@ -8,16 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/ui/checkbox";
 import { Badge } from "@/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
-import {
-	cleanupExpiredResultSets,
-	deleteResultSet,
-	getDataset,
-	listDatasets,
-	listResultSets,
-	previewResultSet,
-} from "@/api/platformApi";
+import { cleanupExpiredResultSets, deleteResultSet, listDatasets, listResultSets, previewResultSet } from "@/api/platformApi";
 import { useActiveDept } from "@/store/contextStore";
-import { normalizeColumnKey } from "@/utils/columnName";
 type Dataset = {
 	id: string;
 	name: string;
@@ -35,18 +27,6 @@ type ResultSet = {
 };
 
 const SOON_EXPIRE_DAYS = 7;
-
-const pickFirstText = (...values: unknown[]): string | undefined => {
-	for (const value of values) {
-		if (typeof value === "string") {
-			const trimmed = value.trim();
-			if (trimmed.length > 0) {
-				return trimmed;
-			}
-		}
-	}
-	return undefined;
-};
 
 function toUiDataset(input: any): Dataset {
 	return {
@@ -100,11 +80,13 @@ export default function SavedQueriesPage() {
 	const [datasetFilter, setDatasetFilter] = useState<string>("all");
 	const [onlySoonExpire, setOnlySoonExpire] = useState(false);
 	const [previewOpen, setPreviewOpen] = useState(false);
-	const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
-	const [previewHeaderLabels, setPreviewHeaderLabels] = useState<string[]>([]);
-	const [previewRows, setPreviewRows] = useState<any[]>([]);
-	const [previewMasking, setPreviewMasking] = useState<any>(null);
-	const [datasetColumnLabels, setDatasetColumnLabels] = useState<Record<string, Record<string, string>>>({});
+	const [previewSql, setPreviewSql] = useState<string>("");
+	const [previewMeta, setPreviewMeta] = useState<{
+		datasetName?: string;
+		rowCount?: number;
+		engine?: string;
+		finishedAt?: string;
+	}>({});
 
 	const load = async () => {
 		setLoading(true);

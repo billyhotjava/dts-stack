@@ -15,6 +15,9 @@ public class ResultSet extends AbstractAuditingEntity<UUID> implements Serializa
     @Column(name = "id", columnDefinition = "uuid")
     private UUID id;
 
+    @Column(name = "name", length = 128)
+    private String name;
+
     public enum StorageFormat {
         JSON,
         CSV,
@@ -51,6 +54,8 @@ public class ResultSet extends AbstractAuditingEntity<UUID> implements Serializa
     @Override
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public String getStorageUri() { return storageUri; }
     public void setStorageUri(String storageUri) { this.storageUri = storageUri; }
     public StorageFormat getStorageFormat() { return storageFormat; }

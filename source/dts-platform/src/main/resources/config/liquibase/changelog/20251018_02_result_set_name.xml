@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251018-02-result-set-name" author="codex">
+        <addColumn tableName="result_set">
+            <column name="name" type="varchar(128)"/>
+        </addColumn>
+
+        <update tableName="result_set">
+            <column name="name" value="临时结果集"/>
+            <where>name IS NULL</where>
+        </update>
+
+        <rollback>
+            <dropColumn tableName="result_set" columnName="name"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
