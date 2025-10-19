@@ -20,6 +20,8 @@ import { updateLocalTranslations } from "@/utils/translation";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 
+const IS_DEV = typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV);
+
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
 	const [loading, setLoading] = useState(false);
 	const [remember, setRemember] = useState(true);
@@ -89,11 +91,24 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		setLoading(true);
 		try {
 			const challenge = await getPkiChallenge();
+			if (IS_DEV) {
+				console.info("[pki-login] challenge", challenge);
+			}
 			const client = await KoalMiddlewareClient.connect();
 			const certificates = await client.listCertificates();
+			if (IS_DEV) {
+				console.info("[pki-login] certificates", certificates);
+			}
 			if (!certificates.length) {
 				await client.logout();
-				throw new Error("未找到可用的签名证书");
+				setPkiCerts([]);
+				setSelectedCertId("");
+				setPinCode("");
+				setPkiClientState({ client, challenge });
+				setPkiDialogOpen(true);      // 先把弹窗打开
+				toast.error("未找到可用的签名证书，请确认介质已插入", { position: "top-center" });
+				return;                       // 退出后续流程
+
 			}
 			setPkiCerts(certificates);
 			setSelectedCertId(certificates[0]?.id ?? "");
@@ -101,6 +116,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			setPkiClientState({ client, challenge });
 			setPkiDialogOpen(true);
 		} catch (error) {
+			if (IS_DEV) {
+				console.error("[pki-login] failed", error);
+			}
 			toast.error(formatKoalError(error), { position: "top-center" });
 		} finally {
 			setLoading(false);
@@ -153,9 +171,18 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		let loggedOut = false;
 
 		try {
+			if (IS_DEV) {
+				console.info("[pki-login] verifying pin", certificate.id);
+			}
 			await client.verifyPin(certificate, pin);
 			const signed = await client.signData(certificate, challenge.nonce);
+			if (IS_DEV) {
+				console.info("[pki-login] signed nonce", signed);
+			}
 			const certContentB64 = await client.exportCertificate(certificate);
+			if (IS_DEV) {
+				console.info("[pki-login] exported certificate");
+			}
 
 			const resp: any = await pkiLogin({
 				challengeId: challenge.challengeId,

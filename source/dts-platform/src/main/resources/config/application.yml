@@ -180,6 +180,10 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  servlet:
+    multipart:
+      max-file-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
+      max-request-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
   security:
     oauth2:
       client:
@@ -213,6 +217,8 @@ logging:
       console-available: true
 
 server:
+  undertow:
+    max-http-form-post-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
   servlet:
     session:
       cookie:

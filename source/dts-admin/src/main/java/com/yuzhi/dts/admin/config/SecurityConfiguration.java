@@ -4,8 +4,9 @@ import static org.springframework.security.config.Customizer.withDefaults;
 import static org.springframework.security.oauth2.core.oidc.StandardClaimNames.PREFERRED_USERNAME;
 
 import com.yuzhi.dts.admin.security.*;
-import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.security.oauth2.AudienceValidator;
+import com.yuzhi.dts.admin.web.filter.AuditLoggingFilter;
+import com.yuzhi.dts.admin.web.filter.SessionInactivityFilter;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -21,10 +22,9 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
-import com.yuzhi.dts.admin.web.filter.AuditLoggingFilter;
-import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import tech.jhipster.config.JHipsterProperties;
 
 @Configuration
@@ -41,7 +41,12 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, MvcRequestMatcher.Builder mvc, AuditLoggingFilter auditLoggingFilter) throws Exception {
+    public SecurityFilterChain filterChain(
+        HttpSecurity http,
+        MvcRequestMatcher.Builder mvc,
+        AuditLoggingFilter auditLoggingFilter,
+        SessionInactivityFilter sessionInactivityFilter
+    ) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authz ->
@@ -124,6 +129,7 @@ public class SecurityConfiguration {
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter())))
             .oauth2Client(withDefaults());
         http.addFilterAfter(auditLoggingFilter, AnonymousAuthenticationFilter.class);
+        http.addFilterAfter(sessionInactivityFilter, AuditLoggingFilter.class);
         return http.build();
     }
 

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251018-10-add-other-missing-rules" author="gemini-cli">
+        <comment>Add other missing audit rules</comment>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/users/display-names"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询用户显示名称"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/dev/seed"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="开发运维"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="执行开发数据初始化"/>
+            <column name="source_table_template" value="系统"/>
+            <column name="order_value" valueNumeric="100"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+    </changeSet>
+</databaseChangeLog>

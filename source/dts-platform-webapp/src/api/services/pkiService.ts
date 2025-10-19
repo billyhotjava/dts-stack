@@ -14,7 +14,15 @@ export async function getPkiChallenge(): Promise<PkiChallenge> {
     baseURL: GLOBAL_CONFIG.adminApiBaseUrl,
     url: "/keycloak/auth/pki-challenge",
   });
-  return data as PkiChallenge;
+  if (!data || typeof data !== "object") {
+    const snippet = typeof data === "string" ? data.slice(0, 120) : JSON.stringify(data ?? null);
+    throw new Error(`PKI挑战接口返回异常，可能未代理到后台服务。响应片段：${snippet}`);
+  }
+  const challenge = data as Partial<PkiChallenge>;
+  if (!challenge.challengeId || !challenge.nonce) {
+    throw new Error("PKI挑战接口返回缺少 challengeId 或 nonce，请检查后台服务。");
+  }
+  return challenge as PkiChallenge;
 }
 
 export type PkiLoginPayload = {

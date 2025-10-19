@@ -36,6 +36,7 @@ services:
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
       SPRINGDOC_API_DOCS_ENABLED: "true"
       SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+      JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:-} ${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA:-}"
       # Optional PKI login integration (align with app overlay)
       DTS_PKI_ENABLED: "${DTS_PKI_ENABLED:-true}"
       DTS_PKI_MODE: "${DTS_PKI_MODE:-disabled}"

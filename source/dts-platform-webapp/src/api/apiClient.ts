@@ -14,6 +14,22 @@ const axiosInstance = axios.create({
     headers: { "Content-Type": "application/json;charset=utf-8" },
 });
 
+const isSuccessStatus = (status: unknown): boolean => {
+  if (status === ResultStatus.SUCCESS) return true;
+  if (typeof status === "string") {
+    const normalized = status.trim().toUpperCase();
+    if (!normalized) return false;
+    if (normalized === "SUCCESS" || normalized === "OK") return true;
+    if (!Number.isNaN(Number(normalized))) {
+      return Number(normalized) === ResultStatus.SUCCESS;
+    }
+  }
+  if (typeof status === "number") {
+    return status === ResultStatus.SUCCESS;
+  }
+  return false;
+};
+
 const TEST_SESSION_ENABLED =
   String(import.meta.env.VITE_TEST_LONG_SESSION ?? import.meta.env.VITE_TEST_SESSION ?? "false").toLowerCase() === "true";
 const TEST_SESSION_REFRESH_MS = Number(import.meta.env.VITE_TEST_SESSION_PING_MS ?? 5 * 60 * 1000);
@@ -171,7 +187,7 @@ axiosInstance.interceptors.response.use(
 			if (res.data && typeof res.data === "object" && "status" in res.data) {
 				// 对于标准响应格式，返回data字段
 				const { status, data, message } = res.data;
-				if (status === ResultStatus.SUCCESS) {
+				if (isSuccessStatus(status)) {
 					return data;
 				}
 				throw new Error(message || t("sys.api.apiRequestFailed"));
@@ -183,7 +199,7 @@ axiosInstance.interceptors.response.use(
 
 		// 处理标准API响应格式
 		const { status, data, message } = res.data;
-		if (status === ResultStatus.SUCCESS) {
+		if (isSuccessStatus(status)) {
 			return data;
 		}
 		throw new Error(message || t("sys.api.apiRequestFailed"));

@@ -93,6 +93,14 @@ public class PkiVerificationService {
     private boolean verifyWithVendor(byte[] originBytes, String originText, String p7SignatureBase64, String certBase64Optional)
         throws Exception {
             String jarPath = props.getVendorJarPath();
+            String gatewayHost = props.getGatewayHost();
+            int gatewayPort = props.getGatewayPort();
+            if (gatewayHost == null || gatewayHost.isBlank()) {
+                throw new IllegalStateException("未配置厂商网关地址 (dts.pki.gateway-host)");
+            }
+            if (gatewayPort <= 0) {
+                throw new IllegalStateException("未配置厂商网关端口 (dts.pki.gateway-port)");
+            }
             Path path = Path.of(jarPath);
             if (!Files.exists(path)) {
                 throw new IllegalStateException("vendor-jar-path 不存在: " + jarPath);
@@ -133,14 +141,10 @@ public class PkiVerificationService {
                 // Build THostInfoSt
                 Class<?> hostClz = Class.forName("com.koal.svs.client.st.THostInfoSt", true, loader);
                 Object host = hostClz.getConstructor().newInstance();
-                if (props.getGatewayHost() != null) {
-                    Method setIp = hostClz.getMethod("setSvrIP", String.class);
-                    setIp.invoke(host, props.getGatewayHost());
-                }
-                if (props.getGatewayPort() > 0) {
-                    Method setPort = hostClz.getMethod("setPort", int.class);
-                    setPort.invoke(host, props.getGatewayPort());
-                }
+                Method setIp = hostClz.getMethod("setSvrIP", String.class);
+                setIp.invoke(host, gatewayHost);
+                Method setPort = hostClz.getMethod("setPort", int.class);
+                setPort.invoke(host, gatewayPort);
 
                 // Try to initialize helper like demo: initialize(gwIP, gwPort, maxWaitMs, bCipher, socketTimeout)
                 try {
@@ -148,10 +152,9 @@ public class PkiVerificationService {
                     int maxWait = Math.max(1000, props.getApiTimeoutMs());
                     int socketTimeout = Math.max(500, props.getApiTimeoutMs());
                     boolean bCipher = false;
-                    String ip = props.getGatewayHost();
-                    int port = props.getGatewayPort();
-                    if (ip != null && port > 0) {
-                        init.invoke(helper, ip, port, maxWait, bCipher, socketTimeout);
+                    Object initResult = init.invoke(helper, gatewayHost, gatewayPort, maxWait, bCipher, socketTimeout);
+                    if (!(initResult instanceof Boolean bool) || !bool) {
+                        throw new IllegalStateException("厂商客户端初始化失败，请检查网关服务连通性");
                     }
                 } catch (NoSuchMethodException ignore) {
                     // Some vendor builds may not expose initialize; safe to skip.

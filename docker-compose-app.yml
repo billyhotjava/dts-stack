@@ -33,7 +33,7 @@ services:
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
       SPRING_CLOUD_CONFIG_ENABLED: "false"
       EUREKA_CLIENT_ENABLED: "false"
-      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12 -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
+      JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12 -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD} ${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA:-}"
       # Optional PKI login integration (see docs/pki-auth.md)
       DTS_PKI_ENABLED: "${DTS_PKI_ENABLED:-true}"
       DTS_PKI_MODE: "${DTS_PKI_MODE:-disabled}"

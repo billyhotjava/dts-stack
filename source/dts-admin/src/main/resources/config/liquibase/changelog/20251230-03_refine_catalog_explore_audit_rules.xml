@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251230-03-refine-catalog-explore-audit-rules" author="codex">
+        <comment>Refine catalog dataset and explore result audit mappings with consistent templates</comment>
+        <sql>
+WITH updated_catalog_create AS (
+    UPDATE audit_operation_mapping
+       SET module_name = '数据资产',
+           action_type = '新增',
+           description_template = '新建数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）',
+           source_table_template = '数据资产',
+           param_extractors = '{"datasetLabel":"details.目标引用","datasetId":"event.resourceId"}',
+           event_class = COALESCE(event_class, 'AuditEvent'),
+           source_system = COALESCE(source_system, 'platform'),
+           enabled = COALESCE(enabled, TRUE)
+     WHERE url_pattern = '/api/catalog/datasets'
+       AND http_method = 'POST'
+ RETURNING id
+)
+INSERT INTO audit_operation_mapping (
+    url_pattern, http_method, module_name, action_type,
+    description_template, source_table_template, param_extractors,
+    event_class, order_value, enabled, source_system
+)
+SELECT '/api/catalog/datasets','POST','数据资产','新增',
+       '新建数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）','数据资产',
+       '{"datasetLabel":"details.目标引用","datasetId":"event.resourceId"}',
+       'AuditEvent',30,TRUE,'platform'
+WHERE NOT EXISTS (
+    SELECT 1 FROM updated_catalog_create
+)
+  AND NOT EXISTS (
+    SELECT 1 FROM audit_operation_mapping
+     WHERE url_pattern = '/api/catalog/datasets'
+       AND http_method = 'POST'
+);
+
+WITH updated_catalog_update AS (
+    UPDATE audit_operation_mapping
+       SET module_name = '数据资产',
+           action_type = '修改',
+           description_template = '修改数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）',
+           source_table_template = '数据资产',
+           param_extractors = '{"datasetLabel":"details.目标引用","datasetId":"path.id"}',
+           event_class = COALESCE(event_class, 'AuditEvent'),
+           source_system = COALESCE(source_system, 'platform'),
+           enabled = COALESCE(enabled, TRUE)
+     WHERE url_pattern = '/api/catalog/datasets/{id}'
+       AND http_method = 'PUT'
+ RETURNING id
+)
+INSERT INTO audit_operation_mapping (
+    url_pattern, http_method, module_name, action_type,
+    description_template, source_table_template, param_extractors,
+    event_class, order_value, enabled, source_system
+)
+SELECT '/api/catalog/datasets/{id}','PUT','数据资产','修改',
+       '修改数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）','数据资产',
+       '{"datasetLabel":"details.目标引用","datasetId":"path.id"}',
+       'AuditEvent',29,TRUE,'platform'
+WHERE NOT EXISTS (
+    SELECT 1 FROM updated_catalog_update
+)
+  AND NOT EXISTS (
+    SELECT 1 FROM audit_operation_mapping
+     WHERE url_pattern = '/api/catalog/datasets/{id}'
+       AND http_method = 'PUT'
+);
+
+WITH updated_catalog_delete AS (
+    UPDATE audit_operation_mapping
+       SET module_name = '数据资产',
+           action_type = '删除',
+           description_template = '删除数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）',
+           source_table_template = '数据资产',
+           param_extractors = '{"datasetLabel":"details.目标引用","datasetId":"path.id"}',
+           event_class = COALESCE(event_class, 'AuditEvent'),
+           source_system = COALESCE(source_system, 'platform'),
+           enabled = COALESCE(enabled, TRUE)
+     WHERE url_pattern = '/api/catalog/datasets/{id}'
+       AND http_method = 'DELETE'
+ RETURNING id
+)
+INSERT INTO audit_operation_mapping (
+    url_pattern, http_method, module_name, action_type,
+    description_template, source_table_template, param_extractors,
+    event_class, order_value, enabled, source_system
+)
+SELECT '/api/catalog/datasets/{id}','DELETE','数据资产','删除',
+       '删除数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）','数据资产',
+       '{"datasetLabel":"details.目标引用","datasetId":"path.id"}',
+       'AuditEvent',29,TRUE,'platform'
+WHERE NOT EXISTS (
+    SELECT 1 FROM updated_catalog_delete
+)
+  AND NOT EXISTS (
+    SELECT 1 FROM audit_operation_mapping
+     WHERE url_pattern = '/api/catalog/datasets/{id}'
+       AND http_method = 'DELETE'
+);
+
+WITH updated_explore_save AS (
+    UPDATE audit_operation_mapping
+       SET module_name = '数据探索',
+           action_type = '修改',
+           description_template = '保存数据探索结果集：执行ID {executionId|未知}',
+           source_table_template = '数据查询',
+           param_extractors = '{"executionId":"path.executionId"}',
+           event_class = COALESCE(event_class, 'AuditEvent'),
+           source_system = COALESCE(source_system, 'platform'),
+           enabled = COALESCE(enabled, TRUE)
+     WHERE url_pattern = '/api/explore/save-result/{executionId}'
+       AND http_method = 'POST'
+ RETURNING id
+)
+INSERT INTO audit_operation_mapping (
+    url_pattern, http_method, module_name, action_type,
+    description_template, source_table_template, param_extractors,
+    event_class, order_value, enabled, source_system
+)
+SELECT '/api/explore/save-result/{executionId}','POST','数据探索','修改',
+       '保存数据探索结果集：执行ID {executionId|未知}','数据查询',
+       '{"executionId":"path.executionId"}',
+       'AuditEvent',29,TRUE,'platform'
+WHERE NOT EXISTS (
+    SELECT 1 FROM updated_explore_save
+)
+  AND NOT EXISTS (
+    SELECT 1 FROM audit_operation_mapping
+     WHERE url_pattern = '/api/explore/save-result/{executionId}'
+       AND http_method = 'POST'
+);
+
+WITH updated_explore_preview AS (
+    UPDATE audit_operation_mapping
+       SET module_name = '数据探索',
+           action_type = '查询',
+           description_template = '预览数据探索结果集：{resultSetId|未知}',
+           source_table_template = '数据查询',
+           param_extractors = '{"resultSetId":"path.id"}',
+           event_class = COALESCE(event_class, 'AuditEvent'),
+           source_system = COALESCE(source_system, 'platform'),
+           enabled = COALESCE(enabled, TRUE)
+     WHERE url_pattern = '/api/explore/result-preview/{id}'
+       AND http_method = 'GET'
+ RETURNING id
+)
+INSERT INTO audit_operation_mapping (
+    url_pattern, http_method, module_name, action_type,
+    description_template, source_table_template, param_extractors,
+    event_class, order_value, enabled, source_system
+)
+SELECT '/api/explore/result-preview/{id}','GET','数据探索','查询',
+       '预览数据探索结果集：{resultSetId|未知}','数据查询',
+       '{"resultSetId":"path.id"}',
+       'AuditEvent',29,TRUE,'platform'
+WHERE NOT EXISTS (
+    SELECT 1 FROM updated_explore_preview
+)
+  AND NOT EXISTS (
+    SELECT 1 FROM audit_operation_mapping
+     WHERE url_pattern = '/api/explore/result-preview/{id}'
+       AND http_method = 'GET'
+);
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

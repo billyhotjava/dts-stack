@@ -27,6 +27,8 @@ export type GlobalConfig = {
     allowedLoginRoles: string[];
     /** Base URL for Admin APIs (used for Keycloak localization, etc.) */
     adminApiBaseUrl: string;
+    /** Local Koal middleware endpoints, used for PKI login */
+    koalPkiEndpoints: string[];
 };
 
 /**
@@ -124,6 +126,15 @@ const resolveAllowedLoginRoles = (): string[] => {
         .filter(Boolean);
 };
 
+const resolveKoalPkiEndpoints = (): string[] => {
+    const raw = import.meta.env.VITE_KOAL_PKI_ENDPOINTS;
+    if (typeof raw !== "string") return [];
+    return raw
+        .split(",")
+        .map((endpoint) => endpoint.trim())
+        .filter(Boolean);
+};
+
 
 export const GLOBAL_CONFIG: GlobalConfig = {
 	appName: import.meta.env.VITE_APP_NAME || "BI数智平台",
@@ -141,4 +152,5 @@ export const GLOBAL_CONFIG: GlobalConfig = {
     enableSqlWorkbench: String(import.meta.env.VITE_ENABLE_SQL_WORKBENCH || "false").toLowerCase() === "true",
     allowedLoginRoles: resolveAllowedLoginRoles(),
     adminApiBaseUrl: resolveAdminApiBaseUrl(),
+    koalPkiEndpoints: resolveKoalPkiEndpoints(),
 };

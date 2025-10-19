@@ -273,6 +273,9 @@ dts:
         visibility: ${DTS_REQUIRE_APPROVAL_PORTAL_MENU_VISIBILITY:true}
         # 结构/展示类变更（name/icon/sortOrder/path/component/parent/deleted）是否需要审批（默认开启）
         structure: ${DTS_REQUIRE_APPROVAL_PORTAL_MENU_STRUCTURE:true}
+  session:
+    # Maximum idle time (in minutes) for interactive administrator sessions before forcing re-authentication
+    max-idle-minutes: ${DTS_SESSION_MAX_IDLE_MINUTES:10}
 
 # ===================================================================
 # JHipster specific properties

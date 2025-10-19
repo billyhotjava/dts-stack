@@ -15,23 +15,89 @@ const KOAL_SCRIPT_PATHS = [
 ] as const;
 
 const DEFAULT_ENDPOINTS = ["https://127.0.0.1:16080", "http://127.0.0.1:18080"] as const;
+const IS_DEV = typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV);
 
 const RESULT_ERROR_MESSAGES: Record<number, string> = {
+	0x00000000: "调用成功",
+	0x00000001: "session 不存在，请先调用 login 接口",
+	0x00000003: "session 已注册 Notify，请先调用 logout 释放会话",
+	0x00000004: "消息类型错误",
+	0x00000005: "消息 JsonBody 无效或缺少参数，请核对接口文档",
+	0x00000006: "app 已经登录，建议业务完成后调用 logout 接口",
+	0x00000007: "超时：调用耗时超过 30 秒，可能程序阻塞或存在人工交互",
+	0x00000008: "登录参数未授权或未使用分配的登录参数",
+	0x00000009: "可信驱动已设置",
+	0x0000000a: "可信驱动未设置",
+	0x0000000b: "获取登录临时参数失败",
+	0x0000000c: "调用失败，请结合接口返回详情排查",
+	0x0000000d: "内存不足，请检查终端内存",
+	0x0000000e: "OpenSSL 接口调用失败，请结合接口返回详情排查",
 	0x0a000000: "未知错误",
-	0x0a000001: "中间件调用失败",
-	0x0a000002: "中间件内部异常",
-	0x0a000003: "当前服务暂不支持",
-	0x0a000004: "中间件文件操作失败",
+	0x0a000001: "失败：驱动接口调用失败，通常为参数异常",
+	0x0a000002: "异常错误：驱动接口调用失败，通常为参数异常",
+	0x0a000003: "不支持的服务：请核实调用的接口是否正确",
+	0x0a000004: "文件操作错误",
 	0x0a000005: "无效的句柄",
-	0x0a000006: "请求参数无效",
-	0x0a000007: "读取数据失败",
-	0x0a000024: "PIN码错误",
-	0x0a000025: "PIN码已锁定，请联系管理员解锁",
-	0x0a000026: "PIN码无效",
-	0x0a000027: "PIN码长度不正确",
-	0x0a000028: "用户已登录",
-	0x0a00002c: "应用已存在",
-	0x0a00002e: "指定的应用不存在",
+	0x0a000006: "无效的参数，请对照接口文档检查",
+	0x0a000007: "读文件错误",
+	0x0a000008: "写文件错误",
+	0x0a000009: "名称长度错误",
+	0x0a00000a: "密钥用途错误，请核对传入参数",
+	0x0a00000b: "模的长度错误",
+	0x0a00000c: "未初始化",
+	0x0a00000d: "对象错误",
+	0x0a00000e: "内存错误",
+	0x0a00000f: "超时：驱动操作阻塞，请尝试插拔 key 后重试",
+	0x0a000010: "输入数据长度错误",
+	0x0a000011: "输入数据错误",
+	0x0a000012: "生成随机数错误",
+	0x0a000013: "HASH 对象错误",
+	0x0a000014: "HASH 运算错误",
+	0x0a000015: "产生 RSA 密钥错误",
+	0x0a000016: "RSA 密钥模长错误",
+	0x0a000017: "CSP 服务导入公钥错误",
+	0x0a000018: "RSA 加密错误",
+	0x0a000019: "RSA 解密错误",
+	0x0a00001a: "HASH 值不相等，请检查输入数据",
+	0x0a00001b: "未发现密钥：容器中不存在对应密钥，请更换介质或重签发证书",
+	0x0a00001c: "未发现证书：请在驱动工具中确认证书是否存在",
+	0x0a00001d: "对象未导出",
+	0x0a00001e: "解密时补丁处理错误",
+	0x0a00001f: "MAC 长度错误",
+	0x0a000020: "缓冲区不足",
+	0x0a000021: "密钥类型错误",
+	0x0a000022: "无事件错误",
+	0x0a000023: "设备已移除，请检查 USB 连接后重试",
+	0x0a000024: "PIN 错误：输入的 PIN 与预置值不匹配",
+	0x0a000025: "PIN 锁死：错误次数过多，请使用驱动工具或调用 unlockPIN 解锁",
+	0x0a000026: "PIN 无效，请确认正确的 PIN 再试",
+	0x0a000027: "PIN 长度错误，请设置至少 6 位的复杂 PIN",
+	0x0a000028: "用户已经登录（已验证 PIN）",
+	0x0a000029: "未初始化用户口令",
+	0x0a00002a: "PIN 类型错误，请对照接口文档重试",
+	0x0a00002b: "应用名称无效，请检查输入",
+	0x0a00002c: "应用已经存在，请更换或删除现有应用",
+	0x0a00002d: "用户没有登录，请先调用 verifyPin 校验 PIN",
+	0x0a00002e: "应用不存在，请新建或更换已有应用名",
+	0x0a00002f: "文件已经存在，请更换或删除现有文件",
+	0x0a000030: "存储空间不足，请清理介质后重试",
+	0x0a000031: "文件不存在，请新建或更换已有文件名",
+	0x0a000032: "已达到最大可管理容器数，请清理介质后重试",
+	0x0b000035: "容器不存在，请新建或更换已有容器名",
+	0x0b000036: "容器已存在，请更换或删除现有容器",
+	0x0d000000: "源数据过长，请核对输入长度",
+	0x0d000001: "设备不存在，请确认驱动是否安装或重新插拔 key",
+	0x0d000002: "应用打开失败，可能是程序异常，请收集日志反馈",
+	0x0d000003: "容器打开失败，可能是程序异常，请收集日志反馈",
+	0x0d000004: "容器中无密钥对，请检查介质或重新发证",
+	0x0d000005: "加密密钥对结构转换失败，请核对密钥数据",
+	0x0d000006: "字段加密失败",
+	0x0d000007: "字段解密失败",
+	0x0d000008: "写缓存失败",
+	0x0d000009: "读缓存失败",
+	0x0d00000a: "应用名编码非 UTF-8，请使用 UTF-8 编码",
+	0x0d00000b: "容器名编码非 UTF-8，请使用 UTF-8 编码",
+	0x0d00000c: "秘钥为空",
 };
 
 let koalSdkPromise: Promise<void> | null = null;
@@ -66,7 +132,14 @@ async function ensureKoalSdk() {
 	if (!koalSdkPromise) {
 		koalSdkPromise = (async () => {
 			for (const path of KOAL_SCRIPT_PATHS) {
-				await loadScript(path);
+				try {
+					await loadScript(path);
+				} catch (error) {
+					if (IS_DEV) {
+						console.error("[koal] 脚本加载失败", path, error);
+					}
+					throw error;
+				}
 			}
 		})();
 	}
@@ -85,6 +158,7 @@ declare global {
 			encode(value: string): string;
 			decode(value: string): string;
 		};
+		__koalUseMockClient?: () => KoalMiddlewareClient | null;
 	}
 }
 
@@ -111,6 +185,34 @@ export type KoalSignedPayload = {
 	dupCertB64?: string;
 };
 
+export type KoalConnectOptions = {
+	endpoints?: readonly string[];
+	includeDefaults?: boolean;
+};
+
+function collectEndpoints(options?: KoalConnectOptions): string[] {
+	const groups: ReadonlyArray<readonly string[] | undefined> = [
+		options?.endpoints,
+		GLOBAL_CONFIG.koalPkiEndpoints,
+		options?.includeDefaults === false ? [] : DEFAULT_ENDPOINTS,
+	];
+
+	const seen = new Set<string>();
+	const result: string[] = [];
+
+	for (const group of groups) {
+		if (!group) continue;
+		for (const raw of group) {
+			const normalized = typeof raw === "string" ? raw.trim() : "";
+			if (!normalized || seen.has(normalized)) continue;
+			seen.add(normalized);
+			result.push(normalized);
+		}
+	}
+
+	return result;
+}
+
 export class KoalMiddlewareClient {
 	private readonly baseUrl: string;
 	private readonly transport: any;
@@ -129,13 +231,28 @@ export class KoalMiddlewareClient {
 		this.signClient = this.multiplexer.createClient("signxPlugin", window.signXServiceClient, this.transport);
 	}
 
-	static async connect(): Promise<KoalMiddlewareClient> {
+	static async connect(options?: KoalConnectOptions): Promise<KoalMiddlewareClient> {
+		if (IS_DEV && typeof window !== "undefined") {
+			const mockFactory = window.__koalUseMockClient;
+			if (typeof mockFactory === "function") {
+				const mockClient = mockFactory();
+				if (mockClient) {
+					console.info("[koal] 使用模拟客户端");
+					return mockClient;
+				}
+			}
+		}
+
 		await ensureKoalSdk();
 
-		const endpoints = [
-			...(GLOBAL_CONFIG?.koalPkiEndpoints ?? []),
-			...DEFAULT_ENDPOINTS,
-		];
+		const endpoints = collectEndpoints(options);
+		if (IS_DEV) {
+			console.info("[koal] attempting endpoints", endpoints);
+		}
+
+		if (!endpoints.length) {
+			throw new Error("未配置可用的 PKI 中间件地址，请检查环境变量 VITE_KOAL_PKI_ENDPOINTS");
+		}
 
 		const errors: Error[] = [];
 
@@ -143,10 +260,18 @@ export class KoalMiddlewareClient {
 			try {
 				const client = new KoalMiddlewareClient(url);
 				await client.login();
+				if (IS_DEV) {
+					console.info(`[koal] connected via ${url}`);
+				}
 				return client;
 			} catch (error) {
+				if (IS_DEV) {
+					console.warn(`[koal] ${url} 登录失败`, error);
+				}
 				if (error instanceof Error) {
-					errors.push(error);
+					errors.push(new Error(`${url}：${error.message}`));
+				} else {
+					errors.push(new Error(`${url}：未知错误`));
 				}
 			}
 		}
@@ -235,11 +360,24 @@ export class KoalMiddlewareClient {
 		}
 		const payload = parseJson(response?.jsonBody);
 		if (!payload || !Array.isArray(payload.certs)) {
+			if (IS_DEV) {
+				console.info("[koal] 未返回证书列表", payload);
+			}
 			return [];
 		}
-		return payload.certs
+		if (IS_DEV) {
+			console.info("[koal] 原始证书列表", payload.certs);
+		}
+
+		const filtered = payload.certs
 			.filter((item: any) => filterCertificate(item))
 			.map((item: any) => normalizeCertificate(item));
+
+		if (IS_DEV) {
+			console.info("[koal] 过滤后证书", filtered);
+		}
+
+		return filtered;
 	}
 
 	async verifyPin(cert: KoalCertificate, pin: string): Promise<void> {
@@ -314,19 +452,28 @@ export class KoalMiddlewareClient {
 
 function filterCertificate(item: Record<string, any>): boolean {
 	const manufacturer = String(item?.manufacturer ?? "").toUpperCase();
-	if (manufacturer.includes("KOAL") || manufacturer.startsWith("MICROSOFT")) {
+	if (manufacturer.startsWith("MICROSOFT")) {
+		if (IS_DEV) {
+			console.info("[koal] 忽略证书：MICROSOFT 内建证书", item);
+		}
 		return false;
 	}
 
 	const keyUsageRaw = item?.keyUsage ?? item?.KeyUsage;
 	const keyUsageNumber = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? 0);
 	if (!Number.isNaN(keyUsageNumber) && keyUsageNumber !== 1 && keyUsageNumber !== 2) {
+		if (IS_DEV) {
+			console.info("[koal] 忽略证书：不支持的 keyUsage", keyUsageRaw, item);
+		}
 		return false;
 	}
 
 	const signFlagRaw = item?.signFlag ?? item?.SignFlag;
 	const signFlag = typeof signFlagRaw === "string" ? Number(signFlagRaw) : Number(signFlagRaw ?? 1);
 	if (!Number.isNaN(signFlag) && signFlag !== 1) {
+		if (IS_DEV) {
+			console.info("[koal] 忽略证书：signFlag != 1", signFlagRaw, item);
+		}
 		return false;
 	}
 
@@ -406,3 +553,6 @@ export function formatKoalError(error: unknown): string {
 
 export const KoalErrorMessages = RESULT_ERROR_MESSAGES;
 
+export async function preloadKoalSdk(): Promise<void> {
+	await ensureKoalSdk();
+}

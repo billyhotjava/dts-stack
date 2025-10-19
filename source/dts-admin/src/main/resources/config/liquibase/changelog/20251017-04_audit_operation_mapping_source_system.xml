@@ -380,7 +380,7 @@
             )
             UPDATE audit_operation_mapping a
                SET description_template = description_template || '（'
-                   || COALESCE(NULLIF(a.source_table_template, ''), NULLIF(a.resource_type, ''), '目标')
+                   || COALESCE(NULLIF(a.source_table_template, ''), '目标')
                    || 'ID：{resourceId|未知}）'
              WHERE a.id IN (SELECT id FROM updated)
                AND a.description_template NOT LIKE '%ID：{%';
@@ -456,6 +456,210 @@
                  WHERE url_pattern = '/api/modeling/standards/{id}/attachments'
                    AND http_method = 'POST'
             );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251019-04-refine-modeling-standard-dictionary" author="codex">
+        <comment>完善数据标准及附件相关审计描述，并补充附件下载/删除规则</comment>
+        <sql>
+            UPDATE audit_operation_mapping
+               SET module_name = '数据资产',
+                   action_type = '查询',
+                   description_template = '预览数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）',
+                   source_table_template = '数据资产',
+                   param_extractors = '{"datasetLabel":"details.目标引用","datasetId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/datasets/{id}/preview'
+               AND http_method = 'GET';
+
+            UPDATE audit_operation_mapping
+               SET module_name = '数据标准',
+                   action_type = '查询',
+                   description_template = '查看数据标准：{standardLabel|未知}（ID：{standardId|未知}）',
+                   source_table_template = '数据标准',
+                   param_extractors = '{"standardLabel":"details.目标引用","standardId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/modeling/standards/{id}'
+               AND http_method = 'GET';
+
+            UPDATE audit_operation_mapping
+               SET module_name = '数据标准',
+                   action_type = '修改',
+                   description_template = '修改数据标准：{standardLabel|未知}（ID：{standardId|未知}）',
+                   source_table_template = '数据标准',
+                   param_extractors = '{"standardLabel":"details.目标引用","standardId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/modeling/standards/{id}'
+               AND http_method = 'PUT';
+
+            UPDATE audit_operation_mapping
+               SET module_name = '数据标准',
+                   action_type = '删除',
+                   description_template = '删除数据标准：{standardLabel|未知}（ID：{standardId|未知}）',
+                   source_table_template = '数据标准',
+                   param_extractors = '{"standardLabel":"details.目标引用","standardId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/modeling/standards/{id}'
+               AND http_method = 'DELETE';
+
+            UPDATE audit_operation_mapping
+               SET module_name = '数据标准',
+                   action_type = '新增',
+                   description_template = '新建数据标准：{standardLabel|未知}（ID：{standardId|未知}）',
+                   source_table_template = '数据标准',
+                   param_extractors = '{"standardLabel":"details.目标引用","standardId":"event.resourceId"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/modeling/standards'
+               AND http_method = 'POST';
+
+            UPDATE audit_operation_mapping
+               SET module_name = '数据建模',
+                   action_type = '查询',
+                   description_template = '查看建模标准附件：{standardLabel|未知}（ID：{standardId|未知}）',
+                   source_table_template = '建模标准附件',
+                   param_extractors = '{"standardLabel":"details.目标引用","standardId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/modeling/standards/{id}/attachments'
+               AND http_method = 'GET';
+
+            UPDATE audit_operation_mapping
+               SET module_name = '数据建模',
+                   action_type = '新增',
+                   description_template = '上传建模标准附件：{standardLabel|未知}（ID：{standardId|未知}）',
+                   source_table_template = '建模标准附件',
+                   param_extractors = '{"standardLabel":"details.目标引用","standardId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/modeling/standards/{id}/attachments'
+               AND http_method = 'POST';
+
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, param_extractors,
+                event_class, order_value, enabled, source_system
+            )
+            SELECT '/api/modeling/standards/{id}/attachments/{attachmentId}/download','GET','数据建模','下载',
+                   '下载建模标准附件：{attachmentName|未知}（标准ID：{standardId|未知}）','建模标准附件',
+                   '{"standardId":"path.id","attachmentId":"path.attachmentId","attachmentName":"details.附件名称"}',
+                   'AuditEvent',18,TRUE,'platform'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/modeling/standards/{id}/attachments/{attachmentId}/download'
+                   AND http_method = 'GET'
+            );
+
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, param_extractors,
+                event_class, order_value, enabled, source_system
+            )
+            SELECT '/api/modeling/standards/{id}/attachments/{attachmentId}','DELETE','数据建模','删除',
+                   '删除建模标准附件：{attachmentName|未知}（标准ID：{standardId|未知}）','建模标准附件',
+                   '{"standardId":"path.id","attachmentId":"path.attachmentId","attachmentName":"details.附件名称"}',
+                   'AuditEvent',18,TRUE,'platform'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/modeling/standards/{id}/attachments/{attachmentId}'
+                   AND http_method = 'DELETE'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251019-05-refine-governance-quality-dictionary" author="codex">
+        <comment>完善治理质量与合规接口的审计字典描述，补齐ID与名称</comment>
+        <sql>
+            UPDATE audit_operation_mapping
+               SET description_template = '切换质量规则状态：{ruleLabel|未知}（ID：{ruleId|未知}）',
+                   source_table_template = '质量规则',
+                   param_extractors = '{"ruleLabel":"details.目标引用","ruleId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/governance/quality/rules/{id}/toggle'
+               AND http_method = 'POST';
+
+            UPDATE audit_operation_mapping
+               SET description_template = '修改质量规则：{ruleLabel|未知}（ID：{ruleId|未知}）',
+                   source_table_template = '质量规则',
+                   param_extractors = '{"ruleLabel":"details.目标引用","ruleId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/governance/quality/rules/{id}'
+               AND http_method = 'PUT';
+
+            UPDATE audit_operation_mapping
+               SET description_template = '删除质量规则：{ruleLabel|未知}（ID：{ruleId|未知}）',
+                   source_table_template = '质量规则',
+                   param_extractors = '{"ruleLabel":"details.目标引用","ruleId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/governance/quality/rules/{id}'
+               AND http_method = 'DELETE';
+
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, param_extractors,
+                event_class, order_value, enabled, source_system
+            )
+            SELECT '/api/governance/quality/rules/{id}','GET','治理管理','查询',
+                   '查看质量规则详情：{ruleLabel|未知}（ID：{ruleId|未知}）','质量规则',
+                   '{"ruleLabel":"details.目标引用","ruleId":"path.id"}',
+                   'AuditEvent',70,TRUE,'platform'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/governance/quality/rules/{id}'
+                   AND http_method = 'GET'
+            );
+
+            UPDATE audit_operation_mapping
+               SET description_template = '删除合规批次：{batchLabel|未知}（ID：{batchId|未知}）',
+                   source_table_template = '合规批次',
+                   param_extractors = '{"batchLabel":"details.目标引用","batchId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/governance/compliance/batches/{id}'
+               AND http_method = 'DELETE';
+
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, param_extractors,
+                event_class, order_value, enabled, source_system
+            )
+            SELECT '/api/governance/compliance/batches/{id}','GET','治理管理','查询',
+                   '查看合规批次：{batchLabel|未知}（ID：{batchId|未知}）','合规批次',
+                   '{"batchLabel":"details.目标引用","batchId":"path.id"}',
+                   'AuditEvent',70,TRUE,'platform'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/governance/compliance/batches/{id}'
+                   AND http_method = 'GET'
+            );
+
+            UPDATE audit_operation_mapping
+               SET description_template = '查看质量任务运行：{runLabel|未知}（ID：{runId|未知}）',
+                   source_table_template = '质量任务运行',
+                   param_extractors = '{"runLabel":"details.目标引用","runId":"path.id"}',
+                   event_class = COALESCE(event_class, 'AuditEvent'),
+                   source_system = COALESCE(source_system, 'platform'),
+                   enabled = COALESCE(enabled, TRUE)
+             WHERE url_pattern = '/api/governance/quality/runs/{id}'
+               AND http_method = 'GET';
         </sql>
     </changeSet>
 

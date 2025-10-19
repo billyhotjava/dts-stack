@@ -39,6 +39,8 @@
     <include file="config/liquibase/changelog/20251220-05_audit_operation_mapping_patch2.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251230-01_drop_user_data_levels.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251230-02_remove_portal_viewer_roles.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251230-03_refine_catalog_explore_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260105-01_audit_operation_mapping_platform_catalog.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-01_audit_operation_mapping_restore.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-02_organization_node_restore.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-03_remove_visualization_foundation_menus.xml" relativeToChangelogFile="false"/>

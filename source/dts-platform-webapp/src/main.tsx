@@ -9,6 +9,10 @@ import { GLOBAL_CONFIG } from "./global-config";
 import ErrorBoundary from "./routes/components/error-boundary";
 import { makeRoutesSection } from "./routes/sections";
 
+if (import.meta.env.DEV) {
+	await import("./debug/register-koal-devtools");
+}
+
 await registerLocalIcons();
 
 // MSW mock removed

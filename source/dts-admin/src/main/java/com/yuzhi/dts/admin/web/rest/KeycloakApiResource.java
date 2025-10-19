@@ -14,6 +14,9 @@ import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import com.yuzhi.dts.admin.security.SecurityUtils;
+import com.yuzhi.dts.admin.security.session.SessionControlService;
+import com.yuzhi.dts.admin.security.session.SessionKeyGenerator;
+import com.yuzhi.dts.admin.web.rest.dto.PkiChallengeView;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.common.audit.AuditStage;
 import java.nio.charset.StandardCharsets;
@@ -55,6 +58,7 @@ public class KeycloakApiResource {
     private final KeycloakAdminClient keycloakAdminClient;
     private final AdminUserService adminUserService;
     private final AdminRoleAssignmentRepository roleAssignRepo;
+    private final SessionControlService sessionControlService;
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class);
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -74,7 +78,8 @@ public class KeycloakApiResource {
         KeycloakAuthService keycloakAuthService,
         KeycloakAdminClient keycloakAdminClient,
         AdminUserService adminUserService,
-        AdminRoleAssignmentRepository roleAssignRepo
+        AdminRoleAssignmentRepository roleAssignRepo,
+        SessionControlService sessionControlService
     ) {
         this.stores = stores;
         this.auditService = auditService;
@@ -82,6 +87,7 @@ public class KeycloakApiResource {
         this.keycloakAdminClient = keycloakAdminClient;
         this.adminUserService = adminUserService;
         this.roleAssignRepo = roleAssignRepo;
+        this.sessionControlService = sessionControlService;
     }
 
     // ---- Users ----
@@ -675,6 +681,25 @@ public class KeycloakApiResource {
 
     private String currentUser() {
         return SecurityUtils.getCurrentUserLogin().orElse("unknown");
+    }
+
+    private void registerSession(String username, KeycloakAuthService.TokenResponse tokens) {
+        if (tokens == null) {
+            return;
+        }
+        String sessionState = tokens.sessionState();
+        String sessionKey = SessionKeyGenerator.fromToken(sessionState, tokens.accessToken());
+        if (sessionKey == null) {
+            return;
+        }
+        String actor = sanitizeActor(username);
+        if (!StringUtils.hasText(actor)) {
+            actor = username;
+        }
+        if (!StringUtils.hasText(actor)) {
+            actor = currentUser();
+        }
+        sessionControlService.register(actor, sessionState, sessionKey, Instant.now());
     }
 
     private String resolveActorForLogout(Map<String, String> body, String refreshToken) {
@@ -1395,6 +1420,8 @@ public class KeycloakApiResource {
             if (loginResult.tokens().sessionState() != null) data.put("sessionState", loginResult.tokens().sessionState());
             if (loginResult.tokens().expiresIn() != null) data.put("expiresIn", loginResult.tokens().expiresIn());
             if (loginResult.tokens().refreshExpiresIn() != null) data.put("refreshExpiresIn", loginResult.tokens().refreshExpiresIn());
+            String sessionUser = (principal != null && !principal.isBlank()) ? principal : username;
+            registerSession(sessionUser, loginResult.tokens());
             return ResponseEntity.ok(ApiResponse.ok(data));
         } catch (org.springframework.security.authentication.BadCredentialsException ex) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
@@ -1472,6 +1499,13 @@ public class KeycloakApiResource {
             if (loginResult.tokens().refreshExpiresIn() != null) {
                 data.put("refreshExpiresIn", loginResult.tokens().refreshExpiresIn());
             }
+            String sessionUser = Optional.ofNullable(user)
+                .map(u -> u.getOrDefault("preferred_username", u.get("username")))
+                .filter(v -> v instanceof String)
+                .map(v -> (String) v)
+                .filter(StringUtils::hasText)
+                .orElse(username);
+            registerSession(sessionUser, loginResult.tokens());
             auditService.recordAction(
                 username,
                 "ADMIN_AUTH_LOGIN",
@@ -1503,9 +1537,19 @@ public class KeycloakApiResource {
     }
 
     @PostMapping("/keycloak/auth/logout")
-    public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) Map<String, String> body) {
+    public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) Map<String, String> body, HttpServletRequest request) {
         String refreshToken = Optional.ofNullable(body).map(b -> b.get("refreshToken")).orElse(null);
+        String sessionState = Optional.ofNullable(body).map(b -> b.get("sessionState")).orElse(null);
         String actor = resolveActorForLogout(body, refreshToken);
+        String authHeader = request == null ? null : request.getHeader("Authorization");
+        String bearer = authHeader == null ? null : authHeader.trim();
+        if (bearer != null && bearer.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())) {
+            bearer = bearer.substring("Bearer ".length()).trim();
+        }
+        String sessionKey = SessionKeyGenerator.fromToken(sessionState, bearer);
+        if (sessionKey != null && !sessionKey.isBlank()) {
+            sessionControlService.invalidate(sessionKey);
+        }
         auditService.recordAction(
             actor,
             "ADMIN_AUTH_LOGOUT",
@@ -1570,6 +1614,10 @@ public class KeycloakApiResource {
             if (tokens.scope() != null) {
                 data.put("scope", tokens.scope());
             }
+            if (tokens.sessionState() != null) {
+                data.put("sessionState", tokens.sessionState());
+            }
+            registerSession(currentUser(), tokens);
             auditService.recordAction(currentUser(), "ADMIN_AUTH_REFRESH", AuditStage.SUCCESS, "self", Map.of());
             return ResponseEntity.ok(ApiResponse.ok(data));
         } catch (BadCredentialsException ex) {
@@ -1819,6 +1867,8 @@ public class KeycloakApiResource {
             if (loginResult.tokens().sessionState() != null) data.put("sessionState", loginResult.tokens().sessionState());
             if (loginResult.tokens().expiresIn() != null) data.put("expiresIn", loginResult.tokens().expiresIn());
             if (loginResult.tokens().refreshExpiresIn() != null) data.put("refreshExpiresIn", loginResult.tokens().refreshExpiresIn());
+            String sessionUser = (principal != null && !principal.isBlank()) ? principal : mappedUsername;
+            registerSession(sessionUser, loginResult.tokens());
 
             Map<String, Object> successAudit = new HashMap<>(auditContext);
             successAudit.put("principal", principal);
@@ -1832,8 +1882,6 @@ public class KeycloakApiResource {
 
     @org.springframework.beans.factory.annotation.Autowired
     private org.springframework.context.ApplicationContext ctx;
-
-    public record PkiChallengeView(String challengeId, String nonce, String aud, long ts, long exp) {}
 
     @GetMapping("/keycloak/auth/pki-challenge")
     public ResponseEntity<ApiResponse<PkiChallengeView>> pkiChallenge(jakarta.servlet.http.HttpServletRequest request) {
