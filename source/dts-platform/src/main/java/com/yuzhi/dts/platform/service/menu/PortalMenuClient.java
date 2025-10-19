@@ -59,9 +59,9 @@ public class PortalMenuClient {
     }
 
     /**
-     * Fetch portal menu tree with audience hints so that dts-admin can filter by roles/permissions/dataLevel.
+     * Fetch portal menu tree with audience hints so that dts-admin can filter by角色与权限。
      */
-    public List<RemoteMenuNode> fetchMenuTreeForAudience(List<String> roles, List<String> permissions, String dataLevel) {
+    public List<RemoteMenuNode> fetchMenuTreeForAudience(List<String> roles, List<String> permissions) {
         if (!props.isEnabled()) {
             log.debug("Portal menu client disabled via configuration");
             return List.of();
@@ -81,10 +81,6 @@ public class PortalMenuClient {
                     if (qs.length() == 0) qs.append("?"); else qs.append("&");
                     qs.append("permissions=").append(urlEncode(p));
                 }
-            }
-            if (dataLevel != null && !dataLevel.isBlank()) {
-                if (qs.length() == 0) qs.append("?"); else qs.append("&");
-                qs.append("dataLevel=").append(urlEncode(dataLevel));
             }
             URI uri = buildUri(props.getApiPath(), "/menu" + qs.toString());
             ResponseEntity<ApiEnvelope<List<RemoteMenuNode>>> response = restExchange(uri, MENU_TREE_TYPE);

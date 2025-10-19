@@ -23,9 +23,9 @@
     <include file="config/liquibase/changelog/20251120-01_data_level_options.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251120-02_audit_event_table.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251011-01_audit_event_extend.json.xml" relativeToChangelogFile="false"/>
-        <include file="config/liquibase/changelog/20251002-01_portal_menu_visibility.xml" relativeToChangelogFile="false"/>
-        <include file="config/liquibase/changelog/20251012-01_portal_menu_bind_all_roles.xml" relativeToChangelogFile="false"/>
-        <include file="config/liquibase/changelog/20251002-02_admin_custom_role_cleanup.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251002-01_portal_menu_visibility.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251012-01_portal_menu_bind_all_roles.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251002-02_admin_custom_role_cleanup.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251210-01_portal_menu_visibility_role_user_cleanup.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251201-01_org_keycloak_mapping.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251220-01_audit_operation_mapping.xml" relativeToChangelogFile="false"/>
@@ -50,6 +50,10 @@
     <include file="config/liquibase/changelog/20251015-08_delete_all_secure_views.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-09_clean_secure_view_row_filters.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251017-01_remove_security_view_audit.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251017-04_audit_operation_mapping_source_system.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251017-02_extend_audit_operation_mapping.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251018-06_audit_operation_mapping_backfill.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251018-07_add_dataset_grant_audit_rule.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

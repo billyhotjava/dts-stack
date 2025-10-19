@@ -29,10 +29,6 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "classification", length = 32)
     private String classification; // PUBLIC/INTERNAL/SECRET/CONFIDENTIAL/TOP_SECRET
 
-    // New ABAC fields (MVP): prefer these when present
-    @Column(name = "data_level", length = 32)
-    private String dataLevel; // DATA_PUBLIC/DATA_INTERNAL/DATA_SECRET/DATA_TOP_SECRET
-
     @Column(name = "owner_dept", length = 64)
     private String ownerDept; // owning department code
 
@@ -95,14 +91,6 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
 
     public void setClassification(String classification) {
         this.classification = classification;
-    }
-
-    public String getDataLevel() {
-        return dataLevel;
-    }
-
-    public void setDataLevel(String dataLevel) {
-        this.dataLevel = dataLevel;
     }
 
     public String getOwnerDept() {

@@ -12,6 +12,7 @@ import java.security.Principal;
 import java.util.*;
 import java.util.stream.Collectors;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -385,15 +386,26 @@ public class AdminApiResource {
         after.put("key", key);
         after.put("value", cfg.get("value"));
         after.put("description", cfg.get("description"));
-        ChangeRequest cr = changeRequestService.draft("CONFIG", "CONFIG_SET", key, after, before, Objects.toString(cfg.get("reason"), null));
-        auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-            "ADMIN_SETTING_VIEW",
-            AuditStage.SUCCESS,
-            Objects.toString(cfg.getOrDefault("key", "config")),
-            Map.of("draft", Boolean.TRUE)
-        );
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        try {
+            ChangeRequest cr = changeRequestService.draft("CONFIG", "CONFIG_SET", key, after, before, Objects.toString(cfg.get("reason"), null));
+            auditService.recordAction(
+                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                "ADMIN_SETTING_VIEW",
+                AuditStage.SUCCESS,
+                Objects.toString(cfg.getOrDefault("key", "config")),
+                Map.of("draft", Boolean.TRUE)
+            );
+            return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        } catch (IllegalStateException ex) {
+            auditService.recordAction(
+                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                "ADMIN_SETTING_VIEW",
+                AuditStage.FAIL,
+                Objects.toString(cfg.getOrDefault("key", "config")),
+                Map.of("error", ex.getMessage())
+            );
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
+        }
     }
 
     @GetMapping("/portal/menus")
@@ -499,6 +511,11 @@ public class AdminApiResource {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "create", "id", String.valueOf(persisted.getId())));
             } catch (Exception ignored) {}
             return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
+        } catch (IllegalStateException ex) {
+            Map<String, Object> failureDetail = new LinkedHashMap<>(auditDetail);
+            failureDetail.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_MENU_CREATE", AuditStage.FAIL, pendingRef, failureDetail);
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
         } catch (IllegalArgumentException ex) {
             Map<String, Object> failureDetail = new LinkedHashMap<>(auditDetail);
             failureDetail.put("error", ex.getMessage());
@@ -590,6 +607,12 @@ public class AdminApiResource {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "update", "id", String.valueOf(persisted.getId())));
             } catch (Exception ignored) {}
             return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
+        } catch (IllegalStateException ex) {
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("before", before);
+            detail.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_MENU_UPDATE", AuditStage.FAIL, id, detail);
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
         } catch (IllegalArgumentException ex) {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
@@ -619,34 +642,41 @@ public class AdminApiResource {
         auditDetail.put("before", before);
         auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.BEGIN, id, auditDetail);
         if (requireMenuStructureApproval) {
-            ChangeRequest cr = changeRequestService.draft(
-                "PORTAL_MENU",
-                "DELETE",
-                id,
-                Map.of("id", menuId),
-                before,
-                null
-            );
             try {
-                notifyClient.trySend(
-                    "approval_pending",
-                    Map.of(
-                        "id",
-                        String.valueOf(cr.getId()),
-                        "type",
-                        cr.getResourceType(),
-                        "category",
-                        cr.getCategory(),
-                        "requestedBy",
-                        cr.getRequestedBy()
-                    )
+                ChangeRequest cr = changeRequestService.draft(
+                    "PORTAL_MENU",
+                    "DELETE",
+                    id,
+                    Map.of("id", menuId),
+                    before,
+                    null
                 );
-            } catch (Exception ignored) {}
-            Map<String, Object> approvalDetail = new LinkedHashMap<>(auditDetail);
-            approvalDetail.put("status", "APPROVAL_PENDING");
-            approvalDetail.put("changeRequestId", cr.getId());
-            auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalDetail);
-            return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
+                try {
+                    notifyClient.trySend(
+                        "approval_pending",
+                        Map.of(
+                            "id",
+                            String.valueOf(cr.getId()),
+                            "type",
+                            cr.getResourceType(),
+                            "category",
+                            cr.getCategory(),
+                            "requestedBy",
+                            cr.getRequestedBy()
+                        )
+                    );
+                } catch (Exception ignored) {}
+                Map<String, Object> approvalDetail = new LinkedHashMap<>(auditDetail);
+                approvalDetail.put("status", "APPROVAL_PENDING");
+                approvalDetail.put("changeRequestId", cr.getId());
+                auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalDetail);
+                return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
+            } catch (IllegalStateException ex) {
+                Map<String, Object> failureDetail = new LinkedHashMap<>(auditDetail);
+                failureDetail.put("error", ex.getMessage());
+                auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.FAIL, id, failureDetail);
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
+            }
         }
         try {
             markMenuDeleted(entity);
@@ -953,15 +983,19 @@ public class AdminApiResource {
         if (StringUtils.hasText(titleEn)) {
             after.put("titleEn", titleEn.trim());
         }
-        ChangeRequest cr = changeRequestService.draft(
-            "CUSTOM_ROLE",
-            "CREATE",
-            normalizedName,
-            after,
-            null,
-            Objects.toString(payload.get("reason"), null)
-        );
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        try {
+            ChangeRequest cr = changeRequestService.draft(
+                "CUSTOM_ROLE",
+                "CREATE",
+                normalizedName,
+                after,
+                null,
+                Objects.toString(payload.get("reason"), null)
+            );
+            return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
+        }
     }
 
     @GetMapping("/role-assignments")
@@ -997,22 +1031,26 @@ public class AdminApiResource {
         after.put("scopeOrgId", scopeOrgId);
         after.put("datasetIds", datasetIds);
         after.put("operations", new LinkedHashSet<>(ops));
-        ChangeRequest cr = changeRequestService.draft(
-            "ROLE_ASSIGNMENT",
-            "CREATE",
-            null,
-            after,
-            null,
-            Objects.toString(payload.get("reason"), null)
-        );
-        auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
-            "ADMIN_ROLE_ASSIGNMENT_CREATE",
-            AuditStage.SUCCESS,
-            username,
-            Map.of("changeRequestId", cr.getId(), "role", role)
-        );
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        try {
+            ChangeRequest cr = changeRequestService.draft(
+                "ROLE_ASSIGNMENT",
+                "CREATE",
+                null,
+                after,
+                null,
+                Objects.toString(payload.get("reason"), null)
+            );
+            auditService.recordAction(
+                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                "ADMIN_ROLE_ASSIGNMENT_CREATE",
+                AuditStage.SUCCESS,
+                username,
+                Map.of("changeRequestId", cr.getId(), "role", role)
+            );
+            return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
+        }
     }
 
     @GetMapping("/change-requests")
@@ -1898,6 +1936,130 @@ public class AdminApiResource {
         return visibilities;
     }
 
+    private final class MenuVisibilityBatch {
+
+        private final PortalMenu menu;
+        private final LinkedHashMap<String, Map<String, Object>> explicitRuleMap = new LinkedHashMap<>();
+        private final LinkedHashSet<String> allowedRoles = new LinkedHashSet<>();
+        private final LinkedHashSet<String> allowedPermissions = new LinkedHashSet<>();
+        private String maxDataLevel;
+        private boolean hasExplicitRules = false;
+
+        MenuVisibilityBatch(PortalMenu menu) {
+            this.menu = menu;
+        }
+
+        void merge(Map<?, ?> raw) {
+            if (raw == null) {
+                return;
+            }
+            List<Map<String, Object>> rules = normalizeVisibilityRules(raw.get("visibilityRules"));
+            if (!rules.isEmpty()) {
+                hasExplicitRules = true;
+                for (Map<String, Object> rule : rules) {
+                    String role = normalizeRoleCode(rule.get("role"));
+                    if (!StringUtils.hasText(role)) {
+                        continue;
+                    }
+                    String permission = rule.get("permission") == null ? null : rule.get("permission").toString().trim();
+                    String level = normalizeDataLevelForVisibility(rule.get("dataLevel"));
+                    Map<String, Object> normalized = new LinkedHashMap<>();
+                    normalized.put("role", role);
+                    if (StringUtils.hasText(permission)) {
+                        normalized.put("permission", permission);
+                    }
+                    normalized.put("dataLevel", level);
+                    String key = role + "|" + (permission == null ? "" : permission) + "|" + level;
+                    explicitRuleMap.put(key, normalized);
+                }
+            }
+            mergeRoles(raw.get("allowedRoles"));
+            mergePermissions(raw.get("allowedPermissions"));
+            if (raw.containsKey("maxDataLevel")) {
+                String level = normalizeDataLevelForVisibility(raw.get("maxDataLevel"));
+                if (maxDataLevel == null || dataLevelPriority(level) > dataLevelPriority(maxDataLevel)) {
+                    maxDataLevel = level;
+                }
+            }
+        }
+
+        private void mergeRoles(Object source) {
+            if (source == null) {
+                return;
+            }
+            if (source instanceof Collection<?> collection) {
+                for (Object item : collection) {
+                    addRole(item);
+                }
+            } else {
+                addRole(source);
+            }
+        }
+
+        private void addRole(Object value) {
+            if (value == null) {
+                return;
+            }
+            if (value instanceof Map<?, ?> map) {
+                addRole(map.get("role"));
+                return;
+            }
+            String normalized = normalizeRoleCode(value);
+            if (StringUtils.hasText(normalized)) {
+                allowedRoles.add(normalized);
+            }
+        }
+
+        private void mergePermissions(Object source) {
+            if (source == null) {
+                return;
+            }
+            if (source instanceof Collection<?> collection) {
+                for (Object item : collection) {
+                    addPermission(item);
+                }
+            } else {
+                addPermission(source);
+            }
+        }
+
+        private void addPermission(Object value) {
+            if (value == null) {
+                return;
+            }
+            if (value instanceof Map<?, ?> map) {
+                addPermission(map.get("permission"));
+                return;
+            }
+            String text = value.toString().trim();
+            if (!text.isEmpty()) {
+                allowedPermissions.add(text);
+            }
+        }
+
+        Map<String, Object> toPayload() {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            if (hasExplicitRules && !explicitRuleMap.isEmpty()) {
+                payload.put("visibilityRules", new ArrayList<>(explicitRuleMap.values()));
+                return payload;
+            }
+            if (!allowedRoles.isEmpty()) {
+                payload.put("allowedRoles", new ArrayList<>(allowedRoles));
+            }
+            if (!allowedPermissions.isEmpty()) {
+                payload.put("allowedPermissions", new ArrayList<>(allowedPermissions));
+            }
+            if (maxDataLevel != null) {
+                payload.put("maxDataLevel", maxDataLevel);
+            }
+            return payload;
+        }
+
+        PortalMenu menu() {
+            return menu;
+        }
+    }
+
     private List<PortalMenuVisibility> defaultVisibilities(PortalMenu menu) {
         List<PortalMenuVisibility> defaults = new ArrayList<>();
         boolean foundation = isFoundationMenu(menu);
@@ -2063,39 +2225,40 @@ public class AdminApiResource {
                     }
                 });
         } else if ("BATCH_UPDATE".equalsIgnoreCase(action) || "BULK_UPDATE".equalsIgnoreCase(action)) {
-            // Expect payload: { updates: [ { id: number, allowedRoles: string[], allowedPermissions?: string[], maxDataLevel?: string } ] }
             Object rawItems = payload.get("updates");
-            java.util.Set<Long> touchedMenuIds = new java.util.LinkedHashSet<>();
+            java.util.Map<Long, MenuVisibilityBatch> batchByMenu = new java.util.LinkedHashMap<>();
             if (rawItems instanceof java.util.Collection<?> col) {
                 for (Object it : col) {
-                    if (!(it instanceof java.util.Map<?, ?> m)) {
+                    if (!(it instanceof java.util.Map<?, ?> updateMap)) {
                         continue;
                     }
-                    Object idObj = m.get("id");
+                    Object idObj = updateMap.get("id");
                     if (idObj == null) {
                         continue;
                     }
-                    Long id;
+                    Long menuId;
                     try {
-                        id = Long.valueOf(idObj.toString());
+                        menuId = Long.valueOf(idObj.toString());
                     } catch (NumberFormatException nfe) {
                         continue;
                     }
-                    final Long fid = id;
-                    portalMenuRepo
-                        .findById(fid)
-                        .ifPresent(target -> {
-                            // Build a minimal payload map for visibility update using existing helpers
-                            java.util.Map<String, Object> updatePayload = new java.util.LinkedHashMap<>();
-                            if (m.containsKey("allowedRoles")) updatePayload.put("allowedRoles", m.get("allowedRoles"));
-                            if (m.containsKey("allowedPermissions")) updatePayload.put("allowedPermissions", m.get("allowedPermissions"));
-                            if (m.containsKey("maxDataLevel")) updatePayload.put("maxDataLevel", m.get("maxDataLevel"));
-                            if (m.containsKey("visibilityRules")) updatePayload.put("visibilityRules", m.get("visibilityRules"));
-                            java.util.List<PortalMenuVisibility> updatedVisibilities = buildVisibilityEntities(updatePayload, target);
-                            portalMenuService.replaceVisibilities(target, updatedVisibilities);
-                            touchedMenuIds.add(target.getId());
-                        });
+                    PortalMenu target = portalMenuRepo.findById(menuId).orElse(null);
+                    if (target == null) {
+                        continue;
+                    }
+                    MenuVisibilityBatch batch = batchByMenu.computeIfAbsent(menuId, key -> new MenuVisibilityBatch(target));
+                    batch.merge(updateMap);
                 }
+            }
+            java.util.Set<Long> touchedMenuIds = new java.util.LinkedHashSet<>();
+            for (MenuVisibilityBatch batch : batchByMenu.values()) {
+                java.util.Map<String, Object> updatePayload = batch.toPayload();
+                if (updatePayload.isEmpty()) {
+                    continue;
+                }
+                java.util.List<PortalMenuVisibility> updatedVisibilities = buildVisibilityEntities(updatePayload, batch.menu());
+                portalMenuService.replaceVisibilities(batch.menu(), updatedVisibilities);
+                touchedMenuIds.add(batch.menu().getId());
             }
             if (!touchedMenuIds.isEmpty()) {
                 try {

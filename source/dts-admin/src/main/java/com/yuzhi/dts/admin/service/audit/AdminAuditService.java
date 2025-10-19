@@ -6,11 +6,11 @@ import com.yuzhi.dts.admin.config.AuditProperties;
 import com.yuzhi.dts.admin.domain.AuditEvent;
 import com.yuzhi.dts.admin.repository.AuditEventRepository;
 import com.yuzhi.dts.admin.security.SecurityUtils;
-import com.yuzhi.dts.common.audit.AuditActionCatalog;
-import com.yuzhi.dts.common.audit.AuditActionDefinition;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import jakarta.servlet.http.HttpServletRequest;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
@@ -41,6 +41,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Service
 @Transactional
@@ -53,6 +56,7 @@ public class AdminAuditService {
         public long id;
         public Instant occurredAt;
         public String actor;
+        public String actorRole;
         public String module;
         public String action;
         public String resourceType;
@@ -86,6 +90,61 @@ public class AdminAuditService {
         public String operationType;     // 查询/新增/修改/删除/登录/登出/部分更新
         public String operationContent;  // 如：修改了用户/查询了用户列表
         public String logTypeText;       // 安全审计/操作审计
+        // rule engine metadata
+        public Boolean operationRuleHit;
+        public Long operationRuleId;
+        public String operationModule;
+        public String operationSourceTable;
+        public String operationEventClass;
+    }
+
+    private String resolveActorRole(String actor) {
+        if (!StringUtils.hasText(actor)) {
+            return null;
+        }
+        String uname = actor.trim().toLowerCase(java.util.Locale.ROOT);
+        if (uname.equals("sysadmin")) {
+            return "ROLE_SYS_ADMIN";
+        }
+        if (uname.equals("authadmin")) {
+            return "ROLE_AUTH_ADMIN";
+        }
+        if (uname.equals("auditadmin") || uname.equals("securityadmin") || uname.equals("security_auditor")) {
+            return "ROLE_SECURITY_AUDITOR";
+        }
+        if (uname.equals("opadmin")) {
+            return "ROLE_OP_ADMIN";
+        }
+        try {
+            return userRepo
+                .findByUsernameIgnoreCase(actor)
+                .flatMap(user -> user.getRealmRoles().stream().map(SecurityUtils::normalizeRole).filter(r -> r.startsWith("ROLE_")).findFirst())
+                .orElse(null);
+        } catch (Exception ex) {
+            if (log.isDebugEnabled()) {
+                log.debug("Failed to resolve role for actor {}: {}", actor, ex.toString());
+            }
+            return null;
+        }
+    }
+
+    private String translateActorRole(String role, String actor) {
+        String uname = actor == null ? null : actor.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!StringUtils.hasText(role)) {
+            if ("sysadmin".equals(uname)) return "系统管理员";
+            if ("authadmin".equals(uname)) return "授权管理员";
+            if ("auditadmin".equals(uname)) return "安全审计员";
+            if ("opadmin".equals(uname)) return "运维管理员";
+            return null;
+        }
+        String normalized = SecurityUtils.normalizeRole(role);
+        return switch (normalized) {
+            case "ROLE_SYS_ADMIN", "SYS_ADMIN" -> "系统管理员";
+            case "ROLE_AUTH_ADMIN", "AUTH_ADMIN" -> "授权管理员";
+            case "ROLE_SECURITY_AUDITOR", "ROLE_AUDITOR_ADMIN", "ROLE_AUDIT_ADMIN", "SECURITY_AUDITOR", "AUDITOR_ADMIN", "AUDIT_ADMIN", "AUDITADMIN" -> "安全审计员";
+            case "ROLE_OP_ADMIN", "OP_ADMIN" -> "运维管理员";
+            default -> null;
+        };
     }
 
     public static final class PendingAuditEvent {
@@ -114,7 +173,6 @@ public class AdminAuditService {
     private final AuditProperties properties;
     private final DtsCommonAuditClient auditClient;
     private final ObjectMapper objectMapper;
-    private final AuditActionCatalog actionCatalog;
     private final com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository userRepo;
     private final com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository;
 
@@ -130,7 +188,6 @@ public class AdminAuditService {
         AuditProperties properties,
         DtsCommonAuditClient auditClient,
         ObjectMapper objectMapper,
-        AuditActionCatalog actionCatalog,
         com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository userRepo,
         com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository
     ) {
@@ -138,7 +195,6 @@ public class AdminAuditService {
         this.properties = properties;
         this.auditClient = auditClient;
         this.objectMapper = objectMapper;
-        this.actionCatalog = actionCatalog;
         this.userRepo = userRepo;
         this.organizationRepository = organizationRepository;
     }
@@ -211,43 +267,28 @@ public class AdminAuditService {
     }
 
     public void recordAction(String actor, String actionCode, AuditStage stage, String resourceId, Object payload) {
-        // 仅记录有人为操作上下文的事件
         if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor) || "anonymoususer".equalsIgnoreCase(actor)) {
             return;
         }
-        if (!StringUtils.hasText(actionCode)) {
-            record(actor, actionCode, "GENERAL", "general", resourceId, outcomeFromStage(stage), payload, null);
-            return;
-        }
+        String normalizedCode = normalizeActionCode(actionCode);
         AuditStage effectiveStage = stage == null ? AuditStage.SUCCESS : stage;
-        AuditActionDefinition definition = actionCatalog
-            .findByCode(actionCode)
-            .orElseGet(() -> new AuditActionDefinition(
-                actionCode.trim().toUpperCase(Locale.ROOT),
-                actionCode,
-                "admin",
-                "管理端",
-                "admin",
-                "管理动作",
-                false,
-                null
-            ));
-        if (!definition.isStageSupported(effectiveStage)) {
-            log.debug("Audit action {} does not declare stage {}; continuing", definition.getCode(), effectiveStage);
-        }
+        ActionEnvelope envelope = deriveActionEnvelope(normalizedCode);
         Map<String, Object> extraTags = new HashMap<>();
-        extraTags.put("actionCode", definition.getCode());
+        if (StringUtils.hasText(normalizedCode)) {
+            extraTags.put("actionCode", normalizedCode);
+        }
         extraTags.put("stage", effectiveStage.name());
-        extraTags.put("moduleKey", definition.getModuleKey());
-        extraTags.put("moduleTitle", definition.getModuleTitle());
-        extraTags.put("entryKey", definition.getEntryKey());
-        extraTags.put("entryTitle", definition.getEntryTitle());
-        extraTags.put("supportsFlow", definition.isSupportsFlow());
+        if (StringUtils.hasText(envelope.moduleKey())) {
+            extraTags.put("moduleKey", envelope.moduleKey());
+        }
+        if (StringUtils.hasText(envelope.resourceKey())) {
+            extraTags.put("entryKey", envelope.resourceKey());
+        }
         record(
             actor,
-            definition.getDisplay(),
-            definition.getModuleKey(),
-            definition.getEntryKey(),
+            envelope.actionDisplay(),
+            envelope.moduleKey(),
+            envelope.resourceKey(),
             resourceId,
             outcomeFromStage(effectiveStage),
             payload,
@@ -262,6 +303,62 @@ public class AdminAuditService {
             case SUCCESS -> "SUCCESS";
             case FAIL -> "FAILED";
         };
+    }
+
+    private record ActionEnvelope(String moduleKey, String resourceKey, String actionDisplay) {}
+
+    private String normalizeActionCode(String actionCode) {
+        if (!StringUtils.hasText(actionCode)) {
+            return null;
+        }
+        return actionCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private ActionEnvelope deriveActionEnvelope(String normalizedCode) {
+        String moduleKey = "general";
+        String resourceKey = "general";
+        String display = StringUtils.hasText(normalizedCode) ? normalizedCode : "UNKNOWN_ACTION";
+        if (!StringUtils.hasText(normalizedCode)) {
+            return new ActionEnvelope(moduleKey, resourceKey, display);
+        }
+        String[] tokens = normalizedCode.split("_");
+        if (tokens.length > 0) {
+            moduleKey = mapNamespaceToModule(tokens[0]);
+            resourceKey = buildResourceKey(moduleKey, tokens);
+        }
+        return new ActionEnvelope(moduleKey, resourceKey, display);
+    }
+
+    private String mapNamespaceToModule(String namespaceToken) {
+        if (!StringUtils.hasText(namespaceToken)) {
+            return "general";
+        }
+        String ns = namespaceToken.toLowerCase(Locale.ROOT);
+        // Known namespaces collapse to well-defined buckets; otherwise keep lowercase token
+        return switch (ns) {
+            case "admin", "catalog", "governance", "modeling", "explore", "visualization", "platform" -> ns;
+            default -> ns;
+        };
+    }
+
+    private String buildResourceKey(String moduleKey, String[] tokens) {
+        if (tokens.length <= 1) {
+            return moduleKey;
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append(moduleKey);
+        builder.append('.');
+        if (tokens.length == 2) {
+            builder.append(tokens[1].toLowerCase(Locale.ROOT));
+            return builder.toString();
+        }
+        for (int i = 1; i < tokens.length - 1; i++) {
+            if (i > 1) {
+                builder.append('-');
+            }
+            builder.append(tokens[i].toLowerCase(Locale.ROOT));
+        }
+        return builder.toString();
     }
 
     public void record(String actor, String action, String module, String resourceType, String resourceId, String outcome, Object payload) {
@@ -279,13 +376,16 @@ public class AdminAuditService {
         Object payload,
         Map<String, Object> extraTags
     ) {
-        if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor)) {
+        if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor) || "anonymoususer".equalsIgnoreCase(actor)) {
             return;
         }
         PendingAuditEvent event = new PendingAuditEvent();
         event.occurredAt = Instant.now();
         event.actor = defaultString(actor, "anonymous");
         event.actorRole = SecurityUtils.getCurrentUserPrimaryAuthority();
+        if (!StringUtils.hasText(event.actorRole)) {
+            event.actorRole = resolveActorRole(actor);
+        }
         event.action = defaultString(action, "UNKNOWN");
         event.module = defaultString(module, "GENERAL");
         event.resourceType = resourceType;
@@ -293,6 +393,7 @@ public class AdminAuditService {
         event.result = defaultString(outcome, "SUCCESS");
         event.payload = payload;
         event.extraTags = serializeTags(extraTags);
+        enrichWithRequestContext(event);
         // capture last entity from current thread (aspect)
         try {
             var cap = com.yuzhi.dts.admin.service.audit.AuditEntityContext.getLast();
@@ -322,6 +423,9 @@ public class AdminAuditService {
         if (!StringUtils.hasText(event.actorRole)) {
             event.actorRole = SecurityUtils.getCurrentUserPrimaryAuthority();
         }
+        if (!StringUtils.hasText(event.actorRole)) {
+            event.actorRole = resolveActorRole(event.actor);
+        }
         // If not prefilled, attempt to capture entity snapshot at record time
         if (!StringUtils.hasText(event.capturedId)) {
             try {
@@ -333,6 +437,7 @@ public class AdminAuditService {
             } catch (Exception ignore) {}
             try { com.yuzhi.dts.admin.service.audit.AuditEntityContext.clear(); } catch (Exception ignore) {}
         }
+        enrichWithRequestContext(event);
         logEnqueuedEvent(event);
         com.yuzhi.dts.admin.service.audit.AuditRequestContext.markDomainAudit();
         offer(event);
@@ -569,6 +674,11 @@ public class AdminAuditService {
             }
         }
 
+        String actorRoleDisplay = translateActorRole(entity.getActorRole(), entity.getActor());
+        if (actorRoleDisplay != null) {
+            det.put("操作者角色", actorRoleDisplay);
+        }
+
         det.put("请求ID", extractRequestId());
         // Absolute fallback: if target_id still missing, use event UUID to guarantee non-empty value
         if ((!det.containsKey("目标ID")) || det.get("目标ID") == null || String.valueOf(det.get("目标ID")).isBlank()) {
@@ -760,6 +870,7 @@ public class AdminAuditService {
         if (key == null) return null;
         String k = key.trim().toLowerCase(java.util.Locale.ROOT);
         if (k.equals("admin_keycloak_user") || k.equals("admin") || k.equals("admin.auth") || k.equals("user")) return "用户";
+        if (k.equals("portal_user") || k.equals("platform_user") || k.equals("platform.auth")) return "业务用户";
         if (k.equals("portal_menu") || k.equals("menu") || k.equals("portal.menus") || k.equals("portal-menus")) return "门户菜单";
         if (k.equals("role") || k.startsWith("role_")) return "角色";
         if (k.equals("admin_role_assignment") || k.equals("role_assignment") || k.equals("role_assignments")) return "用户角色";
@@ -805,6 +916,48 @@ public class AdminAuditService {
         );
     }
 
+    public Page<AuditEvent> searchAllowedActors(
+        String actor,
+        String module,
+        String action,
+        String sourceSystem,
+        String eventType,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        List<String> allowedActors,
+        Pageable pageable
+    ) {
+        List<String> normalizedAllowed = normalizeActorList(allowedActors);
+        if (normalizedAllowed.isEmpty()) {
+            return Page.empty(pageable == null ? Pageable.unpaged() : pageable);
+        }
+        Pageable effectivePageable = pageable;
+        if (pageable != null && pageable.getSort().isSorted()) {
+            effectivePageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        }
+        return repository.searchAllowedActors(
+            likePattern(actor),
+            likePattern(module),
+            likePattern(action),
+            likePattern(sourceSystem),
+            likePattern(eventType),
+            likePattern(result),
+            likePattern(resourceType),
+            likePattern(resource),
+            likePattern(requestUri),
+            from,
+            to,
+            likePattern(clientIp),
+            normalizedAllowed,
+            effectivePageable
+        );
+    }
+
     public Page<AuditEvent> searchAllowedRoles(
         String actor,
         String module,
@@ -839,6 +992,48 @@ public class AdminAuditService {
             to,
             likePattern(clientIp),
             roles,
+            effectivePageable
+        );
+    }
+
+    public Page<AuditEvent> searchExcludeActors(
+        String actor,
+        String module,
+        String action,
+        String sourceSystem,
+        String eventType,
+        String result,
+        String resourceType,
+        String resource,
+        String requestUri,
+        Instant from,
+        Instant to,
+        String clientIp,
+        List<String> excludedActors,
+        Pageable pageable
+    ) {
+        List<String> normalizedExcluded = normalizeActorList(excludedActors);
+        if (normalizedExcluded.isEmpty()) {
+            return search(actor, module, action, sourceSystem, eventType, result, resourceType, resource, requestUri, from, to, clientIp, pageable);
+        }
+        Pageable effectivePageable = pageable;
+        if (pageable != null && pageable.getSort().isSorted()) {
+            effectivePageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        }
+        return repository.searchExcludeActors(
+            likePattern(actor),
+            likePattern(module),
+            likePattern(action),
+            likePattern(sourceSystem),
+            likePattern(eventType),
+            likePattern(result),
+            likePattern(resourceType),
+            likePattern(resource),
+            likePattern(requestUri),
+            from,
+            to,
+            likePattern(clientIp),
+            normalizedExcluded,
             effectivePageable
         );
     }
@@ -1282,6 +1477,11 @@ public class AdminAuditService {
         view.httpMethod = event.getHttpMethod();
         view.result = event.getResult();
         view.extraTags = event.getExtraTags();
+        view.actorRole = event.getActorRole();
+        if (StringUtils.hasText(event.getSourceSystem())) {
+            view.sourceSystem = event.getSourceSystem();
+            view.sourceSystemText = "platform".equalsIgnoreCase(event.getSourceSystem()) ? "业务管理" : "系统管理";
+        }
         return view;
     }
 
@@ -1296,6 +1496,20 @@ public class AdminAuditService {
 
     private String normalize(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private List<String> normalizeActorList(List<String> actors) {
+        if (actors == null || actors.isEmpty()) {
+            return List.of();
+        }
+        java.util.LinkedHashSet<String> normalized = new java.util.LinkedHashSet<>();
+        for (String actor : actors) {
+            if (!StringUtils.hasText(actor)) {
+                continue;
+            }
+            normalized.add(actor.trim().toLowerCase(Locale.ROOT));
+        }
+        return List.copyOf(normalized);
     }
 
     private String likePattern(String value) {
@@ -1326,6 +1540,54 @@ public class AdminAuditService {
             event.resourceId,
             queue != null ? queue.size() : 0
         );
+    }
+
+    private void enrichWithRequestContext(PendingAuditEvent event) {
+        if (event == null) {
+            return;
+        }
+        try {
+            RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+            if (!(attrs instanceof ServletRequestAttributes servletAttributes)) {
+                return;
+            }
+            HttpServletRequest request = servletAttributes.getRequest();
+            if (request == null) {
+                return;
+            }
+            if (!StringUtils.hasText(event.requestUri)) {
+                String uri = request.getRequestURI();
+                if (StringUtils.hasText(uri)) {
+                    event.requestUri = uri;
+                }
+            }
+            if (!StringUtils.hasText(event.httpMethod)) {
+                String method = request.getMethod();
+                if (StringUtils.hasText(method)) {
+                    event.httpMethod = method.toUpperCase(java.util.Locale.ROOT);
+                }
+            }
+            if (!StringUtils.hasText(event.clientIp)) {
+                String forwarded = request.getHeader("X-Forwarded-For");
+                String xfip = StringUtils.hasText(forwarded) ? forwarded.split(",")[0].trim() : null;
+                String realIp = request.getHeader("X-Real-IP");
+                String remote = request.getRemoteAddr();
+                String resolved = IpAddressUtils.resolveClientIp(null, xfip, realIp, remote);
+                if (StringUtils.hasText(resolved)) {
+                    event.clientIp = resolved;
+                }
+            }
+            if (!StringUtils.hasText(event.clientAgent)) {
+                String agent = request.getHeader("User-Agent");
+                if (StringUtils.hasText(agent)) {
+                    event.clientAgent = agent;
+                }
+            }
+        } catch (Exception ex) {
+            if (log.isDebugEnabled()) {
+                log.debug("Failed to enrich audit event with request context: {}", ex.toString());
+            }
+        }
     }
 
     private String serializeTags(Map<String, Object> tags) {

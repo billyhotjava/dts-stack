@@ -38,16 +38,19 @@
 		font-size: 0.875rem;
 		line-height: 1.57143;
 	}
-	main[data-slot="slash-layout-main"] :is(p, li, span, label, td, th, input, select, textarea, button) {
-		font-size: inherit;
-	}
-
+	  main[data-slot="slash-layout-main"] :is(p, li, span, label, td, th, input, select, textarea, button) {
+			font-size: inherit;
+		}
+	
+		/* Unify antd table font size */
+		:where(.ant-table-wrapper) :is(td, th) {
+			font-size: 0.875rem !important;
+		}
 	/* Ensure table section titles match table header font size (align with admin) */
-	main[data-slot="slash-layout-main"] [data-slot="card"]:has(.ant-table) [data-slot="card-title"],
-	main[data-slot="slash-layout-main"] [data-slot="card"]:has([data-slot="card-content"] table) [data-slot="card-title"] {
-		font-size: 0.875rem !important; /* match antd th (text-sm) */
-		line-height: 1.25rem !important;
-	}
+	  main[data-slot="slash-layout-main"] [data-slot="card"] [data-slot="card-title"] {
+			font-size: 0.875rem !important; /* match antd th (text-sm) */
+      line-height: 1.25rem !important;
+		}
 }
 
 /* Utilities overrides to strictly unify content typography */

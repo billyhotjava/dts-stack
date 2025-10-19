@@ -154,7 +154,6 @@ public class InceptorCatalogSyncService {
             dataset.setType(DATASET_TYPE);
             dataset.setName(defaultIfBlank(dataset.getName(), tableName));
             dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));
-            dataset.setDataLevel(defaultIfBlank(dataset.getDataLevel(), "DATA_INTERNAL"));
             dataset.setOwner(defaultIfBlank(dataset.getOwner(), DEFAULT_OWNER));
             dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
 

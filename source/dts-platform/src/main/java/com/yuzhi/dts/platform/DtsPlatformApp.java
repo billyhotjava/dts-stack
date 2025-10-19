@@ -5,7 +5,6 @@ import com.yuzhi.dts.platform.config.AuditProperties;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
 import com.yuzhi.dts.platform.config.DataStandardProperties;
-import com.yuzhi.dts.platform.config.DtsCommonAuditProperties;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
 import com.yuzhi.dts.platform.config.HiveExecutionProperties;
 import com.yuzhi.dts.platform.config.CRLFLogConverter;
@@ -31,7 +30,6 @@ import tech.jhipster.config.JHipsterConstants;
 @EnableConfigurationProperties({
     LiquibaseProperties.class,
     ApplicationProperties.class,
-    DtsCommonAuditProperties.class,
     DtsAdminProperties.class,
     HiveExecutionProperties.class,
     CatalogFeatureProperties.class,

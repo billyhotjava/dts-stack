@@ -693,6 +693,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 
     const phoneValue = formData.attributes.phone?.[0] ?? "";
 	const title = mode === "create" ? "创建用户" : "编辑用户";
+	const canEditUsername = mode === "create";
 
 	return (
 		<Dialog open={open} onOpenChange={onCancel}>
@@ -719,15 +720,21 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									<Input
 										id="username"
 										value={formData.username}
-										onChange={(e) =>
-											setFormData((prev) => ({
-												...prev,
-												username: e.target.value,
-											}))
+										onChange={
+											canEditUsername
+												? (e) =>
+														setFormData((prev) => ({
+															...prev,
+															username: e.target.value,
+														}))
+												: undefined
 										}
 										placeholder="请输入用户名"
+										disabled={!canEditUsername}
 									/>
-									<p className="text-xs text-muted-foreground">用户名即登录名，需要保持唯一。</p>
+									<p className="text-xs text-muted-foreground">
+										用户名即登录名，需要保持唯一。{!canEditUsername ? " 已创建的用户不支持修改用户名。" : ""}
+									</p>
 								</div>
 								<div className="space-y-2">
 									<Label htmlFor="fullName">姓名 *</Label>

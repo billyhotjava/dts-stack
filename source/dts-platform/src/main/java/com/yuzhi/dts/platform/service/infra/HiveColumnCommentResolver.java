@@ -28,7 +28,7 @@ public final class HiveColumnCommentResolver {
      * Groups: {@code name} = column identifier (without backticks), {@code comment} = raw comment text.
      */
     private static final Pattern COLUMN_COMMENT_PATTERN = Pattern.compile(
-        "(?i)^[`\"]?(?<name>[a-z0-9_]+)[`\"]?\\s+[^,]*?\\bcomment\\s+'(?<comment>(?:''|[^'])*)'",
+        "(?i)^[`\"]?(?<name>[a-z0-9_]+)[`\"]?\\s+.*?\\bcomment\\s+'(?<comment>(?:''|[^'])*)'",
         Pattern.CASE_INSENSITIVE
     );
 

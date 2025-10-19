@@ -126,7 +126,7 @@ const resolveAllowedLoginRoles = (): string[] => {
 
 
 export const GLOBAL_CONFIG: GlobalConfig = {
-	appName: import.meta.env.VITE_APP_NAME || "BI智慧管理平台",
+	appName: import.meta.env.VITE_APP_NAME || "BI数智平台",
 	appVersion: packageJson.version,
 	defaultRoute: resolveDefaultRoute(),
 	publicPath: resolvePublicPath(),

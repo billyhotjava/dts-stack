@@ -74,18 +74,7 @@ type Dataset = {
 };
 
 function toUiDataset(apiItem: any): Dataset {
-	const dataLevel: string = String(apiItem.dataLevel || "").toUpperCase();
-	const fallback = normalizeClassification(apiItem.classification);
-	const derived: Classification =
-		dataLevel === "DATA_TOP_SECRET"
-			? "TOP_SECRET"
-			: dataLevel === "DATA_SECRET"
-			? "SECRET"
-			: dataLevel === "DATA_INTERNAL"
-			? "INTERNAL"
-			: dataLevel === "DATA_PUBLIC"
-			? "PUBLIC"
-			: fallback;
+	const derived: Classification = normalizeClassification(apiItem.classification ?? apiItem.dataLevel) ?? "INTERNAL";
 	return {
 		id: String(apiItem.id),
 		name: String(apiItem.hiveTable || apiItem.name || apiItem.id),

@@ -237,6 +237,8 @@ dts:
     features:
       # Serve Keycloak localization resources from platform to avoid browser TLS trust issues to admin domain in dev
       kc-localization: ${DTS_FEATURE_PLATFORM_KC_LOCALIZATION:true}
+    session:
+      timeout-minutes: ${DTS_PLATFORM_SESSION_TIMEOUT_MINUTES:10}
     hive:
       enabled: false
       jdbc-url: jdbc:hive2://dts-hive:10000/default
@@ -314,19 +316,8 @@ jhipster:
 
 auditing:
   enabled: true
-  queue-capacity: 5000
-  retention-days: 180
-  encryption-key: ${AUDITING_ENCRYPTION_KEY:}
-  hmac-key: ${AUDITING_HMAC_KEY:}
-  forward-enabled: ${AUDITING_FORWARD_ENABLED:true}
-  forward-retry-interval: 60000
 
 dts:
-  common:
-    audit:
-      enabled: ${DTS_COMMON_AUDIT_ENABLED:true}
-      base-url: ${DTS_COMMON_AUDIT_BASE_URL:}
-      service-token: ${DTS_COMMON_AUDIT_TOKEN:}
   platform:
     data-standard:
       encryption-key: ${DATA_STANDARD_ENCRYPTION_KEY:}

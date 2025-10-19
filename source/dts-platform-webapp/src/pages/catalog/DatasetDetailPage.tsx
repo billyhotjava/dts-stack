@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { Button } from "@/ui/button";
-import { Badge } from "@/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
@@ -20,12 +19,11 @@ import {
 	createDatasetGrant,
 	deleteDatasetGrant,
 } from "@/api/platformApi";
-import type { DatasetAsset, DataLevel, DatasetGrant, TableSchema } from "@/types/catalog";
+import type { DatasetAsset, DatasetGrant, TableSchema } from "@/types/catalog";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import userDirectoryService, { type UserDirectoryEntry } from "@/api/services/userDirectoryService";
 import { useRouter } from "@/routes/hooks";
 import { normalizeClassification } from "@/utils/classification";
-import { renderDataLevelLabel } from "@/constants/governance";
 import { useUserInfo } from "@/store/userStore";
 import { cn } from "@/utils";
 import { Check, ChevronsUpDown } from "lucide-react";
@@ -337,17 +335,6 @@ export default function DatasetDetailPage() {
 		[canManageGrants, id, loadGrants],
 	);
 
-    // Normalize legacy classification -> DATA_* for UI binding
-    const fromLegacy = (c?: string): DataLevel => {
-        const normalized = normalizeClassification(c);
-        if (normalized === "PUBLIC") return "DATA_PUBLIC" as DataLevel;
-        if (normalized === "INTERNAL") return "DATA_INTERNAL" as DataLevel;
-        if (normalized === "SECRET") return "DATA_SECRET" as DataLevel;
-        if (normalized === "TOP_SECRET") return "DATA_TOP_SECRET" as DataLevel;
-        // default minimal
-        return "DATA_INTERNAL" as DataLevel;
-    };
-
     const loadDataset = async (withSpinner = false) => {
         if (withSpinner) setLoading(true);
         try {
@@ -366,10 +353,8 @@ export default function DatasetDetailPage() {
                         : []),
             };
             // Backfill initial values for edit form to avoid empty saves
-            // 1) dataLevel: prefer DATA_* if provided; otherwise map from legacy classification
-            if (!normalized.dataLevel) {
-                normalized.dataLevel = fromLegacy((data as any)?.classification);
-            }
+            normalized.classification = normalizeClassification((data as any)?.classification) ?? "INTERNAL";
+            delete normalized.dataLevel;
             if (Array.isArray((data as any)?.tables)) {
                 normalized.tables = ((data as any).tables as any[])
                     .map((table) => {
@@ -486,15 +471,6 @@ export default function DatasetDetailPage() {
 	}, [grantDialogOpen, userSearch, loadUsers]);
 
 
-    const toLegacyClassification = (dl?: string): string => {
-        const v = String(dl || "").toUpperCase();
-        if (v === "DATA_PUBLIC") return "PUBLIC";
-        if (v === "DATA_INTERNAL") return "INTERNAL";
-        if (v === "DATA_SECRET") return "SECRET";
-        if (v === "DATA_TOP_SECRET") return "TOP_SECRET";
-        return "INTERNAL";
-    };
-
     const onSave = async () => {
 	if (!dataset) return;
 	if (!editable) {
@@ -508,14 +484,14 @@ export default function DatasetDetailPage() {
 	// Sanitize payload for backend
 	const payload: any = {
 		...dataset,
-		classification: toLegacyClassification(dataset.dataLevel as string),
-		dataLevel: dataset.dataLevel,
+		classification: normalizeClassification(dataset.classification ?? undefined) ?? "INTERNAL",
 		ownerDept: dataset.ownerDept || undefined,
 		// Backend expects a string; submit as comma-separated list
 		tags: Array.isArray((dataset as any).tags)
 			? ((dataset as any).tags as string[]).join(",")
 			: String((dataset as any).tags || ""),
 	};
+	delete payload.dataLevel;
 	delete payload.scope;
 	delete payload.shareScope;
 	setSaving(true);
@@ -628,15 +604,6 @@ export default function DatasetDetailPage() {
 										disabled={!editable}
 										onChange={(e) => setDataset({ ...(dataset as DatasetAsset), owner: e.target.value })}
 									/>
-								</div>
-								<div className="grid gap-2">
-									<Label>数据密级</Label>
-									<div className="flex items-center gap-2 rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-2">
-										<Badge variant="outline">
-											{renderDataLevelLabel((dataset.dataLevel as DataLevel) || "DATA_INTERNAL")}
-										</Badge>
-										<span className="text-xs text-muted-foreground">密级由系统自动判定</span>
-									</div>
 								</div>
 								<div className="grid gap-2">
 									<Label>所属部门 *</Label>

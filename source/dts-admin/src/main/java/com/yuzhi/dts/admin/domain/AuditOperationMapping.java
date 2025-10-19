@@ -22,6 +22,9 @@ public class AuditOperationMapping {
     @Column(name = "status_code_regex", length = 32)
     private String statusCodeRegex;
 
+    @Column(name = "source_system", length = 32)
+    private String sourceSystem;
+
     @Column(name = "module_name", length = 128, nullable = false)
     private String moduleName;
 
@@ -72,6 +75,8 @@ public class AuditOperationMapping {
     public void setHttpMethod(String httpMethod) { this.httpMethod = httpMethod; }
     public String getStatusCodeRegex() { return statusCodeRegex; }
     public void setStatusCodeRegex(String statusCodeRegex) { this.statusCodeRegex = statusCodeRegex; }
+    public String getSourceSystem() { return sourceSystem; }
+    public void setSourceSystem(String sourceSystem) { this.sourceSystem = sourceSystem; }
     public String getModuleName() { return moduleName; }
     public void setModuleName(String moduleName) { this.moduleName = moduleName; }
     public String getActionType() { return actionType; }

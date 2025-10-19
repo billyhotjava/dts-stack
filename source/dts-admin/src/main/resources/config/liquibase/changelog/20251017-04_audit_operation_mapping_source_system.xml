@@ -1,0 +1,462 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251017-04-add-source-system-column" author="codex">
+        <comment>Add source_system selector to audit_operation_mapping for audience-specific rules</comment>
+        <addColumn tableName="audit_operation_mapping">
+            <column name="source_system" type="VARCHAR(32)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20251017-05-align-login-mappings" author="codex">
+        <validCheckSum>9:24de824c29e742d3baae8ba6d605ab05</validCheckSum>
+        <validCheckSum>9:8c041c999cd9fb68523c1676057e1629</validCheckSum>
+        <comment>Scope login rules by source system and normalise templates</comment>
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="SUCCESS"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <column name="source_system" value="admin"/>
+            <where>url_pattern = '/api/keycloak/auth/login' AND http_method = 'POST' AND status_code_regex IN ('200','SUCCESS')</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="FAILED"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <column name="source_system" value="admin"/>
+            <where>url_pattern = '/api/keycloak/auth/login' AND http_method = 'POST' AND status_code_regex IN ('[45]\d{2}','FAILED')</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="SUCCESS"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <column name="source_system" value="platform"/>
+            <column name="description_template" value="用户登录成功（业务端）: {username}"/>
+            <where>url_pattern = '/api/keycloak/auth/platform/login' AND http_method = 'POST' AND status_code_regex IN ('200','SUCCESS')</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="FAILED"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <column name="source_system" value="platform"/>
+            <column name="description_template" value="用户登录失败（业务端）: {username}"/>
+            <where>url_pattern = '/api/keycloak/auth/platform/login' AND http_method = 'POST' AND status_code_regex IN ('[45]\d{2}','FAILED')</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="用户登录成功（系统端）: {username}"/>
+            <where>url_pattern = '/api/keycloak/auth/login' AND http_method = 'POST' AND status_code_regex = 'SUCCESS'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="用户登录失败（系统端）: {username}"/>
+            <where>url_pattern = '/api/keycloak/auth/login' AND http_method = 'POST' AND status_code_regex = 'FAILED'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="source_system" value="admin"/>
+            <where>url_pattern = '/api/keycloak/auth/logout' AND http_method = 'POST'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20251017-06-add-missing-get-role-mapping" author="codex">
+        <validCheckSum>9:efe99f5febce02cd9f1f32c80ebc4737</validCheckSum>
+        <validCheckSum>9:b397fabafba414fbd3d217cdce523832</validCheckSum>
+        <sql>
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, param_extractors,
+                event_class, order_value, enabled, source_system
+            )
+            SELECT '/api/keycloak/users/{id}/roles','GET','角色管理','查询',
+                   '查询用户角色：{targetRef|未知}','用户角色','{"targetRef":"details.目标引用"}',
+                   'AuditEvent',7,TRUE,'admin'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/keycloak/users/{id}/roles'
+                   AND http_method = 'GET'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251017-07-add-change-request-mine-rule" author="codex">
+        <validCheckSum>9:d49a0e8e83f55949edcb9193cd48b077</validCheckSum>
+        <validCheckSum>9:815df1a49a2cae9f320f83468517bf1b</validCheckSum>
+        <sql>
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, event_class,
+                order_value, enabled, source_system
+            )
+            SELECT '/api/admin/change-requests/mine','GET','审批管理','查询',
+                   '查询我的变更申请','变更申请','AuditEvent',
+                   12,TRUE,'admin'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/admin/change-requests/mine'
+                   AND http_method = 'GET'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251017-08-add-dataset-preview-rule" author="codex">
+        <validCheckSum>9:1d4100fe291a24d87e78c6e09fb233ed</validCheckSum>
+        <validCheckSum>9:91b2148f4060c55fcb3c344bed62b227</validCheckSum>
+        <sql>
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, param_extractors,
+                event_class, order_value, enabled, source_system
+            )
+            SELECT '/api/datasets/{id}/preview','GET','数据资产','查询',
+                   '预览数据资产：{datasetId}','数据资产','{"datasetId":"path.id"}',
+                   'AuditEvent',30,TRUE,'platform'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/datasets/{id}/preview'
+                   AND http_method = 'GET'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251017-09-add-admin-user-display-names" author="codex">
+        <validCheckSum>9:bffa52d86d70222ea9d12a5d4804edd8</validCheckSum>
+        <validCheckSum>9:fca76a8711953225c056e951ee78cf79</validCheckSum>
+        <sql>
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, event_class,
+                order_value, enabled, source_system
+            )
+            SELECT '/api/admin/users/display-names','GET','用户管理','查询',
+                   '查询用户显示名称','用户','AuditEvent',
+                   18,TRUE,'admin'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/admin/users/display-names'
+                   AND http_method = 'GET'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251018-01-broaden-login-status-regex" author="codex">
+        <comment>Allow login mappings to match textual or numeric status codes</comment>
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="(?:SUCCESS|200)"/>
+            <where>url_pattern = '/api/keycloak/auth/login' AND http_method = 'POST' AND status_code_regex = 'SUCCESS'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="(?:FAILED|[45]\d{2})"/>
+            <where>url_pattern = '/api/keycloak/auth/login' AND http_method = 'POST' AND status_code_regex = 'FAILED'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="(?:SUCCESS|200)"/>
+            <where>url_pattern = '/api/keycloak/auth/platform/login' AND http_method = 'POST' AND status_code_regex = 'SUCCESS'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="(?:FAILED|[45]\d{2})"/>
+            <where>url_pattern = '/api/keycloak/auth/platform/login' AND http_method = 'POST' AND status_code_regex = 'FAILED'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20251018-02-enrich-role-mappings" author="codex">
+        <comment>Make user role operations reference the actual 用户名</comment>
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="查询用户角色：{event.resourceId|未知}"/>
+            <column name="source_table_template" value="用户角色"/>
+            <column name="param_extractors" valueComputed="NULL"/>
+            <column name="source_system" value="admin"/>
+            <where>url_pattern = '/api/keycloak/users/{id}/roles' AND http_method = 'GET'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="提交角色分配申请：{event.resourceId|未知}"/>
+            <column name="source_table_template" value="用户角色"/>
+            <column name="param_extractors" value="{&quot;requestId&quot;:&quot;details.requestId&quot;, &quot;roles&quot;:&quot;details.roles&quot;}"/>
+            <column name="source_system" value="admin"/>
+            <where>url_pattern = '/api/keycloak/users/{id}/roles' AND http_method = 'POST'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="提交角色撤销申请：{event.resourceId|未知}"/>
+            <column name="source_table_template" value="用户角色"/>
+            <column name="param_extractors" value="{&quot;requestId&quot;:&quot;details.requestId&quot;, &quot;roles&quot;:&quot;details.roles&quot;, &quot;operation&quot;:&quot;details.operation&quot;}"/>
+            <column name="source_system" value="admin"/>
+            <where>url_pattern = '/api/keycloak/users/{id}/roles' AND http_method = 'DELETE'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20251018-03-add-approval-request-detail" author="codex">
+        <validCheckSum>9:3d944645271a44f0aa0d5f21e69cc447</validCheckSum>
+        <validCheckSum>9:6734658063840e09fe67f4a2283ca79e</validCheckSum>
+        <sql>
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, event_class,
+                order_value, enabled, source_system
+            )
+            SELECT '/api/approval-requests/{id}','GET','审批管理','查询',
+                   '查看审批请求：{event.resourceId|未知}','审批请求','AuditEvent',
+                   15,TRUE,'admin'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/approval-requests/{id}'
+                   AND http_method = 'GET'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251018-04-enrich-admin-logout" author="codex">
+        <comment>Expose 用户名 in admin logout audit entries</comment>
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="用户登出（系统端）: {event.actor|未知}"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <column name="source_system" value="admin"/>
+            <where>url_pattern = '/api/keycloak/auth/logout' AND http_method = 'POST'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20251018-05-align-platform-login-rules" author="codex">
+        <comment>Route平台登录审计到字典规则</comment>
+        <update tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/login"/>
+            <column name="module_name" value="业务管理"/>
+            <column name="action_type" value="登录"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <column name="event_class" value="SecurityEvent"/>
+            <where>url_pattern = '/api/keycloak/auth/platform/login' AND http_method = 'POST' AND status_code_regex = '(?:SUCCESS|200)' AND source_system = 'platform'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/login"/>
+            <column name="module_name" value="业务管理"/>
+            <column name="action_type" value="登录"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <column name="event_class" value="SecurityEvent"/>
+            <where>url_pattern = '/api/keycloak/auth/platform/login' AND http_method = 'POST' AND status_code_regex = '(?:FAILED|[45]\d{2})' AND source_system = 'platform'</where>
+        </update>
+        <sql>
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, status_code_regex, source_system,
+                module_name, action_type, description_template,
+                source_table_template, param_extractors, event_class,
+                order_value, enabled
+            )
+            SELECT '/api/keycloak/auth/login','POST','PENDING','platform',
+                   '业务管理','登录','用户正在登录（业务端）: {username}',
+                   '用户','{&quot;username&quot;:&quot;event.actor&quot;}','SecurityEvent',
+                   6, TRUE
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/keycloak/auth/login'
+                   AND http_method = 'POST'
+                   AND status_code_regex = 'PENDING'
+                   AND source_system = 'platform'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251018-06-add-platform-logout-rules" author="codex">
+        <validCheckSum>9:3978c91694f4d2f341c6d0948dba2069</validCheckSum>
+        <validCheckSum>9:763de1a67a069bbf60eb3f79a20149f1</validCheckSum>
+        <comment>补充平台登出审计字典</comment>
+        <sql splitStatements="true" stripComments="false">
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, status_code_regex, source_system,
+                module_name, action_type, description_template,
+                source_table_template, param_extractors, event_class,
+                order_value, enabled
+            )
+            SELECT '/api/keycloak/auth/logout','POST','SUCCESS','platform',
+                   '业务管理','登出','用户退出登录（业务端）: {username}',
+                   '用户','{&quot;username&quot;:&quot;event.actor&quot;}','SecurityEvent',
+                   7, TRUE
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/keycloak/auth/logout'
+                   AND http_method = 'POST'
+                   AND status_code_regex = 'SUCCESS'
+                   AND source_system = 'platform'
+            );
+
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, status_code_regex, source_system,
+                module_name, action_type, description_template,
+                source_table_template, param_extractors, event_class,
+                order_value, enabled
+            )
+            SELECT '/api/keycloak/auth/logout','POST','FAILED','platform',
+                   '业务管理','登出','用户退出登录失败（业务端）: {username}',
+                   '用户','{&quot;username&quot;:&quot;event.actor&quot;}','SecurityEvent',
+                   7, TRUE
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/keycloak/auth/logout'
+                   AND http_method = 'POST'
+                   AND status_code_regex = 'FAILED'
+                   AND source_system = 'platform'
+            );
+
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, status_code_regex, source_system,
+                module_name, action_type, description_template,
+                source_table_template, param_extractors, event_class,
+                order_value, enabled
+            )
+            SELECT '/api/keycloak/auth/logout','POST','PENDING','platform',
+                   '业务管理','登出','用户正在退出登录（业务端）: {username}',
+                   '用户','{&quot;username&quot;:&quot;event.actor&quot;}','SecurityEvent',
+                   7, TRUE
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/keycloak/auth/logout'
+                   AND http_method = 'POST'
+                   AND status_code_regex = 'PENDING'
+                   AND source_system = 'platform'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251018-07-dedup-platform-login-mappings" author="codex">
+        <comment>清理重复的业务端登录失败映射，保留每个状态唯一一条</comment>
+        <sql>
+            WITH duplicates AS (
+                SELECT id
+                FROM (
+                    SELECT id,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY url_pattern, http_method, status_code_regex, source_system
+                               ORDER BY id
+                           ) AS rn
+                    FROM audit_operation_mapping
+                    WHERE url_pattern = '/api/keycloak/auth/login'
+                      AND http_method = 'POST'
+                      AND source_system = 'platform'
+                      AND status_code_regex IN ('(?:SUCCESS|200)','(?:FAILED|[45]\d{2})','PENDING')
+                ) ranked
+                WHERE rn &gt; 1
+            )
+            DELETE FROM audit_operation_mapping
+            WHERE id IN (SELECT id FROM duplicates);
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251018-08-platform-login-username-fallback" author="codex">
+        <comment>业务端登录事件优先使用 resourceId 作为用户名，避免显示未知</comment>
+        <update tableName="audit_operation_mapping">
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.resourceId&quot;}"/>
+            <where>url_pattern = '/api/keycloak/auth/login'
+              AND http_method = 'POST'
+              AND source_system = 'platform'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20251018-09-admin-user-create-target-ref" author="codex">
+        <comment>新增用户审计使用 resourceId 作为目标引用，避免“未知”</comment>
+        <update tableName="audit_operation_mapping">
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;event.resourceId&quot;}"/>
+            <where>url_pattern = '/api/keycloak/users'
+              AND http_method = 'POST'
+              AND module_name = '用户管理'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20251018-10-normalize-param-extractors-json" author="codex">
+        <comment>移除历史 param_extractors 中的反斜杠转义，确保 JSON 可解析</comment>
+        <sql>
+            UPDATE audit_operation_mapping
+               SET param_extractors = replace(param_extractors, E'\\\"', '"')
+             WHERE param_extractors LIKE '%\\"%';
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251019-03-append-resource-id-descriptions" author="codex">
+        <comment>为包含 {id} 的接口追加中文ID提示并补全路径变量提取</comment>
+        <sql>
+            WITH updated AS (
+                UPDATE audit_operation_mapping
+                   SET param_extractors = (
+                       COALESCE(param_extractors, '{}')::jsonb
+                       || jsonb_build_object('resourceId', 'path.id')
+                       || jsonb_build_object('resourceLabel', 'details.目标引用')
+                   )::text
+                 WHERE url_pattern LIKE '%{id}%'
+                RETURNING id
+            )
+            UPDATE audit_operation_mapping a
+               SET description_template = description_template || '（'
+                   || COALESCE(NULLIF(a.source_table_template, ''), NULLIF(a.resource_type, ''), '目标')
+                   || 'ID：{resourceId|未知}）'
+             WHERE a.id IN (SELECT id FROM updated)
+               AND a.description_template NOT LIKE '%ID：{%';
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251019-01-catalog-dataset-detail-rule" author="codex">
+        <comment>补齐数据目录详情操作的字典描述，明确目标资产</comment>
+        <sql>
+            WITH updated AS (
+                UPDATE audit_operation_mapping
+                   SET module_name = '数据目录',
+                       action_type = '查询',
+                       description_template = '查看数据集：{datasetLabel|未知}（ID：{datasetId|未知}）',
+                       source_table_template = '数据资产',
+                       param_extractors = '{&quot;datasetLabel&quot;:&quot;details.目标引用&quot;,&quot;datasetId&quot;:&quot;event.resourceId&quot;}',
+                       event_class = COALESCE(event_class, 'AuditEvent'),
+                       source_system = COALESCE(source_system, 'platform'),
+                       enabled = COALESCE(enabled, TRUE)
+                 WHERE url_pattern = '/api/catalog/datasets/{id}'
+                   AND http_method = 'GET'
+                RETURNING id
+            )
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, param_extractors,
+                event_class, order_value, enabled, source_system
+            )
+            SELECT '/api/catalog/datasets/{id}','GET','数据目录','查询',
+                   '查看数据集：{datasetLabel|未知}（ID：{datasetId|未知}）','数据资产',
+                   '{&quot;datasetLabel&quot;:&quot;details.目标引用&quot;,&quot;datasetId&quot;:&quot;event.resourceId&quot;}',
+                   'AuditEvent',29,TRUE,'platform'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM updated
+            )
+              AND NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/catalog/datasets/{id}'
+                   AND http_method = 'GET'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="20251019-02-modeling-standard-attachments" author="codex">
+        <comment>为建模标准附件接口提供审计字典，补足操作文案</comment>
+        <sql>
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, param_extractors,
+                event_class, order_value, enabled, source_system
+            )
+            SELECT '/api/modeling/standards/{id}/attachments','GET','数据建模','查询',
+                   '查看建模标准附件：{standardLabel|未知}（ID：{standardId|未知}）','建模标准',
+                   '{&quot;standardLabel&quot;:&quot;details.目标引用&quot;,&quot;standardId&quot;:&quot;event.resourceId&quot;}',
+                   'AuditEvent',18,TRUE,'platform'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/modeling/standards/{id}/attachments'
+                   AND http_method = 'GET'
+            );
+
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, action_type,
+                description_template, source_table_template, param_extractors,
+                event_class, order_value, enabled, source_system
+            )
+            SELECT '/api/modeling/standards/{id}/attachments','POST','数据建模','新增',
+                   '上传建模标准附件：{standardLabel|未知}（ID：{standardId|未知}）','建模标准',
+                   '{&quot;standardLabel&quot;:&quot;details.目标引用&quot;,&quot;standardId&quot;:&quot;event.resourceId&quot;}',
+                   'AuditEvent',18,TRUE,'platform'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/modeling/standards/{id}/attachments'
+                   AND http_method = 'POST'
+            );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

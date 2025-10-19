@@ -60,7 +60,7 @@ class ExploreAbacIT {
         CatalogDataset ds = new CatalogDataset();
         ds.setName("orders_dept_priv");
         ds.setType("TRINO");
-        ds.setDataLevel("DATA_INTERNAL");
+        ds.setClassification("INTERNAL");
         ds.setOwnerDept("D001");
         ds.setHiveDatabase("mart");
         ds.setHiveTable("orders");
@@ -90,7 +90,7 @@ class ExploreAbacIT {
         CatalogDataset ds = new CatalogDataset();
         ds.setName("orders_dept_priv2");
         ds.setType("TRINO");
-        ds.setDataLevel("DATA_PUBLIC");
+        ds.setClassification("PUBLIC");
         ds.setOwnerDept("D001");
         ds.setHiveDatabase("mart");
         ds.setHiveTable("orders");
@@ -126,7 +126,7 @@ class ExploreAbacIT {
         CatalogDataset ds = new CatalogDataset();
         ds.setName("finance_core");
         ds.setType("TRINO");
-        ds.setDataLevel("DATA_INTERNAL");
+        ds.setClassification("INTERNAL");
         ds.setOwnerDept("D009");
         ds.setHiveDatabase("mart");
         ds.setHiveTable("finance_core");

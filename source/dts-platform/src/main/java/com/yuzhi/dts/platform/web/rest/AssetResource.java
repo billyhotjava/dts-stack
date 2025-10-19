@@ -324,7 +324,7 @@ public class AssetResource {
             .map(token -> token.toUpperCase(Locale.ROOT))
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        String columnName = columnOpt.get();
+        String columnName = columnOpt.orElseThrow();
         int headerIndex = resolveHeaderIndex(headers, columnName);
         rows.removeIf(row -> !isRowAllowed(row, headers, headerIndex, columnName, allowedLevels, allowedTokens));
     }

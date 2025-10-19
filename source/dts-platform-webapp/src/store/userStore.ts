@@ -338,15 +338,35 @@ const buildPermissions = (normalizedUsername: string): string[] => {
 	return Array.from(perms);
 };
 
+const resolveUsernameForLogout = (info: Partial<UserInfo> | undefined): string | undefined => {
+	if (!info) return undefined;
+	const bag = info as Record<string, unknown>;
+	const candidates: unknown[] = [
+		info.username,
+		bag["preferredUsername"],
+		bag["preferred_username"],
+		bag["user"],
+		bag["principal"],
+	];
+	for (const candidate of candidates) {
+		if (typeof candidate === "string") {
+			const trimmed = candidate.trim();
+			if (trimmed) return trimmed;
+		}
+	}
+	return undefined;
+};
+
 export const useSignOut = () => {
 	const { clearUserInfoAndToken } = useUserActions();
-	const { userToken } = useUserStore.getState();
 
 	const signOut = async () => {
+		const { userToken, userInfo } = useUserStore.getState();
 		try {
 			// 如果有refreshToken，调用后端登出接口
-			if (userToken.refreshToken) {
-				await userService.logout(userToken.refreshToken);
+			const refreshToken = userToken?.refreshToken;
+			if (refreshToken) {
+				await userService.logout(refreshToken, resolveUsernameForLogout(userInfo));
 			}
 		} catch (error) {
 			console.error("Logout error:", error);

@@ -1,0 +1,2200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+    <changeSet id="20251018-06-admin-audit-rule-backfill" author="codex">
+        <comment>Backfill missing admin audit operation mappings</comment>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/change-requests"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="提交权限变更请求"/>
+            <column name="source_table_template" value="权限变更请求"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/change-requests/{id}/approve"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="审批通过权限变更"/>
+            <column name="source_table_template" value="权限变更请求"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/change-requests/{id}/reject"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="驳回权限变更请求"/>
+            <column name="source_table_template" value="权限变更请求"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/change-requests/{id}/submit"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="提交权限变更审批"/>
+            <column name="source_table_template" value="权限变更请求"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/datasets"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据资产管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询数据资产目录"/>
+            <column name="source_table_template" value="数据资产"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/dev/seed"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="运维工具"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="执行开发环境初始化"/>
+            <column name="source_table_template" value="运维任务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/maintenance/purge-requests"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="运维工具"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="清理历史审批请求"/>
+            <column name="source_table_template" value="运维任务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/orgs/sync"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="部门管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="同步部门信息"/>
+            <column name="source_table_template" value="部门"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/permissions/catalog"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="权限管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询目录权限配置"/>
+            <column name="source_table_template" value="目录权限"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/platform/orgs"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="组织同步"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询平台组织视图"/>
+            <column name="source_table_template" value="组织结构"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/platform/orgs/sync"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="组织同步"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="同步平台组织结构"/>
+            <column name="source_table_template" value="组织结构"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/portal/menus/reset"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="菜单管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="重置门户菜单配置"/>
+            <column name="source_table_template" value="菜单"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/system/config"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="系统配置"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询系统配置"/>
+            <column name="source_table_template" value="系统配置"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/system/config"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="系统配置"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="更新系统配置"/>
+            <column name="source_table_template" value="系统配置"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/users"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="系统用户管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询管理员用户列表"/>
+            <column name="source_table_template" value="管理员用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/users"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="系统用户管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增管理员用户"/>
+            <column name="source_table_template" value="管理员用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/users/{username}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="系统用户管理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除管理员用户"/>
+            <column name="source_table_template" value="管理员用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/users/{username}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="系统用户管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改管理员用户信息"/>
+            <column name="source_table_template" value="管理员用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-events"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="审计日志"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="接收审计事件"/>
+            <column name="source_table_template" value="审计事件"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-logs"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审计日志"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询审计日志列表"/>
+            <column name="source_table_template" value="审计日志"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-logs/categories"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审计日志"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询审计分类列表"/>
+            <column name="source_table_template" value="审计分类"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-logs/modules"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审计日志"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询审计模块列表"/>
+            <column name="source_table_template" value="审计模块"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/approvals"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="审批管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询Keycloak审批请求"/>
+            <column name="source_table_template" value="审批请求"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/pki-challenge"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="认证管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="获取证书登录挑战码"/>
+            <column name="source_table_template" value="认证流程"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/pki-login"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="认证管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="证书登录（系统端）"/>
+            <column name="source_table_template" value="认证流程"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/refresh"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="认证管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="刷新管理员会话令牌"/>
+            <column name="source_table_template" value="认证流程"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/groups"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户组管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询用户组列表"/>
+            <column name="source_table_template" value="用户组"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/groups"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="用户组管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增用户组"/>
+            <column name="source_table_template" value="用户组"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/groups/user/{userId}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户组管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询用户所属的用户组"/>
+            <column name="source_table_template" value="用户组"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/groups/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="用户组管理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除用户组"/>
+            <column name="source_table_template" value="用户组"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/groups/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户组管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看用户组详情"/>
+            <column name="source_table_template" value="用户组"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/groups/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="用户组管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改用户组信息"/>
+            <column name="source_table_template" value="用户组"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/groups/{id}/members"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户组管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询用户组成员"/>
+            <column name="source_table_template" value="用户组成员"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/groups/{id}/members/{userId}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="用户组管理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="移除用户组成员"/>
+            <column name="source_table_template" value="用户组成员"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/groups/{id}/members/{userId}"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="用户组管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="添加用户到用户组"/>
+            <column name="source_table_template" value="用户组成员"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/localization/zh-CN"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="认证管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="获取认证端中文文案"/>
+            <column name="source_table_template" value="国际化配置"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/platform/roles"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询平台侧角色列表"/>
+            <column name="source_table_template" value="角色"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/roles/{name}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看角色详情"/>
+            <column name="source_table_template" value="角色"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/roles/{name}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改角色信息"/>
+            <column name="source_table_template" value="角色"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/roles/{name}/users"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询角色绑定用户"/>
+            <column name="source_table_template" value="角色成员"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/user-sync/process/{id}"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="用户同步"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="处理用户同步任务"/>
+            <column name="source_table_template" value="用户同步任务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/userprofile/attributes"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户属性配置"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询用户属性定义"/>
+            <column name="source_table_template" value="用户属性"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/userprofile/config"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户属性配置"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询用户属性配置"/>
+            <column name="source_table_template" value="用户属性"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/userprofile/config"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="用户属性配置"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="更新用户属性配置"/>
+            <column name="source_table_template" value="用户属性"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/userprofile/configured"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户属性配置"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="检查用户属性是否配置"/>
+            <column name="source_table_template" value="用户属性"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/userprofile/test"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户属性配置"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="测试用户属性规则"/>
+            <column name="source_table_template" value="用户属性"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users/search"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="搜索Keycloak用户"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users/{id}/abac-claims"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询用户ABAC声明"/>
+            <column name="source_table_template" value="用户声明"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users/{id}/enabled"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="启用或禁用用户"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users/{id}/person-level"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="调整用户人员密级"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/users/{id}/reset-password"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="重置用户密码"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/menu"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="菜单管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询菜单树"/>
+            <column name="source_table_template" value="菜单"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/platform/directory/roles"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="目录同步"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询平台角色目录"/>
+            <column name="source_table_template" value="平台角色"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/platform/directory/users"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="目录同步"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询平台用户目录"/>
+            <column name="source_table_template" value="平台用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/platform/infra/inceptor"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="基础设施"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看Inceptor集群状态"/>
+            <column name="source_table_template" value="Inceptor集群"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/user"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="系统用户管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询当前用户信息"/>
+            <column name="source_table_template" value="管理员用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="60"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="admin"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="20251018-07-platform-audit-rule-backfill" author="codex">
+        <comment>Backfill missing platform audit operation mappings</comment>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/apis/{id}/execute"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="服务管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="执行API服务"/>
+            <column name="source_table_template" value="API服务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/apis/{id}/publish"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="服务管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="发布API服务"/>
+            <column name="source_table_template" value="API服务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/apis/{id}/test"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="服务管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="测试API服务"/>
+            <column name="source_table_template" value="API服务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/auth-info"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="认证管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询认证上下文信息"/>
+            <column name="source_table_template" value="认证信息"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/dashboards"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询仪表盘列表"/>
+            <column name="source_table_template" value="仪表盘"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/data-quality-runs/latest"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据质量"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询最新质量任务结果"/>
+            <column name="source_table_template" value="质量任务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/data-quality-runs/trigger"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据质量"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="触发质量任务"/>
+            <column name="source_table_template" value="质量任务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/dataset-jobs/{jobId}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据资产"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看数据集作业详情"/>
+            <column name="source_table_template" value="数据资产作业"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/datasets/{id}/jobs"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据资产"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询数据集作业列表"/>
+            <column name="source_table_template" value="数据资产作业"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/datasets/{id}/sync-schema"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据资产"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="同步数据集字段"/>
+            <column name="source_table_template" value="数据资产"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/departments"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="组织管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询部门列表"/>
+            <column name="source_table_template" value="部门"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/directory/roles"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="组织管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询目录角色列表"/>
+            <column name="source_table_template" value="目录角色"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/directory/users"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="组织管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询目录用户列表"/>
+            <column name="source_table_template" value="目录用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/etl-jobs/{id}/submit"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据资产"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="提交ETL作业运行"/>
+            <column name="source_table_template" value="ETL作业"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/explore/legacy/execute"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="执行历史查询"/>
+            <column name="source_table_template" value="遗留查询"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/explore/legacy/explain"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="分析历史查询执行计划"/>
+            <column name="source_table_template" value="遗留查询"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/explore/legacy/result-preview/{resultSetId}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="预览历史查询结果"/>
+            <column name="source_table_template" value="遗留查询结果"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/explore/legacy/result-sets/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除历史查询结果"/>
+            <column name="source_table_template" value="遗留查询结果"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/explore/legacy/save-result/{executionId}"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="保存历史查询结果"/>
+            <column name="source_table_template" value="遗留查询结果"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/compliance/batches/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除合规批次记录"/>
+            <column name="source_table_template" value="合规批次"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/issues"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询治理问题列表"/>
+            <column name="source_table_template" value="治理问题"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/issues"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="创建治理问题"/>
+            <column name="source_table_template" value="治理问题"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/issues/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="更新治理问题"/>
+            <column name="source_table_template" value="治理问题"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/issues/{id}/actions"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="处理治理问题行动"/>
+            <column name="source_table_template" value="治理问题"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/issues/{id}/close"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="关闭治理问题"/>
+            <column name="source_table_template" value="治理问题"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/quality/runs"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询质量任务运行记录"/>
+            <column name="source_table_template" value="质量任务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/quality/runs"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="触发质量任务运行"/>
+            <column name="source_table_template" value="质量任务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/quality/runs/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看质量任务运行详情"/>
+            <column name="source_table_template" value="质量任务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/rules"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询质量规则列表"/>
+            <column name="source_table_template" value="质量规则"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/rules"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="治理管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增质量规则"/>
+            <column name="source_table_template" value="质量规则"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/classifications"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询数据分类列表"/>
+            <column name="source_table_template" value="数据分类"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/classifications"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增数据分类"/>
+            <column name="source_table_template" value="数据分类"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/classifications/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除数据分类"/>
+            <column name="source_table_template" value="数据分类"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/classifications/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改数据分类"/>
+            <column name="source_table_template" value="数据分类"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/permissions"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询权限策略列表"/>
+            <column name="source_table_template" value="权限策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/permissions"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增权限策略"/>
+            <column name="source_table_template" value="权限策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/permissions/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除权限策略"/>
+            <column name="source_table_template" value="权限策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/permissions/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改权限策略"/>
+            <column name="source_table_template" value="权限策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/policies/apply"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="应用授权策略"/>
+            <column name="source_table_template" value="数据授权策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/policies/dataset/{datasetId}/policies"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询数据集授权策略"/>
+            <column name="source_table_template" value="数据授权策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/policies/domains-with-datasets"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询域下授权数据集"/>
+            <column name="source_table_template" value="数据授权策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/policies/preview"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="预览授权策略影响"/>
+            <column name="source_table_template" value="数据授权策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/policies/subject/{type}/{id}/visible"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询主体可见资产范围"/>
+            <column name="source_table_template" value="数据授权策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/policies/subjects"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询授权主体列表"/>
+            <column name="source_table_template" value="数据授权策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/requests"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询权限申请记录"/>
+            <column name="source_table_template" value="权限申请"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/requests"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="提交权限申请"/>
+            <column name="source_table_template" value="权限申请"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/requests/{id}/approve"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="审批通过权限申请"/>
+            <column name="source_table_template" value="权限申请"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/requests/{id}/reject"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="驳回权限申请"/>
+            <column name="source_table_template" value="权限申请"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/iam/simulate"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="权限治理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="模拟权限可见范围"/>
+            <column name="source_table_template" value="权限策略"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/infra/data-sources/postgres/activate"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="基础设施"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="激活Postgres数据源"/>
+            <column name="source_table_template" value="数据源"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/infra/data-storages"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="基础设施"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询数据存储列表"/>
+            <column name="source_table_template" value="数据存储"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/infra/data-storages"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="基础设施"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增数据存储"/>
+            <column name="source_table_template" value="数据存储"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/infra/data-storages/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="基础设施"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除数据存储"/>
+            <column name="source_table_template" value="数据存储"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/infra/data-storages/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="基础设施"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改数据存储"/>
+            <column name="source_table_template" value="数据存储"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/infra/schedules"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="基础设施"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询调度计划列表"/>
+            <column name="source_table_template" value="调度计划"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/infra/schedules"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="基础设施"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增调度计划"/>
+            <column name="source_table_template" value="调度计划"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/infra/schedules/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="基础设施"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除调度计划"/>
+            <column name="source_table_template" value="调度计划"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/infra/schedules/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="基础设施"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改调度计划"/>
+            <column name="source_table_template" value="调度计划"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/job-runs/{id}/status"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据资产"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询作业执行状态"/>
+            <column name="source_table_template" value="作业执行"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/pki-session"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="认证管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="业务端证书登录"/>
+            <column name="source_table_template" value="认证流程"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/auth/refresh"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="认证管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="刷新业务端会话令牌"/>
+            <column name="source_table_template" value="认证流程"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/keycloak/localization/zh-CN"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="认证管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="获取业务端中文文案"/>
+            <column name="source_table_template" value="国际化配置"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/menu"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="菜单管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询业务端菜单"/>
+            <column name="source_table_template" value="菜单"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/query-executions"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询查询执行列表"/>
+            <column name="source_table_template" value="查询执行"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/query-executions"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="创建查询执行"/>
+            <column name="source_table_template" value="查询执行"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/query-executions/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除查询执行记录"/>
+            <column name="source_table_template" value="查询执行"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/query-executions/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看查询执行详情"/>
+            <column name="source_table_template" value="查询执行"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/query-executions/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改查询执行记录"/>
+            <column name="source_table_template" value="查询执行"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/query-workspaces"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询查询工作区列表"/>
+            <column name="source_table_template" value="查询工作区"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/query-workspaces"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增查询工作区"/>
+            <column name="source_table_template" value="查询工作区"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/query-workspaces/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除查询工作区"/>
+            <column name="source_table_template" value="查询工作区"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/query-workspaces/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看查询工作区详情"/>
+            <column name="source_table_template" value="查询工作区"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/query-workspaces/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改查询工作区"/>
+            <column name="source_table_template" value="查询工作区"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/reports/published"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询已发布报表"/>
+            <column name="source_table_template" value="报表"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/result-sets"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询结果集列表"/>
+            <column name="source_table_template" value="数据查询结果"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/result-sets"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增结果集"/>
+            <column name="source_table_template" value="数据查询结果"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/result-sets/cleanup"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="清理过期结果集"/>
+            <column name="source_table_template" value="数据查询结果"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/result-sets/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除结果集"/>
+            <column name="source_table_template" value="数据查询结果"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/result-sets/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看结果集详情"/>
+            <column name="source_table_template" value="数据查询结果"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/result-sets/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改结果集"/>
+            <column name="source_table_template" value="数据查询结果"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/saved-queries"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询已保存查询列表"/>
+            <column name="source_table_template" value="数据查询"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/saved-queries"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增已保存查询"/>
+            <column name="source_table_template" value="数据查询"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/saved-queries/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除已保存查询"/>
+            <column name="source_table_template" value="数据查询"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/saved-queries/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看已保存查询详情"/>
+            <column name="source_table_template" value="数据查询"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/saved-queries/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改已保存查询"/>
+            <column name="source_table_template" value="数据查询"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/services/apis"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="服务管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询API服务列表"/>
+            <column name="source_table_template" value="API服务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/services/apis/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="服务管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看API服务详情"/>
+            <column name="source_table_template" value="API服务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/services/apis/{id}/metrics"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="服务管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看API服务指标"/>
+            <column name="source_table_template" value="API服务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/services/apis/{id}/try"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="服务管理"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="在线调试API服务"/>
+            <column name="source_table_template" value="API服务"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/services/products"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="服务管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询服务产品列表"/>
+            <column name="source_table_template" value="服务产品"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/services/products/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="服务管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看服务产品详情"/>
+            <column name="source_table_template" value="服务产品"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql-connections"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询SQL连接列表"/>
+            <column name="source_table_template" value="SQL连接"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql-connections"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增SQL连接"/>
+            <column name="source_table_template" value="SQL连接"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql-connections/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除SQL连接"/>
+            <column name="source_table_template" value="SQL连接"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql-connections/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看SQL连接详情"/>
+            <column name="source_table_template" value="SQL连接"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql-connections/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="数据探索"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改SQL连接"/>
+            <column name="source_table_template" value="SQL连接"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql/cancel/{id}"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="SQL工作台"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="取消SQL作业"/>
+            <column name="source_table_template" value="SQL作业"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql/catalog"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="SQL工作台"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="获取SQL元数据"/>
+            <column name="source_table_template" value="SQL元数据"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql/query"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="SQL工作台"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="执行临时SQL查询"/>
+            <column name="source_table_template" value="SQL查询"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql/status/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="SQL工作台"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询SQL作业状态"/>
+            <column name="source_table_template" value="SQL作业"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql/submit"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="SQL工作台"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="提交SQL作业"/>
+            <column name="source_table_template" value="SQL作业"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/sql/validate"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="SQL工作台"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="校验SQL语句"/>
+            <column name="source_table_template" value="SQL查询"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/tokens"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="令牌管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="创建个人访问令牌"/>
+            <column name="source_table_template" value="访问令牌"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/tokens/me"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="令牌管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询我的访问令牌"/>
+            <column name="source_table_template" value="访问令牌"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/tokens/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="令牌管理"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除访问令牌"/>
+            <column name="source_table_template" value="访问令牌"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/vis/cockpit/metrics"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询驾驶舱指标"/>
+            <column name="source_table_template" value="驾驶舱指标"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/vis/dashboards"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询可视化仪表盘"/>
+            <column name="source_table_template" value="仪表盘"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/vis/finance/summary"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看财务看板概览"/>
+            <column name="source_table_template" value="财务看板"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/vis/hr/summary"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看人力看板概览"/>
+            <column name="source_table_template" value="人力看板"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/vis/projects/summary"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看项目看板概览"/>
+            <column name="source_table_template" value="项目看板"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/vis/supply/summary"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看供应链看板概览"/>
+            <column name="source_table_template" value="供应链看板"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/viz-specs"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询自定义可视化配置"/>
+            <column name="source_table_template" value="可视化配置"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/viz-specs"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增可视化配置"/>
+            <column name="source_table_template" value="可视化配置"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/viz-specs/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除可视化配置"/>
+            <column name="source_table_template" value="可视化配置"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/viz-specs/{id}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查看可视化配置详情"/>
+            <column name="source_table_template" value="可视化配置"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/viz-specs/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="更新可视化配置"/>
+            <column name="source_table_template" value="可视化配置"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/viz-specs/{id}/render"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="可视化"/>
+            <column name="action_type" value="执行"/>
+            <column name="description_template" value="渲染可视化配置"/>
+            <column name="source_table_template" value="可视化配置"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="70"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="source_system" value="platform"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="20251018-08-backfill-platform-login" author="codex">
+        <comment>Ensure platform login events resolve to localized descriptions</comment>
+        <sql splitStatements="true" stripComments="false">
+            UPDATE audit_operation_mapping
+               SET url_pattern = '/api/keycloak/auth/login'
+             WHERE url_pattern = '/api/keycloak/auth/platform/login'
+               AND http_method = 'POST';
+
+            UPDATE audit_operation_mapping
+               SET status_code_regex     = '(?:SUCCESS|200)',
+                   module_name           = '业务管理',
+                   action_type           = '登录',
+                   description_template  = '用户登录成功（业务端）: {username}',
+                   source_table_template = '用户',
+                   param_extractors      = '{\"username\":\"event.actor\"}',
+                   event_class           = 'SecurityEvent',
+                   order_value           = 6,
+                   enabled               = TRUE,
+                   source_system         = 'platform'
+             WHERE url_pattern = '/api/keycloak/auth/login'
+               AND http_method = 'POST'
+               AND status_code_regex IN ('200','SUCCESS','(?:SUCCESS|200)')
+               AND COALESCE(source_system,'') IN ('','platform');
+
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, status_code_regex, source_system,
+                module_name, action_type, description_template,
+                source_table_template, param_extractors, event_class,
+                order_value, enabled
+            )
+            SELECT '/api/keycloak/auth/login','POST','(?:SUCCESS|200)','platform',
+                   '业务管理','登录','用户登录成功（业务端）: {username}',
+                   '用户','{\"username\":\"event.actor\"}','SecurityEvent',
+                   6, TRUE
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/keycloak/auth/login'
+                   AND http_method = 'POST'
+                   AND status_code_regex = '(?:SUCCESS|200)'
+                   AND source_system = 'platform'
+            );
+
+            UPDATE audit_operation_mapping
+               SET status_code_regex     = '(?:FAILED|[45]\\d{2})',
+                   module_name           = '业务管理',
+                   action_type           = '登录',
+                   description_template  = '用户登录失败（业务端）: {username}',
+                   source_table_template = '用户',
+                   param_extractors      = '{\"username\":\"event.actor\"}',
+                   event_class           = 'SecurityEvent',
+                   order_value           = 6,
+                   enabled               = TRUE,
+                   source_system         = 'platform'
+             WHERE url_pattern = '/api/keycloak/auth/login'
+               AND http_method = 'POST'
+               AND status_code_regex IN ('[45]\\d{2}','FAILED','(?:FAILED|[45]\\d{2})')
+               AND COALESCE(source_system,'') IN ('','platform');
+
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, status_code_regex, source_system,
+                module_name, action_type, description_template,
+                source_table_template, param_extractors, event_class,
+                order_value, enabled
+            )
+            SELECT '/api/keycloak/auth/login','POST','(?:FAILED|[45]\\d{2})','platform',
+                   '业务管理','登录','用户登录失败（业务端）: {username}',
+                   '用户','{\"username\":\"event.actor\"}','SecurityEvent',
+                   6, TRUE
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/keycloak/auth/login'
+                   AND http_method = 'POST'
+                   AND status_code_regex = '(?:FAILED|[45]\\d{2})'
+                   AND source_system = 'platform'
+            );
+
+            UPDATE audit_operation_mapping
+               SET module_name           = '业务管理',
+                   action_type           = '登录',
+                   description_template  = '用户正在登录（业务端）: {username}',
+                   source_table_template = '用户',
+                   param_extractors      = '{\"username\":\"event.actor\"}',
+                   event_class           = 'SecurityEvent',
+                   order_value           = 6,
+                   enabled               = TRUE,
+                   source_system         = 'platform'
+             WHERE url_pattern = '/api/keycloak/auth/login'
+               AND http_method = 'POST'
+               AND status_code_regex = 'PENDING'
+               AND COALESCE(source_system,'') IN ('','platform');
+
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, status_code_regex, source_system,
+                module_name, action_type, description_template,
+                source_table_template, param_extractors, event_class,
+                order_value, enabled
+            )
+            SELECT '/api/keycloak/auth/login','POST','PENDING','platform',
+                   '业务管理','登录','用户正在登录（业务端）: {username}',
+                   '用户','{\"username\":\"event.actor\"}','SecurityEvent',
+                   6, TRUE
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/keycloak/auth/login'
+                   AND http_method = 'POST'
+                   AND status_code_regex = 'PENDING'
+                   AND source_system = 'platform'
+            );
+        </sql>
+    </changeSet>
+</databaseChangeLog>

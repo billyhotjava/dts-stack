@@ -84,6 +84,57 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and lower(coalesce(e.actor, '')) in (:allowedActors) " +
+            "order by e.occurred_at desc, e.id desc",
+        countQuery =
+            "select count(*) from audit_event e " +
+            "where coalesce(e.actor, '') ilike :actor escape '\\' " +
+            "and coalesce(e.module, '') ilike :module escape '\\' " +
+            "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
+            "and coalesce(e.result, '') ilike :result escape '\\' " +
+            "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
+            "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
+            "and coalesce(e.request_uri, '') ilike :requestUri escape '\\' " +
+            "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
+            "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
+            "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and lower(coalesce(e.actor, '')) in (:allowedActors)",
+        nativeQuery = true
+    )
+    Page<AuditEvent> searchAllowedActors(
+        @Param("actor") String actor,
+        @Param("module") String module,
+        @Param("action") String action,
+        @Param("sourceSystem") String sourceSystem,
+        @Param("eventType") String eventType,
+        @Param("result") String result,
+        @Param("resourceType") String resourceType,
+        @Param("resource") String resource,
+        @Param("requestUri") String requestUri,
+        @Param("from") Instant from,
+        @Param("to") Instant to,
+        @Param("clientIp") String clientIp,
+        @Param("allowedActors") java.util.List<String> allowedActors,
+        Pageable pageable
+    );
+
+    @Query(
+        value =
+            "select * from audit_event e " +
+            "where coalesce(e.actor, '') ilike :actor escape '\\' " +
+            "and coalesce(e.module, '') ilike :module escape '\\' " +
+            "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
+            "and coalesce(e.result, '') ilike :result escape '\\' " +
+            "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
+            "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
+            "and coalesce(e.request_uri, '') ilike :requestUri escape '\\' " +
+            "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
+            "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
+            "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
             "and coalesce(e.actor_role, '') in (:roles) " +
             "order by e.occurred_at desc, e.id desc",
         countQuery =
@@ -272,6 +323,57 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("to") Instant to,
         @Param("clientIp") String clientIp,
         @Param("roles") java.util.List<String> roles,
+        @Param("excludedActors") java.util.List<String> excludedActors,
+        Pageable pageable
+    );
+
+    @Query(
+        value =
+            "select * from audit_event e " +
+            "where coalesce(e.actor, '') ilike :actor escape '\\' " +
+            "and coalesce(e.module, '') ilike :module escape '\\' " +
+            "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
+            "and coalesce(e.result, '') ilike :result escape '\\' " +
+            "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
+            "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
+            "and coalesce(e.request_uri, '') ilike :requestUri escape '\\' " +
+            "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
+            "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
+            "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and lower(coalesce(e.actor, '')) not in (:excludedActors) " +
+            "order by e.occurred_at desc, e.id desc",
+        countQuery =
+            "select count(*) from audit_event e " +
+            "where coalesce(e.actor, '') ilike :actor escape '\\' " +
+            "and coalesce(e.module, '') ilike :module escape '\\' " +
+            "and coalesce(e.action, '') ilike :action escape '\\' " +
+            "and coalesce(e.source_system, '') ilike :sourceSystem escape '\\' " +
+            "and coalesce(e.event_type, '') ilike :eventType escape '\\' " +
+            "and coalesce(e.result, '') ilike :result escape '\\' " +
+            "and coalesce(e.resource_type, '') ilike :resourceType escape '\\' " +
+            "and coalesce(e.resource_id, '') ilike :resource escape '\\' " +
+            "and coalesce(e.request_uri, '') ilike :requestUri escape '\\' " +
+            "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
+            "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
+            "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and lower(coalesce(e.actor, '')) not in (:excludedActors)",
+        nativeQuery = true
+    )
+    Page<AuditEvent> searchExcludeActors(
+        @Param("actor") String actor,
+        @Param("module") String module,
+        @Param("action") String action,
+        @Param("sourceSystem") String sourceSystem,
+        @Param("eventType") String eventType,
+        @Param("result") String result,
+        @Param("resourceType") String resourceType,
+        @Param("resource") String resource,
+        @Param("requestUri") String requestUri,
+        @Param("from") Instant from,
+        @Param("to") Instant to,
+        @Param("clientIp") String clientIp,
         @Param("excludedActors") java.util.List<String> excludedActors,
         Pageable pageable
     );

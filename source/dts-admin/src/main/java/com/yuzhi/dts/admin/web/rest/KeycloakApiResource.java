@@ -23,11 +23,13 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Base64;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -53,6 +55,7 @@ public class KeycloakApiResource {
     private final AdminRoleAssignmentRepository roleAssignRepo;
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class);
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}")
     private String managementClientId;
@@ -236,6 +239,11 @@ public class KeycloakApiResource {
                 "message",
                 "操作已提交，等待审批"
             )));
+        } catch (IllegalStateException ex) {
+            Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
+            failure.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_USER_CREATE", AuditStage.FAIL, requestedUsername, failure);
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
         } catch (IllegalArgumentException ex) {
             Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
             failure.put("error", ex.getMessage());
@@ -302,6 +310,11 @@ public class KeycloakApiResource {
                 "message",
                 "用户信息更新请求已提交，等待审批"
             )));
+        } catch (IllegalStateException ex) {
+            Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
+            failure.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_USER_UPDATE", AuditStage.FAIL, username, failure);
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
         } catch (IllegalArgumentException ex) {
             Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
             failure.put("error", ex.getMessage());
@@ -662,6 +675,77 @@ public class KeycloakApiResource {
         return SecurityUtils.getCurrentUserLogin().orElse("unknown");
     }
 
+    private String resolveActorForLogout(Map<String, String> body, String refreshToken) {
+        String actor = sanitizeActor(SecurityUtils.getCurrentUserLogin().orElse(null));
+        if (!StringUtils.hasText(actor) && body != null) {
+            actor = firstNonBlank(
+                body.get("username"),
+                body.get("user"),
+                body.get("account"),
+                body.get("principal"),
+                body.get("operator")
+            );
+            actor = sanitizeActor(actor);
+        }
+        if (!StringUtils.hasText(actor)) {
+            actor = extractUsernameFromToken(refreshToken);
+        }
+        if (!StringUtils.hasText(actor)) {
+            actor = "system";
+        }
+        return actor;
+    }
+
+    private String sanitizeActor(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        String lowered = trimmed.toLowerCase(Locale.ROOT);
+        if ("anonymous".equals(lowered) || "anonymoususer".equals(lowered)) {
+            return null;
+        }
+        return trimmed;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private String extractUsernameFromToken(String token) {
+        if (!StringUtils.hasText(token)) {
+            return null;
+        }
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) {
+                return null;
+            }
+            byte[] decoded = Base64.getUrlDecoder().decode(parts[1]);
+            com.fasterxml.jackson.databind.JsonNode node = JSON.readTree(decoded);
+            if (node.hasNonNull("preferred_username")) {
+                return node.get("preferred_username").asText();
+            }
+            if (node.hasNonNull("username")) {
+                return node.get("username").asText();
+            }
+            if (node.hasNonNull("sub")) {
+                return node.get("sub").asText();
+            }
+        } catch (Exception ex) {
+            LOG.debug("Failed to extract username from refresh token: {}", ex.getMessage());
+        }
+        return null;
+    }
+
     private String clientIp(HttpServletRequest request) {
         if (request == null) {
             return "unknown";
@@ -676,21 +760,34 @@ public class KeycloakApiResource {
 
     @GetMapping("/keycloak/users/{id}/roles")
     public ResponseEntity<List<KeycloakRoleDTO>> getUserRoles(@PathVariable String id) {
-        List<String> names = keycloakAdminClient.listUserRealmRoles(id, adminAccessToken());
+        String adminToken = adminAccessToken();
+        List<String> names = Optional.ofNullable(keycloakAdminClient.listUserRealmRoles(id, adminToken)).orElse(List.of());
         org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class)
             .info("Fetched user realm roles from Keycloak: userId={}, roles={}", id, names);
-        if (names.isEmpty()) return ResponseEntity.ok(List.of());
         Map<String, KeycloakRoleDTO> catalog = new LinkedHashMap<>();
         for (KeycloakRoleDTO role : adminUserService.listRealmRoles()) {
             if (role.getName() != null) catalog.put(role.getName(), role);
         }
         List<KeycloakRoleDTO> roles = names.stream().map(n -> catalog.getOrDefault(n, fallbackRole(n))).toList();
+        String targetPrincipal = null;
+        try {
+            targetPrincipal = resolveUsername(id, null, adminToken);
+        } catch (Exception ex) {
+            LOG.debug("Failed to resolve username for id {}: {}", id, ex.getMessage());
+        }
+        String displayTarget = StringUtils.hasText(targetPrincipal) ? targetPrincipal : id;
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("roleCount", roles.size());
+        payload.put("userId", id);
+        if (StringUtils.hasText(targetPrincipal)) {
+            payload.put("username", targetPrincipal);
+        }
         auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            currentUser(),
             "ADMIN_USER_VIEW",
             AuditStage.SUCCESS,
-            id,
-            Map.of("roleCount", roles.size())
+            displayTarget,
+            payload
         );
         return ResponseEntity.ok(roles);
     }
@@ -1309,8 +1406,24 @@ public class KeycloakApiResource {
         String username = Optional.ofNullable(body).map(b -> b.getOrDefault("username", "")).map(String::trim).orElse("");
         String password = Optional.ofNullable(body).map(b -> b.getOrDefault("password", "")).orElse("");
         if (username.isBlank() || password.isBlank()) {
+            if (!username.isBlank()) {
+                auditService.recordAction(
+                    username,
+                    "ADMIN_AUTH_LOGIN",
+                    AuditStage.FAIL,
+                    username,
+                    Map.of("audience", "admin", "mode", "password", "error", "MISSING_CREDENTIALS")
+                );
+            }
             return ResponseEntity.badRequest().body(ApiResponse.error("用户名或密码不能为空"));
         }
+        auditService.recordAction(
+            username,
+            "ADMIN_AUTH_LOGIN",
+            AuditStage.BEGIN,
+            username,
+            Map.of("audience", "admin", "mode", "password")
+        );
         try {
             KeycloakAuthService.LoginResult loginResult = keycloakAuthService.login(username, password);
             // Enforce triad-only for admin console
@@ -1326,6 +1439,13 @@ public class KeycloakApiResource {
                             set.contains("ROLE_AUDIT_ADMIN") || set.contains("AUDIT_ADMIN") ||
                             set.contains("ROLE_AUDITADMIN") || set.contains("AUDITADMIN");
             if (!triad) {
+                auditService.recordAction(
+                    username,
+                    "ADMIN_AUTH_LOGIN",
+                    AuditStage.FAIL,
+                    username,
+                    Map.of("audience", "admin", "mode", "password", "error", "ROLE_NOT_ALLOWED")
+                );
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("仅系统管理角色可登录系统端"));
             }
             Map<String, Object> data = new HashMap<>();
@@ -1350,11 +1470,32 @@ public class KeycloakApiResource {
             if (loginResult.tokens().refreshExpiresIn() != null) {
                 data.put("refreshExpiresIn", loginResult.tokens().refreshExpiresIn());
             }
+            auditService.recordAction(
+                username,
+                "ADMIN_AUTH_LOGIN",
+                AuditStage.SUCCESS,
+                username,
+                Map.of("audience", "admin", "mode", "password")
+            );
             return ResponseEntity.ok(ApiResponse.ok(data));
         } catch (BadCredentialsException ex) {
+            auditService.recordAction(
+                username,
+                "ADMIN_AUTH_LOGIN",
+                AuditStage.FAIL,
+                username,
+                Map.of("audience", "admin", "mode", "password", "error", ex.getMessage() == null ? "BAD_CREDENTIALS" : ex.getMessage())
+            );
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
         } catch (Exception ex) {
             String message = Optional.ofNullable(ex.getMessage()).filter(m -> !m.isBlank()).orElse("登录失败，请稍后重试");
+            auditService.recordAction(
+                username,
+                "ADMIN_AUTH_LOGIN",
+                AuditStage.FAIL,
+                username,
+                Map.of("audience", "admin", "mode", "password", "error", Optional.ofNullable(ex.getMessage()).orElse("UNKNOWN"))
+            );
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(message));
         }
     }
@@ -1362,6 +1503,14 @@ public class KeycloakApiResource {
     @PostMapping("/keycloak/auth/logout")
     public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) Map<String, String> body) {
         String refreshToken = Optional.ofNullable(body).map(b -> b.get("refreshToken")).orElse(null);
+        String actor = resolveActorForLogout(body, refreshToken);
+        auditService.recordAction(
+            actor,
+            "ADMIN_AUTH_LOGOUT",
+            AuditStage.BEGIN,
+            actor,
+            Map.of("audience", "admin")
+        );
         try {
             if (refreshToken != null && !refreshToken.isBlank()) {
                 try {
@@ -1372,9 +1521,23 @@ public class KeycloakApiResource {
                     throw ex;
                 }
             }
+            auditService.recordAction(
+                actor,
+                "ADMIN_AUTH_LOGOUT",
+                AuditStage.SUCCESS,
+                actor,
+                Map.of("audience", "admin")
+            );
             return ResponseEntity.ok(ApiResponse.ok(null));
         } catch (Exception ex) {
             // From client perspective, even if Keycloak-side logout fails, we clear local session; return 200 to avoid blocking UX.
+            auditService.recordAction(
+                actor,
+                "ADMIN_AUTH_LOGOUT",
+                AuditStage.FAIL,
+                actor,
+                Map.of("audience", "admin", "error", Optional.ofNullable(ex.getMessage()).orElse("LOGOUT_ERROR"))
+            );
             return ResponseEntity.ok(ApiResponse.ok(null));
         }
     }

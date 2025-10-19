@@ -413,7 +413,15 @@ export default function UserDetailView() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {userRoles.length > 0 ? <Table rowKey="id" columns={roleColumns} dataSource={userRoles} pagination={false} size="small" /> : (
+          {userRoles.length > 0 ? (
+            <Table
+              rowKey={(record) => record.id || record.name}
+              columns={roleColumns}
+              dataSource={userRoles}
+              pagination={false}
+              size="small"
+            />
+          ) : (
             <div className="text-center py-8 text-muted-foreground">
               <Icon icon="mdi:account-group-outline" size={48} className="mx-auto mb-2 opacity-50" />
               <p>暂无分配角色</p>
@@ -428,7 +436,15 @@ export default function UserDetailView() {
           <CardTitle>所属组 ({userGroups.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {userGroups.length > 0 ? <Table rowKey="id" columns={groupColumns} dataSource={userGroups} pagination={false} size="small" /> : (
+          {userGroups.length > 0 ? (
+            <Table
+              rowKey={(record) => record.id || record.name || record.path}
+              columns={groupColumns}
+              dataSource={userGroups}
+              pagination={false}
+              size="small"
+            />
+          ) : (
             <div className="text-center py-8 text-muted-foreground">
               <Icon icon="mdi:account-group-outline" size={48} className="mx-auto mb-2 opacity-50" />
               <p>暂无所属组</p>

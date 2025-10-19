@@ -68,7 +68,7 @@ async function getDatasets() {
             name: String(it.name || ""),
             domain: String(it.domainName || it.domainId || ""),
             owner: String(it.owner || ""),
-            classification: toCn(it.dataLevel || it.classification),
+            classification: toCn(it.classification),
         })) as DatasetClassificationItem[];
     } catch {
         try {

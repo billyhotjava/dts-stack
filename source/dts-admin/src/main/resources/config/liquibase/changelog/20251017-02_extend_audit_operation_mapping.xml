@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251017-02-extend-audit-operation-mapping" author="codex">
+        <comment>Add explicit mappings for admin and platform endpoints lacking friendly audit descriptions</comment>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/role-assignments"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询角色分配列表"/>
+            <column name="source_table_template" value="用户角色"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="26"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/role-assignments"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="角色管理"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新增角色分配：{assignee}"/>
+            <column name="source_table_template" value="用户角色"/>
+            <column name="param_extractors" value="{&quot;assignee&quot;:&quot;details.目标引用&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="25"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/whoami"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="用户管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询当前管理员信息"/>
+            <column name="source_table_template" value="用户"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="24"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/directory/orgs"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="部门管理"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询组织树"/>
+            <column name="source_table_template" value="部门"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="30"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/quality/rules"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="数据质量"/>
+            <column name="action_type" value="查询"/>
+            <column name="description_template" value="查询质量规则列表"/>
+            <column name="source_table_template" value="质量规则"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="34"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/quality/rules"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据质量"/>
+            <column name="action_type" value="新增"/>
+            <column name="description_template" value="新建质量规则"/>
+            <column name="source_table_template" value="质量规则"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="33"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/quality/rules/{id}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="数据质量"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="修改质量规则：{ruleId}"/>
+            <column name="source_table_template" value="质量规则"/>
+            <column name="param_extractors" value="{&quot;ruleId&quot;:&quot;path.id&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="33"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/quality/rules/{id}"/>
+            <column name="http_method" value="DELETE"/>
+            <column name="module_name" value="数据质量"/>
+            <column name="action_type" value="删除"/>
+            <column name="description_template" value="删除质量规则：{ruleId}"/>
+            <column name="source_table_template" value="质量规则"/>
+            <column name="param_extractors" value="{&quot;ruleId&quot;:&quot;path.id&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="33"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/governance/quality/rules/{id}/toggle"/>
+            <column name="http_method" value="POST"/>
+            <column name="module_name" value="数据质量"/>
+            <column name="action_type" value="修改"/>
+            <column name="description_template" value="更新质量规则状态：{ruleId}"/>
+            <column name="source_table_template" value="质量规则"/>
+            <column name="param_extractors" value="{&quot;ruleId&quot;:&quot;path.id&quot;}"/>
+            <column name="event_class" value="AuditEvent"/>
+            <column name="order_value" valueNumeric="32"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="20251017-03-align-login-status-regex" author="codex">
+        <comment>Match login audit rules against event results and reuse actor as username</comment>
+
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="SUCCESS"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <where>url_pattern = '/api/keycloak/auth/login' AND http_method = 'POST' AND status_code_regex = '200'</where>
+        </update>
+
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="FAILED"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <where>url_pattern = '/api/keycloak/auth/login' AND http_method = 'POST' AND status_code_regex = '[45]\d{2}'</where>
+        </update>
+
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="SUCCESS"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <where>url_pattern = '/api/keycloak/auth/platform/login' AND http_method = 'POST' AND status_code_regex = '200'</where>
+        </update>
+
+        <update tableName="audit_operation_mapping">
+            <column name="status_code_regex" value="FAILED"/>
+            <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
+            <where>url_pattern = '/api/keycloak/auth/platform/login' AND http_method = 'POST' AND status_code_regex = '[45]\d{2}'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

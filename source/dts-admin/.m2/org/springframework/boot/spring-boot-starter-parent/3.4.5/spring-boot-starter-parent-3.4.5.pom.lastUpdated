@@ -1,4 +1,0 @@
-#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
-#Fri Oct 10 23:49:35 CST 2025
-@default-aliyunmaven-https\://maven.aliyun.com/repository/public/.lastUpdated=1760111375726
-https\://maven.aliyun.com/repository/public/.error=Could not transfer artifact org.springframework.boot\:spring-boot-starter-parent\:pom\:3.4.5 from/to aliyunmaven (https\://maven.aliyun.com/repository/public)\: maven.aliyun.com\: Temporary failure in name resolution

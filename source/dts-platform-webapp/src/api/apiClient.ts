@@ -229,6 +229,8 @@ axiosInstance.interceptors.response.use(
           default:
             break;
         }
+        const combinedMsg = hint ? `${errMsg}（${hint}）` : errMsg;
+        (error as any).message = combinedMsg;
         // Attempt silent refresh on 401 (non-auth endpoints) and retry once
         if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest) {
           const cfg = response.config || {};
@@ -267,7 +269,7 @@ axiosInstance.interceptors.response.use(
           }
         } else {
           if (!shouldSuppressAuthHandling && !isLoginRequest) {
-            toast.error(hint ? `${errMsg}（${hint}）` : errMsg, { position: "top-center" });
+            toast.error(combinedMsg, { position: "top-center" });
           }
         }
         return Promise.reject(error);

@@ -30,7 +30,7 @@ public class PortalMenuService {
         List<String> roles = sanitizeAudienceRoles(currentAuthorities());
         List<RemoteMenuNode> remote;
         if (roles != null && !roles.isEmpty()) {
-            remote = client.fetchMenuTreeForAudience(roles, List.of(), null);
+            remote = client.fetchMenuTreeForAudience(roles, List.of());
         } else {
             remote = client.fetchMenuTree();
         }

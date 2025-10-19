@@ -72,13 +72,14 @@ public class SecuritySqlRewriter {
             return sanitizedSql;
         }
 
-        String guardColumn = guardColumnOpt.get();
+        String guardColumn = guardColumnOpt.orElseThrow();
         ProjectionAdjustment adjustment = ensureGuardColumnProjection(sanitizedSql, guardColumn, dataset);
         sanitizedSql = adjustment.sql();
         if (adjustment.columnAdded()) {
             sanitizedSql = ensureGroupByContainsGuard(sanitizedSql, guardColumn, dataset);
         }
-        return "SELECT * FROM (" + sanitizedSql + ") " + alias + " WHERE " + predicateOpt.get();
+        String predicate = predicateOpt.orElseThrow();
+        return "SELECT * FROM (" + sanitizedSql + ") " + alias + " WHERE " + predicate;
     }
 
     private String resolveAlias(CatalogDataset dataset) {

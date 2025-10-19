@@ -665,7 +665,7 @@ public class ExploreResource {
             .map(token -> token.toUpperCase(Locale.ROOT))
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        String dataLevelColumn = columnOpt.get();
+        String dataLevelColumn = columnOpt.orElseThrow();
         int headerIndex = resolveHeaderIndex(headers, dataLevelColumn);
 
         rows.removeIf(row -> !isRowLevelAllowed(row, headers, headerIndex, dataLevelColumn, allowedLevels, allowedTokens));

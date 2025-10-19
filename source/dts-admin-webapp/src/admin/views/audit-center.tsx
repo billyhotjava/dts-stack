@@ -21,6 +21,7 @@ interface FilterState {
 	from?: string;
 	to?: string;
 	sourceSystem?: string;
+	module?: string;
 	actor?: string;
 	resource?: string;
 	clientIp?: string;
@@ -46,8 +47,11 @@ export default function AuditCenterView() {
 	const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
 	const [totalElements, setTotalElements] = useState(0);
 	const [exporting, setExporting] = useState(false);
-    const [rowDetails, setRowDetails] = useState<Record<number, AuditLogDetail | null>>({});
-    const [rowLoading, setRowLoading] = useState<Record<number, boolean>>({});
+	const [rowDetails, setRowDetails] = useState<Record<number, AuditLogDetail | null>>({});
+	const [rowLoading, setRowLoading] = useState<Record<number, boolean>>({});
+	const [moduleOptions, setModuleOptions] = useState<Array<{ value: string; label: string }>>([
+		{ value: "", label: "全部模块" },
+	]);
 
 	const loadLogs = useCallback(
 		async (nextPage: number, nextSize: number) => {
@@ -78,7 +82,20 @@ export default function AuditCenterView() {
 		loadLogs(page, size);
 	}, [loadLogs, page, size]);
 
-    // no module catalog; sourceSystem replaces the old module filter
+	useEffect(() => {
+		AuditLogService.getAuditModules()
+			.then((modules) => {
+				const mapped = modules.map((item) => ({
+					value: item.key ?? "",
+					label: item.title ?? item.key ?? "-",
+				}));
+				setModuleOptions([{ value: "", label: "全部模块" }, ...mapped]);
+			})
+			.catch((error) => {
+				console.error("Failed to load module catalog", error);
+				toast.error("加载模块字典失败");
+			});
+	}, []);
 
 	const handleRefresh = useCallback(() => {
 		loadLogs(0, size);
@@ -167,7 +184,7 @@ export default function AuditCenterView() {
                 <CardHeader className="space-y-2">
                     <CardTitle>查询条件</CardTitle>
                     <Text variant="body3" className="text-muted-foreground">
-                        支持按时间范围、来源系统、操作人、目标位置与 IP 筛选审计记录。
+                        支持按时间范围、来源系统、功能模块、操作人、目标位置与 IP 筛选审计记录。
                     </Text>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -191,6 +208,12 @@ export default function AuditCenterView() {
                                 { value: "admin", label: "系统管理" },
                                 { value: "platform", label: "业务管理" },
                             ]}
+						/>
+						<SelectField
+							label="功能模块"
+							value={filters.module || ""}
+							onChange={(value) => setFilters((prev) => ({ ...prev, module: value || undefined }))}
+							options={moduleOptions}
 						/>
                             <InputField
                                 label="操作者"
@@ -285,8 +308,6 @@ export default function AuditCenterView() {
 
 // mergeModuleOptionLists removed (unused)
 
-// module catalog removed; sourceSystem now drives filtering
-
 function buildQuery(filters: FilterState): Record<string, string> {
 	const params: Record<string, string> = {};
 	if (filters.from) {
@@ -297,6 +318,9 @@ function buildQuery(filters: FilterState): Record<string, string> {
 	}
 	if (filters.sourceSystem) {
 		params.sourceSystem = filters.sourceSystem;
+	}
+	if (filters.module) {
+		params.module = filters.module;
 	}
 	if (filters.actor) {
 		params.actor = filters.actor;

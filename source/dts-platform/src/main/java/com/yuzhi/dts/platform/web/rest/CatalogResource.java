@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import jakarta.validation.Valid;
 import java.lang.reflect.Array;
@@ -208,7 +209,6 @@ public class CatalogResource {
         @RequestParam(required = false) UUID domainId,
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String classification,
-        @RequestParam(required = false) String dataLevel,
         @RequestParam(required = false) String ownerDept,
         @RequestParam(required = false) String type,
         @RequestParam(required = false) String exposedBy,
@@ -232,8 +232,6 @@ public class CatalogResource {
             )
             .filter(ds -> classification == null || (ds.getClassification() != null && ds.getClassification().equalsIgnoreCase(classification)))
             .filter(ds -> type == null || (ds.getType() != null && ds.getType().equalsIgnoreCase(type)))
-            // ABAC filters (optional)
-            .filter(ds -> dataLevel == null || (ds.getDataLevel() != null && ds.getDataLevel().equalsIgnoreCase(dataLevel)))
             .filter(ds -> ownerDept == null || (ds.getOwnerDept() != null && ds.getOwnerDept().equalsIgnoreCase(ownerDept)))
             .filter(ds -> exposedBy == null || (ds.getExposedBy() != null && ds.getExposedBy().equalsIgnoreCase(exposedBy)))
             .filter(ds -> owner == null || (ds.getOwner() != null && ds.getOwner().toLowerCase().contains(owner.toLowerCase())))
@@ -279,7 +277,6 @@ public class CatalogResource {
         m.put("type", d.getType());
         m.put("classification", d.getClassification());
         // ABAC fields (optional for backward compatibility)
-        m.put("dataLevel", d.getDataLevel());
         m.put("ownerDept", d.getOwnerDept());
         m.put("owner", d.getOwner());
         m.put("hiveDatabase", d.getHiveDatabase());
@@ -332,6 +329,7 @@ public class CatalogResource {
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<CatalogDataset> createDataset(@Valid @RequestBody CatalogDataset dataset) {
         applySourcePolicy(dataset);
+        normalizeClassification(dataset);
         validateOwnerDepartment(dataset);
         ensurePrimarySourceIfRequired(dataset);
         ensureDatasetEditPermission(dataset);
@@ -346,6 +344,7 @@ public class CatalogResource {
         List<CatalogDataset> prepared = new ArrayList<>(items.size());
         for (CatalogDataset item : items) {
             applySourcePolicy(item);
+            normalizeClassification(item);
             validateOwnerDepartment(item);
             ensurePrimarySourceIfRequired(item);
             ensureDatasetEditPermission(item);
@@ -364,13 +363,12 @@ public class CatalogResource {
         existing.setName(patch.getName());
         existing.setType(patch.getType());
         // Keep dataset type normalization, but do not hard-require primary source when updating
-        // so that metadata changes (e.g., ownerDept, dataLevel) can be saved even if Hive/Inceptor
-        // isn’t configured in dev environments. Connectivity will still be enforced at execution time
+        // so that metadata changes（如 ownerDept）可以在缺少 Hive/Inceptor 的环境下保存。
+        // Connectivity will still be enforced at execution time
         // (e.g., preview/sync operations).
         applySourcePolicy(existing);
         existing.setClassification(patch.getClassification());
-        // ABAC fields
-        existing.setDataLevel(patch.getDataLevel());
+        normalizeClassification(existing);
         existing.setOwnerDept(patch.getOwnerDept());
         validateOwnerDepartment(existing);
         existing.setOwner(patch.getOwner());
@@ -418,6 +416,20 @@ public class CatalogResource {
             dataset.setType(defaultSource);
         } else {
             dataset.setType(requested.toUpperCase(Locale.ROOT));
+        }
+    }
+
+    private void normalizeClassification(CatalogDataset dataset) {
+        String value = dataset.getClassification();
+        DataLevel normalized = DataLevel.normalize(value);
+        if (normalized != null) {
+            dataset.setClassification(normalized.classification());
+            return;
+        }
+        if (value != null && !value.isBlank()) {
+            dataset.setClassification(value.trim().toUpperCase(Locale.ROOT));
+        } else {
+            dataset.setClassification("INTERNAL");
         }
     }
 

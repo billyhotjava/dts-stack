@@ -12,24 +12,15 @@ import { toast } from "sonner";
 import { createDataset, getCatalogConfig, listDatasets } from "@/api/platformApi";
 import { listInfraDataSources, refreshInceptorRegistry } from "@/api/services/infraService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
-import { renderDataLevelLabel } from "@/constants/governance";
 import { useUserInfo } from "@/store/userStore";
-
-// Legacy display classification removed in favor of DATA_* levels
-
-const DATA_LEVELS = [
-  { value: "DATA_PUBLIC", label: "公开 (DATA_PUBLIC)" },
-  { value: "DATA_INTERNAL", label: "内部 (DATA_INTERNAL)" },
-  { value: "DATA_SECRET", label: "秘密 (DATA_SECRET)" },
-  { value: "DATA_TOP_SECRET", label: "机密 (DATA_TOP_SECRET)" },
-] as const;
-type DataLevel = (typeof DATA_LEVELS)[number]["value"];
+import { normalizeClassification } from "@/utils/classification";
+import type { SecurityLevel } from "@/types/catalog";
 
 type ListItem = {
 	id: string;
 	name: string;
 	owner: string;
-	dataLevel?: string;
+	classification?: string;
 	ownerDept?: string;
 	domainId: string;
 	type: string;
@@ -88,14 +79,13 @@ export default function DatasetsPage() {
 	const [page, setPage] = useState(0);
 	const [size] = useState(10);
 	const [keyword, setKeyword] = useState("");
-	const [dataLevelFilter, setDataLevelFilter] = useState<string>("all");
 const [deptFilter, setDeptFilter] = useState<string>("");
 	const [instOwnerInitialized, setInstOwnerInitialized] = useState(false);
 	const [open, setOpen] = useState(false);
 	const [form, setForm] = useState({
 		name: "",
 		owner: "",
-		dataLevel: "DATA_INTERNAL" as DataLevel,
+		classification: "INTERNAL" as SecurityLevel,
 		ownerDept: "",
 		tags: "",
 		description: "",
@@ -220,25 +210,6 @@ const renderSourceLabel = (value: string) => {
 				return upper || "-";
 		}
 };
-
-    // Simple role check: OPADMIN or ROLE_OP_ADMIN can编辑
-    // Badge for DATA_* levels with tones aligned to Explore pages
-    const dataLevelBadge = (level?: string) => {
-      const key = String(level || "").toUpperCase();
-      const tone =
-        key === "DATA_TOP_SECRET"
-          ? "bg-rose-500/10 text-rose-500"
-          : key === "DATA_SECRET"
-          ? "bg-amber-500/10 text-amber-500"
-          : key === "DATA_INTERNAL"
-          ? "bg-sky-500/10 text-sky-500"
-          : key === "DATA_PUBLIC"
-          ? "bg-emerald-500/10 text-emerald-600"
-          : "bg-muted text-muted-foreground";
-      const label = renderDataLevelLabel(level);
-      return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold ${tone}`}>{label}</span>;
-    };
-
 	const toggleSecretMultiSource = useCallback(() => {
 		setMultiSourceUnlocked((prev) => {
 			const next = !prev;
@@ -254,8 +225,7 @@ const renderSourceLabel = (value: string) => {
 	const fetchList = async () => {
 		setLoading(true);
 		try {
-			const params: any = { page, size, keyword };
-			if (dataLevelFilter !== "all") params.dataLevel = dataLevelFilter;
+		const params: any = { page, size, keyword };
 			if (deptFilter.trim()) params.ownerDept = deptFilter.trim();
 			const resp = (await listDatasets(params)) as any;
 			const content = (resp && resp.content) || [];
@@ -270,11 +240,12 @@ const renderSourceLabel = (value: string) => {
 							.map((s: string) => s.trim())
 							.filter(Boolean)
 					: [];
+				const classification = normalizeClassification(it.classification ?? it.dataLevel) ?? "INTERNAL";
 				return {
 					id: String(it.id),
 					name: it.name,
 					owner: it.owner || "",
-					dataLevel: it.dataLevel || undefined,
+					classification,
 					ownerDept: it.ownerDept || undefined,
 					domainId: String(it.domainId || ""),
 					type: normalizeSourceType(rawType || resolvedDefaultSource),
@@ -336,7 +307,7 @@ const renderSourceLabel = (value: string) => {
 
 useEffect(() => {
 		void fetchList();
-	}, [page, size, resolvedDefaultSource, dataLevelFilter, deptFilter, keyword]);
+	}, [page, size, resolvedDefaultSource, deptFilter, keyword]);
 
 	// In keep-alive/multi-tab layouts, the list view may not unmount when navigating
 	// to the detail page. Refresh the list on window focus/history navigation.
@@ -430,11 +401,11 @@ const filtered = useMemo(() => {
 		}
 	};
 
-const onCreate = async () => {
-	if (!hasPrimarySource) {
-		toast.error("请先在基础管理中完善默认数据源连接");
-		return;
-	}
+	const onCreate = async () => {
+		if (!hasPrimarySource) {
+			toast.error("请先在基础管理中完善默认数据源连接");
+			return;
+		}
 	if (!form.name.trim()) {
 		toast.error("请填写数据集名称");
 		return;
@@ -457,21 +428,12 @@ const onCreate = async () => {
 		const shouldPersistLocation = selectedSourceType === "INCEPTOR" || selectedSourceType === "POSTGRES";
 		const locationDatabase = shouldPersistLocation && hiveDatabase ? hiveDatabase : undefined;
 		const locationTable = shouldPersistLocation && hiveTable ? hiveTable : undefined;
-		const legacyClassification = (
-			form.dataLevel === "DATA_PUBLIC"
-				? "PUBLIC"
-				: form.dataLevel === "DATA_INTERNAL"
-				? "INTERNAL"
-				: form.dataLevel === "DATA_SECRET"
-				? "SECRET"
-				: "TOP_SECRET"
-		) as string;
+		const classification = normalizeClassification(form.classification) ?? "INTERNAL";
 
 		const payload = {
 			name: form.name.trim(),
 			owner: form.owner.trim(),
-			classification: legacyClassification,
-			dataLevel: form.dataLevel,
+			classification,
 			ownerDept: ownerDeptValue,
 			tags: tagsList,
 			description: form.description.trim(),
@@ -528,20 +490,11 @@ const onCreate = async () => {
 		for (const r of rows) {
 			try {
 				const candidate = String((r.sourceType || "").toString().trim() || "").toUpperCase();
-                const sourceType = normalizeSourceType(multiSourceAllowed && candidate ? candidate : resolvedDefaultSource);
-                const shouldPersistLocation = sourceType === "INCEPTOR" || sourceType === "POSTGRES";
-                const locationDatabase = shouldPersistLocation && r.hiveDatabase ? r.hiveDatabase : undefined;
-                const locationTable = shouldPersistLocation && r.hiveTable ? r.hiveTable : undefined;
-					// 兼容：尝试以数据密级推导 legacy classification；若无则回退
-					const legacyClassification = r.dataLevel
-						? (String(r.dataLevel).toUpperCase() === "DATA_PUBLIC"
-							? "PUBLIC"
-							: String(r.dataLevel).toUpperCase() === "DATA_INTERNAL"
-							? "INTERNAL"
-							: String(r.dataLevel).toUpperCase() === "DATA_SECRET"
-							? "SECRET"
-							: "TOP_SECRET")
-						: (r.classification || "INTERNAL");
+				const sourceType = normalizeSourceType(multiSourceAllowed && candidate ? candidate : resolvedDefaultSource);
+				const shouldPersistLocation = sourceType === "INCEPTOR" || sourceType === "POSTGRES";
+				const locationDatabase = shouldPersistLocation && r.hiveDatabase ? r.hiveDatabase : undefined;
+				const locationTable = shouldPersistLocation && r.hiveTable ? r.hiveTable : undefined;
+				const legacyClassification = normalizeClassification(r.classification) ?? "INTERNAL";
 					await createDataset({
 						name: r.name,
 						owner: r.owner || "",
@@ -591,23 +544,9 @@ const onCreate = async () => {
 						{/* 需求：隐藏批量导入与新建入口（仅保留查询/刷新/筛选） */}
 					</div>
 				</CardHeader>
-					<CardContent className="space-y-3">
-						<div className="grid gap-2 md:grid-cols-4">
-							<div>
-								<Label>数据密级</Label>
-								<Select value={dataLevelFilter} onValueChange={setDataLevelFilter}>
-									<SelectTrigger>
-										<SelectValue placeholder="全部" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="all">全部</SelectItem>
-										{DATA_LEVELS.map((l) => (
-											<SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-		<div>
+				<CardContent className="space-y-3">
+					<div className="grid gap-2 md:grid-cols-4">
+						<div>
 			<Label>所属部门</Label>
 			<Select
 				value={deptFilter || "all"}
@@ -642,46 +581,44 @@ const onCreate = async () => {
 					<div className="overflow-hidden rounded-md border">
 						<table className="w-full min-w-[820px] table-fixed text-sm">
 							<thead className="bg-muted/50">
-							<tr className="text-left">
-								<th className="px-3 py-2 w-[32px]">#</th>
-								<th className="px-3 py-2">数据集名称</th>
-								<th className="px-3 py-2">所属部门</th>
-								<th className="px-3 py-2">数据密级</th>
-								<th className="px-3 py-2">描述</th>
-								<th className="px-3 py-2">操作</th>
-							</tr>
+								<tr className="text-left">
+									<th className="px-3 py-2 w-[32px]">#</th>
+									<th className="px-3 py-2">数据集名称</th>
+									<th className="px-3 py-2">所属部门</th>
+									<th className="px-3 py-2">描述</th>
+									<th className="px-3 py-2">操作</th>
+								</tr>
 							</thead>
 							<tbody>
 								{filtered.map((d, idx) => (
 									<tr key={d.id} className="border-b last:border-b-0">
 										<td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
 										<td className="px-3 py-2 font-medium">{d.name}</td>
-							<td className="px-3 py-2 text-xs">{renderDept(d.ownerDept)}</td>
-							<td className="px-3 py-2 text-xs">{dataLevelBadge(d.dataLevel)}</td>
-							<td className="px-3 py-2 text-xs truncate" title={d.description || "-"}>{d.description || "-"}</td>
+										<td className="px-3 py-2 text-xs">{renderDept(d.ownerDept)}</td>
+										<td className="px-3 py-2 text-xs truncate" title={d.description || "-"}>{d.description || "-"}</td>
 										<td className="px-3 py-2">
-												<div className="flex flex-wrap items-center gap-2">
-													{d.editable ? (
-														<button
-															type="button"
-															onClick={() => router.push(`/catalog/datasets/${d.id}`)}
-															className="inline-flex items-center rounded-md border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring"
-														>
-															编辑
-														</button>
-													) : (
-														<span className="text-xs text-muted-foreground">-</span>
-													)}
-												</div>
+											<div className="flex flex-wrap items-center gap-2">
+												{d.editable ? (
+													<button
+														type="button"
+														onClick={() => router.push(`/catalog/datasets/${d.id}`)}
+														className="inline-flex items-center rounded-md border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring"
+													>
+														编辑
+													</button>
+												) : (
+													<span className="text-xs text-muted-foreground">-</span>
+												)}
+											</div>
 										</td>
 									</tr>
 								))}
 								{!filtered.length && (
-                                <tr>
-							<td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">
-                                        {loading ? "加载中…" : "暂无数据"}
-                                    </td>
-                                </tr>
+									<tr>
+										<td colSpan={5} className="px-3 py-6 text-center text-xs text-muted-foreground">
+											{loading ? "加载中…" : "暂无数据"}
+										</td>
+									</tr>
 								)}
 							</tbody>
 						</table>
@@ -726,25 +663,7 @@ const onCreate = async () => {
 							<Label>负责人</Label>
 							<Input value={form.owner} onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))} />
 						</div>
-							{/* 统一显示与提交 DATA_*，不再展示 legacy 密级 */}
-							<div className="grid gap-2">
-								<Label>数据密级</Label>
-								<Select
-									value={form.dataLevel}
-									onValueChange={(v: DataLevel) => setForm((f) => ({ ...f, dataLevel: v }))}
-								>
-									<SelectTrigger>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{DATA_LEVELS.map((l) => (
-											<SelectItem key={l.value} value={l.value}>
-												{l.label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
+
 				<div className="grid gap-2">
 					<Label>所属部门 *</Label>
 					<Select

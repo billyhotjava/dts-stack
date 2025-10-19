@@ -11,6 +11,8 @@ const STORAGE_KEYS = {
   LOGOUT_TS: "dts.session.logoutTs",
 } as const;
 
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 function decodeJwtExp(token?: string): number | null {
@@ -146,6 +148,41 @@ export default function SessionManager() {
       if (timer) window.clearTimeout(timer);
     };
   }, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken, router]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    let timer: number | undefined;
+    let loggedOut = false;
+
+    const logoutDueToIdle = () => {
+      if (loggedOut) return;
+      loggedOut = true;
+      const refreshToken = token?.refreshToken;
+      const username = user?.username || user?.email || undefined;
+      if (refreshToken) {
+        userService.logout(refreshToken, username).catch(() => undefined);
+      }
+      toast.error("长时间未操作，已自动退出，请重新登录");
+      clearUserInfoAndToken();
+      localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
+      router.replace(LOGIN_ROUTE);
+    };
+
+    const resetTimer = () => {
+      if (loggedOut) return;
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(logoutDueToIdle, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const events: Array<keyof WindowEventMap> = ["click", "keydown", "mousemove", "scroll", "touchstart"];
+    events.forEach(event => window.addEventListener(event, resetTimer, true));
+    resetTimer();
+
+    return () => {
+      if (timer) window.clearTimeout(timer);
+      events.forEach(event => window.removeEventListener(event, resetTimer, true));
+    };
+  }, [isLoggedIn, clearUserInfoAndToken, router, token?.refreshToken, user?.username, user?.email]);
 
   return null;
 }

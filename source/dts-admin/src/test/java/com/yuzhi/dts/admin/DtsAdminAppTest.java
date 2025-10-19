@@ -19,7 +19,7 @@ class DtsAdminAppTest {
 
         new DtsAdminApp(environment).initApplication();
 
-        assertThat(output.getErr())
+        assertThat(output.getAll())
             .contains("You have misconfigured your application! It should not run with both the 'dev' and 'prod' profiles at the same time.");
     }
 
@@ -30,6 +30,6 @@ class DtsAdminAppTest {
 
         new DtsAdminApp(environment).initApplication();
 
-        assertThat(output.getErr()).doesNotContain("You have misconfigured your application!");
+        assertThat(output.getAll()).doesNotContain("You have misconfigured your application!");
     }
 }

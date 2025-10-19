@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -22,17 +23,22 @@ import org.springframework.util.StringUtils;
 @Component
 public class PortalSessionRegistry {
 
-    private static final Duration DEFAULT_TTL = Duration.ofMinutes(30);
-
+    private final Duration sessionTtl;
     private final Map<String, PortalSession> accessTokenIndex = new ConcurrentHashMap<>();
     private final Map<String, PortalSession> refreshTokenIndex = new ConcurrentHashMap<>();
     private final Map<String, PortalSession> userIndex = new ConcurrentHashMap<>();
+
+    public PortalSessionRegistry(@Value("${dts.platform.session.timeout-minutes:10}") long timeoutMinutes) {
+        long minutes = timeoutMinutes <= 0 ? 10 : timeoutMinutes;
+        this.sessionTtl = Duration.ofMinutes(minutes);
+    }
 
     /**
      * Register a brand new session for the given username/authorities.
      */
     public synchronized PortalSession createSession(String username, List<String> roles, List<String> permissions, AdminTokens adminTokens) {
-        PortalSession session = PortalSession.create(username, normalizeRoles(roles), permissions, null, null, adminTokens, DEFAULT_TTL);
+        enforceSingleSession(username);
+        PortalSession session = PortalSession.create(username, normalizeRoles(roles), permissions, null, null, adminTokens, sessionTtl);
         register(session);
         return session;
     }
@@ -48,6 +54,7 @@ public class PortalSessionRegistry {
         String personnelLevel,
         AdminTokens adminTokens
     ) {
+        enforceSingleSession(username);
         PortalSession session = PortalSession.create(
             username,
             normalizeRoles(roles),
@@ -55,7 +62,7 @@ public class PortalSessionRegistry {
             deptCode,
             personnelLevel,
             adminTokens,
-            DEFAULT_TTL
+            sessionTtl
         );
         register(session);
         return session;
@@ -84,7 +91,7 @@ public class PortalSessionRegistry {
                 // fall back to existing tokens when refresh fails
             }
         }
-        PortalSession renewed = existing.renew(DEFAULT_TTL, tokens);
+        PortalSession renewed = existing.renew(sessionTtl, tokens);
         register(renewed);
         return renewed;
     }
@@ -100,11 +107,19 @@ public class PortalSessionRegistry {
         if (session == null) {
             return Optional.empty();
         }
-        if (session.isExpired()) {
-            remove(session);
-            return Optional.empty();
+        synchronized (this) {
+            PortalSession current = accessTokenIndex.get(accessToken);
+            if (current == null) {
+                return Optional.empty();
+            }
+            if (current.isExpired()) {
+                remove(current);
+                return Optional.empty();
+            }
+            PortalSession extended = current.extend(sessionTtl);
+            register(extended);
+            return Optional.of(extended);
         }
-        return Optional.of(session);
     }
 
     public synchronized PortalSession invalidateByRefreshToken(String refreshToken) {
@@ -121,6 +136,28 @@ public class PortalSessionRegistry {
             userIndex.remove(existing.username());
         }
         return existing;
+    }
+
+    public synchronized boolean hasActiveSession(String username) {
+        PortalSession current = userIndex.get(username);
+        if (current == null) {
+            return false;
+        }
+        if (current.isExpired()) {
+            remove(current);
+            return false;
+        }
+        return true;
+    }
+
+    private void enforceSingleSession(String username) {
+        PortalSession existing = userIndex.get(username);
+        if (existing != null && !existing.isExpired()) {
+            throw new IllegalStateException("session_active");
+        }
+        if (existing != null && existing.isExpired()) {
+            remove(existing);
+        }
     }
 
     private void register(PortalSession session) {
@@ -208,6 +245,22 @@ public class PortalSessionRegistry {
 
         private boolean isExpired() {
             return Instant.now().isAfter(expiresAt);
+        }
+
+        private PortalSession extend(Duration ttl) {
+            Instant newExpiry = Instant.now().plus(ttl);
+            return new PortalSession(
+                sessionId,
+                username,
+                roles,
+                permissions,
+                deptCode,
+                personnelLevel,
+                accessToken,
+                refreshToken,
+                newExpiry,
+                adminTokens
+            );
         }
     }
 

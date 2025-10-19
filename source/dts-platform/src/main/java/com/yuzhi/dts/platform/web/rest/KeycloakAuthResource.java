@@ -35,7 +35,7 @@ public class KeycloakAuthResource {
     }
 
     public record LoginPayload(String username, String password) {}
-    public record RefreshPayload(String refreshToken) {}
+    public record RefreshPayload(String refreshToken, String username) {}
 
     public record PkiSessionPayload(String username, Map<String, Object> user) {}
 
@@ -53,7 +53,17 @@ public class KeycloakAuthResource {
             // audit: login begin
             java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
             auditPayload.put("username", username);
-            audit.recordAs(username, "AUTH LOGIN", "auth", "admin_keycloak_user", username, "PENDING", auditPayload, null);
+            auditPayload.put("audience", "platform");
+            audit.recordAs(
+                username,
+                "AUTH LOGIN",
+                "platform",
+                "portal_user",
+                username,
+                "PENDING",
+                auditPayload,
+                Map.of("audience", "platform")
+            );
             if (log.isInfoEnabled()) {
                 log.info("[login] attempt username={}", username);
             }
@@ -138,16 +148,60 @@ public class KeycloakAuthResource {
             if (log.isInfoEnabled()) {
                 log.info("[login] success username={} roles={} perms={}", username, mappedRoles, permissions);
             }
-            audit.recordAs(username, "AUTH LOGIN", "auth", "admin_keycloak_user", username, "SUCCESS", java.util.Map.of("audience", "platform"), null);
-        return ResponseEntity.ok(ApiResponses.ok(data));
+            audit.recordAs(
+                username,
+                "AUTH LOGIN",
+                "platform",
+                "portal_user",
+                username,
+                "SUCCESS",
+                Map.of("audience", "platform"),
+                null
+            );
+            return ResponseEntity.ok(ApiResponses.ok(data));
+        } catch (IllegalStateException ex) {
+            if ("session_active".equals(ex.getMessage())) {
+                String msg = "当前账号已在其他页面登录，请先退出后再尝试";
+                log.warn("[login] active session blocked username={}", username);
+                audit.recordAs(
+                    username,
+                    "AUTH LOGIN",
+                    "platform",
+                    "portal_user",
+                    username,
+                    "FAILED",
+                    Map.of("audience", "platform", "error", msg),
+                    null
+                );
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponses.error("SESSION_ACTIVE", msg));
+            }
+            throw ex;
         } catch (org.springframework.security.authentication.BadCredentialsException ex) {
             log.warn("[login] unauthorized username={} reason={}", username, ex.getMessage());
-            audit.record("AUTH LOGIN", "auth", "admin_keycloak_user", username, "FAILED", java.util.Map.of("error", ex.getMessage()));
+            audit.recordAs(
+                username,
+                "AUTH LOGIN",
+                "platform",
+                "portal_user",
+                username,
+                "FAILED",
+                Map.of("audience", "platform", "error", ex.getMessage()),
+                null
+            );
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error(ex.getMessage()));
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
             log.error("[login] error username={} msg={}", username, msg);
-            audit.record("AUTH LOGIN", "auth", "admin_keycloak_user", username, "FAILED", java.util.Map.of("error", msg));
+            audit.recordAs(
+                username,
+                "AUTH LOGIN",
+                "platform",
+                "portal_user",
+                username,
+                "FAILED",
+                Map.of("audience", "platform", "error", msg),
+                null
+            );
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
         }
     }
@@ -156,20 +210,61 @@ public class KeycloakAuthResource {
     public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) RefreshPayload payload) {
         String portalRefresh = payload != null ? payload.refreshToken() : null;
         PortalSession session = sessionRegistry.invalidateByRefreshToken(portalRefresh);
-        String actor = session != null ? session.username() : com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("unknown");
-        // mark begin with explicit actor to avoid anonymous drop
-        audit.recordAs(actor, "AUTH LOGOUT", "auth", "admin_keycloak_user", actor, "PENDING", java.util.Map.of("hasRefreshToken", portalRefresh != null && !portalRefresh.isBlank()), null);
+        String requestedActor = payload != null ? sanitizeActor(payload.username()) : null;
+        String sessionActor = session != null ? sanitizeActor(session.username()) : null;
+        String contextActor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
+        String actor = firstNonBlank(sessionActor, requestedActor, contextActor, "unknown");
+
+        Map<String, Object> beginPayload = new LinkedHashMap<>();
+        beginPayload.put("hasRefreshToken", StringUtils.hasText(portalRefresh));
+        audit.recordAs(
+            actor,
+            "AUTH LOGOUT",
+            "platform",
+            "portal_user",
+            actor,
+            "PENDING",
+            beginPayload,
+            Map.of("audience", "platform")
+        );
+
+        boolean revokeFailed = false;
+        String revokeError = null;
         if (session != null) {
             AdminTokens adminTokens = session.adminTokens();
             if (adminTokens != null && StringUtils.hasText(adminTokens.refreshToken())) {
                 try {
                     adminAuthClient.logout(adminTokens.refreshToken());
-                } catch (Exception ignore) {
-                    // best-effort
+                } catch (Exception ex) {
+                    revokeFailed = true;
+                    revokeError = ex.getMessage();
                 }
             }
         }
-        audit.recordAs(actor, "AUTH LOGOUT", "auth", "admin_keycloak_user", actor, "SUCCESS", java.util.Map.of(), null);
+
+        if (revokeFailed) {
+            audit.recordAs(
+                actor,
+                "AUTH LOGOUT",
+                "platform",
+                "portal_user",
+                actor,
+                "FAILED",
+                Map.of("audience", "platform", "error", revokeError == null ? "LOGOUT_ERROR" : revokeError),
+                null
+            );
+        } else {
+            audit.recordAs(
+                actor,
+                "AUTH LOGOUT",
+                "platform",
+                "portal_user",
+                actor,
+                "SUCCESS",
+                Map.of("audience", "platform"),
+                null
+            );
+        }
         return ResponseEntity.ok(ApiResponses.ok(null));
     }
 
@@ -190,7 +285,17 @@ public class KeycloakAuthResource {
             java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
             auditPayload.put("username", username);
             auditPayload.put("mode", "pki");
-            audit.recordAs(username, "AUTH LOGIN", "auth", "admin_keycloak_user", username, "PENDING", auditPayload, null);
+            auditPayload.put("audience", "platform");
+            audit.recordAs(
+                username,
+                "AUTH LOGIN",
+                "platform",
+                "portal_user",
+                username,
+                "PENDING",
+                auditPayload,
+                Map.of("audience", "platform", "mode", "pki")
+            );
 
             Map<String, Object> user = payload.user() == null ? java.util.Collections.emptyMap() : new java.util.LinkedHashMap<>(payload.user());
             // Normalize and map roles from upstream into platform authorities
@@ -243,11 +348,45 @@ public class KeycloakAuthResource {
             data.put("accessToken", session.accessToken());
             data.put("refreshToken", session.refreshToken());
 
-            audit.recordAs(username, "AUTH LOGIN", "auth", "admin_keycloak_user", username, "SUCCESS", java.util.Map.of("audience", "platform", "mode", "pki"), null);
+            audit.recordAs(
+                username,
+                "AUTH LOGIN",
+                "platform",
+                "portal_user",
+                username,
+                "SUCCESS",
+                Map.of("audience", "platform", "mode", "pki"),
+                null
+            );
             return ResponseEntity.ok(ApiResponses.ok(data));
+        } catch (IllegalStateException ex) {
+            if ("session_active".equals(ex.getMessage())) {
+                String msg = "当前账号已在其他页面登录，请先退出后再尝试";
+                audit.recordAs(
+                    username,
+                    "AUTH LOGIN",
+                    "platform",
+                    "portal_user",
+                    username,
+                    "FAILED",
+                    Map.of("audience", "platform", "mode", "pki", "error", msg),
+                    null
+                );
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponses.error("SESSION_ACTIVE", msg));
+            }
+            throw ex;
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
-            audit.record("AUTH LOGIN", "auth", "admin_keycloak_user", username, "FAILED", java.util.Map.of("error", msg));
+            audit.recordAs(
+                username,
+                "AUTH LOGIN",
+                "platform",
+                "portal_user",
+                username,
+                "FAILED",
+                Map.of("audience", "platform", "mode", "pki", "error", msg),
+                null
+            );
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
         }
     }
@@ -255,7 +394,18 @@ public class KeycloakAuthResource {
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<Map<String, String>>> refresh(@RequestBody RefreshPayload payload) {
         try {
-            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "PENDING", java.util.Map.of());
+            String currentActor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
+            String actor = currentActor != null ? currentActor : "unknown";
+            audit.recordAs(
+                actor,
+                "AUTH REFRESH",
+                "platform",
+                "portal_user",
+                actor,
+                "PENDING",
+                Map.of("audience", "platform"),
+                null
+            );
             PortalSession refreshed = sessionRegistry.refreshSession(
                 payload.refreshToken(),
                 existing -> {
@@ -294,15 +444,67 @@ public class KeycloakAuthResource {
                     data.put("adminRefreshTokenExpiresAt", adminTokens.refreshExpiresAt().toString());
                 }
             }
-            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "SUCCESS", java.util.Map.of());
+            audit.recordAs(
+                actor,
+                "AUTH REFRESH",
+                "platform",
+                "portal_user",
+                actor,
+                "SUCCESS",
+                Map.of("audience", "platform"),
+                null
+            );
             return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (IllegalArgumentException ex) {
-            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "FAILED", java.util.Map.of("error", ex.getMessage()));
+            String actor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
+            audit.recordAs(
+                actor != null ? actor : "unknown",
+                "AUTH REFRESH",
+                "platform",
+                "portal_user",
+                actor != null ? actor : "unknown",
+                "FAILED",
+                Map.of("audience", "platform", "error", ex.getMessage()),
+                null
+            );
             return ResponseEntity.status(401).body(ApiResponses.error("刷新令牌无效，请重新登录"));
         } catch (IllegalStateException ex) {
-            audit.record("AUTH REFRESH", "auth", "admin_keycloak_user", com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous"), "FAILED", java.util.Map.of("error", ex.getMessage()));
+            String actor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
+            audit.recordAs(
+                actor != null ? actor : "unknown",
+                "AUTH REFRESH",
+                "platform",
+                "portal_user",
+                actor != null ? actor : "unknown",
+                "FAILED",
+                Map.of("audience", "platform", "error", ex.getMessage()),
+                null
+            );
             return ResponseEntity.status(401).body(ApiResponses.error("会话已过期，请重新登录"));
         }
+    }
+
+    private String sanitizeActor(String candidate) {
+        if (!StringUtils.hasText(candidate)) {
+            return null;
+        }
+        String trimmed = candidate.trim();
+        if ("anonymous".equalsIgnoreCase(trimmed) || "anonymoususer".equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        return trimmed;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private List<String> toStringList(Object value) {

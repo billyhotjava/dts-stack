@@ -43,8 +43,6 @@ export interface DatasetAsset {
 	owner: string;
 	bizDomainId: string; // domain id
 	classification: SecurityLevel;
-	// ABAC fields (optional during transition)
-	dataLevel?: DataLevel;
 	ownerDept?: string;
     tags: string[];
 	description?: string;

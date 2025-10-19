@@ -253,7 +253,7 @@ export default function DataDomainManagementPage() {
 						name: it.name,
 						domainKey: String(it.domainId || ""),
 						owner: it.owner || "",
-						classification: it.dataLevel ? (String(it.dataLevel).toUpperCase() as DataLevel) : fromLegacy(it.classification || "INTERNAL"),
+						classification: fromLegacy(it.classification || "INTERNAL"),
 						sourceSystem: it.type || "",
 						lastUpdated: new Date().toISOString().slice(0, 10),
 						tags: [],

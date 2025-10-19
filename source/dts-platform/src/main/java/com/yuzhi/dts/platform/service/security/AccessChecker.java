@@ -8,7 +8,6 @@ import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.security.policy.PersonnelLevel;
-import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
@@ -40,14 +39,13 @@ public class AccessChecker {
         if (dataset == null) return false;
         // Special handling: OP_ADMIN (and ADMIN) can access all datasets without restriction
         if (isSuperAdmin()) return true;
-        // Level check (ABAC: personnel_level vs data_level)，缺失时回退旧密级逻辑
+        // Level check (ABAC: personnel_level vs dataset classification)，缺失时回退旧密级逻辑
         if (!levelAllowed(dataset)) {
             if (log.isDebugEnabled()) {
                 log.debug(
-                    "Dataset {}({}) rejected by level gate: dataLevel={}, classification={}, userPersonnel={}, userMaxLevel={}",
+                    "Dataset {}({}) rejected by level gate: classification={}, userPersonnel={}, userMaxLevel={}",
                     dataset.getName(),
                     dataset.getId(),
-                    dataset.getDataLevel(),
                     dataset.getClassification(),
                     extractPersonnelLevelFromJwt(),
                     classificationUtils.getCurrentUserMaxLevel()
@@ -60,14 +58,14 @@ public class AccessChecker {
 
     private boolean levelAllowed(CatalogDataset dataset) {
         // Normalize dataset level to new DATA_*; accept legacy values
-        String levelStr = dataset.getDataLevel() != null ? dataset.getDataLevel() : dataset.getClassification();
+        String levelStr = dataset.getClassification();
         DataLevel resourceLevel = DataLevel.normalize(levelStr);
         // No level info on resource → fall back to legacy behavior
         if (resourceLevel == null) {
             boolean allowed = classificationUtils.canAccess(levelStr);
             if (log.isDebugEnabled()) {
                 log.debug(
-                    "Dataset {}({}) evaluated via classification fallback: rawLevel={}, userMaxLevel={}, allowed={}",
+                    "Dataset {}({}) evaluated via classification fallback: classification={}, userMaxLevel={}, allowed={}",
                     dataset.getName(),
                     dataset.getId(),
                     levelStr,
@@ -84,10 +82,9 @@ public class AccessChecker {
             boolean allowed = classificationUtils.canAccess(levelStr);
             if (log.isDebugEnabled()) {
                 log.debug(
-                    "Dataset {}({}) fell back to classification gate due to missing personnel claim: dataLevel={}, classification={}, userMaxLevel={}, allowed={}",
+                    "Dataset {}({}) fell back to classification gate due to missing personnel claim: classification={}, userMaxLevel={}, allowed={}",
                     dataset.getName(),
                     dataset.getId(),
-                    dataset.getDataLevel(),
                     dataset.getClassification(),
                     classificationUtils.getCurrentUserMaxLevel(),
                     allowed
@@ -99,10 +96,9 @@ public class AccessChecker {
         boolean allowed = personnel.rank() >= resourceLevel.rank();
         if (log.isDebugEnabled()) {
             log.debug(
-                "Dataset {}({}) ABAC check: dataLevel={}, classification={}, resourceRank={}, personnelLevel={}, personnelRank={}, allowed={}",
+                "Dataset {}({}) ABAC check: classification={}, resourceRank={}, personnelLevel={}, personnelRank={}, allowed={}",
                 dataset.getName(),
                 dataset.getId(),
-                dataset.getDataLevel(),
                 dataset.getClassification(),
                 resourceLevel.rank(),
                 personnel,

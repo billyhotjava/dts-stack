@@ -35,7 +35,7 @@ class CatalogResourceIT {
         Map<String, Object> payload = Map.of(
             "name", "dept_asset",
             "type", "TRINO",
-            "dataLevel", "DATA_INTERNAL"
+            "classification", "INTERNAL"
         );
         mockMvc
             .perform(
@@ -53,7 +53,7 @@ class CatalogResourceIT {
         Map<String, Object> payload = Map.of(
             "name", "inst_asset",
             "type", "TRINO",
-            "dataLevel", "DATA_INTERNAL",
+            "classification", "INTERNAL",
             "ownerDept", "D010"
         );
         mockMvc

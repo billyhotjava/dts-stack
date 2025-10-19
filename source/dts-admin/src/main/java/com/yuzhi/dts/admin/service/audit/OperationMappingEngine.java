@@ -38,6 +38,7 @@ public class OperationMappingEngine {
         public String description;        // 操作内容
         public String sourceTable;        // 源表（中文）
         public String eventClass;         // SecurityEvent/AuditEvent
+        public boolean ruleMatched;       // true if derived from mapping rule, false if fallback
     }
 
     private static final class CompiledRule {
@@ -48,6 +49,41 @@ public class OperationMappingEngine {
             this.raw = raw;
             this.pattern = pattern;
             this.statusPattern = statusPattern;
+        }
+    }
+    public static final class RuleSummary {
+        private final Long id;
+        private final String moduleName;
+        private final String actionType;
+        private final String descriptionTemplate;
+        private final String sourceTableTemplate;
+
+        RuleSummary(AuditOperationMapping mapping) {
+            this.id = mapping.getId();
+            this.moduleName = safeTrim(mapping.getModuleName());
+            this.actionType = safeTrim(mapping.getActionType());
+            this.descriptionTemplate = safeTrim(mapping.getDescriptionTemplate());
+            this.sourceTableTemplate = safeTrim(mapping.getSourceTableTemplate());
+        }
+
+        public Long getId() {
+            return id;
+        }
+
+        public String getModuleName() {
+            return moduleName;
+        }
+
+        public String getActionType() {
+            return actionType;
+        }
+
+        public String getDescriptionTemplate() {
+            return descriptionTemplate;
+        }
+
+        public String getSourceTableTemplate() {
+            return sourceTableTemplate;
         }
     }
 
@@ -117,6 +153,7 @@ public class OperationMappingEngine {
         for (CompiledRule r : rules) {
             if (!methodMatches(method, r.raw.getHttpMethod())) continue;
             if (!statusMatches(statusCode, r.statusPattern)) continue;
+            if (!sourceMatches(event.getSourceSystem(), r.raw.getSourceSystem())) continue;
             PathPattern.PathMatchInfo info = r.pattern.matchAndExtract(PathContainer.parsePath(uri));
             if (info == null) continue;
             if (best == null) {
@@ -128,7 +165,37 @@ public class OperationMappingEngine {
             if (best == r) bestInfo = info;
         }
         if (best == null) return Optional.empty();
-        return Optional.of(render(best, bestInfo, event, details));
+        ResolvedOperation resolved = render(best, bestInfo, event, details);
+        resolved.ruleMatched = true;
+        return Optional.of(resolved);
+    }
+
+    /**
+     * Resolve operation information using mapping rules; if no rule matches, derive a best-effort fallback
+     * using legacy heuristics. The returned {@link ResolvedOperation} indicates whether a rule was matched.
+     */
+    public Optional<ResolvedOperation> resolveWithFallback(AuditEvent event) {
+        if (event == null) {
+            return Optional.empty();
+        }
+        Optional<ResolvedOperation> rule = resolve(event);
+        if (rule.isPresent()) {
+            return rule;
+        }
+        ResolvedOperation fallback = buildFallbackOperation(event);
+        return fallback == null ? Optional.empty() : Optional.of(fallback);
+    }
+
+    public List<RuleSummary> describeRules() {
+        List<CompiledRule> snapshot = this.rules;
+        if (snapshot.isEmpty()) {
+            return List.of();
+        }
+        List<RuleSummary> summaries = new ArrayList<>(snapshot.size());
+        for (CompiledRule rule : snapshot) {
+            summaries.add(new RuleSummary(rule.raw));
+        }
+        return Collections.unmodifiableList(summaries);
     }
 
     private boolean methodMatches(String req, String rule) {
@@ -142,6 +209,27 @@ public class OperationMappingEngine {
         if (pattern == null) return true;
         if (!StringUtils.hasText(statusCode)) return false;
         return pattern.matcher(statusCode.trim()).matches();
+    }
+
+    private boolean sourceMatches(String eventSource, String ruleSource) {
+        if (!StringUtils.hasText(ruleSource)) {
+            return true;
+        }
+        if (!StringUtils.hasText(eventSource)) {
+            return false;
+        }
+        String actual = eventSource.trim().toLowerCase(Locale.ROOT);
+        String[] tokens = ruleSource.split(",");
+        for (String token : tokens) {
+            if (!StringUtils.hasText(token)) {
+                continue;
+            }
+            String expected = token.trim().toLowerCase(Locale.ROOT);
+            if ("*".equals(expected) || actual.equals(expected)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String extractStatusCode(Map<String, Object> details, AuditEvent event) {
@@ -220,6 +308,13 @@ public class OperationMappingEngine {
         putIfNotBlank(vars, "event.resourceId", event.getResourceId());
         putIfNotBlank(vars, "event.result", event.getResult());
         putIfNotBlank(vars, "event.clientIp", event.getClientIp());
+        putIfNotBlank(vars, "event.sourceSystem", event.getSourceSystem());
+        putIfNotBlank(vars, "event.actorRole", event.getActorRole());
+        String actorRoleText = localizeActorRole(event.getActorRole(), event.getActor());
+        if (actorRoleText != null) {
+            vars.put("event.actorRoleText", actorRoleText);
+            vars.put("操作者角色", actorRoleText);
+        }
 
         Map<String, Object> safeDetails = (details == null) ? Collections.emptyMap() : details;
         for (Map.Entry<String, Object> e : safeDetails.entrySet()) {
@@ -317,5 +412,394 @@ public class OperationMappingEngine {
             result = result.substring(0, l) + String.valueOf(v) + result.substring(r + 1);
         }
         return result;
+    }
+
+    private ResolvedOperation buildFallbackOperation(AuditEvent event) {
+        FallbackContext ctx = new FallbackContext(event, parseDetails(event.getDetails()));
+        String signalType = inferTypeFromSignal(ctx.actionUpper, ctx.summary);
+        String type = signalType;
+        if (!StringUtils.hasText(type)) {
+            type = inferTypeFromActionCode(ctx.extraTags);
+        }
+        if (!StringUtils.hasText(type) && containsLogin(ctx.actionUpper, ctx.summary)) {
+            type = "登录";
+        }
+        if (!StringUtils.hasText(type) && containsLogout(ctx.actionUpper, ctx.summary)) {
+            type = "登出";
+        }
+        if (!StringUtils.hasText(type)) {
+            type = inferTypeFromHttp(ctx.method, ctx, signalType);
+        }
+
+        String label = resolveResourceLabel(ctx);
+        String target = resolveTargetIndicator(ctx);
+        String content = determineFallbackContent(ctx, type, label, target);
+        if (!StringUtils.hasText(type) && !StringUtils.hasText(content)) {
+            return null;
+        }
+
+        ResolvedOperation resolved = new ResolvedOperation();
+        resolved.ruleMatched = false;
+        resolved.ruleId = null;
+        resolved.moduleName = StringUtils.hasText(ctx.module) ? ctx.module : null;
+        resolved.actionType = StringUtils.hasText(type) ? type : null;
+        resolved.description = StringUtils.hasText(content) ? content : null;
+        resolved.sourceTable = StringUtils.hasText(label) ? label : null;
+        resolved.eventClass = StringUtils.hasText(event.getEventClass()) ? event.getEventClass() : null;
+        return resolved;
+    }
+
+    private String determineFallbackContent(FallbackContext ctx, String type, String label, String target) {
+        if (StringUtils.hasText(ctx.summary) && shouldReuseSummary(type, ctx.summary)) {
+            String text = ctx.summary;
+            if (StringUtils.hasText(target)) {
+                text = appendTargetIfMissing(text, target);
+            }
+            return text;
+        }
+        String effectiveLabel = StringUtils.hasText(label) ? label : "资源";
+        if (StringUtils.hasText(type)) {
+            String built = buildOperationContent(type, effectiveLabel, target, ctx);
+            if (StringUtils.hasText(built)) {
+                return built;
+            }
+        }
+        if (StringUtils.hasText(ctx.summary)) {
+            String text = ctx.summary;
+            if (StringUtils.hasText(target)) {
+                text = appendTargetIfMissing(text, target);
+            }
+            return text;
+        }
+        return null;
+    }
+
+    private String buildOperationContent(String type, String label, String target, FallbackContext ctx) {
+        switch (type) {
+            case "查询":
+                if (isListQuery(ctx)) {
+                    return "查询" + label + "列表";
+                }
+                if (StringUtils.hasText(target)) {
+                    return "查看" + label + wrapTarget(target);
+                }
+                return "查询" + label;
+            case "新增":
+                if (StringUtils.hasText(target)) {
+                    return "新增" + label + wrapTarget(target);
+                }
+                return "新增" + label;
+            case "修改":
+                if (StringUtils.hasText(target)) {
+                    return "修改" + label + wrapTarget(target);
+                }
+                return "修改" + label;
+            case "部分更新":
+                if (StringUtils.hasText(target)) {
+                    return "部分更新" + label + wrapTarget(target);
+                }
+                return "部分更新" + label;
+            case "删除":
+                if (StringUtils.hasText(target)) {
+                    return "删除" + label + wrapTarget(target);
+                }
+                return "删除" + label;
+            case "导出":
+                return "导出" + label;
+            case "执行":
+                if (StringUtils.hasText(target)) {
+                    return "执行" + label + wrapTarget(target);
+                }
+                return "执行" + label;
+            case "审批":
+                if (StringUtils.hasText(target)) {
+                    return "审批" + label + wrapTarget(target);
+                }
+                return "处理" + label + "审批";
+            case "登录":
+                if (StringUtils.hasText(ctx.summary)) {
+                    return ctx.summary;
+                }
+                return "登录系统";
+            case "登出":
+                if (StringUtils.hasText(ctx.summary)) {
+                    return ctx.summary;
+                }
+                return "退出系统";
+            default:
+                return ctx.summary;
+        }
+    }
+
+    private String resolveResourceLabel(FallbackContext ctx) {
+        if (StringUtils.hasText(ctx.targetTableLabel)) {
+            return ctx.targetTableLabel;
+        }
+        if (StringUtils.hasText(ctx.targetTable)) {
+            String mapped = mapTableLabel(ctx.targetTable);
+            if (StringUtils.hasText(mapped)) {
+                return mapped;
+            }
+        }
+        if (StringUtils.hasText(ctx.resourceType)) {
+            String mapped = mapTableLabel(ctx.resourceType);
+            if (StringUtils.hasText(mapped)) {
+                return mapped;
+            }
+        }
+        if (StringUtils.hasText(ctx.module) && hasChinese(ctx.module)) {
+            return ctx.module;
+        }
+        return "资源";
+    }
+
+    private String resolveTargetIndicator(FallbackContext ctx) {
+        if (StringUtils.hasText(ctx.targetRef)) {
+            return ctx.targetRef;
+        }
+        if (StringUtils.hasText(ctx.targetId)) {
+            return ctx.targetId;
+        }
+        if (StringUtils.hasText(ctx.resourceId)) {
+            return ctx.resourceId;
+        }
+        return null;
+    }
+
+    private boolean isListQuery(FallbackContext ctx) {
+        if (!"GET".equals(ctx.method)) {
+            return false;
+        }
+        return !StringUtils.hasText(ctx.targetId) && !StringUtils.hasText(ctx.resourceId);
+    }
+
+    private boolean containsLogin(String actionUpper, String summary) {
+        if (!StringUtils.hasText(actionUpper) && !StringUtils.hasText(summary)) {
+            return false;
+        }
+        if (StringUtils.hasText(actionUpper) && (actionUpper.contains("LOGIN") || actionUpper.contains("SIGNIN") || actionUpper.contains("AUTH"))) {
+            return true;
+        }
+        return StringUtils.hasText(summary) && (summary.contains("登录") || summary.contains("登陆"));
+    }
+
+    private boolean containsLogout(String actionUpper, String summary) {
+        if (!StringUtils.hasText(actionUpper) && !StringUtils.hasText(summary)) {
+            return false;
+        }
+        if (StringUtils.hasText(actionUpper) && (actionUpper.contains("LOGOUT") || actionUpper.contains("SIGNOUT"))) {
+            return true;
+        }
+        return StringUtils.hasText(summary) && (summary.contains("退出") || summary.contains("登出"));
+    }
+
+    private String inferTypeFromSignal(String actionUpper, String summary) {
+        if (!StringUtils.hasText(actionUpper) && !StringUtils.hasText(summary)) return null;
+        String upper = actionUpper == null ? "" : actionUpper;
+        String text = summary == null ? "" : summary;
+        if (upper.contains("EXPORT") || text.contains("导出")) return "导出";
+        if (upper.contains("EXECUTE") || upper.contains("RUN") || text.contains("执行")) return "执行";
+        if (upper.contains("DELETE") || upper.contains("REMOVE") || upper.contains("DESTROY") || text.contains("删除") || text.contains("移除")) return "删除";
+        if (upper.contains("CREATE") || upper.contains("ADD") || upper.contains("REGISTER") || text.contains("新增") || text.contains("添加") || text.contains("新建")) return "新增";
+        if (upper.contains("PATCH")) return "部分更新";
+        if (upper.contains("UPDATE") || upper.contains("MODIFY") || upper.contains("RESET") || upper.contains("EDIT") || upper.contains("ENABLE") || upper.contains("DISABLE") || upper.contains("GRANT") || upper.contains("REVOKE") || text.contains("修改") || text.contains("更新") || text.contains("重置") || text.contains("授权") || text.contains("启用") || text.contains("禁用")) return "修改";
+        if (upper.contains("APPROVE") || text.contains("审批")) return "审批";
+        if (upper.contains("LIST") || upper.contains("SEARCH") || upper.contains("QUERY") || upper.contains("VIEW") || text.contains("查询") || text.contains("查看")) return "查询";
+        return null;
+    }
+
+    private String inferTypeFromActionCode(String extraTagsJson) {
+        if (!StringUtils.hasText(extraTagsJson)) {
+            return null;
+        }
+        try {
+            Map<?, ?> tags = objectMapper.readValue(extraTagsJson, Map.class);
+            Object ac = tags.get("actionCode");
+            if (ac == null) return null;
+            String code = String.valueOf(ac).trim().toUpperCase(Locale.ROOT);
+            if (code.contains("VIEW") || code.contains("LIST") || code.contains("SEARCH") || code.contains("EXPORT")) return "查询";
+            if (code.contains("CREATE") || code.contains("ADD") || code.contains("NEW")) return "新增";
+            if (code.contains("UPDATE") || code.contains("EDIT") || code.contains("RESET") || code.contains("GRANT") || code.contains("REVOKE") || code.contains("ENABLE") || code.contains("DISABLE") || code.contains("SET")) return "修改";
+            if (code.contains("DELETE") || code.contains("REMOVE")) return "删除";
+            if (code.contains("LOGIN")) return "登录";
+            if (code.contains("LOGOUT")) return "登出";
+        } catch (Exception ignore) {}
+        return null;
+    }
+
+    private String inferTypeFromHttp(String method, FallbackContext ctx, String signalType) {
+        if (!StringUtils.hasText(method)) {
+            return likelyQuery(ctx) ? "查询" : null;
+        }
+        switch (method) {
+            case "GET":
+            case "HEAD":
+            case "OPTIONS":
+                return "查询";
+            case "POST":
+                if ("审批".equals(signalType)) return "审批";
+                if (likelyQuery(ctx)) return "查询";
+                return "新增";
+            case "PUT":
+                return "修改";
+            case "PATCH":
+                return "部分更新";
+            case "DELETE":
+                return "删除";
+            default:
+                return null;
+        }
+    }
+
+    private boolean likelyQuery(FallbackContext ctx) {
+        if (ctx.actionUpper.contains("LOGIN") || ctx.actionUpper.contains("LOGOUT") || ctx.actionUpper.contains("CREATE") || ctx.actionUpper.contains("UPDATE") || ctx.actionUpper.contains("DELETE") || ctx.actionUpper.contains("REMOVE")) {
+            return false;
+        }
+        if (StringUtils.hasText(ctx.method)) {
+            return "GET".equals(ctx.method);
+        }
+        String uri = ctx.requestUri == null ? "" : ctx.requestUri;
+        String rt = ctx.resourceTypeLower;
+        boolean knownResource = rt.contains("user") || rt.contains("role") || rt.contains("menu") || rt.contains("org") || rt.contains("approval") || rt.contains("model") || rt.contains("catalog") || rt.contains("standard");
+        boolean looksApi = uri.startsWith("/api/") || uri.startsWith("/api");
+        return knownResource && looksApi;
+    }
+
+    private boolean shouldReuseSummary(String type, String summary) {
+        if (!StringUtils.hasText(summary)) return false;
+        if (!hasChinese(summary)) return false;
+        if (!StringUtils.hasText(type)) return true;
+        if ("登录".equals(type) || "登出".equals(type)) return true;
+        return summary.contains(type);
+    }
+
+    private boolean hasChinese(String s) {
+        if (s == null || s.isBlank()) return false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= '\u4e00' && c <= '\u9fa5') return true;
+        }
+        return false;
+    }
+
+    private String wrapTarget(String target) {
+        String trimmed = target == null ? "" : target.trim();
+        if (trimmed.startsWith("【") && trimmed.endsWith("】")) {
+            return trimmed;
+        }
+        return "【" + trimmed + "】";
+    }
+
+    private String appendTargetIfMissing(String text, String target) {
+        if (!StringUtils.hasText(text) || !StringUtils.hasText(target)) {
+            return text;
+        }
+        if (text.contains(target) || text.contains(wrapTarget(target))) {
+            return text;
+        }
+        return text + wrapTarget(target);
+    }
+
+    public static String mapTableLabel(String key) {
+        if (key == null) return null;
+        String k = key.trim().toLowerCase(Locale.ROOT);
+        if (k.equals("admin_keycloak_user") || k.equals("admin") || k.equals("admin.auth") || k.equals("user")) return "用户";
+        if (k.equals("portal_menu") || k.equals("menu") || k.equals("portal.menus") || k.equals("portal-menus")) return "门户菜单";
+        if (k.equals("role") || k.startsWith("role_")) return "角色";
+        if (k.equals("admin_role_assignment") || k.equals("role_assignment") || k.equals("role_assignments")) return "用户角色";
+        if (k.equals("approval_requests") || k.equals("approval_request") || k.equals("approvals") || k.equals("approval")) return "审批请求";
+        if (k.equals("organization") || k.equals("organization_node") || k.equals("org") || k.startsWith("admin.org")) return "部门";
+        if (k.equals("localization") || k.contains("localization")) return "界面语言";
+        return key;
+    }
+
+    private static String coerceToString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString();
+        return text == null ? null : text.trim();
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String val : values) {
+            if (StringUtils.hasText(val)) {
+                return val;
+            }
+        }
+        return null;
+    }
+
+    private static String safeUpper(String value) {
+        return StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "";
+    }
+
+    private static String safeTrim(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String localizeActorRole(String role, String actor) {
+        String uname = actor == null ? null : actor.trim().toLowerCase(Locale.ROOT);
+        if (!StringUtils.hasText(role)) {
+            if ("sysadmin".equals(uname)) return "系统管理员";
+            if ("authadmin".equals(uname)) return "授权管理员";
+            if ("auditadmin".equals(uname) || "securityadmin".equals(uname)) return "安全审计员";
+            if ("opadmin".equals(uname)) return "运维管理员";
+            return null;
+        }
+        String normalized = role.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+        return switch (normalized) {
+            case "ROLE_SYS_ADMIN", "SYS_ADMIN" -> "系统管理员";
+            case "ROLE_AUTH_ADMIN", "AUTH_ADMIN" -> "授权管理员";
+            case "ROLE_SECURITY_AUDITOR", "ROLE_AUDITOR_ADMIN", "ROLE_AUDIT_ADMIN", "SECURITY_AUDITOR", "AUDITOR_ADMIN", "AUDIT_ADMIN", "AUDITADMIN" -> "安全审计员";
+            case "ROLE_OP_ADMIN", "OP_ADMIN" -> "运维管理员";
+            default -> null;
+        };
+    }
+
+    private static final class FallbackContext {
+        final Map<String, Object> details;
+        final String actionUpper;
+        final String summary;
+        final String method;
+        final String extraTags;
+        final String module;
+        final String resourceType;
+        final String resourceTypeLower;
+        final String resourceId;
+        final String requestUri;
+        final String targetTable;
+        final String targetTableLabel;
+        final String targetId;
+        final String targetRef;
+
+        FallbackContext(AuditEvent event, Map<String, Object> details) {
+            this.details = details == null ? Collections.emptyMap() : details;
+            this.actionUpper = safeUpper(event.getAction());
+            this.summary = safeTrim(event.getSummary());
+            this.method = safeUpper(event.getHttpMethod());
+            this.extraTags = event.getExtraTags();
+            this.module = safeTrim(event.getModule());
+            this.resourceType = safeTrim(event.getResourceType());
+            this.resourceTypeLower = this.resourceType == null ? "" : this.resourceType.toLowerCase(Locale.ROOT);
+            this.resourceId = safeTrim(event.getResourceId());
+            this.requestUri = safeTrim(event.getRequestUri());
+            this.targetTable = firstNonBlank(
+                coerceToString(this.details.get("源表")),
+                coerceToString(this.details.get("target_table"))
+            );
+            this.targetTableLabel = mapTableLabel(this.targetTable);
+            this.targetId = firstNonBlank(
+                coerceToString(this.details.get("目标ID")),
+                coerceToString(this.details.get("target_id"))
+            );
+            this.targetRef = firstNonBlank(
+                coerceToString(this.details.get("目标引用")),
+                coerceToString(this.details.get("target_ref"))
+            );
+        }
     }
 }

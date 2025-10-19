@@ -2,10 +2,11 @@ package com.yuzhi.dts.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.Map;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.test.util.ReflectionTestUtils;
 import tech.jhipster.config.JHipsterConstants;
 
 class ApplicationWebXmlTest {
@@ -16,13 +17,18 @@ class ApplicationWebXmlTest {
         SpringApplicationBuilder builder = new SpringApplicationBuilder();
 
         SpringApplicationBuilder configured = webXml.configure(builder);
-        SpringApplication application = configured.application();
+        SpringApplication application = configured.build();
 
-        assertThat(application.getAllSources()).contains(DtsAdminApp.class);
+        Object primarySources = ReflectionTestUtils.getField(application, "primarySources");
+        assertThat(primarySources)
+            .isNotNull()
+            .asInstanceOf(InstanceOfAssertFactories.COLLECTION)
+            .contains(DtsAdminApp.class);
 
-        Map<String, Object> defaultProperties = application.getDefaultProperties();
+        Object defaultProperties = ReflectionTestUtils.getField(application, "defaultProperties");
         assertThat(defaultProperties)
             .isNotNull()
+            .asInstanceOf(InstanceOfAssertFactories.MAP)
             .containsEntry("spring.profiles.default", JHipsterConstants.SPRING_PROFILE_DEVELOPMENT);
     }
 }
