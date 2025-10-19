@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,15 +33,28 @@ public class PkiVerificationService {
         this.props = props;
     }
 
-    public VerifyResult verifyPkcs7(String plain, String p7SignatureBase64, String certBase64Optional) {
-        if (plain == null || p7SignatureBase64 == null) {
+    public VerifyResult verifyPkcs7(String originDataBase64, String p7SignatureBase64, String certBase64Optional) {
+        if (originDataBase64 == null || p7SignatureBase64 == null) {
             return new VerifyResult(false, "缺少签名参数", null);
         }
+
+        byte[] originBytes;
+        String originText;
+        String normalizedOrigin = originDataBase64.trim();
+        try {
+            originBytes = Base64.getDecoder().decode(normalizedOrigin.replaceAll("\\s+", ""));
+            originText = new String(originBytes, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException ex) {
+            originBytes = originDataBase64.getBytes(StandardCharsets.UTF_8);
+            originText = originDataBase64;
+        }
+
+        String normalizedSignature = p7SignatureBase64.replaceAll("\\s+", "");
 
         // Try vendor JAR if configured
         if (props != null && props.getVendorJarPath() != null && !props.getVendorJarPath().isBlank()) {
             try {
-                boolean verified = verifyWithVendor(plain, p7SignatureBase64, certBase64Optional);
+                boolean verified = verifyWithVendor(originBytes, originText, normalizedSignature, certBase64Optional);
                 if (!verified) {
                     return new VerifyResult(false, "签名验签失败", null);
                 }
@@ -71,10 +85,12 @@ public class PkiVerificationService {
             }
         }
 
+        id.put("signedAt", Instant.now());
+
         return new VerifyResult(true, "verified", id);
     }
 
-    private boolean verifyWithVendor(String plain, String p7SignatureBase64, String certBase64Optional)
+    private boolean verifyWithVendor(byte[] originBytes, String originText, String p7SignatureBase64, String certBase64Optional)
         throws Exception {
             String jarPath = props.getVendorJarPath();
             Path path = Path.of(jarPath);
@@ -168,9 +184,8 @@ public class PkiVerificationService {
                         String.class,
                         hostClz
                     );
-                    byte[] originBytes = plain.getBytes(StandardCharsets.UTF_8);
                     String certB64 = certBase64Optional == null ? "" : certBase64Optional;
-                    String signB64 = p7SignatureBase64 == null ? "" : p7SignatureBase64.replaceAll("\\s+", "");
+                    String signB64 = p7SignatureBase64 == null ? "" : p7SignatureBase64;
                     Object ret = verifySign.invoke(helper, -1, -1, originBytes, originBytes.length, certB64, signB64, host);
                     if (ret instanceof Integer) code = (Integer) ret;
                 } catch (NoSuchMethodException nsme) {
@@ -179,7 +194,7 @@ public class PkiVerificationService {
                 if (code == null) {
                     byte[] p7 = Base64.getDecoder().decode(String.valueOf(p7SignatureBase64).replaceAll("\\s+", "").getBytes(StandardCharsets.US_ASCII));
                     Method pkcs7 = helperClz.getMethod("PKCS7DataVerify", String.class, byte[].class, int.class, hostClz);
-                    Object ret = pkcs7.invoke(helper, plain, p7, digestAlgo, host);
+                    Object ret = pkcs7.invoke(helper, originText, p7, digestAlgo, host);
                     if (ret instanceof Integer) code = (Integer) ret; else code = 0;
                 }
                 // 0 = success per vendor convention

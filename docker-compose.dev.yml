@@ -37,7 +37,7 @@ services:
       SPRINGDOC_API_DOCS_ENABLED: "true"
       SPRINGDOC_SWAGGER_UI_ENABLED: "true"
       # Optional PKI login integration (align with app overlay)
-      DTS_PKI_ENABLED: "${DTS_PKI_ENABLED:-false}"
+      DTS_PKI_ENABLED: "${DTS_PKI_ENABLED:-true}"
       DTS_PKI_MODE: "${DTS_PKI_MODE:-disabled}"
       DTS_PKI_ACCEPT_FORWARDED_CERT: "${DTS_PKI_ACCEPT_FORWARDED_CERT:-false}"
       DTS_PKI_CLIENT_CERT_HEADER: "${DTS_PKI_CLIENT_CERT_HEADER:-X-Forwarded-Tls-Client-Cert}"
@@ -137,10 +137,6 @@ services:
       # Decodes to ASCII: 0123456789abcdef (16 bytes)
       DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
       # Centralize audit logs to admin in dev as well
-      AUDITING_FORWARD_ENABLED: "${AUDITING_FORWARD_ENABLED:-true}"
-      DTS_COMMON_AUDIT_ENABLED: "${DTS_COMMON_AUDIT_ENABLED:-true}"
-      DTS_COMMON_AUDIT_BASE_URL: "http://dts-admin:8081" # dev direct container URL
-      DTS_COMMON_AUDIT_TOKEN: "${DTS_COMMON_AUDIT_TOKEN:-}"
     command:
       - bash
       - -lc

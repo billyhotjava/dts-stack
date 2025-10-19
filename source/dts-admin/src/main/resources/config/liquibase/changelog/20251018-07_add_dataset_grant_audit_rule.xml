@@ -1,26 +1,28 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog
     xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
-    <changeSet id="20251018-07-add-rule" author="gemini-cli">
-        <insert tableName="audit_operation_mapping">
-            <column name="url_pattern" value="/api/catalog/datasets/{datasetId}/grants"/>
-            <column name="http_method" value="POST"/>
-            <column name="status_code_regex" value="2\d\d"/>
-            <column name="source_system" value="platform"/>
-            <column name="module_name" value="catalog"/>
-            <column name="action_type" value="UPDATE"/>
-            <column name="description_template" value="更新了数据集【{path.datasetId}】的访问权限"/>
-            <column name="source_table_template" value="catalog_dataset"/>
-            <column name="param_extractors" value="[{"name":"datasetId","source":"path","path":"datasetId"}]"/>
-            <column name="event_class" value="DataAssetEvent"/>
-            <column name="order_value" value="550"/>
-            <column name="enabled" value="true"/>
-            <column name="version" value="1.0"/>
-            <column name="updated_by" value="gemini-cli"/>
-            <column name="updated_at" valueDate="${now}"/>
-        </insert>
+    <changeSet id="20251018-07-add-dataset-grant-rule" author="codex">
+        <comment>补充数据集授权接口的审计字典，展示数据集名称与ID</comment>
+        <sql>
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, status_code_regex, source_system,
+                module_name, action_type, description_template,
+                source_table_template, param_extractors, event_class,
+                order_value, enabled
+            )
+            SELECT '/api/catalog/datasets/{datasetId}/grants','POST','2\d\d','platform',
+                   '数据目录','授权','对数据集授权：{resourceLabel|未知}（ID：{resourceId|未知}）',
+                   '数据资产','{&quot;resourceId&quot;:&quot;path.datasetId&quot;,&quot;resourceLabel&quot;:&quot;details.目标引用&quot;}',
+                   'AuditEvent',29,TRUE
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/catalog/datasets/{datasetId}/grants'
+                   AND http_method = 'POST'
+            );
+        </sql>
     </changeSet>
+
 </databaseChangeLog>

@@ -1,0 +1,2813 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>signClient demo</title>
+
+    <script src="gen-js/es5-shim.min.js" type="text/javascript" charset="utf-8"></script>
+    <script src="gen-js/json2.js" type="text/javascript" charset="utf-8"></script>
+    <script src="gen-js/thrift.js" type="text/javascript" charset="utf-8"></script>
+    <script src="gen-js/commdef_types.js" type="text/javascript" charset="utf-8"></script>
+    <script src="gen-js/pkiService.js" type="text/javascript" charset="utf-8"></script>
+    <script src="gen-js/pkiService_types.js" type="text/javascript" charset="utf-8"></script>
+
+    <script src="gen-js/devService.js" type="text/javascript" charset="utf-8"></script>
+    <script src="gen-js/devService_types.js" type="text/javascript" charset="utf-8"></script>
+
+    <script src="gen-js/signXService.js" type="text/javascript" charset="utf-8"></script>
+    <script src="gen-js/signXService_types.js" type="text/javascript" charset="utf-8"></script>
+    <script src="gen-js/base64.js" type="text/javascript" charset="utf-8"></script>
+    <script>
+
+        var KOAL_SERVER_NAME = "pkiService";
+        var ENROLL_SERVER_NAME = "enrollPlugin";
+        var DEV_SERVER_NAME = "deviceOperator";
+        var SIGNXDLL_SERVER_NAME = "signxPlugin";
+        var kmailDLL_SERVER_NAME = "kmailPlugin";
+        var ssoDll_SERVER_NAME = "ssoCustomization";
+
+        var sessionID = 0;
+        var ticket = "";
+
+        var ResultError = {
+            SAR_OK: 0x00000000,    					//成功
+            SAR_FAIL: 0x0A000001,    				//失败
+            SAR_UNKNOWNERR: 0x0A000002,    			//异常错误
+            SAR_NOTSUPPORTYETERR: 0x0A000003,    	//不支持的服务
+            SAR_FILEERR: 0x0A000004,    				//文件操作错误
+            SAR_INVALIDHANDLEERR: 0x0A000005,    	//无效的句柄
+            SAR_INVALIDPARAMERR: 0x0A000006,    		//无效的参数
+            SAR_READFILEERR: 0x0A000007,    			//读文件错误
+            SAR_PIN_ERROR: 0x0A000024,				//PIN不正确
+            SAR_PIN_LOCKED: 0x0A000025,				//PIN被锁死
+            SAR_PIN_INVALID: 0x0A000026,				//PIN无效
+            SAR_PIN_ERROR_LENGTH: 0x0A000027,		//PIN长度错误
+            SAR_USER_EXISTS: 0x0A000028,				//用户已经登录
+            SAR_APPLICATION_EXISTS: 0x0A00002C,		//应用已存在
+            SAR_APPLICATION_NOT_EXISTS: 0x0A00002E   //应用不存在
+
+        }
+
+        // 自定义Map对象
+        function Map() {
+
+            this.keys = new Array();
+            this.data = new Object();
+
+            this.set = function (key, value) {
+                if (this.data[key] == null) {
+                    if (this.keys.indexOf(key) == -1) {
+                        this.keys.push(key);
+                    }
+                }
+                this.data[key] = value;
+            }
+
+            this.get = function (key) {
+                return this.data[key];
+            }
+        }
+        var map = new Map();
+
+        //系统配置
+        var SERVICE_TYPE = "http://";
+        var SERVER_IP = "127.0.0.1";
+        var SERVER_PORT = "18080";
+        var URL = "http://127.0.0.1:18080";
+        function setSysParam() {
+            if (document.getElementById("http").checked) {
+                SERVICE_TYPE = "http://";
+                SERVER_IP = document.getElementById("serverIP").value;
+                SERVER_PORT = document.getElementById("serverHttpPort").value;
+
+            } else if (document.getElementById("https").checked) {
+                SERVICE_TYPE = "https://";
+                SERVER_IP = document.getElementById("serverIP").value;
+                SERVER_PORT = document.getElementById("serverHttpsPort").value;
+            }
+            URL = SERVICE_TYPE + SERVER_IP + ":" + SERVER_PORT;
+            alert("url：" + URL);
+        }
+
+        function getSelectValue(selectName) {
+            var obj = document.getElementById(selectName); //定位id
+            var index = obj.selectedIndex;               // 选中索引
+            var value = obj.options[index].value;        // 选中值
+            return value;
+        }
+
+        /**
+        *	pkiService模块		
+        *	测试login接口
+        */
+        function login_callback(response) {
+            if (0 != response.errCode && 6 != response.errCode) {
+                alert(response.jsonBody);
+                alert("[interface]: login is failure.");
+                return false;
+            }
+
+            var obj = JSON.parse(response.jsonBody)
+            sessionID = obj.sessionID;
+            ticket = obj.ticket;
+
+            alert(response.jsonBody);
+            alert("[interface]: login is successful.");
+        }
+        function JS_Login() {
+            setSysParam();
+            try {
+                var transport = new Thrift.TXHRTransport(URL);
+                var mp = new Thrift.Multiplexer();
+                var client = mp.createClient(KOAL_SERVER_NAME, pkiServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 1;
+                request.msgType = 0x01;
+                request.version = 1;
+
+                var obj = new Object();
+                //以下参数需要联系研发分配，否则在商用期间将无法使用
+                obj.appName = "ZF-App";				///应用名称
+                obj.appID = "7ea7b92a-3091-3d79-639f-3ef4c3e2d6d7";			///应用ID
+                obj.token = "7ea7b92a-3091-3d79-639f-3ef4c3e2d6d7";			///会话Token
+                request.jsonBody = JSON.stringify(obj);
+
+                var login = client.login(request, login_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	pkiService模块	
+        *	测试logout接口
+        */
+        function logout_callback(response) {
+            if (0 == response.errCode) {
+                alert("[interface]: logout is successful.");
+            } else {
+                alert("[interface]: logout is failure.");
+            }
+        }
+        function JS_Logout() {
+            try {
+                var transport = new Thrift.TXHRTransport(URL);
+                var mp = new Thrift.Multiplexer();
+                var client = mp.createClient(KOAL_SERVER_NAME, pkiServiceClient, transport);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.logout(tk, logout_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+
+        /**
+        *	pkiService模块
+        *	测试getVersions接口
+        */
+        function getVersions_callback(response) {
+            if (response.errCode == 0) {
+                var obj = JSON.parse(response.jsonBody)
+                alert(response.jsonBody);
+                alert("[interface]: getVersions is successful.");
+            } else {
+                alert("[interface]: getVersions is failure.");
+            }
+        }
+        function JS_getVersions() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(KOAL_SERVER_NAME, pkiServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 1;
+                request.msgType = 0x02;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getVersions(tk, request, getVersions_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	pkiService模块		
+        *	测试getNotify接口
+        */
+        function getNotify_callback(response) {
+            var event = "";
+            if (0 == response.errCode) {
+                if (0x0FFF0001 == response.msgType) {
+                    event = "key insert event";
+                } else if (0x0FFF0002 == response.msgType) {
+                    event = "key remove event";
+                } else if (0x0FFF0003 == response.msgType) {
+                    event = "key info changed.";
+                } else if (0x0FFF0004 == response.msgType) {
+                    event = "session closed";
+                }
+                alert(event + "\nresponse:" + response.jsonBody);
+                alert("[interface]: getNotify is successful.");
+                return false;
+            } else {
+                alert("response:" + response.jsonBody);
+                alert("[interface]: getNotify is failure.");
+            }
+        }
+        function JS_getNotify() {
+            try {
+                var transport = new Thrift.TXHRTransport(URL);
+                var mp = new Thrift.Multiplexer();
+                var client = mp.createClient(KOAL_SERVER_NAME, pkiServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 1;
+                request.msgType = 0x0FFF0000;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                var login = client.getNotify(tk, request, getNotify_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+
+
+        /**
+        *	enRollService模块
+        *	测试makePkcs10接口
+        *	测试前需要验证PIN
+        */
+        function makePkcs10_callback(response) {
+            if (response.errCode == 0) {
+                var obj = JSON.parse(response.jsonBody)
+                alert(response.jsonBody);
+                alert("[interface]: makePkcs10 is successful.");
+            } else {
+                alert("[interface]: makePkcs10 is failure.");
+            }
+        }
+        function JS_makePkcs10() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(ENROLL_SERVER_NAME, enRollServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 1;
+                request.msgType = 0x20;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				            //应用名称
+                obj.conName = getSelectValue("con");				            //容器名称
+                obj.dn = "C=CN,ST=shanxi,O=koal,OU=koal,CN=shidawei,emailAddress=shidawei@koal.com";
+                obj.extType = "1";						                                    //临时密钥扩展项，1.不携带，2.携带临时密钥，其他值.协同模式。
+                obj.digestType = "2";						                                //公钥的摘要值获取类型，默认2。可选项1: md5，2：sha1，3：sm3，4：sha256
+                obj.reqDigst = "0";			 			                                    //证书请求签名摘要类型，1：md5，2：sha1，3：sm3，4：sha256，其他值或不写则默认sm2->sm3，rsa->sha256
+
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.makePkcs10(tk, request, makePkcs10_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	enRollService模块
+        *	测试genb64keypair接口
+        */
+        function genKeypair_callback(response) {
+            if (response.errCode == 0) {
+                var obj = JSON.parse(response.jsonBody)
+                alert(response.jsonBody);
+                alert("[interface]: genKeypair is successful.");
+            } else {
+                alert("[interface]: genKeypair is failure.");
+            }
+        }
+        function JS_genKeypair() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(ENROLL_SERVER_NAME, enRollServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 1;
+                request.msgType = 0x21;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));			//设备ID
+                obj.appName = getSelectValue("app");			            //应用名称
+                obj.conName = getSelectValue("con");			            //容器名称
+                obj.keyType = "1";					                                    //0:SM2,1:RSA
+                obj.keyLen = "2048";				                                    //KeyType为rsa时有效
+                obj.purpose = "1";                                                      //keyType为SM2时候有效（目前key不支持2）,1. 椭圆曲线签名算法,2. 椭圆曲线加密算法	
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.genKeypair(tk, request, genKeypair_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	enRollService模块
+        *	测试importEncKeypair接口
+        */
+        function importEncKeypair_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: importEncKeypair is successful.");
+            } else {
+                alert("[interface]: importEncKeypair is failure.");
+            }
+        }
+        function JS_importEncKeypair() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(ENROLL_SERVER_NAME, enRollServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 1;
+                request.msgType = 0x22;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var keypair = "MIIFzwSCAQCKHpV26vHL3obgrkC6aN1+vJ6KA8g29A15Gn6bYsBm7cZIf4VLdypibatc+FyyaS/0TxlquCsobQLFGKVGd+OlZypAhzeat+M0pLM2M5I9Tow5duv29bX3lL4lxtfecwPJaSKg4zY9ZUtuRZMC15yiZXK7MsOzaoUEihKiMUN/Mbu29hivSQ/A7OIH9++niW6F+OHNdGl5jt3qW+gZkXDY+Gpo1muK8OCmx1kyeJjPXSYyzfsZz5UcrGYnep+63FQ1SPoD4HgJjJHntd0DLmFcXThemOZRG7ozoYuEFmVbclNiXRN2Io/2fKLH4L3ix7UAWThW4UFt+EZ9IB1PugeGBIIEsATRoC8eOLPYy+YAo6C3KsyF1Icyvj/mc3eF3ML2DHIPW+zpu7hesyF68eYaaifej5x6eGJsaHg0/xKCOGYg5auhL2ugeEUFZIM9WNK4nnKBT+x5y2kS9NIQOnGD1qKafXw01gkEDPZKPAqkKwTtitPEt5RA5Kp53tRXqtmvH4WG3T7LDHHmg+eGF4kkIwtesujelWMjeKhDvIpopt9oACHzIHfbYuPPfWdAr5gtS2iKWiYBK7puTDQc+AUQUovvPUbP+404PeQVFB7oi9zGQNxrwC3IE9S9HPpMTwtyzU7kIo5AwKQAR1UZPV/xKWyZqEafAP9CdB+TCoOwZ4zv+bqTcuerVWXkB/Femi0jNfn1FsKF2DP+1bWqwFW/G4U4mGaBr4tMPPTrHklc8CMjJazF0CE7hGFDmRc7IWL5C9UnczImY6elIdbmwmwXxPHQt8LGvt6dyuOy3haAkf/OV49XoI8+d3Vv0/BIii0RTZH1kwnralQ9OxsNtWStx/xBMGfs25lVdG9uEduwYc/DVlAUAGQJdjxeExuOtCkRcW1f+7U1jEj+yrqYPica2AKmQhGLvx9XQ1mE23rLPJMMd4exxxada+r+oc0R8oIqxyAtG3DAXvLUXo5Y4tZpYuz6zKrVxHXSbV9uskPPx8CKEVRxIXP9oXdr3AieCTuOHBt9nRC5xGjsAZSyNMirk1RGWH5yvsZhWIiakD7DjCB4J8SFsk2zBGG2vrnM2slc16+PEU2Fh4H74J98B3Mn2d9viNrr3ZjNo8KdGCZHj6jtWWbibSdDZak52MeXjDu4JAxTAB7LYVJdjO0quZARhr3KZblyaZ76VghWw70IKO8LrG0RdG4dhjcGMKRY/apFLVyi9EL1AAQsLw8Vx5IQluyQd9bFO3dYQxFhVY7XcRvbNDnYcuul8qibR6w8SodoSD8mWZHAnvrUxBt+BWNtEGFxeoZQ1Wy6zbZmmrz3pzBUaEZjHG5EjYtHbEvm6e5Tm61yfuXCKsp9oygR0YcGBrvdV31VDqA4k0dZfugFUbgAhmMpy71uDR2KiyUq7+NXXjXa+KYlEHmwjrBk3BCT5MGUGWil0h2DwMW4QBpcr1XDNU0Hslx4rOCND38ebPkLWVzH0YYfHxlZgIHlKEGbzHjw+73RHe85ORWndXayYY1yAJLQF8Dc96G0Ee+KU8lHy3V2uUcaLwxdxMu3GbUXSqdEzbfulFmM9uRAWbkrMdAb0GeuEbkPzpVlVcO/De0qe0Gjkg4HydFHfxaY/sWHRbXpkj4sFK2IrlP5qxB021117f958Xw3lW0khwSgt79J45af/IvDi9PkxnO2rWGzNVT26N2KQwPHHkFTvexf1H7GaPepALmU5tlFRWbfHxdVOIQfl0kPdyonNZwm9HgQdNxz5he76pAS1Amjc91MT4YmzW/dntGWSORGwU5tSpAsaBpqOz5p8XAJD4JEDQHFTHORyqQBzjW6Wu1C+6lT98AKJ6pzN4OphDgHwG3BJIopkqplpcdjyZGaSsdsuywIyeVY3FKJfgff1BFd5gAukUP0mScXbnbe/TdwT9GgH9nfnK0gvDEJOQfzOynBiEsWKRZiyQQVMS4yLjE1Ni4xMDE5Ny4xLjEwNC4x";
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));			//设备ID
+                obj.appName = getSelectValue("app");			            //应用名称
+                obj.conName = getSelectValue("con");			            //容器名称
+                obj.b64Key = keypair;				                                    //密钥对(base64编码)
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.importEncKeypair(tk, request, importEncKeypair_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	enRollService模块
+        *	测试importX509Cert接口
+        */
+        function importX509Cert_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: importX509Cert is successful.");
+            } else {
+                alert("[interface]: importX509Cert is failure.");
+            }
+        }
+        function JS_importX509Cert() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(ENROLL_SERVER_NAME, enRollServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 1;
+                request.msgType = 0x23;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var cert = "MIICSDCCAe6gAwIBAgIGIBkFCAAEMAoGCCqBHM9VAYN1MFsxCzAJBgNVBAYTAkNOMQ8wDQYDVQQIDAZzaGFueGkxDTALBgNVBAcMBHhpYW4xDTALBgNVBAoMBGtvYWwxCzAJBgNVBAsMAmNhMRAwDgYDVQQDDAdlY2NSb290MB4XDTE5MTAyMDExMDg0MFoXDTI5MTAxNzExMDg0MFowcTELMAkGA1UEBhMCQ04xDzANBgNVBAgMBnNoYW54aTENMAsGA1UECgwEa29hbDENMAsGA1UECwwEa29hbDERMA8GA1UEAwwIc2hpZGF3ZWkxIDAeBgkqhkiG9w0BCQEWEXNoaWRhd2VpQGtvYWwuY29tMFkwEwYHKoZIzj0CAQYIKoEcz1UBgi0DQgAEFayasMn6VXtSEiTQsZuZmh7o+uolRCzR1PW8pdwuO3ALm079EgHiRV0pm/vnU7q/V+PzKakXnajP+RBxdc3E8KOBhzCBhDAJBgNVHRMEAjAAMAsGA1UdDwQEAwIFIDAqBglghkgBhvhCAQ0EHRYbR21TU0wgR2VuZXJhdGVkIENlcnRpZmljYXRlMB0GA1UdDgQWBBTnnAQUeK14Akb7JKxkfZ4Bnr5jxDAfBgNVHSMEGDAWgBStNt6lbdm0B8T9oeLvpo84hqmvyTAKBggqgRzPVQGDdQNIADBFAiEA8zd1JWZ3c7cqkuSv2cbkV+PtDY8Z+yTTaY7eba7QdRoCIERakjlVVBcNYIDNXpxtrySHCICrvn2wr0HUiqOZmxY4";
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));			//设备ID
+                obj.appName = getSelectValue("app");			            //应用名称
+                obj.conName = getSelectValue("con");			            //容器名称
+                obj.b64cert = cert;					                                    //证书
+                obj.purpose = "1";					                                    //1表示签名证书,0表示加密证书
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.importX509Cert(tk, request, importX509Cert_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	enRollService模块
+        *	测试getCert接口
+        */
+        function getCert_callback(response) {
+            if (response.errCode == 0) {
+                alert(response.jsonBody);
+                alert("[interface]: getCert is successful.");
+            } else {
+                alert("[interface]: getCert is failure.");
+            }
+        }
+        function JS_getCert() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(ENROLL_SERVER_NAME, enRollServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 1;
+                request.msgType = 0x25;
+                request.version = 1;
+                request.extend = 0x00;
+
+
+                var type = prompt("1：签名，0：加密，请输入证书类型！");
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));			//设备ID
+                obj.appName = getSelectValue("app");			//应用名称
+                obj.conName = getSelectValue("con");			//容器名称
+                obj.certType = type;				//1表示签名证书, 0表示加密证书
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getCert(tk, request, getCert_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	enRollService模块
+        *	测试importPfxCert接口
+        *	需要设备认证
+        */
+        function importPfxCert_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: importPfxCert is successful.");
+            } else {
+                alert("[interface]: importPfxCert is failure.");
+            }
+        }
+        function JS_importPfxCert() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(ENROLL_SERVER_NAME, enRollServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x24;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var rsaPfxStr = "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";
+                var eccPfxStr = "MIIEEgIBAzCCA9gGCSqGSIb3DQEHAaCCA8kEggPFMIIDwTCCArcGCSqGSIb3DQEHBqCCAqgwggKkAgEAMIICnQYJKoZIhvcNAQcBMBwGCiqGSIb3DQEMAQYwDgQIKOPAUKhjzAgCAggAgIICcFQRSy/C6EvDqMdWJyGKmxvzCIJEqPdQnzc8NqRvxqJc0/2EZymOOpVihv1sl2YzIcPlrjD8m86+72hvGToW+Fv35ZDvoDmml5HKFb/AhMwe27QwGo73p7v6yTjkLzSz4JdUv6gRTUnJUiVbcJuGN2qS4ByyjEw10vCu6lRKNgOwrv6Krt0U6W+0Bxc78VUpYkxc95jOA/F6uOaSGZAosLL+biXc8GOZ0meZz92NUqWDkzySFHzi7qL6UcFJ6meT09Nc3K6SeJfKACWlXclNka7wg5pMWrw21cGsRGo3xyTeQME4tFTWWieHFnGvjo/tuouRPdiuYWMNJj5JcGGPL7uH8w/mnJPaero6DOCrMf8o4p/IrShkH3njNHzeolEu652yHRZnP/hGTSee5/XETRX0CTHrljyx2Lcp7w+dyRC5dIGTwvUk/mTFA5C/Yf775OwO+45gEjp6wEMZzs2kNUHj9cLt7D7EEZYJeaZLeSgObsrMgvGaR1xWMkVIcr9l9rpzV2Qtb4svE5uQy3WHrR4MbnQjK9MMTzR2CSnLjKlderqNWT2HFUnp1hXix6bBK7TjWQu+J+p1KFtr/ss5xahJbyeWIasSqj5Aoduugzq+wMLLBhC/DzXWRgwcVJJ6vtAPSx3nPH2aliKv1VheoIsfza+0jUWR/kydCCHNyIQ75tXdiqlMqcREj4u13Gjsq83Sn5Mf5iJcp1tMXKFebDgqtHa8BPN+oz0yfTMWZ6eGmr5s0H6fl6fbr+KrFG3UMAoQL7/0jLXPpXZpmgWROX5QL5iJuOkmAVdQAx+BDsjhu3v8wqqGZfXG8Xxi7dukZTCCAQIGCSqGSIb3DQEHAaCB9ASB8TCB7jCB6wYLKoZIhvcNAQwKAQKggbQwgbEwHAYKKoZIhvcNAQwBAzAOBAhMkZAWBq4B/QICCAAEgZAPkzeWCH8ZIRMn1yIGaVMLeGMafQ+ADypKJS/IuPQP58tnvh3udIDJ04ZuH6QsXXzr4xOfBaTHRe/M9ZvKoRkkx7a9PgCaxdo9IN40/1bqBeOvVNLrHghPVx5rTYhWDUA/+PkEDAnYXvTuObbJr8Lph0le6AHMlDZXtHl7m/XDPZ2NqVjVEN0dQwotcelCaJExJTAjBgkqhkiG9w0BCRUxFgQU8xfDWkJHSbCMuP6dl1INzjODK/8wMTAhMAkGBSsOAwIaBQAEFNsS6yoBrJXQAIEU/60AjQn7eAtfBAiFJYY31zOvHwICCAA=";
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				//应用名称	
+                obj.conName = getSelectValue("con");				//容器名称
+                obj.b64cert = rsaPfxStr;					//pfx证书(base64编码)
+                obj.certPass = "123456";					//密码
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.importPfxCert(tk, request, importPfxCert_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	enRollService模块
+        *	测试importPfx2SkfFile接口
+        * 	需要验证PIN码
+        */
+        function importPfx2SkfFile_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: importPfx2SkfFile is successful.");
+            } else {
+                alert("[interface]: importPfx2SkfFile is failure.");
+            }
+        }
+        function JS_importPfx2SkfFile() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(ENROLL_SERVER_NAME, enRollServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x26;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var PfxStr = "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";
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				//应用名称	
+                obj.conName = getSelectValue("con");				//容器名称
+                obj.signFlag = "0";						//证书类型，1表示签名，0表示加密
+                obj.passWD = "123456";					//证书密码
+                obj.cert = PfxStr;					//证书内容
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.importPfxCert(tk, request, importPfx2SkfFile_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试getDevices接口
+        */
+        function getDevices_callback(response) {
+            if (response.errCode == 0) {
+                var obj = JSON.parse(response.jsonBody)
+                var s1 = document.getElementById("device");
+                for (var i = 0; i < obj.devices.length; i++) {
+                    if (obj.devices[i] != null) {
+                        var devName = obj.devices[i].devName;
+                        var devId = obj.devices[i].devID;
+                        var option = document.createElement("option");
+                        option.innerHTML = devName;
+                        s1.appendChild(option);
+                        map.set(devName, devId);
+                    }
+                }
+                alert(response.jsonBody);
+                alert("[interface]: getDevices is successful.");
+            } else {
+                alert("[interface]: getDevices is failure.");
+            }
+        }
+        function JS_getDevices() {
+            document.getElementById("device").length = 1;
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x10;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getDevices(tk, request, getDevices_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试getDevInfo接口
+        */
+        function getDevInfo_callback(response) {
+            if (response.errCode == 0) {
+                alert(response.jsonBody);
+                alert("[interface]: getDevInfo is successful.");
+            } else {
+                alert("[interface]: getDevInfo is failure.");
+            }
+        }
+        function JS_getDevInfo() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x11;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+
+                obj.devID = map.get(getSelectValue("device"));					//设备ID
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getDevInfo(tk, request, getDevInfo_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试setLable接口
+        */
+        function setDevLable_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: setDevLable is successful.");
+            } else {
+                if (response.errCode == ResultError.SAR_NOTSUPPORTYETERR) {
+                    alert("[interface]: not support setDevLable.");
+                } else {
+                    alert("[interface]: setDevLable is failure.");
+                }
+            }
+        }
+        function JS_setDevLable() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x12;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));			//设备ID
+                obj.lable = "GM3000"				//标签
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.setDevLable(tk, request, setDevLable_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试transMitData接口
+        */
+        function transMitData_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: transMitData is successful.");
+            } else {
+                if (response.errCode == ResultError.SAR_NOTSUPPORTYETERR) {
+                    alert("[interface]: not support transMitData.");
+                } else {
+                    alert("[interface]: transMitData is failure.");
+                }
+
+            }
+        }
+        function JS_transMitData() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x13;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.command = ""; 						//用于填写与用户约定的命令号
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.transMitData(tk, request, transMitData_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试DevAuth接口
+        */
+        function devAuth_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: devAuth is successful.");
+                alert(response.jsonBody);
+            } else {
+                if (response.errCode == ResultError.SAR_NOTSUPPORTYETERR) {
+                    alert("[interface]: not support devAuth.");
+                } else {
+                    alert("[interface]: devAuth is failure.");
+                }
+            }
+        }
+        function JS_devAuth() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x14;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));						//设备ID
+                obj.authData = "MTIzNDU2NzgxMjM0NTY3OA=="; 		//认证数据(base64编码), 例:1234567812345678的base64
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.devAuth(tk, request, devAuth_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试changeAuthKey接口
+        *	测试前需要设备认证
+        */
+        function changeAuthKey_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: changeAuthKey is successful.");
+                alert(response.jsonBody);
+            } else {
+                if (response.errCode == ResultError.SAR_NOTSUPPORTYETERR) {
+                    alert("[interface]: not support changeAuthKey.");
+                } else {
+                    alert("[interface]: changeAuthKey is failure.");
+                }
+
+            }
+        }
+        function JS_changeAuthKey() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x15;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));						//设备ID
+                obj.authKeyData = "MTIzNDU2NzgxMjM0NTY3OA==";		//认证数据(base64编码), 例: 1234567812345678的base64
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.changeAuthKey(tk, request, changeAuthKey_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试getPINInfo接口
+        */
+        function getPINInfo_callback(response) {
+            if (response.errCode == 0) {
+                alert(response.jsonBody);
+                alert("[interface]: getPINInfo is successful.");
+            } else {
+                if (response.errCode == ResultError.SAR_NOTSUPPORTYETERR) {
+                    alert("[interface]: not support getPINInfo.");
+                } else if (response.errCode == ResultError.SAR_APPLICATION_NOT_EXISTS) {
+                    alert("[interface]: application name is not exist.");
+                } else {
+                    alert("[interface]: getPINInfo is failure.");
+                }
+            }
+        }
+        function JS_getPINInfo() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x16;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");			//应用名称
+                obj.PINType = "1";  					//0为ADMIN_TYPE，1为USER_TYPE
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getPINInfo(tk, request, getPINInfo_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试changePIN接口
+        */
+        function changePIN_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: changePIN is successful.");
+                alert(response.jsonBody);
+            } else if (response.errCode == ResultError.SAR_PINERROR) {
+                alert("[interface]: changePIN is failure, PIN is incorrect.");
+                alert(response.jsonBody);
+            } else {
+                if (response.errCode == ResultError.SAR_NOTSUPPORTYETERR) {
+                    alert("[interface]: not support changePIN.");
+                } else if (response.errCode == ResultError.SAR_APPLICATION_NOT_EXISTS) {
+                    alert("[interface]: application name is not exist.");
+                } else {
+                    alert("[interface]: changePIN is failure.");
+                }
+            }
+        }
+        function JS_changePIN() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x17;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var oldPIN = prompt('请输入旧PIN码');
+                var newPIN = prompt('请输入新PIN码');
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				//应用名称
+                obj.PINType = "1";  						//0为ADMIN_TYPE，1为USER_TYPE
+                obj.oldPIN = oldPIN;					//oldPIN
+                obj.newPIN = newPIN;					//newPIN
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.changePIN(tk, request, changePIN_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试verifyPIN接口
+        */
+        function verifyPIN_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: verifyPIN is successful.");
+                alert(response.jsonBody);
+            } else if (response.errCode == ResultError.SAR_PINERROR) {
+                alert("[interface]: verifyPIN is failure, PIN is incorrect.");
+                alert(response.jsonBody);
+            } else {
+                if (response.errCode == ResultError.SAR_NOTSUPPORTYETERR) {
+                    alert("[interface]: not support verifyPIN.");
+                } else if (response.errCode == ResultError.SAR_APPLICATION_NOT_EXISTS) {
+                    alert("[interface]: application name is not exist.");
+                } else {
+                    alert("[interface]: verifyPIN is failure.");
+                }
+
+            }
+        }
+        function JS_verifyPIN() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x18;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var pin = prompt("请输入PIN码");
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");			//应用名称
+				//obj.conName = getSelectValue("con");                //容器名称（csp硬件K时需要传入）
+                obj.PINType = "1";  					//0为ADMIN_TYPE，1为USER_TYPE
+                obj.PIN = pin;						//PIN
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.verifyPIN(tk, request, verifyPIN_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试unlockPIN接口
+        */
+        function unlockPIN_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: unlockPIN is successful.");
+                alert(response.jsonBody);
+            } else if (response.errCode == ResultError.SAR_PINERROR) {
+                alert("[interface]: unlockPIN is failure,PIN is incorrect.");
+                alert(response.jsonBody);
+            } else {
+                if (response.errCode == ResultError.SAR_NOTSUPPORTYETERR) {
+                    alert("[interface]: not support unlockPIN.");
+                } else if (response.errCode == ResultError.SAR_APPLICATION_NOT_EXISTS) {
+                    alert("[interface]: application name is not exist.");
+                } else {
+                    alert("[interface]: unlockPIN is failure.");
+                }
+
+
+            }
+        }
+        function JS_unlockPIN() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x19;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var adminPIN = prompt('请输入管理员PIN码');
+                var userPIN = prompt('请输入用户PIN码');
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				//应用名称
+                obj.adminPIN = adminPIN;					//管理员PIN
+                obj.userPIN = userPIN;					//用户PIN
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.unlockPIN(tk, request, unlockPIN_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+
+        /**
+        *	devService模块
+        *	测试hasFinger接口
+        */
+        function hasFinger_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: hasFinger is successful.");
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: hasFinger is failure.");
+            }
+        }
+        function JS_hasFinger() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x31;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));					//设备ID
+                obj.appName = getSelectValue("app");					//应用名称
+                obj.type = "1";
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.hasFinger(tk, request, hasFinger_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试verifyFinger接口
+        */
+        function verifyFinger_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: verifyFinger is successful.");
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: verifyFinger is failure.");
+            }
+        }
+        function JS_verifyFinger() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x32;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));	//设备ID
+                obj.appName = getSelectValue("app");				//应用名称
+                obj.type = "1";
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.verifyFinger(tk, request, verifyFinger_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试getAppList接口
+        */
+        function getAppList_callback(response) {
+            if (response.errCode == 0) {
+                var obj = JSON.parse(response.jsonBody);
+                if (JSON.stringify(obj) != "{}") {
+                    var s1 = document.getElementById("app");
+                    for (var i = 0; i < obj.apps.length; i++) {
+                        if (obj.apps[i] != null) {
+                            var appName = obj.apps[i];
+                            var option = document.createElement("option");
+                            option.innerHTML = appName;
+                            s1.appendChild(option);
+                        }
+                    }
+                }
+
+                alert(response.jsonBody);
+                alert("[interface]: getAppList is successful.");
+            } else {
+                alert("[interface]: getAppList is failure.");
+            }
+        }
+        function JS_getAppList() {
+            document.getElementById("app").length = 1;
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x1a;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));					//设备ID
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getAppList(tk, request, getAppList_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试CreateApp接口
+        *	使用前需要设备认证
+        */
+        function createApp_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: createApp is successful.");
+                alert(response.jsonBody);
+            } else {
+                if (response.errCode == ResultError.SAR_APPLICATION_EXISTS) {
+                    alert("[interface]: application name is exist.");
+                } else {
+                    alert("[interface]: createApp is failure.");
+                }
+            }
+        }
+        function JS_createApp() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x1b;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));			//设备ID
+                obj.appName = "GM6000RSA";			//应用名称
+
+                var admin_obj = new Object();
+                admin_obj.PIN = "admin";		//管理员PIN
+                admin_obj.maxRetryCount = "10";			//最大重试次数
+                obj.admin = admin_obj;
+
+                var user_obj = new Object();
+                user_obj.PIN = "123456";		//用户pin
+                user_obj.maxRetryCount = "10";			//最大重试次数
+                obj.user = user_obj;
+                obj.fileRight = "1";			//创建文件和容器的权限
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.createApp(tk, request, createApp_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试delApp接口
+        *	测试前需要设备认证
+        */
+        function delApp_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: delApp is successful.");
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: delApp is failure.");
+            }
+        }
+        function JS_delApp() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x1c;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));			//设备ID
+                obj.appName = getSelectValue("app");		//应用名称
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.delApp(tk, request, delApp_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试getContainers接口
+        */
+        function getContainers_callback(response) {
+            if (response.errCode == 0) {
+                var obj = JSON.parse(response.jsonBody);
+                if (JSON.stringify(obj) != "{}") {
+                    var s1 = document.getElementById("con");
+                    for (var i = 0; i < obj.containers.length; i++) {
+                        if (obj.containers[i] != null) {
+                            var conName = obj.containers[i];
+                            var option = document.createElement("option");
+                            option.innerHTML = conName;
+                            s1.appendChild(option);
+                        }
+                    }
+                }
+
+                alert(response.jsonBody);
+                alert("[interface]: getContainers is successful.");
+            } else {
+                alert("[interface]: getContainers is failure.");
+            }
+        }
+        function JS_getContainers() {
+            document.getElementById("con").length = 1;
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x1d;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));					//设备ID
+                obj.appName = getSelectValue("app");					//应用名称	
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getContainers(tk, request, getContainers_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试createContainer接口
+        *	测试前需要PIN码验证
+        */
+        function createContainer_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: createContainer is successful.");
+                alert(response.jsonBody);
+            } else if (response.errCode == ResultError.SAR_PINERROR) {
+                alert("[interface]: unlockPIN is failure,PIN is incorrect.");
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: createContainer is failure.");
+            }
+        }
+        function JS_createContainer() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x1e;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				//应用名称
+                obj.containerName = "RAT"; 					//容器名称			
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.createContainer(tk, request, createContainer_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试delContainer接口
+        *	测试前需要PIN码验证
+        */
+        function delContainer_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: delContainer is successful.");
+                alert(response.jsonBody);
+            } else if (response.errCode == ResultError.SAR_PINERROR) {
+                alert("[interface]: unlockPIN is failure,PIN is incorrect.");
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: delContainer is failure.");
+            }
+        }
+        function JS_delContainer() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x1f;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				//应用名称
+                obj.containerName = getSelectValue("con"); 			//容器名称					
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.delContainer(tk, request, delContainer_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试getContainerType接口
+        */
+        function getContainerType_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: getContainerType is successful.");
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: getContainerType is failure.");
+            }
+        }
+        function JS_getContainerType() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x20;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				//应用名称
+                obj.containerName = getSelectValue("con"); 			//容器名称
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getContainerType(tk, request, getContainerType_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试importCertificate接口
+        *	需要设备认证
+        */
+        function importCertificate_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: importCertificate is successful.");
+            } else {
+                alert("[interface]: importCertificate is failure.");
+            }
+        }
+        function JS_importCertificate() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x21;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var certStr = "MIICHzCCAcOgAwIBAgIMZLQAAAAAABKgAuffMAwGCCqBHM9VAYN1BQAwfjELMAkGA1UEBhMCQ04xDzANBgNVBAgMBumZleilvzEPMA0GA1UEBwwG6KW/5a6JMQ0wCwYDVQQKDARrb2FsMQ0wCwYDVQQLDARrb2FsMRgwFgYDVQQLDA/opb/lronliIblhazlj7gxFTATBgNVBAMMDGNhX2xvY2FsX3NtMjAeFw0xOTA0MTUxNjAwMDBaFw0yMjA0MTUxNTU5NTlaMDwxCzAJBgNVBAYTAkNOMR0wGwYJKoZIhvcNAQkBFg50ZXN0M0Brb2FsLmNvbTEOMAwGA1UEAwwFdGVzdDMwWTATBgcqhkjOPQIBBggqgRzPVQGCLQNCAASh11u4tfIk/O8oLNjQKzLndZcWUSGaQsVU0njnWzZNOwlDcMcyh4DY/nIPRs0z4G9gP+uNjuvV12pozMo3T6Gzo2cwZTATBgNVHSUEDDAKBggrBgEFBQcDBDAOBgNVHQ8BAf8EBAMCADAwHwYDVR0jBBgwFoAUCA7JdOlxoV8yyZpzdq84jrurZK0wHQYDVR0OBBYEFHMZFnaVr97YaH9uIno+zpjX1UnUMAwGCCqBHM9VAYN1BQADSAAwRQIgN8WJwHqUbmsh++NKW2XANTqCwMD21fWWmPSonWkABv0CIQCHNqREG+kgNv4e+xGIxnS4nD1HJGZq8EEGmlmVwukmOg==";
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				//应用名称	
+                obj.containerName = getSelectValue("con");				//容器名称
+                obj.signFlag = "0";						//1表示签名证书，0表示加密证书
+                obj.cert = certStr;					//证书(base64编码)
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.importCertificate(tk, request, importCertificate_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试exportCertificate接口
+        */
+        function exportCertificate_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: exportCertificate is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                cert = obj.cert;
+
+                alert(cert);
+            } else {
+                alert("[interface]: exportCertificate is failure.");
+            }
+        }
+        function JS_exportCertificate() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x22;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var certType = prompt("1：签名，0：加密，请输入证书类型！");
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				//应用名称
+                obj.containerName = getSelectValue("con");				//容器名称
+                obj.signFlag = certType;					//1表示签名证书，0表示加密证书
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.exportCertificate(tk, request, exportCertificate_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试exportPublicKey接口
+        */
+        function exportPublicKey_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: exportPublicKey is successful.");
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: exportPublicKey is failure.");
+            }
+        }
+        function JS_exportPublicKey() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x23;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var signType = prompt("1：签名，0：加密，请输入公钥类型！");
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.appName = getSelectValue("app");				//应用名称
+                obj.containerName = getSelectValue("con");				//容器名称
+                obj.signFlag = signType;					//1表示签名公钥，0表示加密公钥
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.exportPublicKey(tk, request, exportPublicKey_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试getProviders接口
+        */
+        function getProviders_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: getProviders is successful.");
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: getProviders is failure.");
+            }
+        }
+        function JS_getProviders() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x24;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getProviders(tk, request, getProviders_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试setProvider接口
+        */
+        function setProvider_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: setProvider is successful.");
+            } else {
+                alert("[interface]: setProvider is failure.");
+            }
+        }
+        function JS_setProvider() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x25;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var arr = new Array();
+                arr[0] = "055C_F603";						//设备VID_PID
+                arr[1] = "057C_F604";
+                arr[2] = "056C_F605";
+                var obj = new Object();
+                obj.name = "Longmai";						//设备名称
+                obj.PIDVID = arr;
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.setProvider(tk, request, setProvider_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试extPubKeyEncrypt接口
+        */
+        var enCryptData = "";
+        function extPubKeyEncrypt_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: extPubKeyEncrypt is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                enCryptData = obj.data;
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: extPubKeyEncrypt is failure.");
+            }
+        }
+        function JS_extPubKeyEncrypt() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x26;
+                request.version = 1;
+                request.extend = 0x00;
+                var RSAPubKey = "AAABAAAIAADgY8SKsv2KsM85Wn7qzJGU0VO1EWUvQxob63wJilqit+3Iq0tKeuTrg803N48XJG9V17ux9e3FrFfhxpU4F1o7mNJm6QllKxiAT2R7L3T5NggZgdQRoY3e/yah0tjInDmIwI9w4Ie/m+czHZ14KaVJECdpv0G2uNlz0rVrC/jYZBxJjDOB+FHJdoQME1QIHgNkLAEFnAm/vqvNGqCcJHpv5QbrGdWpMNEbw9OwprTBW2Odx0Ya2OZU/YDj9Ts2nq6A50VLQVaJmptc4C/mc31qI98Ft5fH3Z9pMU+te39CY5ioxJBgIMnHMIBMAdCazFDFbf/K74wZY/xITDLfSeEbAAEAAQ==";
+                var ECCPubkey = "AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFlQQtdVN0r0EJe9CP1KWHCUWbNwKW0itzGqR9zPB3wkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACOi3EbQhNyj1XTNamyo4uB8OqxS9DD5iA/Ift+90hAS";
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.pubKey = RSAPubKey;					//公钥(base64编码)
+                obj.type = "1";						//1表示RSA,2表示ECC
+                obj.srcData = "MTIzNDU2NzgxMjM0NTY3OAog";	//源数据:1234567812345678的base64, 原数据必须小于256字节
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.extPubKeyEncrypt(tk, request, extPubKeyEncrypt_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试extPriKeyDecrypt接口
+        */
+        function extPriKeyDecrypt_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: extPriKeyDecrypt is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: extPriKeyDecrypt is failure.");
+            }
+        }
+        function JS_extPriKeyDecrypt() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x27;
+                request.version = 1;
+                request.extend = 0x00;
+                var RSAPriKey = "AAABAAAIAADgY8SKsv2KsM85Wn7qzJGU0VO1EWUvQxob63wJilqit+3Iq0tKeuTrg803N48XJG9V17ux9e3FrFfhxpU4F1o7mNJm6QllKxiAT2R7L3T5NggZgdQRoY3e/yah0tjInDmIwI9w4Ie/m+czHZ14KaVJECdpv0G2uNlz0rVrC/jYZBxJjDOB+FHJdoQME1QIHgNkLAEFnAm/vqvNGqCcJHpv5QbrGdWpMNEbw9OwprTBW2Odx0Ya2OZU/YDj9Ts2nq6A50VLQVaJmptc4C/mc31qI98Ft5fH3Z9pMU+te39CY5ioxJBgIMnHMIBMAdCazFDFbf/K74wZY/xITDLfSeEbAAEAAdPa3lHltKQhU0VfP70H79uF13Z5OgNpY1lA+Bc53WEMLyDrOWbUqRYDltmvRxYefE+cI8Zd32Rm14J/L5uJ0NO78crf8tLl4XgjfUchA1vXu8X5YfRTh9MnK55Vp/+gIGIRDF0SYJhz5dHJAEfXagqVieC5hp2x4P0Nz+OFpikGdt8S+qCpsmJBint3CoG6yewcXpHMtKs0Z556ytkoPo7XwDSxwHAhHC1NOFWoE5wXW+4H6ZRM6di/vKRLlA7/DI2SnlpfdR7Cp+TAKz8f0n9g4hQh+/reyiYG7Wxx3afOWcTijEBvL6J+eev7xCldoV8LvY5vzAgfnPKCq7+kdaHkMk51h5AwUenT89vN5iZ5h65ZzkBGP4OIPc+CRd+kYcHNpgBMKkJt5eXJx+h50lh5ycmWAnO7x6hCEfHyUbpAZ+wiDfe6Pc4gHZfsAjmeP/wjye32T5AoQixCKh5ofAhfhgxt1jg7gaY8Tc+htAXCDYZN0GYL77/IdAvjLjQcp/u6uSz96fJid1YYgitbYy0XQ6MWJaurnl94+Z/mrmNn7JUEWeA0vA9g7DK1KE42eadtRUPQFM+S+D/hHxHGR6k98FkNqv0AJzW58eURPmqDMU6u1mw+fBSU86ltDubXYq4sx6dEiVCNeIomyMfUBJbXXExwrSuponXaC4bGSKJtb+x8rwieoBSNK3ggBw0rMdBqo4GV5N6iFOC8Npku5+FKvSL+Yl0X1+86lY2HaLjSzGk8hmcNfLygukcy9DdBsvVFzC4toxtNTlM1gHxW5ldbw/H21SiQ/C34pzshTv4G3VNSJU08p3MfpdREUnuJl3Qqu1/LrW8aEadZbUPsK2FnxeUaqB4ufuslQfs/dnAfIY0PiUzERX6Hay60/Xr8ndYI5H9Mj1DLojAdA1N3Uru6CrDYMMqze6n9Y4fUYwIdwdv4Sksn+00ut9YBkadCb4z/G9JnUycBsRn1yXCwNzCGDw3LZdSZsYh0o2J4Bm5R5Lw3AuhQrKC9psLDr7A3zT2rdwphIQEWWAeE5mf7QW4+eWDjwr+l8a0CjIoRYnWMyjL8jAzuZhrzZobsMqQFhKmNGwIggnO7vykMC2dpyK6OsOwafPOw8JN2/71Ma0T7w9bhhFiUILliDyhVh5cxSkKswWVEGm60SUtDulfSBbaHllS4GY4U92VFk5LDnadh";
+                var ECCPrikey = "AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWm3Fl36vpmkdqhYTOQW5LKpEkrP+7Z4AzI2JG1wOh0Y=";
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));				//设备ID
+                obj.priKey = RSAPriKey;					//公钥(base64编码)
+                obj.type = "1";						//1表示RSA,2表示ECC
+                obj.encryptData = enCryptData;			    //源数据:1234567812345678的base64, 原数据必须小于256字节
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.extPriKeyDecrypt(tk, request, extPriKeyDecrypt_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试getAllCert接口
+        */
+        function getAllCert_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: getAllCert is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                cert = obj.cert;
+
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: getAllCert is failure.");
+            }
+        }
+        function JS_getAllCert() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x28;
+                request.version = 1;
+                request.extend = 0x00;
+
+                ///若需要获取所有证书列表，可不用写request.jsonBody
+                var obj = new Object();
+                var arrInclude = new Array();
+                //arrInclude[0] = "5817_qvSDVe2BXk/Y/nK+7pgmAd64s5F";				//包含devid
+                //arrInclude[1] = "6051_eUADXwWAiLTmbjIPCBqyHvv0Fm7";
+                obj.include = arrInclude;
+
+                var arrExclude = new Array();
+                //arrExclude[0] = "5817_qvSDVe2BXk/Y/nK+7pgmAd64s5F";				//不包含devid
+                //arrExclude[1] = "7232_NGZZhaunPRGm5V3kRhZoJuXAKPF";
+                obj.exclude = arrExclude;
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getAllCert(tk, request, getAllCert_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+
+        /**
+        *	devService模块
+        *	测试findCert接口
+        */
+        function findCert_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: findCert is successful.");
+                alert(response.jsonBody);
+
+            } else {
+                alert("[interface]: findCert is failure.");
+            }
+        }
+        function JS_findCert() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x34;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var arr = new Array();
+                arr[0] = "29D900000000000000000077";				//证书序列号
+                arr[1] = "49EA00000000058CAFA5F4AD";
+                arr[2] = "29D900000000000000000078";
+                var obj = new Object();
+                obj.Serials = arr;
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.findCert(tk, request, findCert_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	devService模块
+        *	测试GenRandom接口
+        */
+        function genRandom_callback(response) {
+
+            if (response.errCode == 0) {
+                var obj = JSON.parse(response.jsonBody)
+                alert("[interface]: genRandom is successful.");
+			    alert(obj.b64Random);
+            } else {
+                alert("[interface]: genRandom is failure.");
+            }
+        }
+        function JS_GenRandom() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x42;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));	 //设备ID
+                obj.randomLen = "16";				            //随机数字节数
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.genRandom(tk, request, genRandom_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试signData接口
+        *	测试前需要验证PIN
+        */
+        var b64SignData = "";
+        function signData_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: signData is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                b64SignData = obj.b64signData;
+                alert(b64SignData);
+            } else {
+                alert("[interface]: signData is failure.");
+            }
+        }
+        function JS_signData() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x10;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));		   //设备ID
+                obj.appName = getSelectValue("app");					   //应用名称	
+                obj.conName = getSelectValue("con");					   //容器名称
+
+                var tmpData = document.getElementById("srcSignData").value;		       //待签名数据
+                obj.srcData = Base64.encode(tmpData);
+
+                obj.isBase64SrcData = "1";						                       //是否为base64编码源数据，1表示是，0表示否
+                obj.type = document.getElementById("signdataType").value;			   //签名类型,1表示PM-BD签名,2表示SM2/RSA签名, 3表示SSL建链定制签名,4表示银行二代K签名（需要屏显报文）
+                obj.mdType = document.getElementById("digstType").value;			   //指定摘要类型,"1"-MD5 "2"-SHA1 "3"-SM3 "4"-SHA256
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                if (4 == obj.type) {
+                    alert("please press ok.");
+                }
+
+                client.signData(tk, request, signData_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试verifySignData接口
+        */
+        function verifySignData_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: verifySignData is successful.");
+            } else {
+                alert("[interface]: verifySignData is failure.");
+            }
+        }
+        function JS_verifySignData() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x11;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));	//设备ID
+                obj.appName = getSelectValue("app");				//应用名称
+                obj.conName = getSelectValue("con");				//容器名称
+
+                var tmpData = document.getElementById("srcSignData").value;		//签名源数据	
+                obj.srcData = Base64.encode(tmpData);
+
+                obj.signData = b64SignData;				  						//签名数据
+                obj.isBase64SrcData = "1";						  				//是否为base64编码源数据，1表示是，0表示否
+                obj.type = document.getElementById("signdataType").value;		//签名类型,1表示PM-BD验签,2表示SM2/RSA验签
+                obj.mdType = document.getElementById("digstType").value;	    //指定摘要类型,"1"-MD5 "2"-SHA1 "3"-SM3 "4"-SHA256
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.verifySignData(tk, request, verifySignData_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试signMessage接口
+        */
+        var p7SignData = "";
+        function signMessage_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: signMessage is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                p7SignData = obj.signData;
+                alert(p7SignData);
+            } else {
+                alert("[interface]: signMessage is failure.");
+            }
+        }
+        function JS_signMessage() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x12;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));			   //设备ID
+                obj.appName = getSelectValue("app");						   //应用名称
+                obj.conName = getSelectValue("con");						   //容器名称		
+
+                var tmpData = document.getElementById("srcP7signData").value;
+                obj.srcData = Base64.encode(tmpData);  									    //待签名数据(base64编码), 例如:base64: 1234567812345678
+                obj.attachData = document.getElementById("withdata").value;;		        //0表示PKCS7_DETACHED
+                obj.mdType = document.getElementById("digsttype").value;;		    	    //指定的摘要类型,"1"-MD5 "2"-SHA1 "3"-SM3 "4"-SHA256
+                //注意sm2签名与sm3，rsa签名与md5、sha1、sha256配套使用
+                obj.signwithSM2Std = "0";									                //用于sm2签名，1表示使用SM2规范，0表示使用RFC规范，默认0
+                obj.isSignedWithKey2G = document.getElementById("useKey2G").value;	        //是否使用银行二代K签名（需要屏显报文）：0表示不使用，1表示使用，默认0
+                obj.noAttr = "1";                                                           //不携带属性，1: 是, 0: 否, 默认0
+
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                if (1 == obj.isSignedWithKey2G) {
+                    alert("please press ok.");
+                }
+                client.signMessage(tk, request, signMessage_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试verifyMessage接口
+        */
+        function verifyMessage_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: verifyMessage is successful.");
+            } else {
+                alert("[interface]: verifyMessage is failure.");
+            }
+        }
+        function JS_verifyMessage() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x13;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                var tmpData = document.getElementById("srcP7signData").value;
+                obj.srcData = Base64.encode(tmpData);						    //签名数据的源数据(base64), 例: base64: 1234567812345678
+                obj.signData = p7SignData;										//签名数据(base64)
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.verifyMessage(tk, request, verifyMessage_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+
+        /**
+        *	signXService模块
+        *	测试extECCVerify接口
+        */
+        function extECCVerify_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: extECCVerify is successful.");
+            } else {
+                alert("[interface]: extECCVerify is failure.");
+            }
+        }
+        function JS_extECCVerify() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x14;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var pubkey = "AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIL9gYfCORfGu+8gbAXYk4RQsB3JvbvJGJfsb+maha74AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP66AE403IE6WVEdle4goHUwCnx5fofQTU6UCjDMjc9X";
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));					//设备ID
+                obj.pubkey = pubkey;						//公钥
+                obj.srcData = "MTIzNDU2NzgxMjM0NTY3OA==";	//签名数据的源数据(base64),例: b64: 1234567812345678
+                obj.signData = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6kAnrhyKUSlDrG+QDU4asJai/GJ7EwyVm737TlMen8wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA5wtlJYotksp4HI59I7Vj9hECTRxu44FIbx69SweJIlQ=";					//签名数据(base64)
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.extECCVerify(tk, request, extECCVerify_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试extECCVerifyEx接口
+        */
+        function extECCVerifyEx_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: extECCVerifyEx is successful.");
+            } else {
+                alert("[interface]: extECCVerifyEx is failure.");
+            }
+        }
+        function JS_extECCVerifyEx() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x15;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var cert = "MIIB3jCCAYOgAwIBAgIMKdkAAAAAAAAAAAB4MAwGCCqBHM9VAYN1BQAwJDELMAkGA1UEBhMCQ04xFTATBgNVBAMMDGxvY2FsX2NhX3NtMjAeFw0xOTExMjAxNjAwMDBaFw0yMjExMjAxNTU5NTlaMCkxCzAJBgNVBAYTAkNOMRowGAYDVQQDDBF0ZXN0MDAwMDAwMDAwMDAwMTBZMBMGByqGSM49AgEGCCqBHM9VAYItA0IABCC/YGHwjkXxrvvIGwF2JOEULAdyb27yRiX7G/pmoWu+/roATjTcgTpZUR2V7iCgdTAKfHl+h9BNTpQKMMyNz1ejgZMwgZAwEQYJYIZIAYb4QgEBBAQDAgCAMAsGA1UdDwQEAwIAwDAgBgNVHSUBAf8EFjAUBggrBgEFBQcDAgYIKwYBBQUHAwQwDAYDVR0TBAUwAwEBADAfBgNVHSMEGDAWgBT6af3+dG26lCr1wqX0G1WwOOsMGTAdBgNVHQ4EFgQUsYFnbwLwqN8HumSRocr5/yY0QtQwDAYIKoEcz1UBg3UFAANHADBEAiBsLQfj+uQaR38vtWK0jPKENs5wr4Keg/wOXsYTws8NhwIgTBAmJW66eQ+G51L0OxSjoA4Rlr/aAV7zVRnSxA7pnPI=";
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));					//设备ID
+                obj.cert = cert;							//证书
+                obj.srcData = "MTIzNDU2NzgxMjM0NTY3OA==";   	//签名数据的源数据(base64编码),例: b64: 1234567812345678
+                obj.signData = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6kAnrhyKUSlDrG+QDU4asJai/GJ7EwyVm737TlMen8wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA5wtlJYotksp4HI59I7Vj9hECTRxu44FIbx69SweJIlQ=";					//签名数据(base64编码)
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.extECCVerifyEx(tk, request, extECCVerifyEx_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试dupCertWithTemplate接口
+        */
+		var cert= "";
+        function dupCertWithTemplate_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: dupCertWithTemplate is successful.");
+			    var obj = JSON.parse(response.jsonBody)
+				cert = obj.cert;
+                alert(cert);
+            } else {
+                alert("[interface]: dupCertWithTemplate is failure.");
+            }
+        }
+        function JS_dupCertWithTemplate() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x16;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));			//设备ID
+                obj.appName = getSelectValue("app");			//应用名称
+                obj.conName = getSelectValue("con");			//容器名称
+                obj.signFlag = "1";					//1表示签名证书,0表示加密证书
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.dupCertWithTemplate(tk, request, dupCertWithTemplate_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试parseCert接口
+        */
+        function parseCert_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: parseCert is successful.");
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: parseCert is failure.");
+            }
+        }
+        function JS_parseCert() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x17;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                //证书内容(base64编码)
+                obj.cert = document.getElementById("srcCert").value;
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.parseCert(tk, request, parseCert_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试envelopeEncrypt接口
+        */
+        var p7EnvData = "";
+        function envelopeEncrypt_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: envelopeEncrypt is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                p7EnvData = obj.envelopeData;
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: envelopeEncrypt is failure.");
+            }
+        }
+        function JS_envelopeEncrypt() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x18;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.srcData = "MTIzNDU2NzgxMjM0NTY3OA==";  						//待签名数据(base64编码), 例如:base64: 1234567812345678
+                obj.cert = "MIIBwTCCAWSgAwIBAgIMKdkAAAAAAAAAAAB3MAwGCCqBHM9VAYN1BQAwJDELMAkGA1UEBhMCQ04xFTATBgNVBAMMDGxvY2FsX2NhX3NtMjAeFw0xOTExMjAxNjAwMDBaFw0yMjExMjAxNTU5NTlaMCkxCzAJBgNVBAYTAkNOMRowGAYDVQQDDBF0ZXN0MDAwMDAwMDAwMDAwMTBZMBMGByqGSM49AgEGCCqBHM9VAYItA0IABJ7n6vH8LtNscwWCUfCGDeNNU/s3Zs+cfO1qBRDbu9xaqc7vpTafB+CBOrZD2/fdGWDWtucfDAFmJbHSxRK7Q0mjdTBzMAsGA1UdDwQEAwIAMDAMBgNVHRMEBTADAQEAMBYGA1UdJQEB/wQMMAoGCCsGAQUFBwMEMB8GA1UdIwQYMBaAFPpp/f50bbqUKvXCpfQbVbA46wwZMB0GA1UdDgQWBBRWCzF9ucAogTuQJhe2TcIm1mtUQDAMBggqgRzPVQGDdQUAA0kAMEYCIQDEhuPbrP//txTsMHaMnWzeD+6ENvUjj0vpUwq8D/lwrwIhALQJPoHD09J+ZLr8oeJQZ9ec0alId8TPVcWSNv1yy+Q1";							    //证书内容
+                obj.cihperType = "3";                               				//"0"-DES(不支持) "1"-3DES "2"-AES "3"-SM4 "4"-AES128 "5"-DES-ECB(不支持) "6"-3DES-ECB(不支持) "7"-AES_ECB "8"-SM4_ECB "9"-AES128_ECB
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.envelopeEncrypt(tk, request, envelopeEncrypt_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试envelopeEDecrypt接口
+        */
+        //var plain = "";
+        function envelopeDecrypt_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: envelopeEDecrypt is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                //p7EnvData = obj.plainData;
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: envelopeEDecrypt is failure.");
+            }
+        }
+        function JS_envelopeDecrypt() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x19;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));									//设备ID
+                obj.appName = getSelectValue("app");									//应用名称
+                obj.conName = getSelectValue("con");									//容器名称				
+                obj.srcData = p7EnvData;  									//待签名数据(base64编码), 例如:base64: 1234567812345678
+
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.envelopeDecrypt(tk, request, envelopeDecrypt_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试verifyMessage接口
+        */
+        function verifySignedMessage_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: verifySignedMessage is successful.");
+            } else {
+                alert("[interface]: verifySignedMessage is failure.");
+            }
+        }
+        function JS_verifySignedMessage() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x1A;
+                request.version = 1;
+                request.extend = 0x00;
+                var inCert = "MIIB3jCCAYOgAwIBAgIMKdkAAAAAAAAAAAB4MAwGCCqBHM9VAYN1BQAwJDELMAkGA1UEBhMCQ04xFTATBgNVBAMMDGxvY2FsX2NhX3NtMjAeFw0xOTExMjAxNjAwMDBaFw0yMjExMjAxNTU5NTlaMCkxCzAJBgNVBAYTAkNOMRowGAYDVQQDDBF0ZXN0MDAwMDAwMDAwMDAwMTBZMBMGByqGSM49AgEGCCqBHM9VAYItA0IABCC/YGHwjkXxrvvIGwF2JOEULAdyb27yRiX7G/pmoWu+/roATjTcgTpZUR2V7iCgdTAKfHl+h9BNTpQKMMyNz1ejgZMwgZAwEQYJYIZIAYb4QgEBBAQDAgCAMAsGA1UdDwQEAwIAwDAgBgNVHSUBAf8EFjAUBggrBgEFBQcDAgYIKwYBBQUHAwQwDAYDVR0TBAUwAwEBADAfBgNVHSMEGDAWgBT6af3+dG26lCr1wqX0G1WwOOsMGTAdBgNVHQ4EFgQUsYFnbwLwqN8HumSRocr5/yY0QtQwDAYIKoEcz1UBg3UFAANHADBEAiBsLQfj+uQaR38vtWK0jPKENs5wr4Keg/wOXsYTws8NhwIgTBAmJW66eQ+G51L0OxSjoA4Rlr/aAV7zVRnSxA7pnPI=";
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));								//设备ID
+                obj.appName = getSelectValue("app");								//应用名称
+                obj.conName = getSelectValue("con");								//容器名称
+                obj.srcData = "MTIzNDU2NzgxMjM0NTY3OA==";        		//签名数据的源数据(base64), 例: base64: 1234567812345678
+                obj.signData = p7SignData;					    		//签名数据(base64)
+                obj.cert = inCert;
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.verifySignedMessage(tk, request, verifySignedMessage_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	signXService模块
+        *	测试getExtension接口
+        */
+        function getExtension_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: getExtension is successful.");
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: getExtension is failure.");
+            }
+        }
+        function JS_getExtension() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x1B;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                //证书内容(base64编码)
+                obj.cert = "MIIESDCCA+ygAwIBAgIIY0kAVQAAACMwDAYIKoEcz1UBg3UFADB1MQswCQYDVQQGEwJDTjELMAkGA1UECAwCYmoxCzAJBgNVBAcMAmJqMQ8wDQYDVQQKDAZrb2FsaWkxDzANBgNVBAsMBmtvYWxpaTEQMA4GA1UECwwHcHJvZHVjdDEYMBYGA1UEAwwPY2E2XzVfN19zdWJfc20yMB4XDTE0MDIxODAzMDIxOVoXDTE5MDIxNzAzMDIxOVowYTELMAkGA1UEBhMCQ04xDzANBgNVBAgMBuWMl+S6rDEPMA0GA1UEBwwG5YyX5LqsMQ0wCwYDVQQKDAR0ZXN0MQ0wCwYDVQQLDAR0ZXN0MRIwEAYDVQQDDAl0ZXN0c20yLjcwWTATBgcqhkjOPQIBBggqgRzPVQGCLQNCAASnapTTZ2GLDnkcwquizo0O3+DMKGeKgz1DTf2WB4PWN0vDrgpEx2J2sFaEIGKYJnWHAQEUfHZ8LJ4P/DgwRcK4o4ICdjCCAnIwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDgYDVR0PAQH/BAQDAgDAMBEGCWCGSAGG+EIBAQQEAwIAQDAfBgNVHSMEGDAWgBTQvZjXHWsmVuSggWM72VFwGT71YjCB9wYDVR0fBIHvMIHsMIHpoIHmoIHjhoGobGRhcDovLzE5Mi4xNjguOC4yNTQ6Mzg5L0NOPWNhNl81Xzdfc3ViX3NtMixDTj1jYTZfNV83X3N1Yl9zbTIsIE9VPUNSTERpc3RyaWJ1dGVQb2ludHMsIGRjPWtvYWxpaSxkYz1jb20/Y2VydGlmaWNhdGVSZXZvY2F0aW9uTGlzdD9iYXNlP29iamVjdGNsYXNzPWNSTERpc3RyaWJ1dGlvblBvaW50hjZodHRwOi8vMTkyLjE2OC44LjI1Mzo4ODgwL2Rvd25sb2FkL2NhNl81Xzdfc3ViX3NtMi5jcmwwgf0GCCsGAQUFBwEBBIHwMIHtMIGmBggrBgEFBQcwAoaBmWxkYXA6Ly8xOTIuMTY4LjguMjU0OjM4OS9DTj1jYTZfNV83X3N1Yl9zbTIsQ049Y2E2XzVfN19zdWJfc20yLCBPVT1jQUNlcnRpZmljYXRlcywgZGM9a29hbGlpLGRjPWNvbT9jQUNlcnRpZmljYXRlP2Jhc2U/b2JqZWN0Q2xhc3M9Y2VydGlmaWNhdGlvbkF1dGhvcml0eTBCBggrBgEFBQcwAoY2aHR0cDovLzE5Mi4xNjguOC4yNTM6ODg4MC9kb3dubG9hZC9jYTZfNV83X3N1Yl9zbTIuY2VyMB0GA1UdDgQWBBTWWHvPJyyT1WJJCUCCtItwI+1NcDAMBggqgRzPVQGDdQUAA0gAMEUCIQDGkBT/l6yjeljyAr8gQ0e3erlw7NUtkz3dk/P4tewo/QIgLzpQ6df2nED6AZ1HrgP2jMal3df5BJwy3p46Hchmfuc=";
+                obj.oid = "2.5.29.35";			//证书扩展项oid
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.getExtension(tk, request, getExtension_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+        /**
+        *	sso定制模块
+        *	测试setURL接口
+        */
+        function setURL_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: setURL is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                b64SignData = obj.b64signData;
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: setURL is failure.");
+            }
+        }
+        function JS_setURL() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(ssoDll_SERVER_NAME, ssoCustomizationServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x10;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.url = "http://127.0.0.1:80/test"
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.setURL(tk, request, setURL_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+        /**
+        *	deviceService模块
+        *	测试digestData接口
+        */
+        var b64HashData = "";
+        function digestData_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: digestData is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                b64HashData = obj.b64HashData;
+                alert(b64HashData);
+            } else {
+                alert("[interface]: digestData  is failure.");
+            }
+        }
+        function JS_digestData() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x43;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                var tmpData = document.getElementById("digestSrcSignData").value       //待签名数据
+        
+                obj.devID = map.get(getSelectValue("device"));		             //设备ID
+                obj.pubKey = "";                                                 // sm2公钥，预留暂不支持
+                obj.algID  = +document.getElementById("dataDigstType").value;        // 摘要类型
+                obj.useUkey = +document.getElementById("dataCalculateType").value;   // 计算摘要的方式 
+                obj.b64SrcData = Base64.encode(tmpData);                         // base64源数据
+                
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+                client.digestData(tk, request, digestData_callback);
+                
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+        //function str2utf8(str) {
+        //   return eval('\''+encodeURI(str).replace(/%/gm, '\\x')+'\'');
+        //} 
+        
+        function digestFile_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: digestFile is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                b64HashData = obj.b64HashData;
+                alert(b64HashData);
+            } else {
+                alert("[interface]: digestFile  is failure.");
+            }
+        }
+        function JS_digestFile() {
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(DEV_SERVER_NAME, devServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x44;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object(); 
+                var tmpFilePath = document.getElementById("tmpFilePath").value
+                obj.devID = map.get(getSelectValue("device"));                     // 设备ID
+                obj.pubKey = "";                                                   // sm2公钥，预留暂不支持
+                obj.algID = +document.getElementById("fileDigstType").value;       // 摘要类型
+                obj.useUkey = +document.getElementById("fileCalculateType").value; // 计算摘要的方式
+                obj.filePath = tmpFilePath;                                        // 文件路径
+                
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+                client.digestFile(tk, request, digestFile_callback);
+                
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+        
+        function JS_verifyDigest() {
+           var tmpData = document.getElementById("srcDigestData").value; //待校验数据  
+           if (b64HashData == tmpData) { 
+             alert("verification succeeded")
+           } else { 
+             alert("verification failed") 
+           }
+        }
+        
+        /**
+        *	signXService模块
+        *	测试envelopeEncrypt接口
+        */
+        var p7EnvData = "";
+        function envelopeEncrypt_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: envelopeEncrypt is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                p7EnvData = obj.envelopeData;
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: envelopeEncrypt is failure.");
+            }
+        }
+        function JS_envelopeEncrypt() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x18;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.srcData = "MTIzNDU2NzgxMjM0NTY3OA==";  	//待签名数据(base64编码), 例如:base64: 1234567812345678
+
+                /*
+                SYM_ALGOR_DES_CBC          = 0x00,
+                SYM_ALGOR_DES_EDE3_CBC     = 0x01,
+                SYM_ALGOR_AES_256_CBC      = 0x02,
+                SYM_ALGOR_SM4_CBC          = 0x03,
+                SYM_ALGOR_AES_128_CBC      = 0x04,
+                SYM_ALGOR_DES_ECB          = 0x05,
+                SYM_ALGOR_DES_EDE3_ECB     = 0x06,
+                SYM_ALGOR_AES_256_ECB      = 0x07,
+                SYM_ALGOR_SM4_ECB          = 0x08,
+                SYM_ALGOR_AES_128_ECB      = 0x09
+                */
+
+                //csp个人rsa2048加密证书
+                obj.cert = "MIIEFTCCAv2gAwIBAgIMSeoAAAAACA\/cJ5D\/MA0GCSqGSIb3DQEBCwUAMIGJMQswCQYDVQQGEwJDTjEPMA0GA1UECAwG5LiK5rW3MRIwEAYDVQQHDAnkuIrmtbfluIIxLTArBgNVBAoMJOS4iua1t+agvOWwlOi9r+S7tuiCoeS7veaciemZkOWFrOWPuDEVMBMGA1UECwwM5qC85bCU6L2v5Lu2MQ8wDQYDVQQDDAZLb2FsQ2EwHhcNMjAwNjE0MTYwMDAwWhcNMjUwNjE1MTU1OTU5WjBYMQswCQYDVQQGEwJDTjEVMBMGA1UECgwM5qC85bCU6L2v5Lu2MR4wHAYJKoZIhvcNAQkBFg9qaWFvcHhAa29hbC5jb20xEjAQBgNVBAMMCeeEpum5j+e\/lDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKVzyKNh3\/XlxpfNYYvHMUxywfDUNYQFnU3jaGINFiBRE2xChjosvWi04KsHJd62\/DUHc77L2oWeXI5L53bxr\/v3bX4FXEHrIhXmTBoaoEvumKJ7mByHGmorUm1SK\/9Ep7+G\/2TO32hlhddpfGI28dTgACTiOvzVrSlG7UelYGLABVGZfVDu+QgAXL2hCTDPhAbpGQ3PwlqPvs\/RpNRPoPlwPx6S8K9qewlKKtIuSL24o2fDHequ+hzi\/ra8bFN1YMRfDb8Ql60pf6VnGTJuPkMCo13ajzyuGnqpWqe6QFp+sWRkupZxFB\/\/mQr\/Qi+dh6IvLh0YxeOJMksDd7l6FoUCAwEAAaOBrDCBqTAMBgNVHRMEBTADAQEAMB8GA1UdJQQYMBYGCCsGAQUFBwMEBgorBgEEAYI3FAICMAsGA1UdDwQEAwIAMDArBgkrBgEEAYI3FAIEHh4cAFMAbQBhAHIAdABjAGEAcgBkAEwAbwBnAG8AbjAfBgNVHSMEGDAWgBTX2PxIHiJmU9RB0yda3Ay\/O3RpozAdBgNVHQ4EFgQUY5TWLRPqC8MTpTLHKCGftemMchwwDQYJKoZIhvcNAQELBQADggEBAE8ZgjU\/WthlBna8Qlr+JKs69tZC46Fpowl+x0q61gJX6dnzXBBCzB+L0\/M6Dqmns5q0BVzOfHSqvh2zVWvsnQBjzqinL3IbzSKWA\/Ivczk+VxThz5DPLFPTGbVQDBTAYhHH+X1fCO8pbfhbvMckbJAyNnecSFscv5004BXb9G3TcABxm5BAybvTQOdIzGJXCB0NKQlBwQe4BeZm2oDwqdEP4g+kf6eWj1jOdJ4jMt8rR0EwVa0CNNj9TjhurZjOJ1M1LeeuF6A2a61PWIj8nqC\/h7sPJEvoVEIidnGPOin7av0Nw22bouTO\/xGxG0u83P2LdL7vTM4Df+LCuwtqFdM=";
+                obj.cihperType = "1";
+
+                //skf龙脉K sm2加密证书
+                //obj.cert          = "MIIBxzCCAWugAwIBAgIMUmwAAAAAAAAAAAAyMAwGCCqBHM9VAYN1BQAwIzELMAkGA1UEBhMCQ04xFDASBgNVBAMMC2xvY2FsY2Ffc20yMB4XDTIxMDYwNzA0MDAwMFoXDTI0MDYwNzAzNTk1OVowMTELMAkGA1UEBhMCQ04xIjAgBgNVBAMMGVBLSeS4remXtOS7tl/pgq7ku7bliqDlr4YwWTATBgcqhkjOPQIBBggqgRzPVQGCLQNCAASHeaVK0CNW1wbMBwPQ/ibpueZ5WXDY9vR5rBdH81EuHnfUTL4nVEFIv9W0rZ4o1Wiu63qJmXm/3AcTYnGqEae3o3UwczAMBgNVHRMEBTADAQEAMBYGA1UdJQEB/wQMMAoGCCsGAQUFBwMEMAsGA1UdDwQEAwIAMDAfBgNVHSMEGDAWgBRs+yHV4hw6ezpsJfZdD+s98wHdHTAdBgNVHQ4EFgQUcVLQGu2jhWKHXtRZoyx19KppgLgwDAYIKoEcz1UBg3UFAANIADBFAiEAw8q/uRj1qJiuYBULSjkIjrEDFuRZBQPAqtODaLJGRkACICfQRAE88FbIf/xobWsUxPKVeIOCfZzwvkdfI9rOm6W9";
+                //obj.cihperType    ="3";
+
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.envelopeEncrypt(tk, request, envelopeEncrypt_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+
+       /**
+        *	signXService模块
+        *	测试envelopeEDecrypt接口
+        */
+        //var plain = "";
+        function envelopeDecrypt_callback(response) {
+            if (response.errCode == 0) {
+                alert("[interface]: envelopeEDecrypt is successful.");
+                var obj = JSON.parse(response.jsonBody)
+                //p7EnvData = obj.plainData;
+                alert(response.jsonBody);
+            } else {
+                alert("[interface]: envelopeEDecrypt is failure.");
+            }
+        }
+        function JS_envelopeDecrypt() {
+
+            try {
+                transport = new Thrift.TXHRTransport(URL);
+                mp = new Thrift.Multiplexer();
+                client = mp.createClient(SIGNXDLL_SERVER_NAME, signXServiceClient, transport);
+
+                var request = msgRequest;
+                request.reqid = 0x01;
+                request.msgType = 0x19;
+                request.version = 1;
+                request.extend = 0x00;
+
+                var obj = new Object();
+                obj.devID = map.get(getSelectValue("device"));      //设备ID
+                obj.appName = getSelectValue("app");                //应用名称
+                obj.conName = getSelectValue("con");                //容器名称
+                obj.srcData = p7EnvData;  	                        //待签名数据(base64编码), 例如:base64: 1234567812345678
+
+                request.jsonBody = JSON.stringify(obj);
+
+                var tk = sessionTicket;
+                tk.sessionID = sessionID;
+                tk.ticket = ticket;
+
+                client.envelopeDecrypt(tk, request, envelopeDecrypt_callback);
+            } catch (e) {
+                alert("error：" + e.message);
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <h1>PKI中间件WEB端（用证）示例</h1>
+
+    <h2>参数配置</h2>
+    <!--http端口范围16080 ~ 16089，默认16080，集成时需要考虑端口变化的情况-->
+    <!--https端口范围18080 ~ 18089，默认18080，集成时需要考虑端口变化的情况-->
+    <form action="" method="get">
+        地址：<input id="serverIP" type="text" value="127.0.0.1" required></input>
+        http端口：<input id="serverHttpPort" type="text" value="18080" required></input>
+        https端口：<input id="serverHttpsPort" type="text" value="16080" required></input><br>
+        协议：<label><input id="http" name="protocal" type="radio" checked="checked" />http</label>
+        <label><input id="https" name="protocal" type="radio" />https</label><br>
+    </form>
+    <hr />
+
+    <h2>公共接口 </h2>
+    <button onclick="JS_Login()">登录</button>
+    <button onclick="JS_Logout()">登出</button>
+    <button onclick="JS_getVersions()">获取版本信息</button>
+    <button onclick="JS_getNotify()">获取通知事件</button>
+    <hr>
+    </hr>
+
+    <h2>设备操作 </h2>
+    <button onclick="JS_getAllCert()">获取证书列表</button>
+    <br><br>
+    <button onclick="JS_getDevices()">获取设备列表</button>
+    <select id="device">
+        <option>请选择设备</option>
+    </select>
+    <button onclick="JS_getDevInfo()">获取设备信息</button>
+    <br><br>
+    <button onclick="JS_getAppList()">获取应用列表</button>
+    <select id="app">
+        <option>请选择应用</option>
+    </select>
+    <br><br>
+    <button onclick="JS_getContainers()">获取容器列表</button>
+    <select id="con">
+        <option>请选择容器</option>
+    </select>
+    <button onclick="JS_getContainerType()">获得容器类型</button>
+    <br><br>
+    <button onclick="JS_getPINInfo()">获取PIN</button>
+    <button onclick="JS_changePIN()">修改PIN</button>
+    <button onclick="JS_verifyPIN()">校验PIN</button>
+    <button onclick="JS_unlockPIN()">解锁PIN码</button>
+    <br><br>
+    <button onclick="JS_exportPublicKey()">导出公钥</button>
+    <button onclick="JS_exportCertificate()">导出数字证书</button>
+    <br><br>
+    <button onclick="JS_GenRandom()">生成随机数</button>
+    <button onclick="JS_dupCertWithTemplate()">生成证书</button>
+    <hr>
+    </hr>
+
+    <h2>用证</h2>
+
+    <br>普通(PKCS#1)签名<br>
+    <textarea cols="120" rows="10" id="srcSignData" placeholder="请输入源数据（如果为银行二代key报文签名，请输入XML报文）"></textarea>
+    <br><br>
+    <select id="digstType">
+        <option selected="selected">请选择签名摘要类型</option>
+        <option value="1">md5</option>
+        <option value="2">sha1</option>
+        <option value="3">sm3</option>
+        <option value="4">sha256</option>
+    </select>
+    <select id="signdataType">
+        <option selected="selected">请选择签名类型</option>
+        <option value="1">PM-BD签名</option>
+        <option value="2">SM2/RSA签名</option>
+        <option value="3">SSL建链定制签名</option>
+        <option value="4">银行二代K签名</option>
+    </select>
+    <br />
+    <button onclick="JS_signData()">数据签名</button>
+    <button onclick="JS_verifySignData()">验证签名</button>
+    <br><br>
+
+    <hr>PKCS#7签名</hr><br>
+    <textarea cols="120" rows="10" id="srcP7signData" placeholder="请输入源数据（如果为银行二代key报文签名，请输入XML报文）"></textarea>
+    <br><br>
+    <select id="withdata">
+        <option selected="selected">是否携带原文</option>
+        <option value="1">是</option>
+        <option value="0">否</option>
+    </select>
+    <select id="digsttype">
+        <option selected="selected">请选择签名摘要类型</option>
+        <option value="1">md5</option>
+        <option value="2">sha1</option>
+        <option value="3">sm3</option>
+        <option value="4">sha256</option>
+    </select>
+    <select id="useKey2G">
+        <option selected="selected">是否为二代key</option>
+        <option value="1">是</option>
+        <option value="0">否</option>
+    </select>
+    <br />
+    <button onclick="JS_signMessage()">pkcs#7数据签名</button>
+    <button onclick="JS_verifyMessage()">pkcs#7验证签名</button>
+    <button onclick="JS_envelopeEncrypt()">组pkcs#7数字信封</button>
+    <button onclick="JS_envelopeDecrypt()">解pkcs#7数字信封</button>
+    <br><br>
+    <hr>证书解析</hr><br>
+    <textarea cols="120" rows="5" id="srcCert" placeholder="请输入base64编码的证书"></textarea>
+    <br>
+    <button onclick="JS_parseCert()">解析证书</button>
+    <br><br><br><br>
+</body>
+
+</html>

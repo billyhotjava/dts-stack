@@ -36,7 +36,7 @@ public class PkiChallengeService {
         random.nextBytes(buf);
         String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(buf);
         Instant now = Instant.now();
-        Instant exp = now.plus(ttl == null ? Duration.ofMinutes(5) : ttl);
+        Instant exp = now.plus(ttl == null ? Duration.ofMinutes(10) : ttl);
         Challenge c = new Challenge(id, nonce, aud == null ? "dts-admin" : aud, now, exp, ip, ua);
         store.put(id, c);
         return c;
@@ -46,12 +46,25 @@ public class PkiChallengeService {
         return store.get(id);
     }
 
-    public boolean validateAndConsume(String id, String expectedPlain) {
+    public Challenge validateAndConsume(String id, String providedNonce, String originDataBase64) {
         Challenge c = store.remove(id);
-        if (c == null) return false;
-        if (Instant.now().isAfter(c.exp)) return false;
-        // by default, require the plain text to at least contain nonce
-        return expectedPlain != null && expectedPlain.contains(Objects.toString(c.nonce, ""));
+        if (c == null) return null;
+        if (Instant.now().isAfter(c.exp)) return null;
+        String expectedNonce = Objects.toString(c.nonce, "");
+        if (providedNonce == null || !providedNonce.equals(expectedNonce)) {
+            return null;
+        }
+        if (originDataBase64 != null) {
+            try {
+                byte[] decoded = Base64.getDecoder().decode(originDataBase64.replaceAll("\\s+", ""));
+                String plain = new String(decoded, java.nio.charset.StandardCharsets.UTF_8);
+                if (!plain.contains(expectedNonce)) {
+                    return null;
+                }
+            } catch (IllegalArgumentException ex) {
+                return null;
+            }
+        }
+        return c;
     }
 }
-

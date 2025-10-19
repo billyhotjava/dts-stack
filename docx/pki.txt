@@ -1,0 +1,49 @@
+参与方：
+- 网关
+- 集成应用
+- PKI中间件
+- KEY驱动
+
+交互步骤：
+1. 集成应用向PKI中间件发起“登录”请求，PKI中间件将登录状态返回给集成应用。
+2. 集成应用调用PKI中间件的接口获取证书列表，PKI中间件返回包含devid、appName、conName等字段的JSON结构。
+3. 集成应用请求验证PIN码，PKI中间件调用KEY驱动的SKF_VerifyPIN接口，KEY驱动返回验证结果后，PKI中间件将结果回传给集成应用。
+4. 集成应用发起P1/P7签名请求，PKI中间件调用KEY驱动的相关签名接口，KEY驱动返回签名结果后，PKI中间件将结果交给集成应用。
+5. 网关转发签名内容与原始数据至应用服务端；应用服务端先调用PKI中间件初始化验证环境（initializeVerify），再依次调用PKCS7DetachDataVerify和FinalizeVerify完成验签，最后将验签结果返回给网关。
+
+以下为示例代码文本：
+String error = "";
+
+// 对接关键流程 START
+SvsClientHelper svsClientHelper = SvsClientHelper.getInstance();
+THostInfoSt tHostInfoSt = new THostInfoSt();
+
+// 设置网关IP+端口
+svsClientHelper.initialize(gwIP, gwPort, MAX_WAIT_TIME, B_CIPHER, SOCKET_TIME_OUT);
+tHostInfoSt.setSrvIP(gwIP);
+tHostInfoSt.setPort(gwPort);
+
+int result = 0;
+
+// 注：签名原文需要作成byte数据，而不是base64编码的数据
+byte[] arrayOriginData = Base64.decode(originDataB64);
+
+try {
+  result = svsClientHelper.verifySign(nSignType: -1, nSignStyle: -1, arrayOriginData,
+      arrayOriginData.length, certContentB64, signDataB64, tHostInfoSt);
+} catch (SvsClientException e) {
+  System.err.println("验签失败！" + e);
+  error = "签名验证失败，" + e.getMessage();
+  sendResp(resp, error);
+  return;
+}
+
+// 对接关键流程 END
+
+String certCn = TestUtil.getCertInfo(certContentB64, type: 0, item: "CN");
+
+if (result == 0) {
+  error = "签名验证成功，certCn: " + certCn;
+} else {
+  error = "签名验证失败，错误码: " + result;
+}

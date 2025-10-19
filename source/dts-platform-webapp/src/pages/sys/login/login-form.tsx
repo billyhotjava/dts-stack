@@ -13,20 +13,31 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/ui/input";
 import { cn } from "@/utils";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
-import { getPkiChallenge, pkiLogin, trySignWithLocalAgent, createPortalSessionFromPki } from "@/api/services/pkiService";
+import { getPkiChallenge, pkiLogin, createPortalSessionFromPki, type PkiChallenge } from "@/api/services/pkiService";
+import { KoalMiddlewareClient, KoalCertificate, formatKoalError } from "@/api/services/koalPkiClient";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
 import { updateLocalTranslations } from "@/utils/translation";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
 	const [loading, setLoading] = useState(false);
 	const [remember, setRemember] = useState(true);
 	const [showPassword, setShowPassword] = useState(false);
+	const [pkiDialogOpen, setPkiDialogOpen] = useState(false);
+	const [pkiCerts, setPkiCerts] = useState<KoalCertificate[]>([]);
+	const [selectedCertId, setSelectedCertId] = useState("");
+	const [pinCode, setPinCode] = useState("");
+	const [pkiClientState, setPkiClientState] = useState<{ client: KoalMiddlewareClient; challenge: PkiChallenge } | null>(null);
+	const [pkiSubmitting, setPkiSubmitting] = useState(false);
 	const navigate = useNavigate();
 
 	const { loginState } = useLoginStateContext();
 	const signIn = useSignIn();
 	const { setUserToken, setUserInfo } = useUserActions();
 	const bilingual = useBilingualText();
+
+	const selectedCert = pkiCerts.find((item) => item.id === selectedCertId);
 
 	const form = useForm<SignInReq>({
 		defaultValues: {
@@ -78,47 +89,137 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		setLoading(true);
 		try {
 			const challenge = await getPkiChallenge();
-			const plain = challenge.nonce; // server requires the nonce to be present in the plain text
-			const signed = await trySignWithLocalAgent(plain);
-			if (!signed) {
-				toast.error("未检测到本地签名Agent，请安装或启动后重试", { position: "top-center" });
-				return;
+			const client = await KoalMiddlewareClient.connect();
+			const certificates = await client.listCertificates();
+			if (!certificates.length) {
+				await client.logout();
+				throw new Error("未找到可用的签名证书");
 			}
-            const resp: any = await pkiLogin({
-                challengeId: challenge.challengeId,
-                plain,
-                p7Signature: signed.p7,
-                certB64: signed.cert,
-                mode: "agent",
-            });
-            const rawUser = (resp as any)?.user ?? (resp as any)?.userInfo ?? {};
-            const username = String(rawUser?.username || rawUser?.preferred_username || "").trim();
-            if (!username) throw new Error("无法识别用户名");
-            // Exchange to platform portal session tokens
-            const portal = await createPortalSessionFromPki(username, rawUser);
-            const portalUser = (portal as any)?.user ?? rawUser;
-            const accessToken = String((portal as any)?.accessToken || (portal as any)?.token || "").trim();
-            const refreshToken = String((portal as any)?.refreshToken || "").trim();
-            if (!accessToken) throw new Error("登录响应缺少访问令牌");
-            setUserToken({ accessToken, refreshToken });
-            setUserInfo(portalUser);
-			// 初始化上下文并预加载菜单
-			try { useContextActions().initDefaults(); } catch {}
+			setPkiCerts(certificates);
+			setSelectedCertId(certificates[0]?.id ?? "");
+			setPinCode("");
+			setPkiClientState({ client, challenge });
+			setPkiDialogOpen(true);
+		} catch (error) {
+			toast.error(formatKoalError(error), { position: "top-center" });
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const closePkiDialog = async (logout = true) => {
+		const current = pkiClientState;
+		setPkiDialogOpen(false);
+		setPkiCerts([]);
+		setSelectedCertId("");
+		setPinCode("");
+		setPkiClientState(null);
+		if (logout && current) {
+			try {
+				await current.client.logout();
+			} catch {
+				// ignore
+			}
+		}
+	};
+
+	const handlePkiDialogOpenChange = (open: boolean) => {
+		if (!open) {
+			void closePkiDialog(true);
+		} else {
+			setPkiDialogOpen(true);
+		}
+	};
+
+	const handleConfirmPki = async () => {
+		if (!pkiClientState) {
+			toast.error("会话已失效，请重新获取挑战", { position: "top-center" });
+			return;
+		}
+		const certificate = pkiCerts.find((item) => item.id === selectedCertId);
+		if (!certificate) {
+			toast.error("请选择签名证书", { position: "top-center" });
+			return;
+		}
+		const pin = pinCode.trim();
+		if (!pin) {
+			toast.error("请输入PIN码", { position: "top-center" });
+			return;
+		}
+
+		const { client, challenge } = pkiClientState;
+		setPkiSubmitting(true);
+		setLoading(true);
+		let loggedOut = false;
+
+		try {
+			await client.verifyPin(certificate, pin);
+			const signed = await client.signData(certificate, challenge.nonce);
+			const certContentB64 = await client.exportCertificate(certificate);
+
+			const resp: any = await pkiLogin({
+				challengeId: challenge.challengeId,
+				nonce: challenge.nonce,
+				originDataB64: signed.originDataB64,
+				signDataB64: signed.signDataB64,
+				certContentB64,
+				devId: certificate.devId,
+				appName: certificate.appName,
+				conName: certificate.conName,
+				signType: signed.signType,
+				dupCertB64: signed.dupCertB64,
+				mode: "agent",
+			});
+
+			const rawUser = resp?.user ?? resp?.userInfo ?? {};
+			const username = String(rawUser?.username || rawUser?.preferred_username || "").trim();
+			if (!username) throw new Error("无法识别用户名");
+
+			const portal = await createPortalSessionFromPki(username, rawUser);
+			const portalUser = portal?.user ?? rawUser;
+			const accessToken = String(portal?.accessToken || portal?.token || "").trim();
+			const refreshToken = String(portal?.refreshToken || "").trim();
+			if (!accessToken) throw new Error("登录响应缺少访问令牌");
+
+			setUserToken({ accessToken, refreshToken });
+			setUserInfo(portalUser);
+
+			try {
+				useContextActions().initDefaults();
+			} catch {
+				// ignore
+			}
 			try {
 				const svc = await import("@/api/services/menuService");
 				await svc.default.getMenuTree().catch(() => undefined);
-			} catch {}
-			// 加载Keycloak中文翻译（非阻塞）
+			} catch {
+				// ignore
+			}
 			try {
 				const translations = await KeycloakLocalizationService.getChineseTranslations();
 				updateLocalTranslations(translations);
-			} catch {}
+			} catch {
+				// ignore
+			}
+
 			navigate("/dashboard/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), { closeButton: true });
-		} catch (error: any) {
-			toast.error(error?.message || "证书登录失败", { position: "top-center" });
+
+			await client.logout();
+			loggedOut = true;
+		} catch (error) {
+			toast.error(formatKoalError(error), { position: "top-center" });
 		} finally {
+			setPkiSubmitting(false);
 			setLoading(false);
+			if (!loggedOut) {
+				try {
+					await client.logout();
+				} catch {
+					// ignore
+				}
+			}
+			await closePkiDialog(false);
 		}
 	};
 
@@ -206,6 +307,60 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					</Button>
 				</form>
 			</Form>
+			<Dialog open={pkiDialogOpen} onOpenChange={handlePkiDialogOpenChange}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>证书登录</DialogTitle>
+					</DialogHeader>
+					<div className="space-y-4">
+						<div className="space-y-2">
+							<label className="text-sm font-medium text-muted-foreground">选择证书</label>
+							<Select value={selectedCertId} onValueChange={setSelectedCertId}>
+								<SelectTrigger>
+									<SelectValue placeholder="请选择证书" />
+								</SelectTrigger>
+								<SelectContent>
+									{pkiCerts.map((cert) => (
+										<SelectItem key={cert.id} value={cert.id}>
+											{cert.subjectCn || cert.sn || cert.id}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							{selectedCert && (
+								<div className="rounded-md border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+									<div>持有人：{selectedCert.subjectCn || "-"}</div>
+									<div>颁发者：{selectedCert.issuerCn || "-"}</div>
+									<div>序列号：{selectedCert.sn || "-"}</div>
+									<div>算法类型：{selectedCert.signType}</div>
+								</div>
+							)}
+						</div>
+						<div className="space-y-2">
+							<label className="text-sm font-medium text-muted-foreground">输入 PIN 码</label>
+							<Input
+								type="password"
+								value={pinCode}
+								onChange={(event) => setPinCode(event.target.value)}
+								placeholder="请输入 PIN 码"
+							/>
+						</div>
+					</div>
+					<DialogFooter>
+						<Button type="button" variant="outline" onClick={() => void closePkiDialog(true)} disabled={pkiSubmitting}>
+							取消
+						</Button>
+						<Button
+							type="button"
+							onClick={() => void handleConfirmPki()}
+							disabled={pkiSubmitting || !selectedCertId || !pinCode.trim()}
+						>
+							{pkiSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+							开始签名
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

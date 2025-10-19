@@ -16,6 +16,8 @@ import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.common.audit.AuditStage;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -1586,11 +1588,20 @@ public class KeycloakApiResource {
 
     public record PkiLoginPayload(
         String challengeId,
-        String plain,           // server-issued string to sign (includes nonce)
-        String p7Signature,     // Base64 PKCS#7 signature
-        String certB64,         // optional: Base64 of signer leaf certificate
-        String mode,            // agent|gateway (informational)
-        String username         // optional: mock username for allow-mock
+        String nonce,               // challenge nonce (plain string)
+        String plain,               // legacy: plain text (fallback)
+        String originDataB64,       // Base64 of data actually signed
+        String p7Signature,         // legacy signature field
+        String signDataB64,         // preferred signature field
+        String certB64,             // legacy certificate field
+        String certContentB64,      // preferred certificate field
+        String mode,                // agent|gateway (informational)
+        String username,            // optional: mock username for allow-mock
+        String devId,
+        String appName,
+        String conName,
+        String signType,
+        String dupCertB64            // optional: PM-BD duplicated cert payload
     ) {}
 
     @PostMapping("/keycloak/auth/pki-login")
@@ -1608,19 +1619,66 @@ public class KeycloakApiResource {
                 return ResponseEntity.badRequest().body(ApiResponse.error("请求体不能为空"));
             }
 
-            // Verify challenge first
+            String clientIp = Optional
+                .ofNullable(request.getHeader("X-Forwarded-For"))
+                .map(String::trim)
+                .filter(org.springframework.util.StringUtils::hasText)
+                .orElse(request.getRemoteAddr());
+            String userAgent = Optional.ofNullable(request.getHeader("User-Agent")).orElse("");
+
             com.yuzhi.dts.admin.service.pki.PkiChallengeService challengeService = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiChallengeService.class);
-            if (payload.challengeId == null || payload.plain == null) {
-                return ResponseEntity.badRequest().body(ApiResponse.error("缺少 challenge 或 plain"));
+            String challengeId = Optional.ofNullable(payload.challengeId()).map(String::trim).orElse("");
+            String nonce = Optional.ofNullable(payload.nonce()).map(String::trim).orElse("");
+            if (!org.springframework.util.StringUtils.hasText(challengeId) || !org.springframework.util.StringUtils.hasText(nonce)) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("缺少 challenge 或 nonce"));
             }
-            boolean challengeOk = challengeService.validateAndConsume(payload.challengeId, payload.plain);
-            if (!challengeOk) {
+            String originDataB64 = Optional.ofNullable(payload.originDataB64()).map(String::trim).orElse("");
+            if (!org.springframework.util.StringUtils.hasText(originDataB64)) {
+                String legacyPlain = payload.plain();
+                if (org.springframework.util.StringUtils.hasText(legacyPlain)) {
+                    originDataB64 = Base64.getEncoder().encodeToString(legacyPlain.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            }
+            if (!org.springframework.util.StringUtils.hasText(originDataB64)) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("缺少签名原文"));
+            }
+
+            var challenge = challengeService.validateAndConsume(challengeId, nonce, originDataB64);
+            if (challenge == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("挑战校验失败或已过期"));
             }
 
+            String signatureB64 = Optional.ofNullable(payload.signDataB64()).map(String::trim).orElse("");
+            if (!org.springframework.util.StringUtils.hasText(signatureB64)) {
+                signatureB64 = Optional.ofNullable(payload.p7Signature()).map(String::trim).orElse("");
+            }
+            if (!org.springframework.util.StringUtils.hasText(signatureB64)) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("缺少签名数据"));
+            }
+
+            String certB64 = Optional.ofNullable(payload.certContentB64()).map(String::trim).orElse("");
+            if (!org.springframework.util.StringUtils.hasText(certB64)) {
+                certB64 = Optional.ofNullable(payload.certB64()).map(String::trim).orElse("");
+            }
+            if (!org.springframework.util.StringUtils.hasText(certB64)) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("缺少证书数据"));
+            }
+
+            String devId = Optional.ofNullable(payload.devId()).map(String::trim).orElse("");
+            String appName = Optional.ofNullable(payload.appName()).map(String::trim).orElse("");
+            String conName = Optional.ofNullable(payload.conName()).map(String::trim).orElse("");
+            String signType = Optional.ofNullable(payload.signType()).map(String::trim).orElse("");
+            String dupCertB64 = Optional.ofNullable(payload.dupCertB64()).map(String::trim).orElse("");
+            String originHash = null;
+            try {
+                byte[] decodedOrigin = Base64.getDecoder().decode(originDataB64.replaceAll("\\s+", ""));
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                originHash = Base64.getEncoder().encodeToString(digest.digest(decodedOrigin));
+            } catch (IllegalArgumentException | java.security.NoSuchAlgorithmException ignore) {}
+
             // Verify signature via gateway/vendor
             com.yuzhi.dts.admin.service.pki.PkiVerificationService verifier = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiVerificationService.class);
-            var vr = verifier.verifyPkcs7(payload.plain, payload.p7Signature, payload.certB64);
+            var vr = verifier.verifyPkcs7(originDataB64, signatureB64, certB64);
             if (!vr.ok()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(vr.message()));
             }
@@ -1628,6 +1686,24 @@ public class KeycloakApiResource {
             Map<String, Object> data = new HashMap<>();
             if (vr.identity() != null) data.putAll(vr.identity());
             data.put("mode", payload.mode == null ? (pkiProps.getMode() == null ? "gateway" : pkiProps.getMode()) : payload.mode);
+            if (org.springframework.util.StringUtils.hasText(signType)) data.put("signType", signType);
+            if (org.springframework.util.StringUtils.hasText(devId)) data.put("devId", devId);
+            if (org.springframework.util.StringUtils.hasText(appName)) data.put("appName", appName);
+            if (org.springframework.util.StringUtils.hasText(conName)) data.put("conName", conName);
+            if (org.springframework.util.StringUtils.hasText(dupCertB64)) data.put("dupCertB64", dupCertB64);
+
+            Object subjectDnObj = vr.identity() == null ? null : vr.identity().get("subjectDn");
+            String subjectDn = subjectDnObj == null ? null : subjectDnObj.toString();
+            Object issuerDnObj = vr.identity() == null ? null : vr.identity().get("issuerDn");
+            String issuerDn = issuerDnObj == null ? null : issuerDnObj.toString();
+            String certCn = extractFromDn(subjectDn, "CN");
+            String issuerCn = extractFromDn(issuerDn, "CN");
+            if (org.springframework.util.StringUtils.hasText(certCn)) data.put("certCn", certCn);
+            if (org.springframework.util.StringUtils.hasText(issuerCn)) data.put("issuerCn", issuerCn);
+            Object serialObj = vr.identity() == null ? null : vr.identity().get("serialNumber");
+            if (serialObj != null) data.put("serialNumber", serialObj.toString());
+            Object signedAtObj = vr.identity() == null ? null : vr.identity().get("signedAt");
+            if (signedAtObj != null) data.put("signedAt", signedAtObj);
 
             // Resolve username mapping: prefer dev-provided username when allow-mock enabled; otherwise derive from certificate subject DN
             String mappedUsername = null;
@@ -1635,18 +1711,43 @@ public class KeycloakApiResource {
             if (allowMock && payload.username != null && !payload.username.isBlank()) {
                 mappedUsername = payload.username.trim();
             }
-            if ((mappedUsername == null || mappedUsername.isBlank()) && vr.identity() != null) {
-                Object dnObj = vr.identity().get("subjectDn");
-                String subjectDn = dnObj == null ? null : dnObj.toString();
+            if ((mappedUsername == null || mappedUsername.isBlank()) && org.springframework.util.StringUtils.hasText(subjectDn)) {
                 mappedUsername = extractFromDn(subjectDn, "UID", "CN");
             }
             if (mappedUsername == null || mappedUsername.isBlank()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("无法从证书映射用户名"));
             }
 
+            Map<String, Object> auditContext = new LinkedHashMap<>();
+            auditContext.put("audience", "platform");
+            auditContext.put("mode", "pki");
+            auditContext.put("challengeId", challengeId);
+            auditContext.put("nonce", nonce);
+            auditContext.put("clientIp", clientIp);
+            auditContext.put("userAgent", userAgent);
+            if (challenge != null) {
+                auditContext.put("challengeIssuedAt", challenge.ts);
+                auditContext.put("challengeExpiresAt", challenge.exp);
+                auditContext.put("challengeIp", challenge.ip);
+                auditContext.put("challengeUa", challenge.ua);
+            }
+            if (originHash != null) auditContext.put("originHash", originHash);
+            if (org.springframework.util.StringUtils.hasText(signType)) auditContext.put("signType", signType);
+            if (org.springframework.util.StringUtils.hasText(devId)) auditContext.put("devId", devId);
+            if (org.springframework.util.StringUtils.hasText(appName)) auditContext.put("appName", appName);
+            if (org.springframework.util.StringUtils.hasText(conName)) auditContext.put("conName", conName);
+            if (org.springframework.util.StringUtils.hasText(certCn)) auditContext.put("certCn", certCn);
+            if (org.springframework.util.StringUtils.hasText(issuerCn)) auditContext.put("issuerCn", issuerCn);
+            if (serialObj != null) auditContext.put("serialNumber", serialObj.toString());
+            if (signedAtObj != null) auditContext.put("signedAt", signedAtObj);
+            if (org.springframework.util.StringUtils.hasText(dupCertB64)) auditContext.put("dupCertB64", dupCertB64);
+
             // Enforce: admin-only users must NOT log into platform via PKI
             String normalized = mappedUsername.toLowerCase();
             if (normalized.equals("sysadmin") || normalized.equals("authadmin") || normalized.equals("auditadmin")) {
+                Map<String, Object> failAudit = new HashMap<>(auditContext);
+                failAudit.put("error", "forbidden_role");
+                auditService.recordAction(mappedUsername, "ADMIN_AUTH_LOGIN", AuditStage.FAIL, mappedUsername, failAudit);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("系统管理角色用户不能登录业务平台"));
             }
 
@@ -1658,7 +1759,9 @@ public class KeycloakApiResource {
                     .map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::isEnabled)
                     .orElse(false);
                 if (!allowed) {
-                    auditService.recordAction(mappedUsername, "ADMIN_AUTH_LOGIN", AuditStage.FAIL, mappedUsername, Map.of("error", "not_approved", "audience", "platform"));
+                    Map<String, Object> failAudit = new HashMap<>(auditContext);
+                    failAudit.put("error", "not_approved");
+                    auditService.recordAction(mappedUsername, "ADMIN_AUTH_LOGIN", AuditStage.FAIL, mappedUsername, failAudit);
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
                 }
             }
@@ -1717,7 +1820,9 @@ public class KeycloakApiResource {
             if (loginResult.tokens().expiresIn() != null) data.put("expiresIn", loginResult.tokens().expiresIn());
             if (loginResult.tokens().refreshExpiresIn() != null) data.put("refreshExpiresIn", loginResult.tokens().refreshExpiresIn());
 
-            auditService.recordAction(mappedUsername, "ADMIN_AUTH_LOGIN", AuditStage.SUCCESS, mappedUsername, Map.of("audience", "platform", "mode", "pki"));
+            Map<String, Object> successAudit = new HashMap<>(auditContext);
+            successAudit.put("principal", principal);
+            auditService.recordAction(mappedUsername, "ADMIN_AUTH_LOGIN", AuditStage.SUCCESS, mappedUsername, successAudit);
             return ResponseEntity.ok(ApiResponse.ok(data));
         } catch (Exception ex) {
             String message = Optional.ofNullable(ex.getMessage()).filter(m -> !m.isBlank()).orElse("PKI 登录失败");
@@ -1739,7 +1844,7 @@ public class KeycloakApiResource {
         com.yuzhi.dts.admin.service.pki.PkiChallengeService svc = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiChallengeService.class);
         String ip = Optional.ofNullable(request.getHeader("X-Forwarded-For")).orElse(request.getRemoteAddr());
         String ua = Optional.ofNullable(request.getHeader("User-Agent")).orElse("");
-        var c = svc.issue("dts-admin", ip, ua, java.time.Duration.ofMinutes(5));
+        var c = svc.issue("dts-admin", ip, ua, java.time.Duration.ofMinutes(10));
         var view = new PkiChallengeView(c.id, c.nonce, c.aud, c.ts.toEpochMilli(), c.exp.toEpochMilli());
         return ResponseEntity.ok(ApiResponse.ok(view));
     }

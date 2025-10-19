@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>验签demo-pki中间件签名的方式</title>
+    <script type="text/javascript" src="script/jquery.min.js"></script>
+</head>
+<body>
+    <div align="center">
+        <h1>验签demo</h1>
+    </div>
+
+    <div align="center">
+        <p style="color:blue">注意：该demo为第三方应用提供验签功能的参考，目前支持SM和PM算法。demo流程执行流程已经调试通过，但是内部实现仅供参考！</p>
+        <div>
+            网关IP：<input id="gwIP" placeholder="192.168.190.7" />
+        </div>
+        </br>
+        <div>
+            网关端口：<input id="gwPort" placeholder="10009" />
+        </div>
+        </br></br>
+        <div>
+            签名值(base64编码)：</br></br>
+            <textarea id="signData" rows="8" cols="100"></textarea>
+        </div>
+        </br></br></br>
+        <div>
+            签名原文(base64编码)：</br></br>
+            <textarea id="originData" rows="8" cols="100"></textarea>
+        </div>
+        </br></br></br>
+        <div>
+            <p style="color:red">注意：如果是SM算法，则调用PKI中间件的"导出证书"接口，将证书的base64内容粘贴至以下框中。</p>
+            <p style="color:red">如果是PM算法，则只需要调用PKI中间件的"生成证书"接口，将证书的base64内容粘贴至以下框中。</p>
+            证书内容(base64编码)：</br>
+            <textarea id="certContent" rows="8" cols="100"></textarea></br>
+        </div>
+        </br>
+        <button onclick="verifyTest()">验签测试</button>
+    </div>
+
+</body>
+</html>
+<script type="text/javascript">
+    function verifyTest() {
+        var gwIP = $("#gwIP").val();
+        var gwPort = $("#gwPort").val();
+        var signData = $("#signData").val();
+        var originData = $("#originData").val();
+        var certContent = $("#certContent").val();
+        if (gwIP == null || gwIP == "") {
+            alert("网关IP为空，请重新输入!");
+            return;
+        }
+        if (gwPort == null || gwPort < 1 || gwPort > 65535) {
+            alert("网关端口不合法，请重新输入!");
+            return;
+        }
+        if (signData == null || signData == "") {
+            alert("签名数据为空，请重新输入!");
+            return;
+        }
+        if (originData == null || originData == "") {
+            alert("签名原文为空，请重新输入!");
+            return;
+        }
+        if (certContent == null || certContent == "") {
+            alert("证书内容为空，请重新输入!");
+            return;
+        }
+
+
+        $.ajax({
+            url : "./demo",
+            data : {
+                signData : signData,
+                originData : originData,
+                certContent : certContent,
+                gwIP : gwIP,
+                gwPort : gwPort
+            },
+            type : "POST",
+            cache:false,
+            success : function(result) {
+                alert("客户身份验证结果:" + result);
+            },
+            error: function (result) {
+                alert("与demo服务端交互异常！" + result);
+            }
+        });
+    }
+</script>

@@ -43,9 +43,10 @@ public class DataStandardAttachmentService {
 
     public DataStandardAttachmentDto upload(UUID standardId, MultipartFile file, String version) {
         DataStandard standard = loadStandard(standardId);
-        validateFile(file);
+        String extension = validateFile(file);
         SecretKey secretKey = resolveKey();
         byte[] bytes = toBytes(file);
+        String detectedContentType = AttachmentSignatureValidator.validate(extension, bytes);
         byte[] iv = DataStandardCrypto.randomIv();
         byte[] cipher = DataStandardCrypto.encrypt(bytes, secretKey, iv);
 
@@ -54,7 +55,7 @@ public class DataStandardAttachmentService {
         attachment.setStandard(standard);
         attachment.setVersion(StringUtils.hasText(version) ? version : standard.getCurrentVersion());
         attachment.setFileName(file.getOriginalFilename());
-        attachment.setContentType(file.getContentType());
+        attachment.setContentType(detectedContentType);
         attachment.setFileSize(file.getSize());
         attachment.setSha256(DataStandardCrypto.sha256(bytes));
         attachment.setKeyVersion(properties.getKeyVersion());
@@ -116,7 +117,7 @@ public class DataStandardAttachmentService {
         } catch (Exception ignore) {}
     }
 
-    private void validateFile(MultipartFile file) {
+    private String validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("请选择需要上传的文件");
         }
@@ -140,6 +141,7 @@ public class DataStandardAttachmentService {
             String available = String.join(", ", allowed);
             throw new IllegalArgumentException("不支持的文件类型: " + ext + "，请上传 " + available + " 文件");
         }
+        return ext;
     }
 
     private byte[] toBytes(MultipartFile file) {

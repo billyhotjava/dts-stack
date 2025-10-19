@@ -35,7 +35,7 @@ services:
       EUREKA_CLIENT_ENABLED: "false"
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12 -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
       # Optional PKI login integration (see docs/pki-auth.md)
-      DTS_PKI_ENABLED: "${DTS_PKI_ENABLED:-false}"
+      DTS_PKI_ENABLED: "${DTS_PKI_ENABLED:-true}"
       DTS_PKI_MODE: "${DTS_PKI_MODE:-disabled}"
       DTS_PKI_ACCEPT_FORWARDED_CERT: "${DTS_PKI_ACCEPT_FORWARDED_CERT:-false}"
       DTS_PKI_CLIENT_CERT_HEADER: "${DTS_PKI_CLIENT_CERT_HEADER:-X-Forwarded-Tls-Client-Cert}"
@@ -81,6 +81,8 @@ services:
         condition: service_healthy
       dts-trino:
         condition: service_started
+      dts-admin:
+        condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
@@ -108,14 +110,8 @@ services:
       DATA_STANDARD_STORAGE_DIR: "/opt/dts/upload"
       # Base64 key for AES-GCM (16 bytes here for demo; replace in production)
       DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
-      # Centralize audit logs to admin: enable forward by default
-      AUDITING_FORWARD_ENABLED: "${AUDITING_FORWARD_ENABLED:-true}"
-      DTS_COMMON_AUDIT_ENABLED: "${DTS_COMMON_AUDIT_ENABLED:-true}"
-      # Admin API base (ingest endpoint is /api/audit-events under this base URL)
-      # Use internal container URL to avoid TLS/trust issues in closed network
-      DTS_COMMON_AUDIT_BASE_URL: "http://dts-admin:8081"
-      # Optional shared token for admin ingest validation; leave empty by default to avoid mismatches
-      DTS_COMMON_AUDIT_TOKEN: "${DTS_COMMON_AUDIT_TOKEN:-}"
+      DTS_ADMIN_BASE_URL: "http://dts-admin:8081"
+      DTS_ADMIN_API_PATH: "/api"
     volumes:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       # Mount vendor JDBC driver(s) for Hive to avoid Hadoop conflicts
