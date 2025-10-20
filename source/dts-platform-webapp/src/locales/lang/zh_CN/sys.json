@@ -343,12 +343,13 @@
 			"sensitivity": {
 				"DATA_PUBLIC": "公开",
 				"DATA_INTERNAL": "内部",
-				"DATA_SECRET": "秘密",
-				"DATA_TOP_SECRET": "机密",
-				"PUBLIC": "公开",
-				"INTERNAL": "内部",
-				"SECRET": "秘密",
-				"TOP_SECRET": "机密",
+			"DATA_SECRET": "秘密",
+			"DATA_CONFIDENTIAL": "机密",
+			"PUBLIC": "公开",
+			"INTERNAL": "内部",
+			"SECRET": "秘密",
+			"CONFIDENTIAL": "机密",
+			"TOP_SECRET": "机密",
 				"TOP-SECRET": "机密",
 				"NORMAL": "普通",
 				"UNKNOWN": "未知敏感度"
@@ -365,12 +366,12 @@
 			"assetCategory": "分类",
 			"assetRecords": "记录数",
 			"assetUpdatedAt": "最近更新",
-			"category": {
-				"public": "公开",
-				"internal": "内部",
-				"confidential": "秘密",
-				"secret": "机密"
-			}
+		"category": {
+			"public": "公开",
+			"internal": "内部",
+			"secret": "秘密",
+			"confidential": "机密"
+		}
 		},
 		"permission": {
 			"title": "权限列表",

@@ -260,13 +260,14 @@
         "DATA_PUBLIC": "Public",
         "DATA_INTERNAL": "Internal",
         "DATA_SECRET": "Secret",
-        "DATA_TOP_SECRET": "Top Secret",
+        "DATA_CONFIDENTIAL": "Confidential",
         "NON_SECRET": "Non-secret",
         "GENERAL": "General",
         "IMPORTANT": "Important",
         "CORE": "Core",
         "PUBLIC": "Public",
         "INTERNAL": "Internal",
+        "CONFIDENTIAL": "Confidential",
         "TOP_SECRET": "Top Secret",
         "SECRET": "Secret",
         "TOP-SECRET": "Top Secret",
@@ -288,8 +289,8 @@
       "category": {
         "public": "Public",
         "internal": "Internal",
-        "confidential": "Confidential",
-        "secret": "Secret"
+        "secret": "Secret",
+        "confidential": "Confidential"
       }
     },
     "permission": {

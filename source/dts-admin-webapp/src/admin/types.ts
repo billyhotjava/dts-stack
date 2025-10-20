@@ -101,7 +101,7 @@ export interface PortalMenuCollection {
 }
 
 export type SecurityLevel = "NON_SECRET" | "GENERAL" | "IMPORTANT" | "CORE";
-export type OrgDataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
+export type OrgDataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_CONFIDENTIAL";
 
 export type DataOperation = "read" | "write" | "export";
 

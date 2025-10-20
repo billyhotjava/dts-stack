@@ -27,10 +27,15 @@ public class PortalSessionRegistry {
     private final Map<String, PortalSession> accessTokenIndex = new ConcurrentHashMap<>();
     private final Map<String, PortalSession> refreshTokenIndex = new ConcurrentHashMap<>();
     private final Map<String, PortalSession> userIndex = new ConcurrentHashMap<>();
+    private final PortalSessionActivityService activityService;
 
-    public PortalSessionRegistry(@Value("${dts.platform.session.timeout-minutes:10}") long timeoutMinutes) {
+    public PortalSessionRegistry(
+        @Value("${dts.platform.session.timeout-minutes:10}") long timeoutMinutes,
+        PortalSessionActivityService activityService
+    ) {
         long minutes = timeoutMinutes <= 0 ? 10 : timeoutMinutes;
         this.sessionTtl = Duration.ofMinutes(minutes);
+        this.activityService = activityService;
     }
 
     /**
@@ -135,6 +140,7 @@ public class PortalSessionRegistry {
         if (current != null && current.sessionId().equals(existing.sessionId())) {
             userIndex.remove(existing.username());
         }
+        activityService.invalidate(existing.accessToken());
         return existing;
     }
 
@@ -166,9 +172,11 @@ public class PortalSessionRegistry {
         if (previous != null) {
             accessTokenIndex.remove(previous.accessToken());
             refreshTokenIndex.remove(previous.refreshToken());
+            activityService.invalidate(previous.accessToken());
         }
         accessTokenIndex.put(session.accessToken(), session);
         refreshTokenIndex.put(session.refreshToken(), session);
+        activityService.register(session.username(), session.sessionId(), session.accessToken(), Instant.now());
     }
 
     private void remove(PortalSession session) {
@@ -178,6 +186,7 @@ public class PortalSessionRegistry {
         if (current != null && current.sessionId().equals(session.sessionId())) {
             userIndex.remove(session.username());
         }
+        activityService.invalidate(session.accessToken());
     }
 
     private List<String> normalizeRoles(List<String> roles) {

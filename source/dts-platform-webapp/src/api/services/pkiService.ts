@@ -10,7 +10,7 @@ export type PkiChallenge = {
 };
 
 export async function getPkiChallenge(): Promise<PkiChallenge> {
-  const data = await apiClient.get<PkiChallenge>({
+  const data = await apiClient.get<unknown>({
     baseURL: GLOBAL_CONFIG.adminApiBaseUrl,
     url: "/keycloak/auth/pki-challenge",
   });

@@ -18,7 +18,7 @@ public class OrganizationNode extends AbstractAuditingEntity<Long> implements Se
     private String name;
 
     @Column(name = "data_level", nullable = false, length = 64)
-    private String dataLevel; // DATA_PUBLIC / DATA_INTERNAL / DATA_SECRET / DATA_TOP_SECRET
+    private String dataLevel; // DATA_PUBLIC / DATA_INTERNAL / DATA_SECRET / DATA_CONFIDENTIAL
 
     @Column(name = "contact")
     private String contact;
@@ -112,4 +112,3 @@ public class OrganizationNode extends AbstractAuditingEntity<Long> implements Se
         this.children = children;
     }
 }
-

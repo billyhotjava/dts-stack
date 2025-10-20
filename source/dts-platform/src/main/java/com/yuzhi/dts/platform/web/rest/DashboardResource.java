@@ -32,7 +32,7 @@ public class DashboardResource {
         all.add(dashboard("biz-overview", "业务总览", "PUBLIC", "/superset/dashboard/1"));
         all.add(dashboard("finance", "财务看板", "INTERNAL", "/superset/dashboard/2"));
         all.add(dashboard("risk", "风控看板", "SECRET", "/superset/dashboard/3"));
-        all.add(dashboard("ceo", "CEO驾驶舱", "TOP_SECRET", "/superset/dashboard/4"));
+        all.add(dashboard("ceo", "CEO驾驶舱", "CONFIDENTIAL", "/superset/dashboard/4"));
 
         String max = classificationUtils.getCurrentUserMaxLevel();
         List<Map<String, Object>> visible = all
@@ -52,4 +52,3 @@ public class DashboardResource {
         return m;
     }
 }
-

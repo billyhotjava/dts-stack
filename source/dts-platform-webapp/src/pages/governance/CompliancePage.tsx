@@ -26,16 +26,23 @@ import {
 import { cn } from "@/utils";
 import { normalizeClassification, type ClassificationLevel } from "@/utils/classification";
 
-type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
+type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_CONFIDENTIAL";
 
 const toLegacy = (v: DataLevel): ClassificationLevel =>
-    v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
+    v === "DATA_PUBLIC"
+        ? "PUBLIC"
+        : v === "DATA_INTERNAL"
+            ? "INTERNAL"
+            : v === "DATA_SECRET"
+                ? "SECRET"
+                : "CONFIDENTIAL";
 const fromLegacy = (v: string): DataLevel => {
     const normalized = normalizeClassification(v);
     if (normalized === "PUBLIC") return "DATA_PUBLIC";
     if (normalized === "INTERNAL") return "DATA_INTERNAL";
     if (normalized === "SECRET") return "DATA_SECRET";
-    return "DATA_TOP_SECRET";
+    if (normalized === "CONFIDENTIAL") return "DATA_CONFIDENTIAL";
+    return "DATA_CONFIDENTIAL";
 };
 
 const SEVERITY_LABELS: Record<string, string> = {

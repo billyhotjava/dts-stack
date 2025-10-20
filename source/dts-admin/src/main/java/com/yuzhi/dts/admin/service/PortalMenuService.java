@@ -287,7 +287,7 @@ public class PortalMenuService {
             case "PUBLIC", "NON_SECRET" -> 1;
             case "INTERNAL", "GENERAL" -> 2;
             case "SECRET", "IMPORTANT" -> 3;
-            case "TOP_SECRET", "CORE", "CORE_SECRET" -> 4;
+            case "CONFIDENTIAL", "CORE", "CORE_SECRET" -> 4;
             default -> 0;
         };
     }

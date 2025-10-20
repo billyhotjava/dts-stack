@@ -6,7 +6,7 @@
 - 用户身份：部门用户 / 研究所用户（数据域 = DEPT/INST）
 - 角色：查看员 / 开发员 / 管理员（Owner）
 - 人员密级：内部 < 秘密 < 机密
-- 数据集密级：公开 < 内部 < 秘密 < 机密（DATA_PUBLIC < DATA_INTERNAL < DATA_SECRET < DATA_TOP_SECRET）
+- 数据集密级：公开 < 内部 < 秘密 < 机密（DATA_PUBLIC < DATA_INTERNAL < DATA_SECRET < DATA_CONFIDENTIAL）
 - 验证内容：
   - 登录后“数据资产列表”仅出现有权访问的数据；
   - 点击“预览”：有权则展示样例表格（LIMIT 50），越权则弹出警告。
@@ -37,7 +37,7 @@
    - 描述：生产产品数据
 2) 设备状态
    - 数据域：研究所（INST）
-   - 数据密级：机密（DATA_TOP_SECRET）
+  - 数据密级：机密（DATA_CONFIDENTIAL）
    - 共享范围：所内共享（SHARE_INST）
    - 描述：实验室设备数据
 

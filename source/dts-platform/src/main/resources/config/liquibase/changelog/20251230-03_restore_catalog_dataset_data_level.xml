@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251230-03-restore-catalog-dataset-data-level" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="catalog_dataset"/>
+                <not>
+                    <columnExists tableName="catalog_dataset" columnName="data_level"/>
+                </not>
+            </and>
+        </preConditions>
+
+        <addColumn tableName="catalog_dataset">
+            <column name="data_level" type="varchar(32)"/>
+        </addColumn>
+
+        <update tableName="catalog_dataset">
+            <column name="data_level" value="DATA_PUBLIC"/>
+            <where>UPPER(classification) = 'PUBLIC'</where>
+        </update>
+        <update tableName="catalog_dataset">
+            <column name="data_level" value="DATA_INTERNAL"/>
+            <where>UPPER(classification) = 'INTERNAL'</where>
+        </update>
+        <update tableName="catalog_dataset">
+            <column name="data_level" value="DATA_SECRET"/>
+            <where>UPPER(classification) = 'SECRET'</where>
+        </update>
+        <update tableName="catalog_dataset">
+            <column name="data_level" value="DATA_TOP_SECRET"/>
+            <where>UPPER(classification) = 'TOP_SECRET'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

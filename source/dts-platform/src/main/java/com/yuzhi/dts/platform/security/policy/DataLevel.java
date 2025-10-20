@@ -10,8 +10,8 @@ import java.util.stream.Collectors;
 public enum DataLevel {
     DATA_PUBLIC(List.of("NON_SECRET", "公开", "非密", "公开级")),
     DATA_INTERNAL(List.of("GENERAL", "内部", "一般", "内部级")),
-    DATA_SECRET(List.of("IMPORTANT", "秘密", "重要", "秘密级")),
-    DATA_TOP_SECRET(List.of("CORE", "机密", "核心", "机密级", "绝密", "绝密级", "TOP SECRET", "TOP-SECRET"));
+    DATA_SECRET(List.of("SECRET", "秘密", "重要", "秘密级")),
+    DATA_CONFIDENTIAL(List.of("CONFIDENTIAL", "机密", "核心", "机密级"));
 
     private final List<String> normalizedSynonyms;
     private final List<String> literalSynonyms;
@@ -38,7 +38,7 @@ public enum DataLevel {
             case DATA_PUBLIC -> 0;
             case DATA_INTERNAL -> 1;
             case DATA_SECRET -> 2;
-            case DATA_TOP_SECRET -> 3;
+            case DATA_CONFIDENTIAL -> 3;
         };
     }
 
@@ -66,6 +66,9 @@ public enum DataLevel {
             return null;
         }
         String canonical = trimmed.toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+        if (canonical.equals("TOP_SECRET")) {
+            return DATA_CONFIDENTIAL;
+        }
         for (DataLevel level : values()) {
             if (level.name().equals(canonical)) {
                 return level;

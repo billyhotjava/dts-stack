@@ -15,8 +15,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ClassificationUtils {
-    // Ranking: higher means more sensitive
-    // Four official levels; "CONFIDENTIAL" kept as alias between SECRET and TOP_SECRET if encountered
+    // Ranking: higher means more sensitive. "TOP_SECRET" retained as compatibility alias for legacy data.
     private static final Map<String, Integer> RANK = Map.of(
         "PUBLIC", 1,
         "INTERNAL", 2,
@@ -34,7 +33,7 @@ public class ClassificationUtils {
     /**
      * Resolve current user's maximum allowed classification level.
      * Prefer ABAC personnel_level/person_security_level.
-     * Fallback to realm roles: ROLE_TOP_SECRET > ROLE_SECRET > ROLE_INTERNAL > ROLE_PUBLIC.
+     * Fallback to realm roles: ROLE_CONFIDENTIAL (legacy ROLE_TOP_SECRET) > ROLE_SECRET > ROLE_INTERNAL > ROLE_PUBLIC.
      * Then to property dts.platform.default-user-classification (default INTERNAL).
      */
     public String getCurrentUserMaxLevel() {
@@ -42,7 +41,7 @@ public class ClassificationUtils {
         String fromAbac = resolveMaxLevelFromPersonnelClaim();
         if (fromAbac != null) return fromAbac;
         // 2) Fallback to legacy realm roles
-        if (SecurityUtils.hasCurrentUserAnyOfAuthorities("ROLE_TOP_SECRET")) return "TOP_SECRET";
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities("ROLE_TOP_SECRET")) return "CONFIDENTIAL";
         if (SecurityUtils.hasCurrentUserAnyOfAuthorities("ROLE_SECRET")) return "SECRET";
         if (SecurityUtils.hasCurrentUserAnyOfAuthorities("ROLE_INTERNAL")) return "INTERNAL";
         if (SecurityUtils.hasCurrentUserAnyOfAuthorities("ROLE_PUBLIC")) return "PUBLIC";
@@ -62,7 +61,7 @@ public class ClassificationUtils {
 
     /**
      * Map personnel_level (GENERAL/IMPORTANT/CORE) to maximum classification.
-     * GENERAL -> INTERNAL, IMPORTANT -> SECRET, CORE -> TOP_SECRET
+     * GENERAL -> SECRET, IMPORTANT -> CONFIDENTIAL, CORE -> TOP_SECRET (compat; maps to CONFIDENTIAL data set)
      */
     private String resolveMaxLevelFromPersonnelClaim() {
         try {

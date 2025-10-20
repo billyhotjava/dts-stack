@@ -236,12 +236,12 @@ public class AdminApiResource {
     private final AdminUserService adminUserService;
 
     private static final Set<String> MENU_SECURITY_LEVELS = Set.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
-    private static final Set<String> VISIBILITY_DATA_LEVELS = Set.of("PUBLIC", "INTERNAL", "SECRET", "TOP_SECRET");
+    private static final Set<String> VISIBILITY_DATA_LEVELS = Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
     private static final Map<String, String> MENU_DATA_LEVEL_ALIAS = Map.of(
         "GENERAL", "INTERNAL",
         "NON_SECRET", "PUBLIC",
-        "IMPORTANT", "SECRET",
-        "CORE", "TOP_SECRET"
+        "IMPORTANT", "CONFIDENTIAL",
+        "CORE", "CONFIDENTIAL"
     );
     // Tighten default visibility: ROLE_USER is non-binding and should not be added by default
     private static final List<String> DEFAULT_PORTAL_ROLES = List.of(AuthoritiesConstants.OP_ADMIN);
@@ -2138,7 +2138,7 @@ public class AdminApiResource {
             case "PUBLIC", "NON_SECRET" -> 1;
             case "INTERNAL", "GENERAL" -> 2;
             case "SECRET", "IMPORTANT" -> 3;
-            case "TOP_SECRET", "CORE" -> 4;
+            case "CONFIDENTIAL", "CORE" -> 4;
             default -> 0;
         };
     }
@@ -3366,7 +3366,7 @@ public class AdminApiResource {
             case "DATA_PUBLIC" -> 0;
             case "DATA_INTERNAL" -> 1;
             case "DATA_SECRET" -> 2;
-            case "DATA_TOP_SECRET" -> 3;
+            case "DATA_CONFIDENTIAL" -> 3;
             default -> null;
         };
     }

@@ -428,7 +428,7 @@ public class AuditLogResource {
         if (login.isEmpty()) {
             return UNRESTRICTED_SCOPE;
         }
-        String normalized = login.get().trim().toLowerCase(Locale.ROOT);
+        String normalized = login.orElseThrow().trim().toLowerCase(Locale.ROOT);
         if ("authadmin".equals(normalized)) {
             return new VisibilityScope(Set.of("auditadmin"), Set.of());
         }

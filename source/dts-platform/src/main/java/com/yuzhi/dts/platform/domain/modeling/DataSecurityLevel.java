@@ -4,5 +4,5 @@ public enum DataSecurityLevel {
     PUBLIC,
     INTERNAL,
     SECRET,
-    TOP_SECRET
+    CONFIDENTIAL
 }

@@ -375,7 +375,7 @@ const DATA_LEVEL_LABELS: Record<string, string> = {
     DATA_PUBLIC: "公开",
     DATA_INTERNAL: "内部",
     DATA_SECRET: "秘密",
-    DATA_TOP_SECRET: "机密",
+    DATA_CONFIDENTIAL: "机密",
 };
 
 // 人员密级（人员安全等级）中文映射

@@ -38,7 +38,7 @@ class SecuritySqlRewriterTest {
         dataset.setId(UUID.fromString("11111111-2222-3333-4444-555555555555"));
         dataset.setHiveTable("ods_orders");
 
-        when(accessChecker.resolveAllowedDataLevels()).thenReturn(List.of(DataLevel.DATA_TOP_SECRET, DataLevel.DATA_SECRET));
+        when(accessChecker.resolveAllowedDataLevels()).thenReturn(List.of(DataLevel.DATA_CONFIDENTIAL, DataLevel.DATA_SECRET));
         when(metadataResolver.findDataLevelColumn(dataset)).thenReturn(Optional.of("data_level"));
 
         String rewritten = rewriter.guard("SELECT id, amount FROM ods_orders WHERE status = 'DONE';", dataset);
@@ -46,7 +46,7 @@ class SecuritySqlRewriterTest {
         assertThat(rewritten).contains("SELECT id, amount, `data_level` FROM ods_orders WHERE status = 'DONE'");
         assertThat(rewritten).contains("WHERE");
         assertThat(rewritten).contains("UPPER(TRIM(");
-        assertThat(rewritten).contains("TOP_SECRET");
+        assertThat(rewritten).contains("CONFIDENTIAL");
         assertThat(rewritten).doesNotEndWith(";");
     }
 

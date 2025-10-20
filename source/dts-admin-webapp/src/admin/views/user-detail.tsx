@@ -415,7 +415,9 @@ export default function UserDetailView() {
         <CardContent>
           {userRoles.length > 0 ? (
             <Table
-              rowKey={(record) => record.id || record.name}
+              rowKey={(record, index) =>
+                record.id ?? record.name ?? (index != null ? `role-${index}` : "role-unknown")
+              }
               columns={roleColumns}
               dataSource={userRoles}
               pagination={false}
@@ -438,7 +440,12 @@ export default function UserDetailView() {
         <CardContent>
           {userGroups.length > 0 ? (
             <Table
-              rowKey={(record) => record.id || record.name || record.path}
+              rowKey={(record, index) =>
+                record.id ??
+                record.name ??
+                record.path ??
+                (index != null ? `group-${index}` : "group-unknown")
+              }
               columns={groupColumns}
               dataSource={userGroups}
               pagination={false}

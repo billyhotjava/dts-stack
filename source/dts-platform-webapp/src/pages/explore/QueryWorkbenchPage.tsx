@@ -31,7 +31,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/ui/t
 import { normalizeColumnKey } from "@/utils/columnName";
 
 const CLASSIFICATION_META: Record<ClassificationLevel, { label: string; tone: string }> = {
-	TOP_SECRET: { label: CLASSIFICATION_LABELS_ZH.TOP_SECRET, tone: "bg-rose-500/10 text-rose-500" },
+	CONFIDENTIAL: { label: CLASSIFICATION_LABELS_ZH.CONFIDENTIAL, tone: "bg-rose-500/10 text-rose-500" },
 	SECRET: { label: CLASSIFICATION_LABELS_ZH.SECRET, tone: "bg-amber-500/10 text-amber-500" },
 	INTERNAL: { label: CLASSIFICATION_LABELS_ZH.INTERNAL, tone: "bg-sky-500/10 text-sky-500" },
 	PUBLIC: { label: CLASSIFICATION_LABELS_ZH.PUBLIC, tone: "bg-emerald-500/10 text-emerald-600" },

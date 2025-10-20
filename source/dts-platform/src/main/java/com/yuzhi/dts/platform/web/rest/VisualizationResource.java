@@ -27,7 +27,7 @@ public class VisualizationResource {
             dashboard("biz-overview", "业务总览", "经营", "PUBLIC", "/superset/dashboard/1", 96, 0.98),
             dashboard("finance", "财务看板", "财务", "INTERNAL", "/superset/dashboard/2", 120, 0.95),
             dashboard("risk", "风险控制", "风险", "SECRET", "/superset/dashboard/3", 240, 0.92),
-            dashboard("ceo", "CEO 驾驶舱", "经营", "TOP_SECRET", "/superset/dashboard/4", 60, 0.99)
+            dashboard("ceo", "CEO 驾驶舱", "经营", "CONFIDENTIAL", "/superset/dashboard/4", 60, 0.99)
         );
 
         List<Map<String, Object>> visible = all

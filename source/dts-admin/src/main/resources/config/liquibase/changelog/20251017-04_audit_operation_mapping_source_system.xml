@@ -5,6 +5,11 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <changeSet id="20251017-04-add-source-system-column" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="audit_operation_mapping" columnName="source_system"/>
+            </not>
+        </preConditions>
         <comment>Add source_system selector to audit_operation_mapping for audience-specific rules</comment>
         <addColumn tableName="audit_operation_mapping">
             <column name="source_system" type="VARCHAR(32)"/>

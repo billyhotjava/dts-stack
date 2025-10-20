@@ -27,7 +27,7 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     private String type; // hive|jdbc|file
 
     @Column(name = "classification", length = 32)
-    private String classification; // PUBLIC/INTERNAL/SECRET/CONFIDENTIAL/TOP_SECRET
+    private String classification; // PUBLIC/INTERNAL/SECRET/CONFIDENTIAL
 
     @Column(name = "owner_dept", length = 64)
     private String ownerDept; // owning department code

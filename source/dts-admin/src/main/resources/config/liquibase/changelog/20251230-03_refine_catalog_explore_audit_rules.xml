@@ -4,6 +4,18 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
+    <changeSet id="20251230-03a-ensure-source-system-column" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="audit_operation_mapping" columnName="source_system"/>
+            </not>
+        </preConditions>
+        <comment>Ensure source_system column exists for older deployments</comment>
+        <addColumn tableName="audit_operation_mapping">
+            <column name="source_system" type="VARCHAR(32)"/>
+        </addColumn>
+    </changeSet>
+
     <changeSet id="20251230-03-refine-catalog-explore-audit-rules" author="codex">
         <comment>Refine catalog dataset and explore result audit mappings with consistent templates</comment>
         <sql>

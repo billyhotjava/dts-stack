@@ -214,7 +214,6 @@ function collectEndpoints(options?: KoalConnectOptions): string[] {
 }
 
 export class KoalMiddlewareClient {
-	private readonly baseUrl: string;
 	private readonly transport: any;
 	private readonly multiplexer: any;
 	private readonly pkiClient: any;
@@ -223,7 +222,6 @@ export class KoalMiddlewareClient {
 	private session: { sessionID: number; ticket: string } | null = null;
 
 	private constructor(baseUrl: string) {
-		this.baseUrl = baseUrl;
 		this.transport = new window.Thrift.TXHRTransport(baseUrl);
 		this.multiplexer = new window.Thrift.Multiplexer();
 		this.pkiClient = this.multiplexer.createClient("pkiService", window.pkiServiceClient, this.transport);

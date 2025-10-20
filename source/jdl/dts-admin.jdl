@@ -13,7 +13,7 @@ application {
   }
 }
 
-enum SecurityLevel { PUBLIC, INTERNAL, SECRET, TOP_SECRET }
+enum SecurityLevel { PUBLIC, INTERNAL, SECRET, CONFIDENTIAL }
 enum DataSourceType { HIVE, TRINO, JDBC, FILE, API }
 enum ServiceType { SQL, AGG_METRIC, REST, GRAPHQL }
 enum RuleType { NOT_NULL, UNIQUE, REF_DICT, RANGE, CUSTOM_SQL }

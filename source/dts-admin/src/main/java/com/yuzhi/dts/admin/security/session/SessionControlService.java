@@ -87,6 +87,10 @@ public class SessionControlService {
             return ValidationResult.ACTIVE;
         }
 
+        if (record == null) {
+            return ValidationResult.ACTIVE;
+        }
+
         String userKey = normalize(username);
         if (userKey == null) {
             return ValidationResult.ACTIVE;

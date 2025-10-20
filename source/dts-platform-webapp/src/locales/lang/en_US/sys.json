@@ -347,10 +347,11 @@
     "DATA_PUBLIC": "Public",
     "DATA_INTERNAL": "Internal",
     "DATA_SECRET": "Secret",
-    "DATA_TOP_SECRET": "Top Secret",
+    "DATA_CONFIDENTIAL": "Confidential",
     "PUBLIC": "Public",
     "INTERNAL": "Internal",
     "SECRET": "Secret",
+    "CONFIDENTIAL": "Confidential",
     "TOP_SECRET": "Top Secret",
     "TOP-SECRET": "Top Secret",
     "NORMAL": "Normal",
@@ -368,12 +369,12 @@
    "assetCategory": "Category",
    "assetRecords": "Records",
    "assetUpdatedAt": "Updated At",
-   "category": {
-    "public": "Public",
-    "internal": "Internal",
-    "confidential": "Confidential",
-    "secret": "Secret"
-   }
+  "category": {
+   "public": "Public",
+   "internal": "Internal",
+    "secret": "Secret",
+    "confidential": "Confidential"
+  }
   },
   "permission": {
    "title": "Permission Catalogue",

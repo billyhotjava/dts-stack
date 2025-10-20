@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251230-04-data-level-confidential-update" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="catalog_dataset"/>
+                <columnExists tableName="catalog_dataset" columnName="data_level"/>
+            </and>
+        </preConditions>
+        <update tableName="catalog_dataset">
+            <column name="data_level" value="DATA_CONFIDENTIAL"/>
+            <where>UPPER(classification) IN ('CONFIDENTIAL', 'TOP_SECRET') OR data_level IN ('DATA_TOP_SECRET', 'DATA_CONFIDENTIAL')</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

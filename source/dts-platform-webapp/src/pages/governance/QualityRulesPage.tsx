@@ -24,7 +24,7 @@ import {
 import { normalizeClassification, type ClassificationLevel } from "@/utils/classification";
 
 
-type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
+type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_CONFIDENTIAL";
 type SeverityLevel = "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 interface DatasetOption {
@@ -96,13 +96,20 @@ interface RuleForm {
 }
 
 const toLegacy = (v: DataLevel): ClassificationLevel =>
-  v === "DATA_PUBLIC" ? "PUBLIC" : v === "DATA_INTERNAL" ? "INTERNAL" : v === "DATA_SECRET" ? "SECRET" : "TOP_SECRET";
+	v === "DATA_PUBLIC"
+		? "PUBLIC"
+		: v === "DATA_INTERNAL"
+			? "INTERNAL"
+			: v === "DATA_SECRET"
+				? "SECRET"
+				: "CONFIDENTIAL";
 const fromLegacy = (v: string): DataLevel => {
-  const normalized = normalizeClassification(v);
-  if (normalized === "PUBLIC") return "DATA_PUBLIC";
-  if (normalized === "INTERNAL") return "DATA_INTERNAL";
-  if (normalized === "SECRET") return "DATA_SECRET";
-  return "DATA_TOP_SECRET";
+	const normalized = normalizeClassification(v);
+	if (normalized === "PUBLIC") return "DATA_PUBLIC";
+	if (normalized === "INTERNAL") return "DATA_INTERNAL";
+	if (normalized === "SECRET") return "DATA_SECRET";
+	if (normalized === "CONFIDENTIAL") return "DATA_CONFIDENTIAL";
+	return "DATA_CONFIDENTIAL";
 };
 
 const SEVERITY_LABELS: Record<SeverityLevel, string> = {
@@ -1087,7 +1094,7 @@ const QualityRulesPage = () => {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                根据数据集快速套用常见检测逻辑，套用后可在下方 SQL 文本框继续调整。
+                根据数据集快速套用常见检测逻辑，SQL 内容由系统生成，仅供查看。
               </p>
             </div>
             <div className="md:col-span-2 space-y-2">
@@ -1095,7 +1102,7 @@ const QualityRulesPage = () => {
               <Textarea
                 placeholder="请输入检测 SQL，支持使用 :date 等参数占位符"
                 value={form.sql}
-                onChange={(event) => setForm((prev) => ({ ...prev, sql: event.target.value }))}
+                readOnly
                 rows={8}
               />
             </div>

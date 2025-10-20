@@ -544,9 +544,15 @@ public class KeycloakAuthResource {
         if (raw == null || raw.isBlank()) return null;
         String v = raw.trim().toUpperCase(Locale.ROOT);
         // Map Chinese labels to canonical levels
-        if (v.equals("内部") || v.equals("INTERNAL") || v.equals("GENERAL")) return "GENERAL";
-        if (v.equals("秘密") || v.equals("SECRET") || v.equals("IMPORTANT")) return "IMPORTANT";
-        if (v.equals("机密") || v.equals("TOP_SECRET") || v.equals("CORE")) return "CORE";
+        if (v.equals("非密") || v.equals("一般") || v.equals("INTERNAL") || v.equals("GENERAL") || v.equals("PUBLIC")) {
+            return "GENERAL";
+        }
+        if (v.equals("重要") || v.equals("秘密") || v.equals("SECRET") || v.equals("IMPORTANT") || v.equals("IMPORTAN") || v.equals("CONFIDENTIAL") || v.equals("机密")) {
+            return "IMPORTANT";
+        }
+        if (v.equals("核心") || v.equals("CORE") || v.equals("TOP_SECRET")) {
+            return "CORE";
+        }
         // Best-effort: keep as-is
         return v;
     }

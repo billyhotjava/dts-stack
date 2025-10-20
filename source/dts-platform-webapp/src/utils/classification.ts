@@ -1,17 +1,17 @@
-export type ClassificationLevel = "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET";
+export type ClassificationLevel = "PUBLIC" | "INTERNAL" | "SECRET" | "CONFIDENTIAL";
 
 export const CLASSIFICATION_LABELS_ZH: Record<ClassificationLevel, string> = {
 	PUBLIC: "公开",
 	INTERNAL: "内部",
 	SECRET: "秘密",
-	TOP_SECRET: "机密",
+	CONFIDENTIAL: "机密",
 };
 
 export const CLASSIFICATION_LABELS_EN: Record<ClassificationLevel, string> = {
 	PUBLIC: "Public",
 	INTERNAL: "Internal",
 	SECRET: "Secret",
-	TOP_SECRET: "Top Secret",
+	CONFIDENTIAL: "Confidential",
 };
 
 const CLASSIFICATION_ALIAS_MAP: Record<string, ClassificationLevel> = {
@@ -24,14 +24,16 @@ const CLASSIFICATION_ALIAS_MAP: Record<string, ClassificationLevel> = {
 	SECRET: "SECRET",
 	DATA_SECRET: "SECRET",
 	SECRET_LEVEL: "SECRET",
-	CONFIDENTIAL: "SECRET",
 	秘密: "SECRET",
-	TOP_SECRET: "TOP_SECRET",
-	TOPSECRET: "TOP_SECRET",
-	"TOP SECRET": "TOP_SECRET",
-	"TOP-SECRET": "TOP_SECRET",
-	DATA_TOP_SECRET: "TOP_SECRET",
-	机密: "TOP_SECRET",
+	CONFIDENTIAL: "CONFIDENTIAL",
+	DATA_CONFIDENTIAL: "CONFIDENTIAL",
+	CONFIDENTIAL_LEVEL: "CONFIDENTIAL",
+	机密: "CONFIDENTIAL",
+	TOP_SECRET: "CONFIDENTIAL",
+	TOPSECRET: "CONFIDENTIAL",
+	"TOP SECRET": "CONFIDENTIAL",
+	"TOP-SECRET": "CONFIDENTIAL",
+	DATA_TOP_SECRET: "CONFIDENTIAL",
 };
 
 export function normalizeClassification(value?: string): ClassificationLevel;

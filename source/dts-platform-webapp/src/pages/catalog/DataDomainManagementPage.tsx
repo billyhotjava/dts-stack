@@ -24,13 +24,14 @@ import {
 } from "@/api/platformApi";
 import { normalizeClassification } from "@/utils/classification";
 
-type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
+type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_CONFIDENTIAL";
 const fromLegacy = (v: string): DataLevel => {
 	const normalized = normalizeClassification(v);
 	if (normalized === "PUBLIC") return "DATA_PUBLIC";
 	if (normalized === "INTERNAL") return "DATA_INTERNAL";
 	if (normalized === "SECRET") return "DATA_SECRET";
-	return "DATA_TOP_SECRET";
+	if (normalized === "CONFIDENTIAL") return "DATA_CONFIDENTIAL";
+	return "DATA_CONFIDENTIAL";
 };
 
 type DomainNode = {

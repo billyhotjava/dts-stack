@@ -1,8 +1,8 @@
 // Catalog-related domain models and enums
 // Keep colocated with usage. Used by pages and mocks.
 
-export type SecurityLevel = "PUBLIC" | "INTERNAL" | "SECRET" | "TOP_SECRET";
-export type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_TOP_SECRET";
+export type SecurityLevel = "PUBLIC" | "INTERNAL" | "SECRET" | "CONFIDENTIAL";
+export type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_CONFIDENTIAL";
 
 // SourceType values seen in backend/CSV imports use both HIVE and INCEPTOR; treat INCEPTOR as HIVE alias
 export type SourceType = "HIVE" | "INCEPTOR" | "TRINO" | "EXTERNAL" | "API";

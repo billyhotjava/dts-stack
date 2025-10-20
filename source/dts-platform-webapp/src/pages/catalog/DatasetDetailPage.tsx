@@ -110,6 +110,10 @@ export default function DatasetDetailPage() {
 		}
 		return set;
 	}, [userRoles]);
+	const isInstituteDataAdmin = useMemo(
+		() => normalizedRoleSet.has("INST_DATA_OWNER") || normalizedRoleSet.has("ROLE_INST_DATA_OWNER"),
+		[normalizedRoleSet],
+	);
 	const hasDataMaintainerRole = useMemo(() => {
 		const maintainers = [
 			"ROLE_OP_ADMIN",
@@ -127,6 +131,29 @@ export default function DatasetDetailPage() {
 		];
 		return maintainers.some((role) => normalizedRoleSet.has(role));
 	}, [normalizedRoleSet]);
+	const userDeptCode = useMemo(() => {
+		const attrs = ((userInfo as any)?.attributes || {}) as Record<string, unknown>;
+		const pickDept = (value: unknown): string | undefined => {
+			const tokens = parseStringList(value);
+			if (tokens.length > 0) {
+				const first = tokens[0]?.trim();
+				return first ? first : undefined;
+			}
+			if (typeof value === "string") {
+				const trimmed = value.trim();
+				return trimmed || undefined;
+			}
+			return undefined;
+		};
+		return (
+			pickDept(attrs.dept_code) ||
+			pickDept(attrs.deptCode) ||
+			pickDept(attrs.department) ||
+			pickDept((userInfo as any)?.dept_code) ||
+			pickDept((userInfo as any)?.deptCode) ||
+			pickDept((userInfo as any)?.department)
+		);
+	}, [userInfo]);
 	const currentUsername = useMemo(() => {
 		const candidates = [
 			(userInfo as any)?.preferred_username,
@@ -183,6 +210,32 @@ export default function DatasetDetailPage() {
 		() => deptOptions.filter((d) => d.parentId != null && d.parentId !== 0),
 		[deptOptions],
 	);
+	const enforcedOwnerDept = useMemo(() => {
+		if (isInstituteDataAdmin) return undefined;
+		const code = (userDeptCode || "").trim();
+		return code || undefined;
+	}, [isInstituteDataAdmin, userDeptCode]);
+	const deptOptionsForSelect = useMemo(() => {
+		if (isInstituteDataAdmin) {
+			return sortedDeptOptions;
+		}
+		if (!enforcedOwnerDept) {
+			return sortedDeptOptions;
+		}
+		const matched = sortedDeptOptions.find((dept) => String(dept.code) === enforcedOwnerDept);
+		if (matched) {
+			return [matched];
+		}
+		return [
+			{
+				code: enforcedOwnerDept,
+				nameZh: enforcedOwnerDept,
+				nameEn: enforcedOwnerDept,
+				parentId: null,
+			},
+		];
+	}, [isInstituteDataAdmin, sortedDeptOptions, enforcedOwnerDept]);
+	const deptSelectDisabled = !editable || (!isInstituteDataAdmin && Boolean(enforcedOwnerDept));
 	const resetGrantForm = useCallback(() => {
 		setGrantForm({
 			username: "",
@@ -442,15 +495,20 @@ export default function DatasetDetailPage() {
         };
     }, []);
 
-	// If ownerDept is empty, default to the root department (fallback to active dept or first entry).
+	// Force owner department for non-institute admins; otherwise keep legacy root fallback.
 	useEffect(() => {
 		if (!dataset) return;
 		const current = String(dataset.ownerDept || "").trim();
+		if (enforcedOwnerDept) {
+			if (current === enforcedOwnerDept) return;
+			setDataset((prev) => (prev ? { ...prev, ownerDept: enforcedOwnerDept } : prev));
+			return;
+		}
 		if (current) return;
-	const fallback = rootDept?.code ?? deptOptions[0]?.code;
+		const fallback = rootDept?.code ?? deptOptions[0]?.code;
 		if (!fallback) return;
 		setDataset((prev) => (prev ? { ...prev, ownerDept: fallback } : prev));
-	}, [dataset, rootDept, deptOptions]);
+	}, [dataset, enforcedOwnerDept, rootDept, deptOptions]);
 
 	useEffect(() => {
 		if (!grantDialogOpen) {
@@ -609,7 +667,7 @@ export default function DatasetDetailPage() {
 									<Label>所属部门 *</Label>
 									<Select
 										value={dataset.ownerDept || undefined}
-										disabled={!editable}
+										disabled={deptSelectDisabled}
 										onValueChange={(v) =>
 											setDataset({
 												...(dataset as DatasetAsset),
@@ -618,10 +676,18 @@ export default function DatasetDetailPage() {
 										}
 									>
 										<SelectTrigger>
-											<SelectValue placeholder={deptLoading ? "加载中…" : "选择部门…"} />
+											<SelectValue
+												placeholder={
+													deptLoading
+														? "加载中…"
+														: !isInstituteDataAdmin && enforcedOwnerDept
+														? "仅可查看所属部门"
+														: "选择部门…"
+												}
+											/>
 										</SelectTrigger>
 										<SelectContent>
-											{sortedDeptOptions.map((d) => (
+											{deptOptionsForSelect.map((d) => (
 												<SelectItem key={d.code} value={d.code}>
 													{d.nameZh || d.nameEn || d.code}
 												</SelectItem>

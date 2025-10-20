@@ -148,7 +148,7 @@ class ExploreResourceIT {
     void executeShouldRejectDatasetWithoutPermission() throws Exception {
         CatalogDataset lockedDataset = new CatalogDataset();
         lockedDataset.setName("finance_plans");
-        lockedDataset.setClassification("TOP_SECRET");
+        lockedDataset.setClassification("CONFIDENTIAL");
         lockedDataset.setHiveDatabase("core");
         lockedDataset.setHiveTable("finance_plans");
         CatalogDataset saved = datasetRepository.saveAndFlush(lockedDataset);
@@ -317,7 +317,7 @@ class ExploreResourceIT {
     void previewShouldRejectWhenDatasetAccessDenied() throws Exception {
         CatalogDataset restricted = new CatalogDataset();
         restricted.setName("finance_budget");
-        restricted.setClassification("TOP_SECRET");
+        restricted.setClassification("CONFIDENTIAL");
         restricted.setHiveDatabase("core");
         restricted.setHiveTable("finance_budget");
         CatalogDataset saved = datasetRepository.saveAndFlush(restricted);
@@ -387,7 +387,7 @@ class ExploreResourceIT {
     void runSavedQueryShouldRespectDatasetPermission() throws Exception {
         CatalogDataset restricted = new CatalogDataset();
         restricted.setName("finance_payroll");
-        restricted.setClassification("TOP_SECRET");
+        restricted.setClassification("CONFIDENTIAL");
         restricted.setHiveDatabase("core");
         restricted.setHiveTable("finance_payroll");
         CatalogDataset savedDataset = datasetRepository.saveAndFlush(restricted);
