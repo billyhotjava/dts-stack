@@ -96,6 +96,16 @@ services:
       - "traefik.http.services.dts-admin.loadbalancer.server.port=8081"
       - "traefik.http.middlewares.dts-strip-admin.stripprefixregex.regex=/admin"
       - "traefik.http.routers.dts-admin.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file"
+      - "traefik.http.routers.dts-admin-uiapi.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.dts-admin-uiapi.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin-uiapi.tls=true"
+      - "traefik.http.routers.dts-admin-uiapi.service=dts-admin"
+      - "traefik.http.routers.dts-admin-uiapi.middlewares=cors-allow@file,security-headers@file"
+      - "traefik.http.routers.dts-admin-platformapi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/admin/api`)"
+      - "traefik.http.routers.dts-admin-platformapi.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin-platformapi.tls=true"
+      - "traefik.http.routers.dts-admin-platformapi.service=dts-admin"
+      - "traefik.http.routers.dts-admin-platformapi.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file"
 
   # Java backend: dts-platform (Spring Boot)
   dts-platform:
@@ -104,8 +114,8 @@ services:
     depends_on:
       dts-pg:
         condition: service_healthy
-      dts-trino:
-        condition: service_started
+      # dts-trino:
+      #   condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}

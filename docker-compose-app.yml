@@ -72,6 +72,12 @@ services:
       - "traefik.http.routers.dts-admin-uiapi.tls=true"
       - "traefik.http.routers.dts-admin-uiapi.service=dts-admin"
       - "traefik.http.routers.dts-admin-uiapi.middlewares=cors-allow@file,security-headers@file"
+      # Handle platform webapp fallback (/admin/api -> admin service) to keep legacy bundles functional
+      - "traefik.http.routers.dts-admin-platformapi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/admin/api`)"
+      - "traefik.http.routers.dts-admin-platformapi.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin-platformapi.tls=true"
+      - "traefik.http.routers.dts-admin-platformapi.service=dts-admin"
+      - "traefik.http.routers.dts-admin-platformapi.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file"
 
   dts-platform:
     image: ${IMAGE_DTS_PLATFORM:?Set IMAGE_DTS_PLATFORM in imgversion.conf or .env}
@@ -79,8 +85,8 @@ services:
     depends_on:
       dts-pg:
         condition: service_healthy
-      dts-trino:
-        condition: service_started
+      #dts-trino:
+      #  condition: service_started
       dts-admin:
         condition: service_started
     environment:

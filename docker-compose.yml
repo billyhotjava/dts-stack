@@ -211,43 +211,43 @@ services:
   #   networks:
   #     - dts-core
 
-  dts-trino:
-    image: ${IMAGE_TRINO}
-    container_name: dts-trino 
-    volumes:
-      - ./services/dts-trino/init/catalog:/etc/trino/catalog:ro,Z
-      - ./services/dts-trino/config.properties:/etc/trino/config.properties:ro,Z
-      - ./services/dts-trino/hive-conf:/etc/trino/hive-conf:ro,Z
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/v1/info >/dev/null || exit 1"]
-      <<: *hc
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-   # Router (HTTPS)
-      - "traefik.http.routers.dts-trino.rule=Host(`${HOST_TRINO}`) && PathPrefix(`/`)"
-      - "traefik.http.routers.dts-trino.entrypoints=websecure"
-      - "traefik.http.routers.dts-trino.tls=true"
+  # dts-trino:
+  #   image: ${IMAGE_TRINO}
+  #   container_name: dts-trino 
+  #   volumes:
+  #     - ./services/dts-trino/init/catalog:/etc/trino/catalog:ro,Z
+  #     - ./services/dts-trino/config.properties:/etc/trino/config.properties:ro,Z
+  #     - ./services/dts-trino/hive-conf:/etc/trino/hive-conf:ro,Z
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8080/v1/info >/dev/null || exit 1"]
+  #     <<: *hc
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=dts-core"
+  #  # Router (HTTPS)
+  #     - "traefik.http.routers.dts-trino.rule=Host(`${HOST_TRINO}`) && PathPrefix(`/`)"
+  #     - "traefik.http.routers.dts-trino.entrypoints=websecure"
+  #     - "traefik.http.routers.dts-trino.tls=true"
 
-      # Backend service port
-      - "traefik.http.services.dts-trino.loadbalancer.server.port=8080"
+  #     # Backend service port
+  #     - "traefik.http.services.dts-trino.loadbalancer.server.port=8080"
 
-      # Root path redirect to /ui/
-      - "traefik.http.middlewares.dts-trino-redirect.redirectregex.regex=^/$$"
-      - "traefik.http.middlewares.dts-trino-redirect.redirectregex.replacement=/ui/"
+  #     # Root path redirect to /ui/
+  #     - "traefik.http.middlewares.dts-trino-redirect.redirectregex.regex=^/$$"
+  #     - "traefik.http.middlewares.dts-trino-redirect.redirectregex.replacement=/ui/"
 
-      # HTTP -> HTTPS redirect for trino hostname only
-      - "traefik.http.middlewares.dts-trino-https.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.dts-trino-https.redirectscheme.permanent=true"
-      - "traefik.http.routers.dts-trino-http.rule=Host(`${HOST_TRINO}`)"
-      - "traefik.http.routers.dts-trino-http.entrypoints=web"
-      - "traefik.http.routers.dts-trino-http.middlewares=dts-trino-https@docker"
+  #     # HTTP -> HTTPS redirect for trino hostname only
+  #     - "traefik.http.middlewares.dts-trino-https.redirectscheme.scheme=https"
+  #     - "traefik.http.middlewares.dts-trino-https.redirectscheme.permanent=true"
+  #     - "traefik.http.routers.dts-trino-http.rule=Host(`${HOST_TRINO}`)"
+  #     - "traefik.http.routers.dts-trino-http.entrypoints=web"
+  #     - "traefik.http.routers.dts-trino-http.middlewares=dts-trino-https@docker"
 
-      # Chain middlewares without repeating the key
-      - "traefik.http.routers.dts-trino.middlewares=dts-trino-redirect@docker"
-    restart: unless-stopped
-    networks:
-      - dts-core
+  #     # Chain middlewares without repeating the key
+  #     - "traefik.http.routers.dts-trino.middlewares=dts-trino-redirect@docker"
+  #   restart: unless-stopped
+  #   networks:
+  #     - dts-core
 
   # dts-ranger:
   #   image: ${IMAGE_RANGER_ADMIN}

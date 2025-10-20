@@ -176,6 +176,7 @@ generate_env_base(){
   : "${TRAEFIK_METRICS_PORT:=9100}"
   : "${TRAEFIK_ENABLE_PING:=true}"
   : "${TRUSTSTORE_PASSWORD:=changeit}"
+  : "${IMAGE_MAVEN:=maven:3.9.9-eclipse-temurin-21}"
 
   # ---------- Keycloak ----------
   : "${KC_ADMIN:=admin}"
@@ -298,6 +299,9 @@ TRAEFIK_DASHBOARD=${TRAEFIK_DASHBOARD}
 TRAEFIK_DASHBOARD_PORT=${TRAEFIK_DASHBOARD_PORT}
 TRAEFIK_METRICS_PORT=${TRAEFIK_METRICS_PORT}
 TRAEFIK_ENABLE_PING=${TRAEFIK_ENABLE_PING}
+
+# ====== Build Helpers ======
+IMAGE_MAVEN=${IMAGE_MAVEN}
 
 # ====== Hosts ======
 HOST_SSO=${HOST_SSO}
