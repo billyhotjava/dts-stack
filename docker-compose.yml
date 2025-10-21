@@ -119,7 +119,8 @@ services:
       KC_HOSTNAME_STRICT: ${KC_HOSTNAME_STRICT}
       KC_HOSTNAME_STRICT_HTTPS: ${KC_HOSTNAME_STRICT_HTTPS}
       KC_HTTP_ENABLED: ${KC_HTTP_ENABLED}
-      KC_FEATURES: scripts
+      KC_FEATURES: scripts,token-exchange
+      KC_SPI_TOKEN_EXCHANGE_ACCEPT_REQUESTED_SUBJECT: "true"
     depends_on:
       dts-pg:
         condition: service_healthy

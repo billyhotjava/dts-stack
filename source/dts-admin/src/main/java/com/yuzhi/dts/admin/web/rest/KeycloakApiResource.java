@@ -1717,12 +1717,42 @@ public class KeycloakApiResource {
             String conName = Optional.ofNullable(payload.conName()).map(String::trim).orElse("");
             String signType = Optional.ofNullable(payload.signType()).map(String::trim).orElse("");
             String dupCertB64 = Optional.ofNullable(payload.dupCertB64()).map(String::trim).orElse("");
+            byte[] originBytes = null;
             String originHash = null;
             try {
-                byte[] decodedOrigin = Base64.getDecoder().decode(originDataB64.replaceAll("\\s+", ""));
+                originBytes = Base64.getDecoder().decode(originDataB64.replaceAll("\\s+", ""));
                 MessageDigest digest = MessageDigest.getInstance("SHA-256");
-                originHash = Base64.getEncoder().encodeToString(digest.digest(decodedOrigin));
+                originHash = Base64.getEncoder().encodeToString(digest.digest(originBytes));
             } catch (IllegalArgumentException | java.security.NoSuchAlgorithmException ignore) {}
+
+            if (LOG.isDebugEnabled()) {
+                int signatureLength = signatureB64.length();
+                int certLength = certB64.length();
+                int dupCertLength = dupCertB64.isEmpty() ? 0 : dupCertB64.length();
+                int originB64Length = originDataB64.length();
+                int originLength = originBytes == null ? -1 : originBytes.length;
+                String originPreview = originBytes == null ? "<decode-failed>" : new String(originBytes, StandardCharsets.UTF_8);
+                if (originPreview.length() > 128) {
+                    originPreview = originPreview.substring(0, 128) + "...";
+                }
+                LOG.debug(
+                    "[pki-login] verify request stats challengeId={} originLen={} originB64Len={} signatureB64Len={} certB64Len={} dupCertB64Len={} devId={} appName={} conName={} signType={}",
+                    challengeId,
+                    originLength,
+                    originB64Length,
+                    signatureLength,
+                    certLength,
+                    dupCertLength,
+                    devId,
+                    appName,
+                    conName,
+                    signType
+                );
+                LOG.debug("[pki-login] origin preview='{}'", originPreview);
+                LOG.debug("[pki-login] originB64='{}'", originDataB64);
+                LOG.debug("[pki-login] signatureB64='{}'", signatureB64);
+                LOG.debug("[pki-login] certB64='{}'", certB64);
+            }
 
             // Verify signature via gateway/vendor
             com.yuzhi.dts.admin.service.pki.PkiVerificationService verifier = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiVerificationService.class);

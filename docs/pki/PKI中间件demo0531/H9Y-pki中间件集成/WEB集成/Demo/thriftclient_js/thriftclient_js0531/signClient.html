@@ -70,6 +70,39 @@
         }
         var map = new Map();
 
+        function logMessage(message) {
+            var text = "";
+            if (message === null || message === undefined) {
+                text = String(message);
+            } else {
+                try {
+                    text = typeof message === "string" ? message : JSON.stringify(message);
+                } catch (e) {
+                    text = String(message);
+                }
+            }
+            var output = document.getElementById("messageArea");
+            if (output) {
+                var timestamp = new Date().toLocaleTimeString();
+                output.value += "[" + timestamp + "] " + text + "\n";
+                output.scrollTop = output.scrollHeight;
+            }
+            if (typeof console !== "undefined" && typeof console.log === "function") {
+                console.log(text);
+            }
+        }
+
+        window.alert = function (message) {
+            logMessage(message);
+        };
+
+        function clearLog() {
+            var output = document.getElementById("messageArea");
+            if (output) {
+                output.value = "";
+            }
+        }
+
         //系统配置
         var SERVICE_TYPE = "http://";
         var SERVER_IP = "127.0.0.1";
@@ -2699,6 +2732,11 @@
 <body>
 
     <h1>PKI中间件WEB端（用证）示例</h1>
+
+    <h2>消息输出</h2>
+    <button onclick="clearLog()">清空日志</button>
+    <br />
+    <textarea id="messageArea" rows="10" style="width: 100%; box-sizing: border-box;" readonly></textarea>
 
     <h2>参数配置</h2>
     <!--http端口范围16080 ~ 16089，默认16080，集成时需要考虑端口变化的情况-->

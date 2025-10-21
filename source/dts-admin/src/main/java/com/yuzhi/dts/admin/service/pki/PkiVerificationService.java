@@ -38,25 +38,25 @@ public class PkiVerificationService {
             return new VerifyResult(false, "缺少签名参数", null);
         }
 
-        byte[] originBytes;
+        byte[] originBytes = decodeBase64Relaxed(originDataBase64);
         String originText;
-        String normalizedOrigin = originDataBase64.trim();
-        try {
-            originBytes = Base64.getDecoder().decode(normalizedOrigin.replaceAll("\\s+", ""));
+        if (originBytes != null) {
             originText = new String(originBytes, StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException ex) {
+        } else {
             originBytes = originDataBase64.getBytes(StandardCharsets.UTF_8);
             originText = originDataBase64;
         }
 
-        String normalizedSignature = p7SignatureBase64.replaceAll("\\s+", "");
+        String normalizedSignature = normalizeBase64(p7SignatureBase64);
 
         // Try vendor JAR if configured
         if (props != null && props.getVendorJarPath() != null && !props.getVendorJarPath().isBlank()) {
             try {
-                boolean verified = verifyWithVendor(originBytes, originText, normalizedSignature, certBase64Optional);
-                if (!verified) {
-                    return new VerifyResult(false, "签名验签失败", null);
+                int vendorCode = verifyWithVendor(originBytes, originText, normalizedSignature, certBase64Optional);
+                if (vendorCode != 0) {
+                    String hex = "0x" + Integer.toHexString(vendorCode).toUpperCase();
+                    log.warn("Vendor PKI verification returned non-zero code: {}", hex);
+                    return new VerifyResult(false, "厂商网关验签失败: code=" + hex, null);
                 }
             } catch (Exception ex) {
                 log.warn("Vendor PKI verification failed: {}", ex.toString());
@@ -71,7 +71,10 @@ public class PkiVerificationService {
         // Parse provided cert to extract identity if present
         if (certBase64Optional != null && !certBase64Optional.isBlank()) {
             try {
-                byte[] certBytes = Base64.getDecoder().decode(certBase64Optional.replaceAll("\\s+", ""));
+                byte[] certBytes = decodeBase64Relaxed(certBase64Optional);
+                if (certBytes == null) {
+                    throw new IllegalArgumentException("无法解码证书 Base64");
+                }
                 CertificateFactory cf = CertificateFactory.getInstance("X.509");
                 X509Certificate cert = (X509Certificate) cf.generateCertificate(new java.io.ByteArrayInputStream(certBytes));
                 id.put("subjectDn", cert.getSubjectX500Principal().getName());
@@ -90,7 +93,7 @@ public class PkiVerificationService {
         return new VerifyResult(true, "verified", id);
     }
 
-    private boolean verifyWithVendor(byte[] originBytes, String originText, String p7SignatureBase64, String certBase64Optional)
+    private int verifyWithVendor(byte[] originBytes, String originText, String p7SignatureBase64, String certBase64Optional)
         throws Exception {
             String jarPath = props.getVendorJarPath();
             String gatewayHost = props.getGatewayHost();
@@ -187,24 +190,69 @@ public class PkiVerificationService {
                         String.class,
                         hostClz
                     );
-                    String certB64 = certBase64Optional == null ? "" : certBase64Optional;
-                    String signB64 = p7SignatureBase64 == null ? "" : p7SignatureBase64;
+                    String certB64 = normalizeBase64(certBase64Optional);
+                    String signB64 = normalizeBase64(p7SignatureBase64);
                     Object ret = verifySign.invoke(helper, -1, -1, originBytes, originBytes.length, certB64, signB64, host);
                     if (ret instanceof Integer) code = (Integer) ret;
                 } catch (NoSuchMethodException nsme) {
                     // Fallback to PKCS7DataVerify
                 }
                 if (code == null) {
-                    byte[] p7 = Base64.getDecoder().decode(String.valueOf(p7SignatureBase64).replaceAll("\\s+", "").getBytes(StandardCharsets.US_ASCII));
+                    byte[] p7 = decodeBase64Relaxed(p7SignatureBase64);
+                    if (p7 == null) {
+                        throw new IllegalArgumentException("无法解码 PKCS#7 签名数据");
+                    }
                     Method pkcs7 = helperClz.getMethod("PKCS7DataVerify", String.class, byte[].class, int.class, hostClz);
                     Object ret = pkcs7.invoke(helper, originText, p7, digestAlgo, host);
                     if (ret instanceof Integer) code = (Integer) ret; else code = 0;
                 }
                 // 0 = success per vendor convention
-                return code == 0;
+                return code == null ? -1 : code;
             } catch (InvocationTargetException ite) {
                 Throwable cause = ite.getTargetException() != null ? ite.getTargetException() : ite;
                 throw new Exception(cause);
             }
+    }
+
+    private static String normalizeBase64(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().replaceAll("\\s+", "");
+    }
+
+    private static byte[] decodeBase64Relaxed(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = normalizeBase64(value);
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        String padded = padBase64(normalized);
+        try {
+            return Base64.getDecoder().decode(padded);
+        } catch (IllegalArgumentException ex) {
+            try {
+                return Base64.getUrlDecoder().decode(padded);
+            } catch (IllegalArgumentException urlEx) {
+                String translated = normalized.replace('-', '+').replace('_', '/');
+                String translatedPadded = padBase64(translated);
+                try {
+                    return Base64.getDecoder().decode(translatedPadded);
+                } catch (IllegalArgumentException finalEx) {
+                    return null;
+                }
+            }
+        }
+    }
+
+    private static String padBase64(String value) {
+        int remainder = value.length() % 4;
+        if (remainder == 0) {
+            return value;
+        }
+        int padding = 4 - remainder;
+        return value + "=".repeat(padding);
     }
 }

@@ -397,7 +397,10 @@ export class KoalMiddlewareClient {
 		const ticket = this.buildTicket();
 		const originDataB64 = window.Base64?.encode?.(plainText) ?? btoa(plainText);
 		const signTypeCode = cert.signType === "PM-BD" ? "1" : "2";
-		const mdType = cert.signType === "RSA" ? "4" : "3";
+		let mdType = "3"; // 默认 SM3
+		if (cert.signType === "RSA" || cert.signType === "PM-BD") {
+			mdType = "2"; // SHA1 与厂商示例一致
+		}
 
 		const request = this.buildRequest(0x10, {
 			devID: cert.devId,
@@ -418,11 +421,13 @@ export class KoalMiddlewareClient {
 		if (!signDataB64) {
 			throw new Error("签名失败：缺少签名数据");
 		}
+		const dupCertB64: Nullable<string> = payload?.dupCert ?? payload?.dupCertB64 ?? payload?.dup_cert;
 		return {
-			signDataB64: String(signDataB64),
+			signDataB64: String(signDataB64).trim(),
 			originDataB64,
 			signType: cert.signType,
 			mdType,
+			dupCertB64: dupCertB64 ? String(dupCertB64).trim() : undefined,
 		};
 	}
 
@@ -449,19 +454,11 @@ export class KoalMiddlewareClient {
 }
 
 function filterCertificate(item: Record<string, any>): boolean {
-	const manufacturer = String(item?.manufacturer ?? "").toUpperCase();
-	if (manufacturer.startsWith("MICROSOFT")) {
-		if (IS_DEV) {
-			console.info("[koal] 忽略证书：MICROSOFT 内建证书", item);
-		}
-		return false;
-	}
-
 	const keyUsageRaw = item?.keyUsage ?? item?.KeyUsage;
-	const keyUsageNumber = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? 0);
-	if (!Number.isNaN(keyUsageNumber) && keyUsageNumber !== 1 && keyUsageNumber !== 2) {
+	const keyUsageNumber = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? Number.NaN);
+	if (Number.isNaN(keyUsageNumber) || keyUsageNumber !== 1) {
 		if (IS_DEV) {
-			console.info("[koal] 忽略证书：不支持的 keyUsage", keyUsageRaw, item);
+			console.info("[koal] 忽略证书：keyUsage 不是签名用途", keyUsageRaw, item);
 		}
 		return false;
 	}
@@ -482,6 +479,8 @@ function normalizeCertificate(item: Record<string, any>): KoalCertificate {
 	const subjectCn = item?.subjectName?.CN ?? item?.subject ?? "";
 	const issuerCn = item?.issuerName?.CN ?? item?.issuer ?? "";
 	const signHint = String(item?.certType ?? item?.certAlgorithm ?? item?.algName ?? "").toUpperCase();
+
+	const manufacturer = String(item?.manufacturer ?? item?.Manufacturer ?? "").trim();
 
 	let signType: KoalCertificate["signType"] = "UNKNOWN";
 	if (signHint.includes("PM") || signHint.includes("P7")) {
@@ -512,7 +511,7 @@ function normalizeCertificate(item: Record<string, any>): KoalCertificate {
 		subjectCn: String(subjectCn ?? ""),
 		issuerCn: String(issuerCn ?? ""),
 		sn: String(item?.SN ?? ""),
-		manufacturer: String(item?.manufacturer ?? ""),
+		manufacturer,
 		keyUsage: Number.isNaN(keyUsage) ? undefined : keyUsage,
 		certType: item?.certType ? String(item.certType) : undefined,
 		signType,
