@@ -57,8 +57,8 @@ export function NavItem(item: NavItemProps) {
 		navItemClasses.base,
 		navItemClasses.hover,
 		"min-h-[44px]",
-		active && depth === 1 && navItemClasses.active,
-		active && depth !== 1 && "bg-action-hover!",
+		active && depth === 1 && navItemClasses.activeRoot,
+		active && depth !== 1 && navItemClasses.activeChild,
 		disabled && navItemClasses.disabled,
 	);
 

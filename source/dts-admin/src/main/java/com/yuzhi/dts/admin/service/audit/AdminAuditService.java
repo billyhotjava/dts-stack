@@ -7,10 +7,10 @@ import com.yuzhi.dts.admin.domain.AuditEvent;
 import com.yuzhi.dts.admin.repository.AuditEventRepository;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.common.audit.AuditStage;
-import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
@@ -175,6 +175,7 @@ public class AdminAuditService {
     private final ObjectMapper objectMapper;
     private final com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository userRepo;
     private final com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository;
+    private final AuditResourceDictionaryService resourceDictionary;
 
     private BlockingQueue<PendingAuditEvent> queue;
     private ScheduledExecutorService workerPool;
@@ -189,7 +190,8 @@ public class AdminAuditService {
         DtsCommonAuditClient auditClient,
         ObjectMapper objectMapper,
         com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository userRepo,
-        com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository
+        com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository,
+        AuditResourceDictionaryService resourceDictionary
     ) {
         this.repository = repository;
         this.properties = properties;
@@ -197,6 +199,7 @@ public class AdminAuditService {
         this.objectMapper = objectMapper;
         this.userRepo = userRepo;
         this.organizationRepository = organizationRepository;
+        this.resourceDictionary = resourceDictionary;
     }
 
     @PostConstruct
@@ -715,15 +718,21 @@ public class AdminAuditService {
 
     private String mapEventCategory(String resourceType, String module, String actionUpper) {
         String a = actionUpper == null ? "" : actionUpper;
-        // 登录事件优先归类
         if (a.contains("LOGIN") || a.contains("LOGOUT") || (a.contains("ACCESS") && a.contains("DENIED"))) {
             return "登录管理";
+        }
+        Optional<String> category = resourceDictionary.resolveCategory(resourceType);
+        if (category.isPresent()) {
+            return category.orElseThrow();
+        }
+        Optional<String> moduleCategory = resourceDictionary.resolveCategory(module);
+        if (moduleCategory.isPresent()) {
+            return moduleCategory.orElseThrow();
         }
         String r = resourceType == null ? null : resourceType.trim().toLowerCase(java.util.Locale.ROOT);
         String m = module == null ? null : module.trim().toLowerCase(java.util.Locale.ROOT);
         String key = r != null && !r.isBlank() ? r : (m == null ? "" : m);
         if (key.isBlank()) return "数据资产";
-        // 管理端 IAM/权限类并入 角色管理
         if (key.startsWith("iam") || key.equals("iam_permission") || key.equals("iam_dataset_policy") || key.equals("iam_user_classification")) {
             return "角色管理";
         }
@@ -867,17 +876,11 @@ public class AdminAuditService {
     }
 
     private String mapTableLabel(String key) {
-        if (key == null) return null;
-        String k = key.trim().toLowerCase(java.util.Locale.ROOT);
-        if (k.equals("admin_keycloak_user") || k.equals("admin") || k.equals("admin.auth") || k.equals("user")) return "用户";
-        if (k.equals("portal_user") || k.equals("platform_user") || k.equals("platform.auth")) return "业务用户";
-        if (k.equals("portal_menu") || k.equals("menu") || k.equals("portal.menus") || k.equals("portal-menus")) return "门户菜单";
-        if (k.equals("role") || k.startsWith("role_")) return "角色";
-        if (k.equals("admin_role_assignment") || k.equals("role_assignment") || k.equals("role_assignments")) return "用户角色";
-        if (k.equals("approval_requests") || k.equals("approval_request") || k.equals("approvals") || k.equals("approval")) return "审批请求";
-        if (k.equals("organization") || k.equals("organization_node") || k.equals("org") || k.startsWith("admin.org")) return "部门";
-        if (k.equals("localization") || k.contains("localization")) return "界面语言";
-        return key;
+        if (!StringUtils.hasText(key)) {
+            return "通用";
+        }
+        String trimmed = key.trim();
+        return resourceDictionary.resolveLabel(trimmed).orElse(trimmed);
     }
 
     public Page<AuditEvent> search(
@@ -1568,13 +1571,9 @@ public class AdminAuditService {
                 }
             }
             if (!StringUtils.hasText(event.clientIp)) {
-                String forwarded = request.getHeader("X-Forwarded-For");
-                String xfip = StringUtils.hasText(forwarded) ? forwarded.split(",")[0].trim() : null;
-                String realIp = request.getHeader("X-Real-IP");
-                String remote = request.getRemoteAddr();
-                String resolved = IpAddressUtils.resolveClientIp(null, xfip, realIp, remote);
-                if (StringUtils.hasText(resolved)) {
-                    event.clientIp = resolved;
+                String clientIp = extractClientIp(request);
+                if (StringUtils.hasText(clientIp)) {
+                    event.clientIp = clientIp;
                 }
             }
             if (!StringUtils.hasText(event.clientAgent)) {
@@ -1588,6 +1587,111 @@ public class AdminAuditService {
                 log.debug("Failed to enrich audit event with request context: {}", ex.toString());
             }
         }
+    }
+
+    private String extractClientIp(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        List<String> candidates = new ArrayList<>();
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(forwarded)) {
+            for (String part : forwarded.split(",")) {
+                String sanitized = sanitizeIpCandidate(part);
+                if (sanitized != null) {
+                    candidates.add(sanitized);
+                }
+            }
+        }
+        String realIp = sanitizeIpCandidate(request.getHeader("X-Real-IP"));
+        if (realIp != null) {
+            candidates.add(realIp);
+        }
+        String remote = sanitizeIpCandidate(request.getRemoteAddr());
+        if (remote != null) {
+            candidates.add(remote);
+        }
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        for (String candidate : candidates) {
+            if (isPublicAddress(candidate)) {
+                return normalizeLoopback(candidate);
+            }
+        }
+        for (String candidate : candidates) {
+            if (!isLoopbackOrUnspecified(candidate)) {
+                return normalizeLoopback(candidate);
+            }
+        }
+        return normalizeLoopback(candidates.get(0));
+    }
+
+    private String sanitizeIpCandidate(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty() || "unknown".equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() > 1) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1);
+        }
+        if (trimmed.startsWith("[") && trimmed.endsWith("]") && trimmed.length() > 1) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeLoopback(String ip) {
+        if (!StringUtils.hasText(ip)) {
+            return null;
+        }
+        String value = ip.trim();
+        if ("::1".equals(value) || "0:0:0:0:0:0:0:1".equals(value)) {
+            return "127.0.0.1";
+        }
+        if (value.startsWith("::ffff:")) {
+            return value.substring(7);
+        }
+        return value;
+    }
+
+    private boolean isLoopbackOrUnspecified(String ip) {
+        InetAddress addr = tryParseInet(ip);
+        if (addr == null) {
+            return false;
+        }
+        return addr.isLoopbackAddress() || addr.isAnyLocalAddress() || addr.isLinkLocalAddress();
+    }
+
+    private boolean isPublicAddress(String ip) {
+        InetAddress addr = tryParseInet(ip);
+        if (addr == null) {
+            return false;
+        }
+        if (addr.isLoopbackAddress() || addr.isAnyLocalAddress() || addr.isLinkLocalAddress()) {
+            return false;
+        }
+        if (addr.isSiteLocalAddress()) {
+            return false;
+        }
+        if (addr instanceof Inet6Address inet6) {
+            String lower = ip.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("fc") || lower.startsWith("fd") || lower.startsWith("fe80")) {
+                return false;
+            }
+            if (inet6.isIPv4CompatibleAddress()) {
+                return isPublicAddress(ipv4FromIpv6(inet6));
+            }
+        }
+        return true;
+    }
+
+    private String ipv4FromIpv6(Inet6Address inet6) {
+        byte[] addr = inet6.getAddress();
+        return (addr[12] & 0xFF) + "." + (addr[13] & 0xFF) + "." + (addr[14] & 0xFF) + "." + (addr[15] & 0xFF);
     }
 
     private String serializeTags(Map<String, Object> tags) {

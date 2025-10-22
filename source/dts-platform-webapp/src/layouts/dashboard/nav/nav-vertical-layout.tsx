@@ -3,9 +3,9 @@ import Logo from "@/components/logo";
 import { NavVertical } from "@/components/nav";
 import type { NavProps } from "@/components/nav/types";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { Icon } from "@/components/icon";
 import { useSettingActions, useSettings } from "@/store/settingStore";
 import { ThemeLayout } from "@/types/enum";
-import { Badge } from "@/ui/badge";
 import { ScrollArea } from "@/ui/scroll-area";
 import { cn } from "@/utils";
 
@@ -34,20 +34,16 @@ export function NavVerticalLayout({ data, className }: Props) {
 				width: "var(--layout-nav-width)",
 			}}
 		>
-			<div className="relative flex items-center py-4 px-2 h-[var(--layout-header-height)]">
-				<div className="flex items-center justify-center">
-					<Logo />
-					<div className="flex flex-col ml-2 whitespace-nowrap">
-						<span className="inline-flex items-center gap-2 text-xl font-bold">
-							<span aria-hidden className="text-red-500 text-2xl">
-								★
-							</span>
+			<div className="relative flex items-center gap-3 py-4 px-3 h-[var(--layout-header-height)] select-none">
+				<Logo />
+				<div className="flex items-start gap-2 whitespace-nowrap">
+					<Icon icon="mdi:star" size={22} className="text-red-500" color="#ef4444" />
+					<span className="flex flex-col leading-tight">
+						<span className="text-base font-semibold text-foreground">
 							{(GLOBAL_CONFIG.appName || "BI数智平台").replace("管理", "")}
 						</span>
-						<Badge variant="destructive" className="mt-1 !text-[13.2px] leading-none bg-red-500">
-							机密
-						</Badge>
-					</div>
+						<span className="text-sm font-bold text-red-600">机密</span>
+					</span>
 				</div>
 			</div>
 

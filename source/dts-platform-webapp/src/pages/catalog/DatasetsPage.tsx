@@ -599,13 +599,9 @@ const filtered = useMemo(() => {
 										<td className="px-3 py-2">
 											<div className="flex flex-wrap items-center gap-2">
 												{d.editable ? (
-													<button
-														type="button"
-														onClick={() => router.push(`/catalog/datasets/${d.id}`)}
-														className="inline-flex items-center rounded-md border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring"
-													>
+													<Button variant="outline" size="sm" onClick={() => router.push(`/catalog/datasets/${d.id}`)}>
 														编辑
-													</button>
+													</Button>
 												) : (
 													<span className="text-xs text-muted-foreground">-</span>
 												)}

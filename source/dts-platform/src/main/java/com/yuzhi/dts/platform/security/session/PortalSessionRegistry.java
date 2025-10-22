@@ -158,12 +158,15 @@ public class PortalSessionRegistry {
 
     private void enforceSingleSession(String username) {
         PortalSession existing = userIndex.get(username);
-        if (existing != null && !existing.isExpired()) {
-            throw new IllegalStateException("session_active");
+        if (existing == null) {
+            return;
         }
-        if (existing != null && existing.isExpired()) {
+        if (existing.isExpired()) {
             remove(existing);
+            return;
         }
+        // Force-logout the previous session so the newest login stays active.
+        remove(existing);
     }
 
     private void register(PortalSession session) {

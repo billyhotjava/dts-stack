@@ -90,14 +90,21 @@ public class OperationMappingEngine {
     private final AuditOperationMappingRepository repo;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final AuditResourceDictionaryService resourceDictionary;
     private final PathPatternParser parser = new PathPatternParser();
     private volatile List<CompiledRule> rules = List.of();
     private final Map<String, PathPattern> patternCache = new ConcurrentHashMap<>();
 
-    public OperationMappingEngine(AuditOperationMappingRepository repo, ObjectMapper objectMapper, JdbcTemplate jdbcTemplate) {
+    public OperationMappingEngine(
+        AuditOperationMappingRepository repo,
+        ObjectMapper objectMapper,
+        JdbcTemplate jdbcTemplate,
+        AuditResourceDictionaryService resourceDictionary
+    ) {
         this.repo = repo;
         this.objectMapper = objectMapper;
         this.jdbcTemplate = jdbcTemplate;
+        this.resourceDictionary = resourceDictionary;
     }
 
     @jakarta.annotation.PostConstruct
@@ -441,7 +448,8 @@ public class OperationMappingEngine {
         ResolvedOperation resolved = new ResolvedOperation();
         resolved.ruleMatched = false;
         resolved.ruleId = null;
-        resolved.moduleName = StringUtils.hasText(ctx.module) ? ctx.module : null;
+        String moduleCategory = resolveModuleCategory(ctx);
+        resolved.moduleName = StringUtils.hasText(moduleCategory) ? moduleCategory : (StringUtils.hasText(ctx.module) ? ctx.module : null);
         resolved.actionType = StringUtils.hasText(type) ? type : null;
         resolved.description = StringUtils.hasText(content) ? content : null;
         resolved.sourceTable = StringUtils.hasText(label) ? label : null;
@@ -536,19 +544,25 @@ public class OperationMappingEngine {
             return ctx.targetTableLabel;
         }
         if (StringUtils.hasText(ctx.targetTable)) {
-            String mapped = mapTableLabel(ctx.targetTable);
+            String mapped = resolveTableLabel(ctx.targetTable);
             if (StringUtils.hasText(mapped)) {
                 return mapped;
             }
         }
         if (StringUtils.hasText(ctx.resourceType)) {
-            String mapped = mapTableLabel(ctx.resourceType);
+            String mapped = resolveTableLabel(ctx.resourceType);
             if (StringUtils.hasText(mapped)) {
                 return mapped;
             }
         }
-        if (StringUtils.hasText(ctx.module) && hasChinese(ctx.module)) {
-            return ctx.module;
+        if (StringUtils.hasText(ctx.module)) {
+            String mappedModule = resolveTableLabel(ctx.module);
+            if (StringUtils.hasText(mappedModule)) {
+                return mappedModule;
+            }
+            if (hasChinese(ctx.module)) {
+                return ctx.module;
+            }
         }
         return "资源";
     }
@@ -700,17 +714,34 @@ public class OperationMappingEngine {
         return text + wrapTarget(target);
     }
 
-    public static String mapTableLabel(String key) {
-        if (key == null) return null;
-        String k = key.trim().toLowerCase(Locale.ROOT);
-        if (k.equals("admin_keycloak_user") || k.equals("admin") || k.equals("admin.auth") || k.equals("user")) return "用户";
-        if (k.equals("portal_menu") || k.equals("menu") || k.equals("portal.menus") || k.equals("portal-menus")) return "门户菜单";
-        if (k.equals("role") || k.startsWith("role_")) return "角色";
-        if (k.equals("admin_role_assignment") || k.equals("role_assignment") || k.equals("role_assignments")) return "用户角色";
-        if (k.equals("approval_requests") || k.equals("approval_request") || k.equals("approvals") || k.equals("approval")) return "审批请求";
-        if (k.equals("organization") || k.equals("organization_node") || k.equals("org") || k.startsWith("admin.org")) return "部门";
-        if (k.equals("localization") || k.contains("localization")) return "界面语言";
-        return key;
+    private String resolveTableLabel(String key) {
+        if (!StringUtils.hasText(key)) {
+            return null;
+        }
+        String trimmed = key.trim();
+        return resourceDictionary.resolveLabel(trimmed).orElse(trimmed);
+    }
+
+    private String resolveModuleCategory(FallbackContext ctx) {
+        if (StringUtils.hasText(ctx.targetTable)) {
+            Optional<String> category = resourceDictionary.resolveCategory(ctx.targetTable);
+            if (category.isPresent()) {
+                return category.orElseThrow();
+            }
+        }
+        if (StringUtils.hasText(ctx.resourceType)) {
+            Optional<String> category = resourceDictionary.resolveCategory(ctx.resourceType);
+            if (category.isPresent()) {
+                return category.orElseThrow();
+            }
+        }
+        if (StringUtils.hasText(ctx.module)) {
+            Optional<String> category = resourceDictionary.resolveCategory(ctx.module);
+            if (category.isPresent()) {
+                return category.orElseThrow();
+            }
+        }
+        return null;
     }
 
     private static String coerceToString(Object value) {
@@ -760,7 +791,7 @@ public class OperationMappingEngine {
         };
     }
 
-    private static final class FallbackContext {
+    private final class FallbackContext {
         final Map<String, Object> details;
         final String actionUpper;
         final String summary;
@@ -791,7 +822,7 @@ public class OperationMappingEngine {
                 coerceToString(this.details.get("源表")),
                 coerceToString(this.details.get("target_table"))
             );
-            this.targetTableLabel = mapTableLabel(this.targetTable);
+            this.targetTableLabel = resolveTableLabel(this.targetTable);
             this.targetId = firstNonBlank(
                 coerceToString(this.details.get("目标ID")),
                 coerceToString(this.details.get("target_id"))

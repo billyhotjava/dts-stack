@@ -16,6 +16,8 @@
     <include file="config/liquibase/changelog/20250930-01_user_approvals_and_snapshots.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251005-01_portal_menu_seed.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251020-01_portal_menu_security_level.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251021-01_audit_resource_dictionary.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251021-02_audit_operation_mapping_enhance.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251108-01_portal_menu_deleted_fix.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251112-01_portal_menu_deleted_repair.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251112-02_portal_menu_metadata_text.xml" relativeToChangelogFile="false"/>

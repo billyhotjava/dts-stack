@@ -6,8 +6,10 @@ import { defineConfig, loadEnv } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { fileURLToPath } from "node:url";
 import { resolve as resolvePath } from "node:path";
+import legacy from "@vitejs/plugin-legacy";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
+const supportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 109"];
 
 export default defineConfig(({ mode }) => {
   const rawEnv = loadEnv(mode, process.cwd(), "");
@@ -34,6 +36,11 @@ export default defineConfig(({ mode }) => {
 				identifiers: ({ debugId }) => `${debugId}`,
 			}),
 			tailwindcss(),
+			legacy({
+				targets: supportedBrowsers,
+				modernPolyfills: true,
+				renderLegacyChunks: false,
+			}),
 			tsconfigPaths(),
 
 			isProduction &&

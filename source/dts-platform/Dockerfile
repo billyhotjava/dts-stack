@@ -1,13 +1,14 @@
 # ---------- build stage ----------
-# Allow overriding base image via internal mirror
-ARG BASE_IMAGE=openjdk:17-slim
-FROM ${BASE_IMAGE} AS build
+# Build stage uses Maven 3.9.9 with Temurin JDK 21
+ARG MAVEN_IMAGE=maven:3.9.9-eclipse-temurin-21
+ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21-jre
+FROM ${MAVEN_IMAGE} AS build
 
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends maven ca-certificates && \
+    apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 COPY . .
@@ -43,9 +44,8 @@ RUN BUILD_POM=$(cat /workspace/.build-pom) && \
     mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am package
 
 # ---------- runtime stage ----------
-# Reuse same base image; can be overridden by BASE_IMAGE
-ARG BASE_IMAGE=openjdk:17-slim
-FROM ${BASE_IMAGE} AS runtime
+# Runtime stage uses Temurin JRE 21
+FROM ${RUNTIME_BASE_IMAGE} AS runtime
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \

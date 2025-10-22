@@ -150,6 +150,10 @@ export const useSignIn = () => {
 			const adminAccessTokenExpiresAt = normalizeDate((res as any)?.adminAccessTokenExpiresAt);
 			const adminRefreshTokenExpiresAt = normalizeDate((res as any)?.adminRefreshTokenExpiresAt);
 
+			const rawNotice = typeof (res as any)?.sessionNotice === "string" ? ((res as any).sessionNotice as string).trim() : "";
+			const takeoverFlag = Boolean((res as any)?.sessionTakeover);
+			const takeoverMessage = rawNotice || (takeoverFlag ? "已切换到当前登录，其他会话已下线" : "");
+
 			// 适配后端数据格式：处理角色和权限信息
 			const adaptedUser = {
 				...rawUser,
@@ -205,6 +209,13 @@ export const useSignIn = () => {
 			});
 			setUserInfo(adaptedUser);
 
+			if (takeoverMessage) {
+				toast.info(takeoverMessage, {
+					position: "top-center",
+					closeButton: true,
+				});
+			}
+
 			// Mark login timestamp for downstream grace handling on initial 401s
 			try {
 				localStorage.setItem("dts.session.loginTs", String(Date.now()));
@@ -229,6 +240,8 @@ export const useSignIn = () => {
 					adminAccessTokenExpiresAt,
 					adminRefreshTokenExpiresAt,
 				},
+				notice: takeoverMessage || undefined,
+				takeover: takeoverFlag,
 			};
 		} catch (err) {
 			const fallback = handleDevFallback({ error: err, payload: data, setUserToken, setUserInfo });
@@ -249,6 +262,8 @@ type SignInResult = {
 	mode: "backend" | "fallback";
 	user: UserInfo;
 	token: UserToken;
+	notice?: string;
+	takeover?: boolean;
 };
 
 type DevFallbackContext = {
@@ -307,7 +322,7 @@ const handleDevFallback = ({ error, payload, setUserToken, setUserInfo }: DevFal
 	const refreshToken = `dev-refresh-${normalized}-${Date.now()}`;
 	setUserToken({ accessToken, refreshToken });
 	setUserInfo(user);
-	return { mode: "fallback", user, token: { accessToken, refreshToken } };
+	return { mode: "fallback", user, token: { accessToken, refreshToken }, notice: undefined, takeover: false };
 };
 
 const buildRoles = (normalizedUsername: string): string[] => {

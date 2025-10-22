@@ -214,6 +214,15 @@ axiosInstance.interceptors.response.use(
             console.error("API Response Error:", response?.status, response?.data, error.message);
         }
         const apiBody: any = response?.data || {};
+        const headers = response?.headers || {};
+        const sessionExpiredHeader =
+          typeof headers?.["x-session-expired"] === "string"
+            ? headers["x-session-expired"].toLowerCase() === "true"
+            : false;
+        const sessionConflictHeader =
+          typeof headers?.["x-session-conflict"] === "string"
+            ? headers["x-session-conflict"].toLowerCase() === "true"
+            : false;
         const errCode: string | undefined = (apiBody && (apiBody as any).code) || undefined;
         // Prefer Problem Details fields when present; then fall back to common keys
         const problemDetail =
@@ -247,6 +256,10 @@ axiosInstance.interceptors.response.use(
         }
         const combinedMsg = hint ? `${errMsg}（${hint}）` : errMsg;
         (error as any).message = combinedMsg;
+        const sessionErrorByMessage =
+          typeof combinedMsg === "string" &&
+          /已在其他位置登录|会话已超时|重新登录|session/i.test(combinedMsg);
+        const shouldForceLogout = sessionExpiredHeader || sessionConflictHeader || sessionErrorByMessage;
         // Attempt silent refresh on 401 (non-auth endpoints) and retry once
         if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest) {
           const cfg = response.config || {};
@@ -274,7 +287,7 @@ axiosInstance.interceptors.response.use(
               return Promise.reject(error);
             }
           } catch {}
-          if (!import.meta.env?.DEV && !TEST_SESSION_ENABLED) {
+          if (!TEST_SESSION_ENABLED || shouldForceLogout) {
             userStore.getState().actions.clearUserInfoAndToken();
             try { localStorage.setItem("dts.session.logoutTs", String(Date.now())); } catch {}
             if (typeof window !== "undefined" && !isLoginRouteActive()) {
@@ -282,6 +295,12 @@ axiosInstance.interceptors.response.use(
             }
           } else {
             console.warn("[DEV/TEST] 401 after refresh; skipping auto logout");
+          }
+        } else if (shouldForceLogout && !TEST_SESSION_ENABLED) {
+          userStore.getState().actions.clearUserInfoAndToken();
+          try { localStorage.setItem("dts.session.logoutTs", String(Date.now())); } catch {}
+          if (typeof window !== "undefined" && !isLoginRouteActive()) {
+            location.replace(resolveLoginHref());
           }
         } else {
           if (!shouldSuppressAuthHandling && !isLoginRequest) {

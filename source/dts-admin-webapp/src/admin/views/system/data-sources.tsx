@@ -175,7 +175,6 @@ export default function AdminDataSourcesView() {
 		}
 	};
 
-	const multiSourceEnabled = features?.multiSourceEnabled ?? false;
 	const hasInceptor = features?.hasActiveInceptor ?? false;
 	const inceptorStatusLabel = hasInceptor ? "Inceptor 数据源已就绪" : "Inceptor 数据源未配置";
 	const activeInceptor = useMemo(
@@ -262,12 +261,6 @@ export default function AdminDataSourcesView() {
 		} finally {
 			setDeletingId(null);
 		}
-	};
-
-	const openGenericCreate = () => {
-		setGenericDialogMode("create");
-		setGenericEditing(null);
-		setGenericDialogOpen(true);
 	};
 
 	const openGenericEdit = (item: InfraDataSource) => {
@@ -981,17 +974,6 @@ export default function AdminDataSourcesView() {
 							<CardDescription>展示后端注册的数据源摘要（不包含敏感信息）。</CardDescription>
 						</div>
 						<div className="flex items-center gap-2">
-							<Button
-								type="button"
-								size="sm"
-								onClick={openGenericCreate}
-								disabled={savingGeneric || loadingSources || !multiSourceEnabled}
-								variant={multiSourceEnabled ? "default" : "outline"}
-								title={multiSourceEnabled ? undefined : "启用多数据源后可在此配置普通数据源"}
-							>
-								<Icon icon="solar:add-circle-bold" className="mr-1 h-4 w-4" />
-								新增数据源
-							</Button>
 							<Button type="button" variant="ghost" size="sm" onClick={loadSources} disabled={loadingSources}>
 								<Icon icon="solar:refresh-bold" className="mr-1 h-4 w-4" /> 刷新
 							</Button>

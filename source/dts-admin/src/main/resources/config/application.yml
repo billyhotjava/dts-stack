@@ -199,21 +199,28 @@ spring:
         core-size: 2
         max-size: 50
         queue-capacity: 10000
+
+server:
+  forward-headers-strategy: framework
+  tomcat:
+    remoteip:
+      remote-ip-header: x-forwarded-for
+      protocol-header: x-forwarded-proto
+      host-header: x-forwarded-host
+      internal-proxies: ${DTS_TRUSTED_PROXY_REGEX:.*}
     scheduling:
       thread-name-prefix: dts-admin-scheduling-
       pool:
         size: 2
+  servlet:
+    session:
+      cookie:
+        http-only: true
   thymeleaf:
     mode: HTML
   output:
     ansi:
       console-available: true
-
-server:
-  servlet:
-    session:
-      cookie:
-        http-only: true
 
 springdoc:
   show-actuator: true

@@ -206,7 +206,6 @@ spring:
       thread-name-prefix: dts-platform-scheduling-
       pool:
         size: 2
-
 logging:
   level:
     com.yuzhi.dts.platform.service.security.AccessChecker: DEBUG
@@ -217,6 +216,13 @@ logging:
       console-available: true
 
 server:
+  forward-headers-strategy: framework
+  tomcat:
+    remoteip:
+      remote-ip-header: x-forwarded-for
+      protocol-header: x-forwarded-proto
+      host-header: x-forwarded-host
+      internal-proxies: ${DTS_TRUSTED_PROXY_REGEX:.*}
   undertow:
     max-http-form-post-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
   servlet:

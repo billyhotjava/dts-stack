@@ -9,7 +9,11 @@ export interface SignInReq {
 export interface SignUpReq extends SignInReq {
 	email: string;
 }
-export type SignInRes = UserToken & { user: UserInfo };
+export type SignInRes = UserToken & {
+	user: UserInfo;
+	sessionNotice?: string;
+	sessionTakeover?: boolean;
+};
 
 export enum UserApi {
 	SignIn = "/keycloak/auth/login",

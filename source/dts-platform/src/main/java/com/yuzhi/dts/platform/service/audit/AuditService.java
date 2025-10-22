@@ -5,13 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditActionCatalog;
 import com.yuzhi.dts.common.audit.AuditActionDefinition;
 import com.yuzhi.dts.common.audit.AuditStage;
-import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -239,24 +242,112 @@ public class AuditService {
         if (StringUtils.hasText(forwarded)) {
             String[] parts = forwarded.split(",");
             for (String part : parts) {
-                String trimmed = part == null ? null : part.trim();
-                if (StringUtils.hasText(trimmed)) {
-                    candidates.add(trimmed);
+                String candidate = sanitizeIpCandidate(part);
+                if (candidate != null) {
+                    candidates.add(candidate);
                 }
             }
         }
-        String realIp = request.getHeader("X-Real-IP");
-        if (StringUtils.hasText(realIp)) {
-            candidates.add(realIp.trim());
+        String realIp = sanitizeIpCandidate(request.getHeader("X-Real-IP"));
+        if (realIp != null) {
+            candidates.add(realIp);
         }
-        String remote = request.getRemoteAddr();
-        if (StringUtils.hasText(remote)) {
-            candidates.add(remote.trim());
+        String remote = sanitizeIpCandidate(request.getRemoteAddr());
+        if (remote != null) {
+            candidates.add(remote);
         }
         if (candidates.isEmpty()) {
             return null;
         }
-        return IpAddressUtils.resolveClientIp(candidates.toArray(new String[0]));
+        for (String candidate : candidates) {
+            if (isPublicAddress(candidate)) {
+                return normalizeLoopback(candidate);
+            }
+        }
+        for (String candidate : candidates) {
+            if (!isLoopbackOrUnspecified(candidate)) {
+                return normalizeLoopback(candidate);
+            }
+        }
+        return normalizeLoopback(candidates.get(0));
+    }
+
+    private String sanitizeIpCandidate(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty() || "unknown".equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() > 1) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1);
+        }
+        if (trimmed.startsWith("[") && trimmed.endsWith("]") && trimmed.length() > 1) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeLoopback(String ip) {
+        if (!StringUtils.hasText(ip)) {
+            return null;
+        }
+        String value = ip.trim();
+        if ("::1".equals(value) || "0:0:0:0:0:0:0:1".equals(value)) {
+            return "127.0.0.1";
+        }
+        if (value.startsWith("::ffff:")) {
+            return value.substring(7);
+        }
+        return value;
+    }
+
+    private boolean isLoopbackOrUnspecified(String ip) {
+        InetAddress addr = tryParseInet(ip);
+        if (addr == null) {
+            return false;
+        }
+        return addr.isLoopbackAddress() || addr.isAnyLocalAddress() || addr.isLinkLocalAddress();
+    }
+
+    private boolean isPublicAddress(String ip) {
+        InetAddress addr = tryParseInet(ip);
+        if (addr == null) {
+            return false;
+        }
+        if (addr.isLoopbackAddress() || addr.isAnyLocalAddress() || addr.isLinkLocalAddress()) {
+            return false;
+        }
+        if (addr.isSiteLocalAddress()) {
+            return false;
+        }
+        if (addr instanceof Inet6Address inet6) {
+            String lower = ip.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("fc") || lower.startsWith("fd") || lower.startsWith("fe80")) {
+                return false;
+            }
+            if (inet6.isIPv4CompatibleAddress()) {
+                return isPublicAddress(ipv4FromIpv6(inet6));
+            }
+        }
+        return true;
+    }
+
+    private InetAddress tryParseInet(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            return InetAddress.getByName(raw.trim());
+        } catch (UnknownHostException ignored) {
+            return null;
+        }
+    }
+
+    private String ipv4FromIpv6(Inet6Address inet6) {
+        byte[] addr = inet6.getAddress();
+        return (addr[12] & 0xFF) + "." + (addr[13] & 0xFF) + "." + (addr[14] & 0xFF) + "." + (addr[15] & 0xFF);
     }
 
     private String serializeTags(Map<String, Object> tags) {

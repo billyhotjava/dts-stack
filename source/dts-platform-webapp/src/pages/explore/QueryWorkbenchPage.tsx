@@ -21,7 +21,7 @@ import {
 	listDatasets,
 	getDataset,
 } from "@/api/platformApi";
-import { CLASSIFICATION_LABELS_ZH, normalizeClassification, type ClassificationLevel } from "@/utils/classification";
+import { normalizeClassification, type ClassificationLevel } from "@/utils/classification";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useActiveDept } from "@/store/contextStore";
 import { SqlWorkbenchExperimental } from "@/components/sql/SqlWorkbenchExperimental";
@@ -29,13 +29,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/ui/tooltip";
 import { normalizeColumnKey } from "@/utils/columnName";
-
-const CLASSIFICATION_META: Record<ClassificationLevel, { label: string; tone: string }> = {
-	CONFIDENTIAL: { label: CLASSIFICATION_LABELS_ZH.CONFIDENTIAL, tone: "bg-rose-500/10 text-rose-500" },
-	SECRET: { label: CLASSIFICATION_LABELS_ZH.SECRET, tone: "bg-amber-500/10 text-amber-500" },
-	INTERNAL: { label: CLASSIFICATION_LABELS_ZH.INTERNAL, tone: "bg-sky-500/10 text-sky-500" },
-	PUBLIC: { label: CLASSIFICATION_LABELS_ZH.PUBLIC, tone: "bg-emerald-500/10 text-emerald-600" },
-};
 
 type Classification = ClassificationLevel;
 
@@ -191,15 +184,6 @@ function createDefaultVisualState(): VisualQueryState {
 		sorters: [],
 		limit: 100,
 	};
-}
-
-function classificationBadge(level: Classification) {
-	const meta = CLASSIFICATION_META[level];
-	return (
-		<span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold ${meta.tone}`}>
-			{meta.label}
-		</span>
-	);
 }
 
 function buildTableReference(dataset: Dataset) {
@@ -475,8 +459,6 @@ function VisualQueryBuilder({
 
 	const generatedSql = useMemo(() => generateSQLFromVisual(state, dataset ?? undefined), [state, dataset]);
 	const canCopySql = generatedSql.trim().length > 0;
-	const datasetClassificationLabel =
-		dataset && dataset.classification ? CLASSIFICATION_META[dataset.classification]?.label ?? dataset.classification : null;
 	const handleCopySql = useCallback(async () => {
 		if (!canCopySql) {
 			return;
@@ -542,7 +524,7 @@ function VisualQueryBuilder({
 							</Badge>
 						</div>
 					</div>
-					<div className="rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
+					<div className="rounded-md border border-dashed border-primary/30 p-3">
 						<ScrollArea className="h-72 lg:h-[420px]">
 							{filteredFields.length ? (
 								<div className="space-y-2">
@@ -619,7 +601,7 @@ function VisualQueryBuilder({
 						<Button variant="outline" size="sm" onClick={onAggregationAdd}>
 							新增聚合
 						</Button>
-						<div className="space-y-2 rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
+						<div className="space-y-2 rounded-md border border-dashed border-primary/30 p-3">
 							<div className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium text-text-primary">
 								<span>分组维度（GROUP BY）</span>
 								<div className="flex flex-wrap items-center gap-2 text-xs">
@@ -770,16 +752,9 @@ function VisualQueryBuilder({
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
 						{dataset ? (
-							<>
-								<Badge variant="outline" className="font-normal">
-									数据集：{dataset.name}
-								</Badge>
-								{datasetClassificationLabel ? (
-									<Badge variant="outline" className="font-normal">
-										敏感度：{datasetClassificationLabel}
-									</Badge>
-								) : null}
-							</>
+							<Badge variant="outline" className="font-normal">
+								数据集：{dataset.name}
+							</Badge>
 						) : (
 							<Badge variant="outline" className="font-normal text-muted-foreground">
 								未选择数据集
@@ -1495,7 +1470,6 @@ useEffect(() => {
 											<tr className="text-left">
 												<th className="px-3 py-2 w-[140px]">数据源</th>
 												<th className="px-3 py-2">名称</th>
-												<th className="px-3 py-2 w-[90px]">密级</th>
 												<th className="px-3 py-2">库 / 表</th>
 												<th className="px-3 py-2 w-[72px] text-center">操作</th>
 											</tr>
@@ -1512,7 +1486,6 @@ useEffect(() => {
 													>
 														<td className="px-3 py-2 text-xs font-medium text-muted-foreground">{dataset.source}</td>
 														<td className="px-3 py-2 font-medium text-foreground">{dataset.name}</td>
-														<td className="px-3 py-2">{classificationBadge(dataset.classification)}</td>
 														<td className="px-3 py-2 text-xs text-muted-foreground">{tableRef || "-"}</td>
 														<td className="px-3 py-2 text-center">
 															<button
@@ -1531,7 +1504,7 @@ useEffect(() => {
 											})}
 											{!datasetRows.length && (
 												<tr>
-													<td className="px-3 py-4 text-center text-xs text-muted-foreground" colSpan={5}>
+													<td className="px-3 py-4 text-center text-xs text-muted-foreground" colSpan={4}>
 														{isDatasetsLoading ? "加载中…" : "当前暂无可用数据集"}
 													</td>
 												</tr>
@@ -1620,10 +1593,7 @@ useEffect(() => {
 						<CardTitle className="text-base font-semibold">运行状态</CardTitle>
 						<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 							{selectedDataset ? (
-								<>
-									{classificationBadge(selectedDataset.classification)}
-									<span>Hive 表：{selectedTableReference || "未登记"}</span>
-								</>
+								<span>Hive 表：{selectedTableReference || "未登记"}</span>
 							) : (
 								<span>未选择数据集</span>
 							)}

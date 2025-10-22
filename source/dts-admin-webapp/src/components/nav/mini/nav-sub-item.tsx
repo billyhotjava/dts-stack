@@ -46,8 +46,8 @@ export const NavSubItem = (item: NavItemProps) => {
 	const itemClassName = cn(
 		navItemClasses.base,
 		navItemClasses.hover,
-		item.active && item.depth === 1 && navItemClasses.active,
-		item.active && item.depth !== 1 && "bg-action-hover!",
+		item.active && item.depth === 1 && navItemClasses.activeRoot,
+		item.active && item.depth !== 1 && navItemClasses.activeChild,
 		item.disabled && navItemClasses.disabled,
 	);
 

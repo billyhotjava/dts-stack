@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251021-01-audit-resource-dictionary" author="codex">
+        <comment>Create dictionary table for audit resource labels and categories</comment>
+        <createTable tableName="audit_resource_dictionary">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="resource_key" type="VARCHAR(128)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="display_name" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category" type="VARCHAR(64)"/>
+            <column name="aliases" type="TEXT"/>
+            <column name="order_value" type="INT" defaultValueNumeric="0"/>
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <createIndex indexName="idx_audit_resource_dictionary_enabled" tableName="audit_resource_dictionary">
+            <column name="enabled"/>
+        </createIndex>
+        <createIndex indexName="idx_audit_resource_dictionary_order" tableName="audit_resource_dictionary">
+            <column name="order_value"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251021-02-audit-resource-dictionary-seed" author="codex">
+        <comment>Seed canonical audit resource labels and categories</comment>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="general"/>
+            <column name="display_name" value="通用"/>
+            <column name="category" value="通用"/>
+            <column name="aliases" value="general"/>
+            <column name="order_value" valueNumeric="1"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="admin_keycloak_user"/>
+            <column name="display_name" value="用户"/>
+            <column name="category" value="用户管理"/>
+            <column name="aliases" value="admin_keycloak_user,admin,user,admin.user,admin.users,admin.auth"/>
+            <column name="order_value" valueNumeric="10"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="admin_role_assignment"/>
+            <column name="display_name" value="用户角色"/>
+            <column name="category" value="角色管理"/>
+            <column name="aliases" value="admin_role_assignment,role,roles,role_assignment,role_assignments,admin.role,admin.roles"/>
+            <column name="order_value" valueNumeric="11"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="portal_user"/>
+            <column name="display_name" value="业务用户"/>
+            <column name="category" value="用户管理"/>
+            <column name="aliases" value="portal_user,platform_user,platform.auth"/>
+            <column name="order_value" valueNumeric="13"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="portal_menu"/>
+            <column name="display_name" value="门户菜单"/>
+            <column name="category" value="菜单管理"/>
+            <column name="aliases" value="portal_menu,menu,portal.menus,portal-menus,portal.navigation"/>
+            <column name="order_value" valueNumeric="12"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="organization_node"/>
+            <column name="display_name" value="部门"/>
+            <column name="category" value="部门管理"/>
+            <column name="aliases" value="organization_node,organization,org,admin.org,admin.orgs"/>
+            <column name="order_value" valueNumeric="14"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="approval_request"/>
+            <column name="display_name" value="审批请求"/>
+            <column name="category" value="审批管理"/>
+            <column name="aliases" value="approval_request,approval_requests,approvals,approval"/>
+            <column name="order_value" valueNumeric="15"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="localization"/>
+            <column name="display_name" value="界面语言"/>
+            <column name="category" value="系统配置"/>
+            <column name="aliases" value="localization,localizations,portal.localization"/>
+            <column name="order_value" valueNumeric="20"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="data_standard"/>
+            <column name="display_name" value="数据标准"/>
+            <column name="category" value="数据标准"/>
+            <column name="aliases" value="data_standard,data_standards,modeling.standard,modeling.standards"/>
+            <column name="order_value" valueNumeric="30"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="quality_rule"/>
+            <column name="display_name" value="质量规则"/>
+            <column name="category" value="数据质量"/>
+            <column name="aliases" value="quality_rule,quality_rules,governance.quality.rules,gov_rule,gov_rules"/>
+            <column name="order_value" valueNumeric="31"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="catalog_dataset"/>
+            <column name="display_name" value="数据资产"/>
+            <column name="category" value="数据资产"/>
+            <column name="aliases" value="catalog_dataset,catalog.datasets,catalog*,catalog_secure_view,catalog_row_filter_rule,catalog_access_policy,catalog_asset"/>
+            <column name="order_value" valueNumeric="40"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="explore_query"/>
+            <column name="display_name" value="数据查询"/>
+            <column name="category" value="数据开发"/>
+            <column name="aliases" value="explore,explore*,explore_query,catalog_dataset_job,schedule"/>
+            <column name="order_value" valueNumeric="41"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="visualization_dashboard"/>
+            <column name="display_name" value="仪表盘"/>
+            <column name="category" value="数据可视化"/>
+            <column name="aliases" value="visualization,visualization*,dashboard,dashboards,portal.dashboard"/>
+            <column name="order_value" valueNumeric="42"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="auth_session"/>
+            <column name="display_name" value="登录会话"/>
+            <column name="category" value="登录管理"/>
+            <column name="aliases" value="auth,auth_session,login,logout,access_denied"/>
+            <column name="order_value" valueNumeric="50"/>
+        </insert>
+
+        <insert tableName="audit_resource_dictionary">
+            <column name="resource_key" value="audit_log"/>
+            <column name="display_name" value="审计日志"/>
+            <column name="category" value="审计日志"/>
+            <column name="aliases" value="audit_log,audit_logs,audit_log_detail,audit_event"/>
+            <column name="order_value" valueNumeric="60"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="20251021-03-audit-resource-dictionary-approvals" author="codex">
+        <comment>Broaden approval resource aliases to cover admin tables and dotted keys</comment>
+        <update tableName="audit_resource_dictionary">
+            <column name="aliases" value="admin_approval,admin_approval_item,admin_approval_request,admin.approval_requests,admin.approval_request,approval_request,approval_requests,approvals,approval"/>
+            <where>resource_key = 'approval_request'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20251021-04-audit-resource-dictionary-orgs" author="codex">
+        <comment>Add plural and platform aliases for organization dictionary entries</comment>
+        <update tableName="audit_resource_dictionary">
+            <column name="aliases" value="organization_node,organization,org,orgs,platform.org,platform.orgs,admin.org,admin.orgs"/>
+            <where>resource_key = 'organization_node'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20251021-05-audit-resource-dictionary-catalog-label" author="codex">
+        <comment>Include display name in catalog dataset aliases</comment>
+        <update tableName="audit_resource_dictionary">
+            <column name="aliases" value="catalog_dataset,catalog.datasets,catalog*,catalog_secure_view,catalog_row_filter_rule,catalog_access_policy,catalog_asset,数据资产"/>
+            <where>resource_key = 'catalog_dataset'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20251021-06-audit-resource-dictionary-keycloak-users" author="codex">
+        <comment>Cover Keycloak REST aliases for admin user resources</comment>
+        <update tableName="audit_resource_dictionary">
+            <column name="aliases" value="admin_keycloak_user,admin_keycloak_users,admin,user,users,admin.user,admin.users,keycloak.user,keycloak.users,admin.auth"/>
+            <where>resource_key = 'admin_keycloak_user'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

@@ -689,6 +689,10 @@ const QualityRulesPage = () => {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+        <Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+        <span className="text-center">非密模块禁止处理涉密数据</span>
+      </div>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -1100,10 +1104,12 @@ const QualityRulesPage = () => {
             <div className="md:col-span-2 space-y-2">
               <Label>质量检测 SQL</Label>
               <Textarea
-                placeholder="请输入检测 SQL，支持使用 :date 等参数占位符"
+                placeholder="质量检测 SQL 由系统自动生成"
                 value={form.sql}
                 readOnly
+                aria-readonly="true"
                 rows={8}
+                className="cursor-not-allowed resize-none bg-muted/40 text-muted-foreground"
               />
             </div>
             <div className="md:col-span-2 space-y-2">

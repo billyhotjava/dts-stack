@@ -78,7 +78,7 @@ export default function SessionManager() {
       if (e.key === STORAGE_KEYS.SESSION_ID) {
         const newId = e.newValue;
         if (isLoggedIn && newId && newId !== mySessionIdRef.current) {
-          toast.error("当前账号已在其他页面登录，已强制退出");
+          toast.error("账号已在其他位置登录，本会话已退出");
           clearUserInfoAndToken();
           localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
           router.replace(LOGIN_ROUTE);

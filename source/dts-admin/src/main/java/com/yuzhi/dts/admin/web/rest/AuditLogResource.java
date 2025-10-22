@@ -8,6 +8,7 @@ import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditEventView;
 import com.yuzhi.dts.admin.service.audit.OperationMappingEngine;
 import com.yuzhi.dts.admin.service.audit.OperationMappingEngine.RuleSummary;
+import com.yuzhi.dts.admin.service.audit.AuditResourceDictionaryService;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.web.rest.errors.BadRequestAlertException;
 import com.yuzhi.dts.common.audit.AuditStage;
@@ -60,11 +61,18 @@ public class AuditLogResource {
     private final AdminAuditService auditService;
     private final ObjectMapper objectMapper;
     private final OperationMappingEngine opMappingEngine;
+    private final AuditResourceDictionaryService resourceDictionary;
 
-    public AuditLogResource(AdminAuditService auditService, ObjectMapper objectMapper, OperationMappingEngine opMappingEngine) {
+    public AuditLogResource(
+        AdminAuditService auditService,
+        ObjectMapper objectMapper,
+        OperationMappingEngine opMappingEngine,
+        AuditResourceDictionaryService resourceDictionary
+    ) {
         this.auditService = auditService;
         this.objectMapper = objectMapper;
         this.opMappingEngine = opMappingEngine;
+        this.resourceDictionary = resourceDictionary;
     }
 
     @GetMapping("/modules")
@@ -100,6 +108,13 @@ public class AuditLogResource {
 
     private LinkedHashMap<String, ModuleView> collectModulesFromRules() {
         LinkedHashMap<String, ModuleView> modules = new LinkedHashMap<>();
+        List<String> canonicalModules = resourceDictionary.listModuleCategories();
+        if (!canonicalModules.isEmpty()) {
+            for (String moduleName : canonicalModules) {
+                ensureModuleView(moduleName, modules);
+            }
+            return modules;
+        }
         for (RuleSummary summary : opMappingEngine.describeRules()) {
             ensureModuleView(summary.getModuleName(), modules);
         }
@@ -157,6 +172,14 @@ public class AuditLogResource {
             return summary.getSourceTableTemplate();
         }
         return null;
+    }
+
+    private String resolveTableLabel(String key) {
+        if (!StringUtils.hasText(key)) {
+            return null;
+        }
+        String trimmed = key.trim();
+        return resourceDictionary.resolveLabel(trimmed).orElse(trimmed);
     }
 
     private String safeTrim(String value) {
@@ -498,7 +521,7 @@ public class AuditLogResource {
                 if (tbl == null) tbl = det.get("target_table");
                 if (tbl != null) {
                     view.targetTable = String.valueOf(tbl);
-                    view.targetTableLabel = OperationMappingEngine.mapTableLabel(view.targetTable);
+                    view.targetTableLabel = resolveTableLabel(view.targetTable);
                 }
                 Object tid = det.get("目标ID");
                 if (tid == null) tid = det.get("target_id");
@@ -537,7 +560,7 @@ public class AuditLogResource {
                         view.operationSourceTable = m.sourceTable;
                     }
                     if (!StringUtils.hasText(view.targetTableLabel)) {
-                        view.targetTableLabel = m.sourceTable;
+                        view.targetTableLabel = resolveTableLabel(m.sourceTable);
                     }
                     if (!StringUtils.hasText(view.targetTable)) {
                         view.targetTable = m.sourceTable;

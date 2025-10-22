@@ -3,19 +3,25 @@ package com.yuzhi.dts.admin.web.filter;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService.PendingAuditEvent;
-import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
@@ -113,11 +119,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         event.action = deriveActionCode(resourceType, request.getMethod());
         event.resourceId = uri;
         // IP 获取：XFF 首段 -> X-Real-IP -> remoteAddr（跳过回环/内网地址）
-        String forwarded = request.getHeader("X-Forwarded-For");
-        String xfip = (forwarded != null && !forwarded.isBlank()) ? forwarded.split(",")[0].trim() : null;
-        String realIp = request.getHeader("X-Real-IP");
-        String remote = request.getRemoteAddr();
-        event.clientIp = IpAddressUtils.resolveClientIp(xfip, realIp, remote);
+        event.clientIp = extractClientIp(request);
         event.clientAgent = request.getHeader("User-Agent");
         event.requestUri = request.getRequestURI();
         event.httpMethod = request.getMethod();
@@ -229,4 +231,119 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         }
     }
 
+    private String extractClientIp(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        List<String> candidates = new ArrayList<>();
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(forwarded)) {
+            for (String part : forwarded.split(",")) {
+                String sanitized = sanitizeIpCandidate(part);
+                if (sanitized != null) {
+                    candidates.add(sanitized);
+                }
+            }
+        }
+        String realIp = sanitizeIpCandidate(request.getHeader("X-Real-IP"));
+        if (realIp != null) {
+            candidates.add(realIp);
+        }
+        String remote = sanitizeIpCandidate(request.getRemoteAddr());
+        if (remote != null) {
+            candidates.add(remote);
+        }
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        for (String candidate : candidates) {
+            if (isPublicAddress(candidate)) {
+                return normalizeLoopback(candidate);
+            }
+        }
+        for (String candidate : candidates) {
+            if (!isLoopbackOrUnspecified(candidate)) {
+                return normalizeLoopback(candidate);
+            }
+        }
+        return normalizeLoopback(candidates.get(0));
+    }
+
+    private String sanitizeIpCandidate(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty() || "unknown".equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() > 1) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1);
+        }
+        if (trimmed.startsWith("[") && trimmed.endsWith("]") && trimmed.length() > 1) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeLoopback(String ip) {
+        if (!StringUtils.hasText(ip)) {
+            return null;
+        }
+        String value = ip.trim();
+        if ("::1".equals(value) || "0:0:0:0:0:0:0:1".equals(value)) {
+            return "127.0.0.1";
+        }
+        if (value.startsWith("::ffff:")) {
+            return value.substring(7);
+        }
+        return value;
+    }
+
+    private boolean isLoopbackOrUnspecified(String ip) {
+        InetAddress addr = tryParseInet(ip);
+        if (addr == null) {
+            return false;
+        }
+        return addr.isLoopbackAddress() || addr.isAnyLocalAddress() || addr.isLinkLocalAddress();
+    }
+
+    private boolean isPublicAddress(String ip) {
+        InetAddress addr = tryParseInet(ip);
+        if (addr == null) {
+            return false;
+        }
+        if (addr.isLoopbackAddress() || addr.isAnyLocalAddress() || addr.isLinkLocalAddress()) {
+            return false;
+        }
+        if (addr.isSiteLocalAddress()) {
+            return false;
+        }
+        if (addr instanceof Inet6Address inet6) {
+            String lower = ip.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("fc") || lower.startsWith("fd") || lower.startsWith("fe80")) {
+                return false;
+            }
+            if (inet6.isIPv4CompatibleAddress()) {
+                return isPublicAddress(ipv4FromIpv6(inet6));
+            }
+        }
+        return true;
+    }
+
+    private InetAddress tryParseInet(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            return InetAddress.getByName(raw.trim());
+        } catch (UnknownHostException ignored) {
+            return null;
+        }
+    }
+
+    private String ipv4FromIpv6(Inet6Address inet6) {
+        byte[] addr = inet6.getAddress();
+        return (addr[12] & 0xFF) + "." + (addr[13] & 0xFF) + "." + (addr[14] & 0xFF) + "." + (addr[15] & 0xFF);
+    }
 }

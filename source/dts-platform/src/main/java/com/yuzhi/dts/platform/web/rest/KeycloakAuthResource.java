@@ -89,6 +89,7 @@ public class KeycloakAuthResource {
             String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
 
             // Issue a portal session (opaque tokens) for platform API access
+            boolean takeover = sessionRegistry.hasActiveSession(username);
             AdminTokens adminTokens = computeAdminTokens(
                 result.accessToken(),
                 result.accessTokenExpiresIn(),
@@ -146,7 +147,11 @@ public class KeycloakAuthResource {
                 }
             }
             if (log.isInfoEnabled()) {
-                log.info("[login] success username={} roles={} perms={}", username, mappedRoles, permissions);
+                if (takeover) {
+                    log.info("[login] success username={} roles={} perms={} takeover=true", username, mappedRoles, permissions);
+                } else {
+                    log.info("[login] success username={} roles={} perms={}", username, mappedRoles, permissions);
+                }
             }
             audit.recordAs(
                 username,
@@ -158,24 +163,11 @@ public class KeycloakAuthResource {
                 Map.of("audience", "platform"),
                 null
             );
-            return ResponseEntity.ok(ApiResponses.ok(data));
-        } catch (IllegalStateException ex) {
-            if ("session_active".equals(ex.getMessage())) {
-                String msg = "当前账号已在其他页面登录，请先退出后再尝试";
-                log.warn("[login] active session blocked username={}", username);
-                audit.recordAs(
-                    username,
-                    "AUTH LOGIN",
-                    "platform",
-                    "portal_user",
-                    username,
-                    "FAILED",
-                    Map.of("audience", "platform", "error", msg),
-                    null
-                );
-                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponses.error("SESSION_ACTIVE", msg));
+            if (takeover) {
+                data.put("sessionNotice", "已切换到当前登录，其他会话已下线");
+                data.put("sessionTakeover", Boolean.TRUE);
             }
-            throw ex;
+            return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (org.springframework.security.authentication.BadCredentialsException ex) {
             log.warn("[login] unauthorized username={} reason={}", username, ex.getMessage());
             audit.recordAs(
@@ -317,6 +309,7 @@ public class KeycloakAuthResource {
             String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
 
             // Issue a portal session (opaque tokens) for platform API access (no admin tokens needed for PKI path)
+            boolean takeover = sessionRegistry.hasActiveSession(username);
             AdminTokens adminTokens = null;
             PortalSession session = sessionRegistry.createSession(username, mappedRoles, permissions, deptCode, personnelLevel, adminTokens);
 
@@ -347,6 +340,10 @@ public class KeycloakAuthResource {
             data.put("user", userOut);
             data.put("accessToken", session.accessToken());
             data.put("refreshToken", session.refreshToken());
+            if (takeover) {
+                data.put("sessionNotice", "已切换到当前登录，其他会话已下线");
+                data.put("sessionTakeover", Boolean.TRUE);
+            }
 
             audit.recordAs(
                 username,
@@ -359,22 +356,6 @@ public class KeycloakAuthResource {
                 null
             );
             return ResponseEntity.ok(ApiResponses.ok(data));
-        } catch (IllegalStateException ex) {
-            if ("session_active".equals(ex.getMessage())) {
-                String msg = "当前账号已在其他页面登录，请先退出后再尝试";
-                audit.recordAs(
-                    username,
-                    "AUTH LOGIN",
-                    "platform",
-                    "portal_user",
-                    username,
-                    "FAILED",
-                    Map.of("audience", "platform", "mode", "pki", "error", msg),
-                    null
-                );
-                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponses.error("SESSION_ACTIVE", msg));
-            }
-            throw ex;
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
             audit.recordAs(
