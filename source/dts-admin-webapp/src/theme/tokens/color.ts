@@ -1,14 +1,16 @@
 import { ThemeColorPresets } from "#/enum";
 import { rgbAlpha } from "@/utils/theme";
 
+const primary2065D1 = {
+	lighter: "#D1E9FC",
+	light: "#76B0F1",
+	default: "#2065D1",
+	dark: "#103996",
+	darker: "#061B64",
+};
+
 export const presetsColors = {
-	[ThemeColorPresets.Default]: {
-		lighter: "#D6E4FF",
-		light: "#89A1FF",
-		default: "#2740A1",
-		dark: "#1C2F7F",
-		darker: "#131F5A",
-	},
+	[ThemeColorPresets.Default]: primary2065D1,
 	[ThemeColorPresets.Cyan]: {
 		lighter: "#CCF4FE",
 		light: "#68CDF9",
@@ -23,13 +25,7 @@ export const presetsColors = {
 		dark: "#431A9E",
 		darker: "#200A69",
 	},
-	[ThemeColorPresets.Blue]: {
-		lighter: "#D1E9FC",
-		light: "#76B0F1",
-		default: "#2065D1",
-		dark: "#103996",
-		darker: "#061B64",
-	},
+	[ThemeColorPresets.Blue]: primary2065D1,
 	[ThemeColorPresets.Orange]: {
 		lighter: "#FEF4D4",
 		light: "#FED680",
@@ -55,7 +51,7 @@ export const presetsColors = {
  *  + darker : 900
  */
 export const paletteColors = {
-	primary: presetsColors[ThemeColorPresets.Default],
+	primary: primary2065D1,
 	success: {
 		lighter: "#D8FBDE",
 		light: "#86E8AB",

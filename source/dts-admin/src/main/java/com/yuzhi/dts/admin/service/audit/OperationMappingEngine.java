@@ -254,26 +254,89 @@ public class OperationMappingEngine {
     }
 
     private CompiledRule moreSpecific(CompiledRule a, CompiledRule b) {
-        // Heuristic: fewer variables, fewer wildcards, longer literal length
-        int av = countVars(a.raw.getUrlPattern());
-        int bv = countVars(b.raw.getUrlPattern());
-        if (av != bv) return av < bv ? a : b;
-        int aw = countWildcards(a.raw.getUrlPattern());
-        int bw = countWildcards(b.raw.getUrlPattern());
-        if (aw != bw) return aw < bw ? a : b;
-        int al = literalLength(a.raw.getUrlPattern());
-        int bl = literalLength(b.raw.getUrlPattern());
-        if (al != bl) return al > bl ? a : b;
-        int ao = a.raw.getOrderValue() == null ? 0 : a.raw.getOrderValue();
-        int bo = b.raw.getOrderValue() == null ? 0 : b.raw.getOrderValue();
-        return ao <= bo ? a : b;
+        int cmp = PathPattern.SPECIFICITY_COMPARATOR.compare(a.pattern, b.pattern);
+        if (cmp < 0) {
+            return a;
+        }
+        if (cmp > 0) {
+            return b;
+        }
+        boolean aCatchAll = isCatchAll(a.pattern);
+        boolean bCatchAll = isCatchAll(b.pattern);
+        if (aCatchAll != bCatchAll) {
+            return aCatchAll ? b : a;
+        }
+        int av = countVars(a.pattern.getPatternString());
+        int bv = countVars(b.pattern.getPatternString());
+        if (av != bv) {
+            return av < bv ? a : b;
+        }
+        int aw = countWildcards(a.pattern.getPatternString());
+        int bw = countWildcards(b.pattern.getPatternString());
+        if (aw != bw) {
+            return aw < bw ? a : b;
+        }
+        int al = literalLength(a.pattern.getPatternString());
+        int bl = literalLength(b.pattern.getPatternString());
+        if (al != bl) {
+            return al > bl ? a : b;
+        }
+        int ao = a.raw.getOrderValue() == null ? Integer.MAX_VALUE : a.raw.getOrderValue();
+        int bo = b.raw.getOrderValue() == null ? Integer.MAX_VALUE : b.raw.getOrderValue();
+        if (ao != bo) {
+            return ao <= bo ? a : b;
+        }
+        long aid = a.raw.getId() == null ? Long.MAX_VALUE : a.raw.getId();
+        long bid = b.raw.getId() == null ? Long.MAX_VALUE : b.raw.getId();
+        return aid <= bid ? a : b;
     }
 
-    private int countVars(String p) { return StringUtils.countOccurrencesOf(p == null ? "" : p, "{"); }
-    private int countWildcards(String p) {
-        if (p == null) return 0; int c = 0; for (char ch : p.toCharArray()) { if (ch == '*') c++; } return c; }
-    private int literalLength(String p) {
-        if (p == null) return 0; int n = 0; boolean inVar = false; for (char ch : p.toCharArray()) { if (ch == '{') inVar = true; else if (ch == '}') inVar = false; else if (!inVar && ch != '*') n++; } return n; }
+    private boolean isCatchAll(PathPattern pattern) {
+        if (pattern == null) {
+            return false;
+        }
+        String text = pattern.getPatternString();
+        return "**".equals(text) || "/**".equals(text);
+    }
+
+    private int countVars(String pattern) {
+        if (pattern == null || pattern.isEmpty()) {
+            return 0;
+        }
+        return StringUtils.countOccurrencesOf(pattern, "{");
+    }
+
+    private int countWildcards(String pattern) {
+        if (pattern == null || pattern.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (char ch : pattern.toCharArray()) {
+            if (ch == '*') {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int literalLength(String pattern) {
+        if (pattern == null || pattern.isEmpty()) {
+            return 0;
+        }
+        int length = 0;
+        boolean inVar = false;
+        for (char ch : pattern.toCharArray()) {
+            if (ch == '{') {
+                inVar = true;
+            } else if (ch == '}') {
+                inVar = false;
+            } else if (!inVar && ch != '*') {
+                length++;
+            }
+        }
+        return length;
+    }
+
     private String normalizePattern(String p) { return (p == null || p.isBlank()) ? "/**" : (p.startsWith("/") ? p : "/" + p); }
 
     private Pattern compileStatusPattern(AuditOperationMapping mapping) {

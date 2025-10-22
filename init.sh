@@ -262,9 +262,9 @@ generate_env_base(){
   : "${EXPLORE_DB_PASSWORD:=${SECRET}}"
 
   # ---------- OIDC 客户端（admin 与 platform 各自一个） ----------
-  : "${OAUTH2_ADMIN_CLIENT_ID:=dts-admin}"
+  : "${OAUTH2_ADMIN_CLIENT_ID:=dts-system}"
   : "${OAUTH2_ADMIN_CLIENT_SECRET:=${SECRET}}"
-  : "${OAUTH2_PLATFORM_CLIENT_ID:=dts-platform}"
+  : "${OAUTH2_PLATFORM_CLIENT_ID:=dts-system}"
   : "${OAUTH2_PLATFORM_CLIENT_SECRET:=${SECRET}}"
   OIDC_ISSUER_URI="https://${HOST_SSO}/realms/${KC_REALM}"
 

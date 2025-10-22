@@ -175,6 +175,13 @@ export type KoalCertificate = {
 	certType?: string;
 	signType: "SM2" | "RSA" | "PM-BD" | "UNKNOWN";
 	raw: Record<string, any>;
+	canSign: boolean;
+	missingFields: string[];
+};
+
+export type PartialKoalCertificate = Omit<KoalCertificate, "canSign" | "missingFields"> & {
+	canSign?: boolean;
+	missingFields?: string[];
 };
 
 export type KoalSignedPayload = {
@@ -369,7 +376,7 @@ export class KoalMiddlewareClient {
 
 		const filtered = payload.certs
 			.filter((item: any) => filterCertificate(item))
-			.map((item: any) => normalizeCertificate(item));
+			.map((item: any, index: number) => normalizeCertificate(item, index));
 
 		if (IS_DEV) {
 			console.info("[koal] 过滤后证书", filtered);
@@ -456,31 +463,45 @@ export class KoalMiddlewareClient {
 function filterCertificate(item: Record<string, any>): boolean {
 	const keyUsageRaw = item?.keyUsage ?? item?.KeyUsage;
 	const keyUsageNumber = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? Number.NaN);
-	if (Number.isNaN(keyUsageNumber) || keyUsageNumber !== 1) {
-		if (IS_DEV) {
-			console.info("[koal] 忽略证书：keyUsage 不是签名用途", keyUsageRaw, item);
-		}
-		return false;
-	}
-
 	const signFlagRaw = item?.signFlag ?? item?.SignFlag;
 	const signFlag = typeof signFlagRaw === "string" ? Number(signFlagRaw) : Number(signFlagRaw ?? 1);
-	if (!Number.isNaN(signFlag) && signFlag !== 1) {
-		if (IS_DEV) {
-			console.info("[koal] 忽略证书：signFlag != 1", signFlagRaw, item);
+	if (IS_DEV) {
+		const hints: string[] = [];
+		if (Number.isNaN(keyUsageNumber)) {
+			hints.push(`keyUsage 未解析 -> ${String(keyUsageRaw)}`);
+		} else if (keyUsageNumber !== 1) {
+			hints.push(`keyUsage=${keyUsageNumber}`);
 		}
-		return false;
+		if (!Number.isNaN(signFlag) && signFlag !== 1) {
+			hints.push(`signFlag=${signFlag}`);
+		}
+		if (hints.length > 0) {
+			console.info("[koal] 非标准签名证书仍返回给前端", hints.join("; "), item);
+		}
 	}
-
 	return true;
 }
 
-function normalizeCertificate(item: Record<string, any>): KoalCertificate {
-	const subjectCn = item?.subjectName?.CN ?? item?.subject ?? "";
-	const issuerCn = item?.issuerName?.CN ?? item?.issuer ?? "";
+function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertificate {
+	const subjectCn = item?.subjectName?.CN ?? item?.subject ?? item?.Subject ?? "";
+	const issuerCn = item?.issuerName?.CN ?? item?.issuer ?? item?.Issuer ?? "";
 	const signHint = String(item?.certType ?? item?.certAlgorithm ?? item?.algName ?? "").toUpperCase();
 
-	const manufacturer = String(item?.manufacturer ?? item?.Manufacturer ?? "").trim();
+	const manufacturer = String(item?.manufacturer ?? item?.Manufacturer ?? item?.Vendor ?? "").trim();
+
+	const devId =
+		firstNonBlank(item?.devID, item?.devId, item?.deviceId, item?.deviceID, item?.device, item?.DeviceID) ?? "";
+	const appName = firstNonBlank(item?.appName, item?.AppName, item?.appname, item?.application) ?? "";
+	const conName =
+		firstNonBlank(
+			item?.containerName,
+			item?.container,
+			item?.conName,
+			item?.ConName,
+			item?.container_name,
+			item?.containerID
+		) ?? "";
+	const sn = firstNonBlank(item?.SN, item?.sn, item?.serialNumber, item?.SerialNumber) ?? "";
 
 	let signType: KoalCertificate["signType"] = "UNKNOWN";
 	if (signHint.includes("PM") || signHint.includes("P7")) {
@@ -496,28 +517,47 @@ function normalizeCertificate(item: Record<string, any>): KoalCertificate {
 	const keyUsageRaw = item?.keyUsage ?? item?.KeyUsage;
 	const keyUsage = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? undefined);
 
+	const idParts = [devId, appName, conName, sn].filter((part) => typeof part === "string" && part.trim() !== "");
+	let id = idParts.join("::");
+	if (!id) {
+		id = `cert-${index}`;
+	}
+
+	const missingFields: string[] = [];
+	if (!devId) missingFields.push("devId");
+	if (!appName) missingFields.push("appName");
+	if (!conName) missingFields.push("conName");
+
+	const canSign = missingFields.length === 0;
+
 	const cert: KoalCertificate = {
-		id: [
-			item?.devID ?? item?.devId ?? "",
-			item?.appName ?? "",
-			item?.containerName ?? "",
-			item?.SN ?? "",
-		]
-			.map((part) => String(part ?? "").trim())
-			.join("::"),
-		devId: String(item?.devID ?? item?.devId ?? ""),
-		appName: String(item?.appName ?? ""),
-		conName: String(item?.containerName ?? ""),
+		id,
+		devId,
+		appName,
+		conName,
 		subjectCn: String(subjectCn ?? ""),
 		issuerCn: String(issuerCn ?? ""),
-		sn: String(item?.SN ?? ""),
+		sn: String(sn ?? ""),
 		manufacturer,
 		keyUsage: Number.isNaN(keyUsage) ? undefined : keyUsage,
 		certType: item?.certType ? String(item.certType) : undefined,
 		signType,
 		raw: item,
+		canSign,
+		missingFields,
 	};
 	return cert;
+}
+
+function firstNonBlank(...candidates: Array<unknown>): string | null {
+	for (const candidate of candidates) {
+		if (candidate === null || candidate === undefined) continue;
+		const value = String(candidate).trim();
+		if (value) {
+			return value;
+		}
+	}
+	return null;
 }
 
 function parseJson(value: Nullable<string>): any {

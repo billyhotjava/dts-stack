@@ -226,6 +226,133 @@ class OperationMappingEngineTest {
         assertThat(summary.getSourceTableTemplate()).isEqualTo("审批请求");
     }
 
+    @Test
+    void approvalRequestDetailRuleOverridesCatchAll() {
+        AuditOperationMapping specific = createMapping(
+            "/api/approval-requests/{id}",
+            "GET",
+            "审批管理",
+            "查询",
+            "查询审批请求：{rid|未知}",
+            "审批请求"
+        );
+        specific.setParamExtractors("{\"rid\":\"path.id\"}");
+        specific.setOrderValue(12);
+
+        AuditOperationMapping catchAll = createMapping(
+            "/**",
+            "ALL",
+            "未知模块",
+            "执行",
+            "执行了操作：{event.requestUri|未知}",
+            "未知"
+        );
+        catchAll.setOrderValue(10000);
+
+        repository = createRepository(List.of(specific, catchAll));
+        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine.reload();
+
+        AuditEvent event = new AuditEvent();
+        event.setRequestUri("/api/approval-requests/1601");
+        event.setHttpMethod("GET");
+        event.setSourceSystem("admin");
+        event.setDetails("{}");
+
+        Optional<OperationMappingEngine.ResolvedOperation> resolved = engine.resolveWithFallback(event);
+        assertThat(resolved).isPresent();
+        OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
+        assertThat(op.ruleMatched).isTrue();
+        assertThat(op.moduleName).isEqualTo("审批管理");
+        assertThat(op.actionType).isEqualTo("查询");
+        assertThat(op.description).isEqualTo("查询审批请求：1601");
+    }
+
+    @Test
+    void datasetPreviewRuleUsesDatasetName() {
+        AuditOperationMapping datasetRule = createMapping(
+            "/api/datasets/{id}/preview",
+            "GET",
+            "数据资产",
+            "查询",
+            "预览数据资产：{datasetName|未知}（ID：{datasetId|未知}）",
+            "数据资产"
+        );
+        datasetRule.setParamExtractors("{\"datasetId\":\"path.id\",\"datasetName\":\"details.datasetName\"}");
+        datasetRule.setOrderValue(30);
+
+        AuditOperationMapping catchAll = createMapping(
+            "/**",
+            "ALL",
+            "未知模块",
+            "执行",
+            "执行了操作：{event.requestUri|未知}",
+            "未知"
+        );
+        catchAll.setOrderValue(10000);
+
+        repository = createRepository(List.of(datasetRule, catchAll));
+        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine.reload();
+
+        AuditEvent event = new AuditEvent();
+        event.setRequestUri("/api/datasets/db486a4a-fb64-4218-907b-b582a764e66e/preview");
+        event.setHttpMethod("GET");
+        event.setSourceSystem("platform");
+        event.setDetails("{\"datasetName\":\"客户订单\",\"源表\":\"数据资产\"}");
+
+        Optional<OperationMappingEngine.ResolvedOperation> resolved = engine.resolveWithFallback(event);
+        assertThat(resolved).isPresent();
+        OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
+        assertThat(op.ruleMatched).isTrue();
+        assertThat(op.moduleName).isEqualTo("数据资产");
+        assertThat(op.actionType).isEqualTo("查询");
+        assertThat(op.description).contains("客户订单");
+        assertThat(op.description).contains("db486a4a-fb64-4218-907b-b582a764e66e");
+    }
+
+    @Test
+    void specificKeycloakApprovalRuleBeatsCatchAll() {
+        AuditOperationMapping specific = createMapping(
+            "/api/keycloak/approvals/{id}/{action}",
+            "POST",
+            "审批管理",
+            "修改",
+            "处理审批：{rid|未知}",
+            "审批请求"
+        );
+        specific.setParamExtractors("{\"rid\":\"path.id\"}");
+        specific.setOrderValue(10);
+
+        AuditOperationMapping catchAll = createMapping(
+            "/**",
+            "ALL",
+            "未知模块",
+            "执行",
+            "执行了操作：{event.requestUri|未知}",
+            "未知"
+        );
+        catchAll.setOrderValue(10000);
+
+        repository = createRepository(List.of(specific, catchAll));
+        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine.reload();
+
+        AuditEvent event = new AuditEvent();
+        event.setRequestUri("/api/keycloak/approvals/5901/approve");
+        event.setHttpMethod("POST");
+        event.setSourceSystem("admin");
+        event.setDetails("{}");
+
+        Optional<OperationMappingEngine.ResolvedOperation> resolved = engine.resolveWithFallback(event);
+        assertThat(resolved).isPresent();
+        OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
+        assertThat(op.ruleMatched).isTrue();
+        assertThat(op.moduleName).isEqualTo("审批管理");
+        assertThat(op.actionType).isEqualTo("修改");
+        assertThat(op.description).contains("处理审批");
+    }
+
     private AuditOperationMappingRepository createRepository(List<AuditOperationMapping> mappings) {
         return (AuditOperationMappingRepository) Proxy.newProxyInstance(
             AuditOperationMappingRepository.class.getClassLoader(),

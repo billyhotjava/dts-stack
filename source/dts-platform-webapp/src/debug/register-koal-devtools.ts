@@ -54,20 +54,22 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
 
 	const normalizeCertificate = (partial: Partial<KoalCertificate>, index: number): KoalCertificate => {
 		const id = partial.id ?? `mock-cert-${index + 1}`;
-		return {
-			id,
-			devId: partial.devId ?? `dev-${index + 1}`,
-			appName: partial.appName ?? "MockApp",
-			conName: partial.conName ?? `container-${index + 1}`,
-			subjectCn: partial.subjectCn ?? `测试用户${index + 1}`,
+    return {
+        id,
+        devId: partial.devId ?? `dev-${index + 1}`,
+        appName: partial.appName ?? "MockApp",
+        conName: partial.conName ?? `container-${index + 1}`,
+        subjectCn: partial.subjectCn ?? `测试用户${index + 1}`,
 			issuerCn: partial.issuerCn ?? "Mock CA",
 			sn: partial.sn ?? `SN-${index + 1}`,
 			manufacturer: partial.manufacturer ?? "MOCK",
 			keyUsage: partial.keyUsage ?? 1,
-			certType: partial.certType ?? "SM2",
-			signType: partial.signType ?? "SM2",
-			raw: partial.raw ?? partial,
-		};
+        certType: partial.certType ?? "SM2",
+        signType: partial.signType ?? "SM2",
+        raw: partial.raw ?? partial,
+        canSign: partial.canSign !== undefined ? partial.canSign : true,
+        missingFields: partial.missingFields ?? [],
+    };
 	};
 
 	const createMockClient = (): KoalMiddlewareClient => {

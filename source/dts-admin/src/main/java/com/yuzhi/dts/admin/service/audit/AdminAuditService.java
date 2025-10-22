@@ -580,7 +580,45 @@ public class AdminAuditService {
         java.util.Map<String, Object> det = new java.util.LinkedHashMap<>();
         String tableKey = tableFromResource(entity.getResourceType(), entity.getModule());
         String tableLabel = mapTableLabel(tableKey);
-        det.put("源表", tableLabel);
+        det.put("源表", tableKey);
+        if (StringUtils.hasText(tableLabel) && !Objects.equals(tableLabel, tableKey)) {
+            det.put("源表描述", tableLabel);
+        }
+        if (pending.payload instanceof java.util.Map<?, ?> payloadMap) {
+            String targetRef = firstNonBlank(
+                coerceToString(payloadMap.get("target_ref")),
+                coerceToString(payloadMap.get("targetRef"))
+            );
+            String datasetName = coerceToString(payloadMap.get("datasetName"));
+            if (!StringUtils.hasText(targetRef)) {
+                targetRef = datasetName;
+            }
+            if (StringUtils.hasText(targetRef) && !det.containsKey("目标引用")) {
+                det.put("目标引用", targetRef);
+            }
+            if (StringUtils.hasText(targetRef)) {
+                det.put("target_ref", targetRef);
+            }
+            if (StringUtils.hasText(datasetName)) {
+                det.put("datasetName", datasetName);
+            }
+            String datasetDomain = coerceToString(payloadMap.get("datasetDomain"));
+            if (StringUtils.hasText(datasetDomain)) {
+                det.put("datasetDomain", datasetDomain);
+            }
+            String datasetClassification = coerceToString(payloadMap.get("datasetClassification"));
+            if (StringUtils.hasText(datasetClassification)) {
+                det.put("datasetClassification", datasetClassification);
+            }
+            String datasetOwner = coerceToString(payloadMap.get("datasetOwner"));
+            if (StringUtils.hasText(datasetOwner)) {
+                det.put("datasetOwner", datasetOwner);
+            }
+            String datasetOwnerDept = coerceToString(payloadMap.get("datasetOwnerDept"));
+            if (StringUtils.hasText(datasetOwnerDept)) {
+                det.put("datasetOwnerDept", datasetOwnerDept);
+            }
+        }
         // Only record PK 目标ID（同时兼容旧键 target_id 以便历史/平台复用）。
         // 对 admin_keycloak_user（用户）：
         // - 数字 -> 本地主键

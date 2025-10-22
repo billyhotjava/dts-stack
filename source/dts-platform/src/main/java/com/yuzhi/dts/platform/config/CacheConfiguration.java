@@ -73,14 +73,17 @@ public class CacheConfiguration {
         }
         Config config = new Config();
         config.setInstanceName("dtsPlatform");
+        config.setProperty("hazelcast.phone.home.enabled", "false");
         config.getNetworkConfig().getJoin().getMulticastConfig().setEnabled(false);
+        config.getNetworkConfig().getJoin().getTcpIpConfig().setEnabled(false);
         if (this.registration == null) {
-            LOG.warn("No discovery service is set up, Hazelcast cannot create a cluster.");
+            LOG.warn("No discovery service is set up, Hazelcast will run in standalone mode.");
         } else {
             // The serviceId is by default the application's name,
             // see the "spring.application.name" standard Spring property
             String serviceId = registration.getServiceId();
             LOG.debug("Configuring Hazelcast clustering for instanceId: {}", serviceId);
+            boolean clusterMembersAdded = false;
             // In development, everything goes through 127.0.0.1, with a different port
             if (env.acceptsProfiles(Profiles.of(JHipsterConstants.SPRING_PROFILE_DEVELOPMENT))) {
                 LOG.debug(
@@ -93,6 +96,7 @@ public class CacheConfiguration {
                     String clusterMember = "127.0.0.1:" + (instance.getPort() + 5701);
                     LOG.debug("Adding Hazelcast (dev) cluster member {}", clusterMember);
                     config.getNetworkConfig().getJoin().getTcpIpConfig().addMember(clusterMember);
+                    clusterMembersAdded = true;
                 }
             } else { // Production configuration, one host per instance all using port 5701
                 config.getNetworkConfig().setPort(5701);
@@ -101,7 +105,12 @@ public class CacheConfiguration {
                     String clusterMember = instance.getHost() + ":5701";
                     LOG.debug("Adding Hazelcast (prod) cluster member {}", clusterMember);
                     config.getNetworkConfig().getJoin().getTcpIpConfig().addMember(clusterMember);
+                    clusterMembersAdded = true;
                 }
+            }
+            if (!clusterMembersAdded) {
+                LOG.warn("Discovery service returned no peer instances; Hazelcast will remain standalone.");
+                config.getNetworkConfig().getJoin().getTcpIpConfig().setEnabled(false);
             }
         }
         config.setManagementCenterConfig(new ManagementCenterConfig());

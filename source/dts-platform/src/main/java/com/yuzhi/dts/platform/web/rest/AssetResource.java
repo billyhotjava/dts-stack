@@ -151,12 +151,10 @@ public class AssetResource {
         boolean read = accessChecker.canRead(dataset);
         boolean deptOk = accessChecker.departmentAllowed(dataset, effDept);
         if (!read || !deptOk) {
-            audit.auditAction(
-                "CATALOG_ASSET_VIEW",
-                AuditStage.FAIL,
-                id.toString(),
-                Map.of("reason", !read ? "RBAC_DENY" : "INVALID_CONTEXT")
-            );
+            Map<String, Object> auditDetail = datasetAuditPayload(dataset);
+            auditDetail.put("reason", !read ? "RBAC_DENY" : "INVALID_CONTEXT");
+            auditDetail.put("requestedRows", rows);
+            audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.FAIL, id.toString(), auditDetail);
             String code = !read
                 ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY
                 : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT;
@@ -169,20 +167,14 @@ public class AssetResource {
             sql = buildPreviewSql(dataset, safeRows);
             sql = securitySqlRewriter.guard(sql, dataset);
         } catch (SecurityGuardException ex) {
-            audit.auditAction(
-                "CATALOG_ASSET_VIEW",
-                AuditStage.FAIL,
-                id.toString(),
-                Map.of("reason", ex.getMessage())
-            );
+            Map<String, Object> auditDetail = datasetAuditPayload(dataset);
+            auditDetail.put("reason", ex.getMessage());
+            audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.FAIL, id.toString(), auditDetail);
             return ApiResponses.error(ex.getMessage());
         } catch (IllegalStateException ex) {
-            audit.auditAction(
-                "CATALOG_ASSET_VIEW",
-                AuditStage.FAIL,
-                id.toString(),
-                Map.of("reason", ex.getMessage())
-            );
+            Map<String, Object> auditDetail = datasetAuditPayload(dataset);
+            auditDetail.put("reason", ex.getMessage());
+            audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.FAIL, id.toString(), auditDetail);
             return ApiResponses.error(ex.getMessage());
         }
 
@@ -219,21 +211,17 @@ public class AssetResource {
             if (queryResult.containsKey("queryMillis")) {
                 result.put("queryMillis", queryResult.get("queryMillis"));
             }
-            audit.auditAction(
-                "CATALOG_ASSET_VIEW",
-                AuditStage.SUCCESS,
-                id.toString(),
-                Map.of("rows", rowsData.size(), "requestedRows", safeRows)
-            );
+            Map<String, Object> auditDetail = datasetAuditPayload(dataset);
+            auditDetail.put("rows", rowsData.size());
+            auditDetail.put("requestedRows", safeRows);
+            audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditDetail);
             return ApiResponses.ok(result);
         } catch (Exception ex) {
             String message = sanitize(ex.getMessage());
-            audit.auditAction(
-                "CATALOG_ASSET_VIEW",
-                AuditStage.FAIL,
-                id.toString(),
-                Map.of("error", message, "sql", sql)
-            );
+            Map<String, Object> auditDetail = datasetAuditPayload(dataset);
+            auditDetail.put("error", message);
+            auditDetail.put("sql", sql);
+            audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.FAIL, id.toString(), auditDetail);
             return ApiResponses.error("数据预览失败: " + message);
         }
     }
@@ -257,6 +245,48 @@ public class AssetResource {
         }
         String cleaned = message.replaceAll("\n", " ").trim();
         return cleaned.length() > 160 ? cleaned.substring(0, 160) : cleaned;
+    }
+
+    private Map<String, Object> datasetAuditPayload(CatalogDataset dataset) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        if (dataset == null) {
+            return detail;
+        }
+        if (dataset.getId() != null) {
+            detail.put("datasetId", dataset.getId().toString());
+        }
+        String name = dataset.getName();
+        if (name != null && !name.isBlank()) {
+            detail.put("datasetName", name);
+            detail.put("target_ref", name);
+        }
+        var domain = dataset.getDomain();
+        if (domain != null && domain.getName() != null && !domain.getName().isBlank()) {
+            detail.put("datasetDomain", domain.getName());
+        }
+        if (dataset.getClassification() != null && !dataset.getClassification().isBlank()) {
+            detail.put("datasetClassification", dataset.getClassification());
+        }
+        if (dataset.getOwner() != null && !dataset.getOwner().isBlank()) {
+            detail.put("datasetOwner", dataset.getOwner());
+        }
+        if (dataset.getOwnerDept() != null && !dataset.getOwnerDept().isBlank()) {
+            detail.put("datasetOwnerDept", dataset.getOwnerDept());
+        }
+        if (dataset.getType() != null && !dataset.getType().isBlank()) {
+            detail.put("datasetType", dataset.getType());
+        }
+        if (dataset.getHiveDatabase() != null && !dataset.getHiveDatabase().isBlank()) {
+            detail.put("datasetDatabase", dataset.getHiveDatabase());
+        }
+        if (dataset.getHiveTable() != null && !dataset.getHiveTable().isBlank()) {
+            detail.put("datasetTable", dataset.getHiveTable());
+            String qualified = dataset.getHiveDatabase() != null && !dataset.getHiveDatabase().isBlank()
+                ? dataset.getHiveDatabase() + "." + dataset.getHiveTable()
+                : dataset.getHiveTable();
+            detail.put("target_table", qualified);
+        }
+        return detail;
     }
 
     private String buildPreviewSql(CatalogDataset dataset, int limit) {

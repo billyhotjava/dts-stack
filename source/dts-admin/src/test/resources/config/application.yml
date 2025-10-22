@@ -44,6 +44,11 @@ spring:
         provider:
           oidc:
             issuer-uri: http://DO_NOT_CALL:9080/realms/jhipster
+        registration:
+          oidc:
+            client-id: test-client
+            client-secret: test-secret
+            scope: openid,profile,email,offline_access
       resourceserver:
         jwt:
           principal-claim-name: preferred_username

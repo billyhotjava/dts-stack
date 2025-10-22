@@ -18,7 +18,7 @@ import { KoalMiddlewareClient, KoalCertificate, formatKoalError } from "@/api/se
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
 import { updateLocalTranslations } from "@/utils/translation";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
 
 const IS_DEV = typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV);
 
@@ -110,8 +110,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				return;                       // 退出后续流程
 
 			}
-			setPkiCerts(certificates);
-			setSelectedCertId(certificates[0]?.id ?? "");
+            setPkiCerts(certificates);
+            const selectable = certificates.find((cert) => cert.canSign) ?? certificates[0];
+            setSelectedCertId(selectable?.id ?? "");
 			setPinCode("");
 			setPkiClientState({ client, challenge });
 			setPkiDialogOpen(true);
@@ -165,7 +166,15 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			return;
 		}
 
-		const { client, challenge } = pkiClientState;
+        if (!certificate.canSign) {
+            const missing = certificate.missingFields.join("、") || "关键信息";
+            toast.error(`所选证书缺少必要的信息（${missing}），无法完成签名，请更换证书`, {
+                position: "top-center",
+            });
+            return;
+        }
+
+        const { client, challenge } = pkiClientState;
 		setPkiSubmitting(true);
 		setLoading(true);
 		let loggedOut = false;
@@ -340,29 +349,52 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 						<DialogTitle>证书登录</DialogTitle>
 					</DialogHeader>
 					<div className="space-y-4">
-						<div className="space-y-2">
-							<label className="text-sm font-medium text-muted-foreground">选择证书</label>
-							<Select value={selectedCertId} onValueChange={setSelectedCertId}>
-								<SelectTrigger>
-									<SelectValue placeholder="请选择证书" />
-								</SelectTrigger>
-								<SelectContent>
-									{pkiCerts.map((cert) => (
-										<SelectItem key={cert.id} value={cert.id}>
-											{cert.subjectCn || cert.sn || cert.id}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							{selectedCert && (
-								<div className="rounded-md border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-									<div>持有人：{selectedCert.subjectCn || "-"}</div>
-									<div>颁发者：{selectedCert.issuerCn || "-"}</div>
-									<div>序列号：{selectedCert.sn || "-"}</div>
-									<div>算法类型：{selectedCert.signType}</div>
-								</div>
-							)}
-						</div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-muted-foreground">选择证书</label>
+                            {pkiCerts.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">未检测到可用证书</p>
+                            ) : (
+                                <RadioGroup
+                                    value={selectedCertId}
+                                    onValueChange={setSelectedCertId}
+                                    className="space-y-3"
+                                >
+                                    {pkiCerts.map((cert, index) => (
+                                        <label
+                                            key={cert.id}
+                                            htmlFor={`cert-${index}`}
+                                            className={`flex cursor-pointer gap-3 rounded-md border p-3 text-xs leading-5 transition-colors ${
+                                                selectedCertId === cert.id
+                                                    ? "border-primary bg-primary/5"
+                                                    : "hover:border-primary/50"
+                                            } ${!cert.canSign ? "opacity-70" : ""}`}
+                                        >
+                                            <RadioGroupItem
+                                                value={cert.id}
+                                                id={`cert-${index}`}
+                                                disabled={!cert.canSign}
+                                                className="mt-1"
+                                            />
+                                            <div className="flex-1 text-muted-foreground">
+                                                <div className="font-medium text-foreground">
+                                                    {cert.subjectCn || cert.sn || cert.id}
+                                                    {!cert.canSign ? "（不可签）" : ""}
+                                                </div>
+                                                <div>颁发者：{cert.issuerCn || "-"}</div>
+                                                <div>序列号：{cert.sn || "-"}</div>
+                                                <div>算法类型：{cert.signType}</div>
+                                                <div>介质厂商：{cert.manufacturer || "-"}</div>
+                                                {!cert.canSign && (
+                                                    <div className="mt-1 text-destructive">
+                                                        缺少必要字段：{cert.missingFields.join("、") || "关键信息"}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </label>
+                                    ))}
+                                </RadioGroup>
+                            )}
+                        </div>
 						<div className="space-y-2">
 							<label className="text-sm font-medium text-muted-foreground">输入 PIN 码</label>
 							<Input
@@ -377,11 +409,16 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 						<Button type="button" variant="outline" onClick={() => void closePkiDialog(true)} disabled={pkiSubmitting}>
 							取消
 						</Button>
-						<Button
-							type="button"
-							onClick={() => void handleConfirmPki()}
-							disabled={pkiSubmitting || !selectedCertId || !pinCode.trim()}
-						>
+                        <Button
+                            type="button"
+                            onClick={() => void handleConfirmPki()}
+                            disabled={
+                                pkiSubmitting ||
+                                !selectedCertId ||
+                                !pinCode.trim() ||
+                                (selectedCert && !selectedCert.canSign)
+                            }
+                        >
 							{pkiSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
 							开始签名
 						</Button>
