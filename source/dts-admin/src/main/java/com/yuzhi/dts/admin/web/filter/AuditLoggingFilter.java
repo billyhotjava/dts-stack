@@ -235,38 +235,52 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         if (request == null) {
             return null;
         }
+        String forwardedCombined = request.getHeader("Forwarded");
+        String forwardedHeader = request.getHeader("X-Forwarded-For");
+        String realIpHeader = request.getHeader("X-Real-IP");
+        String remoteHeader = request.getRemoteAddr();
         List<String> candidates = new ArrayList<>();
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (StringUtils.hasText(forwarded)) {
-            for (String part : forwarded.split(",")) {
+        appendForwardedHeaderCandidates(forwardedCombined, candidates);
+        if (StringUtils.hasText(forwardedHeader)) {
+            for (String part : forwardedHeader.split(",")) {
                 String sanitized = sanitizeIpCandidate(part);
                 if (sanitized != null) {
                     candidates.add(sanitized);
                 }
             }
         }
-        String realIp = sanitizeIpCandidate(request.getHeader("X-Real-IP"));
+        String realIp = sanitizeIpCandidate(realIpHeader);
         if (realIp != null) {
             candidates.add(realIp);
         }
-        String remote = sanitizeIpCandidate(request.getRemoteAddr());
+        String remote = sanitizeIpCandidate(remoteHeader);
         if (remote != null) {
             candidates.add(remote);
         }
         if (candidates.isEmpty()) {
+            logClientIpTrace("admin", forwardedHeader, forwardedCombined, realIpHeader, remoteHeader, null, candidates);
             return null;
         }
+        String resolved = null;
         for (String candidate : candidates) {
             if (isPublicAddress(candidate)) {
-                return normalizeLoopback(candidate);
+                resolved = normalizeLoopback(candidate);
+                break;
             }
         }
-        for (String candidate : candidates) {
-            if (!isLoopbackOrUnspecified(candidate)) {
-                return normalizeLoopback(candidate);
+        if (resolved == null) {
+            for (String candidate : candidates) {
+                if (!isLoopbackOrUnspecified(candidate)) {
+                    resolved = normalizeLoopback(candidate);
+                    break;
+                }
             }
         }
-        return normalizeLoopback(candidates.get(0));
+        if (resolved == null) {
+            resolved = normalizeLoopback(candidates.get(0));
+        }
+        logClientIpTrace("admin", forwardedHeader, forwardedCombined, realIpHeader, remoteHeader, resolved, candidates);
+        return resolved;
     }
 
     private String sanitizeIpCandidate(String raw) {
@@ -345,5 +359,88 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
     private String ipv4FromIpv6(Inet6Address inet6) {
         byte[] addr = inet6.getAddress();
         return (addr[12] & 0xFF) + "." + (addr[13] & 0xFF) + "." + (addr[14] & 0xFF) + "." + (addr[15] & 0xFF);
+    }
+
+    private void logClientIpTrace(String marker, String forwarded, String forwardedCombined, String realIp, String remote, String resolved, List<String> candidates) {
+        boolean fallbackToRemote = resolved != null
+            && remote != null
+            && resolved.trim().equals(remote.trim());
+        boolean missingForwarded = !StringUtils.hasText(forwarded);
+        if (log.isInfoEnabled()) {
+            log.info("[{}-client-ip] resolved={} forwarded='{}' forwardedStd='{}' real='{}' remote='{}' candidates={} fallbackToRemote={} missingForwarded={}",
+                marker,
+                nullSafe(resolved),
+                nullSafe(forwarded),
+                nullSafe(forwardedCombined),
+                nullSafe(realIp),
+                nullSafe(remote),
+                candidates,
+                fallbackToRemote,
+                missingForwarded
+            );
+        } else if (log.isDebugEnabled()) {
+            log.debug("[{}-client-ip] resolved={} forwarded='{}' forwardedStd='{}' real='{}' remote='{}' candidates={} fallbackToRemote={} missingForwarded={}",
+                marker,
+                nullSafe(resolved),
+                nullSafe(forwarded),
+                nullSafe(forwardedCombined),
+                nullSafe(realIp),
+                nullSafe(remote),
+                candidates,
+                fallbackToRemote,
+                missingForwarded
+            );
+        }
+    }
+
+    private void appendForwardedHeaderCandidates(String header, List<String> candidates) {
+        if (!StringUtils.hasText(header)) {
+            return;
+        }
+        String[] segments = header.split(",");
+        for (String segment : segments) {
+            if (!StringUtils.hasText(segment)) {
+                continue;
+            }
+            String[] parts = segment.split(";");
+            for (String part : parts) {
+                String trimmed = part == null ? "" : part.trim();
+                if (trimmed.isEmpty()) {
+                    continue;
+                }
+                int idx = trimmed.toLowerCase(Locale.ROOT).indexOf("for=");
+                if (idx != 0) {
+                    continue;
+                }
+                String value = trimmed.substring(4).trim();
+                if (value.isEmpty()) {
+                    continue;
+                }
+                if (value.startsWith("\"") && value.endsWith("\"") && value.length() > 1) {
+                    value = value.substring(1, value.length() - 1);
+                }
+                if (value.startsWith("[")) {
+                    int closeIdx = value.indexOf(']');
+                    if (closeIdx > 0) {
+                        String ipv6 = value.substring(1, closeIdx);
+                        if (!ipv6.isBlank()) {
+                            candidates.add(ipv6);
+                            continue;
+                        }
+                    }
+                }
+                int colon = value.indexOf(':');
+                if (colon > 0 && value.indexOf(':', colon + 1) == -1) {
+                    value = value.substring(0, colon);
+                }
+                if (!value.isBlank() && !"unknown".equalsIgnoreCase(value)) {
+                    candidates.add(value);
+                }
+            }
+        }
+    }
+
+    private String nullSafe(String value) {
+        return value == null ? "" : value;
     }
 }

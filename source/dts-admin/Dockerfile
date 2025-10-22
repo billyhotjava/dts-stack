@@ -1,7 +1,8 @@
 # ---------- build stage ----------
 # Build against Maven 3.9.9 with Temurin JDK 21
 ARG MAVEN_IMAGE=maven:3.9.9-eclipse-temurin-21
-ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21-jre
+# Eclipse Temurin stopped publishing the floating `21-jre` tag; pin to the latest LTS patch to avoid auth errors.
+ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.5_11-jre
 FROM ${MAVEN_IMAGE} AS build
 
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public

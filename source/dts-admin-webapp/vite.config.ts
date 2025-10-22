@@ -75,6 +75,7 @@ export default defineConfig(({ mode }) => {
           // If targeting Traefik via HTTPS, auto prefix '/admin'
           rewrite: apiProxyPrefix ? (p) => p.replace(/^\/api/, `${apiProxyPrefix}/api`) : undefined,
           secure: false,
+          xfwd: true,
         },
       },
     },

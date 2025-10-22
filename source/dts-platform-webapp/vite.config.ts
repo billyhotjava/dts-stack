@@ -98,6 +98,7 @@ export default defineConfig(({ mode }) => {
 							? (path: string) => path.replace(/^\/api/, `${apiProxyPrefix}/api`)
 							: undefined,
 					secure: false,
+					xfwd: true,
 				},
 				// Proxy Admin API under same-origin path to avoid browser CORS in dev.
             // When VITE_ADMIN_API_BASE_URL = '/admin/api', frontend calls hit Vite and are forwarded here.
@@ -108,6 +109,7 @@ export default defineConfig(({ mode }) => {
                         target: adminTarget,
                         changeOrigin: true,
                         secure: false,
+                        xfwd: true,
                         // Conditional rewrite:
                         // - Keycloak endpoints live under '/api/keycloak/**' on the admin service
                         //   Map '/admin/api/keycloak/**' -> '/api/keycloak/**'

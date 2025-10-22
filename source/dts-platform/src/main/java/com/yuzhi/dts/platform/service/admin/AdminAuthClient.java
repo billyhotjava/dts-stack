@@ -2,7 +2,9 @@ package com.yuzhi.dts.platform.service.admin;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -20,6 +22,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Minimal client for delegating authentication to dts-admin.
@@ -98,6 +102,7 @@ public class AdminAuthClient {
         if (StringUtils.hasText(props.getServiceToken())) {
             headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + props.getServiceToken());
         }
+        propagateForwardedHeaders(headers);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(json, headers);
         try {
             ResponseEntity<ApiEnvelope<Map<String, Object>>> response = restTemplate.exchange(uri, method, entity, MAP_ENVELOPE);
@@ -122,6 +127,101 @@ public class AdminAuthClient {
         return URI.create(normalized + basePath + tail);
     }
 
+    private void propagateForwardedHeaders(HttpHeaders headers) {
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs == null) {
+                return;
+            }
+            HttpServletRequest request = attrs.getRequest();
+            if (request == null) {
+                return;
+            }
+            String forwardedCombined = request.getHeader("Forwarded");
+            String forwarded = request.getHeader("X-Forwarded-For");
+            String realIp = request.getHeader("X-Real-IP");
+            String remote = request.getRemoteAddr();
+            String resolved = IpAddressUtils.resolveClientIp(forwarded, realIp, remote);
+
+            StringBuilder chain = new StringBuilder();
+            if (StringUtils.hasText(forwarded)) {
+                chain.append(forwarded.trim());
+            }
+            if (StringUtils.hasText(resolved)) {
+                String resolvedTrimmed = resolved.trim();
+                if (chain.length() == 0) {
+                    chain.append(resolvedTrimmed);
+                } else if (!forwardedContains(chain.toString(), resolvedTrimmed)) {
+                    chain.insert(0, resolvedTrimmed + ", ");
+                }
+            } else if (chain.length() == 0 && StringUtils.hasText(remote)) {
+                chain.append(remote.trim());
+            }
+
+            if (chain.length() > 0) {
+                headers.set("X-Forwarded-For", chain.toString());
+            }
+            if (StringUtils.hasText(resolved)) {
+                headers.set("X-Real-IP", resolved.trim());
+            } else if (StringUtils.hasText(realIp)) {
+                headers.set("X-Real-IP", realIp.trim());
+            } else if (StringUtils.hasText(remote)) {
+                headers.set("X-Real-IP", remote.trim());
+            }
+            if (StringUtils.hasText(forwardedCombined)) {
+                headers.set("Forwarded", forwardedCombined.trim());
+            } else if (StringUtils.hasText(resolved)) {
+                headers.set("Forwarded", "for=\"" + resolved.trim() + "\"");
+            }
+            String outboundForwarded = headers.getFirst("X-Forwarded-For");
+            String outboundForwardedCombined = headers.getFirst("Forwarded");
+            boolean fallbackToRemote = StringUtils.hasText(resolved)
+                && StringUtils.hasText(remote)
+                && resolved.trim().equals(remote.trim());
+            boolean missingForwarded = !StringUtils.hasText(forwarded);
+            if (log.isInfoEnabled()) {
+                log.info("[admin-auth-client-ip] forwarded='{}' forwardedStd='{}' real='{}' remote='{}' resolved='{}' outbound='{}' outboundStd='{}' fallbackToRemote={} missingForwarded={}",
+                    nullSafe(forwarded),
+                    nullSafe(forwardedCombined),
+                    nullSafe(realIp),
+                    nullSafe(remote),
+                    nullSafe(resolved),
+                    nullSafe(outboundForwarded),
+                    nullSafe(outboundForwardedCombined),
+                    fallbackToRemote,
+                    missingForwarded
+                );
+            } else if (log.isDebugEnabled()) {
+                log.debug("[admin-auth-client-ip] forwarded='{}' forwardedStd='{}' real='{}' remote='{}' resolved='{}' outbound='{}' outboundStd='{}' fallbackToRemote={} missingForwarded={}",
+                    nullSafe(forwarded),
+                    nullSafe(forwardedCombined),
+                    nullSafe(realIp),
+                    nullSafe(remote),
+                    nullSafe(resolved),
+                    nullSafe(outboundForwarded),
+                    nullSafe(outboundForwardedCombined),
+                    fallbackToRemote,
+                    missingForwarded
+                );
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to propagate client IP headers: {}", ex.getMessage());
+        }
+    }
+
+    private boolean forwardedContains(String chain, String candidate) {
+        if (!StringUtils.hasText(chain) || !StringUtils.hasText(candidate)) {
+            return false;
+        }
+        String[] parts = chain.split(",");
+        for (String part : parts) {
+            if (candidate.equals(part.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private String asText(Object v) {
         return v == null ? null : v.toString();
     }
@@ -143,6 +243,10 @@ public class AdminAuthClient {
     private String trim(String s, int max) {
         if (s == null) return "";
         return s.length() <= max ? s : s.substring(0, max) + "...";
+    }
+
+    private String nullSafe(String value) {
+        return value == null ? "" : value;
     }
 
     private String messageFromBody(String body, String fallback) {

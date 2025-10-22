@@ -1,11 +1,13 @@
 # Allow overriding Node base from internal mirror
-ARG BASE_IMAGE_NODE=node:20-alpine
+# Alpine tags for Node.js stopped publishing the floating `20-alpine` tag; pin to a known patch.
+ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
 FROM ${BASE_IMAGE_NODE} AS build
 
 WORKDIR /app
 
-# Install pnpm to align with the project toolchain
-RUN corepack enable && corepack prepare pnpm@10.8.0 --activate
+# Install pnpm matching the repo's packageManager. Corepack bundled with Node 20.17 lacks the latest signing key,
+# so install via npm to avoid signature verification failures.
+RUN npm install -g pnpm@10.8.0 && pnpm --version
 
 # Disable opening visualizer report during Docker build
 ENV VISUALIZER_OPEN=false
@@ -20,7 +22,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm build
 
-ARG BASE_IMAGE_NODE=node:20-alpine
+ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
 FROM ${BASE_IMAGE_NODE} AS runtime
 
 RUN apk add --no-cache nginx gettext && \

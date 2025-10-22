@@ -30,7 +30,7 @@ services:
       DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED: "${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:-true}"
       # Ensure root org creation has a default data level in dev
       DTS_ORG_UNASSIGNED_DATA_LEVEL: "${DTS_ORG_UNASSIGNED_DATA_LEVEL:-INTERNAL}"
-      JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011,http://localhost:18012,http://127.0.0.1:18012,https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API},https://${HOST_SSO},https://192.168.8.129,http://192.168.8.129:18011,http://192.168.8.129:18012"
+      JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011,http://localhost:18012,http://127.0.0.1:18012,https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API},https://${HOST_SSO},https://192.168.8.150,http://192.168.8.150:18011,http://192.168.8.150:18012"
       JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
       JHIPSTER_CORS_ALLOWED_HEADERS: "*"
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
@@ -128,7 +128,7 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${OIDC_ISSUER_URI}
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_PLATFORM_CLIENT_SECRET:-}"
-      JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18012,http://127.0.0.1:18012,https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API},https://${HOST_SSO},https://192.168.8.129,http://192.168.8.129:18011,http://192.168.8.129:18012"
+      JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011,http://localhost:18012,http://127.0.0.1:18012,https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API},https://${HOST_SSO},https://192.168.8.150,http://192.168.8.150:18011,http://192.168.8.150:18012"
       JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
       JHIPSTER_CORS_ALLOWED_HEADERS: "*"
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"

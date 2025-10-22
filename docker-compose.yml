@@ -24,6 +24,7 @@ services:
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--entrypoints.websecure.address=:443"
       - "--entrypoints.websecure.forwardedHeaders.insecure=true"
+      - "--entrypoints.websecure.forwardedHeaders.trustedIPs=0.0.0.0/0"
       - "--ping=${TRAEFIK_ENABLE_PING}"
       - "--entrypoints.metrics.address=:${TRAEFIK_METRICS_PORT}"
       - "--accesslog=true"
@@ -104,8 +105,8 @@ services:
       - start
       - --hostname=${HOST_SSO}
       - --proxy-headers=xforwarded
-      - --http-enabled=${KC_HTTP_ENABLED}
     environment:
+      KC_PROXY: edge
       KEYCLOAK_ADMIN: ${KC_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PWD}
       KC_DB: postgres
@@ -116,6 +117,7 @@ services:
       KC_HOSTNAME: ${KC_HOSTNAME}
       KC_HOSTNAME_PORT: ${KC_HOSTNAME_PORT}
       KC_HOSTNAME_URL: ${KC_HOSTNAME_URL}
+      KC_HOSTNAME_ADMIN_URL: ${KC_HOSTNAME_ADMIN_URL}
       KC_HOSTNAME_STRICT: ${KC_HOSTNAME_STRICT}
       KC_HOSTNAME_STRICT_HTTPS: ${KC_HOSTNAME_STRICT_HTTPS}
       KC_HTTP_ENABLED: ${KC_HTTP_ENABLED}

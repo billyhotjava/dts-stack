@@ -14,8 +14,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -237,8 +239,14 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         // Derive a semantic action code instead of raw "METHOD URI"
         event.action = deriveActionCode(resourceType, request.getMethod());
         event.resourceId = uri;
-        String[] ipCandidates = resolveClientIpCandidates(request);
-        event.clientIp = IpAddressUtils.resolveClientIp(ipCandidates);
+        String forwardedCombined = request.getHeader("Forwarded");
+        String forwardedHeader = request.getHeader("X-Forwarded-For");
+        String realIpHeader = request.getHeader("X-Real-IP");
+        String remoteAddress = request.getRemoteAddr();
+        String[] ipCandidates = resolveClientIpCandidates(forwardedCombined, forwardedHeader, realIpHeader, remoteAddress);
+        String resolvedClientIp = IpAddressUtils.resolveClientIp(ipCandidates);
+        event.clientIp = resolvedClientIp;
+        logClientIpTrace("platform", forwardedHeader, forwardedCombined, realIpHeader, remoteAddress, resolvedClientIp, ipCandidates);
         event.clientAgent = request.getHeader("User-Agent");
         event.requestUri = request.getRequestURI();
         event.httpMethod = request.getMethod();
@@ -264,9 +272,9 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         return sanitized.split("/");
     }
 
-    private String[] resolveClientIpCandidates(HttpServletRequest request) {
+    private String[] resolveClientIpCandidates(String forwardedCombined, String forwarded, String realIp, String remote) {
         List<String> candidates = new ArrayList<>();
-        String forwarded = request.getHeader("X-Forwarded-For");
+        appendForwardedHeaderCandidates(forwardedCombined, candidates);
         if (StringUtils.hasText(forwarded)) {
             String[] parts = forwarded.split(",");
             for (String part : parts) {
@@ -276,15 +284,96 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                 }
             }
         }
-        String realIp = request.getHeader("X-Real-IP");
         if (StringUtils.hasText(realIp)) {
             candidates.add(realIp.trim());
         }
-        String remote = request.getRemoteAddr();
         if (StringUtils.hasText(remote)) {
             candidates.add(remote.trim());
         }
         return candidates.toArray(new String[0]);
+    }
+
+    private void logClientIpTrace(String marker, String forwarded, String forwardedCombined, String realIp, String remote, String resolved, String[] candidates) {
+        boolean fallbackToRemote = StringUtils.hasText(resolved)
+            && StringUtils.hasText(remote)
+            && resolved.trim().equals(remote.trim());
+        boolean missingForwarded = !StringUtils.hasText(forwarded);
+        if (log.isInfoEnabled()) {
+            log.info("[{}-client-ip] resolved={} forwarded='{}' forwardedStd='{}' real='{}' remote='{}' candidates={} fallbackToRemote={} missingForwarded={}",
+                marker,
+                nullSafe(resolved),
+                nullSafe(forwarded),
+                nullSafe(forwardedCombined),
+                nullSafe(realIp),
+                nullSafe(remote),
+                Arrays.toString(candidates),
+                fallbackToRemote,
+                missingForwarded
+            );
+        } else if (log.isDebugEnabled()) {
+            log.debug("[{}-client-ip] resolved={} forwarded='{}' forwardedStd='{}' real='{}' remote='{}' candidates={} fallbackToRemote={} missingForwarded={}",
+                marker,
+                nullSafe(resolved),
+                nullSafe(forwarded),
+                nullSafe(forwardedCombined),
+                nullSafe(realIp),
+                nullSafe(remote),
+                Arrays.toString(candidates),
+                fallbackToRemote,
+                missingForwarded
+            );
+        }
+    }
+
+    private void appendForwardedHeaderCandidates(String header, List<String> candidates) {
+        if (!StringUtils.hasText(header)) {
+            return;
+        }
+        String[] segments = header.split(",");
+        for (String segment : segments) {
+            if (!StringUtils.hasText(segment)) {
+                continue;
+            }
+            String[] parts = segment.split(";");
+            for (String part : parts) {
+                String trimmed = part == null ? "" : part.trim();
+                if (trimmed.isEmpty()) {
+                    continue;
+                }
+                int idx = trimmed.toLowerCase(Locale.ROOT).indexOf("for=");
+                if (idx != 0) {
+                    continue;
+                }
+                String value = trimmed.substring(4).trim();
+                if (value.isEmpty()) {
+                    continue;
+                }
+                if (value.startsWith("\"") && value.endsWith("\"") && value.length() > 1) {
+                    value = value.substring(1, value.length() - 1);
+                }
+                if (value.startsWith("[")) {
+                    int closeIdx = value.indexOf(']');
+                    if (closeIdx > 0) {
+                        String ipv6 = value.substring(1, closeIdx);
+                        if (!ipv6.isBlank()) {
+                            candidates.add(ipv6);
+                            continue;
+                        }
+                    }
+                }
+                int colon = value.indexOf(':');
+                if (colon > 0 && value.indexOf(':', colon + 1) == -1) {
+                    value = value.substring(0, colon);
+                }
+                if (!value.isBlank() && !"unknown".equalsIgnoreCase(value)) {
+                    candidates.add(value);
+                }
+            }
+        }
+    }
+
+    private String nullSafe(String value) {
+        return value == null ? "" : value;
     }
 
     // Prefer the first meaningful segment as module; skip common prefixes like "api", "v1", "v2"

@@ -14,53 +14,29 @@ public final class IpAddressUtils {
     private IpAddressUtils() {}
 
     public static String resolveClientIp(String... candidates) {
-        if (candidates == null) {
+        if (candidates == null || candidates.length == 0) {
             return null;
         }
-        List<String> tokens = new ArrayList<>();
+        // The `resolveClientIpCandidates` method in the filter already puts the IPs
+        // in the correct order of preference (X-Forwarded-For, X-Real-IP, remoteAddr).
+        // We simply take the first valid, non-local one.
         for (String candidate : candidates) {
             if (candidate == null) {
                 continue;
             }
-            for (String part : candidate.split(",")) {
-                String sanitized = sanitize(part);
-                if (sanitized != null) {
-                    tokens.add(sanitized);
-                }
-            }
-        }
-        if (tokens.isEmpty()) {
-            return null;
-        }
-
-        String privateFallback = null;
-        int privateIndex = -1;
-
-        for (int i = 0; i < tokens.size(); i++) {
-            String token = tokens.get(i);
-            InetAddress address = parseInetAddress(token);
-            if (address == null) {
+            String trimmed = candidate.trim();
+            if (trimmed.isEmpty() || "unknown".equalsIgnoreCase(trimmed)) {
                 continue;
             }
-            if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()) {
-                continue;
-            }
-            if (isPublicAddress(address, token)) {
-                return normalize(address, token);
-            }
-            if (privateFallback == null && isPrivateAddress(address, token)) {
-                privateFallback = normalize(address, token);
-                privateIndex = i;
-            }
-        }
 
-        if (privateFallback != null) {
-            boolean trailingCandidate = privateIndex == tokens.size() - 1;
-            if (!trailingCandidate) {
-                return privateFallback;
+            // Additional check to avoid loopback/link-local if they are first in the chain
+            InetAddress address = parseInetAddress(trimmed);
+            if (address != null && !address.isLoopbackAddress() && !address.isLinkLocalAddress() && !address.isAnyLocalAddress()) {
+                 return trimmed;
             }
         }
-        return null;
+        // Fallback to the last candidate if no better one was found
+        return candidates[candidates.length - 1];
     }
 
     private static String sanitize(String raw) {
