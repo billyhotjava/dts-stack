@@ -17,6 +17,7 @@
     <include file="config/liquibase/changelog/20251005-01_portal_menu_seed.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251020-01_portal_menu_security_level.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251021-01_audit_resource_dictionary.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251220-01_audit_operation_mapping.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251021-02_audit_operation_mapping_enhance.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251108-01_portal_menu_deleted_fix.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251112-01_portal_menu_deleted_repair.xml" relativeToChangelogFile="false"/>
@@ -31,7 +32,6 @@
     <include file="config/liquibase/changelog/20251002-02_admin_custom_role_cleanup.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251210-01_portal_menu_visibility_role_user_cleanup.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251201-01_org_keycloak_mapping.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20251220-01_audit_operation_mapping.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251220-02_audit_operation_mapping_seed.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-01_audit_operation_mapping_governance.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-02_refactor_hardcoded_audit_rules.xml" relativeToChangelogFile="false"/>

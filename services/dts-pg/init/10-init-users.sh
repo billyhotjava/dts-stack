@@ -68,6 +68,19 @@ else
   log "pg not ready; skip online password_encryption setup (handled later)"
 fi
 
+# superuser password sync (covers existing data dir reuse)
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+  if [[ $PG_READY -eq 1 ]]; then
+    log "ensure password for superuser ${POSTGRES_USER}"
+    "${psqlb[@]}" -c "ALTER ROLE ${POSTGRES_USER} WITH LOGIN PASSWORD '${POSTGRES_PASSWORD}';" >/dev/null
+  else
+    log "pg not ready; queue superuser password sync for bootstrap"
+    postgres --single -jE <<SQL
+ALTER ROLE ${POSTGRES_USER} WITH LOGIN PASSWORD '${POSTGRES_PASSWORD}';
+SQL
+  fi
+fi
+
 # 工具函数：若无则建角色（可在事务中执行）
 ensure_role() {
   local user="$1" pass="$2"

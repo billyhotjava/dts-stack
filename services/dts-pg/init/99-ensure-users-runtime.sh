@@ -12,6 +12,11 @@ psqlb=(psql -v ON_ERROR_STOP=1 -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POST
 pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1
 "${psqlb[@]}" -c "SELECT 1;" >/dev/null
 
+# superuser password sync (runtime)
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+  "${psqlb[@]}" -c "ALTER ROLE ${POSTGRES_USER} WITH LOGIN PASSWORD '${POSTGRES_PASSWORD}';" >/dev/null
+fi
+
 ensure_role() {
   local user="$1" pass="$2"
   "${psqlb[@]}" <<SQL
