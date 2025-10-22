@@ -1840,4 +1840,24 @@ public class AdminAuditService {
             }
         }
     }
+
+    private static String coerceToString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString();
+        return text == null ? null : text.trim();
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
 }

@@ -36,7 +36,7 @@ public class OperationMappingEngine {
         public String moduleName;         // e.g., 用户管理/角色管理/数据资产管理
         public String actionType;         // 查询/新增/修改/删除/登录/登出/部分更新/执行
         public String description;        // 操作内容
-        public String sourceTable;        // 源表（中文）
+        public String sourceTable;        // 源表（数据库表名）
         public String eventClass;         // SecurityEvent/AuditEvent
         public boolean ruleMatched;       // true if derived from mapping rule, false if fallback
     }
@@ -502,6 +502,7 @@ public class OperationMappingEngine {
         }
 
         String label = resolveResourceLabel(ctx);
+        String tableName = resolveSourceTableName(ctx);
         String target = resolveTargetIndicator(ctx);
         String content = determineFallbackContent(ctx, type, label, target);
         if (!StringUtils.hasText(type) && !StringUtils.hasText(content)) {
@@ -515,7 +516,7 @@ public class OperationMappingEngine {
         resolved.moduleName = StringUtils.hasText(moduleCategory) ? moduleCategory : (StringUtils.hasText(ctx.module) ? ctx.module : null);
         resolved.actionType = StringUtils.hasText(type) ? type : null;
         resolved.description = StringUtils.hasText(content) ? content : null;
-        resolved.sourceTable = StringUtils.hasText(label) ? label : null;
+        resolved.sourceTable = StringUtils.hasText(tableName) ? tableName : (StringUtils.hasText(ctx.targetTable) ? ctx.targetTable : null);
         resolved.eventClass = StringUtils.hasText(event.getEventClass()) ? event.getEventClass() : null;
         return resolved;
     }
@@ -628,6 +629,19 @@ public class OperationMappingEngine {
             }
         }
         return "资源";
+    }
+
+    private String resolveSourceTableName(FallbackContext ctx) {
+        if (StringUtils.hasText(ctx.targetTable)) {
+            return ctx.targetTable;
+        }
+        if (StringUtils.hasText(ctx.resourceTypeLower)) {
+            return normalizeTableKey(ctx.resourceTypeLower);
+        }
+        if (StringUtils.hasText(ctx.module)) {
+            return normalizeTableKey(ctx.module);
+        }
+        return null;
     }
 
     private String resolveTargetIndicator(FallbackContext ctx) {
@@ -783,6 +797,16 @@ public class OperationMappingEngine {
         }
         String trimmed = key.trim();
         return resourceDictionary.resolveLabel(trimmed).orElse(trimmed);
+    }
+
+    private String normalizeTableKey(String key) {
+        if (!StringUtils.hasText(key)) {
+            return null;
+        }
+        String s = key.trim().toLowerCase(Locale.ROOT);
+        s = s.replaceAll("[^a-z0-9]+", "_");
+        s = s.replaceAll("^_+", "").replaceAll("_+$", "");
+        return s.isBlank() ? null : s;
     }
 
     private String resolveModuleCategory(FallbackContext ctx) {

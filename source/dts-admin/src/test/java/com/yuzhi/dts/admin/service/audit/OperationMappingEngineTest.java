@@ -77,7 +77,7 @@ class OperationMappingEngineTest {
 
     @Test
     void resolveWithFallbackReturnsRuleMatchWhenMappingExists() {
-        AuditOperationMapping mapping = createMapping("/api/users/{id}", "GET", "用户管理", "查询", "查看用户{person}", "用户");
+        AuditOperationMapping mapping = createMapping("/api/users/{id}", "GET", "用户管理", "查询", "查看用户{person}", "admin_keycloak_user");
         mapping.setParamExtractors("{\"person\":\"path.id\"}");
         repository = createRepository(List.of(mapping));
         engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
@@ -97,7 +97,7 @@ class OperationMappingEngineTest {
         assertThat(op.ruleId).isEqualTo(mapping.getId());
         assertThat(op.actionType).isEqualTo("查询");
         assertThat(op.description).isEqualTo("查看用户alice");
-        assertThat(op.sourceTable).isEqualTo("用户");
+        assertThat(op.sourceTable).isEqualTo("admin_keycloak_user");
     }
 
     @Test
@@ -121,7 +121,7 @@ class OperationMappingEngineTest {
         assertThat(op.actionType).isEqualTo("删除");
         assertThat(op.description).contains("数据资产");
         assertThat(op.description).contains("【123】");
-        assertThat(op.sourceTable).isEqualTo("数据资产");
+        assertThat(op.sourceTable).isEqualTo("catalog_asset");
     }
 
     @Test
@@ -143,7 +143,7 @@ class OperationMappingEngineTest {
         OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
         assertThat(op.ruleMatched).isFalse();
         assertThat(op.moduleName).isEqualTo("审批管理");
-        assertThat(op.sourceTable).isEqualTo("审批请求");
+        assertThat(op.sourceTable).isEqualTo("admin_approval");
     }
 
     @Test
@@ -164,7 +164,7 @@ class OperationMappingEngineTest {
         OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
         assertThat(op.ruleMatched).isFalse();
         assertThat(op.moduleName).isEqualTo("部门管理");
-        assertThat(op.sourceTable).isEqualTo("部门");
+        assertThat(op.sourceTable).isEqualTo("orgs");
     }
 
     @Test
@@ -178,14 +178,14 @@ class OperationMappingEngineTest {
         event.setHttpMethod("POST");
         event.setSummary("执行了操作：/api/catalog/datasets/cecae4d8-3e93-4186-9b65-6d6c22096135");
         event.setResourceType("catalog_dataset");
-        event.setDetails("{\"源表\":\"数据资产\",\"目标ID\":\"cecae4d8-3e93-4186-9b65-6d6c22096135\"}");
+        event.setDetails("{\"源表\":\"catalog_dataset\",\"目标ID\":\"cecae4d8-3e93-4186-9b65-6d6c22096135\"}");
 
         Optional<OperationMappingEngine.ResolvedOperation> resolved = engine.resolveWithFallback(event);
         assertThat(resolved).isPresent();
         OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
         assertThat(op.ruleMatched).isFalse();
         assertThat(op.moduleName).isEqualTo("数据资产");
-        assertThat(op.sourceTable).isEqualTo("数据资产");
+        assertThat(op.sourceTable).isEqualTo("catalog_dataset");
     }
 
     @Test
@@ -206,12 +206,12 @@ class OperationMappingEngineTest {
         OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
         assertThat(op.ruleMatched).isFalse();
         assertThat(op.moduleName).isEqualTo("用户管理");
-        assertThat(op.sourceTable).isEqualTo("用户");
+        assertThat(op.sourceTable).isEqualTo("users");
     }
 
     @Test
     void describeRulesExposesLoadedRuleMetadata() {
-        AuditOperationMapping mapping = createMapping("/api/approvals", "POST", "审批中心", "执行", "执行审批{event.actor}", "审批请求");
+        AuditOperationMapping mapping = createMapping("/api/approvals", "POST", "审批中心", "执行", "执行审批{event.actor}", "admin_approval");
         repository = createRepository(List.of(mapping));
         engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
         engine.reload();
@@ -223,7 +223,7 @@ class OperationMappingEngineTest {
         assertThat(summary.getModuleName()).isEqualTo("审批中心");
         assertThat(summary.getActionType()).isEqualTo("执行");
         assertThat(summary.getDescriptionTemplate()).contains("审批");
-        assertThat(summary.getSourceTableTemplate()).isEqualTo("审批请求");
+        assertThat(summary.getSourceTableTemplate()).isEqualTo("admin_approval");
     }
 
     @Test
@@ -234,7 +234,7 @@ class OperationMappingEngineTest {
             "审批管理",
             "查询",
             "查询审批请求：{rid|未知}",
-            "审批请求"
+            "admin_approval"
         );
         specific.setParamExtractors("{\"rid\":\"path.id\"}");
         specific.setOrderValue(12);
@@ -245,7 +245,7 @@ class OperationMappingEngineTest {
             "未知模块",
             "执行",
             "执行了操作：{event.requestUri|未知}",
-            "未知"
+            "general"
         );
         catchAll.setOrderValue(10000);
 
@@ -276,7 +276,7 @@ class OperationMappingEngineTest {
             "数据资产",
             "查询",
             "预览数据资产：{datasetName|未知}（ID：{datasetId|未知}）",
-            "数据资产"
+            "catalog_dataset"
         );
         datasetRule.setParamExtractors("{\"datasetId\":\"path.id\",\"datasetName\":\"details.datasetName\"}");
         datasetRule.setOrderValue(30);
@@ -287,7 +287,7 @@ class OperationMappingEngineTest {
             "未知模块",
             "执行",
             "执行了操作：{event.requestUri|未知}",
-            "未知"
+            "general"
         );
         catchAll.setOrderValue(10000);
 
@@ -299,7 +299,7 @@ class OperationMappingEngineTest {
         event.setRequestUri("/api/datasets/db486a4a-fb64-4218-907b-b582a764e66e/preview");
         event.setHttpMethod("GET");
         event.setSourceSystem("platform");
-        event.setDetails("{\"datasetName\":\"客户订单\",\"源表\":\"数据资产\"}");
+        event.setDetails("{\"datasetName\":\"客户订单\",\"源表\":\"catalog_dataset\",\"源表描述\":\"数据资产\"}");
 
         Optional<OperationMappingEngine.ResolvedOperation> resolved = engine.resolveWithFallback(event);
         assertThat(resolved).isPresent();
@@ -319,7 +319,7 @@ class OperationMappingEngineTest {
             "审批管理",
             "修改",
             "处理审批：{rid|未知}",
-            "审批请求"
+            "admin_approval"
         );
         specific.setParamExtractors("{\"rid\":\"path.id\"}");
         specific.setOrderValue(10);
@@ -330,7 +330,7 @@ class OperationMappingEngineTest {
             "未知模块",
             "执行",
             "执行了操作：{event.requestUri|未知}",
-            "未知"
+            "general"
         );
         catchAll.setOrderValue(10000);
 
