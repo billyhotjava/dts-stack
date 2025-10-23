@@ -173,9 +173,12 @@ public class PortalSessionRegistry {
         // Remove previous session for same user to enforce single-login semantics
         PortalSession previous = userIndex.put(session.username(), session);
         if (previous != null) {
-            accessTokenIndex.remove(previous.accessToken());
-            refreshTokenIndex.remove(previous.refreshToken());
-            activityService.invalidate(previous.accessToken(), PortalSessionActivityService.ValidationResult.CONCURRENT);
+            boolean tokenChanged = !previous.accessToken().equals(session.accessToken());
+            if (tokenChanged) {
+                accessTokenIndex.remove(previous.accessToken());
+                refreshTokenIndex.remove(previous.refreshToken());
+                activityService.invalidate(previous.accessToken(), PortalSessionActivityService.ValidationResult.CONCURRENT);
+            }
         }
         accessTokenIndex.put(session.accessToken(), session);
         refreshTokenIndex.put(session.refreshToken(), session);

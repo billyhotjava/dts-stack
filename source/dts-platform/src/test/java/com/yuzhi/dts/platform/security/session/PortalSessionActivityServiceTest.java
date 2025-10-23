@@ -35,4 +35,20 @@ class PortalSessionActivityServiceTest {
 
         assertThat(result).isEqualTo(ValidationResult.EXPIRED);
     }
+
+    @Test
+    void newRegistrationClearsPreviousRevocationForSameToken() {
+        PortalSessionActivityService service = new PortalSessionActivityService(15);
+        Instant base = Instant.now();
+
+        service.register("auditadmin", "sess-1", "token-1", base);
+        service.invalidate("token-1", ValidationResult.CONCURRENT);
+
+        // Re-register same token (e.g., extend flow)
+        service.register("auditadmin", "sess-2", "token-1", base.plusSeconds(1));
+
+        ValidationResult status = service.touch("token-1", base.plusSeconds(2));
+
+        assertThat(status).isEqualTo(ValidationResult.ACTIVE);
+    }
 }

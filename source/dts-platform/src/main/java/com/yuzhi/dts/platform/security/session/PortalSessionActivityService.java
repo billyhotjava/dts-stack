@@ -37,6 +37,7 @@ public class PortalSessionActivityService {
         }
         Instant effectiveNow = now == null ? Instant.now() : now;
         SessionRecord record = new SessionRecord(normalize(username), sessionId, tokenKey, effectiveNow);
+        revokedTokens.remove(tokenKey);
         sessionsByToken.put(tokenKey, record);
         if (record.username != null) {
             String previous = tokenByUser.put(record.username, tokenKey);
