@@ -2202,7 +2202,7 @@ public class AdminApiResource {
         if (StringUtils.hasText(cr.getStatus())) detail.put("status", cr.getStatus());
         if (StringUtils.hasText(cr.getRequestedBy())) detail.put("requestedBy", cr.getRequestedBy());
         if (StringUtils.hasText(cr.getDecidedBy())) detail.put("decidedBy", cr.getDecidedBy());
-        if (cr.getSubmittedAt() != null) detail.put("submittedAt", cr.getSubmittedAt().toString());
+        if (cr.getRequestedAt() != null) detail.put("submittedAt", cr.getRequestedAt().toString());
         if (cr.getDecidedAt() != null) detail.put("decidedAt", cr.getDecidedAt().toString());
         if (StringUtils.hasText(cr.getReason())) detail.put("reason", cr.getReason());
         if (StringUtils.hasText(cr.getLastError())) detail.put("error", cr.getLastError());

@@ -1,5 +1,16 @@
 # 工作日志 / TODO
 
+日期: 2025-10-23
+
+已完成
+- [done] 平台端单会话误报修复：刷新/续期不再触发并发登录提示（`PortalSessionRegistry` 更新吊销原因，补充单元测试）。
+
+待办（按优先级）
+- [todo] 统一 `PortalSessionRegistry` / `PortalSessionActivityService` 的用户名大小写处理，杜绝大小写绕过单会话。
+- [todo] 优化 `hasActiveSession` 与相关日志，排除过期会话并减少误判 takeover。
+- [todo] 梳理集中式会话迁移方案（PostgreSQL 会话表 + Liquibase 迁移 + DAO/Service 改造）并估算工期。
+- [todo] 定义会话相关审计/调试日志扩展，便于定位并发冲突与超时原因。
+
 日期: 2025-10-12
 
 已完成
