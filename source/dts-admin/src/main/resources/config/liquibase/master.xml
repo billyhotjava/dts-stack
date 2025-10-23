@@ -60,6 +60,7 @@
     <include file="config/liquibase/changelog/20251018-06_audit_operation_mapping_backfill.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251018-07_add_dataset_grant_audit_rule.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260112-01_audit_dataset_preview_template.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260115-01_audit_resource_dictionary_user_api_alias.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

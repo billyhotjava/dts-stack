@@ -51,4 +51,19 @@ class PortalSessionActivityServiceTest {
 
         assertThat(status).isEqualTo(ValidationResult.ACTIVE);
     }
+
+    @Test
+    void touchReturnsConcurrentOnlyWhenAnotherTokenActive() {
+        PortalSessionActivityService service = new PortalSessionActivityService(15);
+        Instant base = Instant.now();
+
+        service.register("authadmin", "sess-1", "token-1", base);
+        service.register("authadmin", "sess-2", "token-2", base.plusSeconds(1));
+
+        ValidationResult oldToken = service.touch("token-1", base.plusSeconds(2));
+        ValidationResult newToken = service.touch("token-2", base.plusSeconds(3));
+
+        assertThat(oldToken).isEqualTo(ValidationResult.CONCURRENT);
+        assertThat(newToken).isEqualTo(ValidationResult.ACTIVE);
+    }
 }

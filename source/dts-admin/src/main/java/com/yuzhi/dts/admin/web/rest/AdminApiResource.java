@@ -1211,13 +1211,17 @@ public class AdminApiResource {
         cr.setDecidedAt(Instant.now());
         cr.setReason(body != null ? Objects.toString(body.get("reason"), null) : null);
         applyChangeRequest(cr, actor);
+        AuditStage requesterStage = "FAILED".equalsIgnoreCase(cr.getStatus()) ? AuditStage.FAIL : AuditStage.SUCCESS;
+        recordChangeExecutionAudit(cr, requesterStage);
         crRepo.save(cr);
+        Map<String, Object> approverDetail = buildChangeAuditDetail(cr);
+        approverDetail.put("action", "APPROVE");
         auditService.recordAction(
             SecurityUtils.getCurrentUserLogin().orElse("unknown"),
             "ADMIN_CHANGE_REQUEST_MANAGE",
-            AuditStage.SUCCESS,
+            requesterStage,
             id,
-            Map.of("action", "APPROVE")
+            approverDetail
         );
         try { notifyClient.trySend("approval_approved", Map.of("id", id, "type", cr.getResourceType(), "status", cr.getStatus())); } catch (Exception ignored) {}
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
@@ -1233,13 +1237,16 @@ public class AdminApiResource {
         cr.setDecidedAt(Instant.now());
         cr.setReason(body != null ? Objects.toString(body.get("reason"), null) : null);
         cr.setLastError(null);
+        recordChangeExecutionAudit(cr, AuditStage.FAIL);
         crRepo.save(cr);
+        Map<String, Object> approverDetail = buildChangeAuditDetail(cr);
+        approverDetail.put("action", "REJECT");
         auditService.recordAction(
             SecurityUtils.getCurrentUserLogin().orElse("unknown"),
             "ADMIN_CHANGE_REQUEST_MANAGE",
             AuditStage.SUCCESS,
             id,
-            Map.of("action", "REJECT")
+            approverDetail
         );
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
@@ -2163,6 +2170,68 @@ public class AdminApiResource {
             cr.setStatus("FAILED");
             cr.setLastError(e.getMessage());
         }
+    }
+
+    void recordChangeExecutionAudit(ChangeRequest cr, AuditStage stage) {
+        if (cr == null || stage == null) {
+            return;
+        }
+        String actor = Optional.ofNullable(cr.getRequestedBy()).map(String::trim).filter(s -> !s.isEmpty()).orElse(null);
+        if (!StringUtils.hasText(actor)) {
+            return;
+        }
+        String actionCode = buildChangeActionCode(cr);
+        if (!StringUtils.hasText(actionCode)) {
+            return;
+        }
+        Map<String, Object> detail = buildChangeAuditDetail(cr);
+        detail.put("stage", stage.name());
+        String resourceId = StringUtils.hasText(cr.getResourceId()) ? cr.getResourceId() : String.valueOf(cr.getId());
+        auditService.recordAction(actor, actionCode, stage, resourceId, detail);
+    }
+
+    Map<String, Object> buildChangeAuditDetail(ChangeRequest cr) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        if (cr == null) {
+            return detail;
+        }
+        detail.put("changeRequestId", cr.getId());
+        if (StringUtils.hasText(cr.getResourceType())) detail.put("resourceType", cr.getResourceType());
+        if (StringUtils.hasText(cr.getAction())) detail.put("action", cr.getAction());
+        if (StringUtils.hasText(cr.getCategory())) detail.put("category", cr.getCategory());
+        if (StringUtils.hasText(cr.getStatus())) detail.put("status", cr.getStatus());
+        if (StringUtils.hasText(cr.getRequestedBy())) detail.put("requestedBy", cr.getRequestedBy());
+        if (StringUtils.hasText(cr.getDecidedBy())) detail.put("decidedBy", cr.getDecidedBy());
+        if (cr.getSubmittedAt() != null) detail.put("submittedAt", cr.getSubmittedAt().toString());
+        if (cr.getDecidedAt() != null) detail.put("decidedAt", cr.getDecidedAt().toString());
+        if (StringUtils.hasText(cr.getReason())) detail.put("reason", cr.getReason());
+        if (StringUtils.hasText(cr.getLastError())) detail.put("error", cr.getLastError());
+        if (StringUtils.hasText(cr.getResourceId())) detail.put("resourceId", cr.getResourceId());
+        return detail;
+    }
+
+    static String buildChangeActionCode(ChangeRequest cr) {
+        if (cr == null) {
+            return null;
+        }
+        String resourceType = normalizeActionToken(cr.getResourceType());
+        String action = normalizeActionToken(cr.getAction());
+        if (!StringUtils.hasText(resourceType)) {
+            resourceType = "GENERAL";
+        }
+        if (!StringUtils.hasText(action)) {
+            action = "UPDATE";
+        }
+        return "ADMIN_" + resourceType + "_" + action;
+    }
+
+    private static String normalizeActionToken(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String upper = raw.trim().toUpperCase(Locale.ROOT);
+        String normalized = upper.replaceAll("[^A-Z0-9]+", "_");
+        return normalized.replaceAll("_+", "_").replaceAll("^_+", "").replaceAll("_+$", "");
     }
 
     private void applyPortalMenuChange(ChangeRequest cr) throws Exception {

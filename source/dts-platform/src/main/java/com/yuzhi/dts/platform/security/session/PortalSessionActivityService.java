@@ -42,8 +42,14 @@ public class PortalSessionActivityService {
         if (record.username != null) {
             String previous = tokenByUser.put(record.username, tokenKey);
             if (previous != null && !previous.equals(tokenKey)) {
-                sessionsByToken.remove(previous);
-                markRevoked(previous, ValidationResult.CONCURRENT, effectiveNow);
+                SessionRecord prev = sessionsByToken.remove(previous);
+                markRevoked(
+                    previous,
+                    ValidationResult.CONCURRENT,
+                    effectiveNow,
+                    prev != null ? prev.sessionId : null,
+                    record.username
+                );
             }
         }
         cleanup(effectiveNow);
@@ -87,19 +93,28 @@ public class PortalSessionActivityService {
         }
         ValidationResult effectiveReason = reason == null ? ValidationResult.EXPIRED : reason;
         SessionRecord record = sessionsByToken.remove(tokenKey);
+        String owner = null;
         if (record != null) {
             if (record.username != null) {
+                owner = record.username;
                 tokenByUser.computeIfPresent(record.username, (key, value) -> value.equals(tokenKey) ? null : value);
             }
         } else {
             // In case record already removed, still clear token-by-user mapping if any.
             for (Map.Entry<String, String> entry : tokenByUser.entrySet()) {
                 if (tokenKey.equals(entry.getValue())) {
+                    owner = entry.getKey();
                     tokenByUser.remove(entry.getKey(), tokenKey);
                 }
             }
         }
-        markRevoked(tokenKey, effectiveReason, when == null ? Instant.now() : when);
+        markRevoked(
+            tokenKey,
+            effectiveReason,
+            when == null ? Instant.now() : when,
+            record != null ? record.sessionId : null,
+            owner
+        );
         cleanup(when == null ? Instant.now() : when);
     }
 
@@ -131,10 +146,14 @@ public class PortalSessionActivityService {
     private static final class RevokedToken {
         final ValidationResult reason;
         final Instant revokedAt;
+        final String sessionId;
+        final String username;
 
-        RevokedToken(ValidationResult reason, Instant revokedAt) {
+        RevokedToken(ValidationResult reason, Instant revokedAt, String sessionId, String username) {
             this.reason = reason;
             this.revokedAt = revokedAt == null ? Instant.now() : revokedAt;
+            this.sessionId = sessionId;
+            this.username = username;
         }
 
         Instant revokedAt() {
@@ -149,17 +168,43 @@ public class PortalSessionActivityService {
         }
     }
 
-    private void markRevoked(String tokenKey, ValidationResult reason, Instant when) {
+    private void markRevoked(String tokenKey, ValidationResult reason, Instant when, String sessionId, String username) {
         if (tokenKey == null || tokenKey.isBlank()) {
             return;
         }
-        revokedTokens.put(tokenKey, new RevokedToken(reason == null ? ValidationResult.EXPIRED : reason, when == null ? Instant.now() : when));
+        revokedTokens.put(
+            tokenKey,
+            new RevokedToken(
+                reason == null ? ValidationResult.EXPIRED : reason,
+                when == null ? Instant.now() : when,
+                sessionId,
+                username
+            )
+        );
     }
 
     private ValidationResult lookupRevocation(String tokenKey, Instant now) {
         RevokedToken revoked = revokedTokens.get(tokenKey);
         if (revoked == null) {
             return null;
+        }
+        if (revoked.sessionId != null) {
+            SessionRecord current = sessionsByToken.get(tokenKey);
+            if (current != null && revoked.sessionId.equals(current.sessionId)) {
+                revokedTokens.remove(tokenKey, revoked);
+                return null;
+            }
+        }
+        if (revoked.username != null) {
+            String activeToken = tokenByUser.get(revoked.username);
+            if (activeToken == null) {
+                revokedTokens.remove(tokenKey, revoked);
+                return ValidationResult.EXPIRED;
+            }
+            if (activeToken.equals(tokenKey)) {
+                revokedTokens.remove(tokenKey, revoked);
+                return null;
+            }
         }
         if (revoked.expired(now, cleanupTtl)) {
             revokedTokens.remove(tokenKey, revoked);

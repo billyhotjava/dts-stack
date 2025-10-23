@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260115-01-audit-resource-dictionary-user-api-alias" author="codex">
+        <comment>Add REST path aliases for admin user creation endpoint</comment>
+        <update tableName="audit_resource_dictionary">
+            <column name="aliases" value="admin_keycloak_user,admin_keycloak_users,admin,user,users,admin.user,admin.users,keycloak.user,keycloak.users,admin.auth,/api/keycloak/users,api/keycloak/users,api.keycloak.users,keycloak/users,keycloak_users"/>
+            <where>resource_key = 'admin_keycloak_user'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

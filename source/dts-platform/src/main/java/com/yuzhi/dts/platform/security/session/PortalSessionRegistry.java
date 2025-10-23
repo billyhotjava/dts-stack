@@ -44,7 +44,7 @@ public class PortalSessionRegistry {
     public synchronized PortalSession createSession(String username, List<String> roles, List<String> permissions, AdminTokens adminTokens) {
         enforceSingleSession(username);
         PortalSession session = PortalSession.create(username, normalizeRoles(roles), permissions, null, null, adminTokens, sessionTtl);
-        register(session);
+        register(session, PortalSessionActivityService.ValidationResult.CONCURRENT);
         return session;
     }
 
@@ -69,7 +69,7 @@ public class PortalSessionRegistry {
             adminTokens,
             sessionTtl
         );
-        register(session);
+        register(session, PortalSessionActivityService.ValidationResult.CONCURRENT);
         return session;
     }
 
@@ -97,7 +97,7 @@ public class PortalSessionRegistry {
             }
         }
         PortalSession renewed = existing.renew(sessionTtl, tokens);
-        register(renewed);
+        register(renewed, PortalSessionActivityService.ValidationResult.EXPIRED);
         return renewed;
     }
 
@@ -122,7 +122,7 @@ public class PortalSessionRegistry {
                 return Optional.empty();
             }
             PortalSession extended = current.extend(sessionTtl);
-            register(extended);
+            register(extended, PortalSessionActivityService.ValidationResult.EXPIRED);
             return Optional.of(extended);
         }
     }
@@ -170,6 +170,13 @@ public class PortalSessionRegistry {
     }
 
     private void register(PortalSession session) {
+        register(session, PortalSessionActivityService.ValidationResult.CONCURRENT);
+    }
+
+    private void register(PortalSession session, PortalSessionActivityService.ValidationResult previousReason) {
+        if (session == null) {
+            return;
+        }
         // Remove previous session for same user to enforce single-login semantics
         PortalSession previous = userIndex.put(session.username(), session);
         if (previous != null) {
@@ -177,7 +184,9 @@ public class PortalSessionRegistry {
             if (tokenChanged) {
                 accessTokenIndex.remove(previous.accessToken());
                 refreshTokenIndex.remove(previous.refreshToken());
-                activityService.invalidate(previous.accessToken(), PortalSessionActivityService.ValidationResult.CONCURRENT);
+                PortalSessionActivityService.ValidationResult reason =
+                    previousReason == null ? PortalSessionActivityService.ValidationResult.EXPIRED : previousReason;
+                activityService.invalidate(previous.accessToken(), reason);
             }
         }
         accessTokenIndex.put(session.accessToken(), session);

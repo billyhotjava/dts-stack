@@ -635,11 +635,18 @@ public class AdminAuditService {
         if (pending.payload instanceof java.util.Map<?, ?> payloadMap) {
             String targetRef = firstNonBlank(
                 coerceToString(payloadMap.get("target_ref")),
-                coerceToString(payloadMap.get("targetRef"))
+                coerceToString(payloadMap.get("targetRef")),
+                coerceToString(payloadMap.get("username")),
+                coerceToString(payloadMap.get("userName")),
+                coerceToString(payloadMap.get("fullName")),
+                coerceToString(payloadMap.get("name"))
             );
             String datasetName = coerceToString(payloadMap.get("datasetName"));
             if (!StringUtils.hasText(targetRef)) {
                 targetRef = datasetName;
+            }
+            if (!StringUtils.hasText(targetRef)) {
+                targetRef = coerceToString(pending.resourceId);
             }
             if (StringUtils.hasText(targetRef) && !det.containsKey("目标引用")) {
                 det.put("目标引用", targetRef);
@@ -706,14 +713,24 @@ public class AdminAuditService {
             }
         }
         // If still missing and resource is admin_keycloak_user, fallback to actor username lookup
-        if ((!det.containsKey("目标ID")) || det.get("目标ID") == null) {
+        boolean hasTargetId = det.containsKey("目标ID")
+            && det.get("目标ID") != null
+            && !String.valueOf(det.get("目标ID")).isBlank();
+        if (!hasTargetId) {
             if ("admin_keycloak_user".equals(tableKey)) {
                 String actorUser = entity.getActor();
-                if (actorUser != null && !actorUser.isBlank()) {
-                    try {
-                        var userOpt = userRepo.findByUsernameIgnoreCase(actorUser.trim());
-                        userOpt.ifPresent(u -> det.put("目标ID", String.valueOf(u.getId())));
-                    } catch (Exception ignore) {}
+                String requestedResourceId = pending.resourceId;
+                boolean resourceMissing = !StringUtils.hasText(requestedResourceId);
+                boolean resourceMatchesActor = StringUtils.hasText(requestedResourceId)
+                    && StringUtils.hasText(actorUser)
+                    && requestedResourceId.trim().equalsIgnoreCase(actorUser.trim());
+                if (resourceMissing || resourceMatchesActor) {
+                    if (actorUser != null && !actorUser.isBlank()) {
+                        try {
+                            var userOpt = userRepo.findByUsernameIgnoreCase(actorUser.trim());
+                            userOpt.ifPresent(u -> det.put("目标ID", String.valueOf(u.getId())));
+                        } catch (Exception ignore) {}
+                    }
                 }
             }
         }

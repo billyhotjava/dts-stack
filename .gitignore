@@ -15,3 +15,5 @@ services/certs/*.srl
 services/certs/*.jks
 services/dts-minio/data/
 builds/offline/
+# Local Maven cache used by dts-admin dev container
+source/dts-admin/.m2/
