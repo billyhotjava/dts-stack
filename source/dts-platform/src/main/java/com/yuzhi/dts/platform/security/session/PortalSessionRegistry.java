@@ -191,7 +191,9 @@ public class PortalSessionRegistry {
         }
         accessTokenIndex.put(session.accessToken(), session);
         refreshTokenIndex.put(session.refreshToken(), session);
-        activityService.register(session.username(), session.sessionId(), session.accessToken(), Instant.now());
+        PortalSessionActivityService.ValidationResult takeoverReason =
+            previousReason == null ? PortalSessionActivityService.ValidationResult.CONCURRENT : previousReason;
+        activityService.register(session.username(), session.sessionId(), session.accessToken(), Instant.now(), takeoverReason);
     }
 
     private void remove(PortalSession session) {

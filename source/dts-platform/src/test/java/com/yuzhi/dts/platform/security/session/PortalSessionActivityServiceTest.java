@@ -66,4 +66,19 @@ class PortalSessionActivityServiceTest {
         assertThat(oldToken).isEqualTo(ValidationResult.CONCURRENT);
         assertThat(newToken).isEqualTo(ValidationResult.ACTIVE);
     }
+
+    @Test
+    void registerWithExpiredReasonDoesNotReportConcurrent() {
+        PortalSessionActivityService service = new PortalSessionActivityService(15);
+        Instant base = Instant.now();
+
+        service.register("portaluser", "sess-1", "token-1", base);
+        service.register("portaluser", "sess-2", "token-2", base.plusSeconds(1), ValidationResult.EXPIRED);
+
+        ValidationResult oldToken = service.touch("token-1", base.plusSeconds(2));
+        ValidationResult newToken = service.touch("token-2", base.plusSeconds(3));
+
+        assertThat(oldToken).isEqualTo(ValidationResult.EXPIRED);
+        assertThat(newToken).isEqualTo(ValidationResult.ACTIVE);
+    }
 }

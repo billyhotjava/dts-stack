@@ -32,6 +32,16 @@ public class PortalSessionActivityService {
     }
 
     public void register(String username, String sessionId, String tokenKey, Instant now) {
+        register(username, sessionId, tokenKey, now, ValidationResult.CONCURRENT);
+    }
+
+    public void register(
+        String username,
+        String sessionId,
+        String tokenKey,
+        Instant now,
+        ValidationResult previousReason
+    ) {
         if (tokenKey == null || tokenKey.isBlank()) {
             return;
         }
@@ -43,9 +53,11 @@ public class PortalSessionActivityService {
             String previous = tokenByUser.put(record.username, tokenKey);
             if (previous != null && !previous.equals(tokenKey)) {
                 SessionRecord prev = sessionsByToken.remove(previous);
+                ValidationResult reason =
+                    previousReason == null ? ValidationResult.CONCURRENT : previousReason;
                 markRevoked(
                     previous,
-                    ValidationResult.CONCURRENT,
+                    reason,
                     effectiveNow,
                     prev != null ? prev.sessionId : null,
                     record.username
