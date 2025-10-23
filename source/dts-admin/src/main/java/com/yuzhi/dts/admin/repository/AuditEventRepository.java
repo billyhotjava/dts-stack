@@ -2,6 +2,7 @@ package com.yuzhi.dts.admin.repository;
 
 import com.yuzhi.dts.admin.domain.AuditEvent;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +16,12 @@ import org.springframework.stereotype.Repository;
 public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
 
     Optional<AuditEvent> findTopByOrderByIdDesc();
+
+    @Query(
+        value = "select distinct lower(e.module) as module from audit_event e where e.module is not null and trim(e.module) <> '' order by module",
+        nativeQuery = true
+    )
+    List<String> findDistinctModules();
 
     @Query(
         value =

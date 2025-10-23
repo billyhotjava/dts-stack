@@ -77,9 +77,11 @@ public class AuditLogResource {
 
     @GetMapping("/modules")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> modules() {
-        LinkedHashMap<String, ModuleView> modules = collectModulesFromRules();
-        List<Map<String, Object>> out = new ArrayList<>(modules.size());
-        modules.values().forEach(module -> out.add(Map.of("key", module.key(), "title", module.title())));
+        List<AdminAuditService.ModuleOption> options = auditService.listModuleOptions();
+        List<Map<String, Object>> out = new ArrayList<>(options.size());
+        for (AdminAuditService.ModuleOption option : options) {
+            out.add(Map.of("key", option.code(), "title", option.label()));
+        }
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
 

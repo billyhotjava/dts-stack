@@ -85,10 +85,11 @@ export default function AuditCenterView() {
 	useEffect(() => {
 		AuditLogService.getAuditModules()
 			.then((modules) => {
-				const mapped = modules.map((item) => ({
-					value: item.key ?? "",
-					label: item.title ?? item.key ?? "-",
-				}));
+				const mapped = modules.map((item) => {
+					const label = (item.title && item.title.trim()) || (item.key && item.key.trim()) || "-";
+					const value = (item.key && item.key.trim()) || (item.title && item.title.trim()) || "";
+					return { value, label };
+				});
 				setModuleOptions([{ value: "", label: "全部模块" }, ...mapped]);
 			})
 			.catch((error) => {
@@ -209,12 +210,18 @@ export default function AuditCenterView() {
                                 { value: "platform", label: "业务管理" },
                             ]}
 						/>
-						<SelectField
-							label="功能模块"
-							value={filters.module || ""}
-							onChange={(value) => setFilters((prev) => ({ ...prev, module: value || undefined }))}
-							options={moduleOptions}
-						/>
+				{/* 功能模块筛选暂时隐藏，如需恢复请移除此段注释并同步暴露 UI */}
+				{false && (
+					<SelectField
+						label="功能模块"
+						value={filters.module || ""}
+						onChange={(value) => {
+							const trimmed = value.trim();
+							setFilters((prev) => ({ ...prev, module: trimmed ? trimmed : undefined }));
+						}}
+						options={moduleOptions}
+					/>
+				)}
                             <InputField
                                 label="操作者"
                                 placeholder="如 系统管理员 或 sysadmin"

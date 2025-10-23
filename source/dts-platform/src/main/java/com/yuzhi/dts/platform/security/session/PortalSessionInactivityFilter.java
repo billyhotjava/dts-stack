@@ -56,13 +56,28 @@ public class PortalSessionInactivityFilter extends OncePerRequestFilter {
         }
 
         ValidationResult result = activityService.touch(tokenValue, Instant.now());
-        if (result == ValidationResult.ACTIVE) {
-            filterChain.doFilter(request, response);
-            return;
+        switch (result) {
+            case ACTIVE -> {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            case CONCURRENT -> {
+                log.debug(
+                    "Portal session takeover detected, rejecting token suffix=...{}",
+                    tokenValue.substring(Math.max(0, tokenValue.length() - 6))
+                );
+                respondConflict(response);
+                return;
+            }
+            default -> {
+                log.debug(
+                    "Portal session expired for token suffix=...{}",
+                    tokenValue.substring(Math.max(0, tokenValue.length() - 6))
+                );
+                respondExpired(response);
+                return;
+            }
         }
-
-        log.debug("Portal session expired for token suffix=...{}", tokenValue.substring(Math.max(0, tokenValue.length() - 6)));
-        respondExpired(response);
     }
 
     private String extractTokenValue(String header) {
@@ -74,6 +89,17 @@ public class PortalSessionInactivityFilter extends OncePerRequestFilter {
             return header.trim();
         }
         return header.substring(idx + 1).trim();
+    }
+
+    private void respondConflict(HttpServletResponse response) throws IOException {
+        response.resetBuffer();
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setHeader("X-Session-Conflict", "true");
+        ApiResponse<Object> payload = new ApiResponse<>(HttpStatus.UNAUTHORIZED.value(), "该账号已在其他位置登录，当前会话已失效", null);
+        objectMapper.writeValue(response.getWriter(), payload);
+        response.flushBuffer();
     }
 
     private void respondExpired(HttpServletResponse response) throws IOException {

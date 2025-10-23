@@ -82,7 +82,7 @@ public class PortalSessionRegistry {
             throw new IllegalArgumentException("unknown_refresh_token");
         }
         if (existing.isExpired()) {
-            remove(existing);
+            remove(existing, PortalSessionActivityService.ValidationResult.EXPIRED);
             throw new IllegalStateException("session_expired");
         }
         AdminTokens tokens = existing.adminTokens();
@@ -118,7 +118,7 @@ public class PortalSessionRegistry {
                 return Optional.empty();
             }
             if (current.isExpired()) {
-                remove(current);
+                remove(current, PortalSessionActivityService.ValidationResult.EXPIRED);
                 return Optional.empty();
             }
             PortalSession extended = current.extend(sessionTtl);
@@ -140,7 +140,7 @@ public class PortalSessionRegistry {
         if (current != null && current.sessionId().equals(existing.sessionId())) {
             userIndex.remove(existing.username());
         }
-        activityService.invalidate(existing.accessToken());
+        activityService.invalidate(existing.accessToken(), PortalSessionActivityService.ValidationResult.EXPIRED);
         return existing;
     }
 
@@ -150,7 +150,7 @@ public class PortalSessionRegistry {
             return false;
         }
         if (current.isExpired()) {
-            remove(current);
+            remove(current, PortalSessionActivityService.ValidationResult.EXPIRED);
             return false;
         }
         return true;
@@ -162,11 +162,11 @@ public class PortalSessionRegistry {
             return;
         }
         if (existing.isExpired()) {
-            remove(existing);
+            remove(existing, PortalSessionActivityService.ValidationResult.EXPIRED);
             return;
         }
         // Force-logout the previous session so the newest login stays active.
-        remove(existing);
+        remove(existing, PortalSessionActivityService.ValidationResult.CONCURRENT);
     }
 
     private void register(PortalSession session) {
@@ -175,7 +175,7 @@ public class PortalSessionRegistry {
         if (previous != null) {
             accessTokenIndex.remove(previous.accessToken());
             refreshTokenIndex.remove(previous.refreshToken());
-            activityService.invalidate(previous.accessToken());
+            activityService.invalidate(previous.accessToken(), PortalSessionActivityService.ValidationResult.CONCURRENT);
         }
         accessTokenIndex.put(session.accessToken(), session);
         refreshTokenIndex.put(session.refreshToken(), session);
@@ -183,13 +183,20 @@ public class PortalSessionRegistry {
     }
 
     private void remove(PortalSession session) {
+        remove(session, PortalSessionActivityService.ValidationResult.EXPIRED);
+    }
+
+    private void remove(PortalSession session, PortalSessionActivityService.ValidationResult reason) {
+        if (session == null) {
+            return;
+        }
         accessTokenIndex.remove(session.accessToken());
         refreshTokenIndex.remove(session.refreshToken());
         PortalSession current = userIndex.get(session.username());
         if (current != null && current.sessionId().equals(session.sessionId())) {
             userIndex.remove(session.username());
         }
-        activityService.invalidate(session.accessToken());
+        activityService.invalidate(session.accessToken(), reason);
     }
 
     private List<String> normalizeRoles(List<String> roles) {

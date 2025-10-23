@@ -154,7 +154,21 @@ public class SecuritySqlRewriter {
     }
 
     private boolean containsWildcard(String selectBody) {
-        return selectBody != null && selectBody.contains("*");
+        if (!StringUtils.hasText(selectBody)) {
+            return false;
+        }
+        int index = selectBody.indexOf('*');
+        while (index >= 0) {
+            int previous = index - 1;
+            while (previous >= 0 && Character.isWhitespace(selectBody.charAt(previous))) {
+                previous--;
+            }
+            if (previous < 0 || selectBody.charAt(previous) != '(') {
+                return true;
+            }
+            index = selectBody.indexOf('*', index + 1);
+        }
+        return false;
     }
 
     private boolean containsColumnReference(String fragment, String columnName, CatalogDataset dataset) {

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.InfraSecurityProperties;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.domain.service.InfraDataStorage;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,7 +54,8 @@ class InfraSecretServiceTest {
         storage.setName("lake");
         disabledService.applySecrets(storage, Map.of("accessKey", "abc"));
 
-        assertThat(storage.getSecureProps()).isNull();
+        assertThat(new String(storage.getSecureProps(), StandardCharsets.UTF_8)).isEqualTo("{\"accessKey\":\"abc\"}");
         assertThat(storage.getSecureIv()).isNull();
+        assertThat(storage.getSecureKeyVersion()).isEqualTo("PLAINTEXT");
     }
 }

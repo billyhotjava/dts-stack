@@ -16,8 +16,9 @@ import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -97,6 +98,8 @@ public class AdminAuditService {
         public String operationSourceTable;
         public String operationEventClass;
     }
+
+    public record ModuleOption(String code, String label) {}
 
     private String resolveActorRole(String actor) {
         if (!StringUtils.hasText(actor)) {
@@ -254,6 +257,51 @@ public class AdminAuditService {
                 properties.getQueueCapacity()
             );
         }
+    }
+
+    public List<ModuleOption> listModuleOptions() {
+        List<String> distinct = repository.findDistinctModules();
+        LinkedHashMap<String, ModuleOption> options = new LinkedHashMap<>();
+        if (distinct != null) {
+            for (String raw : distinct) {
+                String normalized = normalize(raw);
+                if (!StringUtils.hasText(normalized) || options.containsKey(normalized)) {
+                    continue;
+                }
+                options.put(normalized, new ModuleOption(normalized, resolveModuleLabel(normalized)));
+            }
+        }
+        if (options.isEmpty()) {
+            options.put("general", new ModuleOption("general", resolveModuleLabel("general")));
+        }
+        return List.copyOf(options.values());
+    }
+
+    private String resolveModuleLabel(String code) {
+        if (!StringUtils.hasText(code)) {
+            return "通用";
+        }
+        String normalized = code.trim().toLowerCase(Locale.ROOT);
+        Optional<String> category = resourceDictionary.resolveCategory(normalized);
+        if (category.isPresent()) {
+            return category.orElseThrow();
+        }
+        Optional<String> label = resourceDictionary.resolveLabel(normalized);
+        if (label.isPresent()) {
+            return label.orElseThrow();
+        }
+        return switch (normalized) {
+            case "admin" -> "用户管理";
+            case "approval" -> "审批管理";
+            case "catalog" -> "数据资产";
+            case "platform" -> "平台管理";
+            case "governance" -> "治理中心";
+            case "explore" -> "探索分析";
+            case "modeling" -> "模型管理";
+            case "visualization" -> "可视化";
+            case "general" -> "通用";
+            default -> normalized;
+        };
     }
 
     @PreDestroy
