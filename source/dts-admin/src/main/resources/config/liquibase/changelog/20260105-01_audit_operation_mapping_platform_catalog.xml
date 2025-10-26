@@ -10,11 +10,11 @@
             WITH updated AS (
                 UPDATE audit_operation_mapping
                    SET module_name = '数据目录',
-                       action_type = CASE http_method
-                           WHEN 'GET' THEN '查询'
-                           WHEN 'PUT' THEN '修改'
-                           WHEN 'DELETE' THEN '删除'
-                           ELSE action_type
+                       operation_type = CASE http_method
+                           WHEN 'GET' THEN 'READ'
+                           WHEN 'PUT' THEN 'UPDATE'
+                           WHEN 'DELETE' THEN 'DELETE'
+                           ELSE operation_type
                        END,
                        description_template = CASE http_method
                            WHEN 'GET' THEN '查看数据集：{datasetLabel|未知}（ID：{datasetId|未知}）'
@@ -40,11 +40,11 @@
                 RETURNING http_method
             )
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
-            SELECT '/api/catalog/datasets/{id}', m.http_method, '数据目录', m.action_type,
+            SELECT '/api/catalog/datasets/{id}', m.http_method, '数据目录', m.operation_type,
                    m.description_template, '数据资产',
                    (
                        jsonb_build_object('datasetId', 'path.id')
@@ -53,10 +53,10 @@
                    'AuditEvent', 29, TRUE, 'platform'
               FROM (
                    VALUES
-                       ('GET'::text, '查询', '查看数据集：{datasetLabel|未知}（ID：{datasetId|未知}）'),
-                       ('PUT'::text, '修改', '修改数据集：{datasetLabel|未知}（ID：{datasetId|未知}）'),
-                       ('DELETE'::text, '删除', '删除数据集：{datasetLabel|未知}（ID：{datasetId|未知}）')
-              ) AS m(http_method, action_type, description_template)
+                       ('GET'::text, 'READ', '查看数据集：{datasetLabel|未知}（ID：{datasetId|未知}）'),
+                       ('PUT'::text, 'UPDATE', '修改数据集：{datasetLabel|未知}（ID：{datasetId|未知}）'),
+                       ('DELETE'::text, 'DELETE', '删除数据集：{datasetLabel|未知}（ID：{datasetId|未知}）')
+              ) AS m(http_method, operation_type, description_template)
              WHERE NOT EXISTS (
                        SELECT 1 FROM updated u WHERE u.http_method = m.http_method
                    )
@@ -74,7 +74,7 @@
             WITH up_save AS (
                 UPDATE audit_operation_mapping
                    SET module_name = '数据探索',
-                       action_type = '新增',
+                       operation_type = 'CREATE',
                        description_template = '保存查询结果集（执行ID：{executionId|未知}）',
                        source_table_template = '数据查询',
                        param_extractors = (
@@ -95,11 +95,11 @@
             ),
             inserted_save AS (
                 INSERT INTO audit_operation_mapping (
-                    url_pattern, http_method, module_name, action_type,
+                    url_pattern, http_method, module_name, operation_type,
                     description_template, source_table_template, param_extractors,
                     event_class, order_value, enabled, source_system
                 )
-                SELECT '/api/explore/save-result/{executionId}', 'POST', '数据探索', '新增',
+                SELECT '/api/explore/save-result/{executionId}', 'POST', '数据探索', 'CREATE',
                        '保存查询结果集（执行ID：{executionId|未知}）', '数据查询',
                        (
                            jsonb_build_object('executionId', 'path.executionId')
@@ -116,7 +116,7 @@
             )
             UPDATE audit_operation_mapping
                SET module_name = '数据探索',
-                   action_type = '查询',
+                   operation_type = 'READ',
                    description_template = '预览查询结果集（ID：{resultId|未知}）',
                    source_table_template = '数据查询',
                    param_extractors = (
@@ -135,11 +135,11 @@
                AND http_method = 'GET';
 
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
-            SELECT '/api/explore/result-preview/{id}', 'GET', '数据探索', '查询',
+            SELECT '/api/explore/result-preview/{id}', 'GET', '数据探索', 'READ',
                    '预览查询结果集（ID：{resultId|未知}）', '数据查询',
                    (
                        jsonb_build_object('resultId', 'path.id')

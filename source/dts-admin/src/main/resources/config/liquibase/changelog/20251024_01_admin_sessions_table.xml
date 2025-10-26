@@ -1,0 +1,62 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd"
+>
+    <changeSet id="20251024-01-admin-sessions-table" author="codex">
+        <comment>create admin_sessions table for centralized session management</comment>
+        <createTable tableName="admin_sessions">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="username" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="normalized_username" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="session_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="session_state" type="varchar(255)"/>
+            <column name="access_token_hash" type="varchar(96)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="refresh_token_hash" type="varchar(96)"/>
+            <column name="created_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_seen_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revoked_at" type="timestamp"/>
+            <column name="revoked_reason" type="varchar(32)"/>
+            <column name="revoked_by_session_id" type="uuid"/>
+        </createTable>
+
+        <createIndex tableName="admin_sessions" indexName="idx_admin_sessions_username">
+            <column name="normalized_username"/>
+        </createIndex>
+
+        <createIndex tableName="admin_sessions" indexName="idx_admin_sessions_session_state">
+            <column name="session_state"/>
+        </createIndex>
+
+        <createIndex tableName="admin_sessions" indexName="uq_admin_sessions_access_hash" unique="true">
+            <column name="access_token_hash"/>
+        </createIndex>
+
+        <createIndex tableName="admin_sessions" indexName="uq_admin_sessions_refresh_hash" unique="true">
+            <column name="refresh_token_hash"/>
+        </createIndex>
+
+        <createIndex tableName="admin_sessions" indexName="idx_admin_sessions_user_active">
+            <column name="normalized_username"/>
+            <column name="revoked_at"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

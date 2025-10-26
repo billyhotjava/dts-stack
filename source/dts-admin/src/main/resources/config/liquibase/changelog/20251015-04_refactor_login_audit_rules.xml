@@ -17,7 +17,7 @@
             <column name="http_method" value="POST"/>
             <column name="status_code_regex" value="200"/>
             <column name="module_name" value="登录管理"/>
-            <column name="action_type" value="登录"/>
+            <column name="operation_type" value="LOGIN"/>
             <column name="description_template" value="用户登录成功（系统端）: {username}"/>
             <column name="source_table_template" value="用户"/>
             <column name="param_extractors" value="{&quot;username&quot;:&quot;request.username&quot;}"/>
@@ -32,7 +32,7 @@
             <column name="http_method" value="POST"/>
             <column name="status_code_regex" value="[45]\d{2}"/>
             <column name="module_name" value="登录管理"/>
-            <column name="action_type" value="登录"/>
+            <column name="operation_type" value="LOGIN"/>
             <column name="description_template" value="用户登录失败（系统端）: {username}"/>
             <column name="source_table_template" value="用户"/>
             <column name="param_extractors" value="{&quot;username&quot;:&quot;request.username&quot;}"/>
@@ -47,7 +47,7 @@
             <column name="http_method" value="POST"/>
             <column name="status_code_regex" value="200"/>
             <column name="module_name" value="登录管理"/>
-            <column name="action_type" value="登录"/>
+            <column name="operation_type" value="LOGIN"/>
             <column name="description_template" value="用户登录成功（平台端）: {username}"/>
             <column name="source_table_template" value="用户"/>
             <column name="param_extractors" value="{&quot;username&quot;:&quot;request.username&quot;}"/>
@@ -62,7 +62,7 @@
             <column name="http_method" value="POST"/>
             <column name="status_code_regex" value="[45]\d{2}"/>
             <column name="module_name" value="登录管理"/>
-            <column name="action_type" value="登录"/>
+            <column name="operation_type" value="LOGIN"/>
             <column name="description_template" value="用户登录失败（平台端）: {username}"/>
             <column name="source_table_template" value="用户"/>
             <column name="param_extractors" value="{&quot;username&quot;:&quot;request.username&quot;}"/>

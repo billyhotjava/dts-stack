@@ -30,3 +30,16 @@
 - Keep secrets out of version control; regenerate `.env` with `./init.sh` and replace `services/certs/` with CA-signed assets for production.
 - Manage image tags in `imgversion.conf`; bump versions there and rerun `./init.sh` to refresh dependent settings.
 - Update `BASE_DOMAIN` in `.env` before rerunning `./init.sh` so routes and certificates stay aligned.
+
+## Current Development Status _(2025-10-24)_
+- **Backend layout**: `source/dts-admin` (IAM/approval) and `source/dts-platform` (data services) consume shared code from `source/dts-common`. Liquibase changelog roots live under each module’s `config/liquibase/`.
+- **Liquibase**: `20251023_01_portal_sessions_table.xml` now uses `filterCondition="revoked_at IS NULL"`. Containers still need rebuilding so the updated changelog reaches runtime; otherwise tables such as `portal_sessions`, `infra_data_source`, `result_set` remain missing and logins/sync jobs fail.
+- **Keycloak integration**: `KeycloakApiResource` falls back to the current request token if the service-account flow cannot issue credentials, avoiding 500s when `/api/keycloak/users` is hit.
+- **Hibernate warnings**: Removed the incubating `hibernate.type.preferred_instant_jdbc_type` override—warnings disappear once refreshed configs are deployed.
+- **Session registry**: `AdminSessionRegistry.validate` no longer calls `Optional.get()` directly; modernizer passes after rebuild.
+- **Open issues**: Portal menu approval currently returns 409 “detached entity passed to persist: PortalMenu” during change application; investigate persistence context handling in `applyPortalMenuChange`. Liquibase tables must be created before re-testing user logins or catalog sync.
+
+## Immediate Follow-ups
+- Rebuild and redeploy both backend services so the latest changelog and YAML changes are applied, then rerun Liquibase against the clean PostgreSQL database.
+- Validate admin/platform login flows after schema creation; capture logs around the PortalMenu approval failure for debugging.
+- Once infrastructure is stable, proceed with PortalMenu fix and retest approval center workflows end-to-end.

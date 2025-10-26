@@ -77,7 +77,10 @@ export const refreshInceptorRegistry = () =>
 	api.post<InfraFeatureFlags>({ url: "/infra/data-sources/inceptor/refresh" });
 
 export const listConnectionTestLogs = (dataSourceId?: string) =>
-	api.get<ConnectionTestLog[]>({ url: "/infra/data-sources/test-logs", params: dataSourceId ? { dataSourceId } : undefined });
+	api.get<ConnectionTestLog[]>({
+		url: "/infra/data-sources/test-logs",
+		params: dataSourceId ? { dataSourceId } : undefined,
+	});
 
 export const testHiveConnection = (data: HiveConnectionTestRequest) =>
 	api.post<HiveConnectionTestResult>({ url: "/infra/data-sources/test-connection", data });
@@ -85,8 +88,7 @@ export const testHiveConnection = (data: HiveConnectionTestRequest) =>
 export const publishInceptorDataSource = (data: HiveConnectionPersistRequest) =>
 	api.post<InfraDataSource>({ url: "/infra/data-sources/inceptor/publish", data });
 
-export const deleteInfraDataSource = (id: string) =>
-	api.delete<boolean>({ url: `/infra/data-sources/${id}` });
+export const deleteInfraDataSource = (id: string) => api.delete<boolean>({ url: `/infra/data-sources/${id}` });
 
 export const createInfraDataSource = (data: UpsertInfraDataSourcePayload) =>
 	api.post<InfraDataSource>({ url: "/infra/data-sources", data });

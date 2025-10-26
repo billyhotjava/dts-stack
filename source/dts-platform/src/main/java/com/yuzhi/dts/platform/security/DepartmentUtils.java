@@ -42,9 +42,26 @@ public final class DepartmentUtils {
         if (owner.endsWith(context) || context.endsWith(owner)) {
             return true;
         }
+        if (startsWithWithDelimiter(context, owner) || startsWithWithDelimiter(owner, context)) {
+            return true;
+        }
         if (ownerDept != null && activeDept != null) {
             return ownerDept.trim().equalsIgnoreCase(activeDept.trim());
         }
         return false;
+    }
+
+    private static boolean startsWithWithDelimiter(String value, String prefix) {
+        if (value.equalsIgnoreCase(prefix)) {
+            return true;
+        }
+        if (!value.regionMatches(true, 0, prefix, 0, Math.min(value.length(), prefix.length()))) {
+            return false;
+        }
+        if (value.length() <= prefix.length()) {
+            return false;
+        }
+        char next = value.charAt(prefix.length());
+        return !Character.isLetterOrDigit(next);
     }
 }

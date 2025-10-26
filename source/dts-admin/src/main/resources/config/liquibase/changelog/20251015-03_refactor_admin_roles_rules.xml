@@ -11,7 +11,7 @@
             <column name="url_pattern" value="/api/admin/roles"/>
             <column name="http_method" value="GET"/>
             <column name="module_name" value="角色管理"/>
-            <column name="action_type" value="查询"/>
+            <column name="operation_type" value="READ"/>
             <column name="description_template" value="查询角色列表"/>
             <column name="source_table_template" value="角色"/>
             <column name="order_value" valueNumeric="25"/>
@@ -22,7 +22,7 @@
             <column name="url_pattern" value="/api/admin/custom-roles"/>
             <column name="http_method" value="GET"/>
             <column name="module_name" value="角色管理"/>
-            <column name="action_type" value="查询"/>
+            <column name="operation_type" value="READ"/>
             <column name="description_template" value="查询自定义角色列表"/>
             <column name="source_table_template" value="角色"/>
             <column name="order_value" valueNumeric="25"/>
@@ -33,7 +33,7 @@
             <column name="url_pattern" value="/api/admin/custom-roles"/>
             <column name="http_method" value="POST"/>
             <column name="module_name" value="角色管理"/>
-            <column name="action_type" value="申请"/>
+            <column name="operation_type" value="REQUEST"/>
             <column name="description_template" value="申请创建自定义角色"/>
             <column name="source_table_template" value="角色"/>
             <column name="order_value" valueNumeric="25"/>
@@ -44,7 +44,7 @@
             <column name="url_pattern" value="/api/admin/roles/{name}/pre-delete-check"/>
             <column name="http_method" value="GET"/>
             <column name="module_name" value="角色管理"/>
-            <column name="action_type" value="查询"/>
+            <column name="operation_type" value="READ"/>
             <column name="description_template" value="预检查角色删除的影响: {name}"/>
             <column name="source_table_template" value="角色"/>
             <column name="param_extractors" value="{&quot;name&quot;:&quot;path.name&quot;}"/>

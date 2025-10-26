@@ -8,33 +8,33 @@ export interface AdminWhoami {
 }
 
 export function normalizeAdminRole(role: string | null | undefined): AdminRole | null {
-    if (!role) {
-        return null;
-    }
-    let normalized = role.trim().toUpperCase();
-    if (normalized.startsWith("ROLE")) {
-        normalized = normalized.replace(/^ROLE[_\-]?/, "");
-    }
-    switch (normalized) {
-        case "SYSADMIN":
-        case "SYS_ADMIN":
-            return "SYSADMIN";
-        case "OPADMIN":
-        case "OP_ADMIN":
-            return "OPADMIN";
-        case "AUTHADMIN":
-        case "AUTH_ADMIN":
-            return "AUTHADMIN";
-        case "AUDITADMIN":
-        case "AUDIT_ADMIN":
-        case "AUDITORADMIN":
-        case "AUDITOR_ADMIN":
-        case "SECURITYAUDITOR":
-        case "SECURITY_AUDITOR":
-            return "AUDITADMIN";
-        default:
-            return null;
-    }
+	if (!role) {
+		return null;
+	}
+	let normalized = role.trim().toUpperCase();
+	if (normalized.startsWith("ROLE")) {
+		normalized = normalized.replace(/^ROLE[_\-]?/, "");
+	}
+	switch (normalized) {
+		case "SYSADMIN":
+		case "SYS_ADMIN":
+			return "SYSADMIN";
+		case "OPADMIN":
+		case "OP_ADMIN":
+			return "OPADMIN";
+		case "AUTHADMIN":
+		case "AUTH_ADMIN":
+			return "AUTHADMIN";
+		case "AUDITADMIN":
+		case "AUDIT_ADMIN":
+		case "AUDITORADMIN":
+		case "AUDITOR_ADMIN":
+		case "SECURITYAUDITOR":
+		case "SECURITY_AUDITOR":
+			return "AUDITADMIN";
+		default:
+			return null;
+	}
 }
 
 export interface ChangeRequest {
@@ -70,6 +70,7 @@ export interface AuditEvent {
 	result?: string;
 	extraTags?: string;
 	payloadPreview?: string;
+	correlationId?: string;
 }
 
 export interface SystemConfigItem {
@@ -109,6 +110,7 @@ export interface OrganizationNode {
 	id: number;
 	name: string;
 	parentId?: number | null;
+	isRoot?: boolean;
 	contact?: string;
 	phone?: string;
 	description?: string;
@@ -125,15 +127,17 @@ export interface OrganizationNode {
 }
 
 export interface OrganizationCreatePayload {
-    name: string;
-    description?: string;
-    parentId?: number | null;
+	name: string;
+	description?: string;
+	parentId?: number | null;
+	isRoot?: boolean;
 }
 
 export interface OrganizationUpdatePayload {
-    name?: string;
-    description?: string;
-    parentId?: number | null;
+	name?: string;
+	description?: string;
+	parentId?: number | null;
+	isRoot?: boolean;
 }
 
 export interface AdminUser {

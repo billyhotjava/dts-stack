@@ -117,6 +117,8 @@ public class AdminDirectoryClient {
         private String name;
         private Long parentId;
         private List<OrgNode> children;
+        @JsonProperty("isRoot")
+        private Boolean isRoot;
 
         public Long getId() { return id; }
         public void setId(Long id) { this.id = id; }
@@ -126,5 +128,7 @@ public class AdminDirectoryClient {
         public void setParentId(Long parentId) { this.parentId = parentId; }
         public List<OrgNode> getChildren() { return children; }
         public void setChildren(List<OrgNode> children) { this.children = children; }
+        public Boolean getIsRoot() { return isRoot; }
+        public void setIsRoot(Boolean isRoot) { this.isRoot = isRoot; }
     }
 }

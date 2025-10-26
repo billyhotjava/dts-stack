@@ -22,7 +22,7 @@
 WITH updated_catalog_create AS (
     UPDATE audit_operation_mapping
        SET module_name = '数据资产',
-           action_type = '新增',
+           operation_type = 'CREATE',
            description_template = '新建数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）',
            source_table_template = '数据资产',
            param_extractors = '{"datasetLabel":"details.目标引用","datasetId":"event.resourceId"}',
@@ -34,11 +34,11 @@ WITH updated_catalog_create AS (
  RETURNING id
 )
 INSERT INTO audit_operation_mapping (
-    url_pattern, http_method, module_name, action_type,
+    url_pattern, http_method, module_name, operation_type,
     description_template, source_table_template, param_extractors,
     event_class, order_value, enabled, source_system
 )
-SELECT '/api/catalog/datasets','POST','数据资产','新增',
+SELECT '/api/catalog/datasets','POST','数据资产','CREATE',
        '新建数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）','数据资产',
        '{"datasetLabel":"details.目标引用","datasetId":"event.resourceId"}',
        'AuditEvent',30,TRUE,'platform'
@@ -54,7 +54,7 @@ WHERE NOT EXISTS (
 WITH updated_catalog_update AS (
     UPDATE audit_operation_mapping
        SET module_name = '数据资产',
-           action_type = '修改',
+           operation_type = 'UPDATE',
            description_template = '修改数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）',
            source_table_template = '数据资产',
            param_extractors = '{"datasetLabel":"details.目标引用","datasetId":"path.id"}',
@@ -66,11 +66,11 @@ WITH updated_catalog_update AS (
  RETURNING id
 )
 INSERT INTO audit_operation_mapping (
-    url_pattern, http_method, module_name, action_type,
+    url_pattern, http_method, module_name, operation_type,
     description_template, source_table_template, param_extractors,
     event_class, order_value, enabled, source_system
 )
-SELECT '/api/catalog/datasets/{id}','PUT','数据资产','修改',
+SELECT '/api/catalog/datasets/{id}','PUT','数据资产','UPDATE',
        '修改数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）','数据资产',
        '{"datasetLabel":"details.目标引用","datasetId":"path.id"}',
        'AuditEvent',29,TRUE,'platform'
@@ -86,7 +86,7 @@ WHERE NOT EXISTS (
 WITH updated_catalog_delete AS (
     UPDATE audit_operation_mapping
        SET module_name = '数据资产',
-           action_type = '删除',
+           operation_type = 'DELETE',
            description_template = '删除数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）',
            source_table_template = '数据资产',
            param_extractors = '{"datasetLabel":"details.目标引用","datasetId":"path.id"}',
@@ -98,11 +98,11 @@ WITH updated_catalog_delete AS (
  RETURNING id
 )
 INSERT INTO audit_operation_mapping (
-    url_pattern, http_method, module_name, action_type,
+    url_pattern, http_method, module_name, operation_type,
     description_template, source_table_template, param_extractors,
     event_class, order_value, enabled, source_system
 )
-SELECT '/api/catalog/datasets/{id}','DELETE','数据资产','删除',
+SELECT '/api/catalog/datasets/{id}','DELETE','数据资产','DELETE',
        '删除数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）','数据资产',
        '{"datasetLabel":"details.目标引用","datasetId":"path.id"}',
        'AuditEvent',29,TRUE,'platform'
@@ -118,7 +118,7 @@ WHERE NOT EXISTS (
 WITH updated_explore_save AS (
     UPDATE audit_operation_mapping
        SET module_name = '数据探索',
-           action_type = '修改',
+           operation_type = 'UPDATE',
            description_template = '保存数据探索结果集：执行ID {executionId|未知}',
            source_table_template = '数据查询',
            param_extractors = '{"executionId":"path.executionId"}',
@@ -130,11 +130,11 @@ WITH updated_explore_save AS (
  RETURNING id
 )
 INSERT INTO audit_operation_mapping (
-    url_pattern, http_method, module_name, action_type,
+    url_pattern, http_method, module_name, operation_type,
     description_template, source_table_template, param_extractors,
     event_class, order_value, enabled, source_system
 )
-SELECT '/api/explore/save-result/{executionId}','POST','数据探索','修改',
+SELECT '/api/explore/save-result/{executionId}','POST','数据探索','UPDATE',
        '保存数据探索结果集：执行ID {executionId|未知}','数据查询',
        '{"executionId":"path.executionId"}',
        'AuditEvent',29,TRUE,'platform'
@@ -150,7 +150,7 @@ WHERE NOT EXISTS (
 WITH updated_explore_preview AS (
     UPDATE audit_operation_mapping
        SET module_name = '数据探索',
-           action_type = '查询',
+           operation_type = 'READ',
            description_template = '预览数据探索结果集：{resultSetId|未知}',
            source_table_template = '数据查询',
            param_extractors = '{"resultSetId":"path.id"}',
@@ -162,11 +162,11 @@ WITH updated_explore_preview AS (
  RETURNING id
 )
 INSERT INTO audit_operation_mapping (
-    url_pattern, http_method, module_name, action_type,
+    url_pattern, http_method, module_name, operation_type,
     description_template, source_table_template, param_extractors,
     event_class, order_value, enabled, source_system
 )
-SELECT '/api/explore/result-preview/{id}','GET','数据探索','查询',
+SELECT '/api/explore/result-preview/{id}','GET','数据探索','READ',
        '预览数据探索结果集：{resultSetId|未知}','数据查询',
        '{"resultSetId":"path.id"}',
        'AuditEvent',29,TRUE,'platform'

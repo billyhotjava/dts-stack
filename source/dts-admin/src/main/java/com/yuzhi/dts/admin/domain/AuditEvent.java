@@ -122,11 +122,20 @@ public class AuditEvent implements Serializable {
     @Column(name = "details")
     private String details;
 
+    @Column(name = "correlation_id", length = 128)
+    private String correlationId;
+
     @Column(name = "record_signature", length = 128)
     private String recordSignature;
 
     @Column(name = "signature_key_ver", length = 16)
     private String signatureKeyVer;
+
+    @Column(name = "operation_group", length = 64)
+    private String operationGroup;
+
+    @Column(name = "operation_type", length = 32)
+    private String operationType;
 
     @Column(name = "created_by", length = 128)
     private String createdBy;
@@ -322,10 +331,17 @@ public class AuditEvent implements Serializable {
     public void setSummary(String summary) { this.summary = summary; }
     public String getDetails() { return details; }
     public void setDetails(String details) { this.details = details; }
+    public String getCorrelationId() { return correlationId; }
+    public void setCorrelationId(String correlationId) { this.correlationId = correlationId; }
     public String getRecordSignature() { return recordSignature; }
     public void setRecordSignature(String recordSignature) { this.recordSignature = recordSignature; }
     public String getSignatureKeyVer() { return signatureKeyVer; }
     public void setSignatureKeyVer(String signatureKeyVer) { this.signatureKeyVer = signatureKeyVer; }
+
+    public String getOperationGroup() { return operationGroup; }
+    public void setOperationGroup(String operationGroup) { this.operationGroup = operationGroup; }
+    public String getOperationType() { return operationType; }
+    public void setOperationType(String operationType) { this.operationType = operationType; }
 
     public String getCreatedBy() {
         return createdBy;

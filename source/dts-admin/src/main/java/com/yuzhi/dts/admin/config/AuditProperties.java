@@ -14,6 +14,8 @@ public class AuditProperties {
     private String hmacKey;
     private boolean forwardEnabled = false;
     private long forwardRetryIntervalMs = 60000;
+    private int maxRetryAttempts = 5;
+    private long retryBackoffMs = 2000;
 
     public boolean isEnabled() {
         return enabled;
@@ -69,5 +71,21 @@ public class AuditProperties {
 
     public void setForwardRetryIntervalMs(long forwardRetryIntervalMs) {
         this.forwardRetryIntervalMs = forwardRetryIntervalMs;
+    }
+
+    public int getMaxRetryAttempts() {
+        return maxRetryAttempts;
+    }
+
+    public void setMaxRetryAttempts(int maxRetryAttempts) {
+        this.maxRetryAttempts = maxRetryAttempts;
+    }
+
+    public long getRetryBackoffMs() {
+        return retryBackoffMs;
+    }
+
+    public void setRetryBackoffMs(long retryBackoffMs) {
+        this.retryBackoffMs = retryBackoffMs;
     }
 }

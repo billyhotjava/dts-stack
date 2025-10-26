@@ -100,49 +100,52 @@ export type MenuTree = Menu & {
 
 // 审计日志相关类型
 export interface AuditLog {
-    eventId?: string;
-    id: number;
-    occurredAt: string;
-    module: string;
-    action: string;
-    actor: string;
-    resourceType?: string;
-    resourceId?: string;
-    clientIp?: string;
-    clientAgent?: string;
-    httpMethod?: string;
-    result: string;
-    // localized display-only fields (backend provided)
-    resultText?: string; // SUCCESS/FAILED -> 成功/失败
-    extraTags?: string;
-    payloadPreview?: string;
-    // extended fields (audit refactor)
-    sourceSystem?: string;
-    sourceSystemText?: string; // admin/platform -> 管理端/业务端
-    eventClass?: string;
-    eventType?: string;
-    summary?: string;
-    operatorId?: string;
-    operatorName?: string;
-    operatorRoles?: string; // JSON string from backend
-    orgCode?: string;
-    orgName?: string;
-    departmentName?: string; // alias of orgName for display
-    // convenience fields extracted from details
-    requestId?: string;
-    targetTable?: string;
-    targetTableLabel?: string; // localized table label
-    targetId?: string;
-    targetRef?: string;
-    // derived fields
-    operationType?: string;    // 查询/新增/修改/删除/登录/登出/部分更新
-    operationContent?: string; // 如：修改了用户
-    logTypeText?: string;      // 安全审计/操作审计
+	eventId?: string;
+	id: number;
+	occurredAt: string;
+	module: string;
+	action: string;
+	actor: string;
+	resourceType?: string;
+	resourceId?: string;
+	clientIp?: string;
+	clientAgent?: string;
+	httpMethod?: string;
+	result: string;
+	// localized display-only fields (backend provided)
+	resultText?: string; // SUCCESS/FAILED -> 成功/失败
+	extraTags?: string;
+	payloadPreview?: string;
+	// extended fields (audit refactor)
+	sourceSystem?: string;
+	sourceSystemText?: string; // admin/platform -> 管理端/业务端
+	eventClass?: string;
+	eventType?: string;
+	summary?: string;
+	operatorId?: string;
+	operatorName?: string;
+	operatorRoles?: string; // JSON string from backend
+	orgCode?: string;
+	orgName?: string;
+	departmentName?: string; // alias of orgName for display
+	// convenience fields extracted from details
+	requestId?: string;
+	targetTable?: string;
+	targetTableLabel?: string; // localized table label
+	targetId?: string;
+	targetRef?: string;
+	changeRequestRef?: string;
+	approvalSummary?: string;
+	// derived fields
+	operationTypeCode?: string; // CREATE/UPDATE/DELETE/READ...
+	operationType?: string; // 本地化显示文本
+	operationContent?: string; // 如：修改了用户
+	logTypeText?: string; // 安全审计/操作审计
 }
 
 export interface AuditLogDetail extends AuditLog {
-    payload?: unknown;
-    details?: unknown;
+	payload?: unknown;
+	details?: unknown;
 }
 
 export interface AuditLogPageResponse {

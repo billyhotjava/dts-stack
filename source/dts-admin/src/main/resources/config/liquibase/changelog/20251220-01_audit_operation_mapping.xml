@@ -19,7 +19,9 @@
             <column name="module_name" type="VARCHAR(128)">
                 <constraints nullable="false"/>
             </column>
-            <column name="action_type" type="VARCHAR(32)">
+            <column name="operation_group" type="VARCHAR(64)"/>
+            <column name="group_display_name" type="VARCHAR(128)"/>
+            <column name="operation_type" type="VARCHAR(32)">
                 <constraints nullable="false"/>
             </column>
             <column name="description_template" type="VARCHAR(1024)">

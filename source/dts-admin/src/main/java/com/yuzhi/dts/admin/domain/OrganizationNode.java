@@ -32,6 +32,9 @@ public class OrganizationNode extends AbstractAuditingEntity<Long> implements Se
     @Column(name = "keycloak_group_id", unique = true)
     private String keycloakGroupId;
 
+    @Column(name = "is_root", nullable = false)
+    private boolean root;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private OrganizationNode parent;
@@ -94,6 +97,14 @@ public class OrganizationNode extends AbstractAuditingEntity<Long> implements Se
 
     public void setKeycloakGroupId(String keycloakGroupId) {
         this.keycloakGroupId = keycloakGroupId;
+    }
+
+    public boolean isRoot() {
+        return root;
+    }
+
+    public void setRoot(boolean root) {
+        this.root = root;
     }
 
     public OrganizationNode getParent() {

@@ -96,22 +96,22 @@ export default function PermissionPage() {
 	};
 	return (
 		<div className="flex flex-col gap-4">
-            <div className="w-full flex  items-center justify-center">
-                <Text variant="subTitle1">当前用户：</Text>
-                {DB_USER.length > 0 ? (
-                  <Tabs defaultValue={username} onValueChange={handleSwitch}>
-                      <TabsList>
-                          {DB_USER.map((user) => (
-                              <TabsTrigger key={user.username} value={user.username}>
-                                  {user.username}
-                              </TabsTrigger>
-                          ))}
-                      </TabsList>
-                  </Tabs>
-                ) : (
-                  <Text variant="body1">{username}</Text>
-                )}
-            </div>
+			<div className="w-full flex  items-center justify-center">
+				<Text variant="subTitle1">当前用户：</Text>
+				{DB_USER.length > 0 ? (
+					<Tabs defaultValue={username} onValueChange={handleSwitch}>
+						<TabsList>
+							{DB_USER.map((user) => (
+								<TabsTrigger key={user.username} value={user.username}>
+									{user.username}
+								</TabsTrigger>
+							))}
+						</TabsList>
+					</Tabs>
+				) : (
+					<Text variant="body1">{username}</Text>
+				)}
+			</div>
 			<Card>
 				<CardContent>
 					<div className="flex items-center gap-2">

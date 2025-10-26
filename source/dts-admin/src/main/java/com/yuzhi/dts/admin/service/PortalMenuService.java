@@ -321,13 +321,33 @@ public class PortalMenuService {
     }
 
     public void replaceVisibilities(PortalMenu menu, List<PortalMenuVisibility> visibilities) {
-        visibilityRepo.deleteByMenuId(menu.getId());
-        menu.clearVisibilities();
-        List<PortalMenuVisibility> effective = (visibilities == null || visibilities.isEmpty()) ? defaultVisibilities(menu) : visibilities;
-        for (PortalMenuVisibility visibility : effective) {
-            menu.addVisibility(visibility);
+        if (menu == null || menu.getId() == null) {
+            throw new IllegalArgumentException("menu must be persisted before updating visibilities");
         }
-        menuRepo.save(menu);
+        PortalMenu managed = menuRepo
+            .findById(menu.getId())
+            .orElseThrow(() -> new IllegalArgumentException("No portal menu found for id " + menu.getId()));
+
+        managed.getVisibilities().clear();
+
+        List<PortalMenuVisibility> effective;
+        if (CollectionUtils.isEmpty(visibilities)) {
+            effective = defaultVisibilities(managed);
+        } else {
+            effective = visibilities
+                .stream()
+                .map(v -> copyVisibility(managed, v))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(ArrayList::new));
+            if (effective.isEmpty()) {
+                effective = defaultVisibilities(managed);
+            }
+        }
+
+        for (PortalMenuVisibility visibility : effective) {
+            managed.addVisibility(visibility);
+        }
+        menuRepo.flush();
     }
 
     public void resetMenusToSeed() {
@@ -708,6 +728,19 @@ public class PortalMenuService {
         op.setDataLevel("INTERNAL");
         defaults.add(op);
         return defaults;
+    }
+
+    private PortalMenuVisibility copyVisibility(PortalMenu targetMenu, PortalMenuVisibility source) {
+        if (source == null) {
+            return null;
+        }
+        PortalMenuVisibility copy = new PortalMenuVisibility();
+        copy.setId(null);
+        copy.setMenu(targetMenu);
+        copy.setRoleCode(source.getRoleCode());
+        copy.setPermissionCode(source.getPermissionCode());
+        copy.setDataLevel(source.getDataLevel());
+        return copy;
     }
 
     public void synchronizeRoleMenuVisibility(String roleCode, String scope, Set<String> operations) {

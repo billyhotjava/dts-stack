@@ -26,11 +26,11 @@ function AdminIndexRedirect() {
 export const adminRoutes: RouteObject[] = [
 	{
 		path: "admin",
-    element: (
-      <AdminGuard>
-        <DashboardLayout />
-      </AdminGuard>
-    ),
+		element: (
+			<AdminGuard>
+				<DashboardLayout />
+			</AdminGuard>
+		),
 		children: [
 			{ index: true, element: <AdminIndexRedirect /> },
 			{ path: "my-changes", element: <MyChangesView /> },

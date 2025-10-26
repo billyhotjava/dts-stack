@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -138,6 +138,7 @@ export const useUserActions = () => useUserStore((state) => state.actions);
 
 export const useSignIn = () => {
 	const { setUserToken, setUserInfo } = useUserActions();
+	const queryClient = useQueryClient();
 
 	const signInMutation = useMutation({
 		mutationFn: userService.signin,
@@ -256,6 +257,7 @@ export const useSignIn = () => {
 
 			setUserToken({ accessToken, refreshToken });
 			setUserInfo(adaptedUser);
+			queryClient.removeQueries({ queryKey: ["admin", "whoami"], exact: true });
 
 			// 登录成功后获取并更新Keycloak翻译词条
 			try {

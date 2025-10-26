@@ -9,7 +9,7 @@
         <sql>
             INSERT INTO audit_operation_mapping (
                 url_pattern, http_method, status_code_regex, source_system,
-                module_name, action_type, description_template,
+                module_name, operation_type, description_template,
                 source_table_template, param_extractors, event_class,
                 order_value, enabled
             )

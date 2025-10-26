@@ -21,7 +21,7 @@ const assetList = [
 
 export default function DataSecurityPage() {
 	const t = useBilingualText();
- 	const translate = (key: string, fallback: string) => {
+	const translate = (key: string, fallback: string) => {
 		const value = t(key).trim();
 		return value.length > 0 ? value : fallback;
 	};
@@ -103,7 +103,9 @@ export default function DataSecurityPage() {
 									<th className="py-2 pr-4 font-medium">{translate("sys.dataSecurity.assetName", "资产名称")}</th>
 									<th className="py-2 pr-4 font-medium">{translate("sys.dataSecurity.assetOwner", "负责人")}</th>
 									<th className="py-2 pr-4 font-medium">{translate("sys.dataSecurity.assetCategory", "分类")}</th>
-									<th className="py-2 pr-4 font-medium text-right">{translate("sys.dataSecurity.assetRecords", "记录数")}</th>
+									<th className="py-2 pr-4 font-medium text-right">
+										{translate("sys.dataSecurity.assetRecords", "记录数")}
+									</th>
 									<th className="py-2 pr-0 font-medium">{translate("sys.dataSecurity.assetUpdatedAt", "最近更新")}</th>
 								</tr>
 							</thead>
@@ -112,11 +114,11 @@ export default function DataSecurityPage() {
 									<tr key={asset.name} className="border-b last:border-none">
 										<td className="py-2 pr-4 font-medium">{asset.name}</td>
 										<td className="py-2 pr-4 text-muted-foreground">{asset.owner}</td>
-									<td className="py-2 pr-4">
-										<Badge variant={categoryVariant(asset.category)}>
-											{translate(`sys.dataSecurity.category.${asset.category}`, asset.category)}
-										</Badge>
-									</td>
+										<td className="py-2 pr-4">
+											<Badge variant={categoryVariant(asset.category)}>
+												{translate(`sys.dataSecurity.category.${asset.category}`, asset.category)}
+											</Badge>
+										</td>
 										<td className="py-2 pr-4 text-right">{asset.records.toLocaleString()}</td>
 										<td className="py-2 pr-0 text-muted-foreground">{asset.updatedAt}</td>
 									</tr>

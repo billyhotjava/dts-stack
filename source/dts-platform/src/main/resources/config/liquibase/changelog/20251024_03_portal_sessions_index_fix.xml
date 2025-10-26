@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251024-03-portal-sessions-drop-unique" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="portal_sessions"/>
+                <indexExists tableName="portal_sessions" indexName="uq_portal_sessions_active_username"/>
+            </and>
+        </preConditions>
+        <dropIndex indexName="uq_portal_sessions_active_username" tableName="portal_sessions"/>
+    </changeSet>
+
+    <changeSet id="20251024-04-portal-sessions-partial-unique" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="portal_sessions"/>
+        </preConditions>
+        <sql splitStatements="false">
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_portal_sessions_active_username_partial
+            ON portal_sessions (normalized_username)
+            WHERE revoked_at IS NULL;
+        </sql>
+    </changeSet>
+</databaseChangeLog>

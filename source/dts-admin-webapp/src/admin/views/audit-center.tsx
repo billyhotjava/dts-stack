@@ -22,6 +22,7 @@ interface FilterState {
 	to?: string;
 	sourceSystem?: string;
 	module?: string;
+	operationGroup?: string;
 	actor?: string;
 	resource?: string;
 	clientIp?: string;
@@ -75,7 +76,7 @@ const MODULE_LABEL_OVERRIDES: Record<string, string> = {
 	"catalog.table.import": "表导入",
 	"dashboard.list": "仪表盘列表",
 	"dataset.schema": "数据模型",
-	"directory": "目录管理",
+	directory: "目录管理",
 	"etl.job": "集成任务",
 	"etl.run.status": "任务运行状态",
 	"explore.execute": "执行查询",
@@ -324,6 +325,9 @@ export default function AuditCenterView() {
 	const [moduleOptions, setModuleOptions] = useState<Array<{ value: string; label: string }>>([
 		{ value: "", label: "全部模块" },
 	]);
+	const [groupOptions, setGroupOptions] = useState<Array<{ value: string; label: string }>>([
+		{ value: "", label: "全部功能分组" },
+	]);
 
 	const loadLogs = useCallback(
 		async (nextPage: number, nextSize: number) => {
@@ -332,21 +336,26 @@ export default function AuditCenterView() {
 			setSize(nextSize);
 			try {
 				const params = buildQuery(filters);
-				const response: AuditLogPageResponse = await AuditLogService.getAuditLogs(nextPage, nextSize, "occurredAt,desc", params);
+				const response: AuditLogPageResponse = await AuditLogService.getAuditLogs(
+					nextPage,
+					nextSize,
+					"occurredAt,desc",
+					params,
+				);
 				setLogs(response.content);
 				setPage(response.page);
 				setSize(response.size);
 				setTotalElements(response.totalElements);
-                // totalPages is not used in UI; skip storing
-                // Note: 功能模块下拉仅使用审计目录（/audit-logs/modules），不再从日志内容动态补全，
-                // 以确保不同角色（含 auditadmin）看到一致的大类选项。
+				// totalPages is not used in UI; skip storing
+				// Note: 功能模块下拉仅使用审计目录（/audit-logs/modules），不再从日志内容动态补全，
+				// 以确保不同角色（含 auditadmin）看到一致的大类选项。
 			} catch (error) {
 				console.error("Failed to load audit logs", error);
 				toast.error("加载审计日志失败");
 			} finally {
 				setLoading(false);
 			}
-	},
+		},
 		[filters],
 	);
 
@@ -354,15 +363,15 @@ export default function AuditCenterView() {
 		loadLogs(page, size);
 	}, [loadLogs, page, size]);
 
-		useEffect(() => {
-			if (!MODULE_FILTER_ENABLED) {
-				return;
-			}
-			AuditLogService.getAuditModules()
-				.then((modules) => {
-					const mapped = modules.map((item) => {
-						const rawKey = item.key?.trim() ?? "";
-						const rawTitle = item.title?.trim();
+	useEffect(() => {
+		if (!MODULE_FILTER_ENABLED) {
+			return;
+		}
+		AuditLogService.getAuditModules()
+			.then((modules) => {
+				const mapped = modules.map((item) => {
+					const rawKey = item.key?.trim() ?? "";
+					const rawTitle = item.title?.trim();
 					const value = rawKey || rawTitle || "";
 					const label = translateModuleLabel(rawKey, rawTitle);
 					return { value, label };
@@ -372,6 +381,29 @@ export default function AuditCenterView() {
 			.catch((error) => {
 				console.error("Failed to load module catalog", error);
 				toast.error("加载模块字典失败");
+			});
+	}, []);
+
+	useEffect(() => {
+		AuditLogService.getAuditGroups()
+			.then((groups) => {
+				const seen = new Set<string>();
+				const mapped: Array<{ value: string; label: string }> = [];
+				for (const item of groups) {
+					const rawKey = (item.key ?? "").trim();
+					const rawTitle = (item.title ?? "").trim();
+					if (!rawKey || seen.has(rawKey)) {
+						continue;
+					}
+					seen.add(rawKey);
+					const label = rawTitle || rawKey;
+					mapped.push({ value: rawKey, label });
+				}
+				setGroupOptions([{ value: "", label: "全部功能分组" }, ...mapped]);
+			})
+			.catch((error) => {
+				console.error("Failed to load audit groups", error);
+				toast.error("加载功能模块分组失败");
 			});
 	}, []);
 
@@ -403,70 +435,123 @@ export default function AuditCenterView() {
 		}
 	}, [filters]);
 
-    const handleExpandRow = useCallback(
-        async (expanded: boolean, record: AuditLog) => {
-            if (!expanded) return;
-            const id = record.id;
-            if (rowDetails[id] !== undefined) return; // already fetched
-            setRowLoading((prev) => ({ ...prev, [id]: true }));
-            try {
-                const detail = await AuditLogService.getAuditLogById(id);
-                setRowDetails((prev) => ({ ...prev, [id]: detail }));
-            } catch (e) {
-                console.error("加载详情失败", e);
-                setRowDetails((prev) => ({ ...prev, [id]: null }));
-            } finally {
-                setRowLoading((prev) => ({ ...prev, [id]: false }));
-            }
-        },
-        [rowDetails]
-    );
+	const handleExpandRow = useCallback(
+		async (expanded: boolean, record: AuditLog) => {
+			if (!expanded) return;
+			const id = record.id;
+			if (rowDetails[id] !== undefined) return; // already fetched
+			setRowLoading((prev) => ({ ...prev, [id]: true }));
+			try {
+				const detail = await AuditLogService.getAuditLogById(id);
+				setRowDetails((prev) => ({ ...prev, [id]: detail }));
+			} catch (e) {
+				console.error("加载详情失败", e);
+				setRowDetails((prev) => ({ ...prev, [id]: null }));
+			} finally {
+				setRowLoading((prev) => ({ ...prev, [id]: false }));
+			}
+		},
+		[rowDetails],
+	);
 
-    // 使用 Antd Table 的分页展示，无需单独显示分页文案
+	// 使用 Antd Table 的分页展示，无需单独显示分页文案
 
-    const columns = useMemo<ColumnsType<AuditLog>>(
-      () => [
-        { title: "操作人", dataIndex: "operatorName", key: "operatorName", width: 140, render: (_: string, r) => r.operatorName || formatOperatorName(r.actor) },
-        { title: "操作人编码", dataIndex: "actor", key: "actor", width: 140 },
-        { title: "IP地址", dataIndex: "clientIp", key: "clientIp", width: 130, render: (v?: string) => v || "127.0.0.1" },
-        { title: "操作时间", dataIndex: "occurredAt", key: "occurredAt", width: 180, render: (v: string) => <span className="text-sm">{formatDateTime(v)}</span> },
-        { title: "模块名称", dataIndex: "sourceSystemText", key: "sourceSystemText", width: 120, render: (_: string, r) => r.sourceSystemText || r.sourceSystem || "-" },
-        { title: "操作内容", dataIndex: "operationContent", key: "operationContent", width: 200, render: (_: string, r) => r.operationContent || r.summary || r.action },
-        { title: "操作类型", dataIndex: "operationType", key: "operationType", width: 110, render: (_: string, r) => r.operationType || "操作" },
-        { title: "操作结果", dataIndex: "result", key: "result", width: 100, render: (_: string, r) => {
-            const raw = (r.result || "").toUpperCase();
-            const isFail = raw === "FAILED" || raw === "FAILURE";
-            const label = r.resultText || (raw === "SUCCESS" ? "成功" : isFail ? "失败" : r.result || "-");
-            return <Badge variant={isFail ? "destructive" : "secondary"}>{label}</Badge>;
-        }},
-        { title: "日志类型", dataIndex: "logTypeText", key: "logTypeText", width: 110, render: (_: string, r) => r.logTypeText || (r.eventClass && r.eventClass.toLowerCase() === "securityevent" ? "安全审计" : "操作审计") },
-      ],
-      []
-    );
+	const columns = useMemo<ColumnsType<AuditLog>>(
+		() => [
+			{
+				title: "操作人",
+				dataIndex: "operatorName",
+				key: "operatorName",
+				width: 140,
+				render: (_: string, r) => r.operatorName || formatOperatorName(r.actor),
+			},
+			{ title: "操作人编码", dataIndex: "actor", key: "actor", width: 140 },
+			{ title: "IP地址", dataIndex: "clientIp", key: "clientIp", width: 130, render: (v?: string) => v || "127.0.0.1" },
+			{
+				title: "操作时间",
+				dataIndex: "occurredAt",
+				key: "occurredAt",
+				width: 180,
+				render: (v: string) => <span className="text-sm">{formatDateTime(v)}</span>,
+			},
+			{
+				title: "模块名称",
+				dataIndex: "sourceSystemText",
+				key: "sourceSystemText",
+				width: 120,
+				render: (_: string, r) => r.sourceSystemText || r.sourceSystem || "-",
+			},
+			{
+				title: "操作内容",
+				dataIndex: "operationContent",
+				key: "operationContent",
+				width: 200,
+				render: (_: string, r) => r.operationContent || r.summary || r.action,
+			},
+			{
+				title: "操作类型",
+				dataIndex: "operationType",
+				key: "operationType",
+				width: 110,
+				render: (_: string, r) => r.operationType || "操作",
+			},
+			{
+				title: "操作结果",
+				dataIndex: "result",
+				key: "result",
+				width: 100,
+				render: (_: string, r) => {
+					const raw = (r.result || "").toUpperCase();
+					const isFail = raw === "FAILED" || raw === "FAILURE";
+					const label = r.resultText || (raw === "SUCCESS" ? "成功" : isFail ? "失败" : r.result || "-");
+					return <Badge variant={isFail ? "destructive" : "secondary"}>{label}</Badge>;
+				},
+			},
+			{
+				title: "关联ID",
+				dataIndex: "correlationId",
+				key: "correlationId",
+				width: 170,
+				render: (value?: string) =>
+					value ? <span className="font-mono text-xs text-muted-foreground">{value}</span> : "-",
+			},
+			{
+				title: "日志类型",
+				dataIndex: "logTypeText",
+				key: "logTypeText",
+				width: 110,
+				render: (_: string, r) =>
+					r.logTypeText || (r.eventClass && r.eventClass.toLowerCase() === "securityevent" ? "安全审计" : "操作审计"),
+			},
+		],
+		[],
+	);
 
-    return (
-        <div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
-            {/* 老页面布局样式：页眉 + 右侧操作区 */}
-            <div className="flex flex-wrap items-center gap-3">
-                <Text variant="body1" className="text-lg font-semibold">日志审计</Text>
-                <div className="ml-auto flex items-center gap-2">
-                    <Button variant="outline" onClick={handleRefresh} disabled={loading}>
-                        {loading ? "刷新中..." : "刷新"}
-                    </Button>
-                    <Button onClick={handleExport} disabled={exporting || logs.length === 0}>
-                        {exporting ? "正在导出..." : "导出日志"}
-                    </Button>
-                </div>
-            </div>
-            <Card>
-                <CardHeader className="space-y-2">
-                    <CardTitle>查询条件</CardTitle>
-                    <Text variant="body3" className="text-muted-foreground">
-                        支持按时间范围、来源系统、功能模块、操作人、目标位置与 IP 筛选审计记录。
-                    </Text>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+	return (
+		<div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
+			{/* 老页面布局样式：页眉 + 右侧操作区 */}
+			<div className="flex flex-wrap items-center gap-3">
+				<Text variant="body1" className="text-lg font-semibold">
+					日志审计
+				</Text>
+				<div className="ml-auto flex items-center gap-2">
+					<Button variant="outline" onClick={handleRefresh} disabled={loading}>
+						{loading ? "刷新中..." : "刷新"}
+					</Button>
+					<Button onClick={handleExport} disabled={exporting || logs.length === 0}>
+						{exporting ? "正在导出..." : "导出日志"}
+					</Button>
+				</div>
+			</div>
+			<Card>
+				<CardHeader className="space-y-2">
+					<CardTitle>查询条件</CardTitle>
+					<Text variant="body3" className="text-muted-foreground">
+						支持按时间范围、来源系统、功能模块、操作人、目标位置与 IP 筛选审计记录。
+					</Text>
+				</CardHeader>
+				<CardContent className="space-y-4">
+					<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
 						<DateTimeField
 							label="起始时间"
 							value={filters.from}
@@ -481,11 +566,11 @@ export default function AuditCenterView() {
 							label="来源系统"
 							value={filters.sourceSystem || ""}
 							onChange={(value) => setFilters((prev) => ({ ...prev, sourceSystem: value || undefined }))}
-                            options={[
-                                { value: "", label: "全部来源" },
-                                { value: "admin", label: "系统管理" },
-                                { value: "platform", label: "业务管理" },
-                            ]}
+							options={[
+								{ value: "", label: "全部来源" },
+								{ value: "admin", label: "系统管理" },
+								{ value: "platform", label: "业务管理" },
+							]}
 						/>
 						{MODULE_FILTER_ENABLED && (
 							<SelectField
@@ -498,12 +583,21 @@ export default function AuditCenterView() {
 								options={moduleOptions}
 							/>
 						)}
-                            <InputField
-                                label="操作者"
-                                placeholder="如 系统管理员 或 sysadmin"
-                                value={filters.actor ?? ""}
-                                onChange={(value) => setFilters((prev) => ({ ...prev, actor: value || undefined }))}
-                            />
+						<SelectField
+							label="功能分组"
+							value={filters.operationGroup || ""}
+							onChange={(value) => {
+								const trimmed = value.trim();
+								setFilters((prev) => ({ ...prev, operationGroup: trimmed ? trimmed : undefined }));
+							}}
+							options={groupOptions}
+						/>
+						<InputField
+							label="操作者"
+							placeholder="如 系统管理员 或 sysadmin"
+							value={filters.actor ?? ""}
+							onChange={(value) => setFilters((prev) => ({ ...prev, actor: value || undefined }))}
+						/>
 						<InputField
 							label="目标位置"
 							placeholder="例如 /admin/approval"
@@ -522,69 +616,70 @@ export default function AuditCenterView() {
 							value={filters.action ?? ""}
 							onChange={(value) => setFilters((prev) => ({ ...prev, action: value || undefined }))}
 						/>
-                            {/* 事件类型筛选已移除 */}
+						{/* 事件类型筛选已移除 */}
 					</div>
-                    <div className="flex flex-wrap gap-3">
-                        <Button type="button" variant="outline" onClick={() => setFilters({})}>
-                            重置条件
-                        </Button>
-                        <Button type="button" variant="ghost" onClick={handleRefresh} disabled={loading}>
-                            {loading ? "刷新中..." : "刷新"}
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+					<div className="flex flex-wrap gap-3">
+						<Button type="button" variant="outline" onClick={() => setFilters({})}>
+							重置条件
+						</Button>
+						<Button type="button" variant="ghost" onClick={handleRefresh} disabled={loading}>
+							{loading ? "刷新中..." : "刷新"}
+						</Button>
+					</div>
+				</CardContent>
+			</Card>
 
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle>日志记录</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Table<AuditLog>
-                        rowKey="id"
-                        columns={columns}
-                        dataSource={logs}
-                        loading={loading}
-                        expandable={{
-                            columnWidth: 48,
-                            expandRowByClick: true,
-                            onExpand: handleExpandRow,
-                            expandedRowRender: (record) => {
-                                const loadingRow = rowLoading[record.id];
-                                const detail = rowDetails[record.id];
-                                if (loadingRow) {
-                                    return <div className="text-xs text-muted-foreground">加载详情...</div>;
-                                }
-                                const content = detail?.details ?? null;
-                                if (!content) {
-                                    return <div className="text-xs text-muted-foreground">无详情</div>;
-                                }
-                                return (
-                                    <pre className="text-xs whitespace-pre-wrap break-words">
-                                        {JSON.stringify(content, null, 2)}
-                                    </pre>
-                                );
-                            },
-                        }}
-                        pagination={{
-                            current: page + 1,
-                            pageSize: size,
-                            total: totalElements,
-                            showSizeChanger: true,
-                            pageSizeOptions: [10, 20, 50, 100],
-                            showQuickJumper: true,
-                            showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
-                            onChange: (current, pageSize) => {
-                                setPage(current - 1);
-                                setSize(pageSize);
-                            },
-                        }}
-                        size="small"
-                        tableLayout="fixed"
-                        scroll={{ x: 1200 }}
-                    />
-                </CardContent>
-            </Card>
+			<Card>
+				<CardHeader className="pb-2">
+					<CardTitle>日志记录</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<Table<AuditLog>
+						rowKey="id"
+						columns={columns}
+						dataSource={logs}
+						loading={loading}
+							expandable={{
+								columnWidth: 48,
+								expandRowByClick: true,
+								onExpand: handleExpandRow,
+								expandedRowRender: (record) => {
+									const loadingRow = rowLoading[record.id];
+									const detail = rowDetails[record.id];
+									if (loadingRow) {
+										return <div className="text-xs text-muted-foreground">加载详情...</div>;
+									}
+									const rawDetails = detail?.details;
+									const sanitized = sanitizeAuditDetails(rawDetails);
+									if (isAuditDetailEmpty(sanitized)) {
+										return <div className="text-xs text-muted-foreground">无详情</div>;
+									}
+									return (
+										<pre className="whitespace-pre-wrap break-words rounded border border-border bg-muted/40 p-3 text-xs">
+											{JSON.stringify(sanitized, null, 2)}
+										</pre>
+									);
+								},
+							}}
+						pagination={{
+							current: page + 1,
+							pageSize: size,
+							total: totalElements,
+							showSizeChanger: true,
+							pageSizeOptions: [10, 20, 50, 100],
+							showQuickJumper: true,
+							showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+							onChange: (current, pageSize) => {
+								setPage(current - 1);
+								setSize(pageSize);
+							},
+						}}
+							size="small"
+							tableLayout="fixed"
+							scroll={{ x: 1300 }}
+					/>
+				</CardContent>
+			</Card>
 		</div>
 	);
 }
@@ -605,6 +700,9 @@ function buildQuery(filters: FilterState): Record<string, string> {
 	if (filters.module) {
 		params.module = filters.module;
 	}
+	if (filters.operationGroup) {
+		params.operationGroup = filters.operationGroup;
+	}
 	if (filters.actor) {
 		params.actor = filters.actor;
 	}
@@ -618,6 +716,64 @@ function buildQuery(filters: FilterState): Record<string, string> {
 		params.action = filters.action;
 	}
 	return params;
+}
+
+const DETAIL_KEYS_TO_HIDE = new Set([
+	"before",
+	"after",
+	"changes",
+	"payload",
+	"payloadJson",
+	"diff",
+	"diffJson",
+	"originalValue",
+	"updatedValue",
+]);
+
+function sanitizeAuditDetails(value: unknown): unknown {
+	if (value === null || value === undefined) {
+		return null;
+	}
+	if (Array.isArray(value)) {
+		const cleaned = value
+			.map((item) => sanitizeAuditDetails(item))
+			.filter((item) => !isAuditDetailEmpty(item));
+		return cleaned.length > 0 ? cleaned : null;
+	}
+	if (typeof value === "object") {
+		const source = value as Record<string, unknown>;
+		const target: Record<string, unknown> = {};
+		for (const [key, raw] of Object.entries(source)) {
+			if (DETAIL_KEYS_TO_HIDE.has(key)) {
+				continue;
+			}
+			const sanitized = sanitizeAuditDetails(raw);
+			if (!isAuditDetailEmpty(sanitized)) {
+				target[key] = sanitized;
+			}
+		}
+		return Object.keys(target).length > 0 ? target : null;
+	}
+	if (typeof value === "string") {
+		return value.trim() === "" ? null : value;
+	}
+	return value;
+}
+
+function isAuditDetailEmpty(value: unknown): boolean {
+	if (value === null || value === undefined) {
+		return true;
+	}
+	if (typeof value === "string") {
+		return value.trim().length === 0;
+	}
+	if (Array.isArray(value)) {
+		return value.length === 0 || value.every((item) => isAuditDetailEmpty(item));
+	}
+	if (typeof value === "object") {
+		return Object.keys(value as Record<string, unknown>).length === 0;
+	}
+	return false;
 }
 
 function resolveAccessToken(): string {
@@ -648,16 +804,16 @@ function formatDateTime(value: string) {
 }
 
 function formatOperatorName(value: string) {
-    const normalized = value?.toLowerCase?.();
-    if (!normalized) {
-        return value;
-    }
-    const label = ADMIN_LABELS[normalized];
-    if (label) {
-        return `${label}（${value}）`;
-    }
-    // 其余用户统一归类为“业务系统”操作人
-    return `业务系统（${value}）`;
+	const normalized = value?.toLowerCase?.();
+	if (!normalized) {
+		return value;
+	}
+	const label = ADMIN_LABELS[normalized];
+	if (label) {
+		return `${label}（${value}）`;
+	}
+	// 其余用户统一归类为“业务系统”操作人
+	return `业务系统（${value}）`;
 }
 
 interface FieldProps {
@@ -670,7 +826,7 @@ interface FieldProps {
 function DateTimeField({ label, value, onChange, placeholder }: FieldProps) {
 	const [open, setOpen] = useState(false);
 	const parsed = value ? dayjs(value) : undefined;
-	const displayText = parsed ? parsed.format("YYYY-MM-DD HH:mm") : placeholder ?? "yyyy-mm-dd --:--";
+	const displayText = parsed ? parsed.format("YYYY-MM-DD HH:mm") : (placeholder ?? "yyyy-mm-dd --:--");
 
 	const handleDateSelect = useCallback(
 		(selectedDate?: Date) => {
@@ -701,7 +857,11 @@ function DateTimeField({ label, value, onChange, placeholder }: FieldProps) {
 			}
 			const [hour, minute] = timeValue.split(":").map((item) => Number.parseInt(item, 10));
 			const base = parsed ?? dayjs();
-			const next = base.hour(Number.isFinite(hour) ? hour : 0).minute(Number.isFinite(minute) ? minute : 0).second(0).millisecond(0);
+			const next = base
+				.hour(Number.isFinite(hour) ? hour : 0)
+				.minute(Number.isFinite(minute) ? minute : 0)
+				.second(0)
+				.millisecond(0);
 			onChange(next.format("YYYY-MM-DDTHH:mm"));
 		},
 		[onChange, parsed],
@@ -716,10 +876,7 @@ function DateTimeField({ label, value, onChange, placeholder }: FieldProps) {
 				<PopoverTrigger asChild>
 					<Button
 						variant="outline"
-						className={cn(
-							"w-full justify-start text-left font-normal",
-							!parsed && "text-muted-foreground",
-						)}
+						className={cn("w-full justify-start text-left font-normal", !parsed && "text-muted-foreground")}
 					>
 						<CalendarIcon className="mr-2 size-4" />
 						{displayText}
@@ -729,7 +886,12 @@ function DateTimeField({ label, value, onChange, placeholder }: FieldProps) {
 					<Calendar mode="single" selected={parsed?.toDate()} onSelect={handleDateSelect} initialFocus />
 					<div className="flex items-center gap-2">
 						<div className="relative w-full">
-							<Input type="time" value={parsed ? parsed.format("HH:mm") : ""} onChange={handleTimeChange} className="pl-9" />
+							<Input
+								type="time"
+								value={parsed ? parsed.format("HH:mm") : ""}
+								onChange={handleTimeChange}
+								className="pl-9"
+							/>
 							<Clock3 className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 						</div>
 						<Button
@@ -764,7 +926,10 @@ function InputField({ label, value, onChange, placeholder }: FieldProps) {
 	);
 }
 
-interface SelectOption { value: string; label: string }
+interface SelectOption {
+	value: string;
+	label: string;
+}
 interface SelectProps {
 	label: string;
 	value: string;

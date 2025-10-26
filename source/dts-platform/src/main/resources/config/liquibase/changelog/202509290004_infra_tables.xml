@@ -4,6 +4,12 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <changeSet id="202509290004-01" author="platform">
+        <validCheckSum>ANY</validCheckSum>
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="infra_data_source"/>
+            </not>
+        </preConditions>
         <comment>Infra: data sources</comment>
         <createTable tableName="infra_data_source">
             <column name="id" type="uuid">
@@ -68,4 +74,3 @@
     </changeSet>
 
 </databaseChangeLog>
-

@@ -79,16 +79,18 @@ public class OrganizationService {
         }
     }
 
-    public OrganizationNode create(String name, Long parentId, String description) {
+    public OrganizationNode create(String name, Long parentId, String description, boolean isRoot) {
         OrganizationNode parent = null;
-        if (parentId == null) {
-            // Only one root organization is allowed
-            if (!repository.findByParentIsNullOrderByIdAsc().isEmpty()) {
-                throw new IllegalArgumentException("仅允许存在一个根部门");
+        if (isRoot) {
+            if (parentId != null) {
+                throw new IllegalArgumentException("ROOT 节点不能指定上级部门");
             }
-        }
-        if (parentId != null) {
-            parent = repository.findById(parentId).orElseThrow();
+            ensureRootAvailability(null);
+        } else {
+            if (parentId == null) {
+                throw new IllegalArgumentException("非 ROOT 节点必须指定上级部门");
+            }
+            parent = repository.findById(parentId).orElseThrow(() -> new IllegalArgumentException("指定的上级组织不存在: " + parentId));
         }
 
         OrganizationNode entity = new OrganizationNode();
@@ -97,40 +99,62 @@ public class OrganizationService {
         entity.setContact(null);
         entity.setPhone(null);
         entity.setDescription(description);
+        entity.setRoot(isRoot);
 
-        if (parent != null) {
+        if (!isRoot && parent != null) {
             entity.setParent(parent);
             if (parent.getChildren() == null) {
                 parent.setChildren(new ArrayList<>());
             }
             parent.getChildren().add(entity);
+        } else {
+            entity.setParent(null);
         }
 
         OrganizationNode saved = repository.save(entity);
 
         if (isKeycloakSyncEnabled()) {
             String token = resolveManagementToken();
-            if (parent != null) {
+            if (!isRoot && parent != null) {
                 ensureGroupSynced(parent, token);
             }
-            ensureGroupSynced(saved, token, parent);
+            ensureGroupSynced(saved, token, saved.getParent());
             synchronizeGroup(saved, token);
         }
 
         return saved;
     }
 
-    public Optional<OrganizationNode> update(Long id, String name, String description, Long parentId) {
+    public Optional<OrganizationNode> update(Long id, String name, String description, Long parentId, Boolean isRoot) {
         return repository
             .findById(id)
             .map(entity -> {
                 Long previousParentId = getId(entity.getParent());
                 OrganizationNode newParent = resolveParent(parentId, entity);
-                if (!Objects.equals(getId(entity.getParent()), getId(newParent))) {
-                    reassignParent(entity, newParent);
+                boolean targetRoot = isRoot != null ? isRoot.booleanValue() : entity.isRoot();
+
+                if (targetRoot) {
+                    if (newParent != null) {
+                        throw new IllegalArgumentException("ROOT 节点不能指定上级部门");
+                    }
+                    ensureRootAvailability(entity.getId());
+                    if (entity.getParent() != null) {
+                        reassignParent(entity, null);
+                    } else {
+                        entity.setParent(null);
+                    }
+                } else {
+                    if (newParent == null) {
+                        throw new IllegalArgumentException("非 ROOT 节点必须指定上级部门");
+                    }
+                    if (!Objects.equals(getId(entity.getParent()), getId(newParent))) {
+                        reassignParent(entity, newParent);
+                    }
                 }
+                entity.setRoot(targetRoot);
                 entity.setName(name);
-                entity.setDataLevel(determineDataLevel(newParent, entity.getDataLevel()));
+                OrganizationNode dataLevelParent = targetRoot ? null : entity.getParent();
+                entity.setDataLevel(determineDataLevel(dataLevelParent, entity.getDataLevel()));
                 entity.setContact(null);
                 entity.setPhone(null);
                 entity.setDescription(description);
@@ -155,7 +179,10 @@ public class OrganizationService {
         }
         OrganizationNode root = repository.findFirstByNameAndParentIsNull(defaultRootName).orElse(existingRoot);
         if (root == null) {
-            root = create(defaultRootName, null, null);
+            root = create(defaultRootName, null, null, true);
+        } else if (!root.isRoot()) {
+            root.setRoot(true);
+            root = repository.save(root);
         }
         if (StringUtils.isBlank(defaultUnassignedName)) {
             return root;
@@ -163,7 +190,7 @@ public class OrganizationService {
         OrganizationNode finalRoot = root;
         OrganizationNode node = repository
             .findFirstByParentIdAndName(root.getId(), defaultUnassignedName)
-            .orElseGet(() -> create(defaultUnassignedName, finalRoot.getId(), defaultUnassignedDescription));
+            .orElseGet(() -> create(defaultUnassignedName, finalRoot.getId(), defaultUnassignedDescription, false));
 
         boolean dirty = false;
         if (StringUtils.isNotBlank(defaultUnassignedDataLevel) && !Objects.equals(node.getDataLevel(), defaultUnassignedDataLevel)) {
@@ -248,6 +275,9 @@ public class OrganizationService {
         repository
             .findById(id)
             .ifPresent(entity -> {
+                if (entity.isRoot()) {
+                    throw new IllegalArgumentException("ROOT 节点无法删除，请先调整为普通部门");
+                }
                 if (isKeycloakSyncEnabled()) {
                     String token = resolveManagementToken();
                     deleteKeycloakGroupRecursive(entity, token);
@@ -487,6 +517,13 @@ public class OrganizationService {
             return normalized;
         }
         return defaultUnassignedDataLevel;
+    }
+
+    private void ensureRootAvailability(Long currentRootId) {
+        OrganizationNode existingRoot = repository.findFirstByRootTrue().orElse(null);
+        if (existingRoot != null && (currentRootId == null || !Objects.equals(existingRoot.getId(), currentRootId))) {
+            throw new IllegalArgumentException("系统中已存在 ROOT 部门，请先调整现有 ROOT 节点");
+        }
     }
 
     private String normalizeDataLevel(String value) {

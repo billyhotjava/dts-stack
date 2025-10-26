@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.service.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,6 +43,9 @@ class AdminAuditServiceUserCreationAuditTest {
     @Mock
     private AuditResourceDictionaryService resourceDictionary;
 
+    @Mock
+    private OperationMappingEngine operationMappingEngine;
+
     private AuditProperties properties;
     private ObjectMapper objectMapper;
     private AdminAuditService service;
@@ -50,6 +54,7 @@ class AdminAuditServiceUserCreationAuditTest {
     void setUp() {
         properties = new AuditProperties();
         objectMapper = new ObjectMapper();
+        when(operationMappingEngine.resolveWithFallback(any())).thenReturn(Optional.empty());
         service = new AdminAuditService(
             repository,
             properties,
@@ -57,7 +62,8 @@ class AdminAuditServiceUserCreationAuditTest {
             objectMapper,
             userRepository,
             organizationRepository,
-            resourceDictionary
+            resourceDictionary,
+            operationMappingEngine
         );
     }
 
@@ -101,7 +107,7 @@ class AdminAuditServiceUserCreationAuditTest {
         );
 
         assertThat(details.get("目标引用")).isEqualTo("optest56");
-        assertThat(details.get("target_ref")).isEqualTo("optest56");
+        assertThat(details).doesNotContainKeys("target_ref");
         assertThat(String.valueOf(details.get("目标ID"))).isNotBlank();
         assertThat(String.valueOf(details.get("目标ID"))).isNotEqualToIgnoringCase("sysadmin");
 

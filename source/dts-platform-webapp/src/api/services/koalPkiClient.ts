@@ -128,6 +128,100 @@ async function loadScript(src: string): Promise<void> {
 	});
 }
 
+const LEGACY_CHROME_MAX_VERSION = 109;
+
+function detectLegacyChrome109(): boolean {
+	if (typeof navigator === "undefined") return false;
+	const ua = navigator.userAgent;
+	const edgeMatch = ua.match(/Edg\/(\d+)/);
+	const chromeMatch = ua.match(/Chrome\/(\d+)/);
+	const criosMatch = ua.match(/CriOS\/(\d+)/); // Chrome on iOS reports CriOS
+	const versionStr = edgeMatch?.[1] ?? chromeMatch?.[1] ?? criosMatch?.[1] ?? null;
+	if (!versionStr) return false;
+	const version = Number.parseInt(versionStr, 10);
+	if (Number.isNaN(version)) return false;
+	return version > 0 && version <= LEGACY_CHROME_MAX_VERSION;
+}
+
+let chrome109TransportPatched = false;
+function applyChrome109TransportWorkaround() {
+	if (chrome109TransportPatched) return;
+	if (!detectLegacyChrome109()) return;
+	if (typeof window === "undefined") return;
+	const thrift = window.Thrift;
+	if (!thrift || !thrift.TXHRTransport || !thrift.TXHRTransport.prototype) {
+		return;
+	}
+	const proto = thrift.TXHRTransport.prototype as any;
+	if ((proto.flush as any)?.__chrome109Patched) {
+		chrome109TransportPatched = true;
+		return;
+	}
+
+	const legacyContentType = "text/plain; charset=utf-8";
+
+	const legacyFlush = function (this: any, async?: any, callback?: any) {
+		const self = this;
+		if ((async && !callback) || this.url === undefined || this.url === "") {
+			return this.send_buf;
+		}
+
+		const xreq = this.getXmlHttpRequestObject() as XMLHttpRequest;
+
+		if (xreq.overrideMimeType) {
+			xreq.overrideMimeType(legacyContentType);
+		}
+
+		if (callback) {
+			xreq.onreadystatechange = (function () {
+				const clientCallback = callback;
+				return function (this: XMLHttpRequest) {
+					if (this.readyState === 4 && this.status === 200) {
+						self.setRecvBuffer(this.responseText);
+						clientCallback();
+					}
+				};
+			})();
+
+			xreq.onerror = (function () {
+				const clientCallback = callback;
+				return function (this: XMLHttpRequest) {
+					clientCallback();
+				};
+			})();
+		}
+
+		xreq.open("POST", this.url, !!async);
+
+		if (xreq.setRequestHeader) {
+			xreq.setRequestHeader("Accept", "application/vnd.apache.thrift.json; charset=utf-8");
+			xreq.setRequestHeader("Content-Type", legacyContentType);
+		}
+
+		xreq.send(this.send_buf);
+		if (async && callback) {
+			return;
+		}
+
+		if (xreq.readyState !== 4) {
+			throw `encountered an unknown ajax ready state: ${xreq.readyState}`;
+		}
+
+		if (xreq.status !== 200) {
+			throw `encountered a unknown request status: ${xreq.status}`;
+		}
+
+		this.recv_buf = xreq.responseText;
+		this.recv_buf_sz = this.recv_buf.length;
+		this.wpos = this.recv_buf.length;
+		this.rpos = 0;
+	};
+
+	(legacyFlush as any).__chrome109Patched = true;
+	proto.flush = legacyFlush;
+	chrome109TransportPatched = true;
+}
+
 async function ensureKoalSdk() {
 	if (!koalSdkPromise) {
 		koalSdkPromise = (async () => {
@@ -141,6 +235,7 @@ async function ensureKoalSdk() {
 					throw error;
 				}
 			}
+			applyChrome109TransportWorkaround();
 		})();
 	}
 	return koalSdkPromise;

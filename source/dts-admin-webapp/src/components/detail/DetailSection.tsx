@@ -20,16 +20,16 @@ export function DetailSection({ title, description, columns = 2, children }: Det
 
 	return (
 		<section className="space-y-3 rounded-xl border border-border bg-background/90 p-4 shadow-sm">
-				{(title || description) && (
-					<header className="space-y-1">
-						{title && (
-							<Title as="h4" className="text-base font-semibold">
-								{title}
-							</Title>
-						)}
-						{description && <p className="text-xs text-muted-foreground">{description}</p>}
-					</header>
-				)}
+			{(title || description) && (
+				<header className="space-y-1">
+					{title && (
+						<Title as="h4" className="text-base font-semibold">
+							{title}
+						</Title>
+					)}
+					{description && <p className="text-xs text-muted-foreground">{description}</p>}
+				</header>
+			)}
 			<div className={gridClass}>{children}</div>
 		</section>
 	);
@@ -44,12 +44,7 @@ type DetailItemProps = {
 
 export function DetailItem({ label, value, monospace, full = false }: DetailItemProps) {
 	return (
-		<div
-			className={cn(
-				"space-y-1",
-				full && "md:col-span-full",
-			)}
-		>
+		<div className={cn("space-y-1", full && "md:col-span-full")}>
 			<Text variant="body2" className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
 				{label}
 			</Text>

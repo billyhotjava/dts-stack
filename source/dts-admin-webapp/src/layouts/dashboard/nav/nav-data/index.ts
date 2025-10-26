@@ -41,8 +41,8 @@ const filterItems = (items: NavItemDataProps[], permissions: string[]) => {
  * @returns 过滤后的导航数据
  */
 const filterNavData = (permissions: string[]) => {
-    const navData = getNavData();
-    return navData
+	const navData = getNavData();
+	return navData
 		.map((group) => {
 			// 过滤组内的项目
 			const filteredItems = filterItems(group.items, permissions);

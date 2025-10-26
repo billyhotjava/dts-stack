@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.domain.AuditEvent;
 import com.yuzhi.dts.admin.domain.AuditOperationMapping;
 import com.yuzhi.dts.admin.repository.AuditOperationMappingRepository;
+import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
@@ -34,7 +36,10 @@ public class OperationMappingEngine {
     public static final class ResolvedOperation {
         public Long ruleId;               // matched rule id (nullable for fallback)
         public String moduleName;         // e.g., 用户管理/角色管理/数据资产管理
-        public String actionType;         // 查询/新增/修改/删除/登录/登出/部分更新/执行
+        public String operationGroup;
+        public String groupDisplayName;
+        public AuditOperationType operationType;
+        public String operationTypeLabel;
         public String description;        // 操作内容
         public String sourceTable;        // 源表（数据库表名）
         public String eventClass;         // SecurityEvent/AuditEvent
@@ -54,37 +59,31 @@ public class OperationMappingEngine {
     public static final class RuleSummary {
         private final Long id;
         private final String moduleName;
-        private final String actionType;
+        private final String operationGroup;
+        private final String groupDisplayName;
+        private final AuditOperationType operationType;
         private final String descriptionTemplate;
         private final String sourceTableTemplate;
 
         RuleSummary(AuditOperationMapping mapping) {
             this.id = mapping.getId();
             this.moduleName = safeTrim(mapping.getModuleName());
-            this.actionType = safeTrim(mapping.getActionType());
+            this.operationGroup = effectiveGroupKey(mapping);
+            this.groupDisplayName = effectiveGroupLabel(mapping);
+            AuditOperationType type = AuditOperationType.from(mapping.getOperationType());
+            this.operationType = type == AuditOperationType.UNKNOWN ? null : type;
             this.descriptionTemplate = safeTrim(mapping.getDescriptionTemplate());
             this.sourceTableTemplate = safeTrim(mapping.getSourceTableTemplate());
         }
 
-        public Long getId() {
-            return id;
-        }
-
-        public String getModuleName() {
-            return moduleName;
-        }
-
-        public String getActionType() {
-            return actionType;
-        }
-
-        public String getDescriptionTemplate() {
-            return descriptionTemplate;
-        }
-
-        public String getSourceTableTemplate() {
-            return sourceTableTemplate;
-        }
+        public Long getId() { return id; }
+        public String getModuleName() { return moduleName; }
+        public String getOperationGroup() { return operationGroup; }
+        public String getGroupDisplayName() { return groupDisplayName; }
+        public String getOperationType() { return operationType == null ? null : operationType.getCode(); }
+        public String getOperationTypeLabel() { return operationType == null ? null : operationType.getDisplayName(); }
+        public String getDescriptionTemplate() { return descriptionTemplate; }
+        public String getSourceTableTemplate() { return sourceTableTemplate; }
     }
 
     private final AuditOperationMappingRepository repo;
@@ -406,11 +405,62 @@ public class OperationMappingEngine {
         ResolvedOperation out = new ResolvedOperation();
         out.ruleId = rule.raw.getId();
         out.moduleName = rule.raw.getModuleName();
-        out.actionType = rule.raw.getActionType();
+        out.operationGroup = effectiveGroupKey(rule.raw);
+        out.groupDisplayName = effectiveGroupLabel(rule.raw);
+        AuditOperationType opType = AuditOperationType.from(rule.raw.getOperationType());
+        out.operationType = opType == AuditOperationType.UNKNOWN ? null : opType;
+        out.operationTypeLabel = opType == AuditOperationType.UNKNOWN ? null : opType.getDisplayName();
         out.eventClass = StringUtils.hasText(rule.raw.getEventClass()) ? rule.raw.getEventClass() : null;
         out.sourceTable = renderTemplate(rule.raw.getSourceTableTemplate(), extracted);
         out.description = renderTemplate(rule.raw.getDescriptionTemplate(), extracted);
         return out;
+    }
+
+    private static String effectiveGroupKey(AuditOperationMapping mapping) {
+        String raw = safeTrim(mapping.getOperationGroup());
+        if (StringUtils.hasText(raw)) {
+            return raw;
+        }
+        String candidate = safeTrim(mapping.getGroupDisplayName());
+        if (!StringUtils.hasText(candidate)) {
+            candidate = safeTrim(mapping.getModuleName());
+        }
+        if (!StringUtils.hasText(candidate)) {
+            candidate = mapping.getId() != null ? "rule_" + mapping.getId() : "general";
+        }
+        String slug = slugify(candidate);
+        if (StringUtils.hasText(slug)) {
+            return slug;
+        }
+        if (mapping.getId() != null) {
+            return "rule_" + mapping.getId();
+        }
+        return "rule_" + UUID.nameUUIDFromBytes(candidate.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String effectiveGroupLabel(AuditOperationMapping mapping) {
+        String label = safeTrim(mapping.getGroupDisplayName());
+        if (StringUtils.hasText(label)) {
+            return label;
+        }
+        label = safeTrim(mapping.getModuleName());
+        if (StringUtils.hasText(label)) {
+            return label;
+        }
+        return "通用";
+    }
+
+    private static String slugify(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = Normalizer.normalize(value.trim(), Normalizer.Form.NFD);
+        String ascii = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        ascii = ascii.replaceAll("[^A-Za-z0-9]+", "_");
+        ascii = ascii.replaceAll("_+", "_");
+        ascii = ascii.replaceAll("^_|_$", "");
+        ascii = ascii.toLowerCase(Locale.ROOT);
+        return ascii.isEmpty() ? null : ascii;
     }
 
     private void putIfNotBlank(Map<String, Object> map, String key, String val) {
@@ -505,7 +555,8 @@ public class OperationMappingEngine {
         String tableName = resolveSourceTableName(ctx);
         String target = resolveTargetIndicator(ctx);
         String content = determineFallbackContent(ctx, type, label, target);
-        if (!StringUtils.hasText(type) && !StringUtils.hasText(content)) {
+        AuditOperationType opType = AuditOperationType.from(type);
+        if (opType == AuditOperationType.UNKNOWN && !StringUtils.hasText(content)) {
             return null;
         }
 
@@ -513,8 +564,17 @@ public class OperationMappingEngine {
         resolved.ruleMatched = false;
         resolved.ruleId = null;
         String moduleCategory = resolveModuleCategory(ctx);
-        resolved.moduleName = StringUtils.hasText(moduleCategory) ? moduleCategory : (StringUtils.hasText(ctx.module) ? ctx.module : null);
-        resolved.actionType = StringUtils.hasText(type) ? type : null;
+        String moduleName = StringUtils.hasText(moduleCategory) ? moduleCategory : (StringUtils.hasText(ctx.module) ? ctx.module : null);
+        resolved.moduleName = moduleName;
+        String groupLabel = StringUtils.hasText(moduleName) ? moduleName : "通用";
+        String groupKey = slugify(groupLabel);
+        if (!StringUtils.hasText(groupKey)) {
+            groupKey = "fallback_" + UUID.nameUUIDFromBytes(groupLabel.getBytes(StandardCharsets.UTF_8));
+        }
+        resolved.operationGroup = groupKey;
+        resolved.groupDisplayName = groupLabel;
+        resolved.operationType = opType == AuditOperationType.UNKNOWN ? null : opType;
+        resolved.operationTypeLabel = resolved.operationType != null ? resolved.operationType.getDisplayName() : (StringUtils.hasText(type) ? type : null);
         resolved.description = StringUtils.hasText(content) ? content : null;
         resolved.sourceTable = StringUtils.hasText(tableName) ? tableName : (StringUtils.hasText(ctx.targetTable) ? ctx.targetTable : null);
         resolved.eventClass = StringUtils.hasText(event.getEventClass()) ? event.getEventClass() : null;

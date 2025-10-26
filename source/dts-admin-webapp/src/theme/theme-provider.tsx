@@ -26,20 +26,20 @@ export function ThemeProvider({ children, adapters = [] }: ThemeProviderProps) {
 
 	// Update font size and font family
 	useEffect(() => {
-    const root = window.document.documentElement;
-    // Clear any old inline font-size to let CSS control it
-    root.style.removeProperty("font-size");
+		const root = window.document.documentElement;
+		// Clear any old inline font-size to let CSS control it
+		root.style.removeProperty("font-size");
 
-    // Derive a scale factor for CSS var --app-font-scale
-    const base = 16; // browser default
-    const defaultStored = Number(typographyTokens.fontSize.sm); // legacy default (14)
-    // Reduce ~10% from previous 1.1 baseline -> 0.99
-    const scale = fontSize === defaultStored ? 0.99 : fontSize / base;
-    root.style.setProperty("--app-font-scale", String(scale));
+		// Derive a scale factor for CSS var --app-font-scale
+		const base = 16; // browser default
+		const defaultStored = Number(typographyTokens.fontSize.sm); // legacy default (14)
+		// Reduce ~10% from previous 1.1 baseline -> 0.99
+		const scale = fontSize === defaultStored ? 0.99 : fontSize / base;
+		root.style.setProperty("--app-font-scale", String(scale));
 
 		const body = window.document.body;
 		body.style.fontFamily = fontFamily;
-  }, [fontFamily, fontSize]);
+	}, [fontFamily, fontSize]);
 
 	// Wrap children with adapters
 	const wrappedWithAdapters = adapters.reduce(

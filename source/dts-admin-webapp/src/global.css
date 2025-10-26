@@ -175,19 +175,19 @@
 	:where(.ant-table-thead > tr > th),
 	:where(.ant-table-tbody > tr > td),
 	:where(.ant-table tfoot > tr > th),
-	  :where(.ant-table tfoot > tr > td) {
-			border-bottom-width: 1.5px;
-		}
-	
-		/* Unify antd table font size */
-		:where(.ant-table-wrapper) :is(td, th) {
-			font-size: 0.875rem !important;
-		}
+	:where(.ant-table tfoot > tr > td) {
+		border-bottom-width: 1.5px;
+	}
+
+	/* Unify antd table font size */
+	:where(.ant-table-wrapper) :is(td, th) {
+		font-size: 0.875rem !important;
+	}
 	/* Ensure table section titles match table header font size */
-	  main[data-slot="slash-layout-main"] [data-slot="card"] [data-slot="card-title"] {
-			font-size: 0.875rem !important; /* match antd th (text-sm) */
-      line-height: 1.25rem !important;
-		}
+	main[data-slot="slash-layout-main"] [data-slot="card"] [data-slot="card-title"] {
+		font-size: 0.875rem !important; /* match antd th (text-sm) */
+		line-height: 1.25rem !important;
+	}
 }
 
 /* Provide sRGB fallbacks for browsers without OKLCH (e.g., Chrome 109) */

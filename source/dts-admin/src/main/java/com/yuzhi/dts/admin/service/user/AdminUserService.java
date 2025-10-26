@@ -239,7 +239,7 @@ public class AdminUserService {
         payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
-        recordAudit(requester, "USER_CREATE_REQUEST", username, ip, request);
+        recordAudit(requester, "USER_CREATE_REQUEST", username, ip, request, changeRequest);
         return toDetailDto(approval);
     }
 
@@ -259,7 +259,7 @@ public class AdminUserService {
         payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
-        recordAudit(requester, "USER_UPDATE_REQUEST", username, ip, request);
+        recordAudit(requester, "USER_UPDATE_REQUEST", username, ip, request, changeRequest);
         return toDetailDto(approval);
     }
 
@@ -299,7 +299,7 @@ public class AdminUserService {
         payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
-        recordAudit(requester, "USER_GRANT_ROLE_REQUEST", username, ip, Map.of("roles", roles));
+        recordAudit(requester, "USER_GRANT_ROLE_REQUEST", username, ip, Map.of("roles", roles), changeRequest);
         return toDetailDto(approval);
     }
 
@@ -358,7 +358,7 @@ public class AdminUserService {
         payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
-        recordAudit(requester, "USER_REVOKE_ROLE_REQUEST", username, ip, Map.of("roles", roles));
+        recordAudit(requester, "USER_REVOKE_ROLE_REQUEST", username, ip, Map.of("roles", roles), changeRequest);
         return toDetailDto(approval);
     }
 
@@ -409,7 +409,7 @@ public class AdminUserService {
         payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
-        recordAudit(requester, "USER_ENABLE_REQUEST", username, ip, Map.of("enabled", enabled));
+        recordAudit(requester, "USER_ENABLE_REQUEST", username, ip, Map.of("enabled", enabled), changeRequest);
         return toDetailDto(approval);
     }
 
@@ -443,7 +443,7 @@ public class AdminUserService {
         payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
-        recordAudit(requester, "USER_SET_PERSON_LEVEL_REQUEST", username, ip, Map.of("personLevel", personLevel));
+        recordAudit(requester, "USER_SET_PERSON_LEVEL_REQUEST", username, ip, Map.of("personLevel", personLevel), changeRequest);
         return toDetailDto(approval);
     }
 
@@ -570,6 +570,17 @@ public class AdminUserService {
     }
 
     private void recordAudit(String actor, String action, String target, String ip, Object detailSource) {
+        recordAudit(actor, action, target, ip, detailSource, null);
+    }
+
+    private void recordAudit(
+        String actor,
+        String action,
+        String target,
+        String ip,
+        Object detailSource,
+        Object correlationRef
+    ) {
         Map<String, Object> detail = new HashMap<>();
         detail.put("payload", detailSource);
         detail.put("ip", ip);
@@ -583,10 +594,17 @@ public class AdminUserService {
             case "USER_RESET_PASSWORD_REQUEST" -> "ADMIN_USER_RESET_PASSWORD";
             default -> action;
         };
-        auditService.recordAction(actor, code, AuditStage.SUCCESS, target, detail);
+        String correlationId = correlationIdFrom(correlationRef);
+        if (correlationId != null) {
+            detail.put("correlationId", correlationId);
+        }
+        String effectiveTarget = correlationId != null ? correlationId : target;
+        auditService.recordAction(actor, code, AuditStage.SUCCESS, effectiveTarget, detail, correlationId);
     }
 
     private void auditUserChange(String actor, String action, String target, String result, Object detail) {
+        String correlationId = extractCorrelationId(detail);
+        String payloadUsername = extractPayloadUsername(detail);
         String normalizedTarget = target == null ? "UNKNOWN" : target;
         // Prefer recording the local DB primary key for admin_keycloak_user
         // If target looks like a username (non-numeric), try resolve to PK id
@@ -607,10 +625,21 @@ public class AdminUserService {
                 }
             }
         }
+        if (StringUtils.isBlank(normalizedTarget) || "UNKNOWN".equalsIgnoreCase(normalizedTarget)) {
+            normalizedTarget = payloadUsername != null ? payloadUsername : normalizedTarget;
+        } else if (payloadUsername != null && normalizedTarget.equalsIgnoreCase(actor)) {
+            normalizedTarget = payloadUsername;
+        }
         Map<String, Object> payload;
         if (detail instanceof Map<?, ?> map) {
             payload = new HashMap<>();
             map.forEach((k, v) -> payload.put(String.valueOf(k), v));
+            if (correlationId != null && !payload.containsKey("correlationId")) {
+                payload.put("correlationId", correlationId);
+            }
+            if (payloadUsername != null && !payload.containsKey("username")) {
+                payload.put("username", payloadUsername);
+            }
         } else {
             payload = Map.of("detail", detail);
         }
@@ -624,7 +653,84 @@ public class AdminUserService {
             default -> action;
         };
         AuditStage stage = "SUCCESS".equalsIgnoreCase(result) ? AuditStage.SUCCESS : AuditStage.FAIL;
-        auditService.recordAction(actor, code, stage, normalizedTarget, payload);
+        auditService.recordAction(actor, code, stage, normalizedTarget, payload, correlationId);
+    }
+
+    private String extractCorrelationId(Object detail) {
+        if (!(detail instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Object direct = map.get("correlationId");
+        if (direct == null) {
+            Object payload = map.get("payload");
+            if (payload instanceof Map<?, ?> payloadMap) {
+                direct = payloadMap.get("correlationId");
+                if (direct == null) {
+                    direct = payloadMap.get("changeRequestId");
+                }
+            }
+        }
+        return correlationIdFrom(direct);
+    }
+
+    private String extractPayloadUsername(Object detail) {
+        if (!(detail instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Object payloadObj = map.get("payload");
+        if (!(payloadObj instanceof Map<?, ?> payloadMap)) {
+            return null;
+        }
+        Object username = payloadMap.get("username");
+        if (username == null) {
+            Object target = payloadMap.get("target");
+            if (target instanceof Map<?, ?> targetMap) {
+                username = targetMap.get("username");
+            }
+        }
+        if (username == null) {
+            Object request = payloadMap.get("request");
+            if (request instanceof Map<?, ?> requestMap) {
+                username = requestMap.get("username");
+            }
+        }
+        return stringValue(username);
+    }
+
+    private String correlationIdFrom(Object correlationRef) {
+        if (correlationRef == null) {
+            return null;
+        }
+        Object raw = correlationRef;
+        if (raw instanceof Optional<?> optional) {
+            return correlationIdFrom(optional.orElse(null));
+        }
+        if (raw instanceof ChangeRequest changeRequest) {
+            return correlationIdFrom(changeRequest.getId());
+        }
+        if (raw instanceof Number number) {
+            long value = number.longValue();
+            if (value <= 0) {
+                return null;
+            }
+            return "CR-" + value;
+        }
+        String text = raw.toString();
+        if (text == null) {
+            return null;
+        }
+        String trimmed = text.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.startsWith("CR-")) {
+            return trimmed;
+        }
+        boolean digits = trimmed.chars().allMatch(Character::isDigit);
+        if (digits) {
+            return "CR-" + trimmed;
+        }
+        return trimmed;
     }
 
     private String normalizeSecurityLevel(String level) {
@@ -801,6 +907,8 @@ public class AdminUserService {
             .orElseThrow(() -> new IllegalArgumentException("审批请求不存在: " + id));
         ensurePending(approval);
         Set<Long> changeRequestIds = extractChangeRequestIds(approval);
+        Long primaryChangeRequestId = changeRequestIds.stream().findFirst().orElse(null);
+        String correlationId = correlationIdFrom(primaryChangeRequestId);
         Instant now = Instant.now();
         try {
             // Prefer caller token when provided; fall back to service account for reliability
@@ -854,7 +962,9 @@ public class AdminUserService {
                                 "admin_approval_item",
                                 String.valueOf(item.getId()),
                                 "SUCCESS",
-                                itemDetail
+                                itemDetail,
+                                null,
+                                correlationId
                             );
                         }
                     }
@@ -868,9 +978,13 @@ public class AdminUserService {
                 String.valueOf(id),
                 new java.util.LinkedHashMap<String, Object>() {{
                     put("result", "APPROVED");
+                    put("status", "APPROVED");
                     put("note", note);
                     put("type", approval.getType());
-                }}
+                    if (primaryChangeRequestId != null) put("changeRequestId", primaryChangeRequestId);
+                    if (correlationId != null) put("correlationId", correlationId);
+                }},
+                correlationId
             );
             updateChangeRequestStatus(changeRequestIds, ApprovalStatus.APPLIED.name(), approver, now, null);
             return toDetailDto(approval);
@@ -878,13 +992,14 @@ public class AdminUserService {
             auditService.recordAction(
                 approver,
                 "ADMIN_APPROVAL_DECIDE",
-                AuditStage.FAIL,
+                AuditStage.BEGIN,
                 String.valueOf(id),
                 new java.util.LinkedHashMap<String, Object>() {{
                     put("error", ex.getMessage());
-                    put("result", "APPROVED");
+                    put("status", "RETRY_SCHEDULED");
                     put("type", approval.getType());
-                }}
+                }},
+                correlationId
             );
             scheduleRetry(approval, note, ex.getMessage());
             approvalRepository.save(approval);
@@ -892,13 +1007,14 @@ public class AdminUserService {
             auditService.recordAction(
                 approver,
                 "ADMIN_APPROVAL_DECIDE",
-                AuditStage.SUCCESS,
+                AuditStage.BEGIN,
                 String.valueOf(id),
                 new java.util.LinkedHashMap<String, Object>() {{
-                    put("result", "REQUEUE");
+                    put("status", "REQUEUE");
                     put("note", ex.getMessage());
                     put("type", approval.getType());
-                }}
+                }},
+                correlationId
             );
             LOG.warn("Approval id={} failed to apply: {}", id, ex.getMessage());
             throw new IllegalStateException("审批执行失败: " + ex.getMessage(), ex);
@@ -911,6 +1027,8 @@ public class AdminUserService {
             .orElseThrow(() -> new IllegalArgumentException("审批请求不存在: " + id));
         ensurePending(approval);
         Set<Long> changeRequestIds = extractChangeRequestIds(approval);
+        Long primaryChangeRequestId = changeRequestIds.stream().findFirst().orElse(null);
+        String correlationId = correlationIdFrom(primaryChangeRequestId);
         Instant now = Instant.now();
         approval.setStatus(ApprovalStatus.REJECTED.name());
         approval.setDecidedAt(now);
@@ -924,9 +1042,13 @@ public class AdminUserService {
             String.valueOf(id),
             new java.util.LinkedHashMap<String, Object>() {{
                 put("result", "REJECTED");
+                put("status", "REJECTED");
                 put("note", note);
                 put("type", approval.getType());
-            }}
+                if (primaryChangeRequestId != null) put("changeRequestId", primaryChangeRequestId);
+                if (correlationId != null) put("correlationId", correlationId);
+            }},
+            correlationId
         );
         updateChangeRequestStatus(changeRequestIds, ApprovalStatus.REJECTED.name(), approver, now, null);
         return toDetailDto(approval);
@@ -938,6 +1060,8 @@ public class AdminUserService {
             .orElseThrow(() -> new IllegalArgumentException("审批请求不存在: " + id));
         ensurePending(approval);
         Set<Long> changeRequestIds = extractChangeRequestIds(approval);
+        Long primaryChangeRequestId = changeRequestIds.stream().findFirst().orElse(null);
+        String correlationId = correlationIdFrom(primaryChangeRequestId);
         Instant now = Instant.now();
         approval.setStatus(ApprovalStatus.PROCESSING.name());
         approval.setDecidedAt(now);
@@ -951,9 +1075,13 @@ public class AdminUserService {
             String.valueOf(id),
             new java.util.LinkedHashMap<String, Object>() {{
                 put("result", "PROCESS");
+                put("status", "PROCESSING");
                 put("note", note);
                 put("type", approval.getType());
-            }}
+                if (primaryChangeRequestId != null) put("changeRequestId", primaryChangeRequestId);
+                if (correlationId != null) put("correlationId", correlationId);
+            }},
+            correlationId
         );
         updateChangeRequestStatus(changeRequestIds, ApprovalStatus.PROCESSING.name(), approver, now, null);
         return toDetailDto(approval);
@@ -985,7 +1113,7 @@ public class AdminUserService {
         payload.put("changeRequestId", changeRequest.getId());
         approval.addItem(buildPayloadItem(username, payload));
         approval = approvalRepository.save(approval);
-        recordAudit(requester, "USER_RESET_PASSWORD_REQUEST", username, ip, Map.of("temporary", temporary));
+        recordAudit(requester, "USER_RESET_PASSWORD_REQUEST", username, ip, Map.of("temporary", temporary), changeRequest);
         return toDetailDto(approval);
     }
 

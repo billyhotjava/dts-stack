@@ -65,11 +65,11 @@
         <validCheckSum>9:b397fabafba414fbd3d217cdce523832</validCheckSum>
         <sql>
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
-            SELECT '/api/keycloak/users/{id}/roles','GET','角色管理','查询',
+            SELECT '/api/keycloak/users/{id}/roles','GET','角色管理','READ',
                    '查询用户角色：{targetRef|未知}','用户角色','{"targetRef":"details.目标引用"}',
                    'AuditEvent',7,TRUE,'admin'
             WHERE NOT EXISTS (
@@ -85,11 +85,11 @@
         <validCheckSum>9:815df1a49a2cae9f320f83468517bf1b</validCheckSum>
         <sql>
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, event_class,
                 order_value, enabled, source_system
             )
-            SELECT '/api/admin/change-requests/mine','GET','审批管理','查询',
+            SELECT '/api/admin/change-requests/mine','GET','审批管理','READ',
                    '查询我的变更申请','变更申请','AuditEvent',
                    12,TRUE,'admin'
             WHERE NOT EXISTS (
@@ -105,11 +105,11 @@
         <validCheckSum>9:91b2148f4060c55fcb3c344bed62b227</validCheckSum>
         <sql>
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
-            SELECT '/api/datasets/{id}/preview','GET','数据资产','查询',
+            SELECT '/api/datasets/{id}/preview','GET','数据资产','READ',
                    '预览数据资产：{datasetId}','数据资产','{"datasetId":"path.id"}',
                    'AuditEvent',30,TRUE,'platform'
             WHERE NOT EXISTS (
@@ -125,11 +125,11 @@
         <validCheckSum>9:fca76a8711953225c056e951ee78cf79</validCheckSum>
         <sql>
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, event_class,
                 order_value, enabled, source_system
             )
-            SELECT '/api/admin/users/display-names','GET','用户管理','查询',
+            SELECT '/api/admin/users/display-names','GET','用户管理','READ',
                    '查询用户显示名称','用户','AuditEvent',
                    18,TRUE,'admin'
             WHERE NOT EXISTS (
@@ -190,11 +190,11 @@
         <validCheckSum>9:6734658063840e09fe67f4a2283ca79e</validCheckSum>
         <sql>
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, event_class,
                 order_value, enabled, source_system
             )
-            SELECT '/api/approval-requests/{id}','GET','审批管理','查询',
+            SELECT '/api/approval-requests/{id}','GET','审批管理','READ',
                    '查看审批请求：{event.resourceId|未知}','审批请求','AuditEvent',
                    15,TRUE,'admin'
             WHERE NOT EXISTS (
@@ -220,7 +220,7 @@
         <update tableName="audit_operation_mapping">
             <column name="url_pattern" value="/api/keycloak/auth/login"/>
             <column name="module_name" value="业务管理"/>
-            <column name="action_type" value="登录"/>
+            <column name="operation_type" value="LOGIN"/>
             <column name="source_table_template" value="用户"/>
             <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
             <column name="event_class" value="SecurityEvent"/>
@@ -229,7 +229,7 @@
         <update tableName="audit_operation_mapping">
             <column name="url_pattern" value="/api/keycloak/auth/login"/>
             <column name="module_name" value="业务管理"/>
-            <column name="action_type" value="登录"/>
+            <column name="operation_type" value="LOGIN"/>
             <column name="source_table_template" value="用户"/>
             <column name="param_extractors" value="{&quot;username&quot;:&quot;event.actor&quot;}"/>
             <column name="event_class" value="SecurityEvent"/>
@@ -238,12 +238,12 @@
         <sql>
             INSERT INTO audit_operation_mapping (
                 url_pattern, http_method, status_code_regex, source_system,
-                module_name, action_type, description_template,
+                module_name, operation_type, description_template,
                 source_table_template, param_extractors, event_class,
                 order_value, enabled
             )
             SELECT '/api/keycloak/auth/login','POST','PENDING','platform',
-                   '业务管理','登录','用户正在登录（业务端）: {username}',
+                   '业务管理','LOGIN','用户正在登录（业务端）: {username}',
                    '用户','{&quot;username&quot;:&quot;event.actor&quot;}','SecurityEvent',
                    6, TRUE
             WHERE NOT EXISTS (
@@ -263,12 +263,12 @@
         <sql splitStatements="true" stripComments="false">
             INSERT INTO audit_operation_mapping (
                 url_pattern, http_method, status_code_regex, source_system,
-                module_name, action_type, description_template,
+                module_name, operation_type, description_template,
                 source_table_template, param_extractors, event_class,
                 order_value, enabled
             )
             SELECT '/api/keycloak/auth/logout','POST','SUCCESS','platform',
-                   '业务管理','登出','用户退出登录（业务端）: {username}',
+                   '业务管理','LOGOUT','用户退出登录（业务端）: {username}',
                    '用户','{&quot;username&quot;:&quot;event.actor&quot;}','SecurityEvent',
                    7, TRUE
             WHERE NOT EXISTS (
@@ -281,12 +281,12 @@
 
             INSERT INTO audit_operation_mapping (
                 url_pattern, http_method, status_code_regex, source_system,
-                module_name, action_type, description_template,
+                module_name, operation_type, description_template,
                 source_table_template, param_extractors, event_class,
                 order_value, enabled
             )
             SELECT '/api/keycloak/auth/logout','POST','FAILED','platform',
-                   '业务管理','登出','用户退出登录失败（业务端）: {username}',
+                   '业务管理','LOGOUT','用户退出登录失败（业务端）: {username}',
                    '用户','{&quot;username&quot;:&quot;event.actor&quot;}','SecurityEvent',
                    7, TRUE
             WHERE NOT EXISTS (
@@ -299,12 +299,12 @@
 
             INSERT INTO audit_operation_mapping (
                 url_pattern, http_method, status_code_regex, source_system,
-                module_name, action_type, description_template,
+                module_name, operation_type, description_template,
                 source_table_template, param_extractors, event_class,
                 order_value, enabled
             )
             SELECT '/api/keycloak/auth/logout','POST','PENDING','platform',
-                   '业务管理','登出','用户正在退出登录（业务端）: {username}',
+                   '业务管理','LOGOUT','用户正在退出登录（业务端）: {username}',
                    '用户','{&quot;username&quot;:&quot;event.actor&quot;}','SecurityEvent',
                    7, TRUE
             WHERE NOT EXISTS (
@@ -398,7 +398,7 @@
             WITH updated AS (
                 UPDATE audit_operation_mapping
                    SET module_name = '数据目录',
-                       action_type = '查询',
+                       operation_type = 'READ',
                        description_template = '查看数据集：{datasetLabel|未知}（ID：{datasetId|未知}）',
                        source_table_template = '数据资产',
                        param_extractors = '{&quot;datasetLabel&quot;:&quot;details.目标引用&quot;,&quot;datasetId&quot;:&quot;event.resourceId&quot;}',
@@ -410,11 +410,11 @@
                 RETURNING id
             )
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
-            SELECT '/api/catalog/datasets/{id}','GET','数据目录','查询',
+            SELECT '/api/catalog/datasets/{id}','GET','数据目录','READ',
                    '查看数据集：{datasetLabel|未知}（ID：{datasetId|未知}）','数据资产',
                    '{&quot;datasetLabel&quot;:&quot;details.目标引用&quot;,&quot;datasetId&quot;:&quot;event.resourceId&quot;}',
                    'AuditEvent',29,TRUE,'platform'
@@ -433,11 +433,11 @@
         <comment>为建模标准附件接口提供审计字典，补足操作文案</comment>
         <sql>
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
-            SELECT '/api/modeling/standards/{id}/attachments','GET','数据建模','查询',
+            SELECT '/api/modeling/standards/{id}/attachments','GET','数据建模','READ',
                    '查看建模标准附件：{standardLabel|未知}（ID：{standardId|未知}）','建模标准',
                    '{&quot;standardLabel&quot;:&quot;details.目标引用&quot;,&quot;standardId&quot;:&quot;event.resourceId&quot;}',
                    'AuditEvent',18,TRUE,'platform'
@@ -448,11 +448,11 @@
             );
 
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
-            SELECT '/api/modeling/standards/{id}/attachments','POST','数据建模','新增',
+            SELECT '/api/modeling/standards/{id}/attachments','POST','数据建模','CREATE',
                    '上传建模标准附件：{standardLabel|未知}（ID：{standardId|未知}）','建模标准',
                    '{&quot;standardLabel&quot;:&quot;details.目标引用&quot;,&quot;standardId&quot;:&quot;event.resourceId&quot;}',
                    'AuditEvent',18,TRUE,'platform'
@@ -469,7 +469,7 @@
         <sql>
             UPDATE audit_operation_mapping
                SET module_name = '数据资产',
-                   action_type = '查询',
+                   operation_type = 'READ',
                    description_template = '预览数据资产：{datasetLabel|未知}（ID：{datasetId|未知}）',
                    source_table_template = '数据资产',
                    param_extractors = '{"datasetLabel":"details.目标引用","datasetId":"path.id"}',
@@ -481,7 +481,7 @@
 
             UPDATE audit_operation_mapping
                SET module_name = '数据标准',
-                   action_type = '查询',
+                   operation_type = 'READ',
                    description_template = '查看数据标准：{standardLabel|未知}（ID：{standardId|未知}）',
                    source_table_template = '数据标准',
                    param_extractors = '{"standardLabel":"details.目标引用","standardId":"path.id"}',
@@ -493,7 +493,7 @@
 
             UPDATE audit_operation_mapping
                SET module_name = '数据标准',
-                   action_type = '修改',
+                   operation_type = 'UPDATE',
                    description_template = '修改数据标准：{standardLabel|未知}（ID：{standardId|未知}）',
                    source_table_template = '数据标准',
                    param_extractors = '{"standardLabel":"details.目标引用","standardId":"path.id"}',
@@ -505,7 +505,7 @@
 
             UPDATE audit_operation_mapping
                SET module_name = '数据标准',
-                   action_type = '删除',
+                   operation_type = 'DELETE',
                    description_template = '删除数据标准：{standardLabel|未知}（ID：{standardId|未知}）',
                    source_table_template = '数据标准',
                    param_extractors = '{"standardLabel":"details.目标引用","standardId":"path.id"}',
@@ -517,7 +517,7 @@
 
             UPDATE audit_operation_mapping
                SET module_name = '数据标准',
-                   action_type = '新增',
+                   operation_type = 'CREATE',
                    description_template = '新建数据标准：{standardLabel|未知}（ID：{standardId|未知}）',
                    source_table_template = '数据标准',
                    param_extractors = '{"standardLabel":"details.目标引用","standardId":"event.resourceId"}',
@@ -529,7 +529,7 @@
 
             UPDATE audit_operation_mapping
                SET module_name = '数据建模',
-                   action_type = '查询',
+                   operation_type = 'READ',
                    description_template = '查看建模标准附件：{standardLabel|未知}（ID：{standardId|未知}）',
                    source_table_template = '建模标准附件',
                    param_extractors = '{"standardLabel":"details.目标引用","standardId":"path.id"}',
@@ -541,7 +541,7 @@
 
             UPDATE audit_operation_mapping
                SET module_name = '数据建模',
-                   action_type = '新增',
+                   operation_type = 'CREATE',
                    description_template = '上传建模标准附件：{standardLabel|未知}（ID：{standardId|未知}）',
                    source_table_template = '建模标准附件',
                    param_extractors = '{"standardLabel":"details.目标引用","standardId":"path.id"}',
@@ -552,7 +552,7 @@
                AND http_method = 'POST';
 
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
@@ -567,11 +567,11 @@
             );
 
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
-            SELECT '/api/modeling/standards/{id}/attachments/{attachmentId}','DELETE','数据建模','删除',
+            SELECT '/api/modeling/standards/{id}/attachments/{attachmentId}','DELETE','数据建模','DELETE',
                    '删除建模标准附件：{attachmentName|未知}（标准ID：{standardId|未知}）','建模标准附件',
                    '{"standardId":"path.id","attachmentId":"path.attachmentId","attachmentName":"details.附件名称"}',
                    'AuditEvent',18,TRUE,'platform'
@@ -617,11 +617,11 @@
                AND http_method = 'DELETE';
 
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
-            SELECT '/api/governance/quality/rules/{id}','GET','治理管理','查询',
+            SELECT '/api/governance/quality/rules/{id}','GET','治理管理','READ',
                    '查看质量规则详情：{ruleLabel|未知}（ID：{ruleId|未知}）','质量规则',
                    '{"ruleLabel":"details.目标引用","ruleId":"path.id"}',
                    'AuditEvent',70,TRUE,'platform'
@@ -642,11 +642,11 @@
                AND http_method = 'DELETE';
 
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled, source_system
             )
-            SELECT '/api/governance/compliance/batches/{id}','GET','治理管理','查询',
+            SELECT '/api/governance/compliance/batches/{id}','GET','治理管理','READ',
                    '查看合规批次：{batchLabel|未知}（ID：{batchId|未知}）','合规批次',
                    '{"batchLabel":"details.目标引用","batchId":"path.id"}',
                    'AuditEvent',70,TRUE,'platform'

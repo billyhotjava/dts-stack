@@ -9,6 +9,7 @@ export interface DeptDto {
   nameZh?: string;
   nameEn?: string;
   parentId?: number | null; // for root detection (null => root)
+  isRoot?: boolean;
 }
 
 type OrgNode = {
@@ -16,6 +17,7 @@ type OrgNode = {
   name: string;
   parentId?: number;
   children?: OrgNode[];
+  isRoot?: boolean;
 };
 
 // Known admin endpoints (by deploy topology):
@@ -40,7 +42,13 @@ const AdminApi = {
 
 function flattenOrgs(nodes: OrgNode[], out: DeptDto[] = []): DeptDto[] {
   for (const n of nodes || []) {
-    out.push({ code: String(n.id), nameZh: n.name, nameEn: n.name, parentId: n.parentId ?? null });
+    out.push({
+      code: String(n.id),
+      nameZh: n.name,
+      nameEn: n.name,
+      parentId: n.parentId ?? null,
+      isRoot: Boolean(n.isRoot),
+    });
     if (n.children && n.children.length) flattenOrgs(n.children, out);
   }
   return out;

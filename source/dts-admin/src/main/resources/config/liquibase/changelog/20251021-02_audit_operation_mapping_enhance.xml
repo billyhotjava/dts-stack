@@ -10,7 +10,7 @@
             WITH up_approval AS (
                 UPDATE audit_operation_mapping
                    SET module_name = '审批管理',
-                       action_type = '查询',
+                       operation_type = 'READ',
                        description_template = '查看审批请求详情：{rid|未知}',
                        source_table_template = '审批请求',
                        param_extractors = (
@@ -24,11 +24,11 @@
                 RETURNING id
             )
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled
             )
-            SELECT '/api/approval-requests/{id}', 'ALL', '审批管理', '查询',
+            SELECT '/api/approval-requests/{id}', 'ALL', '审批管理', 'READ',
                    '查看审批请求详情：{rid|未知}', '审批请求',
                    jsonb_build_object('rid','path.id')::text,
                    'AuditEvent', 8, TRUE
@@ -42,7 +42,7 @@
             WITH up_audit AS (
                 UPDATE audit_operation_mapping
                    SET module_name = '审计日志',
-                       action_type = '查询',
+                       operation_type = 'READ',
                        description_template = '查看审计日志详情：{logId|未知}',
                        source_table_template = '审计日志',
                        param_extractors = (
@@ -56,11 +56,11 @@
                 RETURNING id
             )
             INSERT INTO audit_operation_mapping (
-                url_pattern, http_method, module_name, action_type,
+                url_pattern, http_method, module_name, operation_type,
                 description_template, source_table_template, param_extractors,
                 event_class, order_value, enabled
             )
-            SELECT '/api/audit-logs/{id}', 'GET', '审计日志', '查询',
+            SELECT '/api/audit-logs/{id}', 'GET', '审计日志', 'READ',
                    '查看审计日志详情：{logId|未知}', '审计日志',
                    jsonb_build_object('logId','path.id')::text,
                    'AuditEvent', 12, TRUE

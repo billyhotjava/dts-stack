@@ -22,6 +22,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 @Component
 public class AccessChecker {
@@ -30,10 +31,16 @@ public class AccessChecker {
 
     private final ClassificationUtils classificationUtils;
     private final CatalogDatasetGrantRepository grantRepository;
+    private final OrganizationVisibilityService organizationVisibilityService;
 
-    public AccessChecker(ClassificationUtils classificationUtils, CatalogDatasetGrantRepository grantRepository) {
+    public AccessChecker(
+        ClassificationUtils classificationUtils,
+        CatalogDatasetGrantRepository grantRepository,
+        OrganizationVisibilityService organizationVisibilityService
+    ) {
         this.classificationUtils = classificationUtils;
         this.grantRepository = grantRepository;
+        this.organizationVisibilityService = organizationVisibilityService;
     }
 
     public boolean canRead(CatalogDataset dataset) {
@@ -119,10 +126,17 @@ public class AccessChecker {
         if (isSuperAdmin() || hasAuthority(AuthoritiesConstants.INST_DATA_OWNER)) {
             return true;
         }
-        String normalizedOwner = DepartmentUtils.normalize(dataset.getOwnerDept());
+        String ownerDept = dataset.getOwnerDept();
+        if (!StringUtils.hasText(ownerDept)) {
+            return true;
+        }
+        if (organizationVisibilityService.isRoot(ownerDept)) {
+            return true;
+        }
+        String normalizedOwner = DepartmentUtils.normalize(ownerDept);
         // Without explicit owner department, keep legacy permissive behaviour
         if (normalizedOwner.isEmpty()) {
-            return false;
+            return true;
         }
         String normalizedContext = DepartmentUtils.normalize(activeDept);
         if (normalizedContext.isEmpty()) {

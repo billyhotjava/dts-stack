@@ -27,11 +27,18 @@ public class KeycloakAuthResource {
     private final PortalSessionRegistry sessionRegistry;
     private final AdminAuthClient adminAuthClient;
     private final com.yuzhi.dts.platform.service.audit.AuditService audit;
+    private final com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry;
 
-    public KeycloakAuthResource(PortalSessionRegistry sessionRegistry, AdminAuthClient adminAuthClient, com.yuzhi.dts.platform.service.audit.AuditService audit) {
+    public KeycloakAuthResource(
+        PortalSessionRegistry sessionRegistry,
+        AdminAuthClient adminAuthClient,
+        com.yuzhi.dts.platform.service.audit.AuditService audit,
+        com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry
+    ) {
         this.sessionRegistry = sessionRegistry;
         this.adminAuthClient = adminAuthClient;
         this.audit = audit;
+        this.inceptorRegistry = inceptorRegistry;
     }
 
     public record LoginPayload(String username, String password) {}
@@ -85,11 +92,27 @@ public class KeycloakAuthResource {
             }
 
             // Extract optional attributes for ABAC (dept_code/personnel_level)
-            String deptCode = extractUserAttribute(user, "dept_code");
+            String deptCode = resolveDeptCode(user);
             String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
 
             // Issue a portal session (opaque tokens) for platform API access
             boolean takeover = sessionRegistry.hasActiveSession(username);
+            if (takeover && !sessionRegistry.isTakeoverAllowed()) {
+                log.warn("[login] denied username={} reason=active-session", username);
+                audit.recordAs(
+                    username,
+                    "AUTH LOGIN",
+                    "platform",
+                    "portal_user",
+                    username,
+                    "FAILED",
+                    Map.of("audience", "platform", "error", "ACTIVE_SESSION"),
+                    null
+                );
+                return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(ApiResponses.error("该账号已在其他浏览器登录，请先退出后再尝试"));
+            }
             AdminTokens adminTokens = computeAdminTokens(
                 result.accessToken(),
                 result.accessTokenExpiresIn(),
@@ -97,7 +120,25 @@ public class KeycloakAuthResource {
                 result.refreshTokenExpiresIn(),
                 null
             );
-            PortalSession session = sessionRegistry.createSession(username, mappedRoles, permissions, deptCode, personnelLevel, adminTokens);
+            PortalSession session;
+            try {
+                session = sessionRegistry.createSession(username, mappedRoles, permissions, deptCode, personnelLevel, adminTokens);
+            } catch (PortalSessionRegistry.ActiveSessionExistsException ex) {
+                log.warn("[login] denied username={} reason=race-active-session", username);
+                audit.recordAs(
+                    username,
+                    "AUTH LOGIN",
+                    "platform",
+                    "portal_user",
+                    username,
+                    "FAILED",
+                    Map.of("audience", "platform", "error", "ACTIVE_SESSION"),
+                    null
+                );
+                return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(ApiResponses.error("该账号已在其他浏览器登录，请先退出后再尝试"));
+            }
 
             // Build user payload (override roles/permissions with mapped ones)
             Map<String, Object> userOut = new java.util.HashMap<>(user);
@@ -147,7 +188,7 @@ public class KeycloakAuthResource {
                 }
             }
             if (log.isInfoEnabled()) {
-                if (takeover) {
+                if (takeover && sessionRegistry.isTakeoverAllowed()) {
                     log.info("[login] success username={} roles={} perms={} takeover=true", username, mappedRoles, permissions);
                 } else {
                     log.info("[login] success username={} roles={} perms={}", username, mappedRoles, permissions);
@@ -160,10 +201,17 @@ public class KeycloakAuthResource {
                 "portal_user",
                 username,
                 "SUCCESS",
-                Map.of("audience", "platform"),
+                Map.of("audience", "platform", "username", username),
                 null
             );
-            if (takeover) {
+            try {
+                if (inceptorRegistry.getActive().isEmpty()) {
+                    inceptorRegistry.refresh();
+                }
+            } catch (Exception ex) {
+                log.debug("[login] inceptor registry refresh skipped: {}", ex.getMessage());
+            }
+            if (takeover && sessionRegistry.isTakeoverAllowed()) {
                 data.put("sessionNotice", "已切换到当前登录，其他会话已下线");
                 data.put("sessionTakeover", Boolean.TRUE);
             }
@@ -177,7 +225,7 @@ public class KeycloakAuthResource {
                 "portal_user",
                 username,
                 "FAILED",
-                Map.of("audience", "platform", "error", ex.getMessage()),
+                Map.of("audience", "platform", "username", username, "error", ex.getMessage()),
                 null
             );
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error(ex.getMessage()));
@@ -191,7 +239,7 @@ public class KeycloakAuthResource {
                 "portal_user",
                 username,
                 "FAILED",
-                Map.of("audience", "platform", "error", msg),
+                Map.of("audience", "platform", "username", username, "error", msg),
                 null
             );
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
@@ -305,13 +353,47 @@ public class KeycloakAuthResource {
             }
 
             // Extract optional attributes for ABAC (dept_code/personnel_level)
-            String deptCode = extractUserAttribute(user, "dept_code");
+            String deptCode = resolveDeptCode(user);
             String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
 
             // Issue a portal session (opaque tokens) for platform API access (no admin tokens needed for PKI path)
             boolean takeover = sessionRegistry.hasActiveSession(username);
+            if (takeover && !sessionRegistry.isTakeoverAllowed()) {
+                log.warn("[pki-login] denied username={} reason=active-session", username);
+                audit.recordAs(
+                    username,
+                    "AUTH LOGIN",
+                    "platform",
+                    "portal_user",
+                    username,
+                    "FAILED",
+                    Map.of("audience", "platform", "mode", "pki", "error", "ACTIVE_SESSION"),
+                    null
+                );
+           	    return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(ApiResponses.error("该账号已在其他浏览器登录，请先退出后再尝试"));
+            }
             AdminTokens adminTokens = null;
-            PortalSession session = sessionRegistry.createSession(username, mappedRoles, permissions, deptCode, personnelLevel, adminTokens);
+            PortalSession session;
+            try {
+                session = sessionRegistry.createSession(username, mappedRoles, permissions, deptCode, personnelLevel, adminTokens);
+            } catch (PortalSessionRegistry.ActiveSessionExistsException ex) {
+                log.warn("[pki-login] denied username={} reason=race-active-session", username);
+                audit.recordAs(
+                    username,
+                    "AUTH LOGIN",
+                    "platform",
+                    "portal_user",
+                    username,
+                    "FAILED",
+                    Map.of("audience", "platform", "mode", "pki", "error", "ACTIVE_SESSION"),
+                    null
+                );
+                return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(ApiResponses.error("该账号已在其他浏览器登录，请先退出后再尝试"));
+            }
 
             // Build user payload (override roles/permissions with mapped ones)
             Map<String, Object> userOut = new java.util.LinkedHashMap<>(user);
@@ -340,7 +422,7 @@ public class KeycloakAuthResource {
             data.put("user", userOut);
             data.put("accessToken", session.accessToken());
             data.put("refreshToken", session.refreshToken());
-            if (takeover) {
+            if (takeover && sessionRegistry.isTakeoverAllowed()) {
                 data.put("sessionNotice", "已切换到当前登录，其他会话已下线");
                 data.put("sessionTakeover", Boolean.TRUE);
             }
@@ -517,6 +599,24 @@ public class KeycloakAuthResource {
                     if (first instanceof String s && !s.isBlank()) return s.trim();
                 }
             }
+        }
+        return null;
+    }
+
+    private String resolveDeptCode(Map<String, Object> user) {
+        String dept = extractUserAttribute(
+            user,
+            "dept_code",
+            "deptCode",
+            "dept",
+            "department",
+            "org_code",
+            "orgCode",
+            "dts_org_id",
+            "dtsOrgId"
+        );
+        if (StringUtils.hasText(dept)) {
+            return dept.trim();
         }
         return null;
     }

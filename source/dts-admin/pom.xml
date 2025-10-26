@@ -22,7 +22,7 @@
             The spring-boot version should match the one managed by https://mvnrepository.com/artifact/tech.jhipster/jhipster-dependencies/${jhipster-dependencies.version}
         -->
         <maven.version>3.2.5</maven.version>
-    <java.version>17</java.version>
+        <java.version>21</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -42,7 +42,7 @@
         <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
         <jhipster-framework.version>8.11.0</jhipster-framework.version>
         <jib-maven-plugin.architecture>amd64</jib-maven-plugin.architecture>
-    <jib-maven-plugin.image>eclipse-temurin:17-jre</jib-maven-plugin.image>
+    <jib-maven-plugin.image>eclipse-temurin:21-jre</jib-maven-plugin.image>
         <jib-maven-plugin.version>3.4.5</jib-maven-plugin.version>
         <lifecycle-mapping.version>1.0.0</lifecycle-mapping.version>
         <liquibase-plugin.password/>
@@ -506,10 +506,10 @@
                                 <message>You are running an older version of Maven. JHipster requires at least Maven ${maven.version}</message>
                                 <version>[${maven.version},)</version>
                             </requireMavenVersion>
-                            <requireJavaVersion>
-                                <message>You are running an incompatible version of Java. JHipster supports JDK 17 to 24.</message>
-                                <version>[17,18),[21,22),[24,25)</version>
-                            </requireJavaVersion>
+                           <requireJavaVersion>
+                               <message>You are running an incompatible version of Java. JHipster supports JDK 21 to 24.</message>
+                                <version>[21,25)</version>
+                           </requireJavaVersion>
                         </rules>
                     </configuration>
                 </plugin>

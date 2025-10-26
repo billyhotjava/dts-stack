@@ -31,6 +31,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @ExtendWith(MockitoExtension.class)
 class AdminApiResourceChangeAuditTest {
@@ -67,6 +68,8 @@ class AdminApiResourceChangeAuditTest {
     private OrganizationRepository organizationRepository;
     @Mock
     private AdminUserService adminUserService;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     private AdminApiResource resource;
 
@@ -88,7 +91,8 @@ class AdminApiResourceChangeAuditTest {
             portalMenuVisibilityRepository,
             notifyClient,
             organizationRepository,
-            adminUserService
+            adminUserService,
+            transactionManager
         );
     }
 
@@ -109,13 +113,14 @@ class AdminApiResourceChangeAuditTest {
 
         ArgumentCaptor<Map<String, Object>> detailCaptor = ArgumentCaptor.forClass(Map.class);
         verify(auditService)
-            .recordAction(eq("sysadmin"), eq("ADMIN_ROLE_UPDATE"), eq(AuditStage.SUCCESS), eq("123"), detailCaptor.capture());
+            .recordAction(eq("sysadmin"), eq("ADMIN_ROLE_UPDATE"), eq(AuditStage.SUCCESS), eq("123"), detailCaptor.capture(), eq("CR-98"));
         Map<String, Object> detail = detailCaptor.getValue();
         assertThat(detail.get("changeRequestId")).isEqualTo(98L);
         assertThat(detail.get("status")).isEqualTo("APPROVED");
         assertThat(detail.get("requestedBy")).isEqualTo("sysadmin");
         assertThat(detail.get("decidedBy")).isEqualTo("authadmin");
-        assertThat(detail.get("stage")).isEqualTo("SUCCESS");
+        assertThat(detail.get("stage")).isEqualTo("成功");
+        assertThat(detail.get("stageCode")).isEqualTo("SUCCESS");
     }
 
     @Test
@@ -132,7 +137,8 @@ class AdminApiResourceChangeAuditTest {
             org.mockito.Mockito.anyString(),
             org.mockito.Mockito.any(),
             org.mockito.Mockito.anyString(),
-            org.mockito.Mockito.anyMap()
+            org.mockito.Mockito.anyMap(),
+            org.mockito.Mockito.any()
         );
     }
 
@@ -145,5 +151,70 @@ class AdminApiResourceChangeAuditTest {
         String code = AdminApiResource.buildChangeActionCode(cr);
 
         assertThat(code).isEqualTo("ADMIN_PORTAL_MENU_CREATE");
+    }
+
+    @Test
+    void recordPortalMenuDecisionAuditEmitsApproverLog() {
+        ChangeRequest cr = new ChangeRequest();
+        cr.setId(2752L);
+        cr.setResourceType("PORTAL_MENU");
+        cr.setAction("DISABLE");
+        cr.setResourceId("42");
+        cr.setRequestedBy("sysadmin");
+        cr.setDecidedBy("authadmin");
+        cr.setDecidedAt(Instant.parse("2025-10-25T12:15:38Z"));
+        cr.setStatus("APPROVED");
+        cr.setPayloadJson("{\"deleted\":true}");
+        cr.setDiffJson(
+            """
+            {
+              "before": {"deleted": false},
+              "after": {"deleted": true},
+              "changes": [{"field": "deleted", "before": false, "after": true}]
+            }
+            """
+        );
+
+        ArgumentCaptor<Map<String, Object>> detailCaptor = ArgumentCaptor.forClass(Map.class);
+
+        resource.recordPortalMenuDecisionAudit(cr, AuditStage.SUCCESS);
+
+        verify(auditService)
+            .recordAction(
+                eq("authadmin"),
+                eq("ADMIN_PORTAL_MENU_DISABLE"),
+                eq(AuditStage.SUCCESS),
+                eq("42"),
+                detailCaptor.capture(),
+                eq("CR-2752")
+            );
+        Map<String, Object> detail = detailCaptor.getValue();
+        assertThat(detail.get("stage")).isEqualTo("成功");
+        assertThat(detail.get("stageCode")).isEqualTo("SUCCESS");
+        assertThat(detail.get("decisionPhase")).isEqualTo("APPLY");
+        assertThat(detail.get("before")).isInstanceOf(Map.class);
+        assertThat(detail.get("after")).isInstanceOf(Map.class);
+        assertThat(detail.get("changes")).isInstanceOf(java.util.Collection.class);
+    }
+
+    @Test
+    void resolveStageForChangeOutcomePrefersStatusOverAppliedFlag() {
+        ChangeRequest cr = new ChangeRequest();
+        cr.setStatus("APPLIED");
+
+        AuditStage stage = resource.resolveStageForChangeOutcome(cr, false);
+
+        assertThat(stage).isEqualTo(AuditStage.SUCCESS);
+    }
+
+    @Test
+    void resolveStageForChangeOutcomeFallsBackToFailOnErrorMessage() {
+        ChangeRequest cr = new ChangeRequest();
+        cr.setStatus("APPLIED");
+        cr.setLastError("timeout");
+
+        AuditStage stage = resource.resolveStageForChangeOutcome(cr, true);
+
+        assertThat(stage).isEqualTo(AuditStage.FAIL);
     }
 }

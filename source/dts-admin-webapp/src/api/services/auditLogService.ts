@@ -16,12 +16,12 @@ export class AuditLogService {
 	 * @param sort 排序字段
 	 * @returns 审计日志分页数据
 	 */
-    static getAuditLogs(
-        page: number = 0,
-        size: number = 10,
-        sort: string = "occurredAt,desc",
-        filters: Record<string, unknown> = {},
-    ): Promise<AuditLogPageResponse> {
+	static getAuditLogs(
+		page: number = 0,
+		size: number = 10,
+		sort: string = "occurredAt,desc",
+		filters: Record<string, unknown> = {},
+	): Promise<AuditLogPageResponse> {
 		return apiClient.get<AuditLogPageResponse>({
 			url: AuditLogService.BASE_URL,
 			params: {
@@ -92,8 +92,17 @@ export class AuditLogService {
 		});
 	}
 
+	/** 获取操作分组列表（映射到 operation_group） */
+	static getAuditGroups(): Promise<Array<{ key: string; title: string }>> {
+		return apiClient.get<Array<{ key: string; title: string }>>({
+			url: `${AuditLogService.BASE_URL}/groups`,
+		});
+	}
+
 	/** 获取审计分类条目（模块下的细分条目，使用 entryKey/entryTitle） */
-	static getAuditCategories(): Promise<Array<{ moduleKey: string; moduleTitle: string; entryKey: string; entryTitle: string }>> {
+	static getAuditCategories(): Promise<
+		Array<{ moduleKey: string; moduleTitle: string; entryKey: string; entryTitle: string }>
+	> {
 		return apiClient.get<Array<{ moduleKey: string; moduleTitle: string; entryKey: string; entryTitle: string }>>({
 			url: `${AuditLogService.BASE_URL}/categories`,
 		});

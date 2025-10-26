@@ -37,6 +37,9 @@ class AdminAuditServiceModuleOptionTest {
     @Mock
     private AuditResourceDictionaryService resourceDictionary;
 
+    @Mock
+    private OperationMappingEngine operationMappingEngine;
+
     private AuditProperties properties;
 
     @BeforeEach
@@ -59,7 +62,8 @@ class AdminAuditServiceModuleOptionTest {
             objectMapper,
             userRepository,
             organizationRepository,
-            resourceDictionary
+            resourceDictionary,
+            operationMappingEngine
         );
 
         List<AdminAuditService.ModuleOption> options = service.listModuleOptions();

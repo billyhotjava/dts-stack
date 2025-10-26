@@ -6,77 +6,77 @@ import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 
 interface ApprovalStatusProps {
-  userId: string;
+	userId: string;
 }
 
 export function ApprovalStatus({ userId }: ApprovalStatusProps) {
-  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
-  const [loading, setLoading] = useState(false);
+	const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+	const [loading, setLoading] = useState(false);
 
-  const loadApprovals = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await KeycloakApprovalService.getApprovalRequests();
-      const lowerId = String(userId || "").toLowerCase();
-      const userApprovals = data.filter((req: any) => {
-        const reason = typeof req?.reason === "string" ? req.reason : "";
-        const reasonHit = reason.toLowerCase().includes(lowerId);
-        const items = Array.isArray(req?.items) ? req.items : [];
-        const itemHit = items.some((it: any) => String(it?.targetId || "").toLowerCase() === lowerId);
-        return reasonHit || itemHit;
-      });
-      setApprovals(userApprovals);
-    } catch (error: any) {
-      console.error("Error loading approvals:", error);
-      toast.error(`加载审批状态失败: ${error.message || "未知错误"}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
+	const loadApprovals = useCallback(async () => {
+		setLoading(true);
+		try {
+			const data = await KeycloakApprovalService.getApprovalRequests();
+			const lowerId = String(userId || "").toLowerCase();
+			const userApprovals = data.filter((req: any) => {
+				const reason = typeof req?.reason === "string" ? req.reason : "";
+				const reasonHit = reason.toLowerCase().includes(lowerId);
+				const items = Array.isArray(req?.items) ? req.items : [];
+				const itemHit = items.some((it: any) => String(it?.targetId || "").toLowerCase() === lowerId);
+				return reasonHit || itemHit;
+			});
+			setApprovals(userApprovals);
+		} catch (error: any) {
+			console.error("Error loading approvals:", error);
+			toast.error(`加载审批状态失败: ${error.message || "未知错误"}`);
+		} finally {
+			setLoading(false);
+		}
+	}, [userId]);
 
-  useEffect(() => {
-    loadApprovals();
-  }, [loadApprovals]);
+	useEffect(() => {
+		loadApprovals();
+	}, [loadApprovals]);
 
-  if (loading) {
-    return <Badge variant="secondary">加载中...</Badge>;
-  }
+	if (loading) {
+		return <Badge variant="secondary">加载中...</Badge>;
+	}
 
-  if (approvals.length === 0) {
-    return <Badge variant="success">无待处理审批</Badge>;
-  }
+	if (approvals.length === 0) {
+		return <Badge variant="success">无待处理审批</Badge>;
+	}
 
-  const pendingApprovals = approvals.filter((approval) => approval.status === "PENDING");
-  const failedApprovals = approvals.filter((approval) => approval.status === "FAILED");
+	const pendingApprovals = approvals.filter((approval) => approval.status === "PENDING");
+	const failedApprovals = approvals.filter((approval) => approval.status === "FAILED");
 
-  if (failedApprovals.length > 0) {
-    return (
-      <div className="flex items-center gap-2">
-        <Badge variant="destructive">有失败的审批</Badge>
-        <Button variant="ghost" size="sm" onClick={loadApprovals}>
-          刷新
-        </Button>
-      </div>
-    );
-  }
+	if (failedApprovals.length > 0) {
+		return (
+			<div className="flex items-center gap-2">
+				<Badge variant="destructive">有失败的审批</Badge>
+				<Button variant="ghost" size="sm" onClick={loadApprovals}>
+					刷新
+				</Button>
+			</div>
+		);
+	}
 
-  if (pendingApprovals.length > 0) {
-    return (
-      <div className="flex items-center gap-2">
-        <Badge variant="warning">有待审批请求</Badge>
-        <Button variant="ghost" size="sm" onClick={loadApprovals}>
-          刷新
-        </Button>
-      </div>
-    );
-  }
+	if (pendingApprovals.length > 0) {
+		return (
+			<div className="flex items-center gap-2">
+				<Badge variant="warning">有待审批请求</Badge>
+				<Button variant="ghost" size="sm" onClick={loadApprovals}>
+					刷新
+				</Button>
+			</div>
+		);
+	}
 
-  return (
-    <div className="flex items-center gap-2">
-      <Badge variant="secondary">有审批记录</Badge>
-      <Button variant="ghost" size="sm" onClick={loadApprovals}>
-        刷新
-      </Button>
-    </div>
-  );
+	return (
+		<div className="flex items-center gap-2">
+			<Badge variant="secondary">有审批记录</Badge>
+			<Button variant="ghost" size="sm" onClick={loadApprovals}>
+				刷新
+			</Button>
+		</div>
+	);
 }

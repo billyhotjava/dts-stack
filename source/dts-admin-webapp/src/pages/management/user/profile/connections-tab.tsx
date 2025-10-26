@@ -103,9 +103,7 @@ export default function ConnectionsTab() {
 								<AvatarImage src={avatarUrl} />
 								<AvatarFallback>{deriveInitial(displayName)}</AvatarFallback>
 							</Avatar>
-							<CardTitle className="text-center text-base font-semibold">
-								{displayName}
-							</CardTitle>
+							<CardTitle className="text-center text-base font-semibold">{displayName}</CardTitle>
 							<Text variant="body3" className="text-muted-foreground">
 								{username}
 							</Text>

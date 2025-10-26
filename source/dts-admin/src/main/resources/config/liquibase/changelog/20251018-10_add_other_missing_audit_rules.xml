@@ -11,7 +11,7 @@
             <column name="url_pattern" value="/api/admin/users/display-names"/>
             <column name="http_method" value="GET"/>
             <column name="module_name" value="用户管理"/>
-            <column name="action_type" value="查询"/>
+            <column name="operation_type" value="READ"/>
             <column name="description_template" value="查询用户显示名称"/>
             <column name="source_table_template" value="用户"/>
             <column name="order_value" valueNumeric="60"/>
@@ -22,7 +22,7 @@
             <column name="url_pattern" value="/api/admin/dev/seed"/>
             <column name="http_method" value="POST"/>
             <column name="module_name" value="开发运维"/>
-            <column name="action_type" value="执行"/>
+            <column name="operation_type" value="EXECUTE"/>
             <column name="description_template" value="执行开发数据初始化"/>
             <column name="source_table_template" value="系统"/>
             <column name="order_value" valueNumeric="100"/>

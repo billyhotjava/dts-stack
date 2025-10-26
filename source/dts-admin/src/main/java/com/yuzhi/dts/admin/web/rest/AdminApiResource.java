@@ -11,7 +11,10 @@ import com.yuzhi.dts.admin.web.rest.api.ResultStatus;
 import java.security.Principal;
 import java.util.*;
 import java.util.stream.Collectors;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -188,30 +191,28 @@ public class AdminApiResource {
     }
 
     private static String toCanonicalTriadRole(String authority) {
-        if (authority == null || authority.isBlank()) return null;
-        String a = authority.trim().toUpperCase(Locale.ROOT);
-        // Already canonical
-        if (
-            a.equals(AuthoritiesConstants.SYS_ADMIN) ||
-            a.equals(AuthoritiesConstants.AUTH_ADMIN) ||
-            a.equals(AuthoritiesConstants.AUDITOR_ADMIN)
-        ) {
-            return a;
+        if (authority == null || authority.isBlank()) {
+            return null;
         }
-        // Common alias variants observed in legacy realms/tokens
-        if (a.equals("ROLE_SYSADMIN") || a.equals("ROLE_SYSTEM_ADMIN") || a.equals("SYSADMIN") || a.equals("SYSTEM_ADMIN")) {
+        String upper = authority.trim().toUpperCase(Locale.ROOT);
+        if (
+            upper.equals(AuthoritiesConstants.SYS_ADMIN) ||
+            upper.equals(AuthoritiesConstants.AUTH_ADMIN) ||
+            upper.equals(AuthoritiesConstants.AUDITOR_ADMIN)
+        ) {
+            return upper;
+        }
+        if (upper.startsWith("ROLE")) {
+            upper = upper.replaceFirst("^ROLE[_\\-]?", "");
+        }
+        String compact = upper.replaceAll("[^A-Z0-9]", "");
+        if (compact.startsWith("SYS")) {
             return AuthoritiesConstants.SYS_ADMIN;
         }
-        if (a.equals("ROLE_AUTHADMIN") || a.equals("ROLE_IAM_ADMIN") || a.equals("AUTHADMIN") || a.equals("IAM_ADMIN")) {
+        if (compact.startsWith("AUTH") || compact.startsWith("IAM")) {
             return AuthoritiesConstants.AUTH_ADMIN;
         }
-        if (
-            a.equals("ROLE_AUDITOR_ADMIN") ||
-            a.equals("ROLE_AUDIT_ADMIN") ||
-            a.equals("ROLE_AUDITADMIN") ||
-            a.equals("AUDITADMIN") ||
-            a.equals("SECURITYAUDITOR")
-        ) {
+        if (compact.startsWith("AUDIT") || compact.startsWith("AUDITOR") || compact.startsWith("SECURITYAUDITOR")) {
             return AuthoritiesConstants.AUDITOR_ADMIN;
         }
         return null;
@@ -234,6 +235,7 @@ public class AdminApiResource {
     private final DtsCommonNotifyClient notifyClient;
     private final OrganizationRepository organizationRepository;
     private final AdminUserService adminUserService;
+    private final TransactionTemplate changeApplyTx;
 
     private static final Set<String> MENU_SECURITY_LEVELS = Set.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> VISIBILITY_DATA_LEVELS = Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
@@ -327,7 +329,8 @@ public class AdminApiResource {
         PortalMenuVisibilityRepository visibilityRepo,
         DtsCommonNotifyClient notifyClient,
         OrganizationRepository organizationRepository,
-        AdminUserService adminUserService
+        AdminUserService adminUserService,
+        PlatformTransactionManager transactionManager
     ) {
         this.auditService = auditService;
         this.orgService = orgService;
@@ -345,6 +348,10 @@ public class AdminApiResource {
         this.notifyClient = notifyClient;
         this.organizationRepository = organizationRepository;
         this.adminUserService = adminUserService;
+        TransactionTemplate template = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        template.setReadOnly(false);
+        this.changeApplyTx = template;
     }
 
     @org.springframework.beans.factory.annotation.Value("${dts.admin.require-approval.portal-menu.visibility:true}")
@@ -393,7 +400,8 @@ public class AdminApiResource {
                 "ADMIN_SETTING_VIEW",
                 AuditStage.SUCCESS,
                 Objects.toString(cfg.getOrDefault("key", "config")),
-                Map.of("draft", Boolean.TRUE)
+                Map.of("draft", Boolean.TRUE),
+                correlationId(cr)
             );
             return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
         } catch (IllegalStateException ex) {
@@ -465,8 +473,9 @@ public class AdminApiResource {
                 Map<String, Object> approvalPayload = new LinkedHashMap<>(auditDetail);
                 approvalPayload.put("status", "APPROVAL_PENDING");
                 approvalPayload.put("changeRequestId", cr.getId());
+                attachChangeRequestMetadata(approvalPayload, cr);
                 // 记录变更单本身：target_table=change_request, target_id=cr.id
-                auditService.record(actor, "ADMIN_MENU_CREATE", "PORTAL_MENU", "change_request", String.valueOf(cr.getId()), "SUCCESS", approvalPayload, null);
+                auditService.record(actor, "ADMIN_MENU_CREATE", "PORTAL_MENU", "change_request", String.valueOf(cr.getId()), "SUCCESS", approvalPayload, null, correlationId(cr));
                 return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
             }
             String name = trimToNull(payload.get("name"));
@@ -587,7 +596,8 @@ public class AdminApiResource {
                 Map<String, Object> approvalDetail = new LinkedHashMap<>(auditBase);
                 approvalDetail.put("status", "APPROVAL_PENDING");
                 approvalDetail.put("changeRequestId", cr.getId());
-                auditService.recordAction(actor, "ADMIN_MENU_UPDATE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalDetail);
+                attachChangeRequestMetadata(approvalDetail, cr);
+                auditService.recordAction(actor, "ADMIN_MENU_UPDATE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalDetail, correlationId(cr));
                 return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
             }
             applyMenuUpdates(beforeEntity, payload);
@@ -640,12 +650,12 @@ public class AdminApiResource {
         String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("before", before);
-        auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.BEGIN, id, auditDetail);
+        auditService.recordAction(actor, "ADMIN_MENU_DISABLE", AuditStage.BEGIN, id, auditDetail);
         if (requireMenuStructureApproval) {
             try {
                 ChangeRequest cr = changeRequestService.draft(
                     "PORTAL_MENU",
-                    "DELETE",
+                    "DISABLE",
                     id,
                     Map.of("id", menuId),
                     before,
@@ -669,12 +679,13 @@ public class AdminApiResource {
                 Map<String, Object> approvalDetail = new LinkedHashMap<>(auditDetail);
                 approvalDetail.put("status", "APPROVAL_PENDING");
                 approvalDetail.put("changeRequestId", cr.getId());
-                auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalDetail);
+                attachChangeRequestMetadata(approvalDetail, cr);
+                auditService.recordAction(actor, "ADMIN_MENU_DISABLE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalDetail, correlationId(cr));
                 return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
             } catch (IllegalStateException ex) {
                 Map<String, Object> failureDetail = new LinkedHashMap<>(auditDetail);
                 failureDetail.put("error", ex.getMessage());
-                auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.FAIL, id, failureDetail);
+                auditService.recordAction(actor, "ADMIN_MENU_DISABLE", AuditStage.FAIL, id, failureDetail);
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
             }
         }
@@ -684,7 +695,7 @@ public class AdminApiResource {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("after", toPortalMenuPayload(entity));
-            auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.SUCCESS, id, detail);
+            auditService.recordAction(actor, "ADMIN_MENU_DISABLE", AuditStage.SUCCESS, id, detail);
             try {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "disable", "id", String.valueOf(entity.getId())));
             } catch (Exception ignored) {}
@@ -693,9 +704,9 @@ public class AdminApiResource {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("error", ex.getMessage());
-            auditService.recordAction(actor, "ADMIN_MENU_DELETE", AuditStage.FAIL, id, detail);
-            log.error("Failed to delete portal menu {}", id, ex);
-            return ResponseEntity.internalServerError().body(ApiResponse.error("删除菜单失败: " + ex.getMessage()));
+            auditService.recordAction(actor, "ADMIN_MENU_DISABLE", AuditStage.FAIL, id, detail);
+            log.error("Failed to disable portal menu {}", id, ex);
+            return ResponseEntity.internalServerError().body(ApiResponse.error("禁用菜单失败: " + ex.getMessage()));
         }
     }
 
@@ -749,6 +760,8 @@ public class AdminApiResource {
         String name = trimToNull(payload.get("name"));
         Long parentId = payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString());
         String description = trimToNull(payload.get("description"));
+        Boolean isRoot = parseBoolean(payload.get("isRoot"));
+        boolean rootFlag = Boolean.TRUE.equals(isRoot);
         String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
         String parentRef = parentId == null ? "root" : String.valueOf(parentId);
         Map<String, Object> auditDetail = new LinkedHashMap<>();
@@ -758,6 +771,9 @@ public class AdminApiResource {
         }
         if (StringUtils.hasText(description)) {
             auditDetail.put("description", description);
+        }
+        if (isRoot != null) {
+            auditDetail.put("isRoot", rootFlag);
         }
 
         if (!StringUtils.hasText(name)) {
@@ -769,7 +785,7 @@ public class AdminApiResource {
 
         auditService.recordAction(actor, "ADMIN_ORG_CREATE", AuditStage.BEGIN, parentRef, auditDetail);
         try {
-            OrganizationNode created = orgService.create(name, parentId, description);
+            OrganizationNode created = orgService.create(name, parentId, description, rootFlag);
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("name", created.getName());
             if (created.getParent() != null) {
@@ -777,6 +793,9 @@ public class AdminApiResource {
             }
             if (StringUtils.hasText(description)) {
                 detail.put("description", description);
+            }
+            if (created.isRoot()) {
+                detail.put("isRoot", true);
             }
             detail.put("created", Map.of("id", created.getId(), "name", created.getName()));
             auditService.recordAction(actor, "ADMIN_ORG_CREATE", AuditStage.SUCCESS, String.valueOf(created.getId()), detail);
@@ -806,12 +825,14 @@ public class AdminApiResource {
         if (StringUtils.hasText(existing.getDescription())) {
             beforeView.put("description", existing.getDescription());
         }
+        beforeView.put("isRoot", existing.isRoot());
 
         String name = payload.containsKey("name") ? trimToNull(payload.get("name")) : existing.getName();
         String description = payload.containsKey("description") ? trimToNull(payload.get("description")) : existing.getDescription();
         Long parentId = payload.containsKey("parentId")
             ? (payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString()))
             : (existing.getParent() == null ? null : existing.getParent().getId());
+        Boolean isRoot = payload.containsKey("isRoot") ? parseBoolean(payload.get("isRoot")) : null;
 
         if (!StringUtils.hasText(name)) {
             Map<String, Object> failure = new LinkedHashMap<>();
@@ -829,6 +850,9 @@ public class AdminApiResource {
         if (StringUtils.hasText(description)) {
             requestView.put("description", description);
         }
+        if (isRoot != null) {
+            requestView.put("isRoot", isRoot);
+        }
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("before", beforeView);
         auditDetail.put("request", requestView);
@@ -838,7 +862,7 @@ public class AdminApiResource {
 
         Optional<OrganizationNode> updated;
         try {
-            updated = orgService.update(id, name, description, parentId);
+            updated = orgService.update(id, name, description, parentId, isRoot);
         } catch (IllegalArgumentException ex) {
             Map<String, Object> failure = new LinkedHashMap<>(auditDetail);
             failure.put("error", ex.getMessage());
@@ -859,6 +883,7 @@ public class AdminApiResource {
         if (StringUtils.hasText(updatedNode.getDescription())) {
             afterView.put("description", updatedNode.getDescription());
         }
+        afterView.put("isRoot", updatedNode.isRoot());
         Map<String, Object> successDetail = new LinkedHashMap<>();
         successDetail.put("before", beforeView);
         successDetail.put("after", afterView);
@@ -887,6 +912,11 @@ public class AdminApiResource {
             success.put("status", "DELETED");
             auditService.recordAction(actor, "ADMIN_ORG_DELETE", AuditStage.SUCCESS, String.valueOf(id), success);
             return ResponseEntity.ok(ApiResponse.ok(buildOrgTree()));
+        } catch (IllegalArgumentException ex) {
+            Map<String, Object> failure = new LinkedHashMap<>(detail);
+            failure.put("error", ex.getMessage());
+            auditService.recordAction(actor, "ADMIN_ORG_DELETE", AuditStage.FAIL, String.valueOf(id), failure);
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         } catch (RuntimeException ex) {
             Map<String, Object> failure = new LinkedHashMap<>(detail);
             failure.put("error", ex.getMessage());
@@ -1045,7 +1075,8 @@ public class AdminApiResource {
                 "ADMIN_ROLE_ASSIGNMENT_CREATE",
                 AuditStage.SUCCESS,
                 username,
-                Map.of("changeRequestId", cr.getId(), "role", role)
+                Map.of("changeRequestId", cr.getId(), "role", role),
+                correlationId(cr)
             );
             return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
         } catch (IllegalStateException ex) {
@@ -1142,7 +1173,8 @@ public class AdminApiResource {
             "ADMIN_CHANGE_REQUEST_MANAGE",
             AuditStage.SUCCESS,
             String.valueOf(cr.getId()),
-            Map.of("action", "CREATE")
+            Map.of("action", "CREATE"),
+            correlationId(cr)
         );
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
@@ -1179,7 +1211,8 @@ public class AdminApiResource {
             "ADMIN_CHANGE_REQUEST_MANAGE",
             AuditStage.SUCCESS,
             id,
-            Map.of("action", "SUBMIT")
+            Map.of("action", "SUBMIT"),
+            correlationId(cr)
         );
         try {
             // Notify approvers (e.g., AUTH_ADMIN) that a new request arrived
@@ -1210,21 +1243,61 @@ public class AdminApiResource {
         cr.setDecidedBy(actor);
         cr.setDecidedAt(Instant.now());
         cr.setReason(body != null ? Objects.toString(body.get("reason"), null) : null);
-        applyChangeRequest(cr, actor);
-        AuditStage requesterStage = "FAILED".equalsIgnoreCase(cr.getStatus()) ? AuditStage.FAIL : AuditStage.SUCCESS;
+        cr.setLastError(null);
+
+        boolean applied = Boolean.TRUE.equals(
+            changeApplyTx.execute(status -> {
+                try {
+                    applyChangeRequest(cr, actor);
+                } catch (Exception ex) {
+                    log.error("Error applying change request {}: {}", crid, ex.getMessage(), ex);
+                    cr.setStatus("FAILED");
+                    cr.setLastError(resolveRootCauseMessage(ex));
+                }
+                boolean success = !"FAILED".equalsIgnoreCase(cr.getStatus());
+                if (!success) {
+                    status.setRollbackOnly();
+                }
+                return success;
+            })
+        );
+
+        if (!applied && !StringUtils.hasText(cr.getLastError())) {
+            cr.setLastError("审批执行失败，请稍后重试");
+        }
+
+        AuditStage requesterStage = resolveStageForChangeOutcome(cr, applied);
+        recordPortalMenuDecisionAudit(cr, requesterStage);
         recordChangeExecutionAudit(cr, requesterStage);
         crRepo.save(cr);
         Map<String, Object> approverDetail = buildChangeAuditDetail(cr);
         approverDetail.put("action", "APPROVE");
+        if (!applied && StringUtils.hasText(cr.getLastError())) {
+            approverDetail.put("error", cr.getLastError());
+        }
         auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            actor,
             "ADMIN_CHANGE_REQUEST_MANAGE",
             requesterStage,
             id,
-            approverDetail
+            approverDetail,
+            correlationId(cr)
         );
-        try { notifyClient.trySend("approval_approved", Map.of("id", id, "type", cr.getResourceType(), "status", cr.getStatus())); } catch (Exception ignored) {}
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        if (applied) {
+            try {
+                notifyClient.trySend("approval_approved", Map.of("id", id, "type", cr.getResourceType(), "status", cr.getStatus()));
+            } catch (Exception ignored) {}
+            return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        }
+        try {
+            notifyClient.trySend(
+                "approval_failed",
+                Map.of("id", id, "type", cr.getResourceType(), "status", cr.getStatus(), "error", Objects.toString(cr.getLastError(), ""))
+            );
+        } catch (Exception ignored) {}
+        return ResponseEntity
+            .status(HttpStatus.CONFLICT)
+            .body(ApiResponse.error(StringUtils.hasText(cr.getLastError()) ? cr.getLastError() : "审批执行失败"));
     }
 
     @PostMapping("/change-requests/{id}/reject")
@@ -1246,7 +1319,8 @@ public class AdminApiResource {
             "ADMIN_CHANGE_REQUEST_MANAGE",
             AuditStage.SUCCESS,
             id,
-            approverDetail
+            approverDetail,
+            correlationId(cr)
         );
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
@@ -1482,6 +1556,7 @@ public class AdminApiResource {
         m.put("contact", e.getContact());
         m.put("phone", e.getPhone());
         m.put("description", e.getDescription());
+        m.put("isRoot", e.isRoot());
         if (StringUtils.hasText(e.getKeycloakGroupId())) {
             m.put("keycloakGroupId", e.getKeycloakGroupId());
         }
@@ -1508,6 +1583,7 @@ public class AdminApiResource {
         m.put("phone", node.getPhone());
         m.put("description", node.getDescription());
         m.put("keycloakGroupId", node.getKeycloakGroupId());
+        m.put("isRoot", node.isRoot());
         return m;
     }
 
@@ -1517,6 +1593,26 @@ public class AdminApiResource {
         }
         String text = value.toString().trim();
         return text.isEmpty() ? null : text;
+    }
+
+    private Boolean parseBoolean(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        String text = value.toString().trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        if ("true".equalsIgnoreCase(text) || "1".equals(text)) {
+            return Boolean.TRUE;
+        }
+        if ("false".equalsIgnoreCase(text) || "0".equals(text)) {
+            return Boolean.FALSE;
+        }
+        return null;
     }
 
     private Map<String, Object> toSystemConfigMap(SystemConfig cfg) {
@@ -2168,8 +2264,23 @@ public class AdminApiResource {
             }
         } catch (Exception e) {
             cr.setStatus("FAILED");
-            cr.setLastError(e.getMessage());
+            cr.setLastError(resolveRootCauseMessage(e));
         }
+    }
+
+    private String resolveRootCauseMessage(Throwable throwable) {
+        if (throwable == null) {
+            return null;
+        }
+        Throwable root = throwable;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String message = root.getMessage();
+        if (!StringUtils.hasText(message)) {
+            message = root.getClass().getSimpleName();
+        }
+        return message;
     }
 
     void recordChangeExecutionAudit(ChangeRequest cr, AuditStage stage) {
@@ -2185,9 +2296,106 @@ public class AdminApiResource {
             return;
         }
         Map<String, Object> detail = buildChangeAuditDetail(cr);
-        detail.put("stage", stage.name());
+        detail.put("stage", stageDisplay(stage));
+        detail.put("stageCode", stage.name());
+        detail.put("correlationId", correlationId(cr));
         String resourceId = StringUtils.hasText(cr.getResourceId()) ? cr.getResourceId() : String.valueOf(cr.getId());
-        auditService.recordAction(actor, actionCode, stage, resourceId, detail);
+        auditService.recordAction(actor, actionCode, stage, resourceId, detail, correlationId(cr));
+    }
+
+    private static String correlationId(ChangeRequest cr) {
+        if (cr == null || cr.getId() == null) {
+            return null;
+        }
+        return "CR-" + cr.getId();
+    }
+
+    private static String stageDisplay(AuditStage stage) {
+        if (stage == null) {
+            return "";
+        }
+        return switch (stage) {
+            case BEGIN -> "处理中";
+            case SUCCESS -> "成功";
+            case FAIL -> "失败";
+        };
+    }
+
+    AuditStage resolveStageForChangeOutcome(ChangeRequest cr, boolean applied) {
+        String status = cr != null && StringUtils.hasText(cr.getStatus())
+            ? cr.getStatus().trim().toUpperCase(Locale.ROOT)
+            : "";
+        if ("FAILED".equals(status) || "REJECTED".equals(status) || "CANCELLED".equals(status)) {
+            return AuditStage.FAIL;
+        }
+        if (cr != null && StringUtils.hasText(cr.getLastError())) {
+            return AuditStage.FAIL;
+        }
+        if ("APPROVED".equals(status) || "APPLIED".equals(status) || "COMPLETED".equals(status)) {
+            return AuditStage.SUCCESS;
+        }
+        if ("PENDING".equals(status) || "SUBMITTED".equals(status) || "APPROVAL_PENDING".equals(status)) {
+            return AuditStage.BEGIN;
+        }
+        if (applied) {
+            return AuditStage.SUCCESS;
+        }
+        return AuditStage.BEGIN;
+    }
+
+    void recordPortalMenuDecisionAudit(ChangeRequest cr, AuditStage stage) {
+        if (cr == null || stage == null) {
+            return;
+        }
+        if (!"PORTAL_MENU".equalsIgnoreCase(cr.getResourceType())) {
+            return;
+        }
+        String actor = Optional
+            .ofNullable(cr.getDecidedBy())
+            .map(String::trim)
+            .filter(StringUtils::hasText)
+            .orElseGet(() -> SecurityUtils.getCurrentUserLogin().orElse(null));
+        if (!StringUtils.hasText(actor)) {
+            return;
+        }
+        String resourceId = StringUtils.hasText(cr.getResourceId()) ? cr.getResourceId() : String.valueOf(cr.getId());
+        Map<String, Object> detail = buildChangeAuditDetail(cr);
+        detail.put("stage", stageDisplay(stage));
+        detail.put("stageCode", stage.name());
+        detail.put("decisionPhase", "APPLY");
+        detail.put("correlationId", correlationId(cr));
+        try {
+            Map<String, Object> diff = fromJson(cr.getDiffJson());
+            boolean diffAdded = false;
+            if (diff != null && !diff.isEmpty()) {
+                Object before = diff.get("before");
+                Object after = diff.get("after");
+                Object changes = diff.get("changes");
+                if (before != null) {
+                    detail.put("before", redactSensitiveObject(before));
+                    diffAdded = true;
+                }
+                if (after != null) {
+                    detail.put("after", redactSensitiveObject(after));
+                    diffAdded = true;
+                }
+                if (changes != null) {
+                    detail.put("changes", redactSensitiveObject(changes));
+                    diffAdded = true;
+                }
+            }
+            if (!diffAdded) {
+                Map<String, Object> payload = fromJson(cr.getPayloadJson());
+                if (payload != null && !payload.isEmpty()) {
+                    detail.put("payload", redactSensitiveObject(payload));
+                }
+            }
+        } catch (Exception ex) {
+            if (log.isDebugEnabled()) {
+                log.debug("Failed to parse diff/payload for change request {}: {}", cr.getId(), ex.getMessage());
+            }
+        }
+        auditService.recordAction(actor, buildChangeActionCode(cr), stage, resourceId, detail, correlationId(cr));
     }
 
     Map<String, Object> buildChangeAuditDetail(ChangeRequest cr) {
@@ -2195,6 +2403,7 @@ public class AdminApiResource {
         if (cr == null) {
             return detail;
         }
+        attachChangeRequestMetadata(detail, cr);
         detail.put("changeRequestId", cr.getId());
         if (StringUtils.hasText(cr.getResourceType())) detail.put("resourceType", cr.getResourceType());
         if (StringUtils.hasText(cr.getAction())) detail.put("action", cr.getAction());
@@ -2208,6 +2417,22 @@ public class AdminApiResource {
         if (StringUtils.hasText(cr.getLastError())) detail.put("error", cr.getLastError());
         if (StringUtils.hasText(cr.getResourceId())) detail.put("resourceId", cr.getResourceId());
         return detail;
+    }
+
+    private void attachChangeRequestMetadata(Map<String, Object> target, ChangeRequest cr) {
+        if (target == null || cr == null) {
+            return;
+        }
+        String ref = correlationId(cr);
+        if (StringUtils.hasText(ref) && !target.containsKey("changeRequestRef")) {
+            target.put("changeRequestRef", ref);
+        }
+        if (StringUtils.hasText(cr.getSummary()) && !target.containsKey("summary")) {
+            target.put("summary", cr.getSummary());
+        }
+        if (StringUtils.hasText(cr.getReason()) && !target.containsKey("reason")) {
+            target.put("reason", cr.getReason());
+        }
     }
 
     static String buildChangeActionCode(ChangeRequest cr) {
@@ -2342,7 +2567,7 @@ public class AdminApiResource {
                     );
                 } catch (Exception ignored) {}
             }
-        } else if ("DELETE".equalsIgnoreCase(action)) {
+        } else if ("DISABLE".equalsIgnoreCase(action) || "DELETE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());
             portalMenuRepo
                 .findById(id)
@@ -2369,11 +2594,12 @@ public class AdminApiResource {
     private void applyOrganizationChange(ChangeRequest cr) throws Exception {
         Map<String, Object> payload = fromJson(cr.getPayloadJson());
         String action = cr.getAction();
+        Boolean isRoot = parseBoolean(payload.get("isRoot"));
         if ("CREATE".equalsIgnoreCase(action)) {
             String name = Objects.toString(payload.get("name"), null);
             Long parentId = payload.get("parentId") == null ? null : Long.valueOf(payload.get("parentId").toString());
             String description = Objects.toString(payload.get("description"), null);
-            OrganizationNode created = orgService.create(name, parentId, description);
+            OrganizationNode created = orgService.create(name, parentId, description, Boolean.TRUE.equals(isRoot));
             cr.setResourceId(String.valueOf(created.getId()));
         } else if ("UPDATE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());
@@ -2390,7 +2616,7 @@ public class AdminApiResource {
                     } else {
                         nextParentId = entity.getParent() == null ? null : entity.getParent().getId();
                     }
-                    orgService.update(id, nextName, nextDescription, nextParentId);
+                    orgService.update(id, nextName, nextDescription, nextParentId, isRoot);
                 });
         } else if ("DELETE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());
@@ -2777,6 +3003,7 @@ public class AdminApiResource {
     private static Map<String, Object> toChangeVM(ChangeRequest cr) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", cr.getId());
+        m.put("correlationId", correlationId(cr));
         m.put("resourceType", cr.getResourceType());
         m.put("resourceId", cr.getResourceId());
         m.put("action", cr.getAction());

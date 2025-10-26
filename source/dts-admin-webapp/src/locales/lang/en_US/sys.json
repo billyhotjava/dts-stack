@@ -1,364 +1,365 @@
 {
-  "sys": {
-    "api": {
-      "apiRequestFailed": "The interface request failed, please try again later!",
-      "apiTimeoutMessage": "The interface request timed out, please refresh the page and try again!",
-      "errMsg401": "The user does not have permission (token, user name, password error)!",
-      "errMsg403": "The user is authorized, but access is forbidden!",
-      "errMsg404": "Network request error, the resource was not found!",
-      "errMsg405": "Network request error, request method not allowed!",
-      "errMsg408": "Network request timed out!",
-      "errMsg500": "Server error, please contact the administrator!",
-      "errMsg501": "The network is not implemented!",
-      "errMsg502": "Network Error!",
-      "errMsg503": "The service is unavailable, the server is temporarily overloaded or maintained!",
-      "errMsg504": "Network timeout!",
-      "errMsg505": "The http version does not support the request!",
-      "errorMessage": "The operation failed, the system is abnormal!",
-      "errorTip": "Error Tip",
-      "networkException": "network anomaly",
-      "networkExceptionMsg": "Please check if your network connection is normal! The network is abnormal",
-      "operationFailed": "Operation failed",
-      "operationSuccess": "Operation Success",
-      "successTip": "Success Tip",
-      "timeoutMessage": "Login timed out, please log in again!"
-    },
-    "docs": "Document",
-    "login": {
-      "brandName": "Data Platform Manager",
-      "brandIllustrationAlt": "Futuristic data platform illustration",
-      "accountPlaceholder": "Please input username",
-      "backSignIn": "Back sign in",
-      "confirmPassword": "Confirm Password",
-      "confirmPasswordPlaceholder": "Please input confirm password",
-      "diffPwd": "The two passwords are inconsistent",
-      "email": "Email",
-      "emaildPlaceholder": "Please input email",
-      "forgetFormSecondTitle": "Please enter the email address associated with your account and We will email you a link to reset your password.",
-      "forgetFormTitle": "Reset password",
-      "forgetPassword": "Forget Password?",
-      "loginButton": "Sign in",
-      "loginSuccessDesc": "Welcome back",
-      "loginSuccessTitle": "Login successful",
-      "logout": "Logout",
-      "mobile": "Mobile",
-      "mobilePlaceholder": "Please input mobile",
-      "mobileSignInFormTitle": "Mobile sign in",
-      "otherSignIn": "Or continue with",
-      "password": "Password",
-      "passwordPlaceholder": "Please input password",
-      "policy": "I agree to the xxx Privacy Policy",
-      "policyPlaceholder": "Register after checking",
-      "privacyPolicy": " Privacy policy ",
-      "qrSignInFormTitle": "Qr code sign in",
-      "registerAndAgree": "By signing up, I agree to",
-      "registerButton": "Sign up",
-      "rememberMe": "Remember me",
-      "scanSign": "scanning the code to complete the login",
-      "sendEmailButton": "Send Email",
-      "sendSmsButton": "Send SMS code",
-      "sendSmsText": "Reacquire in {{second}}s",
-      "signInDesc": "Enter your personal details and get started!",
-      "signInFormTitle": "Login to your account",
-      "signInPrimaryTitle": "Hi, Welcome Back",
-      "signInSecondTitle": "Backstage management system",
-      "signInTitle": "Account Sign In",
-      "signUpFormTitle": "Sign up",
-      "smsCode": "SMS code",
-      "smsPlaceholder": "Please input sms code",
-      "termsOfService": " Terms of service ",
-      "userName": "Username",
-      "signInFormDescription": "Enter your username to login to your account",
-      "noAccount": "Don't have an account?"
-    },
-    "nav": {
-      "dashboard": "Dashboard",
-      "others": "Others",
-      "ui": "UI",
-      "custom_ui_components": "Custom UI Components",
-      "analysis": "Analysis",
-      "animate": "Animate",
-      "blank": "Blank",
-      "blog": "Blog",
-      "calendar": "Calendar",
-      "chart": "Chart",
-      "clipboard": "Clipboard",
-      "components": "Components",
-      "disabled": "Item Disabled",
-      "editor": "Editor",
-      "error": {
-        "403": "403",
-        "404": "404",
-        "500": "500",
-        "index": "Error Page",
-        "unexpected": "Unexpected Application Error!",
-        "unknown": "Unknown Error"
-      },
-      "external_link": "External Link",
-      "link": "Item External",
-      "functions": "Functions",
-      "i18n": "Multi Language",
-      "icon": "Icon",
-      "iframe": "Iframe",
-      "kanban": "Kanban",
-      "label": "Item Label",
-      "permission": "Permission",
-      "permission.page_test": "Page Permission Test",
-      "management": "System Management",
-      "markdown": "Markdown",
-      "menulevel": {
-        "1a": "Menu Level 1a",
-        "1b": {
-          "2a": "Menu Level 2a",
-          "2b": {
-            "3a": "Menu Level 3a",
-            "3b": "Menu Level 3b",
-            "index": "Menu Level 2b"
-          },
-          "index": "Menu Level 1b"
-        },
-        "index": "Menu Level"
-      },
-      "scroll": "Scroll",
-      "usermgmt": {
-        "index": "User Management",
-        "organization": "Organization",
-        "permission": "Permission",
-        "role": "Role",
-        "user": "User",
-        "user_detail": "User Detail",
-        "system": {
-          "index": "System Management",
-          "my_changes": "My Requests",
-          "user": "User Management",
-          "role": "Role Management",
-          "permission": "Menu Management",
-          "group": "Organization Management",
-          "system_config": "System Management",
-          "datasource": "Data Sources"
-        }
-      },
-      "toast": "Toast",
-      "token_expired": "Token Expired",
-      "upload": "Upload",
-      "user": {
-        "account": "Account",
-        "index": "User",
-        "profile": "Personal Details"
-      },
-      "workbench": "Workbench",
-      "dataSecurity": "Data Security",
-      "dataSecurityOverview": "Asset Overview",
-      "system": {
-        "group": "Organization",
-        "index": "System Management",
-        "my_changes": "My Change Requests"
-      }
-    },
-    "error": {
-      "unexpected": "Unexpected Application Error!",
-      "unknown": "Unknown Error"
-    },
-    "errorPage": {
-      "403": {
-        "title": "Access Denied",
-        "helmetTitle": "403 Access Denied!",
-        "description": "You do not have permission to access this resource."
-      },
-      "404": {
-        "title": "Oops! Page not found!",
-        "helmetTitle": "404 Page Not Found!",
-        "description": "The page you're looking for doesn't exist or has been moved."
-      },
-      "500": {
-        "title": "Internal Server Error!",
-        "helmetTitle": "500 Internal Server Error!",
-        "description": "Sorry for the inconvenience."
-      },
-      "actions": {
-        "goHome": "Go to Home"
-      }
-    },
-    "workbench": {
-      "title": "Cluster Overview",
-      "uptime": "Uptime",
-      "nodes": "Active Nodes",
-      "jobs": "Running Jobs",
-      "statusHealthy": "Healthy",
-      "statusWarning": "Attention Needed",
-      "cpuLoad": "CPU Load",
-      "memoryLoad": "Memory Usage",
-      "storageLoad": "Storage Usage",
-      "timelineLabel": "Last hour timeline",
-      "nodeTableTitle": "Node Overview",
-      "nodeTableSubtitle": "Latest sampled nodes",
-      "nodeName": "Node",
-      "nodeRole": "Role",
-      "nodeCpu": "CPU Usage",
-      "nodeMemory": "Memory Usage",
-      "nodeStatus": "Status",
-      "roleMaster": "Master",
-      "roleWorker": "Worker"
-    },
-    "admin": {
-      "tab": {
-        "user": "User Change",
-        "role": "Role Change",
-        "org": "Organization",
-        "config": "System Config",
-        "menu": "Menu Management"
-      },
-      "action": {
-        "CREATE": "Create",
-        "UPDATE": "Update",
-        "DELETE": "Delete",
-        "BIND_ROLE": "Bind Role",
-        "UNBIND_ROLE": "Unbind Role",
-        "CONFIG_SET": "Configure",
-        "USER_CREATE": "Create User",
-        "ROLE_ASSIGN": "Assign Role",
-        "DATA_EXPORT": "Export Data",
-        "LOGIN": "Login",
-        "UNKNOWN": "Unknown Action"
-      },
-      "status": {
-        "PENDING": "Pending",
-        "APPROVED": "Approved",
-        "REJECTED": "Rejected",
-        "FAILED": "Failed",
-        "DRAFT": "Draft",
-        "UNKNOWN": "Unknown Status",
-        "ACTIVE": "Active",
-        "DISABLED": "Disabled"
-      },
-      "resource": {
-        "USER": "User",
-        "ROLE": "Role",
-        "ORG": "Organization",
-        "CONFIG": "System Config",
-        "MENU": "Menu",
-        "PORTAL_MENU": "Portal Menu",
-        "UNKNOWN": "Unknown Resource"
-      },
-      "outcome": {
-        "SUCCESS": "Success",
-        "FAILURE": "Failure"
-      },
-      "role": {
-        "SYSADMIN": "System Administrator",
-        "OPADMIN": "Operations Administrator",
-        "AUTHADMIN": "Authorization Administrator",
-        "AUDITADMIN": "Audit Administrator",
-        "DEPT_DATA_OWNER": "Department Data Administrator",
-        "DEPT_DATA_DEV": "Department Data Developer",
-        "INST_DATA_OWNER": "Institute Data Administrator",
-        "INST_DATA_DEV": "Institute Data Developer",
-        "DATA_STEWARD": "Data Steward",
-        "DATA_ANALYST": "Data Analyst"
-      },
-      "sensitivity": {
-        "DATA_PUBLIC": "Public",
-        "DATA_INTERNAL": "Internal",
-        "DATA_SECRET": "Secret",
-        "DATA_CONFIDENTIAL": "Confidential",
-        "NON_SECRET": "Non-secret",
-        "GENERAL": "General",
-        "IMPORTANT": "Important",
-        "CORE": "Core",
-        "PUBLIC": "Public",
-        "INTERNAL": "Internal",
-        "CONFIDENTIAL": "Confidential",
-        "TOP_SECRET": "Top Secret",
-        "SECRET": "Secret",
-        "TOP-SECRET": "Top Secret",
-        "NORMAL": "Normal",
-        "UNKNOWN": "Unknown Sensitivity"
-      }
-    },
-    "dataSecurity": {
-      "title": "Data Security Overview",
-      "subtitle": "Track data assets by sensitivity level",
-      "distributionTitle": "Asset Distribution",
-      "listTitle": "Data Asset List",
-      "listSubtitle": "Sorted by latest synchronization",
-      "assetName": "Asset Name",
-      "assetOwner": "Owner",
-      "assetCategory": "Category",
-      "assetRecords": "Records",
-      "assetUpdatedAt": "Updated At",
-      "category": {
-        "public": "Public",
-        "internal": "Internal",
-        "secret": "Secret",
-        "confidential": "Confidential"
-      }
-    },
-    "permission": {
-      "title": "Permission Catalogue",
-      "new": "New Permission",
-      "dashboard": "Workbench",
-      "dataSecurity": "Data Security",
-      "user": "Account Center",
-      "group": "Organization Center",
-      "permission": "Permission Dictionary",
-      "columns": {
-        "name": "Permission Name",
-        "type": "Type",
-        "icon": "Icon",
-        "component": "Component",
-        "status": "Status",
-        "order": "Order",
-        "action": "Action"
-      },
-      "status": {
-        "enable": "Enabled",
-        "disable": "Disabled"
-      },
-      "type": {
-        "catalogue": "Catalogue",
-        "menu": "Menu",
-        "component": "Component"
-      },
-      "action": {
-        "addChild": "Add Child",
-        "edit": "Edit",
-        "delete": "Delete"
-      },
-      "modal": {
-        "create": "New Permission",
-        "edit": "Edit Permission"
-      }
-    },
-    "profile": {
-      "title": "Job Title",
-      "department": "Department"
-    },
-    "settings": {
-      "accordion": "Accordion Menu",
-      "breadcrumb": "BreadCrumb",
-      "darkSidebar": "Dark Sidebar",
-      "exitFullscreen": "Exit FullScreen",
-      "family": "Family",
-      "font": "Font",
-      "fullscreen": "FullScreen",
-      "layout": "Layout",
-      "mode": "Mode",
-      "multiTab": "Multi Tab",
-      "page": "Page",
-      "presetThemes": "Presets",
-      "size": "Size",
-      "stretch": "Stretch",
-      "stretchTip": "Only available when the screen width is greater than 1280px (xl)",
-      "title": "Settings"
-    },
-    "tab": {
-      "close": "Close",
-      "closeAll": "Close All",
-      "closeLeft": "Close Left",
-      "closeOthers": "Close Others",
-      "closeRight": "Close Right",
-      "fullscreen": "FullScreen",
-      "refresh": "Refresh"
-    }
-  }
+	"sys": {
+		"api": {
+			"apiRequestFailed": "The interface request failed, please try again later!",
+			"apiTimeoutMessage": "The interface request timed out, please refresh the page and try again!",
+			"errMsg401": "The user does not have permission (token, user name, password error)!",
+			"errMsg403": "The user is authorized, but access is forbidden!",
+			"errMsg404": "Network request error, the resource was not found!",
+			"errMsg405": "Network request error, request method not allowed!",
+			"errMsg408": "Network request timed out!",
+			"errMsg500": "Server error, please contact the administrator!",
+			"errMsg501": "The network is not implemented!",
+			"errMsg502": "Network Error!",
+			"errMsg503": "The service is unavailable, the server is temporarily overloaded or maintained!",
+			"errMsg504": "Network timeout!",
+			"errMsg505": "The http version does not support the request!",
+			"errorMessage": "The operation failed, the system is abnormal!",
+			"errorTip": "Error Tip",
+			"networkException": "network anomaly",
+			"networkExceptionMsg": "Please check if your network connection is normal! The network is abnormal",
+			"operationFailed": "Operation failed",
+			"operationSuccess": "Operation Success",
+			"successTip": "Success Tip",
+			"timeoutMessage": "Login timed out, please log in again!"
+		},
+		"docs": "Document",
+		"login": {
+			"brandName": "Data Platform Manager",
+			"brandIllustrationAlt": "Futuristic data platform illustration",
+			"accountPlaceholder": "Please input username",
+			"backSignIn": "Back sign in",
+			"confirmPassword": "Confirm Password",
+			"confirmPasswordPlaceholder": "Please input confirm password",
+			"diffPwd": "The two passwords are inconsistent",
+			"email": "Email",
+			"emaildPlaceholder": "Please input email",
+			"forgetFormSecondTitle": "Please enter the email address associated with your account and We will email you a link to reset your password.",
+			"forgetFormTitle": "Reset password",
+			"forgetPassword": "Forget Password?",
+			"loginButton": "Sign in",
+			"loginSuccessDesc": "Welcome back",
+			"loginSuccessTitle": "Login successful",
+			"logout": "Logout",
+			"mobile": "Mobile",
+			"mobilePlaceholder": "Please input mobile",
+			"mobileSignInFormTitle": "Mobile sign in",
+			"otherSignIn": "Or continue with",
+			"password": "Password",
+			"passwordPlaceholder": "Please input password",
+			"policy": "I agree to the xxx Privacy Policy",
+			"policyPlaceholder": "Register after checking",
+			"privacyPolicy": " Privacy policy ",
+			"qrSignInFormTitle": "Qr code sign in",
+			"registerAndAgree": "By signing up, I agree to",
+			"registerButton": "Sign up",
+			"rememberMe": "Remember me",
+			"scanSign": "scanning the code to complete the login",
+			"sendEmailButton": "Send Email",
+			"sendSmsButton": "Send SMS code",
+			"sendSmsText": "Reacquire in {{second}}s",
+			"signInDesc": "Enter your personal details and get started!",
+			"signInFormTitle": "Login to your account",
+			"signInPrimaryTitle": "Hi, Welcome Back",
+			"signInSecondTitle": "Backstage management system",
+			"signInTitle": "Account Sign In",
+			"signUpFormTitle": "Sign up",
+			"smsCode": "SMS code",
+			"smsPlaceholder": "Please input sms code",
+			"termsOfService": " Terms of service ",
+			"userName": "Username",
+			"signInFormDescription": "Enter your username to login to your account",
+			"noAccount": "Don't have an account?"
+		},
+		"nav": {
+			"dashboard": "Dashboard",
+			"others": "Others",
+			"ui": "UI",
+			"custom_ui_components": "Custom UI Components",
+			"analysis": "Analysis",
+			"animate": "Animate",
+			"blank": "Blank",
+			"blog": "Blog",
+			"calendar": "Calendar",
+			"chart": "Chart",
+			"clipboard": "Clipboard",
+			"components": "Components",
+			"disabled": "Item Disabled",
+			"editor": "Editor",
+			"error": {
+				"403": "403",
+				"404": "404",
+				"500": "500",
+				"index": "Error Page",
+				"unexpected": "Unexpected Application Error!",
+				"unknown": "Unknown Error"
+			},
+			"external_link": "External Link",
+			"link": "Item External",
+			"functions": "Functions",
+			"i18n": "Multi Language",
+			"icon": "Icon",
+			"iframe": "Iframe",
+			"kanban": "Kanban",
+			"label": "Item Label",
+			"permission": "Permission",
+			"permission.page_test": "Page Permission Test",
+			"management": "System Management",
+			"markdown": "Markdown",
+			"menulevel": {
+				"1a": "Menu Level 1a",
+				"1b": {
+					"2a": "Menu Level 2a",
+					"2b": {
+						"3a": "Menu Level 3a",
+						"3b": "Menu Level 3b",
+						"index": "Menu Level 2b"
+					},
+					"index": "Menu Level 1b"
+				},
+				"index": "Menu Level"
+			},
+			"scroll": "Scroll",
+			"usermgmt": {
+				"index": "User Management",
+				"organization": "Organization",
+				"permission": "Permission",
+				"role": "Role",
+				"user": "User",
+				"user_detail": "User Detail",
+				"system": {
+					"index": "System Management",
+					"my_changes": "My Requests",
+					"user": "User Management",
+					"role": "Role Management",
+					"permission": "Menu Management",
+					"group": "Organization Management",
+					"system_config": "System Management",
+					"datasource": "Data Sources"
+				}
+			},
+			"toast": "Toast",
+			"token_expired": "Token Expired",
+			"upload": "Upload",
+			"user": {
+				"account": "Account",
+				"index": "User",
+				"profile": "Personal Details"
+			},
+			"workbench": "Workbench",
+			"dataSecurity": "Data Security",
+			"dataSecurityOverview": "Asset Overview",
+			"system": {
+				"group": "Organization",
+				"index": "System Management",
+				"my_changes": "My Change Requests"
+			}
+		},
+		"error": {
+			"unexpected": "Unexpected Application Error!",
+			"unknown": "Unknown Error"
+		},
+		"errorPage": {
+			"403": {
+				"title": "Access Denied",
+				"helmetTitle": "403 Access Denied!",
+				"description": "You do not have permission to access this resource."
+			},
+			"404": {
+				"title": "Oops! Page not found!",
+				"helmetTitle": "404 Page Not Found!",
+				"description": "The page you're looking for doesn't exist or has been moved."
+			},
+			"500": {
+				"title": "Internal Server Error!",
+				"helmetTitle": "500 Internal Server Error!",
+				"description": "Sorry for the inconvenience."
+			},
+			"actions": {
+				"goHome": "Go to Home"
+			}
+		},
+		"workbench": {
+			"title": "Cluster Overview",
+			"uptime": "Uptime",
+			"nodes": "Active Nodes",
+			"jobs": "Running Jobs",
+			"statusHealthy": "Healthy",
+			"statusWarning": "Attention Needed",
+			"cpuLoad": "CPU Load",
+			"memoryLoad": "Memory Usage",
+			"storageLoad": "Storage Usage",
+			"timelineLabel": "Last hour timeline",
+			"nodeTableTitle": "Node Overview",
+			"nodeTableSubtitle": "Latest sampled nodes",
+			"nodeName": "Node",
+			"nodeRole": "Role",
+			"nodeCpu": "CPU Usage",
+			"nodeMemory": "Memory Usage",
+			"nodeStatus": "Status",
+			"roleMaster": "Master",
+			"roleWorker": "Worker"
+		},
+		"admin": {
+			"tab": {
+				"user": "User Change",
+				"role": "Role Change",
+				"org": "Organization",
+				"config": "System Config",
+				"menu": "Menu Management"
+			},
+			"action": {
+				"CREATE": "Create",
+				"UPDATE": "Update",
+				"DELETE": "Delete",
+				"DISABLE": "Disable",
+				"BIND_ROLE": "Bind Role",
+				"UNBIND_ROLE": "Unbind Role",
+				"CONFIG_SET": "Configure",
+				"USER_CREATE": "Create User",
+				"ROLE_ASSIGN": "Assign Role",
+				"DATA_EXPORT": "Export Data",
+				"LOGIN": "Login",
+				"UNKNOWN": "Unknown Action"
+			},
+			"status": {
+				"PENDING": "Pending",
+				"APPROVED": "Approved",
+				"REJECTED": "Rejected",
+				"FAILED": "Failed",
+				"DRAFT": "Draft",
+				"UNKNOWN": "Unknown Status",
+				"ACTIVE": "Active",
+				"DISABLED": "Disabled"
+			},
+			"resource": {
+				"USER": "User",
+				"ROLE": "Role",
+				"ORG": "Organization",
+				"CONFIG": "System Config",
+				"MENU": "Menu",
+				"PORTAL_MENU": "Portal Menu",
+				"UNKNOWN": "Unknown Resource"
+			},
+			"outcome": {
+				"SUCCESS": "Success",
+				"FAILURE": "Failure"
+			},
+			"role": {
+				"SYSADMIN": "System Administrator",
+				"OPADMIN": "Operations Administrator",
+				"AUTHADMIN": "Authorization Administrator",
+				"AUDITADMIN": "Audit Administrator",
+				"DEPT_DATA_OWNER": "Department Data Administrator",
+				"DEPT_DATA_DEV": "Department Data Developer",
+				"INST_DATA_OWNER": "Institute Data Administrator",
+				"INST_DATA_DEV": "Institute Data Developer",
+				"DATA_STEWARD": "Data Steward",
+				"DATA_ANALYST": "Data Analyst"
+			},
+			"sensitivity": {
+				"DATA_PUBLIC": "Public",
+				"DATA_INTERNAL": "Internal",
+				"DATA_SECRET": "Secret",
+				"DATA_CONFIDENTIAL": "Confidential",
+				"NON_SECRET": "Non-secret",
+				"GENERAL": "General",
+				"IMPORTANT": "Important",
+				"CORE": "Core",
+				"PUBLIC": "Public",
+				"INTERNAL": "Internal",
+				"CONFIDENTIAL": "Confidential",
+				"TOP_SECRET": "Top Secret",
+				"SECRET": "Secret",
+				"TOP-SECRET": "Top Secret",
+				"NORMAL": "Normal",
+				"UNKNOWN": "Unknown Sensitivity"
+			}
+		},
+		"dataSecurity": {
+			"title": "Data Security Overview",
+			"subtitle": "Track data assets by sensitivity level",
+			"distributionTitle": "Asset Distribution",
+			"listTitle": "Data Asset List",
+			"listSubtitle": "Sorted by latest synchronization",
+			"assetName": "Asset Name",
+			"assetOwner": "Owner",
+			"assetCategory": "Category",
+			"assetRecords": "Records",
+			"assetUpdatedAt": "Updated At",
+			"category": {
+				"public": "Public",
+				"internal": "Internal",
+				"secret": "Secret",
+				"confidential": "Confidential"
+			}
+		},
+		"permission": {
+			"title": "Permission Catalogue",
+			"new": "New Permission",
+			"dashboard": "Workbench",
+			"dataSecurity": "Data Security",
+			"user": "Account Center",
+			"group": "Organization Center",
+			"permission": "Permission Dictionary",
+			"columns": {
+				"name": "Permission Name",
+				"type": "Type",
+				"icon": "Icon",
+				"component": "Component",
+				"status": "Status",
+				"order": "Order",
+				"action": "Action"
+			},
+			"status": {
+				"enable": "Enabled",
+				"disable": "Disabled"
+			},
+			"type": {
+				"catalogue": "Catalogue",
+				"menu": "Menu",
+				"component": "Component"
+			},
+			"action": {
+				"addChild": "Add Child",
+				"edit": "Edit",
+				"delete": "Delete"
+			},
+			"modal": {
+				"create": "New Permission",
+				"edit": "Edit Permission"
+			}
+		},
+		"profile": {
+			"title": "Job Title",
+			"department": "Department"
+		},
+		"settings": {
+			"accordion": "Accordion Menu",
+			"breadcrumb": "BreadCrumb",
+			"darkSidebar": "Dark Sidebar",
+			"exitFullscreen": "Exit FullScreen",
+			"family": "Family",
+			"font": "Font",
+			"fullscreen": "FullScreen",
+			"layout": "Layout",
+			"mode": "Mode",
+			"multiTab": "Multi Tab",
+			"page": "Page",
+			"presetThemes": "Presets",
+			"size": "Size",
+			"stretch": "Stretch",
+			"stretchTip": "Only available when the screen width is greater than 1280px (xl)",
+			"title": "Settings"
+		},
+		"tab": {
+			"close": "Close",
+			"closeAll": "Close All",
+			"closeLeft": "Close Left",
+			"closeOthers": "Close Others",
+			"closeRight": "Close Right",
+			"fullscreen": "FullScreen",
+			"refresh": "Refresh"
+		}
+	}
 }

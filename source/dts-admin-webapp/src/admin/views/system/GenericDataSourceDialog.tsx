@@ -102,22 +102,16 @@ export function GenericDataSourceDialog({
 	};
 
 	const addPropsRow = () => setPropsRows((rows) => [...rows, { ...emptyRow }]);
-	const removePropsRow = (index: number) =>
-		setPropsRows((rows) => rows.filter((_, i) => i !== index));
+	const removePropsRow = (index: number) => setPropsRows((rows) => rows.filter((_, i) => i !== index));
 
 	const updatePropsRow = (index: number, patch: Partial<KeyValuePair>) =>
-		setPropsRows((rows) =>
-			rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
-		);
+		setPropsRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
 
 	const addSecretRow = () => setSecretRows((rows) => [...rows, { ...emptyRow }]);
-	const removeSecretRow = (index: number) =>
-		setSecretRows((rows) => rows.filter((_, i) => i !== index));
+	const removeSecretRow = (index: number) => setSecretRows((rows) => rows.filter((_, i) => i !== index));
 
 	const updateSecretRow = (index: number, patch: Partial<KeyValuePair>) =>
-		setSecretRows((rows) =>
-			rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
-		);
+		setSecretRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
 
 	return (
 		<Dialog
@@ -179,7 +173,11 @@ export function GenericDataSourceDialog({
 						</div>
 						<div className="space-y-2">
 							<Label>登录账号（可选）</Label>
-							<Input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="如：trino_reader" />
+							<Input
+								value={username}
+								onChange={(event) => setUsername(event.target.value)}
+								placeholder="如：trino_reader"
+							/>
 						</div>
 						<div className="space-y-2">
 							<Label>登录密码（提交时会加密保存）</Label>
@@ -190,9 +188,7 @@ export function GenericDataSourceDialog({
 								placeholder={mode === "edit" && source?.hasSecrets ? "修改密码将覆盖原值" : "可选"}
 							/>
 							{mode === "edit" && source?.hasSecrets ? (
-								<p className="text-xs text-muted-foreground">
-									当前数据源已有密钥，留空将清除原有密码与相关密钥。
-								</p>
+								<p className="text-xs text-muted-foreground">当前数据源已有密钥，留空将清除原有密码与相关密钥。</p>
 							) : null}
 						</div>
 						<div className="md:col-span-2 space-y-2">
@@ -215,7 +211,8 @@ export function GenericDataSourceDialog({
 							</Button>
 						</div>
 						<p className="text-xs text-muted-foreground">
-							以键值对形式补充驱动参数，如 `ssl=true`、`catalog=hive`。值默认为字符串，如需 JSON 可手动填写 JSON 字符串。
+							以键值对形式补充驱动参数，如 `ssl=true`、`catalog=hive`。值默认为字符串，如需 JSON 可手动填写 JSON
+							字符串。
 						</p>
 						{propsRows.length === 0 ? (
 							<div className="rounded border border-dashed border-muted-foreground/40 px-3 py-4 text-center text-xs text-muted-foreground">

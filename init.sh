@@ -250,7 +250,7 @@ generate_env_base(){
   : "${RANGER_TAGSYNC_PASSWORD:=${SECRET}}"
   : "${RANGER_USERSYNC_PASSWORD:=${SECRET}}"
 
-  # --- YTS 服务数据库 ---
+  # --- DTS 服务数据库 ---
   : "${IAM_DB_NAME:=iam}"
   : "${IAM_DB_USER:=iam}"
   : "${IAM_DB_PASSWORD:=${SECRET}}"
@@ -269,8 +269,8 @@ generate_env_base(){
   OIDC_ISSUER_URI="https://${HOST_SSO}/realms/${KC_REALM}"
 
   # ---------- PKI（admin 服务验签配置） ----------
-  : "${DTS_PKI_ENABLED:=false}"
-  : "${DTS_PKI_MODE:=disabled}"
+  : "${DTS_PKI_ENABLED:=true}"
+  : "${DTS_PKI_MODE:=gateway}"
   : "${DTS_PKI_ALLOW_MOCK:=false}"
   : "${DTS_PKI_ACCEPT_FORWARDED_CERT:=false}"
   : "${DTS_PKI_CLIENT_CERT_HEADER_NAME:=X-Forwarded-Tls-Client-Cert}"
@@ -281,7 +281,7 @@ generate_env_base(){
   : "${DTS_PKI_GATEWAY_HOST:=}"
   : "${DTS_PKI_GATEWAY_PORT:=0}"
   : "${DTS_PKI_DIGEST:=SHA1}"
-  : "${DTS_PKI_VENDOR_JAR:=}"
+  : "${DTS_PKI_VENDOR_JAR:=/opt/dts/vendor}"
   : "${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA:=--add-exports=java.base/sun.security.x509=ALL-UNNAMED --add-exports=java.base/sun.security.util=ALL-UNNAMED --add-opens=java.base/sun.security.x509=ALL-UNNAMED --add-opens=java.base/sun.security.util=ALL-UNNAMED}"
 
   # ---------- 前端 PKI 互操作 ----------

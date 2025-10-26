@@ -167,7 +167,7 @@
             { "code": "ADMIN_MENU_VIEW_TREE", "display": "查看菜单树", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "ADMIN_MENU_CREATE", "display": "新增菜单节点", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "ADMIN_MENU_UPDATE", "display": "编辑菜单节点", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_MENU_DELETE", "display": "删除菜单节点", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_MENU_DISABLE", "display": "禁用菜单节点", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "ADMIN_MENU_VISIBILITY_UPDATE", "display": "调整菜单可见范围", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         },

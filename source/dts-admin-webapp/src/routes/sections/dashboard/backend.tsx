@@ -93,33 +93,37 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 };
 
 export function getBackendDashboardRoutes() {
-    const pm = getPortalMenus();
-    const tree = mapPortalMenusToMenuTree(pm);
-    return convertToRoute(convertFlatToTree(tree));
+	const pm = getPortalMenus();
+	const tree = mapPortalMenusToMenuTree(pm);
+	return convertToRoute(convertFlatToTree(tree));
 }
 
 function mapPortalMenusToMenuTree(items: PortalMenuItem[]): MenuTree[] {
-    const parseMeta = (metadata?: string): { icon?: string } | undefined => {
-        if (!metadata) return undefined;
-        try { return JSON.parse(metadata) as { icon?: string }; } catch { return undefined; }
-    };
-    const walk = (nodes: PortalMenuItem[], parent?: PortalMenuItem): MenuTree[] => {
-        return (nodes || []).map((node) => {
-            const meta = parseMeta(node.metadata);
-            const hasChildren = Array.isArray(node.children) && node.children.length > 0;
-            const n: MenuTree = {
-                id: String(node.id ?? `${parent?.path || ""}/${node.path}`),
-                parentId: parent ? String(parent.id ?? parent.path ?? parent?.name) : "",
-                name: node.displayName ?? node.name,
-                path: node.path || "",
-                component: node.component || "",
-                icon: node.icon ?? meta?.icon,
-                type: hasChildren ? 1 : 2,
-                children: [],
-            } as unknown as MenuTree;
-            if (hasChildren) n.children = walk(node.children!, node);
-            return n;
-        });
-    };
-    return walk(items);
+	const parseMeta = (metadata?: string): { icon?: string } | undefined => {
+		if (!metadata) return undefined;
+		try {
+			return JSON.parse(metadata) as { icon?: string };
+		} catch {
+			return undefined;
+		}
+	};
+	const walk = (nodes: PortalMenuItem[], parent?: PortalMenuItem): MenuTree[] => {
+		return (nodes || []).map((node) => {
+			const meta = parseMeta(node.metadata);
+			const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+			const n: MenuTree = {
+				id: String(node.id ?? `${parent?.path || ""}/${node.path}`),
+				parentId: parent ? String(parent.id ?? parent.path ?? parent?.name) : "",
+				name: node.displayName ?? node.name,
+				path: node.path || "",
+				component: node.component || "",
+				icon: node.icon ?? meta?.icon,
+				type: hasChildren ? 1 : 2,
+				children: [],
+			} as unknown as MenuTree;
+			if (hasChildren) n.children = walk(node.children!, node);
+			return n;
+		});
+	};
+	return walk(items);
 }

@@ -1,57 +1,51 @@
 package com.yuzhi.dts.platform.security.session;
 
+import com.yuzhi.dts.platform.domain.security.PortalSessionCloseReason;
+import com.yuzhi.dts.platform.domain.security.PortalSessionEntity;
+import com.yuzhi.dts.platform.repository.security.PortalSessionRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/**
- * Simple in-memory session registry used for demo authentication flows.
- * Accepts login requests issued by {@link com.yuzhi.dts.platform.web.rest.KeycloakAuthResource}
- * and stores generated access/refresh tokens together with the granted authorities.
- */
 @Component
+@Transactional
 public class PortalSessionRegistry {
 
+    private static final Logger log = LoggerFactory.getLogger(PortalSessionRegistry.class);
+
     private final Duration sessionTtl;
-    private final Map<String, PortalSession> accessTokenIndex = new ConcurrentHashMap<>();
-    private final Map<String, PortalSession> refreshTokenIndex = new ConcurrentHashMap<>();
-    private final Map<String, PortalSession> userIndex = new ConcurrentHashMap<>();
-    private final PortalSessionActivityService activityService;
+    private final PortalSessionRepository sessionRepository;
+    private final boolean allowTakeover;
 
     public PortalSessionRegistry(
         @Value("${dts.platform.session.timeout-minutes:10}") long timeoutMinutes,
-        PortalSessionActivityService activityService
+        @Value("${dts.platform.session.allow-takeover:true}") boolean allowTakeover,
+        PortalSessionRepository sessionRepository
     ) {
         long minutes = timeoutMinutes <= 0 ? 10 : timeoutMinutes;
         this.sessionTtl = Duration.ofMinutes(minutes);
-        this.activityService = activityService;
+        this.sessionRepository = sessionRepository;
+        this.allowTakeover = allowTakeover;
     }
 
-    /**
-     * Register a brand new session for the given username/authorities.
-     */
-    public synchronized PortalSession createSession(String username, List<String> roles, List<String> permissions, AdminTokens adminTokens) {
-        enforceSingleSession(username);
-        PortalSession session = PortalSession.create(username, normalizeRoles(roles), permissions, null, null, adminTokens, sessionTtl);
-        register(session, PortalSessionActivityService.ValidationResult.CONCURRENT);
-        return session;
+    public PortalSession createSession(String username, List<String> roles, List<String> permissions, AdminTokens adminTokens) {
+        return createSessionInternal(username, roles, permissions, null, null, adminTokens);
     }
 
-    /**
-     * Overload: Register a session with additional attributes such as dept code and personnel level.
-     */
-    public synchronized PortalSession createSession(
+    public PortalSession createSession(
         String username,
         List<String> roles,
         List<String> permissions,
@@ -59,158 +53,225 @@ public class PortalSessionRegistry {
         String personnelLevel,
         AdminTokens adminTokens
     ) {
-        enforceSingleSession(username);
+        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, adminTokens);
+    }
+
+    public PortalSession refreshSession(String refreshToken, Function<PortalSession, AdminTokens> adminTokenProvider) {
+        PortalSessionEntity existing = sessionRepository
+            .findByRefreshToken(refreshToken)
+            .orElseThrow(() -> new IllegalArgumentException("unknown_refresh_token"));
+
+        Instant now = Instant.now();
+        if (existing.getRevokedAt() != null) {
+            throw new IllegalStateException("session_revoked");
+        }
+        if (isExpired(existing, now)) {
+            revokeSession(existing, PortalSessionCloseReason.EXPIRED, null, now);
+            throw new IllegalStateException("session_expired");
+        }
+
+        PortalSession current = toPortalSession(existing);
+        AdminTokens tokens = current.adminTokens();
+        if (adminTokenProvider != null) {
+            try {
+                AdminTokens refreshed = adminTokenProvider.apply(current);
+                if (refreshed != null) {
+                    tokens = refreshed;
+                }
+            } catch (Exception ignored) {
+                // keep previous tokens when refresh fails
+            }
+        }
+
+        PortalSession renewed = current.renew(sessionTtl, tokens);
+        revokeSession(existing, PortalSessionCloseReason.EXPIRED, UUID.fromString(renewed.sessionId()), now);
+
+        PortalSessionEntity entity = toEntity(renewed, existing.getNormalizedUsername(), now);
+        sessionRepository.save(entity);
+        return toPortalSession(entity);
+    }
+
+    public Optional<PortalSession> findByAccessToken(String accessToken) {
+        if (!StringUtils.hasText(accessToken)) {
+            return Optional.empty();
+        }
+        Instant now = Instant.now();
+        return sessionRepository
+            .findByAccessToken(accessToken)
+            .flatMap(entity -> {
+                if (entity.getRevokedAt() != null) {
+                    return Optional.empty();
+                }
+                if (isExpired(entity, now)) {
+                    revokeSession(entity, PortalSessionCloseReason.EXPIRED, null, now);
+                    return Optional.empty();
+                }
+                entity.setLastSeenAt(now);
+                entity.setExpiresAt(now.plus(sessionTtl));
+                sessionRepository.save(entity);
+                return Optional.of(toPortalSession(entity));
+            });
+    }
+
+    public PortalSession invalidateByRefreshToken(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            return null;
+        }
+        Instant now = Instant.now();
+        return sessionRepository
+            .findByRefreshToken(refreshToken)
+            .map(entity -> {
+                revokeSession(entity, PortalSessionCloseReason.LOGOUT, null, now);
+                return toPortalSession(entity);
+            })
+            .orElse(null);
+    }
+
+    public boolean hasActiveSession(String username) {
+        String normalized = normalizeUsername(username);
+        if (normalized == null) {
+            return false;
+        }
+        Instant now = Instant.now();
+        PortalSessionEntity entity = sessionRepository.findActiveForUpdate(normalized).orElse(null);
+        if (entity == null) {
+            return false;
+        }
+        if (isExpired(entity, now)) {
+            revokeSession(entity, PortalSessionCloseReason.EXPIRED, null, now);
+            return false;
+        }
+        return true;
+    }
+
+    public boolean isTakeoverAllowed() {
+        return allowTakeover;
+    }
+
+    private PortalSession createSessionInternal(
+        String username,
+        List<String> roles,
+        List<String> permissions,
+        String deptCode,
+        String personnelLevel,
+        AdminTokens adminTokens
+    ) {
+        String sanitizedUsername = requireUsername(username);
+        String normalizedUsername = normalizeUsername(sanitizedUsername);
+        List<String> normalizedRoles = normalizeRoles(roles);
+
         PortalSession session = PortalSession.create(
-            username,
-            normalizeRoles(roles),
+            sanitizedUsername,
+            normalizedRoles,
             permissions,
             deptCode,
             personnelLevel,
             adminTokens,
             sessionTtl
         );
-        register(session, PortalSessionActivityService.ValidationResult.CONCURRENT);
-        return session;
-    }
 
-    /**
-     * Refresh an existing session by refresh token, returning a new set of access/refresh tokens.
-     */
-    public synchronized PortalSession refreshSession(String refreshToken, Function<PortalSession, AdminTokens> adminTokenProvider) {
-        PortalSession existing = refreshTokenIndex.get(refreshToken);
-        if (existing == null) {
-            throw new IllegalArgumentException("unknown_refresh_token");
-        }
-        if (existing.isExpired()) {
-            remove(existing, PortalSessionActivityService.ValidationResult.EXPIRED);
-            throw new IllegalStateException("session_expired");
-        }
-        AdminTokens tokens = existing.adminTokens();
-        if (adminTokenProvider != null) {
-            try {
-                AdminTokens refreshed = adminTokenProvider.apply(existing);
-                if (refreshed != null) {
-                    tokens = refreshed;
+        Instant now = Instant.now();
+        UUID newSessionUuid = UUID.fromString(session.sessionId());
+
+        sessionRepository
+            .findActiveForUpdate(normalizedUsername)
+            .ifPresent(existing -> {
+                if (!allowTakeover) {
+                    throw new ActiveSessionExistsException(normalizedUsername);
                 }
-            } catch (Exception ignored) {
-                // fall back to existing tokens when refresh fails
-            }
-        }
-        PortalSession renewed = existing.renew(sessionTtl, tokens);
-        register(renewed, PortalSessionActivityService.ValidationResult.EXPIRED);
-        return renewed;
+                handleTakeover(existing, newSessionUuid, now);
+            });
+
+        PortalSessionEntity entity = toEntity(session, normalizedUsername, now);
+        sessionRepository.save(entity);
+        return toPortalSession(entity);
     }
 
-    /**
-     * Locate a session by access token if present and not expired.
-     */
-    public Optional<PortalSession> findByAccessToken(String accessToken) {
-        if (!StringUtils.hasText(accessToken)) {
-            return Optional.empty();
-        }
-        PortalSession session = accessTokenIndex.get(accessToken);
-        if (session == null) {
-            return Optional.empty();
-        }
-        synchronized (this) {
-            PortalSession current = accessTokenIndex.get(accessToken);
-            if (current == null) {
-                return Optional.empty();
-            }
-            if (current.isExpired()) {
-                remove(current, PortalSessionActivityService.ValidationResult.EXPIRED);
-                return Optional.empty();
-            }
-            PortalSession extended = current.extend(sessionTtl);
-            register(extended, PortalSessionActivityService.ValidationResult.EXPIRED);
-            return Optional.of(extended);
-        }
-    }
-
-    public synchronized PortalSession invalidateByRefreshToken(String refreshToken) {
-        if (!StringUtils.hasText(refreshToken)) {
-            return null;
-        }
-        PortalSession existing = refreshTokenIndex.remove(refreshToken);
-        if (existing == null) {
-            return null;
-        }
-        accessTokenIndex.remove(existing.accessToken());
-        PortalSession current = userIndex.get(existing.username());
-        if (current != null && current.sessionId().equals(existing.sessionId())) {
-            userIndex.remove(existing.username());
-        }
-        activityService.invalidate(existing.accessToken(), PortalSessionActivityService.ValidationResult.EXPIRED);
-        return existing;
-    }
-
-    public synchronized boolean hasActiveSession(String username) {
-        PortalSession current = userIndex.get(username);
-        if (current == null) {
-            return false;
-        }
-        if (current.isExpired()) {
-            remove(current, PortalSessionActivityService.ValidationResult.EXPIRED);
-            return false;
-        }
-        return true;
-    }
-
-    private void enforceSingleSession(String username) {
-        PortalSession existing = userIndex.get(username);
-        if (existing == null) {
+    private void handleTakeover(PortalSessionEntity existing, UUID takeoverSessionId, Instant now) {
+        if (isExpired(existing, now)) {
+            revokeSession(existing, PortalSessionCloseReason.EXPIRED, null, now);
             return;
         }
-        if (existing.isExpired()) {
-            remove(existing, PortalSessionActivityService.ValidationResult.EXPIRED);
-            return;
-        }
-        // Force-logout the previous session so the newest login stays active.
-        remove(existing, PortalSessionActivityService.ValidationResult.CONCURRENT);
+        revokeSession(existing, PortalSessionCloseReason.CONCURRENT, takeoverSessionId, now);
     }
 
-    private void register(PortalSession session) {
-        register(session, PortalSessionActivityService.ValidationResult.CONCURRENT);
+    private boolean isExpired(PortalSessionEntity entity, Instant reference) {
+        Instant expiresAt = entity.getExpiresAt();
+        return expiresAt != null && expiresAt.isBefore(reference);
     }
 
-    private void register(PortalSession session, PortalSessionActivityService.ValidationResult previousReason) {
-        if (session == null) {
-            return;
+    private void revokeSession(PortalSessionEntity entity, PortalSessionCloseReason reason, UUID takeoverSessionId, Instant when) {
+        Instant effectiveWhen = when == null ? Instant.now() : when;
+        if (entity.getRevokedAt() == null) {
+            entity.setRevokedAt(effectiveWhen);
         }
-        // Remove previous session for same user to enforce single-login semantics
-        PortalSession previous = userIndex.put(session.username(), session);
-        if (previous != null) {
-            boolean tokenChanged = !previous.accessToken().equals(session.accessToken());
-            if (tokenChanged) {
-                accessTokenIndex.remove(previous.accessToken());
-                refreshTokenIndex.remove(previous.refreshToken());
-                PortalSessionActivityService.ValidationResult reason =
-                    previousReason == null ? PortalSessionActivityService.ValidationResult.EXPIRED : previousReason;
-                activityService.invalidate(previous.accessToken(), reason);
-            }
+        if (entity.getRevokedReason() == null && reason != null) {
+            entity.setRevokedReason(reason);
         }
-        accessTokenIndex.put(session.accessToken(), session);
-        refreshTokenIndex.put(session.refreshToken(), session);
-        PortalSessionActivityService.ValidationResult takeoverReason =
-            previousReason == null ? PortalSessionActivityService.ValidationResult.CONCURRENT : previousReason;
-        activityService.register(session.username(), session.sessionId(), session.accessToken(), Instant.now(), takeoverReason);
+        if (takeoverSessionId != null && entity.getRevokedBySessionId() == null) {
+            entity.setRevokedBySessionId(takeoverSessionId);
+        }
+        sessionRepository.saveAndFlush(entity);
+        if (log.isDebugEnabled()) {
+            log.debug(
+                "[session] revoke username={} session={} reason={}",
+                entity.getUsername(),
+                entity.getSessionId(),
+                reason == null ? "UNKNOWN" : reason
+            );
+        }
     }
 
-    private void remove(PortalSession session) {
-        remove(session, PortalSessionActivityService.ValidationResult.EXPIRED);
+    private PortalSessionEntity toEntity(PortalSession session, String normalizedUsername, Instant now) {
+        PortalSessionEntity entity = new PortalSessionEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setUsername(session.username());
+        entity.setNormalizedUsername(normalizedUsername);
+        entity.setSessionId(UUID.fromString(session.sessionId()));
+        entity.setAccessToken(session.accessToken());
+        entity.setRefreshToken(session.refreshToken());
+        entity.setRoles(new ArrayList<>(session.roles()));
+        entity.setPermissions(new ArrayList<>(session.permissions()));
+        entity.setDeptCode(session.deptCode());
+        entity.setPersonnelLevel(session.personnelLevel());
+        entity.setExpiresAt(session.expiresAt());
+        Instant effectiveNow = now == null ? Instant.now() : now;
+        entity.setLastSeenAt(effectiveNow);
+        entity.setCreatedAt(effectiveNow);
+        if (session.adminTokens() != null) {
+            entity.setAdminAccessToken(session.adminTokens().accessToken());
+            entity.setAdminAccessTokenExpiresAt(session.adminTokens().accessExpiresAt());
+            entity.setAdminRefreshToken(session.adminTokens().refreshToken());
+            entity.setAdminRefreshTokenExpiresAt(session.adminTokens().refreshExpiresAt());
+        }
+        return entity;
     }
 
-    private void remove(PortalSession session, PortalSessionActivityService.ValidationResult reason) {
-        if (session == null) {
-            return;
+    private PortalSession toPortalSession(PortalSessionEntity entity) {
+        List<String> roles = entity.getRoles() == null ? Collections.emptyList() : entity.getRoles();
+        List<String> permissions = entity.getPermissions() == null ? Collections.emptyList() : entity.getPermissions();
+        AdminTokens adminTokens = null;
+        if (entity.getAdminAccessToken() != null || entity.getAdminRefreshToken() != null) {
+            adminTokens =
+                new AdminTokens(
+                    entity.getAdminAccessToken(),
+                    entity.getAdminAccessTokenExpiresAt(),
+                    entity.getAdminRefreshToken(),
+                    entity.getAdminRefreshTokenExpiresAt()
+                );
         }
-        accessTokenIndex.remove(session.accessToken());
-        refreshTokenIndex.remove(session.refreshToken());
-        PortalSession current = userIndex.get(session.username());
-        if (current != null && current.sessionId().equals(session.sessionId())) {
-            userIndex.remove(session.username());
-        }
-        activityService.invalidate(session.accessToken(), reason);
+        return new PortalSession(
+            entity.getSessionId().toString(),
+            entity.getUsername(),
+            List.copyOf(roles),
+            List.copyOf(permissions),
+            entity.getDeptCode(),
+            entity.getPersonnelLevel(),
+            entity.getAccessToken(),
+            entity.getRefreshToken(),
+            entity.getExpiresAt(),
+            adminTokens
+        );
     }
 
     private List<String> normalizeRoles(List<String> roles) {
@@ -218,7 +279,7 @@ public class PortalSessionRegistry {
         if (roles != null) {
             for (String role : roles) {
                 if (StringUtils.hasText(role)) {
-                    merged.add(role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase());
+                    merged.add(role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase(Locale.ROOT));
                 }
             }
         }
@@ -228,9 +289,28 @@ public class PortalSessionRegistry {
         return merged.stream().distinct().toList();
     }
 
-    /**
-     * Representation of an authenticated portal session.
-     */
+    private String requireUsername(String username) {
+        if (username == null) {
+            throw new IllegalArgumentException("username must not be null");
+        }
+        String sanitized = username.trim();
+        if (sanitized.isEmpty()) {
+            throw new IllegalArgumentException("username must not be blank");
+        }
+        return sanitized;
+    }
+
+    private String normalizeUsername(String username) {
+        if (username == null) {
+            return null;
+        }
+        String trimmed = username.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.toLowerCase(Locale.ROOT);
+    }
+
     public record PortalSession(
         String sessionId,
         String username,
@@ -275,27 +355,20 @@ public class PortalSessionRegistry {
         private PortalSession renew(Duration ttl, AdminTokens adminTokens) {
             return create(username, roles, permissions, deptCode, personnelLevel, adminTokens, ttl);
         }
-
-        private boolean isExpired() {
-            return Instant.now().isAfter(expiresAt);
-        }
-
-        private PortalSession extend(Duration ttl) {
-            Instant newExpiry = Instant.now().plus(ttl);
-            return new PortalSession(
-                sessionId,
-                username,
-                roles,
-                permissions,
-                deptCode,
-                personnelLevel,
-                accessToken,
-                refreshToken,
-                newExpiry,
-                adminTokens
-            );
-        }
     }
 
     public record AdminTokens(String accessToken, Instant accessExpiresAt, String refreshToken, Instant refreshExpiresAt) {}
+
+    public static class ActiveSessionExistsException extends RuntimeException {
+        private final String normalizedUsername;
+
+        public ActiveSessionExistsException(String normalizedUsername) {
+            super("active_session_exists");
+            this.normalizedUsername = normalizedUsername;
+        }
+
+        public String getNormalizedUsername() {
+            return normalizedUsername;
+        }
+    }
 }

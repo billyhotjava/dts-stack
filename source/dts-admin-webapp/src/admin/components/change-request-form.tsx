@@ -13,12 +13,12 @@ import { useAdminLocale } from "@/admin/lib/locale";
 import { PERSON_SECURITY_LEVELS } from "@/constants/governance";
 
 const ACTIONS: Record<string, string[]> = {
-    // 用户删除功能禁用：移除 DELETE 选项，仅保留停用/启用类与绑定操作
-    user: ["CREATE", "UPDATE", "BIND_ROLE", "UNBIND_ROLE"],
-    role: ["CREATE", "UPDATE", "DELETE"],
-    org: ["CREATE", "UPDATE", "DELETE"],
-    config: ["CONFIG_SET"],
-    menu: ["CREATE", "UPDATE", "DELETE"],
+	// 用户删除功能禁用：移除 DELETE 选项，仅保留停用/启用类与绑定操作
+	user: ["CREATE", "UPDATE", "BIND_ROLE", "UNBIND_ROLE"],
+	role: ["CREATE", "UPDATE", "DELETE"],
+	org: ["CREATE", "UPDATE", "DELETE"],
+	config: ["CONFIG_SET"],
+	menu: ["CREATE", "UPDATE", "DISABLE"],
 };
 
 const TABS = [

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251023-01-create-portal-sessions" author="codex">
+        <createTable tableName="portal_sessions">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="username" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="normalized_username" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="session_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="access_token" type="varchar(128)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="refresh_token" type="varchar(128)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="roles" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="permissions" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dept_code" type="varchar(128)"/>
+            <column name="personnel_level" type="varchar(64)"/>
+            <column name="expires_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_seen_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revoked_at" type="timestamp with time zone"/>
+            <column name="revoked_reason" type="varchar(32)"/>
+            <column name="revoked_by_session_id" type="uuid"/>
+            <column name="admin_access_token" type="text"/>
+            <column name="admin_access_token_expires_at" type="timestamp with time zone"/>
+            <column name="admin_refresh_token" type="text"/>
+            <column name="admin_refresh_token_expires_at" type="timestamp with time zone"/>
+        </createTable>
+
+        <createIndex tableName="portal_sessions" indexName="idx_portal_sessions_username">
+            <column name="normalized_username"/>
+        </createIndex>
+
+        <createIndex tableName="portal_sessions" indexName="idx_portal_sessions_expiry">
+            <column name="expires_at"/>
+        </createIndex>
+
+        <createIndex tableName="portal_sessions" indexName="uq_portal_sessions_active_username" unique="true">
+            <column name="normalized_username"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

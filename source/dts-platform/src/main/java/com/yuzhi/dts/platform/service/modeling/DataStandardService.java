@@ -61,7 +61,10 @@ public class DataStandardService {
         entity.setVersionNotes(request.getVersionNotes());
         entity.setLastReviewAt(request.getLastReviewAt());
         repository.save(entity);
-        createVersionSnapshot(entity, version, request.getChangeSummary(), DataStandardVersionStatus.PUBLISHED);
+        DataStandardVersionStatus versionStatus = request.getVersionStatus() != null
+            ? request.getVersionStatus()
+            : DataStandardVersionStatus.DRAFT;
+        createVersionSnapshot(entity, version, request.getChangeSummary(), versionStatus);
         return DataStandardMapper.toDto(entity);
     }
 
@@ -83,12 +86,7 @@ public class DataStandardService {
         entity.setVersionNotes(request.getVersionNotes());
         entity.setLastReviewAt(request.getLastReviewAt());
         repository.save(entity);
-        createVersionSnapshot(
-            entity,
-            version,
-            request.getChangeSummary(),
-            Objects.requireNonNullElse(request.getVersionStatus(), DataStandardVersionStatus.PUBLISHED)
-        );
+        createVersionSnapshot(entity, version, request.getChangeSummary(), request.getVersionStatus());
         return DataStandardMapper.toDto(entity);
     }
 
@@ -145,9 +143,21 @@ public class DataStandardService {
             .orElseGet(DataStandardVersion::new);
         snapshot.setStandard(entity);
         snapshot.setVersion(version);
-        snapshot.setStatus(status);
+        boolean isNewSnapshot = snapshot.getId() == null;
+        DataStandardVersionStatus effectiveStatus = status;
+        if (effectiveStatus == null) {
+            effectiveStatus = snapshot.getStatus();
+            if (effectiveStatus == null) {
+                effectiveStatus = DataStandardVersionStatus.DRAFT;
+            }
+        }
+        snapshot.setStatus(effectiveStatus);
         snapshot.setChangeSummary(changeSummary);
-        snapshot.setReleasedAt(status == DataStandardVersionStatus.PUBLISHED ? Instant.now() : null);
+        if (status != null) {
+            snapshot.setReleasedAt(effectiveStatus == DataStandardVersionStatus.PUBLISHED ? Instant.now() : null);
+        } else if (isNewSnapshot && effectiveStatus != DataStandardVersionStatus.PUBLISHED) {
+            snapshot.setReleasedAt(null);
+        }
         snapshot.setSnapshotJson(serializeSnapshot(entity));
         versionRepository.save(snapshot);
     }

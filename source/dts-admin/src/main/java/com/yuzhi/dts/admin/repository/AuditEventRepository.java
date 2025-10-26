@@ -39,6 +39,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "order by e.occurred_at desc, e.id desc",
         countQuery =
             "select count(*) from audit_event e " +
@@ -54,7 +55,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and coalesce(e.request_uri, '') ilike :requestUri escape '\\' " +
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
-            "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\'",
+            "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\'",
         nativeQuery = true
     )
     Page<AuditEvent> search(
@@ -70,6 +72,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("from") Instant from,
         @Param("to") Instant to,
         @Param("clientIp") String clientIp,
+        @Param("operationGroup") String operationGroup,
         Pageable pageable
     );
 
@@ -91,6 +94,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and lower(coalesce(e.actor, '')) in (:allowedActors) " +
             "order by e.occurred_at desc, e.id desc",
         countQuery =
@@ -107,6 +111,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and lower(coalesce(e.actor, '')) in (:allowedActors)",
         nativeQuery = true
     )
@@ -123,6 +128,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("from") Instant from,
         @Param("to") Instant to,
         @Param("clientIp") String clientIp,
+        @Param("operationGroup") String operationGroup,
         @Param("allowedActors") java.util.List<String> allowedActors,
         Pageable pageable
     );
@@ -142,6 +148,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and coalesce(e.actor_role, '') in (:roles) " +
             "order by e.occurred_at desc, e.id desc",
         countQuery =
@@ -158,6 +165,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and coalesce(e.actor_role, '') in (:roles)",
         nativeQuery = true
     )
@@ -174,6 +182,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("from") Instant from,
         @Param("to") Instant to,
         @Param("clientIp") String clientIp,
+        @Param("operationGroup") String operationGroup,
         @Param("roles") java.util.List<String> roles,
         Pageable pageable
     );
@@ -193,6 +202,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and coalesce(e.actor_role, '') <> :excluded " +
             "order by e.occurred_at desc, e.id desc",
         countQuery =
@@ -209,6 +219,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and coalesce(e.actor_role, '') <> :excluded",
         nativeQuery = true
     )
@@ -225,6 +236,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("from") Instant from,
         @Param("to") Instant to,
         @Param("clientIp") String clientIp,
+        @Param("operationGroup") String operationGroup,
         @Param("excluded") String excluded,
         Pageable pageable
     );
@@ -244,6 +256,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and coalesce(e.actor_role, '') not in (:excluded) " +
             "order by e.occurred_at desc, e.id desc",
         countQuery =
@@ -260,6 +273,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and coalesce(e.actor_role, '') not in (:excluded)",
         nativeQuery = true
     )
@@ -276,6 +290,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("from") Instant from,
         @Param("to") Instant to,
         @Param("clientIp") String clientIp,
+        @Param("operationGroup") String operationGroup,
         @Param("excluded") java.util.List<String> excluded,
         Pageable pageable
     );
@@ -295,6 +310,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and coalesce(e.actor_role, '') in (:roles) " +
             "and lower(coalesce(e.actor, '')) not in (:excludedActors) " +
             "order by e.occurred_at desc, e.id desc",
@@ -312,6 +328,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and coalesce(e.actor_role, '') in (:roles) " +
             "and lower(coalesce(e.actor, '')) not in (:excludedActors)",
         nativeQuery = true
@@ -329,6 +346,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("from") Instant from,
         @Param("to") Instant to,
         @Param("clientIp") String clientIp,
+        @Param("operationGroup") String operationGroup,
         @Param("roles") java.util.List<String> roles,
         @Param("excludedActors") java.util.List<String> excludedActors,
         Pageable pageable
@@ -349,6 +367,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and lower(coalesce(e.actor, '')) not in (:excludedActors) " +
             "order by e.occurred_at desc, e.id desc",
         countQuery =
@@ -365,6 +384,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and lower(coalesce(e.actor, '')) not in (:excludedActors)",
         nativeQuery = true
     )
@@ -381,6 +401,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("from") Instant from,
         @Param("to") Instant to,
         @Param("clientIp") String clientIp,
+        @Param("operationGroup") String operationGroup,
         @Param("excludedActors") java.util.List<String> excludedActors,
         Pageable pageable
     );
@@ -400,6 +421,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and coalesce(e.actor_role, '') not in (:excludedRoles) " +
             "and lower(coalesce(e.actor, '')) not in (:excludedActors) " +
             "order by e.occurred_at desc, e.id desc",
@@ -417,6 +439,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             "and e.occurred_at >= coalesce(:from, e.occurred_at) " +
             "and e.occurred_at <= coalesce(:to, e.occurred_at) " +
             "and coalesce(cast(e.client_ip as text), '') ilike :clientIp escape '\\' " +
+            "and coalesce(concat_ws('|', nullif(e.operation_group, ''), nullif(e.module, '')), '') ilike :operationGroup escape '\\' " +
             "and coalesce(e.actor_role, '') not in (:excludedRoles) " +
             "and lower(coalesce(e.actor, '')) not in (:excludedActors)",
         nativeQuery = true
@@ -434,6 +457,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
         @Param("from") Instant from,
         @Param("to") Instant to,
         @Param("clientIp") String clientIp,
+        @Param("operationGroup") String operationGroup,
         @Param("excludedRoles") java.util.List<String> excludedRoles,
         @Param("excludedActors") java.util.List<String> excludedActors,
         Pageable pageable

@@ -386,7 +386,8 @@ public class CatalogResource {
     private void validateOwnerDepartment(CatalogDataset d) {
         String ownerDept = Optional.ofNullable(d.getOwnerDept()).map(String::trim).orElse("");
         if (ownerDept.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ownerDept 不能为空");
+            d.setOwnerDept(null);
+            return;
         }
         d.setOwnerDept(ownerDept);
     }

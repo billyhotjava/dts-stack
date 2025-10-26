@@ -194,10 +194,6 @@ export default function DatasetDetailPage() {
 	const [userSearch, setUserSearch] = useState("");
 	const [userPickerOpen, setUserPickerOpen] = useState(false);
     const router = useRouter();
-	const rootDept = useMemo(
-		() => deptOptions.find((d) => d.parentId == null || d.parentId === 0),
-		[deptOptions],
-	);
 	const sortedDeptOptions = useMemo(
 		() =>
 			[...deptOptions].sort(
@@ -206,10 +202,15 @@ export default function DatasetDetailPage() {
 			),
 		[deptOptions],
 	);
-	const nonRootDeptOptions = useMemo(
-		() => deptOptions.filter((d) => d.parentId != null && d.parentId !== 0),
-		[deptOptions],
-	);
+	const deptSelectOptions = useMemo(() => {
+		const root = sortedDeptOptions.find((d) => d.isRoot);
+		const others = sortedDeptOptions.filter((d) => !d.isRoot && d.parentId != null && d.parentId !== 0);
+		return root ? [root, ...others] : others;
+	}, [sortedDeptOptions]);
+const grantDeptOptions = useMemo(
+	() => sortedDeptOptions.filter((dept) => !dept.isRoot && dept.parentId != null && dept.parentId !== 0),
+	[sortedDeptOptions],
+);
 	const enforcedOwnerDept = useMemo(() => {
 		if (isInstituteDataAdmin) return undefined;
 		const code = (userDeptCode || "").trim();
@@ -217,12 +218,12 @@ export default function DatasetDetailPage() {
 	}, [isInstituteDataAdmin, userDeptCode]);
 	const deptOptionsForSelect = useMemo(() => {
 		if (isInstituteDataAdmin) {
-			return sortedDeptOptions;
+			return deptSelectOptions;
 		}
 		if (!enforcedOwnerDept) {
-			return sortedDeptOptions;
+			return deptSelectOptions;
 		}
-		const matched = sortedDeptOptions.find((dept) => String(dept.code) === enforcedOwnerDept);
+		const matched = deptSelectOptions.find((dept) => String(dept.code) === enforcedOwnerDept);
 		if (matched) {
 			return [matched];
 		}
@@ -232,9 +233,10 @@ export default function DatasetDetailPage() {
 				nameZh: enforcedOwnerDept,
 				nameEn: enforcedOwnerDept,
 				parentId: null,
+				isRoot: false,
 			},
 		];
-	}, [isInstituteDataAdmin, sortedDeptOptions, enforcedOwnerDept]);
+	}, [isInstituteDataAdmin, deptSelectOptions, enforcedOwnerDept]);
 	const deptSelectDisabled = !editable || (!isInstituteDataAdmin && Boolean(enforcedOwnerDept));
 	const resetGrantForm = useCallback(() => {
 		setGrantForm({
@@ -287,7 +289,7 @@ export default function DatasetDetailPage() {
 				const normalizedDept = option.deptCode && option.deptCode.trim();
 				const existsInTree =
 					normalizedDept &&
-					nonRootDeptOptions.some((dept) => String(dept.code) === normalizedDept);
+					grantDeptOptions.some((dept) => String(dept.code) === normalizedDept);
 				const preferredName = option.fullName?.trim() || option.displayName?.trim() || option.username;
 				return {
 					username: option.username,
@@ -298,7 +300,7 @@ export default function DatasetDetailPage() {
 			setUserSearch("");
 			setUserPickerOpen(false);
 		},
-		[nonRootDeptOptions],
+		[grantDeptOptions],
 	);
 	const fetchSample = useCallback(
 		async (rows = 10, options?: { silent?: boolean }) => {
@@ -498,17 +500,19 @@ export default function DatasetDetailPage() {
 	// Force owner department for non-institute admins; otherwise keep legacy root fallback.
 	useEffect(() => {
 		if (!dataset) return;
-		const current = String(dataset.ownerDept || "").trim();
-		if (enforcedOwnerDept) {
-			if (current === enforcedOwnerDept) return;
-			setDataset((prev) => (prev ? { ...prev, ownerDept: enforcedOwnerDept } : prev));
-			return;
-		}
-		if (current) return;
-		const fallback = rootDept?.code ?? deptOptions[0]?.code;
-		if (!fallback) return;
-		setDataset((prev) => (prev ? { ...prev, ownerDept: fallback } : prev));
-	}, [dataset, enforcedOwnerDept, rootDept, deptOptions]);
+	if (!enforcedOwnerDept) {
+		return;
+	}
+	const normalized = enforcedOwnerDept.trim();
+	if (!normalized) {
+		return;
+	}
+	const current = String(dataset.ownerDept || "").trim();
+	if (current === normalized) {
+		return;
+	}
+	setDataset((prev) => (prev ? { ...prev, ownerDept: normalized } : prev));
+}, [dataset, enforcedOwnerDept]);
 
 	useEffect(() => {
 		if (!grantDialogOpen) {
@@ -535,15 +539,11 @@ export default function DatasetDetailPage() {
 		toast.error("当前用户无权保存该数据集");
 		return;
 	}
-	if (!String(dataset.ownerDept || "").trim()) {
-		toast.error("请选择所属部门");
-		return;
-	}
 	// Sanitize payload for backend
 	const payload: any = {
 		...dataset,
 		classification: normalizeClassification(dataset.classification ?? undefined) ?? "INTERNAL",
-		ownerDept: dataset.ownerDept || undefined,
+		ownerDept: dataset.ownerDept && dataset.ownerDept.trim().length > 0 ? dataset.ownerDept.trim() : undefined,
 		// Backend expects a string; submit as comma-separated list
 		tags: Array.isArray((dataset as any).tags)
 			? ((dataset as any).tags as string[]).join(",")
@@ -602,7 +602,9 @@ export default function DatasetDetailPage() {
 	}, [tables]);
 
 	if (loading) return <div className="text-sm text-muted-foreground">加载中…</div>;
-	if (!dataset) return <div className="text-sm text-muted-foreground">未找到该数据集</div>;
+if (!dataset) return <div className="text-sm text-muted-foreground">未找到该数据集</div>;
+
+	const ownerDeptSelectValue = dataset.ownerDept && dataset.ownerDept.trim().length > 0 ? dataset.ownerDept.trim() : "__PUBLIC__";
 
 	return (
 		<div className="space-y-4">
@@ -663,38 +665,45 @@ export default function DatasetDetailPage() {
 										onChange={(e) => setDataset({ ...(dataset as DatasetAsset), owner: e.target.value })}
 									/>
 								</div>
-								<div className="grid gap-2">
-									<Label>所属部门 *</Label>
-									<Select
-										value={dataset.ownerDept || undefined}
-										disabled={deptSelectDisabled}
-										onValueChange={(v) =>
-											setDataset({
-												...(dataset as DatasetAsset),
-												ownerDept: v,
-											})
-										}
-									>
-										<SelectTrigger>
-											<SelectValue
-												placeholder={
-													deptLoading
-														? "加载中…"
-														: !isInstituteDataAdmin && enforcedOwnerDept
-														? "仅可查看所属部门"
-														: "选择部门…"
-												}
-											/>
-										</SelectTrigger>
-										<SelectContent>
-											{deptOptionsForSelect.map((d) => (
-												<SelectItem key={d.code} value={d.code}>
-													{d.nameZh || d.nameEn || d.code}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
+				<div className="grid gap-2">
+					<Label>所属部门</Label>
+					<p className="text-xs text-muted-foreground">未指定或选择 ROOT 节点时，数据集将对所有部门开放。</p>
+					<Select
+						value={ownerDeptSelectValue}
+						disabled={deptSelectDisabled}
+						onValueChange={(v) =>
+							setDataset({
+								...(dataset as DatasetAsset),
+								ownerDept: v === "__PUBLIC__" ? "" : v,
+							})
+						}
+					>
+						<SelectTrigger>
+							<SelectValue
+								placeholder={
+									deptLoading
+										? "加载中…"
+										: !isInstituteDataAdmin && enforcedOwnerDept
+										? "仅可查看所属部门"
+										: "选择部门…"
+								}
+							/>
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="__PUBLIC__">未指定（全局可见）</SelectItem>
+							{deptOptionsForSelect.map((d) => {
+								const optionLabel = d.isRoot
+									? `${d.nameZh || d.nameEn || d.code}（ROOT）`
+									: d.nameZh || d.nameEn || d.code;
+								return (
+									<SelectItem key={d.code} value={d.code}>
+										{optionLabel}
+									</SelectItem>
+								);
+							})}
+						</SelectContent>
+					</Select>
+				</div>
 								<div className="grid gap-2">
 									<Label>标签（逗号分隔）</Label>
 									<Input
@@ -1037,14 +1046,14 @@ export default function DatasetDetailPage() {
                                 <SelectTrigger>
                                     <SelectValue placeholder="选择部门（可选）" />
                                 </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={EMPTY_DEPT_VALUE}>默认（不指定）</SelectItem>
-                                    {nonRootDeptOptions.map((dept) => (
-                                        <SelectItem key={dept.code} value={dept.code}>
-                                            {dept.nameZh || dept.nameEn || dept.code}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
+				<SelectContent>
+					<SelectItem value={EMPTY_DEPT_VALUE}>默认（不指定）</SelectItem>
+					{grantDeptOptions.map((dept) => (
+						<SelectItem key={dept.code} value={dept.code}>
+							{dept.nameZh || dept.nameEn || dept.code}
+						</SelectItem>
+					))}
+				</SelectContent>
                             </Select>
                         </div>
                     </div>

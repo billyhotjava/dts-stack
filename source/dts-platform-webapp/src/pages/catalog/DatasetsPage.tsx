@@ -102,7 +102,11 @@ const sortedDeptOptions = useMemo(
 		),
 	[deptOptions],
 );
-const nonRootDeptOptions = useMemo(() => sortedDeptOptions.filter((d) => d.parentId != null && d.parentId !== 0), [sortedDeptOptions]);
+const deptSelectOptions = useMemo(() => {
+	const root = sortedDeptOptions.find((d) => d.isRoot);
+	const others = sortedDeptOptions.filter((d) => !d.isRoot && d.parentId != null && d.parentId !== 0);
+	return root ? [root, ...others] : others;
+}, [sortedDeptOptions]);
 const [deptLoading, setDeptLoading] = useState(false);
 	const [catalogConfig, setCatalogConfig] = useState({
 		multiSourceEnabled: false,
@@ -119,6 +123,7 @@ const isInceptorSource = sourceTypeUpper === "INCEPTOR" || sourceTypeUpper === "
 const isPostgresSource = sourceTypeUpper === "POSTGRES";
 const databaseLabel = isPostgresSource ? "Schema" : "Hive Database";
 const tableLabel = isPostgresSource ? "Table" : "Hive Table";
+const ownerDeptSelectValue = form.ownerDept && form.ownerDept.trim().length > 0 ? form.ownerDept.trim() : "__PUBLIC__";
 // Note: import-from-file feature removed in this build; re-enable when UI wires the input
 
 // const levels = SECURITY_LEVELS; // removed
@@ -180,14 +185,16 @@ const hasPrimarySource = useMemo(() => {
 const deptLabelMap = useMemo(() => {
   const map = new Map<string, string>();
   for (const d of deptOptions) {
-    const label = d.nameZh || d.nameEn || d.code;
+    const baseLabel = d.nameZh || d.nameEn || d.code;
+    const label = d.isRoot ? `${baseLabel}（ROOT）` : baseLabel;
     map.set(d.code, label);
   }
+  map.set("__PUBLIC__", "未指定（全局可见）");
   return map;
 }, [deptOptions]);
 
 const renderDept = (code?: string) => {
-  if (!code) return "-";
+  if (!code || !code.trim()) return "未指定（全局可见）";
   return deptLabelMap.get(code) || code;
 };
 
@@ -411,10 +418,6 @@ const filtered = useMemo(() => {
 		return;
 	}
 	const ownerDeptValue = form.ownerDept ? form.ownerDept.trim() : "";
-	if (!ownerDeptValue) {
-		toast.error("请选择所属部门");
-		return;
-	}
 	try {
 		const selectedSourceType = normalizeSourceType(
 			(multiSourceAllowed ? form.sourceType : resolvedDefaultSource) || resolvedDefaultSource,
@@ -434,7 +437,7 @@ const filtered = useMemo(() => {
 			name: form.name.trim(),
 			owner: form.owner.trim(),
 			classification,
-			ownerDept: ownerDeptValue,
+			ownerDept: ownerDeptValue.length > 0 ? ownerDeptValue : undefined,
 			tags: tagsList,
 			description: form.description.trim(),
 			type: selectedSourceType,
@@ -660,24 +663,36 @@ const filtered = useMemo(() => {
 							<Input value={form.owner} onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))} />
 						</div>
 
-				<div className="grid gap-2">
-					<Label>所属部门 *</Label>
-					<Select
-						value={form.ownerDept || undefined}
-						onValueChange={(v) => setForm((f) => ({ ...f, ownerDept: v }))}
-					>
-						<SelectTrigger>
-							<SelectValue placeholder={deptLoading ? "加载中…" : "选择部门…"} />
-						</SelectTrigger>
-						<SelectContent>
-							{nonRootDeptOptions.map((d) => (
-								<SelectItem key={d.code} value={d.code}>
-									{d.nameZh || d.nameEn || d.code}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</div>
+		<div className="grid gap-2">
+			<Label>所属部门</Label>
+			<p className="text-xs text-muted-foreground">未指定或选择 ROOT 节点时，数据集将对全部部门开放。</p>
+			<Select
+				value={ownerDeptSelectValue}
+				onValueChange={(v) =>
+					setForm((f) => ({
+						...f,
+						ownerDept: v === "__PUBLIC__" ? "" : v,
+					}))
+				}
+			>
+				<SelectTrigger>
+					<SelectValue placeholder={deptLoading ? "加载中…" : "选择部门…"} />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="__PUBLIC__">未指定（全局可见）</SelectItem>
+					{deptSelectOptions.map((d) => {
+						const optionLabel = d.isRoot
+							? `${d.nameZh || d.nameEn || d.code}（ROOT）`
+							: d.nameZh || d.nameEn || d.code;
+						return (
+							<SelectItem key={d.code} value={d.code}>
+								{optionLabel}
+							</SelectItem>
+						);
+					})}
+				</SelectContent>
+			</Select>
+		</div>
 						<div className="grid gap-2">
 							<Label>标签（用逗号分隔）</Label>
 							<Input value={form.tags} onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} />

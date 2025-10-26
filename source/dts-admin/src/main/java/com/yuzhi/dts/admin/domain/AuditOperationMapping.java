@@ -28,8 +28,14 @@ public class AuditOperationMapping {
     @Column(name = "module_name", length = 128, nullable = false)
     private String moduleName;
 
-    @Column(name = "action_type", length = 32, nullable = false)
-    private String actionType;
+    @Column(name = "operation_group", length = 64)
+    private String operationGroup;
+
+    @Column(name = "group_display_name", length = 128)
+    private String groupDisplayName;
+
+    @Column(name = "operation_type", length = 32, nullable = false)
+    private String operationType;
 
     @Column(name = "description_template", length = 1024, nullable = false)
     private String descriptionTemplate;
@@ -79,8 +85,12 @@ public class AuditOperationMapping {
     public void setSourceSystem(String sourceSystem) { this.sourceSystem = sourceSystem; }
     public String getModuleName() { return moduleName; }
     public void setModuleName(String moduleName) { this.moduleName = moduleName; }
-    public String getActionType() { return actionType; }
-    public void setActionType(String actionType) { this.actionType = actionType; }
+    public String getOperationGroup() { return operationGroup; }
+    public void setOperationGroup(String operationGroup) { this.operationGroup = operationGroup; }
+    public String getGroupDisplayName() { return groupDisplayName; }
+    public void setGroupDisplayName(String groupDisplayName) { this.groupDisplayName = groupDisplayName; }
+    public String getOperationType() { return operationType; }
+    public void setOperationType(String operationType) { this.operationType = operationType; }
     public String getDescriptionTemplate() { return descriptionTemplate; }
     public void setDescriptionTemplate(String descriptionTemplate) { this.descriptionTemplate = descriptionTemplate; }
     public String getSourceTableTemplate() { return sourceTableTemplate; }

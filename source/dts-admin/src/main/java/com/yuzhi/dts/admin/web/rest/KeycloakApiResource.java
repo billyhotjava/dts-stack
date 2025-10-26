@@ -14,8 +14,8 @@ import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import com.yuzhi.dts.admin.security.SecurityUtils;
-import com.yuzhi.dts.admin.security.session.SessionControlService;
-import com.yuzhi.dts.admin.security.session.SessionKeyGenerator;
+import com.yuzhi.dts.admin.security.session.AdminSessionCloseReason;
+import com.yuzhi.dts.admin.security.session.AdminSessionRegistry;
 import com.yuzhi.dts.admin.web.rest.dto.PkiChallengeView;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.common.audit.AuditStage;
@@ -58,7 +58,7 @@ public class KeycloakApiResource {
     private final KeycloakAdminClient keycloakAdminClient;
     private final AdminUserService adminUserService;
     private final AdminRoleAssignmentRepository roleAssignRepo;
-    private final SessionControlService sessionControlService;
+    private final AdminSessionRegistry adminSessionRegistry;
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class);
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -79,7 +79,7 @@ public class KeycloakApiResource {
         KeycloakAdminClient keycloakAdminClient,
         AdminUserService adminUserService,
         AdminRoleAssignmentRepository roleAssignRepo,
-        SessionControlService sessionControlService
+        AdminSessionRegistry adminSessionRegistry
     ) {
         this.stores = stores;
         this.auditService = auditService;
@@ -87,7 +87,7 @@ public class KeycloakApiResource {
         this.keycloakAdminClient = keycloakAdminClient;
         this.adminUserService = adminUserService;
         this.roleAssignRepo = roleAssignRepo;
-        this.sessionControlService = sessionControlService;
+        this.adminSessionRegistry = adminSessionRegistry;
     }
 
     // ---- Users ----
@@ -224,7 +224,6 @@ public class KeycloakApiResource {
             auditService.recordAction(actor, "ADMIN_USER_CREATE", AuditStage.FAIL, "pending", failure);
             return ResponseEntity.badRequest().body(ApiResponse.error("用户名不能为空"));
         }
-        auditService.recordAction(actor, "ADMIN_USER_CREATE", AuditStage.BEGIN, requestedUsername, auditDetail);
         try {
             UserOperationRequest command = toOperationRequest(payload);
             LOG.info("Resolved(createUser) command: username={}, fullName={}, email={}, groupsCount={}",
@@ -235,10 +234,10 @@ public class KeycloakApiResource {
                 currentUser(),
                 clientIp(request)
             );
-            Map<String, Object> success = new LinkedHashMap<>(auditDetail);
-            success.put("requestId", approval.id);
-            success.put("status", approval.status);
-            auditService.recordAction(actor, "ADMIN_USER_CREATE", AuditStage.SUCCESS, command.getUsername(), success);
+            String correlationId = correlationId(approval);
+            if (correlationId != null) {
+                auditDetail.put("correlationId", correlationId);
+            }
             return ResponseEntity.ok(ApiResponse.ok(Map.of(
                 "requestId",
                 approval.id,
@@ -298,7 +297,6 @@ public class KeycloakApiResource {
         if (command.getEmail() != null) req.put("email", command.getEmail());
         req.put("groups", command.getGroupPaths() == null ? 0 : command.getGroupPaths().size());
         auditDetail.put("request", req);
-        auditService.recordAction(actor, "ADMIN_USER_UPDATE", AuditStage.BEGIN, username, auditDetail);
         try {
             ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitUpdate(
                 username,
@@ -306,10 +304,10 @@ public class KeycloakApiResource {
                 actor,
                 clientIp(request)
             );
-            Map<String, Object> success = new LinkedHashMap<>(auditDetail);
-            success.put("requestId", approval.id);
-            success.put("status", approval.status);
-            auditService.recordAction(actor, "ADMIN_USER_UPDATE", AuditStage.SUCCESS, username, success);
+            String correlationId = correlationId(approval);
+            if (correlationId != null) {
+                auditDetail.put("correlationId", correlationId);
+            }
             return ResponseEntity.ok(ApiResponse.ok(Map.of(
                 "requestId",
                 approval.id,
@@ -355,7 +353,6 @@ public class KeycloakApiResource {
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("username", username);
         auditDetail.put("temporary", temporary);
-        auditService.recordAction(actor, "ADMIN_USER_RESET_PASSWORD", AuditStage.BEGIN, username, auditDetail);
         ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitResetPassword(
             username,
             password,
@@ -363,10 +360,10 @@ public class KeycloakApiResource {
             actor,
             clientIp(request)
         );
-        Map<String, Object> success = new LinkedHashMap<>(auditDetail);
-        success.put("requestId", approval.id);
-        success.put("status", approval.status);
-        auditService.recordAction(actor, "ADMIN_USER_RESET_PASSWORD", AuditStage.SUCCESS, username, success);
+        String correlationId = correlationId(approval);
+        if (correlationId != null) {
+            auditDetail.put("correlationId", correlationId);
+        }
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
             approval.id,
@@ -392,17 +389,16 @@ public class KeycloakApiResource {
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("username", username);
         auditDetail.put("enabled", enabled);
-        auditService.recordAction(actor, actionCode, AuditStage.BEGIN, username, auditDetail);
         ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitSetEnabled(
             username,
             enabled,
             actor,
             clientIp(request)
         );
-        Map<String, Object> success = new LinkedHashMap<>(auditDetail);
-        success.put("requestId", approval.id);
-        success.put("status", approval.status);
-        auditService.recordAction(actor, actionCode, AuditStage.SUCCESS, username, success);
+        String correlationId = correlationId(approval);
+        if (correlationId != null) {
+            auditDetail.put("correlationId", correlationId);
+        }
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
             approval.id,
@@ -426,20 +422,21 @@ public class KeycloakApiResource {
         if (!List.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE").contains(level)) {
             return ResponseEntity.badRequest().body(ApiResponse.error("无效的人员密级"));
         }
+        String actor = currentUser();
         ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitSetPersonLevel(
             username,
             level,
-            currentUser(),
+            actor,
             clientIp(request),
             null
         );
-        auditService.recordAction(
-            currentUser(),
-            "ADMIN_USER_UPDATE",
-            AuditStage.SUCCESS,
-            username,
-            Map.of("requestId", approval.id, "level", level)
-        );
+        String correlationId = correlationId(approval);
+        Map<String, Object> auditDetail = new LinkedHashMap<>();
+        auditDetail.put("username", username);
+        auditDetail.put("level", level);
+        if (correlationId != null) {
+            auditDetail.put("correlationId", correlationId);
+        }
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
             approval.id,
@@ -662,6 +659,7 @@ public class KeycloakApiResource {
     }
 
     private String adminAccessToken() {
+        String fallbackToken = currentAccessToken();
         try {
             var tokenResponse = keycloakAuthService.obtainClientCredentialsToken(managementClientId, managementClientSecret);
             String token = tokenResponse == null ? null : tokenResponse.accessToken();
@@ -675,6 +673,11 @@ public class KeycloakApiResource {
         } catch (Exception ex) {
             org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class)
                 .warn("Failed to obtain admin access token: {}", ex.getMessage());
+            if (StringUtils.hasText(fallbackToken)) {
+                org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class)
+                    .debug("Falling back to current request access token after admin credentials failure");
+                return fallbackToken;
+            }
             throw new IllegalStateException("获取 Keycloak 管理客户端访问令牌失败: " + ex.getMessage(), ex);
         }
     }
@@ -683,13 +686,44 @@ public class KeycloakApiResource {
         return SecurityUtils.getCurrentUserLogin().orElse("unknown");
     }
 
+    private String correlationId(ApprovalDTOs.ApprovalRequest approval) {
+        if (approval == null) {
+            return null;
+        }
+        return correlationIdFrom(approval.id);
+    }
+
+    private String correlationIdFrom(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Number number) {
+            long value = number.longValue();
+            if (value <= 0) {
+                return null;
+            }
+            return "CR-" + value;
+        }
+        String text = raw.toString();
+        if (text == null) {
+            return null;
+        }
+        String trimmed = text.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.startsWith("CR-")) {
+            return trimmed;
+        }
+        boolean digits = trimmed.chars().allMatch(Character::isDigit);
+        if (digits) {
+            return "CR-" + trimmed;
+        }
+        return trimmed;
+    }
+
     private void registerSession(String username, KeycloakAuthService.TokenResponse tokens) {
         if (tokens == null) {
-            return;
-        }
-        String sessionState = tokens.sessionState();
-        String sessionKey = SessionKeyGenerator.fromToken(sessionState, tokens.accessToken());
-        if (sessionKey == null) {
             return;
         }
         String actor = sanitizeActor(username);
@@ -699,7 +733,14 @@ public class KeycloakApiResource {
         if (!StringUtils.hasText(actor)) {
             actor = currentUser();
         }
-        sessionControlService.register(actor, sessionState, sessionKey, Instant.now());
+        adminSessionRegistry.registerLogin(
+            actor,
+            tokens.sessionState(),
+            tokens.accessToken(),
+            tokens.refreshToken(),
+            resolveExpiry(tokens.expiresIn()),
+            resolveExpiry(tokens.refreshExpiresIn())
+        );
     }
 
     private String resolveActorForLogout(Map<String, String> body, String refreshToken) {
@@ -785,6 +826,13 @@ public class KeycloakApiResource {
         return resolved != null ? resolved : "unknown";
     }
 
+    private Instant resolveExpiry(Long seconds) {
+        if (seconds == null || seconds <= 0) {
+            return null;
+        }
+        return Instant.now().plusSeconds(seconds);
+    }
+
     @GetMapping("/keycloak/users/{id}/roles")
     public ResponseEntity<List<KeycloakRoleDTO>> getUserRoles(@PathVariable String id) {
         String adminToken = adminAccessToken();
@@ -861,20 +909,21 @@ public class KeycloakApiResource {
         String username = resolveUsername(id, null, adminAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         List<String> roleNames = roles.stream().map(KeycloakRoleDTO::getName).filter(Objects::nonNull).toList();
+        String actor = currentUser();
         ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitGrantRoles(
             username,
             roleNames,
             id,
-            currentUser(),
+            actor,
             clientIp(request)
         );
-        auditService.recordAction(
-            currentUser(),
-            "ADMIN_USER_ASSIGN_ROLE",
-            AuditStage.SUCCESS,
-            username,
-            Map.of("requestId", approval.id, "roles", roleNames)
-        );
+        String correlationId = correlationId(approval);
+        Map<String, Object> auditDetail = new LinkedHashMap<>();
+        auditDetail.put("username", username);
+        auditDetail.put("roles", roleNames);
+        if (correlationId != null) {
+            auditDetail.put("correlationId", correlationId);
+        }
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
             approval.id,
@@ -898,20 +947,22 @@ public class KeycloakApiResource {
         String username = resolveUsername(id, null, adminAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         List<String> roleNames = roles.stream().map(KeycloakRoleDTO::getName).filter(Objects::nonNull).toList();
+        String actor = currentUser();
         ApprovalDTOs.ApprovalRequestDetail approval = adminUserService.submitRevokeRoles(
             username,
             roleNames,
             id,
-            currentUser(),
+            actor,
             clientIp(request)
         );
-        auditService.recordAction(
-            currentUser(),
-            "ADMIN_USER_ASSIGN_ROLE",
-            AuditStage.SUCCESS,
-            username,
-            Map.of("requestId", approval.id, "roles", roleNames, "operation", "revoke")
-        );
+        String correlationId = correlationId(approval);
+        Map<String, Object> auditDetail = new LinkedHashMap<>();
+        auditDetail.put("username", username);
+        auditDetail.put("roles", roleNames);
+        auditDetail.put("operation", "revoke");
+        if (correlationId != null) {
+            auditDetail.put("correlationId", correlationId);
+        }
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
             "requestId",
             approval.id,
@@ -1303,7 +1354,6 @@ public class KeycloakApiResource {
         auditDetail.put("action", normalized);
         auditDetail.put("approver", approver);
         auditDetail.put("note", note);
-        auditService.recordAction(actor, "ADMIN_APPROVAL_DECIDE", AuditStage.BEGIN, String.valueOf(id), auditDetail);
         try {
             return switch (normalized) {
                 case "approve" -> {
@@ -1323,26 +1373,21 @@ public class KeycloakApiResource {
                             .map(String::valueOf)
                             .orElse(resourceId);
                     } catch (Exception ignore) {}
-                    auditService.recordAction(actor, "ADMIN_APPROVAL_DECIDE", AuditStage.SUCCESS, resourceId, Map.of("result", "APPROVED"));
                     yield ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 case "reject" -> {
                     ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.reject(id, approver, note);
-                    auditService.recordAction(actor, "ADMIN_APPROVAL_DECIDE", AuditStage.SUCCESS, String.valueOf(id), Map.of("result", "REJECTED"));
                     yield ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 case "process" -> {
                     ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.delay(id, approver, note);
-                    auditService.recordAction(actor, "ADMIN_APPROVAL_DECIDE", AuditStage.SUCCESS, String.valueOf(id), Map.of("result", "DELAYED"));
                     yield ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 default -> ResponseEntity.badRequest().body(ApiResponse.error("不支持的操作"));
             };
         } catch (IllegalArgumentException ex) {
-            auditService.recordAction(actor, "ADMIN_APPROVAL_DECIDE", AuditStage.FAIL, String.valueOf(id), Map.of("error", ex.getMessage()));
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(ex.getMessage()));
         } catch (IllegalStateException ex) {
-            auditService.recordAction(actor, "ADMIN_APPROVAL_DECIDE", AuditStage.FAIL, String.valueOf(id), Map.of("error", ex.getMessage()));
             return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
         }
     }
@@ -1539,17 +1584,14 @@ public class KeycloakApiResource {
     @PostMapping("/keycloak/auth/logout")
     public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) Map<String, String> body, HttpServletRequest request) {
         String refreshToken = Optional.ofNullable(body).map(b -> b.get("refreshToken")).orElse(null);
-        String sessionState = Optional.ofNullable(body).map(b -> b.get("sessionState")).orElse(null);
         String actor = resolveActorForLogout(body, refreshToken);
         String authHeader = request == null ? null : request.getHeader("Authorization");
         String bearer = authHeader == null ? null : authHeader.trim();
         if (bearer != null && bearer.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())) {
             bearer = bearer.substring("Bearer ".length()).trim();
         }
-        String sessionKey = SessionKeyGenerator.fromToken(sessionState, bearer);
-        if (sessionKey != null && !sessionKey.isBlank()) {
-            sessionControlService.invalidate(sessionKey);
-        }
+        adminSessionRegistry.invalidateByAccessToken(bearer, AdminSessionCloseReason.LOGOUT);
+        adminSessionRegistry.invalidateByRefreshToken(refreshToken, AdminSessionCloseReason.LOGOUT);
         auditService.recordAction(
             actor,
             "ADMIN_AUTH_LOGOUT",
@@ -1597,6 +1639,14 @@ public class KeycloakApiResource {
         auditService.recordAction(currentUser(), "ADMIN_AUTH_REFRESH", AuditStage.BEGIN, "self", Map.of());
         try {
             KeycloakAuthService.TokenResponse tokens = keycloakAuthService.refreshTokens(refreshToken);
+            adminSessionRegistry.refreshSession(
+                refreshToken,
+                tokens.sessionState(),
+                tokens.accessToken(),
+                tokens.refreshToken(),
+                resolveExpiry(tokens.expiresIn()),
+                resolveExpiry(tokens.refreshExpiresIn())
+            );
             Map<String, Object> data = new HashMap<>();
             data.put("accessToken", tokens.accessToken());
             if (tokens.refreshToken() != null) {
@@ -1617,7 +1667,6 @@ public class KeycloakApiResource {
             if (tokens.sessionState() != null) {
                 data.put("sessionState", tokens.sessionState());
             }
-            registerSession(currentUser(), tokens);
             auditService.recordAction(currentUser(), "ADMIN_AUTH_REFRESH", AuditStage.SUCCESS, "self", Map.of());
             return ResponseEntity.ok(ApiResponse.ok(data));
         } catch (BadCredentialsException ex) {

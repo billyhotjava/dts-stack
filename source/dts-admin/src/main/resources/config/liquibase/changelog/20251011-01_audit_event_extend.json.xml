@@ -20,7 +20,13 @@
             <column name="details" type="JSONB"/>
             <column name="record_signature" type="VARCHAR(128)"/>
             <column name="signature_key_ver" type="VARCHAR(16)"/>
+            <column name="operation_group" type="VARCHAR(64)"/>
+            <column name="operation_type" type="VARCHAR(32)"/>
         </addColumn>
+
+        <createIndex indexName="idx_audit_evt_op_group" tableName="audit_event">
+            <column name="operation_group"/>
+        </createIndex>
 
         <createIndex indexName="idx_audit_evt_src_time" tableName="audit_event">
             <column name="source_system"/>

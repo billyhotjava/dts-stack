@@ -87,8 +87,11 @@ public class AdminAuditService {
         public String targetTableLabel; // 表中文名（只读显示）
         public String targetId;
         public String targetRef;
+        public String changeRequestRef; // 审批关联号（CR-XXXX）
+        public String approvalSummary;  // 审批内容摘要
         // derived presentation fields (新口径)
-        public String operationType;     // 查询/新增/修改/删除/登录/登出/部分更新
+        public String operationTypeCode; // CREATE/UPDATE/DELETE/READ...
+        public String operationType;     // 本地化显示
         public String operationContent;  // 如：修改了用户/查询了用户列表
         public String logTypeText;       // 安全审计/操作审计
         // rule engine metadata
@@ -97,6 +100,7 @@ public class AdminAuditService {
         public String operationModule;
         public String operationSourceTable;
         public String operationEventClass;
+        public String correlationId;
     }
 
     public record ModuleOption(String code, String label) {}
@@ -170,6 +174,10 @@ public class AdminAuditService {
         // captured entity info (propagated from request thread by aspect)
         public String capturedTable;
         public String capturedId;
+        public String correlationId;
+        public int retryCount;
+        public Instant firstFailureAt;
+        public String lastError;
     }
 
     private final AuditEventRepository repository;
@@ -179,6 +187,7 @@ public class AdminAuditService {
     private final com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository userRepo;
     private final com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository;
     private final AuditResourceDictionaryService resourceDictionary;
+    private final OperationMappingEngine operationMappingEngine;
 
     private BlockingQueue<PendingAuditEvent> queue;
     private ScheduledExecutorService workerPool;
@@ -194,7 +203,8 @@ public class AdminAuditService {
         ObjectMapper objectMapper,
         com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository userRepo,
         com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository,
-        AuditResourceDictionaryService resourceDictionary
+        AuditResourceDictionaryService resourceDictionary,
+        OperationMappingEngine operationMappingEngine
     ) {
         this.repository = repository;
         this.properties = properties;
@@ -203,6 +213,7 @@ public class AdminAuditService {
         this.userRepo = userRepo;
         this.organizationRepository = organizationRepository;
         this.resourceDictionary = resourceDictionary;
+        this.operationMappingEngine = operationMappingEngine;
     }
 
     @PostConstruct
@@ -314,10 +325,14 @@ public class AdminAuditService {
 
     public void recordAction(String actionCode, AuditStage stage, String resourceId, Object payload) {
         com.yuzhi.dts.admin.service.audit.AuditRequestContext.markDomainAudit();
-        recordAction(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), actionCode, stage, resourceId, payload);
+        recordAction(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), actionCode, stage, resourceId, payload, null);
     }
 
     public void recordAction(String actor, String actionCode, AuditStage stage, String resourceId, Object payload) {
+        recordAction(actor, actionCode, stage, resourceId, payload, null);
+    }
+
+    public void recordAction(String actor, String actionCode, AuditStage stage, String resourceId, Object payload, String correlationId) {
         if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor) || "anonymoususer".equalsIgnoreCase(actor)) {
             return;
         }
@@ -328,13 +343,22 @@ public class AdminAuditService {
         if (StringUtils.hasText(normalizedCode)) {
             extraTags.put("actionCode", normalizedCode);
         }
-        extraTags.put("stage", effectiveStage.name());
+        extraTags.put("stage", switch (effectiveStage) {
+            case BEGIN -> "处理中";
+            case SUCCESS -> "成功";
+            case FAIL -> "失败";
+        });
         if (StringUtils.hasText(envelope.moduleKey())) {
             extraTags.put("moduleKey", envelope.moduleKey());
         }
         if (StringUtils.hasText(envelope.resourceKey())) {
             extraTags.put("entryKey", envelope.resourceKey());
         }
+        boolean isChangeRequestPending = stage == AuditStage.BEGIN && correlationId != null && correlationId.toUpperCase(Locale.ROOT).startsWith("CR-");
+        if (isChangeRequestPending) {
+            return;
+        }
+
         record(
             actor,
             envelope.actionDisplay(),
@@ -343,7 +367,8 @@ public class AdminAuditService {
             resourceId,
             outcomeFromStage(effectiveStage),
             payload,
-            extraTags
+            extraTags,
+            correlationId
         );
     }
 
@@ -427,6 +452,20 @@ public class AdminAuditService {
         Object payload,
         Map<String, Object> extraTags
     ) {
+        record(actor, action, module, resourceType, resourceId, outcome, payload, extraTags, null);
+    }
+
+    public void record(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String outcome,
+        Object payload,
+        Map<String, Object> extraTags,
+        String correlationId
+    ) {
         if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor) || "anonymoususer".equalsIgnoreCase(actor)) {
             return;
         }
@@ -444,23 +483,26 @@ public class AdminAuditService {
         event.result = defaultString(outcome, "SUCCESS");
         event.payload = payload;
         event.extraTags = serializeTags(extraTags);
+        event.correlationId = correlationId;
         enrichWithRequestContext(event);
         // capture last entity from current thread (aspect)
         try {
-            var cap = com.yuzhi.dts.admin.service.audit.AuditEntityContext.getLast();
+            AuditEntityContext.Payload cap = AuditEntityContext.get();
             if (cap != null) {
                 event.capturedTable = cap.tableName;
-                event.capturedId = cap.id;
+                event.capturedId = cap.entityId;
             }
-        } catch (Exception ignore) {}
-        try { com.yuzhi.dts.admin.service.audit.AuditEntityContext.clear(); } catch (Exception ignore) {}
+        } catch (Exception ignore) {
+        } finally {
+            try { AuditEntityContext.clear(); } catch (Exception ignore) {}
+        }
         logEnqueuedEvent(event);
         offer(event);
     }
 
     public void record(String actor, String action, String module, String resourceId, String outcome, Object payload) {
         com.yuzhi.dts.admin.service.audit.AuditRequestContext.markDomainAudit();
-        record(actor, action, module, module, resourceId, outcome, payload, null);
+        record(actor, action, module, module, resourceId, outcome, payload, null, null);
     }
 
     public void record(PendingAuditEvent event) {
@@ -480,13 +522,15 @@ public class AdminAuditService {
         // If not prefilled, attempt to capture entity snapshot at record time
         if (!StringUtils.hasText(event.capturedId)) {
             try {
-                var cap = com.yuzhi.dts.admin.service.audit.AuditEntityContext.getLast();
+                AuditEntityContext.Payload cap = AuditEntityContext.get();
                 if (cap != null) {
                     event.capturedTable = cap.tableName;
-                    event.capturedId = cap.id;
+                    event.capturedId = cap.entityId;
                 }
-            } catch (Exception ignore) {}
-            try { com.yuzhi.dts.admin.service.audit.AuditEntityContext.clear(); } catch (Exception ignore) {}
+            } catch (Exception ignore) {
+            } finally {
+                try { AuditEntityContext.clear(); } catch (Exception ignore) {}
+            }
         }
         enrichWithRequestContext(event);
         logEnqueuedEvent(event);
@@ -500,7 +544,13 @@ public class AdminAuditService {
         }
         if (!queue.offer(event)) {
             log.warn("Audit queue is full, falling back to synchronous write");
-            persist(List.of(event));
+            try {
+                persist(List.of(event));
+            } catch (Exception ex) {
+                log.error("Failed to persist audit event synchronously; event will be requeued", ex);
+                markFailure(event, ex);
+                requeue(List.of(event));
+            }
         }
     }
 
@@ -513,7 +563,48 @@ public class AdminAuditService {
         if (batch.isEmpty()) {
             return;
         }
-        persist(batch);
+        try {
+            persist(batch);
+        } catch (Exception ex) {
+            handlePersistenceFailure(batch, ex);
+        }
+    }
+
+    private void handlePersistenceFailure(List<PendingAuditEvent> batch, Exception failure) {
+        if (batch == null || batch.isEmpty()) {
+            return;
+        }
+        markFailure(batch, failure);
+        if (batch.size() == 1) {
+            log.error(
+                "Failed to persist audit event (action={}, actor={}); scheduling retry",
+                batch.get(0) != null ? batch.get(0).action : "unknown",
+                batch.get(0) != null ? batch.get(0).actor : "unknown",
+                failure
+            );
+            requeue(batch);
+            return;
+        }
+        log.error(
+            "Failed to persist audit batch (size={}); attempting itemized recovery",
+            batch.size(),
+            failure
+        );
+        List<PendingAuditEvent> retryable = new ArrayList<>();
+        for (PendingAuditEvent event : batch) {
+            if (event == null) {
+                continue;
+            }
+            try {
+                persist(List.of(event));
+            } catch (Exception singleFailure) {
+                markFailure(event, singleFailure);
+                retryable.add(event);
+            }
+        }
+        if (!retryable.isEmpty()) {
+            requeue(retryable);
+        }
     }
 
     private void persist(List<PendingAuditEvent> batch) {
@@ -547,8 +638,181 @@ public class AdminAuditService {
             );
         }
         if (properties.isForwardEnabled()) {
-            entities.forEach(auditClient::enqueue);
+            for (AuditEvent entity : entities) {
+                try {
+                    auditClient.enqueue(entity);
+                } catch (Exception ex) {
+                    log.error("Failed to forward audit event id={} action={}", entity.getId(), entity.getAction(), ex);
+                }
+            }
         }
+    }
+
+    private void requeue(List<PendingAuditEvent> batch) {
+        if (batch == null || batch.isEmpty()) {
+            return;
+        }
+        if (queue == null) {
+            log.error("Audit queue unavailable; dropping {} events", batch.size());
+            return;
+        }
+        for (PendingAuditEvent event : batch) {
+            if (event == null) {
+                continue;
+            }
+            incrementRetry(event);
+            if (event.retryCount > maxRetryAttempts()) {
+                dropEvent(event);
+                continue;
+            }
+            enqueueRetry(event);
+        }
+    }
+
+    private void incrementRetry(PendingAuditEvent event) {
+        if (event == null) {
+            return;
+        }
+        event.retryCount = event.retryCount + 1;
+        if (event.firstFailureAt == null) {
+            event.firstFailureAt = Instant.now();
+        }
+    }
+
+    private int maxRetryAttempts() {
+        int configured = properties.getMaxRetryAttempts();
+        return configured <= 0 ? 1 : configured;
+    }
+
+    private void enqueueRetry(PendingAuditEvent event) {
+        if (queue == null) {
+            dropEvent(event);
+            return;
+        }
+        long delay = Math.max(0L, properties.getRetryBackoffMs());
+        if (workerPool != null && delay > 0L) {
+            long sanitizedDelay = Math.min(delay, TimeUnit.MINUTES.toMillis(1));
+            try {
+                workerPool.schedule(() -> retryOffer(event), sanitizedDelay, TimeUnit.MILLISECONDS);
+                return;
+            } catch (Exception ex) {
+                log.warn(
+                    "Failed to schedule delayed audit retry for action={} actor={}: {}",
+                    event.action,
+                    event.actor,
+                    ex.toString()
+                );
+            }
+        }
+        retryOffer(event);
+    }
+
+    private void retryOffer(PendingAuditEvent event) {
+        if (queue == null) {
+            dropEvent(event);
+            return;
+        }
+        boolean offered = queue.offer(event);
+        if (!offered) {
+            log.warn(
+                "Audit queue still full when retrying action={} actor={}, attempt={}",
+                event.action,
+                event.actor,
+                event.retryCount
+            );
+            incrementRetry(event);
+            if (event.retryCount > maxRetryAttempts()) {
+                dropEvent(event);
+            } else {
+                enqueueRetry(event);
+            }
+        }
+    }
+
+    private void dropEvent(PendingAuditEvent event) {
+        if (event == null) {
+            return;
+        }
+        log.error(
+            "Dropping audit event after {} attempts (actor={}, action={}, module={}, correlationId={}, firstFailureAt={}, lastError={}, payloadPreview={})",
+            event.retryCount,
+            event.actor,
+            event.action,
+            event.module,
+            event.correlationId,
+            event.firstFailureAt,
+            event.lastError,
+            previewPayload(event.payload)
+        );
+    }
+
+    private String previewPayload(Object payload) {
+        if (payload == null) {
+            return "null";
+        }
+        String text = String.valueOf(payload);
+        if (text.length() > 500) {
+            return text.substring(0, 497) + "...";
+        }
+        return text;
+    }
+
+    private String localizeStatus(String statusText) {
+        if (!StringUtils.hasText(statusText)) {
+            return statusText;
+        }
+        String normalized = statusText.trim().toUpperCase(java.util.Locale.ROOT);
+        return switch (normalized) {
+            case "APPROVED", "SUCCESS", "APPLIED", "COMPLETED" -> "通过";
+            case "REJECTED", "DENIED" -> "驳回";
+            case "DELAYED", "PROCESS", "PROCESSING" -> "延后";
+            case "FAILED", "FAILURE", "ERROR" -> "失败";
+            case "PENDING", "WAITING", "SUBMITTED", "APPROVAL_PENDING", "BEGIN" -> "待处理";
+            case "CANCELLED", "CANCELED" -> "撤回";
+            default -> statusText;
+        };
+    }
+
+    private void markFailure(List<PendingAuditEvent> events, Throwable failure) {
+        if (events == null) {
+            return;
+        }
+        for (PendingAuditEvent event : events) {
+            markFailure(event, failure);
+        }
+    }
+
+    private void markFailure(PendingAuditEvent event, Throwable failure) {
+        if (event == null || failure == null) {
+            return;
+        }
+        if (event.firstFailureAt == null) {
+            event.firstFailureAt = Instant.now();
+        }
+        event.lastError = summarizeException(failure);
+    }
+
+    private String summarizeException(Throwable failure) {
+        if (failure == null) {
+            return "unknown";
+        }
+        Throwable root = failure;
+        int guard = 0;
+        while (root.getCause() != null && guard++ < 8) {
+            root = root.getCause();
+        }
+        String type = root.getClass().getSimpleName();
+        String message = root.getMessage();
+        if ((message == null || message.isBlank()) && root != failure) {
+            message = failure.getMessage();
+        }
+        if (message != null && message.length() > 280) {
+            message = message.substring(0, 277) + "...";
+        }
+        if (message == null || message.isBlank()) {
+            return type;
+        }
+        return type + ": " + message;
     }
 
     private AuditEvent buildEntity(PendingAuditEvent pending, String previousChain) throws JsonProcessingException {
@@ -556,20 +820,109 @@ public class AdminAuditService {
         entity.setOccurredAt(pending.occurredAt);
         entity.setActor(defaultString(pending.actor, "anonymous"));
         entity.setActorRole(pending.actorRole);
+        entity.setCorrelationId(pending.correlationId);
         // source_system：默认admin，可由调用方覆盖（平台转发时置为platform）
         String src = pending.sourceSystem;
         if (src == null || src.isBlank()) src = "admin";
         entity.setSourceSystem(src);
+
+        String baseModule = defaultString(pending.module, "GENERAL");
+        String baseAction = defaultString(pending.action, "UNKNOWN");
+
+        OperationMappingEngine.ResolvedOperation ruleResolution = null;
+        // Rule Engine Integration
+        try {
+            AuditEvent forEngine = new AuditEvent();
+            forEngine.setRequestUri(pending.requestUri);
+            forEngine.setHttpMethod(pending.httpMethod);
+            forEngine.setSourceSystem(entity.getSourceSystem());
+            forEngine.setResult(pending.result);
+            forEngine.setModule(pending.module);
+            forEngine.setResourceType(pending.resourceType);
+            forEngine.setAction(pending.action);
+
+            ruleResolution = operationMappingEngine.resolveWithFallback(forEngine).orElse(null);
+            if (ruleResolution != null) {
+                entity.setOperationGroup(ruleResolution.operationGroup);
+                if (ruleResolution.operationType != null) {
+                    entity.setOperationType(ruleResolution.operationType.getCode());
+                }
+                if (StringUtils.hasText(ruleResolution.moduleName)) {
+                    entity.setModule(ruleResolution.moduleName);
+                }
+                if (StringUtils.hasText(ruleResolution.description)) {
+                    entity.setSummary(ruleResolution.description);
+                }
+                if (StringUtils.hasText(ruleResolution.eventClass)) {
+                    entity.setEventClass(ruleResolution.eventClass);
+                }
+                if (StringUtils.hasText(ruleResolution.description) && !StringUtils.hasText(entity.getAction())) {
+                    entity.setAction(ruleResolution.description);
+                }
+            }
+        } catch (Exception ex) {
+            log.error("Error during audit rule engine resolution", ex);
+        }
+
+        if (!StringUtils.hasText(entity.getModule())) {
+            entity.setModule(baseModule);
+        }
+        if (!StringUtils.hasText(entity.getAction())) {
+            entity.setAction(baseAction);
+        }
+
         entity.setEventUuid(java.util.UUID.randomUUID());
-        entity.setModule(defaultString(pending.module, "GENERAL"));
-        entity.setAction(defaultString(pending.action, "UNKNOWN"));
         // event_class/event_type 简化映射：安全相关 action -> SecurityEvent；其余 -> AuditEvent
         String normalizedAction = entity.getAction() == null ? "" : entity.getAction().toUpperCase(java.util.Locale.ROOT);
         boolean security = normalizedAction.contains("AUTH_") || normalizedAction.contains("LOGIN") || normalizedAction.contains("LOGOUT") || normalizedAction.contains("ACCESS_DENIED");
-        entity.setEventClass(security ? "SecurityEvent" : "AuditEvent");
-        entity.setEventType(mapEventCategory(pending.resourceType, pending.module, normalizedAction));
-        entity.setResourceType(pending.resourceType);
-        entity.setResourceId(pending.resourceId);
+        if (!StringUtils.hasText(entity.getEventClass())) {
+            entity.setEventClass(security ? "SecurityEvent" : "AuditEvent");
+        }
+        AuditOperationType operationType = AuditOperationType.from(entity.getOperationType());
+        AuditEntityContext.Payload contextPayload = AuditEntityContext.get();
+        String ruleSourceRaw = ruleResolution != null ? ruleResolution.sourceTable : null;
+        String contextTableRaw = contextPayload.tableName;
+        String explicitTableRaw = pending.capturedTable;
+        String resourceTypeRaw = pending.resourceType;
+        String moduleRaw = pending.module;
+
+        String ruleTable = sanitizeTableName(ruleSourceRaw);
+        String contextTable = sanitizeTableName(contextTableRaw);
+        String explicitTable = sanitizeTableName(explicitTableRaw);
+        String fallbackTable = sanitizeTableName(resourceTypeRaw);
+        String moduleTable = sanitizeTableName(moduleRaw);
+        String contextId = sanitizeId(contextPayload.entityId);
+        String explicitId = sanitizeId(pending.capturedId);
+        String fallbackId = sanitizeId(pending.resourceId);
+
+        String resolvedId = firstNonBlank(contextId, explicitId, fallbackId);
+        String dictionaryFromRule = dictionaryCanonicalTable(ruleSourceRaw, resourceTypeRaw, contextTableRaw, moduleRaw);
+        String dictionaryFromResource = dictionaryCanonicalTable(resourceTypeRaw, ruleSourceRaw, contextTableRaw, moduleRaw);
+        String dictionaryFromContext = dictionaryCanonicalTable(contextTableRaw, resourceTypeRaw, ruleSourceRaw, moduleRaw);
+        String dictionaryFromModule = dictionaryCanonicalTable(moduleRaw, resourceTypeRaw, ruleSourceRaw);
+        String resolvedTable = selectTable(
+            resolvedId,
+            ruleTable,
+            contextTable,
+            explicitTable,
+            dictionaryFromRule,
+            dictionaryFromResource,
+            dictionaryFromContext,
+            dictionaryFromModule,
+            fallbackTable,
+            moduleTable
+        );
+        if (operationType.requiresTarget() && (!StringUtils.hasText(resolvedTable) || !StringUtils.hasText(resolvedId))) {
+            log.warn(
+                "Missing precise audit target for module={} action={} type={} uri={}",
+                pending.module,
+                pending.action,
+                operationType.getCode(),
+                pending.requestUri
+            );
+        }
+        entity.setResourceType(StringUtils.hasText(resolvedTable) ? resolvedTable : null);
+        entity.setResourceId(StringUtils.hasText(resolvedId) ? resolvedId : null);
         entity.setClientIp(parseClientIp(pending.clientIp));
         entity.setClientAgent(pending.clientAgent);
         entity.setRequestUri(pending.requestUri);
@@ -626,11 +979,18 @@ public class AdminAuditService {
 
         // 详情：中文键
         java.util.Map<String, Object> det = new java.util.LinkedHashMap<>();
-        String tableKey = tableFromResource(entity.getResourceType(), entity.getModule());
-        String tableLabel = mapTableLabel(tableKey);
-        det.put("源表", tableKey);
-        if (StringUtils.hasText(tableLabel) && !Objects.equals(tableLabel, tableKey)) {
-            det.put("源表描述", tableLabel);
+        if (StringUtils.hasText(resolvedTable)) {
+            det.put("源表", resolvedTable);
+            String tableLabel = mapTableLabel(resolvedTable);
+            if (StringUtils.hasText(tableLabel) && !Objects.equals(tableLabel, resolvedTable)) {
+                det.put("源表描述", tableLabel);
+            }
+        }
+        if (StringUtils.hasText(resolvedId)) {
+            det.put("目标ID", resolvedId);
+        }
+        if (operationType != AuditOperationType.UNKNOWN) {
+            det.put("操作类型", operationType.getDisplayName());
         }
         if (pending.payload instanceof java.util.Map<?, ?> payloadMap) {
             String targetRef = firstNonBlank(
@@ -651,9 +1011,6 @@ public class AdminAuditService {
             if (StringUtils.hasText(targetRef) && !det.containsKey("目标引用")) {
                 det.put("目标引用", targetRef);
             }
-            if (StringUtils.hasText(targetRef)) {
-                det.put("target_ref", targetRef);
-            }
             if (StringUtils.hasText(datasetName)) {
                 det.put("datasetName", datasetName);
             }
@@ -673,99 +1030,34 @@ public class AdminAuditService {
             if (StringUtils.hasText(datasetOwnerDept)) {
                 det.put("datasetOwnerDept", datasetOwnerDept);
             }
-        }
-        // Only record PK 目标ID（同时兼容旧键 target_id 以便历史/平台复用）。
-        // 对 admin_keycloak_user（用户）：
-        // - 数字 -> 本地主键
-        // - UUID -> 当作 KeycloakId，转换为本地主键
-        // - 用户名 -> 解析为本地主键
-        String rid = entity.getResourceId();
-        if (rid != null) {
-            String s = rid.trim();
-            boolean isNumeric = s.matches("\\d+");
-            boolean isUuid = s.matches("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
-            String tbl = tableKey;
-            if ("admin_keycloak_user".equals(tbl) || "user".equalsIgnoreCase(entity.getResourceType()) || "admin.auth".equalsIgnoreCase(entity.getResourceType())) {
-                if (isNumeric) {
-                    det.put("目标ID", s);
-                    det.put("target_id", s);
-                } else if (isUuid) {
-                    try {
-                        var byKc = userRepo.findByKeycloakId(s);
-                        byKc.ifPresent(u -> { det.put("目标ID", String.valueOf(u.getId())); det.put("target_id", String.valueOf(u.getId())); });
-                    } catch (Exception ex) {
-                        if (log.isDebugEnabled()) log.debug("Failed to map keycloakId to local id {}: {}", s, ex.toString());
-                    }
-                } else {
-                    try {
-                        var userOpt = userRepo.findByUsernameIgnoreCase(s);
-                        userOpt.ifPresent(u -> { det.put("目标ID", String.valueOf(u.getId())); det.put("target_id", String.valueOf(u.getId())); });
-                    } catch (Exception ex) {
-                        if (log.isDebugEnabled()) log.debug("Failed to resolve user id for username {}: {}", s, ex.toString());
-                    }
-                }
-            } else {
-                if (isNumeric) {
-                    det.put("目标ID", s);
-                } else if (isUuid) {
-                    det.put("目标ID", s);
-                }
-            }
-        }
-        // If still missing and resource is admin_keycloak_user, fallback to actor username lookup
-        boolean hasTargetId = det.containsKey("目标ID")
-            && det.get("目标ID") != null
-            && !String.valueOf(det.get("目标ID")).isBlank();
-        if (!hasTargetId) {
-            if ("admin_keycloak_user".equals(tableKey)) {
-                String actorUser = entity.getActor();
-                String requestedResourceId = pending.resourceId;
-                boolean resourceMissing = !StringUtils.hasText(requestedResourceId);
-                boolean resourceMatchesActor = StringUtils.hasText(requestedResourceId)
-                    && StringUtils.hasText(actorUser)
-                    && requestedResourceId.trim().equalsIgnoreCase(actorUser.trim());
-                if (resourceMissing || resourceMatchesActor) {
-                    if (actorUser != null && !actorUser.isBlank()) {
-                        try {
-                            var userOpt = userRepo.findByUsernameIgnoreCase(actorUser.trim());
-                            userOpt.ifPresent(u -> det.put("目标ID", String.valueOf(u.getId())));
-                        } catch (Exception ignore) {}
+            String changeRequestRef = coerceToString(payloadMap.get("changeRequestRef"));
+            if (!StringUtils.hasText(changeRequestRef)) {
+                String changeRequestId = coerceToString(payloadMap.get("changeRequestId"));
+                if (StringUtils.hasText(changeRequestId)) {
+                    String trimmed = changeRequestId.trim();
+                    if (trimmed.toUpperCase(Locale.ROOT).startsWith("CR-")) {
+                        changeRequestRef = trimmed;
+                    } else {
+                        changeRequestRef = "CR-" + trimmed;
                     }
                 }
             }
-        }
-        // Fallback to captured last entity if target_id not resolved above
-        if (!det.containsKey("目标ID") || det.get("目标ID") == null || String.valueOf(det.get("目标ID")).isBlank()) {
-            var cap = com.yuzhi.dts.admin.service.audit.AuditEntityContext.getLast();
-            if (cap != null && cap.id != null && !cap.id.isBlank()) {
-                det.put("目标ID", cap.id);
+            if (StringUtils.hasText(changeRequestRef)) {
+                det.put("审批单号", changeRequestRef);
+                det.put("目标引用", changeRequestRef);
             }
-        }
-        // Fallback to captured last entity if target_id not resolved above
-        if ((!det.containsKey("目标ID")) || det.get("目标ID") == null || String.valueOf(det.get("目标ID")).isBlank()) {
-            if (pending.capturedId != null && !pending.capturedId.isBlank()) {
-                det.put("目标ID", pending.capturedId);
-            }
-        }
-        // 目标引用（人类可读名称）：当前支持 用户 -> 姓名
-        try {
-            Object tidObj = det.get("目标ID");
-            if (tidObj == null) tidObj = det.get("target_id");
-            String tid = tidObj == null ? null : String.valueOf(tidObj);
-            if (tid != null && !tid.isBlank()) {
-                if ("admin_keycloak_user".equals(tableKey) || "user".equalsIgnoreCase(entity.getResourceType()) || "admin.auth".equalsIgnoreCase(entity.getResourceType())) {
-                    try {
-                        Long uid = Long.parseLong(tid);
-                        userRepo.findById(uid).ifPresent(u -> det.put("目标引用", u.getFullName() != null && !u.getFullName().isBlank() ? u.getFullName() : u.getUsername()));
-                    } catch (NumberFormatException ignore) {
-                        // 非数字：可能是 username 或 UUID，前面已尽可能转为本地ID；此处不再重复解析
-                    }
+            String approvalSummary = firstNonBlank(
+                coerceToString(payloadMap.get("approvalSummary")),
+                coerceToString(payloadMap.get("summary")),
+                coerceToString(payloadMap.get("reason"))
+            );
+            if (StringUtils.hasText(approvalSummary)) {
+                String trimmedSummary = approvalSummary.trim();
+                if (StringUtils.hasText(trimmedSummary)) {
+                    det.put("审批内容", trimmedSummary);
                 }
             }
-        } catch (Exception ex) {
-            if (log.isDebugEnabled()) log.debug("Failed to build human-readable target_ref: {}", ex.toString());
         }
-
         // Expose HTTP status code for downstream rule matching (e.g., login success vs failure).
         if (pending.payload instanceof java.util.Map<?, ?> payloadMap) {
             Object statusObj = payloadMap.get("status");
@@ -774,8 +1066,7 @@ public class AdminAuditService {
             if (statusObj != null) {
                 String statusText = String.valueOf(statusObj).trim();
                 if (!statusText.isEmpty()) {
-                    det.put("status_code", statusText);
-                    det.put("状态码", statusText);
+                    det.put("状态码", localizeStatus(statusText));
                 }
             }
         }
@@ -786,7 +1077,6 @@ public class AdminAuditService {
         }
 
         det.put("请求ID", extractRequestId());
-        // Absolute fallback: if target_id still missing, use event UUID to guarantee non-empty value
         if ((!det.containsKey("目标ID")) || det.get("目标ID") == null || String.valueOf(det.get("目标ID")).isBlank()) {
             java.util.UUID uuid = entity.getEventUuid();
             det.put("目标ID", uuid != null ? uuid.toString() : java.util.UUID.randomUUID().toString());
@@ -798,6 +1088,19 @@ public class AdminAuditService {
         String payloadDigest = sha256Hex(payloadBytes); // first phase: no key/HMAC, just SHA-256
         String chainSignature = sha256Hex((previousChain + "|" + payloadDigest).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         det.put("参数摘要", payloadDigest);
+
+        // Add before/after states from AOP context
+        try {
+            if (contextPayload.before != null) {
+                det.put("before", objectMapper.convertValue(contextPayload.before, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}));
+            }
+            if (contextPayload.after != null) {
+                det.put("after", objectMapper.convertValue(contextPayload.after, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to serialize before/after state for audit", e);
+        }
+
         try { entity.setDetails(objectMapper.writeValueAsString(det)); } catch (Exception ignored) {}
 
         entity.setPayloadIv(null);
@@ -813,7 +1116,14 @@ public class AdminAuditService {
             else if (a.equals("authadmin")) entity.setOperatorName("授权管理员");
             else if (a.equals("auditadmin")) entity.setOperatorName("安全审计员");
         }
-        entity.setSummary(buildSummary(entity));
+        if (!StringUtils.hasText(entity.getSummary())) {
+            entity.setSummary(buildSummary(entity));
+        }
+        if (!StringUtils.hasText(entity.getEventType())) {
+            String categoryResource = StringUtils.hasText(entity.getResourceType()) ? entity.getResourceType() : pending.resourceType;
+            String categoryModule = StringUtils.hasText(entity.getModule()) ? entity.getModule() : pending.module;
+            entity.setEventType(mapEventCategory(categoryResource, categoryModule, normalizedAction));
+        }
         entity.setCreatedBy(entity.getActor());
         entity.setCreatedDate(Instant.now());
         return entity;
@@ -854,41 +1164,21 @@ public class AdminAuditService {
         return "数据资产";
     }
 
-    private String tableFromResource(String resourceType, String module) {
-        if (resourceType == null || resourceType.isBlank()) {
-            return module == null || module.isBlank() ? "general" : normalizeTableKey(module);
+    private String sanitizeTableName(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
         }
-        String r = resourceType.toLowerCase(java.util.Locale.ROOT);
-        // Normalize common admin entry keys to concrete table names
-        if (r.equals("user") || r.equals("admin_keycloak_user") || r.equals("admin.users") || r.equals("admin.user")) {
-            return "admin_keycloak_user";
-        }
-        if (r.equals("role") || r.equals("role_assignment") || r.equals("admin_role_assignment") || r.equals("admin.roles") || r.equals("admin.role")) {
-            return "admin_role_assignment";
-        }
-        if (r.equals("portal_menu") || r.equals("menu") || r.equals("admin.portal-menus") || r.equals("admin.menus") || r.equals("portal.navigation")) {
-            return "portal_menu";
-        }
-        if (r.equals("org") || r.equals("organization") || r.equals("organization_node") || r.equals("admin.orgs") || r.equals("admin.org")) {
-            return "organization_node";
-        }
-        if (r.equals("admin.auth") || r.equals("auth") || r.equals("admin")) {
-            // Auth-related events anchor to user table to avoid non-existent 'admin' table
-            return "admin_keycloak_user";
-        }
-        if (r.equals("api") || r.equals("v1") || r.equals("v2")) {
-            return "general";
-        }
-        return normalizeTableKey(r);
+        String normalized = value.trim().toLowerCase(java.util.Locale.ROOT);
+        normalized = normalized.replaceAll("[^a-z0-9]+", "_");
+        normalized = normalized.replaceAll("^_+", "").replaceAll("_+$", "");
+        return normalized.isBlank() ? null : normalized;
     }
 
-    private String normalizeTableKey(String key) {
-        if (key == null) return "general";
-        // convert dotted or kebab keys to snake-like token
-        String s = key.trim().toLowerCase(java.util.Locale.ROOT);
-        s = s.replaceAll("[^a-z0-9]+", "_");
-        s = s.replaceAll("^_+", "").replaceAll("_+$", "");
-        return s.isBlank() ? "general" : s;
+    private String sanitizeId(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
     }
 
     private String extractRequestId() {
@@ -999,6 +1289,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         Pageable pageable
     ) {
         Pageable effectivePageable = pageable;
@@ -1018,6 +1309,7 @@ public class AdminAuditService {
             from,
             to,
             likePattern(clientIp),
+            likePattern(operationGroup),
             effectivePageable
         );
     }
@@ -1035,6 +1327,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         List<String> allowedActors,
         Pageable pageable
     ) {
@@ -1059,6 +1352,7 @@ public class AdminAuditService {
             from,
             to,
             likePattern(clientIp),
+            likePattern(operationGroup),
             normalizedAllowed,
             effectivePageable
         );
@@ -1077,6 +1371,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         java.util.List<String> roles,
         Pageable pageable
     ) {
@@ -1097,6 +1392,7 @@ public class AdminAuditService {
             from,
             to,
             likePattern(clientIp),
+            likePattern(operationGroup),
             roles,
             effectivePageable
         );
@@ -1115,12 +1411,13 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         List<String> excludedActors,
         Pageable pageable
     ) {
         List<String> normalizedExcluded = normalizeActorList(excludedActors);
         if (normalizedExcluded.isEmpty()) {
-            return search(actor, module, action, sourceSystem, eventType, result, resourceType, resource, requestUri, from, to, clientIp, pageable);
+            return search(actor, module, action, sourceSystem, eventType, result, resourceType, resource, requestUri, from, to, clientIp, operationGroup, pageable);
         }
         Pageable effectivePageable = pageable;
         if (pageable != null && pageable.getSort().isSorted()) {
@@ -1139,6 +1436,7 @@ public class AdminAuditService {
             from,
             to,
             likePattern(clientIp),
+            likePattern(operationGroup),
             normalizedExcluded,
             effectivePageable
         );
@@ -1157,6 +1455,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         java.util.List<String> roles,
         java.util.List<String> excludedActors,
         Pageable pageable
@@ -1178,6 +1477,7 @@ public class AdminAuditService {
             from,
             to,
             likePattern(clientIp),
+            likePattern(operationGroup),
             roles,
             excludedActors,
             effectivePageable
@@ -1197,6 +1497,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         String excludedRole,
         Pageable pageable
     ) {
@@ -1217,6 +1518,7 @@ public class AdminAuditService {
             from,
             to,
             likePattern(clientIp),
+            likePattern(operationGroup),
             excludedRole,
             effectivePageable
         );
@@ -1235,6 +1537,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         java.util.List<String> excludedRoles,
         Pageable pageable
     ) {
@@ -1255,6 +1558,7 @@ public class AdminAuditService {
             from,
             to,
             likePattern(clientIp),
+            likePattern(operationGroup),
             excludedRoles,
             effectivePageable
         );
@@ -1273,6 +1577,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         java.util.List<String> excludedRoles,
         java.util.List<String> excludedActors,
         Pageable pageable
@@ -1294,6 +1599,7 @@ public class AdminAuditService {
             from,
             to,
             likePattern(clientIp),
+            likePattern(operationGroup),
             excludedRoles,
             excludedActors,
             effectivePageable
@@ -1314,7 +1620,7 @@ public class AdminAuditService {
         Instant to,
         String clientIp
     ) {
-        return search(actor, module, action, sourceSystem, eventType, result, resourceType, resource, requestUri, from, to, clientIp, Pageable.unpaged())
+        return search(actor, module, action, sourceSystem, eventType, result, resourceType, resource, requestUri, from, to, clientIp, null, Pageable.unpaged())
             .getContent()
             .stream()
             .map(this::toView)
@@ -1337,7 +1643,8 @@ public class AdminAuditService {
         String requestUri,
         Instant from,
         Instant to,
-        String clientIp
+        String clientIp,
+        String operationGroup
     ) {
         return repository
             .search(
@@ -1353,6 +1660,7 @@ public class AdminAuditService {
                 from,
                 to,
                 likePattern(clientIp),
+                likePattern(operationGroup),
                 Pageable.unpaged()
             )
             .getContent();
@@ -1371,6 +1679,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         java.util.List<String> roles
     ) {
         return repository
@@ -1387,6 +1696,7 @@ public class AdminAuditService {
                 from,
                 to,
                 likePattern(clientIp),
+                likePattern(operationGroup),
                 roles,
                 Pageable.unpaged()
             )
@@ -1406,6 +1716,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         java.util.List<String> roles,
         java.util.List<String> excludedActors
     ) {
@@ -1423,6 +1734,7 @@ public class AdminAuditService {
                 from,
                 to,
                 likePattern(clientIp),
+                likePattern(operationGroup),
                 roles,
                 excludedActors,
                 Pageable.unpaged()
@@ -1443,6 +1755,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         String excludedRole
     ) {
         Page<AuditEvent> page = repository
@@ -1459,6 +1772,7 @@ public class AdminAuditService {
                 from,
                 to,
                 likePattern(clientIp),
+                likePattern(operationGroup),
                 excludedRole,
                 Pageable.unpaged()
             );
@@ -1478,6 +1792,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         java.util.List<String> excludedRoles
     ) {
         Page<AuditEvent> page = repository
@@ -1494,6 +1809,7 @@ public class AdminAuditService {
                 from,
                 to,
                 likePattern(clientIp),
+                likePattern(operationGroup),
                 excludedRoles,
                 Pageable.unpaged()
             );
@@ -1513,6 +1829,7 @@ public class AdminAuditService {
         Instant from,
         Instant to,
         String clientIp,
+        String operationGroup,
         java.util.List<String> excludedRoles,
         java.util.List<String> excludedActors
     ) {
@@ -1530,6 +1847,7 @@ public class AdminAuditService {
                 from,
                 to,
                 likePattern(clientIp),
+                likePattern(operationGroup),
                 excludedRoles,
                 excludedActors,
                 Pageable.unpaged()
@@ -1584,6 +1902,11 @@ public class AdminAuditService {
         view.result = event.getResult();
         view.extraTags = event.getExtraTags();
         view.actorRole = event.getActorRole();
+        AuditOperationType operationType = AuditOperationType.from(event.getOperationType());
+        if (operationType != AuditOperationType.UNKNOWN) {
+            view.operationTypeCode = operationType.getCode();
+            view.operationType = operationType.getDisplayName();
+        }
         if (StringUtils.hasText(event.getSourceSystem())) {
             view.sourceSystem = event.getSourceSystem();
             view.sourceSystemText = "platform".equalsIgnoreCase(event.getSourceSystem()) ? "业务管理" : "系统管理";
@@ -1922,6 +2245,103 @@ public class AdminAuditService {
             if (StringUtils.hasText(value)) {
                 return value;
             }
+        }
+        return null;
+    }
+
+    private String selectTable(String resolvedId, String... candidates) {
+        if (candidates == null || candidates.length == 0) {
+            return null;
+        }
+        for (String candidate : candidates) {
+            if (!StringUtils.hasText(candidate)) {
+                continue;
+            }
+            if (isLikelyIdentifier(candidate, resolvedId)) {
+                continue;
+            }
+            return candidate;
+        }
+        return null;
+    }
+
+    private boolean isLikelyIdentifier(String candidate, String resolvedId) {
+        if (!StringUtils.hasText(candidate)) {
+            return false;
+        }
+        String trimmed = candidate.trim();
+        if (StringUtils.hasText(resolvedId) && trimmed.equalsIgnoreCase(resolvedId.trim())) {
+            return true;
+        }
+        if (trimmed.startsWith("/api/")) {
+            return true;
+        }
+        if (trimmed.matches("\\d{1,18}")) {
+            return true;
+        }
+        if (trimmed.matches("[0-9a-f]{32}")) {
+            return true;
+        }
+        if (trimmed.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
+            return true;
+        }
+        return false;
+    }
+
+    private String dictionaryCanonicalTable(String raw, String... hints) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        boolean adminHint = false;
+        java.util.List<String> probes = new java.util.ArrayList<>();
+        probes.add(raw);
+        String replaced = raw.replace('.', '_');
+        if (!replaced.equals(raw)) {
+            probes.add(replaced);
+        }
+        String sanitizedRaw = sanitizeTableName(raw);
+        if (StringUtils.hasText(sanitizedRaw)) {
+            probes.add(sanitizedRaw);
+            if (sanitizedRaw.startsWith("admin")) {
+                adminHint = true;
+            }
+        }
+        if (hints != null) {
+            for (String hint : hints) {
+                if (!StringUtils.hasText(hint)) {
+                    continue;
+                }
+                String sanitized = sanitizeTableName(hint);
+                if (StringUtils.hasText(sanitized)) {
+                    if (!probes.contains(sanitized)) {
+                        probes.add(sanitized);
+                    }
+                    if (sanitized.startsWith("admin")) {
+                        adminHint = true;
+                    }
+                }
+            }
+        }
+        for (String probe : probes) {
+            if (!StringUtils.hasText(probe)) {
+                continue;
+            }
+            java.util.Optional<AuditResourceDictionaryService.DictionaryEntry> entryOpt = resourceDictionary.findEntry(probe);
+            if (entryOpt.isEmpty()) {
+                continue;
+            }
+            AuditResourceDictionaryService.DictionaryEntry entry = entryOpt.orElseThrow();
+            String key = sanitizeTableName(entry.key());
+            if (!StringUtils.hasText(key)) {
+                continue;
+            }
+            if (adminHint && !key.startsWith("admin_")) {
+                String adminKey = sanitizeTableName("admin_" + key);
+                if (StringUtils.hasText(adminKey)) {
+                    return adminKey;
+                }
+            }
+            return key;
         }
         return null;
     }

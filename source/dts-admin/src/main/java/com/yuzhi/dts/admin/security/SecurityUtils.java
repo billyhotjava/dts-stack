@@ -235,6 +235,36 @@ public final class SecurityUtils {
         Map.entry(AuthoritiesConstants.OP_ADMIN, AuthoritiesConstants.OP_ADMIN)
     );
 
+    private static String canonicalizeGovernanceRole(String role) {
+        if (role == null || role.isBlank()) {
+            return null;
+        }
+        String compact = role.replaceAll("[^A-Z0-9]", "");
+        if (compact.isEmpty()) {
+            return null;
+        }
+        if (compact.startsWith("SYS")) {
+            return AuthoritiesConstants.SYS_ADMIN;
+        }
+        if ((compact.startsWith("AUTH") || compact.startsWith("IAM")) && compact.contains("ADMIN")) {
+            return AuthoritiesConstants.AUTH_ADMIN;
+        }
+        if (
+            compact.startsWith("AUDIT") ||
+            compact.startsWith("AUDITOR") ||
+            compact.contains("SECURITYAUDITOR")
+        ) {
+            return AuthoritiesConstants.AUDITOR_ADMIN;
+        }
+        if (compact.startsWith("SECURITY") && compact.contains("AUDITOR")) {
+            return AuthoritiesConstants.AUDITOR_ADMIN;
+        }
+        if (compact.startsWith("OP") && compact.contains("ADMIN")) {
+            return AuthoritiesConstants.OP_ADMIN;
+        }
+        return null;
+    }
+
     public static String normalizeRole(String role) {
         if (role == null) {
             return null;
@@ -253,7 +283,16 @@ public final class SecurityUtils {
             String noPrefix = upper.substring(5);
             String aliasNoPrefix = ROLE_ALIASES.get(noPrefix);
             if (aliasNoPrefix != null) return aliasNoPrefix;
+            String canonical = canonicalizeGovernanceRole(noPrefix);
+            if (canonical != null) {
+                return canonical;
+            }
             return upper; // keep as-is
+        }
+
+        String canonical = canonicalizeGovernanceRole(upper);
+        if (canonical != null) {
+            return canonical;
         }
 
         // As a last resort, prefix unknown role names

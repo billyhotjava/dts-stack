@@ -1,84 +1,108 @@
 package com.yuzhi.dts.platform.security.session;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.platform.domain.security.PortalSessionCloseReason;
+import com.yuzhi.dts.platform.domain.security.PortalSessionEntity;
+import com.yuzhi.dts.platform.repository.security.PortalSessionRepository;
 import com.yuzhi.dts.platform.security.session.PortalSessionActivityService.ValidationResult;
 import java.time.Instant;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 class PortalSessionActivityServiceTest {
 
+    @Mock
+    private PortalSessionRepository sessionRepository;
+
+    @InjectMocks
+    private PortalSessionActivityService service;
+
     @Test
-    void touchReturnsConcurrentAfterNewLogin() {
-        PortalSessionActivityService service = new PortalSessionActivityService(15);
-        Instant base = Instant.now();
+    void touchUpdatesLastSeenForActiveToken() {
+        Instant now = Instant.parse("2025-01-01T00:00:00Z");
+        PortalSessionEntity entity = new PortalSessionEntity();
+        entity.setAccessToken("token-1");
+        entity.setExpiresAt(now.plusSeconds(120));
+        entity.setLastSeenAt(now.minusSeconds(30));
 
-        service.register("sysadmin", "sess-1", "token-1", base);
-        service.register("sysadmin", "sess-2", "token-2", base.plusSeconds(1));
+        when(sessionRepository.findByAccessToken("token-1")).thenReturn(Optional.of(entity));
 
-        ValidationResult former = service.touch("token-1", base.plusSeconds(2));
-        ValidationResult current = service.touch("token-2", base.plusSeconds(3));
+        ValidationResult result = service.touch("token-1", now);
 
-        assertThat(former).isEqualTo(ValidationResult.CONCURRENT);
-        assertThat(current).isEqualTo(ValidationResult.ACTIVE);
+        assertThat(result).isEqualTo(ValidationResult.ACTIVE);
+        ArgumentCaptor<PortalSessionEntity> captor = ArgumentCaptor.forClass(PortalSessionEntity.class);
+        verify(sessionRepository).save(captor.capture());
+        assertThat(captor.getValue().getLastSeenAt()).isEqualTo(now);
     }
 
     @Test
-    void touchReturnsExpiredAfterManualInvalidate() {
-        PortalSessionActivityService service = new PortalSessionActivityService(15);
-        Instant base = Instant.now();
+    void touchReturnsExpiredWhenTokenMissing() {
+        when(sessionRepository.findByAccessToken("missing")).thenReturn(Optional.empty());
 
-        service.register("authadmin", "sess-1", "token-1", base);
-        service.invalidate("token-1", ValidationResult.EXPIRED);
-
-        ValidationResult result = service.touch("token-1", base.plusSeconds(5));
+        ValidationResult result = service.touch("missing", Instant.parse("2025-01-01T00:00:00Z"));
 
         assertThat(result).isEqualTo(ValidationResult.EXPIRED);
+        verify(sessionRepository, never()).save(any());
     }
 
     @Test
-    void newRegistrationClearsPreviousRevocationForSameToken() {
-        PortalSessionActivityService service = new PortalSessionActivityService(15);
-        Instant base = Instant.now();
+    void touchReturnsRevocationReasonWhenAlreadyRevoked() {
+        PortalSessionEntity entity = new PortalSessionEntity();
+        entity.setAccessToken("token-2");
+        entity.setRevokedAt(Instant.parse("2025-01-01T00:00:00Z"));
+        entity.setRevokedReason(PortalSessionCloseReason.CONCURRENT);
 
-        service.register("auditadmin", "sess-1", "token-1", base);
-        service.invalidate("token-1", ValidationResult.CONCURRENT);
+        when(sessionRepository.findByAccessToken("token-2")).thenReturn(Optional.of(entity));
 
-        // Re-register same token (e.g., extend flow)
-        service.register("auditadmin", "sess-2", "token-1", base.plusSeconds(1));
+        ValidationResult result = service.touch("token-2", Instant.parse("2025-01-01T00:10:00Z"));
 
-        ValidationResult status = service.touch("token-1", base.plusSeconds(2));
-
-        assertThat(status).isEqualTo(ValidationResult.ACTIVE);
+        assertThat(result).isEqualTo(ValidationResult.CONCURRENT);
+        verify(sessionRepository, never()).save(any());
     }
 
     @Test
-    void touchReturnsConcurrentOnlyWhenAnotherTokenActive() {
-        PortalSessionActivityService service = new PortalSessionActivityService(15);
-        Instant base = Instant.now();
+    void touchMarksExpiredTokenAsRevoked() {
+        Instant now = Instant.parse("2025-01-01T00:05:00Z");
+        PortalSessionEntity entity = new PortalSessionEntity();
+        entity.setAccessToken("token-3");
+        entity.setExpiresAt(now.minusSeconds(10));
 
-        service.register("authadmin", "sess-1", "token-1", base);
-        service.register("authadmin", "sess-2", "token-2", base.plusSeconds(1));
+        when(sessionRepository.findByAccessToken("token-3")).thenReturn(Optional.of(entity));
 
-        ValidationResult oldToken = service.touch("token-1", base.plusSeconds(2));
-        ValidationResult newToken = service.touch("token-2", base.plusSeconds(3));
+        ValidationResult result = service.touch("token-3", now);
 
-        assertThat(oldToken).isEqualTo(ValidationResult.CONCURRENT);
-        assertThat(newToken).isEqualTo(ValidationResult.ACTIVE);
+        assertThat(result).isEqualTo(ValidationResult.EXPIRED);
+        ArgumentCaptor<PortalSessionEntity> captor = ArgumentCaptor.forClass(PortalSessionEntity.class);
+        verify(sessionRepository).save(captor.capture());
+        PortalSessionEntity saved = captor.getValue();
+        assertThat(saved.getRevokedAt()).isEqualTo(now);
+        assertThat(saved.getRevokedReason()).isEqualTo(PortalSessionCloseReason.EXPIRED);
     }
 
     @Test
-    void registerWithExpiredReasonDoesNotReportConcurrent() {
-        PortalSessionActivityService service = new PortalSessionActivityService(15);
-        Instant base = Instant.now();
+    void invalidateSetsRevokedReason() {
+        PortalSessionEntity entity = new PortalSessionEntity();
+        entity.setAccessToken("token-4");
 
-        service.register("portaluser", "sess-1", "token-1", base);
-        service.register("portaluser", "sess-2", "token-2", base.plusSeconds(1), ValidationResult.EXPIRED);
+        when(sessionRepository.findByAccessToken("token-4")).thenReturn(Optional.of(entity));
 
-        ValidationResult oldToken = service.touch("token-1", base.plusSeconds(2));
-        ValidationResult newToken = service.touch("token-2", base.plusSeconds(3));
+        service.invalidate("token-4", ValidationResult.CONCURRENT);
 
-        assertThat(oldToken).isEqualTo(ValidationResult.EXPIRED);
-        assertThat(newToken).isEqualTo(ValidationResult.ACTIVE);
+        ArgumentCaptor<PortalSessionEntity> captor = ArgumentCaptor.forClass(PortalSessionEntity.class);
+        verify(sessionRepository).save(captor.capture());
+        PortalSessionEntity saved = captor.getValue();
+        assertThat(saved.getRevokedReason()).isEqualTo(PortalSessionCloseReason.CONCURRENT);
+        assertThat(saved.getRevokedAt()).isNotNull();
     }
 }

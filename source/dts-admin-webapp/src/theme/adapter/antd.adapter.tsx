@@ -31,9 +31,9 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 		colorBgElevated: colorTokens.background.default,
 
 		wireframe: false,
-    fontFamily: fontFamily,
-    // Align with global 0.99 scale when using legacy default 14
-    fontSize: (fontSize === Number(typographyTokens.fontSize.sm) ? Math.round(16 * 0.99) : fontSize),
+		fontFamily: fontFamily,
+		// Align with global 0.99 scale when using legacy default 14
+		fontSize: fontSize === Number(typographyTokens.fontSize.sm) ? Math.round(16 * 0.99) : fontSize,
 
 		borderRadiusSM: removePx(baseThemeTokens.borderRadius.sm),
 		borderRadius: removePx(baseThemeTokens.borderRadius.default),

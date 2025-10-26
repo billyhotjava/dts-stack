@@ -2,6 +2,6 @@
 // 如需启用，请实现组件并接入 Keycloak 用户服务。
 
 export default function ResetPasswordModal() {
-  return null;
+	return null;
 }
 export {};

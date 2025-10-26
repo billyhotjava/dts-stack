@@ -8,11 +8,11 @@ export const POSITION_SUGGESTIONS = ["所长", "副所长", "财务主管", "部
 // Reserve custom user attributes that should not appear in the generic attributes list
 // Include dept_code so it’s treated as a system field (mapped from Keycloak group dts_org_id)
 export const CUSTOM_USER_ATTRIBUTE_KEYS = [
-  "personnel_security_level",
-  "department",
-  // 使用 Keycloak 标准/常见命名作为联系方式字段
-  "phone",
-  "dept_code",
+	"personnel_security_level",
+	"department",
+	// 使用 Keycloak 标准/常见命名作为联系方式字段
+	"phone",
+	"dept_code",
 ] as const;
 
 export const CUSTOM_USER_ATTRIBUTE_KEY_SET = new Set<string>(CUSTOM_USER_ATTRIBUTE_KEYS);

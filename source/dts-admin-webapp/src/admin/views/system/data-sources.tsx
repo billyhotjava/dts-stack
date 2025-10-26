@@ -185,17 +185,18 @@ export default function AdminDataSourcesView() {
 	const lastUpdatedDisplay = features?.lastUpdatedAt ? new Date(features.lastUpdatedAt).toLocaleString() : undefined;
 	let moduleStatuses: ModuleStatus[] = features?.moduleStatuses ?? [];
 	const integrationStatus = features?.integrationStatus;
-	const lastSyncedDisplay = integrationStatus?.lastSyncAt ? new Date(integrationStatus.lastSyncAt).toLocaleString() : undefined;
+	const lastSyncedDisplay = integrationStatus?.lastSyncAt
+		? new Date(integrationStatus.lastSyncAt).toLocaleString()
+		: undefined;
 	const integrationActions = integrationStatus?.actions?.length ? integrationStatus.actions.join("，") : undefined;
 
 	// Derive a transient SYNCING state for the catalog module
 	const datasetCount = integrationStatus?.catalogDatasetCount ?? 0;
-	const showSyncing = (features?.hasActiveInceptor ?? false) && datasetCount === 0 && (features?.syncInProgress || featurePolls > 0);
+	const showSyncing =
+		(features?.hasActiveInceptor ?? false) && datasetCount === 0 && (features?.syncInProgress || featurePolls > 0);
 	if (showSyncing && moduleStatuses.length > 0) {
 		moduleStatuses = moduleStatuses.map((m) =>
-			m.module === "catalog"
-				? { ...m, status: "SYNCING", message: m.message || "首次加载，正在同步 Hive 元数据…" }
-				: m,
+			m.module === "catalog" ? { ...m, status: "SYNCING", message: m.message || "首次加载，正在同步 Hive 元数据…" } : m,
 		);
 	}
 
@@ -790,9 +791,9 @@ export default function AdminDataSourcesView() {
 							<CollapsibleContent>
 								<CardContent className="space-y-4">
 									<div className="grid gap-4 md:grid-cols-2">
-								<FormField
-									control={form.control}
-									name="proxyUser"
+										<FormField
+											control={form.control}
+											name="proxyUser"
 											render={({ field }) => (
 												<FormItem>
 													<FormLabel>代理用户（可选）</FormLabel>
@@ -822,8 +823,8 @@ export default function AdminDataSourcesView() {
 								render={({ field }) => (
 									<FormItem>
 										<FormLabel>验证 SQL</FormLabel>
-											<FormControl>
-												<Input {...field} placeholder="SELECT 1" readOnly />
+										<FormControl>
+											<Input {...field} placeholder="SELECT 1" readOnly />
 										</FormControl>
 									</FormItem>
 								)}
@@ -833,7 +834,8 @@ export default function AdminDataSourcesView() {
 								<Alert>
 									<AlertTitle>当前已绑定 Inceptor</AlertTitle>
 									<AlertDescription className="text-xs text-muted-foreground">
-										平台仅维护一个 Inceptor 数据库连接。再次“测试并覆盖”会复用并更新现有配置，如需全新连接请先删除列表中的数据源。
+										平台仅维护一个 Inceptor
+										数据库连接。再次“测试并覆盖”会复用并更新现有配置，如需全新连接请先删除列表中的数据源。
 									</AlertDescription>
 								</Alert>
 							)}
@@ -898,10 +900,7 @@ export default function AdminDataSourcesView() {
 							onClick={handleRegistryRefresh}
 							disabled={loadingFeatures || refreshing}
 						>
-							<Icon
-								icon="solar:refresh-bold"
-								className={cn("mr-1 h-4 w-4", refreshing ? "animate-spin" : "")}
-							/>
+							<Icon icon="solar:refresh-bold" className={cn("mr-1 h-4 w-4", refreshing ? "animate-spin" : "")} />
 							{refreshing ? "同步中…" : "重新同步"}
 						</Button>
 					</div>
@@ -915,7 +914,8 @@ export default function AdminDataSourcesView() {
 					</div>
 					<div className="space-y-1 text-xs text-muted-foreground">
 						<p>
-							默认 JDBC：{features?.defaultJdbcUrl ? (
+							默认 JDBC：
+							{features?.defaultJdbcUrl ? (
 								<span className="font-mono text-[11px]">{features.defaultJdbcUrl}</span>
 							) : (
 								<span>未配置</span>
@@ -951,7 +951,9 @@ export default function AdminDataSourcesView() {
 											)}
 										</div>
 										<Badge
-											variant={item.status === "READY" ? "default" : item.status === "SYNCING" ? "secondary" : "destructive"}
+											variant={
+												item.status === "READY" ? "default" : item.status === "SYNCING" ? "secondary" : "destructive"
+											}
 										>
 											{item.status}
 										</Badge>
@@ -998,7 +1000,9 @@ export default function AdminDataSourcesView() {
 											<td className="px-3 py-2 font-medium">{item.name}</td>
 											<td className="px-3 py-2">
 												<div className="space-y-1">
-													<Badge variant={item.status === "ACTIVE" ? "default" : "secondary"}>{item.status ?? "未知"}</Badge>
+													<Badge variant={item.status === "ACTIVE" ? "default" : "secondary"}>
+														{item.status ?? "未知"}
+													</Badge>
 													<div className="text-[10px] text-muted-foreground">
 														{item.lastVerifiedAt ? new Date(item.lastVerifiedAt).toLocaleString() : "-"}
 													</div>
@@ -1047,9 +1051,7 @@ export default function AdminDataSourcesView() {
 								</tbody>
 							</table>
 						</div>
-						<p className="text-xs text-muted-foreground">
-							提示：编辑时需重新填写密码或密钥，留空将清除既有敏感配置。
-						</p>
+						<p className="text-xs text-muted-foreground">提示：编辑时需重新填写密码或密钥，留空将清除既有敏感配置。</p>
 					</CardContent>
 				</Card>
 

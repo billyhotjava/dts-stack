@@ -1,11 +1,12 @@
 import { Star } from "lucide-react";
-import { Navigate } from "react-router";
+import { Navigate, useSearchParams } from "react-router";
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
 import LocalePicker from "@/components/locale-picker";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import SettingButton from "@/layouts/components/setting-button";
 import { useUserToken } from "@/store/userStore";
+import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import LoginForm from "./login-form";
 import { LoginProvider } from "./providers/login-provider";
 import RegisterForm from "./register-form";
@@ -13,10 +14,27 @@ import ResetForm from "./reset-form";
 
 function LoginPage() {
 	const token = useUserToken();
+	const [searchParams] = useSearchParams();
 	const bilingual = useBilingualText();
 
 	if (token.accessToken) {
 		return <Navigate to={GLOBAL_CONFIG.defaultRoute} replace />;
+	}
+
+	const reason = searchParams.get("reason");
+	let sessionMessage: string | null = null;
+	switch (reason) {
+		case "concurrent-login":
+			sessionMessage = "检测到该账号已在其他浏览器登录，当前会话已退出，请重新登录。";
+			break;
+		case "session-expired":
+			sessionMessage = "会话已过期，请重新登录以继续使用系统。";
+			break;
+		case "signed-out":
+			sessionMessage = "您已退出登录，如需继续使用请重新登录。";
+			break;
+		default:
+			sessionMessage = null;
 	}
 
 	const brandLabel = bilingual("sys.login.brandName");
@@ -33,6 +51,12 @@ function LoginPage() {
 				</div>
 				<div className="flex flex-1 items-center justify-center">
 					<div className="w-full max-w-xs">
+						{sessionMessage ? (
+							<Alert variant="destructive" className="mb-4">
+								<AlertTitle>安全提醒</AlertTitle>
+								<AlertDescription>{sessionMessage}</AlertDescription>
+							</Alert>
+						) : null}
 						<LoginProvider>
 							<LoginForm />
 							<RegisterForm />

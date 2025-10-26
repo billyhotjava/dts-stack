@@ -25,11 +25,6 @@ import { toast } from "sonner";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { isKeycloakBuiltInRole } from "@/constants/keycloak-roles";
 
-const SCOPE_LABELS: Record<"DEPARTMENT" | "INSTITUTE", string> = {
-    DEPARTMENT: "部门（含子部门）",
-    INSTITUTE: "研究所共享区",
-};
-
 // NOTE: Any previously declared constants used only in commented UI
 // blocks have been removed to satisfy TypeScript noUnusedLocals during
 // production builds.
@@ -304,30 +299,11 @@ export default function RoleManagementView() {
                 },
             },
             {
-                title: "作用域",
-                dataIndex: "scope",
-                key: "scope",
-                width: 140,
-                onCell: () => ({ style: { verticalAlign: "middle", whiteSpace: "nowrap" } }),
-                render: (_scope: "DEPARTMENT" | "INSTITUTE" | undefined, record) => {
-                    const scope = record.scope;
-                    const zone = record.zone;
-                    if (!scope) return <Text variant="body3" className="text-muted-foreground">未设置</Text>;
-                    const label = SCOPE_LABELS[scope];
-                    const zoneLabel = zone ? ` ${zone}` : "";
-                    return <span>{label}{zoneLabel}</span>;
-                },
-            },
-            {
                 title: "可见上限",
                 key: "visibilityMax",
                 width: 160,
                 onCell: () => ({ style: { verticalAlign: "middle" } }),
-                render: (_: any, record) => {
-                    const scopeHint = record.scope === "DEPARTMENT" ? "不高于部门最大密级" : record.scope === "INSTITUTE" ? "不高于研究所最大密级" : "";
-                    const text = scopeHint ? `随人员密级，且${scopeHint}` : "随人员密级与组织策略";
-                    return <Text variant="body3" className="text-muted-foreground">{text}</Text>;
-                },
+                render: () => <Text variant="body3" className="text-muted-foreground">随人员密级</Text>,
             },
             {
                 title: "描述",
@@ -458,7 +434,6 @@ export default function RoleManagementView() {
 
     const expandedRowRender = useCallback(
         (record: RoleRow) => {
-            const scopeLabel = record.scope ? SCOPE_LABELS[record.scope] : "未设置";
             const members = record.assignments || [];
             return (
                 <div className="grid gap-4 border-t border-muted pt-4 text-sm md:grid-cols-3">
@@ -468,7 +443,6 @@ export default function RoleManagementView() {
                         </Text>
                         <div className="space-y-1">
                             <div>编码：{record.code || record.canonical}</div>
-                            <div>作用域：{scopeLabel}</div>
                             <div>描述：{record.description || "未填写"}</div>
                             <div>操作权限：系统默认（读取 / 写入 / 导出）</div>
                         </div>

@@ -52,8 +52,6 @@ export const STATUS_OPTIONS: { value: DataStandardStatus; label: string }[] = [
 export const statusLabel = (status: DataStandardStatus) =>
     STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
 
-export const DOMAIN_OPTIONS = ["主数据域", "共享域", "核心域", "分析域"];
-
 export const toTagList = (input: string): string[] =>
     input
         .split(",")

@@ -2,9 +2,8 @@ package com.yuzhi.dts.admin.web.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.security.SecurityUtils;
-import com.yuzhi.dts.admin.security.session.SessionControlService;
-import com.yuzhi.dts.admin.security.session.SessionControlService.ValidationResult;
-import com.yuzhi.dts.admin.security.session.SessionKeyGenerator;
+import com.yuzhi.dts.admin.security.session.AdminSessionRegistry;
+import com.yuzhi.dts.admin.security.session.AdminSessionRegistry.ValidationResult;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -25,6 +24,7 @@ import org.springframework.security.oauth2.server.resource.authentication.Bearer
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.util.StringUtils;
 
 @Component
 public class SessionInactivityFilter extends OncePerRequestFilter {
@@ -32,11 +32,11 @@ public class SessionInactivityFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(SessionInactivityFilter.class);
 
     private final ObjectMapper objectMapper;
-    private final SessionControlService sessionControlService;
+    private final AdminSessionRegistry sessionRegistry;
 
-    public SessionInactivityFilter(ObjectMapper objectMapper, SessionControlService sessionControlService) {
+    public SessionInactivityFilter(ObjectMapper objectMapper, AdminSessionRegistry sessionRegistry) {
         this.objectMapper = objectMapper;
-        this.sessionControlService = sessionControlService;
+        this.sessionRegistry = sessionRegistry;
     }
 
     @Override
@@ -59,16 +59,14 @@ public class SessionInactivityFilter extends OncePerRequestFilter {
 
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         String tokenValue = extractTokenValue(authHeader);
-        String tokenId = extractTokenId(authentication);
-        String sessionKey = SessionKeyGenerator.fromToken(tokenId, tokenValue);
-        if (sessionKey == null) {
+        if (!StringUtils.hasText(tokenValue)) {
             filterChain.doFilter(request, response);
             return;
         }
 
         String username = SecurityUtils.getCurrentUserLogin().orElse(null);
         String sessionState = extractSessionState(authentication);
-        ValidationResult result = sessionControlService.touch(username, sessionState, sessionKey, Instant.now());
+        ValidationResult result = sessionRegistry.validate(tokenValue, sessionState, username);
         switch (result) {
             case ACTIVE -> {
                 filterChain.doFilter(request, response);
@@ -84,6 +82,16 @@ public class SessionInactivityFilter extends OncePerRequestFilter {
                 emitResponse(response, HttpStatus.UNAUTHORIZED, "该账号已在其他位置登录，当前会话已失效", "X-Session-Conflict");
                 return;
             }
+            case LOGOUT -> {
+                log.debug("Session has been terminated for {}", username);
+                emitResponse(response, HttpStatus.UNAUTHORIZED, "会话已注销，请重新登录", "X-Session-Expired");
+                return;
+            }
+            default -> {
+                log.debug("Unknown session state for {}", username);
+                emitResponse(response, HttpStatus.UNAUTHORIZED, "会话状态异常，请重新登录", "X-Session-Expired");
+                return;
+            }
         }
     }
 
@@ -96,19 +104,6 @@ public class SessionInactivityFilter extends OncePerRequestFilter {
             return header.trim();
         }
         return header.substring(idx + 1).trim();
-    }
-
-    private String extractTokenId(Authentication authentication) {
-        if (authentication instanceof JwtAuthenticationToken jwtAuth) {
-            return jwtAuth.getToken().getId();
-        }
-        if (authentication instanceof BearerTokenAuthentication bearerAuth) {
-            Object jti = Optional.ofNullable(bearerAuth.getTokenAttributes()).map(attrs -> attrs.get("jti")).orElse(null);
-            if (jti instanceof String str && !str.isBlank()) {
-                return str;
-            }
-        }
-        return null;
     }
 
     private String extractSessionState(Authentication authentication) {

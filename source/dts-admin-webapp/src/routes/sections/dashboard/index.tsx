@@ -18,7 +18,11 @@ const getRoutes = (): RouteObject[] => {
 };
 
 export const resolveHomePathForRoles = (roles: string[]): string => {
-	const normalized = (roles || []).map((role) => String(role || "").trim().toUpperCase());
+	const normalized = (roles || []).map((role) =>
+		String(role || "")
+			.trim()
+			.toUpperCase(),
+	);
 	const hasRole = (needle: string) => normalized.includes(needle);
 	if (
 		hasRole("AUDITADMIN") ||
@@ -44,7 +48,13 @@ function DashboardIndexRedirect() {
 	const userInfo = useUserInfo();
 	const normalizedRoles = useMemo(() => {
 		const raw = Array.isArray(userInfo?.roles) ? userInfo?.roles : [];
-		return raw.map((role) => String(role || "").trim().toUpperCase()).filter(Boolean);
+		return raw
+			.map((role) =>
+				String(role || "")
+					.trim()
+					.toUpperCase(),
+			)
+			.filter(Boolean);
 	}, [userInfo?.roles]);
 
 	const fallbackPath = useMemo(() => resolveHomePathForRoles(normalizedRoles), [normalizedRoles]);

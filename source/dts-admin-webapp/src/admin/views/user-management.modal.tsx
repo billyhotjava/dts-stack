@@ -17,12 +17,7 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
-import {
-	PERSON_SECURITY_LEVELS,
-	isApplicationAdminRole,
-	isDataRole,
-	isGovernanceRole,
-} from "@/constants/governance";
+import { PERSON_SECURITY_LEVELS, isApplicationAdminRole, isDataRole, isGovernanceRole } from "@/constants/governance";
 import { isKeycloakBuiltInRole, isReservedBusinessRoleName, shouldHideRole } from "@/constants/keycloak-roles";
 import { GLOBAL_CONFIG } from "@/global-config";
 
@@ -35,8 +30,8 @@ type OrgTreeOption = {
 };
 
 const normalizeGroupPath = (path: string | undefined): string => {
-	if (!path) return '';
-	return path.startsWith('/') ? path : `/${path}`;
+	if (!path) return "";
+	return path.startsWith("/") ? path : `/${path}`;
 };
 
 const areGroupPathsEqual = (current: string[], original: string[]): boolean => {
@@ -52,19 +47,16 @@ const buildOrgOptions = (
 	index: Record<string, OrganizationNode>,
 ): OrgTreeOption[] => {
 	return nodes.map((node) => {
-		const segment = node.name ?? '';
+		const segment = node.name ?? "";
 		const nextPath = segment ? [...ancestors, segment] : [...ancestors];
-		const groupPath = normalizeGroupPath(node.groupPath ?? `/${nextPath.join('/')}`);
+		const groupPath = normalizeGroupPath(node.groupPath ?? `/${nextPath.join("/")}`);
 		index[groupPath] = node;
 		return {
 			value: groupPath,
 			title: segment || groupPath,
 			key: groupPath,
 			selectable: Boolean(groupPath),
-			children:
-				node.children && node.children.length > 0
-					? buildOrgOptions(node.children, nextPath, index)
-					: undefined,
+			children: node.children && node.children.length > 0 ? buildOrgOptions(node.children, nextPath, index) : undefined,
 		};
 	});
 };
@@ -120,8 +112,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [formState, setFormState] = useState<FormState>(() => createEmptyFormState());
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string>("");
-    const [roles, setRoles] = useState<KeycloakRole[]>([]);
-    const [roleNameMap, setRoleNameMap] = useState<Record<string, string>>({});
+	const [roles, setRoles] = useState<KeycloakRole[]>([]);
+	const [roleNameMap, setRoleNameMap] = useState<Record<string, string>>({});
 	const [userRoles, setUserRoles] = useState<KeycloakRole[]>([]);
 	const [roleError, setRoleError] = useState<string>("");
 	const [personLevel, setPersonLevel] = useState<string>("GENERAL");
@@ -144,8 +136,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			setOrgOptions(options);
 			setOrgIndex(index);
 		} catch (error: any) {
-			console.error('Error loading organizations:', error);
-			toast.error(`加载组织结构失败: ${error?.message || '未知错误'}`);
+			console.error("Error loading organizations:", error);
+			toast.error(`加载组织结构失败: ${error?.message || "未知错误"}`);
 		} finally {
 			setOrgLoading(false);
 		}
@@ -224,17 +216,13 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		});
 	};
 
-
 	const loadRoles = useCallback(async () => {
 		try {
 			// Fetch from both sources: Keycloak realm roles + Admin catalog
-			const [kc, admin] = await Promise.allSettled([
-				KeycloakRoleService.getAllRealmRoles(),
-				adminApi.getAdminRoles(),
-			]);
-            const list: KeycloakRole[] = [];
-            const byName = new Map<string, KeycloakRole>();
-            const nameMap: Record<string, string> = {};
+			const [kc, admin] = await Promise.allSettled([KeycloakRoleService.getAllRealmRoles(), adminApi.getAdminRoles()]);
+			const list: KeycloakRole[] = [];
+			const byName = new Map<string, KeycloakRole>();
+			const nameMap: Record<string, string> = {};
 			const add = (r?: KeycloakRole) => {
 				if (!r || !r.name) return;
 				const key = r.name.trim().toUpperCase();
@@ -246,25 +234,25 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			if (kc.status === "fulfilled" && Array.isArray(kc.value)) {
 				kc.value.forEach((r) => add(r));
 			}
-            if (admin.status === "fulfilled" && Array.isArray(admin.value)) {
-                // Map AdminRoleDetail -> KeycloakRole: use canonical code for .name; keep displayName in map
-                (admin.value as any[]).forEach((ar: any) => {
-                    const code = normalizeRoleCode(ar?.roleId || ar?.code || ar?.name);
-                    const display = (ar?.nameZh || ar?.displayName || ar?.name || code) as string;
-                    if (!code) return;
-                    nameMap[code] = display;
-                    add({ name: code, description: ar?.description } as KeycloakRole);
-                });
-            }
-            setRoles(list);
-            setRoleNameMap(nameMap);
+			if (admin.status === "fulfilled" && Array.isArray(admin.value)) {
+				// Map AdminRoleDetail -> KeycloakRole: use canonical code for .name; keep displayName in map
+				(admin.value as any[]).forEach((ar: any) => {
+					const code = normalizeRoleCode(ar?.roleId || ar?.code || ar?.name);
+					const display = (ar?.nameZh || ar?.displayName || ar?.name || code) as string;
+					if (!code) return;
+					nameMap[code] = display;
+					add({ name: code, description: ar?.description } as KeycloakRole);
+				});
+			}
+			setRoles(list);
+			setRoleNameMap(nameMap);
 		} catch (err) {
 			setRoleError("加载角色列表失败");
 			console.error("Error loading roles:", err);
 		}
 	}, []);
 
-    function normalizeRoleCode(value?: string): string {
+	function normalizeRoleCode(value?: string): string {
 		if (!value) return "";
 		let upper = String(value).trim().toUpperCase();
 		if (upper.startsWith("ROLE_")) {
@@ -273,57 +261,64 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			upper = upper.substring(5);
 		}
 		upper = upper.replace(/[^A-Z0-9_]/g, "_").replace(/_+/g, "_");
-        return upper;
-    }
+		return upper;
+	}
 
-    const displayRoleName = (name?: string): string => {
-        if (!name) return "";
-        const key = name.trim().toUpperCase();
-        // 优先使用从 admin 目录得到的中文名
-        return roleNameMap[key] || name;
-    };
+	const displayRoleName = (name?: string): string => {
+		if (!name) return "";
+		const key = name.trim().toUpperCase();
+		// 优先使用从 admin 目录得到的中文名
+		return roleNameMap[key] || name;
+	};
 
-    const loadUserRoles = useCallback(async (userId: string) => {
-        try {
-            const userRolesData = await KeycloakUserService.getUserRoles(userId);
-            // 合并 DB-authority 模式下的角色分配（data roles）
-            const username = user?.username || "";
-            let assignmentRoles: KeycloakRole[] = [];
-            if (username) {
-                try {
-                    const all = await adminApi.getRoleAssignments();
-                    const mine = (all || []).filter((it: any) => (it?.username || "").toString().toLowerCase() === username.toLowerCase());
-                    assignmentRoles = mine.map((it: any) => ({ name: (it?.role || "").toString().trim().toUpperCase() })) as KeycloakRole[];
-                } catch (e) {
-                    // ignore
-                }
-            }
-            let merged: KeycloakRole[] = [];
-            const seen = new Set<string>();
-            const push = (r?: KeycloakRole) => {
-                if (!r || !r.name) return;
-                const key = r.name.trim().toUpperCase();
-                if (seen.has(key)) return;
-                seen.add(key);
-                merged.push(r);
-            };
-            (userRolesData || []).forEach(push);
-            (assignmentRoles || []).forEach(push);
-            // Hide Keycloak 内置/默认角色
-            merged = merged.filter((r) => {
-                const name = (r?.name || "").toString();
-                if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
-                if (GLOBAL_CONFIG.hideBuiltinRoles && shouldHideRole(r)) return false;
-                return true;
-            });
-            setUserRoles(merged);
-            return merged;
-        } catch (err) {
-            setRoleError("加载用户角色失败");
-            console.error("Error loading user roles:", err);
-            return [];
-        }
-    }, [user?.username]);
+	const loadUserRoles = useCallback(
+		async (userId: string) => {
+			try {
+				const userRolesData = await KeycloakUserService.getUserRoles(userId);
+				// 合并 DB-authority 模式下的角色分配（data roles）
+				const username = user?.username || "";
+				let assignmentRoles: KeycloakRole[] = [];
+				if (username) {
+					try {
+						const all = await adminApi.getRoleAssignments();
+						const mine = (all || []).filter(
+							(it: any) => (it?.username || "").toString().toLowerCase() === username.toLowerCase(),
+						);
+						assignmentRoles = mine.map((it: any) => ({
+							name: (it?.role || "").toString().trim().toUpperCase(),
+						})) as KeycloakRole[];
+					} catch (e) {
+						// ignore
+					}
+				}
+				let merged: KeycloakRole[] = [];
+				const seen = new Set<string>();
+				const push = (r?: KeycloakRole) => {
+					if (!r || !r.name) return;
+					const key = r.name.trim().toUpperCase();
+					if (seen.has(key)) return;
+					seen.add(key);
+					merged.push(r);
+				};
+				(userRolesData || []).forEach(push);
+				(assignmentRoles || []).forEach(push);
+				// Hide Keycloak 内置/默认角色
+				merged = merged.filter((r) => {
+					const name = (r?.name || "").toString();
+					if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
+					if (GLOBAL_CONFIG.hideBuiltinRoles && shouldHideRole(r)) return false;
+					return true;
+				});
+				setUserRoles(merged);
+				return merged;
+			} catch (err) {
+				setRoleError("加载用户角色失败");
+				console.error("Error loading user roles:", err);
+				return [];
+			}
+		},
+		[user?.username],
+	);
 
 	const handlePersonLevelChange = useCallback(
 		(level: string) => {
@@ -336,22 +331,22 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		[normalizeAttributesForState],
 	);
 
-    const handleOrganizationChange = (value: string | string[] | null) => {
-        const nextValue = Array.isArray(value) ? value[0] : value;
-        if (!nextValue) {
-            setSelectedGroupPaths([]);
-            // Clear dept_code when no organization is selected
-            updateSingleValueAttribute("dept_code", "");
-            return;
-        }
-        const normalized = normalizeGroupPath(nextValue);
-        setSelectedGroupPaths([normalized]);
-        const node = orgIndex[normalized];
-        // Persist selected organization id as dept_code (aligns with Keycloak group's dts_org_id)
-        if (node?.id != null) {
-            updateSingleValueAttribute("dept_code", String(node.id));
-        }
-    };
+	const handleOrganizationChange = (value: string | string[] | null) => {
+		const nextValue = Array.isArray(value) ? value[0] : value;
+		if (!nextValue) {
+			setSelectedGroupPaths([]);
+			// Clear dept_code when no organization is selected
+			updateSingleValueAttribute("dept_code", "");
+			return;
+		}
+		const normalized = normalizeGroupPath(nextValue);
+		setSelectedGroupPaths([normalized]);
+		const node = orgIndex[normalized];
+		// Persist selected organization id as dept_code (aligns with Keycloak group's dts_org_id)
+		if (node?.id != null) {
+			updateSingleValueAttribute("dept_code", String(node.id));
+		}
+	};
 
 	useEffect(() => {
 		if (!open) {
@@ -369,35 +364,40 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			const resolvedLevel = PERSON_SECURITY_LEVELS.some((option) => option.value === candidateLevel)
 				? candidateLevel
 				: "NON_SECRET";
-    let existingGroups = Array.isArray(user.groups)
-                    ? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
-                    : [];
-            // Fallback: if no groups returned but dept_code attribute exists, match by organization id (dts_org_id)
-            if (existingGroups.length === 0) {
-                const deptCode = (user.attributes?.dept_code?.[0] || '').trim();
-                if (deptCode && Object.keys(orgIndex).length > 0) {
-                    let matchedPath: string | undefined;
-                    for (const [path, node] of Object.entries(orgIndex)) {
-                        if (String(node?.id ?? '') === deptCode) { matchedPath = path; break; }
-                    }
-                    // Last resort: try matching by leaf segment for legacy data
-                    if (!matchedPath) {
-                        matchedPath = Object.keys(orgIndex).find((p) => p.endsWith(`/${deptCode}`) || p.split('/').includes(deptCode));
-                    }
-                    if (matchedPath) {
-                        existingGroups = [normalizeGroupPath(matchedPath)];
-                    }
-                }
-            }
-            const normalizedAttributes = normalizeAttributesForState(user.attributes || {}, resolvedLevel);
-            const initialFormData: FormData = {
-                username: user.username || "",
-                fullName: (user.fullName || user.firstName || user.lastName || user.attributes?.fullName?.[0] || "").trim(),
-                email: user.email || "",
-                enabled: user.enabled ?? true,
-                emailVerified: user.emailVerified ?? false,
-                attributes: normalizedAttributes,
-            };
+			let existingGroups = Array.isArray(user.groups)
+				? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
+				: [];
+			// Fallback: if no groups returned but dept_code attribute exists, match by organization id (dts_org_id)
+			if (existingGroups.length === 0) {
+				const deptCode = (user.attributes?.dept_code?.[0] || "").trim();
+				if (deptCode && Object.keys(orgIndex).length > 0) {
+					let matchedPath: string | undefined;
+					for (const [path, node] of Object.entries(orgIndex)) {
+						if (String(node?.id ?? "") === deptCode) {
+							matchedPath = path;
+							break;
+						}
+					}
+					// Last resort: try matching by leaf segment for legacy data
+					if (!matchedPath) {
+						matchedPath = Object.keys(orgIndex).find(
+							(p) => p.endsWith(`/${deptCode}`) || p.split("/").includes(deptCode),
+						);
+					}
+					if (matchedPath) {
+						existingGroups = [normalizeGroupPath(matchedPath)];
+					}
+				}
+			}
+			const normalizedAttributes = normalizeAttributesForState(user.attributes || {}, resolvedLevel);
+			const initialFormData: FormData = {
+				username: user.username || "",
+				fullName: (user.fullName || user.firstName || user.lastName || user.attributes?.fullName?.[0] || "").trim(),
+				email: user.email || "",
+				enabled: user.enabled ?? true,
+				emailVerified: user.emailVerified ?? false,
+				attributes: normalizedAttributes,
+			};
 
 			setPersonLevel(resolvedLevel);
 			setUserRoles([]);
@@ -421,23 +421,23 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 					}));
 				});
 			}
-    } else {
-        // 创建用户时默认不允许选择“非密”，默认值调整为“一般”
-        const defaultLevel = "GENERAL";
-        const baseAttributes = normalizeAttributesForState({}, defaultLevel);
-        const emptyData: FormData = {
-            username: "",
-            fullName: "",
-            email: "",
+		} else {
+			// 创建用户时默认不允许选择“非密”，默认值调整为“一般”
+			const defaultLevel = "GENERAL";
+			const baseAttributes = normalizeAttributesForState({}, defaultLevel);
+			const emptyData: FormData = {
+				username: "",
+				fullName: "",
+				email: "",
 				enabled: true,
 				emailVerified: false,
 				attributes: baseAttributes,
 			};
 
-        setPersonLevel(defaultLevel);
-        setUserRoles([]);
-        setFormData(emptyData);
-        setSelectedGroupPaths([]);
+			setPersonLevel(defaultLevel);
+			setUserRoles([]);
+			setFormData(emptyData);
+			setSelectedGroupPaths([]);
 			setFormState({
 				originalData: {
 					...emptyData,
@@ -453,35 +453,40 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		setRoleError("");
 	}, [open, mode, user, loadUserRoles, normalizeAttributesForState]);
 
-    // Ensure organization selection is pre-filled after org tree loads
-    useEffect(() => {
-        if (!open || mode !== "edit" || !user) return;
-        if (selectedGroupPaths.length > 0) return;
-        // Prefer groups from user payload
-        let existingGroups = Array.isArray(user.groups)
-            ? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
-            : [];
-        if (existingGroups.length > 0) {
-            setSelectedGroupPaths(existingGroups);
-            return;
-        }
-        // Fallback: map by dept_code -> dts_org_id once orgIndex has data
-        if (Object.keys(orgIndex).length > 0) {
-            const deptCode = (user.attributes?.dept_code?.[0] || '').trim();
-            if (deptCode) {
-                let matchedPath: string | undefined;
-                for (const [path, node] of Object.entries(orgIndex)) {
-                    if (String(node?.id ?? '') === deptCode) { matchedPath = path; break; }
-                }
-                if (!matchedPath) {
-                    matchedPath = Object.keys(orgIndex).find((p) => p.endsWith(`/${deptCode}`) || p.split('/').includes(deptCode));
-                }
-                if (matchedPath) {
-                    setSelectedGroupPaths([normalizeGroupPath(matchedPath)]);
-                }
-            }
-        }
-    }, [open, mode, user, orgIndex, selectedGroupPaths.length]);
+	// Ensure organization selection is pre-filled after org tree loads
+	useEffect(() => {
+		if (!open || mode !== "edit" || !user) return;
+		if (selectedGroupPaths.length > 0) return;
+		// Prefer groups from user payload
+		let existingGroups = Array.isArray(user.groups)
+			? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
+			: [];
+		if (existingGroups.length > 0) {
+			setSelectedGroupPaths(existingGroups);
+			return;
+		}
+		// Fallback: map by dept_code -> dts_org_id once orgIndex has data
+		if (Object.keys(orgIndex).length > 0) {
+			const deptCode = (user.attributes?.dept_code?.[0] || "").trim();
+			if (deptCode) {
+				let matchedPath: string | undefined;
+				for (const [path, node] of Object.entries(orgIndex)) {
+					if (String(node?.id ?? "") === deptCode) {
+						matchedPath = path;
+						break;
+					}
+				}
+				if (!matchedPath) {
+					matchedPath = Object.keys(orgIndex).find(
+						(p) => p.endsWith(`/${deptCode}`) || p.split("/").includes(deptCode),
+					);
+				}
+				if (matchedPath) {
+					setSelectedGroupPaths([normalizeGroupPath(matchedPath)]);
+				}
+			}
+		}
+	}, [open, mode, user, orgIndex, selectedGroupPaths.length]);
 
 	useEffect(() => {
 		if (!open) {
@@ -492,10 +497,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		loadOrganizations();
 	}, [open, loadRoles, loadOrganizations]);
 
-	const hasUserInfoChanged = (
-		normalizedAttributes?: Record<string, string[]>,
-		groupPaths?: string[],
-	): boolean => {
+	const hasUserInfoChanged = (normalizedAttributes?: Record<string, string[]>, groupPaths?: string[]): boolean => {
 		const { originalData, groupPaths: originalGroupPaths } = formState;
 		const attributesToCompare = normalizedAttributes ?? buildAttributesPayload();
 		const pathsToCompare = groupPaths ?? selectedGroupPaths;
@@ -510,7 +512,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		);
 	};
 
-    const handleSubmit = async () => {
+	const handleSubmit = async () => {
 		const username = formData.username.trim();
 		const fullName = formData.fullName.trim();
 		const email = formData.email.trim();
@@ -525,16 +527,14 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			return;
 		}
 
-        const attributesPayload = buildAttributesPayload();
-        const groupPathsPayload = selectedGroupPaths
-            .map((item) => normalizeGroupPath(item))
-            .filter((item) => item);
+		const attributesPayload = buildAttributesPayload();
+		const groupPathsPayload = selectedGroupPaths.map((item) => normalizeGroupPath(item)).filter((item) => item);
 
-        // 部门必填：创建与编辑均需选择所属组织
-        if (groupPathsPayload.length === 0) {
-            setError("所属组织为必填项，请先选择所属组织");
-            return;
-        }
+		// 部门必填：创建与编辑均需选择所属组织
+		if (groupPathsPayload.length === 0) {
+			setError("所属组织为必填项，请先选择所属组织");
+			return;
+		}
 
 		// 创建用户时人员密级不得为“非密”
 		if (personLevel?.toUpperCase?.() === "NON_SECRET") {
@@ -553,86 +553,102 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		setLoading(true);
 		setError("");
 
-        try {
-            // 恢复使用 服务端 接口，由后端生成审批请求并内嵌 changeRequestId，避免“审批请求不存在”
-            if (mode === "create") {
-                const createData: CreateUserRequest = {
-                    username,
-                    email: email || undefined,
-                    firstName: fullName,
-                    fullName: fullName,
-                    enabled: formData.enabled,
-                    emailVerified: formData.emailVerified,
-                    attributes: attributesPayload,
-                    groups: groupPathsPayload.length > 0 ? groupPathsPayload : undefined,
-                    // 在创建时一并提交选择的角色，由后端生成包含角色分配的审批请求
-                    realmRoles: userRoles.map((r) => r.name).filter(Boolean),
-                    // Persist deptCode as organization id (dts_org_id) to align with Keycloak group attribute
-                    deptCode: (() => { const p = groupPathsPayload[0]; const node = p ? orgIndex[normalizeGroupPath(p)] : undefined; return node ? String(node.id) : (attributesPayload.dept_code?.[0] || undefined); })(),
-                };
+		try {
+			// 恢复使用 服务端 接口，由后端生成审批请求并内嵌 changeRequestId，避免“审批请求不存在”
+			if (mode === "create") {
+				const createData: CreateUserRequest = {
+					username,
+					email: email || undefined,
+					firstName: fullName,
+					fullName: fullName,
+					enabled: formData.enabled,
+					emailVerified: formData.emailVerified,
+					attributes: attributesPayload,
+					groups: groupPathsPayload.length > 0 ? groupPathsPayload : undefined,
+					// 在创建时一并提交选择的角色，由后端生成包含角色分配的审批请求
+					realmRoles: userRoles.map((r) => r.name).filter(Boolean),
+					// Persist deptCode as organization id (dts_org_id) to align with Keycloak group attribute
+					deptCode: (() => {
+						const p = groupPathsPayload[0];
+						const node = p ? orgIndex[normalizeGroupPath(p)] : undefined;
+						return node ? String(node.id) : attributesPayload.dept_code?.[0] || undefined;
+					})(),
+				};
 
-                const response = await KeycloakUserService.createUser(createData);
-                if (response?.message) {
-                    toast.success(response.message);
-                } else {
-                    toast.success("用户创建请求已提交，等待审批");
-                }
-            } else if (mode === "edit" && user?.id) {
-                const emailPayload = email || (formState.originalData.email ? "" : undefined);
+				const response = await KeycloakUserService.createUser(createData);
+				if (response?.message) {
+					toast.success(response.message);
+				} else {
+					toast.success("用户创建请求已提交，等待审批");
+				}
+			} else if (mode === "edit" && user?.id) {
+				const emailPayload = email || (formState.originalData.email ? "" : undefined);
 
-                if (hasUserInfoChanges) {
-                    const updateData: UpdateUserRequest = {
-                        id: user.id,
-                        username,
-                        email: emailPayload,
-                        firstName: fullName,
-                        fullName: fullName,
-                        enabled: formData.enabled,
-                        emailVerified: formData.emailVerified,
-                        attributes: attributesPayload,
-                        groups: groupPathsPayload.length > 0 ? groupPathsPayload : [],
-                        deptCode: (() => { const p = groupPathsPayload[0]; const node = p ? orgIndex[normalizeGroupPath(p)] : undefined; return node ? String(node.id) : (attributesPayload.dept_code?.[0] || undefined); })(),
-                    };
+				if (hasUserInfoChanges) {
+					const updateData: UpdateUserRequest = {
+						id: user.id,
+						username,
+						email: emailPayload,
+						firstName: fullName,
+						fullName: fullName,
+						enabled: formData.enabled,
+						emailVerified: formData.emailVerified,
+						attributes: attributesPayload,
+						groups: groupPathsPayload.length > 0 ? groupPathsPayload : [],
+						deptCode: (() => {
+							const p = groupPathsPayload[0];
+							const node = p ? orgIndex[normalizeGroupPath(p)] : undefined;
+							return node ? String(node.id) : attributesPayload.dept_code?.[0] || undefined;
+						})(),
+					};
 
-                    const response = await KeycloakUserService.updateUser(user.id, updateData);
-                    if (response?.message) {
-                        toast.success(`用户信息更新请求提交成功: ${response.message}`);
-                    } else {
-                        toast.success("用户信息更新请求提交成功");
-                    }
-                }
+					const response = await KeycloakUserService.updateUser(user.id, updateData);
+					if (response?.message) {
+						toast.success(`用户信息更新请求提交成功: ${response.message}`);
+					} else {
+						toast.success("用户信息更新请求提交成功");
+					}
+				}
 
-                if (hasRoleChanges) {
-                    const rolesToAdd = formState.roleChanges.filter((rc) => rc.action === "add").map((rc) => rc.role);
+				if (hasRoleChanges) {
+					const rolesToAdd = formState.roleChanges.filter((rc) => rc.action === "add").map((rc) => rc.role);
 
-                    if (rolesToAdd.length > 0) {
-                        const response = await KeycloakUserService.assignRolesToUser(user.id, rolesToAdd);
-                        if (response?.message) {
-                            toast.success(`角色分配请求提交成功: ${response.message}`);
-                        } else {
-                            toast.success("角色分配请求提交成功");
-                        }
-                    }
+					if (rolesToAdd.length > 0) {
+						const response = await KeycloakUserService.assignRolesToUser(user.id, rolesToAdd);
+						if (response?.message) {
+							toast.success(`角色分配请求提交成功: ${response.message}`);
+						} else {
+							toast.success("角色分配请求提交成功");
+						}
+					}
 
-                    const rolesToRemove = formState.roleChanges.filter((rc) => rc.action === "remove").map((rc) => rc.role);
+					const rolesToRemove = formState.roleChanges.filter((rc) => rc.action === "remove").map((rc) => rc.role);
 
-                    if (rolesToRemove.length > 0) {
-                        const response = await KeycloakUserService.removeRolesFromUser(user.id, rolesToRemove);
-                        if (response?.message) {
-                            toast.success(`角色移除请求提交成功: ${response.message}`);
-                        } else {
-                            toast.success("角色移除请求提交成功");
-                        }
-                    }
-                }
-            }
+					if (rolesToRemove.length > 0) {
+						const response = await KeycloakUserService.removeRolesFromUser(user.id, rolesToRemove);
+						if (response?.message) {
+							toast.success(`角色移除请求提交成功: ${response.message}`);
+						} else {
+							toast.success("角色移除请求提交成功");
+						}
+					}
+				}
+			}
 
-            // 刷新“我的申请”和“审批中心”列表，并联动刷新角色/菜单缓存
-            try { await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests", "mine", "dashboard"] }); } catch {}
-            try { await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests"] }); } catch {}
-            try { await queryClient.invalidateQueries({ queryKey: ["admin", "roles"] }); } catch {}
-            try { await queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] }); } catch {}
-            onSuccess();
+			// 刷新“我的申请”和“审批中心”列表，并联动刷新角色/菜单缓存
+			try {
+				await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests", "mine", "dashboard"] });
+			} catch {}
+			try {
+				await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests"] });
+			} catch {}
+			try {
+				await queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
+			} catch {}
+			try {
+				await queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
+			} catch {}
+			onSuccess();
 		} catch (err: any) {
 			setError(err.message || "操作失败");
 			console.error("Error saving user:", err);
@@ -691,7 +707,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 	};
 
-    const phoneValue = formData.attributes.phone?.[0] ?? "";
+	const phoneValue = formData.attributes.phone?.[0] ?? "";
 	const title = mode === "create" ? "创建用户" : "编辑用户";
 	const canEditUsername = mode === "create";
 
@@ -766,35 +782,35 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									/>
 									<p className="text-xs text-muted-foreground">邮箱用于接收通知，可选填写。</p>
 								</div>
-                        <div className="space-y-2">
-                            <Label htmlFor="department">组织机构 *</Label>
-                            <TreeSelect
-                                id="department"
-                                allowClear
-                                value={selectedGroupPaths[0] ?? undefined}
-                                treeData={orgOptions}
-                                showSearch
-                                treeNodeFilterProp="title"
-                                placeholder="请选择所属组织"
-                                style={{ width: "100%" }}
-                                dropdownStyle={{ maxHeight: 320, overflow: "auto" }}
-                                loading={orgLoading}
-                                treeDefaultExpandAll
-                                getPopupContainer={(triggerNode) => triggerNode.parentElement ?? document.body}
-                                onChange={(value) => handleOrganizationChange(value as string | string[] | null)}
-                                onSelect={(value) => handleOrganizationChange(value as string)}
-                            />
-                            <p className="text-xs text-muted-foreground">必须选择所属组织，平台将依据组织控制数据访问范围。</p>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="phone">联系方式</Label>
-                            <Input
-                                id="phone"
-                                value={phoneValue}
-                                onChange={(e) => updateSingleValueAttribute("phone", e.target.value)}
-                                placeholder="请输入联系方式"
-                            />
-                        </div>
+								<div className="space-y-2">
+									<Label htmlFor="department">组织机构 *</Label>
+									<TreeSelect
+										id="department"
+										allowClear
+										value={selectedGroupPaths[0] ?? undefined}
+										treeData={orgOptions}
+										showSearch
+										treeNodeFilterProp="title"
+										placeholder="请选择所属组织"
+										style={{ width: "100%" }}
+										dropdownStyle={{ maxHeight: 320, overflow: "auto" }}
+										loading={orgLoading}
+										treeDefaultExpandAll
+										getPopupContainer={(triggerNode) => triggerNode.parentElement ?? document.body}
+										onChange={(value) => handleOrganizationChange(value as string | string[] | null)}
+										onSelect={(value) => handleOrganizationChange(value as string)}
+									/>
+									<p className="text-xs text-muted-foreground">必须选择所属组织，平台将依据组织控制数据访问范围。</p>
+								</div>
+								<div className="space-y-2">
+									<Label htmlFor="phone">联系方式</Label>
+									<Input
+										id="phone"
+										value={phoneValue}
+										onChange={(e) => updateSingleValueAttribute("phone", e.target.value)}
+										placeholder="请输入联系方式"
+									/>
+								</div>
 								<div className="space-y-2">
 									<Label>人员密级 *</Label>
 									<Select value={personLevel} onValueChange={handlePersonLevelChange}>
@@ -808,9 +824,9 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 													value={option.value}
 													disabled={option.value === "NON_SECRET"}
 													className={option.value === "NON_SECRET" ? "hidden" : undefined}
-											>
-												{option.label}
-											</SelectItem>
+												>
+													{option.label}
+												</SelectItem>
 											))}
 										</SelectContent>
 									</Select>
@@ -851,74 +867,77 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 						</CardContent>
 					</Card>
 
-
-					{(
+					{
 						// 创建和编辑均展示角色分配区块；
 						// 编辑模式会预加载现有角色，创建模式从空开始供选择
-						mode === "edit" ? true : mode === "create"
-					) && (
-						<Card>
-							<CardHeader>
-								<CardTitle className="text-lg">角色分配</CardTitle>
-							</CardHeader>
-							<CardContent>
-								{roleError && (
-									<Alert variant="destructive" className="mb-4">
-										<AlertDescription>{roleError}</AlertDescription>
-									</Alert>
-								)}
+						(mode === "edit" ? true : mode === "create") && (
+							<Card>
+								<CardHeader>
+									<CardTitle className="text-lg">角色分配</CardTitle>
+								</CardHeader>
+								<CardContent>
+									{roleError && (
+										<Alert variant="destructive" className="mb-4">
+											<AlertDescription>{roleError}</AlertDescription>
+										</Alert>
+									)}
 
-								<div className="space-y-2">
-									<Label>用户角色</Label>
-            <div className="flex flex-wrap gap-2 mb-4">
-                            {userRoles.map((role) => {
-                                const allowRemoval = !isDataRole(role.name) && !isReservedBusinessRoleName(role.name) && !isKeycloakBuiltInRole(role);
-                                        return (
-                                            <Badge key={roleKey(role)} variant={resolveRoleBadgeVariant(role.name)}>
-                                                {displayRoleName(role.name)}
-                                                {allowRemoval && (
-                                                    <Button
-                                                        variant="ghost"
-															size="sm"
-															className="ml-1 h-4 w-4 p-0"
-															onClick={() => handleRoleToggle(role)}
-														>
-															<Icon icon="mdi:close" size={12} />
-														</Button>
-													)}
-												</Badge>
-											);
-										})}
-										{userRoles.length === 0 && <span className="text-muted-foreground">暂无分配角色</span>}
-									</div>
+									<div className="space-y-2">
+										<Label>用户角色</Label>
+										<div className="flex flex-wrap gap-2 mb-4">
+											{userRoles.map((role) => {
+												const allowRemoval =
+													!isDataRole(role.name) &&
+													!isReservedBusinessRoleName(role.name) &&
+													!isKeycloakBuiltInRole(role);
+												return (
+													<Badge key={roleKey(role)} variant={resolveRoleBadgeVariant(role.name)}>
+														{displayRoleName(role.name)}
+														{allowRemoval && (
+															<Button
+																variant="ghost"
+																size="sm"
+																className="ml-1 h-4 w-4 p-0"
+																onClick={() => handleRoleToggle(role)}
+															>
+																<Icon icon="mdi:close" size={12} />
+															</Button>
+														)}
+													</Badge>
+												);
+											})}
+											{userRoles.length === 0 && <span className="text-muted-foreground">暂无分配角色</span>}
+										</div>
 
-									<Label>可用角色</Label>
-									<div className="flex flex-wrap gap-2">
-                            {roles
-                                .filter((role) => !userRoles.some((ur) => roleKey(ur) === roleKey(role)))
-                                .filter((role) => !isDataRole(role.name))
-                                .filter((role) => {
-                                    const name = (role?.name || "").toString();
-                                    if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
-                                    if (GLOBAL_CONFIG.hideBuiltinRoles && shouldHideRole(role)) return false;
-                                    return true;
-                                })
-                                .map((role) => (
-                                            <Badge
-                                                key={roleKey(role)}
-                                                variant={resolveRoleBadgeVariant(role.name)}
-                                                className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                                                onClick={() => handleRoleToggle(role)}
-                                            >
-                                                {displayRoleName(role.name)}
-                                                <Icon icon="mdi:plus" size={12} className="ml-1" />
-                                            </Badge>
-                                        ))}
+										<Label>可用角色</Label>
+										<div className="flex flex-wrap gap-2">
+											{roles
+												.filter((role) => !userRoles.some((ur) => roleKey(ur) === roleKey(role)))
+												.filter((role) => !isDataRole(role.name))
+												.filter((role) => {
+													const name = (role?.name || "").toString();
+													if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-"))
+														return false;
+													if (GLOBAL_CONFIG.hideBuiltinRoles && shouldHideRole(role)) return false;
+													return true;
+												})
+												.map((role) => (
+													<Badge
+														key={roleKey(role)}
+														variant={resolveRoleBadgeVariant(role.name)}
+														className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+														onClick={() => handleRoleToggle(role)}
+													>
+														{displayRoleName(role.name)}
+														<Icon icon="mdi:plus" size={12} className="ml-1" />
+													</Badge>
+												))}
+										</div>
 									</div>
-								</div>
-							</CardContent>
-						</Card>
-					)}
+								</CardContent>
+							</Card>
+						)
+					}
 				</div>
 
 				<DialogFooter>

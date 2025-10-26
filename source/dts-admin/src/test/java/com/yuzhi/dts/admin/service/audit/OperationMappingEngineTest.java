@@ -77,7 +77,14 @@ class OperationMappingEngineTest {
 
     @Test
     void resolveWithFallbackReturnsRuleMatchWhenMappingExists() {
-        AuditOperationMapping mapping = createMapping("/api/users/{id}", "GET", "用户管理", "查询", "查看用户{person}", "admin_keycloak_user");
+        AuditOperationMapping mapping = createMapping(
+            "/api/users/{id}",
+            "GET",
+            "用户管理",
+            AuditOperationType.READ.getCode(),
+            "查看用户{person}",
+            "admin_keycloak_user"
+        );
         mapping.setParamExtractors("{\"person\":\"path.id\"}");
         repository = createRepository(List.of(mapping));
         engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
@@ -95,7 +102,8 @@ class OperationMappingEngineTest {
         OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
         assertThat(op.ruleMatched).isTrue();
         assertThat(op.ruleId).isEqualTo(mapping.getId());
-        assertThat(op.actionType).isEqualTo("查询");
+        assertThat(op.operationType).isEqualTo(AuditOperationType.READ);
+        assertThat(op.operationTypeLabel).isEqualTo(AuditOperationType.READ.getDisplayName());
         assertThat(op.description).isEqualTo("查看用户alice");
         assertThat(op.sourceTable).isEqualTo("admin_keycloak_user");
     }
@@ -118,10 +126,40 @@ class OperationMappingEngineTest {
         assertThat(resolved).isPresent();
         OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
         assertThat(op.ruleMatched).isFalse();
-        assertThat(op.actionType).isEqualTo("删除");
+        assertThat(op.operationType).isEqualTo(AuditOperationType.DELETE);
+        assertThat(op.operationTypeLabel).isEqualTo(AuditOperationType.DELETE.getDisplayName());
         assertThat(op.description).contains("数据资产");
         assertThat(op.description).contains("【123】");
         assertThat(op.sourceTable).isEqualTo("catalog_asset");
+    }
+
+    @Test
+    void portalMenuDisableRuleMapsToUpdateOperation() {
+        AuditOperationMapping mapping = createMapping(
+            "/api/admin/portal/menus/{id}",
+            "DELETE",
+            "菜单管理",
+            AuditOperationType.UPDATE.getCode(),
+            "禁用门户菜单：{targetRef|未知}",
+            "门户菜单"
+        );
+        mapping.setParamExtractors("{\"targetRef\":\"path.id\"}");
+        repository = createRepository(List.of(mapping));
+        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine.reload();
+
+        AuditEvent event = new AuditEvent();
+        event.setRequestUri("/api/admin/portal/menus/42");
+        event.setHttpMethod("DELETE");
+        event.setSourceSystem("admin");
+
+        Optional<OperationMappingEngine.ResolvedOperation> resolved = engine.resolveWithFallback(event);
+        assertThat(resolved).isPresent();
+        OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
+        assertThat(op.ruleMatched).isTrue();
+        assertThat(op.operationType).isEqualTo(AuditOperationType.UPDATE);
+        assertThat(op.operationTypeLabel).isEqualTo(AuditOperationType.UPDATE.getDisplayName());
+        assertThat(op.description).isEqualTo("禁用门户菜单：42");
     }
 
     @Test
@@ -211,7 +249,14 @@ class OperationMappingEngineTest {
 
     @Test
     void describeRulesExposesLoadedRuleMetadata() {
-        AuditOperationMapping mapping = createMapping("/api/approvals", "POST", "审批中心", "执行", "执行审批{event.actor}", "admin_approval");
+        AuditOperationMapping mapping = createMapping(
+            "/api/approvals",
+            "POST",
+            "审批中心",
+            AuditOperationType.EXECUTE.getCode(),
+            "执行审批{event.actor}",
+            "admin_approval"
+        );
         repository = createRepository(List.of(mapping));
         engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
         engine.reload();
@@ -221,7 +266,8 @@ class OperationMappingEngineTest {
         OperationMappingEngine.RuleSummary summary = summaries.get(0);
         assertThat(summary.getId()).isEqualTo(mapping.getId());
         assertThat(summary.getModuleName()).isEqualTo("审批中心");
-        assertThat(summary.getActionType()).isEqualTo("执行");
+        assertThat(summary.getOperationType()).isEqualTo(AuditOperationType.EXECUTE.getCode());
+        assertThat(summary.getOperationTypeLabel()).isEqualTo(AuditOperationType.EXECUTE.getDisplayName());
         assertThat(summary.getDescriptionTemplate()).contains("审批");
         assertThat(summary.getSourceTableTemplate()).isEqualTo("admin_approval");
     }
@@ -232,7 +278,7 @@ class OperationMappingEngineTest {
             "/api/approval-requests/{id}",
             "GET",
             "审批管理",
-            "查询",
+            AuditOperationType.READ.getCode(),
             "查询审批请求：{rid|未知}",
             "admin_approval"
         );
@@ -243,7 +289,7 @@ class OperationMappingEngineTest {
             "/**",
             "ALL",
             "未知模块",
-            "执行",
+            AuditOperationType.EXECUTE.getCode(),
             "执行了操作：{event.requestUri|未知}",
             "general"
         );
@@ -264,7 +310,8 @@ class OperationMappingEngineTest {
         OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
         assertThat(op.ruleMatched).isTrue();
         assertThat(op.moduleName).isEqualTo("审批管理");
-        assertThat(op.actionType).isEqualTo("查询");
+        assertThat(op.operationType).isEqualTo(AuditOperationType.READ);
+        assertThat(op.operationTypeLabel).isEqualTo(AuditOperationType.READ.getDisplayName());
         assertThat(op.description).isEqualTo("查询审批请求：1601");
     }
 
@@ -274,7 +321,7 @@ class OperationMappingEngineTest {
             "/api/datasets/{id}/preview",
             "GET",
             "数据资产",
-            "查询",
+            AuditOperationType.READ.getCode(),
             "预览数据资产：{datasetName|未知}（ID：{datasetId|未知}）",
             "catalog_dataset"
         );
@@ -285,7 +332,7 @@ class OperationMappingEngineTest {
             "/**",
             "ALL",
             "未知模块",
-            "执行",
+            AuditOperationType.EXECUTE.getCode(),
             "执行了操作：{event.requestUri|未知}",
             "general"
         );
@@ -306,7 +353,8 @@ class OperationMappingEngineTest {
         OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
         assertThat(op.ruleMatched).isTrue();
         assertThat(op.moduleName).isEqualTo("数据资产");
-        assertThat(op.actionType).isEqualTo("查询");
+        assertThat(op.operationType).isEqualTo(AuditOperationType.READ);
+        assertThat(op.operationTypeLabel).isEqualTo(AuditOperationType.READ.getDisplayName());
         assertThat(op.description).contains("客户订单");
         assertThat(op.description).contains("db486a4a-fb64-4218-907b-b582a764e66e");
     }
@@ -317,7 +365,7 @@ class OperationMappingEngineTest {
             "/api/keycloak/approvals/{id}/{action}",
             "POST",
             "审批管理",
-            "修改",
+            AuditOperationType.UPDATE.getCode(),
             "处理审批：{rid|未知}",
             "admin_approval"
         );
@@ -328,7 +376,7 @@ class OperationMappingEngineTest {
             "/**",
             "ALL",
             "未知模块",
-            "执行",
+            AuditOperationType.EXECUTE.getCode(),
             "执行了操作：{event.requestUri|未知}",
             "general"
         );
@@ -349,7 +397,8 @@ class OperationMappingEngineTest {
         OperationMappingEngine.ResolvedOperation op = resolved.orElseThrow();
         assertThat(op.ruleMatched).isTrue();
         assertThat(op.moduleName).isEqualTo("审批管理");
-        assertThat(op.actionType).isEqualTo("修改");
+        assertThat(op.operationType).isEqualTo(AuditOperationType.UPDATE);
+        assertThat(op.operationTypeLabel).isEqualTo(AuditOperationType.UPDATE.getDisplayName());
         assertThat(op.description).contains("处理审批");
     }
 
@@ -404,7 +453,7 @@ class OperationMappingEngineTest {
         String url,
         String method,
         String moduleName,
-        String actionType,
+        String operationTypeCode,
         String descriptionTemplate,
         String sourceTableTemplate
     ) {
@@ -413,7 +462,7 @@ class OperationMappingEngineTest {
         mapping.setUrlPattern(url);
         mapping.setHttpMethod(method);
         mapping.setModuleName(moduleName);
-        mapping.setActionType(actionType);
+        mapping.setOperationType(operationTypeCode);
         mapping.setDescriptionTemplate(descriptionTemplate);
         mapping.setSourceTableTemplate(sourceTableTemplate);
         mapping.setEnabled(Boolean.TRUE);

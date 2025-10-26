@@ -20,7 +20,12 @@ const sysadminMenus: AdminMenuItem[] = [
 		path: "/admin/system/data-sources",
 		icon: "local:ic-setting",
 		children: [
-			{ key: "system-data-sources", label: "数据源配置", path: "/admin/system/data-sources", icon: "local:ic-analysis" },
+			{
+				key: "system-data-sources",
+				label: "数据源配置",
+				path: "/admin/system/data-sources",
+				icon: "local:ic-analysis",
+			},
 		],
 	},
 ];

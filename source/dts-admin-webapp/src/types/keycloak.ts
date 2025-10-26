@@ -67,39 +67,39 @@ export interface KeycloakGroup {
  * 创建用户请求
  */
 export interface CreateUserRequest {
-    username: string;
-    email?: string;
-    firstName?: string;
-    fullName?: string;
-    lastName?: string;
-    enabled?: boolean;
-    emailVerified?: boolean;
-    attributes?: Record<string, string[]>;
-    groups?: string[];
-    // 可选：在创建时直接提交要授予的Realm角色（由后端生成审批单处理）
-    realmRoles?: string[];
-    // Optional explicit department code to persist on user attributes (dept_code)
-    deptCode?: string;
+	username: string;
+	email?: string;
+	firstName?: string;
+	fullName?: string;
+	lastName?: string;
+	enabled?: boolean;
+	emailVerified?: boolean;
+	attributes?: Record<string, string[]>;
+	groups?: string[];
+	// 可选：在创建时直接提交要授予的Realm角色（由后端生成审批单处理）
+	realmRoles?: string[];
+	// Optional explicit department code to persist on user attributes (dept_code)
+	deptCode?: string;
 }
 
 /**
  * 更新用户请求
  */
 export interface UpdateUserRequest {
-    id?: string;
-    username?: string;
-    email?: string;
-    firstName?: string;
-    fullName?: string;
-    lastName?: string;
-    enabled?: boolean;
-    emailVerified?: boolean;
-    attributes?: Record<string, string[]>;
-    groups?: string[];
-    // 可选：在更新时直接提交要授予的Realm角色（由后端生成审批单处理）
-    realmRoles?: string[];
-    // Optional explicit department code to persist on user attributes (dept_code)
-    deptCode?: string;
+	id?: string;
+	username?: string;
+	email?: string;
+	firstName?: string;
+	fullName?: string;
+	lastName?: string;
+	enabled?: boolean;
+	emailVerified?: boolean;
+	attributes?: Record<string, string[]>;
+	groups?: string[];
+	// 可选：在更新时直接提交要授予的Realm角色（由后端生成审批单处理）
+	realmRoles?: string[];
+	// Optional explicit department code to persist on user attributes (dept_code)
+	deptCode?: string;
 }
 
 /**

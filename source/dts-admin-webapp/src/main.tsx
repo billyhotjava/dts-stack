@@ -15,15 +15,15 @@ import { getRoutesSection } from "./routes/sections";
 await registerLocalIcons();
 
 if (GLOBAL_CONFIG.routerMode === "backend") {
-    await menuService.getMenuList();
-    try {
-        const menus = await adminApi.getPortalMenus();
-        setPortalMenus(menus?.menus ?? [], menus?.allMenus ?? menus?.menus ?? []);
-    } catch (e) {
-        // eslint-disable-next-line no-console
-        console.warn("[main] Failed to prefetch portal menus:", e);
-        setPortalMenus([]);
-    }
+	await menuService.getMenuList();
+	try {
+		const menus = await adminApi.getPortalMenus();
+		setPortalMenus(menus?.menus ?? [], menus?.allMenus ?? menus?.menus ?? []);
+	} catch (e) {
+		// eslint-disable-next-line no-console
+		console.warn("[main] Failed to prefetch portal menus:", e);
+		setPortalMenus([]);
+	}
 }
 
 const router = createBrowserRouter(

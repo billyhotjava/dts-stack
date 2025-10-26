@@ -9,24 +9,31 @@ import { resolve as resolvePath } from "node:path";
 import legacy from "@vitejs/plugin-legacy";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
-const supportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 109"];
+const supportedBrowsers = [
+	"chrome >= 109",
+	"edge >= 109",
+	"firefox >= 102",
+	"safari >= 15.4",
+	"ios >= 15.5",
+	"android >= 109",
+];
 
 export default defineConfig(({ mode }) => {
-  const rawEnv = loadEnv(mode, process.cwd(), "");
-  const env = { ...process.env, ...rawEnv };
-  const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
-  const isProduction = mode === "production";
-  // Default to host-mapped admin backend port when running on host
-  const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:18081";
-  const autoPrefix = (() => {
-    if (env.VITE_API_PROXY_PREFIX) return "";
-    try {
-      const u = new URL(apiProxyTarget);
-      if (u.protocol === "https:") return "/admin";
-    } catch {}
-    return "";
-  })();
-  const apiProxyPrefix = env.VITE_API_PROXY_PREFIX || autoPrefix || "";
+	const rawEnv = loadEnv(mode, process.cwd(), "");
+	const env = { ...process.env, ...rawEnv };
+	const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
+	const isProduction = mode === "production";
+	// Default to host-mapped admin backend port when running on host
+	const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:18081";
+	const autoPrefix = (() => {
+		if (env.VITE_API_PROXY_PREFIX) return "";
+		try {
+			const u = new URL(apiProxyTarget);
+			if (u.protocol === "https:") return "/admin";
+		} catch {}
+		return "";
+	})();
+	const apiProxyPrefix = env.VITE_API_PROXY_PREFIX || autoPrefix || "";
 
 	return {
 		base,
@@ -60,25 +67,25 @@ export default defineConfig(({ mode }) => {
 			},
 		},
 
-    server: {
-      open: true,
-      host: true,
-      port: 3001,
-      // Decouple from other workspaces; do not traverse outside project root
-      fs: { strict: true, allow: [rootDir] },
-      // Ignore any sibling mounts like /workspace/dts-platform-webapp/**
-      watch: { ignored: ["**/dts-platform-webapp/**"] },
-      proxy: {
-        "/api": {
-          target: apiProxyTarget,
-          changeOrigin: true,
-          // If targeting Traefik via HTTPS, auto prefix '/admin'
-          rewrite: apiProxyPrefix ? (p) => p.replace(/^\/api/, `${apiProxyPrefix}/api`) : undefined,
-          secure: false,
-          xfwd: true,
-        },
-      },
-    },
+		server: {
+			open: true,
+			host: true,
+			port: 3001,
+			// Decouple from other workspaces; do not traverse outside project root
+			fs: { strict: true, allow: [rootDir] },
+			// Ignore any sibling mounts like /workspace/dts-platform-webapp/**
+			watch: { ignored: ["**/dts-platform-webapp/**"] },
+			proxy: {
+				"/api": {
+					target: apiProxyTarget,
+					changeOrigin: true,
+					// If targeting Traefik via HTTPS, auto prefix '/admin'
+					rewrite: apiProxyPrefix ? (p) => p.replace(/^\/api/, `${apiProxyPrefix}/api`) : undefined,
+					secure: false,
+					xfwd: true,
+				},
+			},
+		},
 
 		build: {
 			target: "chrome98",
@@ -103,20 +110,20 @@ export default defineConfig(({ mode }) => {
 			exclude: ["@iconify/react", "@vanilla-extract/css"],
 		},
 
-  		esbuild: {
-  			drop: isProduction ? ["console", "debugger"] : [],
-  			legalComments: "none",
-  			target: "chrome98",
-  		},
-      // Prevent Vite CSS analyzer from touching absolute container paths
-      // that don't belong to this project (e.g., /workspace/dts-platform-webapp/...)
-      css: {
-        url: {
-          filter: (url) => {
-            if (url.startsWith("/workspace/")) return false;
-            return true;
-          },
-        },
-      },
-  	};
+		esbuild: {
+			drop: isProduction ? ["console", "debugger"] : [],
+			legalComments: "none",
+			target: "chrome98",
+		},
+		// Prevent Vite CSS analyzer from touching absolute container paths
+		// that don't belong to this project (e.g., /workspace/dts-platform-webapp/...)
+		css: {
+			url: {
+				filter: (url) => {
+					if (url.startsWith("/workspace/")) return false;
+					return true;
+				},
+			},
+		},
+	};
 });
