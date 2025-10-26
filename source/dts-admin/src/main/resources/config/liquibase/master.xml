@@ -69,6 +69,7 @@
     <include file="config/liquibase/changelog/20260127-02_audit_operation_mapping_change_request_types.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260305-01_audit_operation_mapping_source_system_backfill.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260305-02_organization_root_flag.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260310-01_audit_operation_group_slug_fix.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

@@ -18,11 +18,21 @@ export default function LoginAuthGuard({ children }: Props) {
 		}
 		const expandSynonyms = (list: string[]): Set<string> => {
 			const set = new Set<string>((list || []).map((r) => String(r || "").toUpperCase()));
-			if (set.has("SYSADMIN")) set.add("ROLE_SYS_ADMIN");
-			if (set.has("AUTHADMIN")) set.add("ROLE_AUTH_ADMIN");
-			if (set.has("AUDITADMIN")) set.add("ROLE_SECURITY_AUDITOR");
-			if (set.has("SECURITYAUDITOR")) set.add("ROLE_SECURITY_AUDITOR");
-			if (set.has("OPADMIN")) set.add("ROLE_OP_ADMIN");
+			if (set.has("SYSADMIN") || set.has("SYS_ADMIN")) {
+				set.add("ROLE_SYS_ADMIN");
+			}
+			if (set.has("AUTHADMIN") || set.has("AUTH_ADMIN") || set.has("IAM_ADMIN")) {
+				set.add("ROLE_AUTH_ADMIN");
+			}
+			if (set.has("AUDITADMIN") || set.has("AUDIT_ADMIN")) {
+				set.add("ROLE_SECURITY_AUDITOR");
+			}
+			if (set.has("SECURITYAUDITOR") || set.has("SECURITY_AUDITOR")) {
+				set.add("ROLE_SECURITY_AUDITOR");
+			}
+			if (set.has("OPADMIN") || set.has("OP_ADMIN")) {
+				set.add("ROLE_OP_ADMIN");
+			}
 			return set;
 		};
 		const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD || "false").toLowerCase() === "true";

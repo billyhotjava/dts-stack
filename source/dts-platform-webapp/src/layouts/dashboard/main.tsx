@@ -1,36 +1,94 @@
-import { clone, concat } from "ramda";
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import { Outlet, ScrollRestoration, useLocation } from "react-router";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { LineLoading } from "@/components/loading";
 import Page403 from "@/pages/sys/error/Page403";
 import { useSettings } from "@/store/settingStore";
 import { cn } from "@/utils";
-import { flattenTrees } from "@/utils/tree";
-import { frontendNavData } from "./nav/nav-data/nav-data-frontend";
-import type { NavItemDataProps, NavProps } from "@/components/nav";
+import { useMenuStore } from "@/store/menuStore";
+import type { MenuTree } from "#/entity";
+import {
+	isExternalPath,
+	isMenuDeleted,
+	isMenuDisabled,
+	isMenuHidden,
+	parseMenuMetadata,
+	resolveMenuPath,
+} from "@/utils/menuTree";
+
+const normalizeAuthCode = (value: unknown): string => {
+	if (typeof value === "string") return value;
+	if (value && typeof value === "object" && "code" in value && typeof (value as any).code === "string") {
+		return (value as any).code as string;
+	}
+	return "";
+};
+
+const normalizeAuth = (value: unknown): string[] | undefined => {
+	if (!value) return undefined;
+	if (Array.isArray(value)) {
+		const normalized = value.map((entry) => normalizeAuthCode(entry)).filter(Boolean);
+		return normalized.length > 0 ? normalized : undefined;
+	}
+	if (typeof value === "string") {
+		const normalized = normalizeAuthCode(value);
+		return normalized ? [normalized] : undefined;
+	}
+	return undefined;
+};
+
+const buildAuthIndex = (menus: MenuTree[]): Map<string, string[]> => {
+	const index = new Map<string, string[]>();
+	const stack = Array.isArray(menus) ? [...menus] : [];
+	while (stack.length) {
+		const node = stack.pop();
+		if (!node) continue;
+		if (isMenuDeleted(node)) continue;
+		const meta = parseMenuMetadata(node.metadata);
+		if (isMenuHidden(node, meta) || isMenuDisabled(node, meta)) {
+			continue;
+		}
+		const path = resolveMenuPath(node, meta);
+		const auth = normalizeAuth(meta?.auth ?? node.auth);
+		if (path && !isExternalPath(path) && auth && auth.length > 0) {
+			index.set(path, auth);
+		}
+		if (Array.isArray(node.children)) {
+			for (const child of node.children) {
+				stack.push(child as MenuTree);
+			}
+		}
+	}
+	return index;
+};
+
+const resolveAuthForPath = (index: Map<string, string[]>, pathname: string): string[] => {
+	let matchedAuth: string[] = [];
+	let maxLength = -1;
+	for (const [path, auth] of index.entries()) {
+		if (!path || auth.length === 0) continue;
+		if (path === pathname || pathname.startsWith(path.endsWith("/") ? path : `${path}/`)) {
+			if (path.length > maxLength) {
+				matchedAuth = auth;
+				maxLength = path.length;
+			}
+		}
+	}
+	return matchedAuth;
+};
 
 /**
  * find auth by path
  * @param path
  * @returns
  */
-function findAuthByPath(path: string): string[] {
-	const foundItem = allItems.find((item) => item.path === path);
-	return foundItem?.auth || [];
-}
-
-const navData: NavProps["data"] = clone(frontendNavData);
-const allItems = navData.reduce<NavItemDataProps[]>((acc, group) => {
-	const flattenedItems = flattenTrees<NavItemDataProps>(group.items);
-	return concat(acc, flattenedItems);
-}, []);
-
 const Main = () => {
 	const { themeStretch } = useSettings();
+	const menus = useMenuStore((s) => s.menus || []);
 
 	const { pathname } = useLocation();
-	const currentNavAuth = findAuthByPath(pathname);
+	const authIndex = useMemo(() => buildAuthIndex(menus), [menus]);
+	const currentNavAuth = useMemo(() => resolveAuthForPath(authIndex, pathname), [authIndex, pathname]);
 
 	return (
 		<AuthGuard checkAny={currentNavAuth} fallback={<Page403 />}>

@@ -28,17 +28,22 @@ public class PortalMenuService {
     public List<PortalMenuTreeItem> getMenuTree() {
         // Forward the current user's roles (sanitized) so dts-admin can filter precisely.
         List<String> roles = sanitizeAudienceRoles(currentAuthorities());
-        List<RemoteMenuNode> remote;
-        if (roles != null && !roles.isEmpty()) {
-            remote = client.fetchMenuTreeForAudience(roles, List.of());
-        } else {
-            remote = client.fetchMenuTree();
-        }
-        return remote.stream().map(node -> mapTree(node, null, null)).collect(Collectors.toCollection(ArrayList::new));
+        List<RemoteMenuNode> baseline = client.fetchActiveMenuTree();
+        java.util.Set<String> activeIds = flattenIds(baseline);
+        java.util.Set<String> visited = new java.util.LinkedHashSet<>();
+        List<RemoteMenuNode> remote = (roles != null && !roles.isEmpty()) ? client.fetchMenuTreeForAudience(roles, List.of()) : baseline;
+        return remote
+            .stream()
+            .map(node -> mapTree(node, null, null, activeIds, visited))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toCollection(ArrayList::new));
     }
 
     public List<PortalMenuFlatItem> getFlatMenuList() {
         List<PortalMenuTreeItem> tree = getMenuTree();
+        if (tree != null) {
+            tree = tree.stream().filter(node -> node != null && !node.deleted()).collect(Collectors.toCollection(ArrayList::new));
+        }
         List<PortalMenuFlatItem> flat = new ArrayList<>();
         Deque<String> pathStack = new ArrayDeque<>();
         for (PortalMenuTreeItem root : tree) {
@@ -107,6 +112,9 @@ public class PortalMenuService {
     }
 
     private void flatten(PortalMenuTreeItem node, Deque<String> pathStack, List<PortalMenuFlatItem> out) {
+        if (node.deleted()) {
+            return;
+        }
         String parentPath = pathStack.peekLast();
         String fullPath = buildFullPath(parentPath, node.pathSegment());
 
@@ -121,7 +129,8 @@ public class PortalMenuService {
                 fullPath,
                 node.component(),
                 node.icon(),
-                node.metadata()
+                node.metadata(),
+                node.deleted()
             )
         );
 
@@ -134,11 +143,32 @@ public class PortalMenuService {
         }
     }
 
-    private PortalMenuTreeItem mapTree(RemoteMenuNode node, PortalMenuTreeItem parent, String inheritedPath) {
+    private PortalMenuTreeItem mapTree(
+        RemoteMenuNode node,
+        PortalMenuTreeItem parent,
+        String inheritedPath,
+        java.util.Set<String> activeIds,
+        java.util.Set<String> visited
+    ) {
+        if (Boolean.TRUE.equals(node.getDeleted())) {
+            return null;
+        }
         Long id = parseLong(node.getId());
+        if (activeIds != null && id != null && !activeIds.isEmpty()) {
+            if (!activeIds.contains(String.valueOf(id))) {
+                return null;
+            }
+        }
         Long parentId = parseLong(node.getParentId());
         String pathSegment = normalizePathSegment(node.getPath());
         String fullPath = buildFullPath(inheritedPath, pathSegment);
+        String dedupeKey = dedupeKey(id, fullPath);
+        if (visited != null && dedupeKey != null) {
+            if (visited.contains(dedupeKey)) {
+                return null;
+            }
+            visited.add(dedupeKey);
+        }
         List<PortalMenuTreeItem> children = new ArrayList<>();
         PortalMenuTreeItem current = new PortalMenuTreeItem(
             id,
@@ -152,13 +182,23 @@ public class PortalMenuService {
             node.getComponent(),
             node.getIcon(),
             node.getMetadata(),
+            Boolean.TRUE.equals(node.getDeleted()),
             children,
             generateFallbackId(node, parent)
         );
 
         if (node.getChildren() != null && !node.getChildren().isEmpty()) {
-            for (RemoteMenuNode child : node.getChildren()) {
-                children.add(mapTree(child, current, fullPath));
+            List<RemoteMenuNode> sortedChildren = node
+                .getChildren()
+                .stream()
+                .filter(Objects::nonNull)
+                .sorted(this::compareNodes)
+                .collect(Collectors.toList());
+            for (RemoteMenuNode child : sortedChildren) {
+                PortalMenuTreeItem mappedChild = mapTree(child, current, fullPath, activeIds, visited);
+                if (mappedChild != null) {
+                    children.add(mappedChild);
+                }
             }
         }
 
@@ -184,6 +224,7 @@ public class PortalMenuService {
             item.component(),
             item.icon(),
             item.metadata(),
+            item.deleted(),
             children
         );
     }
@@ -242,6 +283,34 @@ public class PortalMenuService {
         return candidate.replaceAll("[^a-zA-Z0-9:/_-]", "-");
     }
 
+    private String dedupeKey(Long id, String fullPath) {
+        if (id != null) {
+            return "id:" + id;
+        }
+        if (StringUtils.hasText(fullPath)) {
+            return "path:" + fullPath;
+        }
+        return null;
+    }
+
+    private int compareNodes(RemoteMenuNode left, RemoteMenuNode right) {
+        int orderLeft = left.getOrder() != null ? left.getOrder() : Integer.MAX_VALUE;
+        int orderRight = right.getOrder() != null ? right.getOrder() : Integer.MAX_VALUE;
+        int cmp = Integer.compare(orderLeft, orderRight);
+        if (cmp != 0) {
+            return cmp;
+        }
+        String nameLeft = left.getName() != null ? left.getName() : "";
+        String nameRight = right.getName() != null ? right.getName() : "";
+        cmp = nameLeft.compareToIgnoreCase(nameRight);
+        if (cmp != 0) {
+            return cmp;
+        }
+        String idLeft = left.getId() != null ? left.getId() : "";
+        String idRight = right.getId() != null ? right.getId() : "";
+        return idLeft.compareTo(idRight);
+    }
+
     private String slug(String input) {
         if (!StringUtils.hasText(input)) {
             return "menu";
@@ -265,6 +334,7 @@ public class PortalMenuService {
         String component,
         String icon,
         String metadata,
+        boolean deleted,
         List<PortalMenuTreeItem> children,
         String generatedId
     ) {
@@ -283,7 +353,8 @@ public class PortalMenuService {
         String path,
         String component,
         String icon,
-        String metadata
+        String metadata,
+        boolean deleted
     ) {}
 
     public record PortalMenuTreeNode(
@@ -297,6 +368,32 @@ public class PortalMenuService {
         String component,
         String icon,
         String metadata,
+        boolean deleted,
         List<PortalMenuTreeNode> children
     ) {}
+
+    private java.util.Set<String> flattenIds(List<RemoteMenuNode> nodes) {
+        java.util.Set<String> ids = new java.util.LinkedHashSet<>();
+        if (nodes == null || nodes.isEmpty()) {
+            return ids;
+        }
+        java.util.ArrayDeque<RemoteMenuNode> stack = new java.util.ArrayDeque<>(nodes);
+        while (!stack.isEmpty()) {
+            RemoteMenuNode current = stack.pop();
+            if (current == null) {
+                continue;
+            }
+            if (StringUtils.hasText(current.getId())) {
+                ids.add(current.getId());
+            }
+            if (current.getChildren() != null) {
+                for (RemoteMenuNode child : current.getChildren()) {
+                    if (child != null) {
+                        stack.push(child);
+                    }
+                }
+            }
+        }
+        return ids;
+    }
 }

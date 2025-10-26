@@ -206,10 +206,10 @@ export const useSignIn = () => {
 			// Helper to expand role synonyms and normalize naming
 			const expandSynonyms = (roles: string[]): Set<string> => {
 				const set = new Set<string>((roles || []).map((r) => String(r || "").toUpperCase()));
-				if (set.has("SYSADMIN")) set.add("ROLE_SYS_ADMIN");
-				if (set.has("AUTHADMIN")) set.add("ROLE_AUTH_ADMIN");
-				if (set.has("AUDITADMIN")) set.add("ROLE_SECURITY_AUDITOR");
-				if (set.has("SECURITYAUDITOR")) set.add("ROLE_SECURITY_AUDITOR");
+				if (set.has("SYSADMIN") || set.has("SYS_ADMIN")) set.add("ROLE_SYS_ADMIN");
+				if (set.has("AUTHADMIN") || set.has("AUTH_ADMIN") || set.has("IAM_ADMIN")) set.add("ROLE_AUTH_ADMIN");
+				if (set.has("AUDITADMIN") || set.has("AUDIT_ADMIN")) set.add("ROLE_SECURITY_AUDITOR");
+				if (set.has("SECURITYAUDITOR") || set.has("SECURITY_AUDITOR")) set.add("ROLE_SECURITY_AUDITOR");
 				// Accept common prefixed variants from legacy realms
 				if (set.has("ROLE_AUDITOR_ADMIN") || set.has("ROLE_AUDIT_ADMIN") || set.has("ROLE_SECURITYAUDITOR")) {
 					set.add("ROLE_SECURITY_AUDITOR");
@@ -217,10 +217,10 @@ export const useSignIn = () => {
 				if (set.has("ROLE_SYSADMIN") || set.has("ROLE_SYSTEM_ADMIN")) {
 					set.add("ROLE_SYS_ADMIN");
 				}
-				if (set.has("ROLE_AUTHADMIN") || set.has("ROLE_IAM_ADMIN")) {
+				if (set.has("ROLE_AUTHADMIN") || set.has("ROLE_IAM_ADMIN") || set.has("ROLE_AUTH_ADMINISTRATOR")) {
 					set.add("ROLE_AUTH_ADMIN");
 				}
-				if (set.has("OPADMIN")) set.add("ROLE_OP_ADMIN");
+				if (set.has("OPADMIN") || set.has("OP_ADMIN")) set.add("ROLE_OP_ADMIN");
 				return set;
 			};
 

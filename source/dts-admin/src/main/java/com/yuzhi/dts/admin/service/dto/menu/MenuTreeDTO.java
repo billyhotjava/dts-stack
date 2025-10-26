@@ -19,6 +19,7 @@ public class MenuTreeDTO {
     private String metadata;
     private String displayName;
     private String securityLevel;
+    private boolean deleted;
     private List<MenuTreeDTO> children = new ArrayList<>();
 
     public String getId() {
@@ -115,6 +116,14 @@ public class MenuTreeDTO {
 
     public void setSecurityLevel(String securityLevel) {
         this.securityLevel = securityLevel;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
     }
 
     public List<MenuTreeDTO> getChildren() {

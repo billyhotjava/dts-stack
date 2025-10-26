@@ -32,6 +32,8 @@ public class PortalMenuClient {
         new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<ApiEnvelope<java.util.Map<String, Object>>> MAP_ENVELOPE =
         new ParameterizedTypeReference<>() {};
+    private static final ParameterizedTypeReference<ApiEnvelope<PortalMenuCollection>> MENU_COLLECTION_TYPE =
+        new ParameterizedTypeReference<>() {};
 
     public PortalMenuClient(RestTemplateBuilder builder, DtsAdminProperties props) {
         this.restTemplate = builder.setConnectTimeout(java.time.Duration.ofSeconds(3)).setReadTimeout(java.time.Duration.ofSeconds(5)).build();
@@ -176,6 +178,58 @@ public class PortalMenuClient {
         return Map.of("status", "ERROR");
     }
 
+    public List<RemoteMenuNode> fetchActiveMenuTree() {
+        if (!props.isEnabled()) {
+            return List.of();
+        }
+        try {
+            URI uri = buildUri(props.getAdminApiPath(), "/portal/menus");
+            HttpHeaders headers = new HttpHeaders();
+            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+            if (StringUtils.hasText(props.getServiceToken())) {
+                headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + props.getServiceToken());
+            }
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+            ResponseEntity<ApiEnvelope<PortalMenuCollection>> response = restTemplate.exchange(
+                uri,
+                HttpMethod.GET,
+                request,
+                MENU_COLLECTION_TYPE
+            );
+            ApiEnvelope<PortalMenuCollection> body = response.getBody();
+            if (body != null && body.isSuccess() && body.data() != null && body.data().getMenus() != null) {
+                return body.data().getMenus();
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to fetch active menu tree via admin API: {}", ex.getMessage());
+        }
+        return List.of();
+    }
+
+    private static class PortalMenuCollection {
+        @JsonProperty("menus")
+        private List<RemoteMenuNode> menus;
+
+        @JsonProperty("allMenus")
+        private List<RemoteMenuNode> allMenus;
+
+        public List<RemoteMenuNode> getMenus() {
+            return menus;
+        }
+
+        public void setMenus(List<RemoteMenuNode> menus) {
+            this.menus = menus;
+        }
+
+        public List<RemoteMenuNode> getAllMenus() {
+            return allMenus;
+        }
+
+        public void setAllMenus(List<RemoteMenuNode> allMenus) {
+            this.allMenus = allMenus;
+        }
+    }
+
     public record ApiEnvelope<T>(@JsonProperty("status") String status, @JsonProperty("message") String message, @JsonProperty("data") T data) {
         public boolean isSuccess() {
             return status != null && ("SUCCESS".equalsIgnoreCase(status) || "OK".equalsIgnoreCase(status) || "200".equals(status));
@@ -195,6 +249,7 @@ public class PortalMenuClient {
         private String icon;
         private String metadata;
         private List<RemoteMenuNode> children;
+        private Boolean deleted;
 
         public String getId() {
             return id;
@@ -282,6 +337,14 @@ public class PortalMenuClient {
 
         public void setChildren(List<RemoteMenuNode> children) {
             this.children = children;
+        }
+
+        public Boolean getDeleted() {
+            return deleted;
+        }
+
+        public void setDeleted(Boolean deleted) {
+            this.deleted = deleted;
         }
     }
 }

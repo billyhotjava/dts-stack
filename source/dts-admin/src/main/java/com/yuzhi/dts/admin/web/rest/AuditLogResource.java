@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -92,23 +93,36 @@ public class AuditLogResource {
         if (summaries.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.ok(List.of()));
         }
-        LinkedHashMap<String, String> grouped = new LinkedHashMap<>();
+        LinkedHashMap<String, Map<String, Object>> grouped = new LinkedHashMap<>();
         for (RuleSummary summary : summaries) {
-            String key = normalizeGroupKey(summary);
+            String key = resolveGroupKey(summary);
             if (!StringUtils.hasText(key)) {
                 continue;
             }
-            String label = safeTrim(summary.getGroupDisplayName());
-            if (!StringUtils.hasText(label)) {
-                label = safeTrim(summary.getModuleName());
-            }
-            if (!StringUtils.hasText(label)) {
-                label = key;
-            }
-            grouped.putIfAbsent(key, label);
+            grouped.computeIfAbsent(key, k -> {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("key", k);
+                entry.put("title", buildGroupLabel(summary));
+                String module = safeTrim(summary.getModuleName());
+                if (module != null) {
+                    entry.put("module", module);
+                }
+                String groupLabel = safeTrim(summary.getGroupDisplayName());
+                if (groupLabel != null) {
+                    entry.put("groupDisplayName", groupLabel);
+                }
+                String sourceSystem = safeTrim(summary.getSourceSystem());
+                if (sourceSystem != null) {
+                    entry.put("sourceSystem", sourceSystem);
+                    String sourceLabel = mapSourceSystemLabel(sourceSystem);
+                    if (sourceLabel != null) {
+                        entry.put("sourceSystemLabel", sourceLabel);
+                    }
+                }
+                return entry;
+            });
         }
-        List<Map<String, Object>> payload = new ArrayList<>(grouped.size());
-        grouped.forEach((key, title) -> payload.add(Map.of("key", key, "title", title)));
+        List<Map<String, Object>> payload = new ArrayList<>(grouped.values());
         return ResponseEntity.ok(ApiResponse.ok(payload));
     }
 
@@ -135,13 +149,10 @@ public class AuditLogResource {
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
-    private String normalizeGroupKey(RuleSummary summary) {
+    private String resolveGroupKey(RuleSummary summary) {
         String rawKey = safeTrim(summary.getOperationGroup());
-        if (StringUtils.hasText(rawKey) && !rawKey.startsWith("rule_") && !rawKey.startsWith("rule-")) {
-            String normalized = slugify(rawKey, "audit-group");
-            if (StringUtils.hasText(normalized)) {
-                return normalized;
-            }
+        if (StringUtils.hasText(rawKey)) {
+            return rawKey;
         }
         String label = safeTrim(summary.getGroupDisplayName());
         if (StringUtils.hasText(label)) {
@@ -156,6 +167,46 @@ public class AuditLogResource {
             return "rule-" + id;
         }
         return "rule-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private String buildGroupLabel(RuleSummary summary) {
+        String module = safeTrim(summary.getModuleName());
+        String groupLabel = safeTrim(summary.getGroupDisplayName());
+        String sourceSystem = safeTrim(summary.getSourceSystem());
+        String sourceLabel = mapSourceSystemLabel(sourceSystem);
+
+        StringBuilder label = new StringBuilder();
+        if (StringUtils.hasText(sourceLabel)) {
+            label.append(sourceLabel);
+        }
+        if (StringUtils.hasText(module)) {
+            if (label.length() > 0) {
+                label.append(" · ");
+            }
+            label.append(module);
+        }
+        if (StringUtils.hasText(groupLabel) && !Objects.equals(groupLabel, module)) {
+            if (label.length() > 0) {
+                label.append(" · ");
+            }
+            label.append(groupLabel);
+        }
+        if (label.length() == 0) {
+            label.append("通用");
+        }
+        return label.toString();
+    }
+
+    private String mapSourceSystemLabel(String sourceSystem) {
+        if (!StringUtils.hasText(sourceSystem)) {
+            return null;
+        }
+        String normalized = sourceSystem.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "admin" -> "系统管理";
+            case "platform" -> "业务管理";
+            default -> sourceSystem;
+        };
     }
 
     private LinkedHashMap<String, ModuleView> collectModulesFromRules() {

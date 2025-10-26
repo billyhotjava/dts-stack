@@ -10,6 +10,7 @@
         {
           "key": "assets",
           "path": "assets",
+          "icon": "solar:database-bold-duotone",
           "titleKey": "sys.nav.portal.catalogAssetsDirectory",
           "title": "数据资产目录"
         }
@@ -25,6 +26,7 @@
         {
           "key": "standards",
           "path": "standards",
+          "icon": "solar:document-text-bold-duotone",
           "titleKey": "sys.nav.portal.modelingStandards",
           "title": "数据标准"
         }
@@ -40,12 +42,14 @@
         {
           "key": "rules",
           "path": "rules",
+          "icon": "solar:checklist-bold-duotone",
           "titleKey": "sys.nav.portal.governanceRules",
           "title": "质量规则"
         },
         {
           "key": "compliance",
           "path": "compliance",
+          "icon": "solar:shield-warning-bold-duotone",
           "titleKey": "sys.nav.portal.governanceCompliance",
           "title": "合规检查"
         }
@@ -61,12 +65,14 @@
         {
           "key": "workbench",
           "path": "workbench",
+          "icon": "solar:code-square-bold-duotone",
           "titleKey": "sys.nav.portal.exploreWorkbench",
           "title": "数据查询和预览"
         },
         {
           "key": "savedQueries",
           "path": "saved-queries",
+          "icon": "solar:folder-with-files-bold-duotone",
           "titleKey": "sys.nav.portal.exploreSavedQueries",
           "title": "结果集管理"
         }

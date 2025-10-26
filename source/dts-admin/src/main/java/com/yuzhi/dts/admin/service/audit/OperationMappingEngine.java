@@ -64,6 +64,7 @@ public class OperationMappingEngine {
         private final AuditOperationType operationType;
         private final String descriptionTemplate;
         private final String sourceTableTemplate;
+        private final String sourceSystem;
 
         RuleSummary(AuditOperationMapping mapping) {
             this.id = mapping.getId();
@@ -74,6 +75,7 @@ public class OperationMappingEngine {
             this.operationType = type == AuditOperationType.UNKNOWN ? null : type;
             this.descriptionTemplate = safeTrim(mapping.getDescriptionTemplate());
             this.sourceTableTemplate = safeTrim(mapping.getSourceTableTemplate());
+            this.sourceSystem = safeTrim(mapping.getSourceSystem());
         }
 
         public Long getId() { return id; }
@@ -84,6 +86,7 @@ public class OperationMappingEngine {
         public String getOperationTypeLabel() { return operationType == null ? null : operationType.getDisplayName(); }
         public String getDescriptionTemplate() { return descriptionTemplate; }
         public String getSourceTableTemplate() { return sourceTableTemplate; }
+        public String getSourceSystem() { return sourceSystem; }
     }
 
     private final AuditOperationMappingRepository repo;

@@ -385,26 +385,67 @@ export default function AuditCenterView() {
 	}, []);
 
 	useEffect(() => {
-		AuditLogService.getAuditGroups()
-			.then((groups) => {
-				const seen = new Set<string>();
-				const mapped: Array<{ value: string; label: string }> = [];
-				for (const item of groups) {
-					const rawKey = (item.key ?? "").trim();
-					const rawTitle = (item.title ?? "").trim();
-					if (!rawKey || seen.has(rawKey)) {
-						continue;
-					}
-					seen.add(rawKey);
-					const label = rawTitle || rawKey;
-					mapped.push({ value: rawKey, label });
+	AuditLogService.getAuditGroups()
+		.then((groups) => {
+			const seen = new Set<string>();
+			const orderLabels = ["系统管理", "业务管理"];
+			const itemsWithMeta: Array<{
+				value: string;
+				label: string;
+				sourceLabel: string;
+				order: number;
+			}> = [];
+			for (const item of groups) {
+				const rawKey = (item.key ?? "").trim();
+				const rawTitle = (item.title ?? "").trim();
+				if (!rawKey || seen.has(rawKey)) {
+					continue;
 				}
-				setGroupOptions([{ value: "", label: "全部功能分组" }, ...mapped]);
-			})
-			.catch((error) => {
-				console.error("Failed to load audit groups", error);
-				toast.error("加载功能模块分组失败");
-			});
+				seen.add(rawKey);
+				const label = rawTitle || rawKey;
+				const sourceLabelRaw =
+					(item as Record<string, unknown>).sourceSystemLabel ??
+					(item as Record<string, unknown>).sourceLabel ??
+					"";
+				const normalizedSource =
+					typeof sourceLabelRaw === "string" && sourceLabelRaw.trim().length > 0
+						? sourceLabelRaw.trim()
+						: orderLabels.find((prefix) => label.startsWith(prefix)) ?? "其他";
+				itemsWithMeta.push({
+					value: rawKey,
+					label,
+					sourceLabel: normalizedSource,
+					order: itemsWithMeta.length,
+				});
+			}
+			const prioritized: Array<{ value: string; label: string }> = [];
+			const usedValues = new Set<string>();
+			const pushBucket = (bucketLabel: string) => {
+				itemsWithMeta
+					.filter((entry) => entry.sourceLabel === bucketLabel)
+					.sort((a, b) => a.order - b.order)
+					.forEach((entry) => {
+						if (usedValues.has(entry.value)) {
+							return;
+						}
+						prioritized.push({ value: entry.value, label: entry.label });
+						usedValues.add(entry.value);
+					});
+			};
+			orderLabels.forEach((label) => pushBucket(label));
+			itemsWithMeta
+				.filter((entry) => !usedValues.has(entry.value))
+				.sort((a, b) => a.order - b.order)
+				.forEach((entry) => {
+					prioritized.push({ value: entry.value, label: entry.label });
+					usedValues.add(entry.value);
+				});
+			setGroupOptions([{ value: "", label: "全部功能分组" }, ...prioritized]);
+		})
+		.catch((error) => {
+			console.error("Failed to load audit groups", error);
+			toast.error("加载功能模块分组失败");
+		});
 	}, []);
 
 	const handleRefresh = useCallback(() => {
@@ -535,9 +576,6 @@ export default function AuditCenterView() {
 					日志审计
 				</Text>
 				<div className="ml-auto flex items-center gap-2">
-					<Button variant="outline" onClick={handleRefresh} disabled={loading}>
-						{loading ? "刷新中..." : "刷新"}
-					</Button>
 					<Button onClick={handleExport} disabled={exporting || logs.length === 0}>
 						{exporting ? "正在导出..." : "导出日志"}
 					</Button>
@@ -619,10 +657,10 @@ export default function AuditCenterView() {
 						{/* 事件类型筛选已移除 */}
 					</div>
 					<div className="flex flex-wrap gap-3">
-						<Button type="button" variant="outline" onClick={() => setFilters({})}>
+						<Button type="button" variant="outline" className="w-32" onClick={() => setFilters({})}>
 							重置条件
 						</Button>
-						<Button type="button" variant="ghost" onClick={handleRefresh} disabled={loading}>
+						<Button type="button" variant="secondary" className="w-32" onClick={handleRefresh} disabled={loading}>
 							{loading ? "刷新中..." : "刷新"}
 						</Button>
 					</div>

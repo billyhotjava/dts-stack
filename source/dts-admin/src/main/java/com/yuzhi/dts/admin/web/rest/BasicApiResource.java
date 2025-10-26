@@ -109,6 +109,7 @@ public class BasicApiResource {
         d.setMetadata(p.getMetadata());
         d.setSecurityLevel(p.getSecurityLevel());
         d.setType((p.getChildren() != null && !p.getChildren().isEmpty()) ? 1 : 2);
+        d.setDeleted(p.isDeleted());
         if (p.getChildren() != null) {
             List<MenuTreeDTO> cs = new ArrayList<>();
             for (PortalMenu c : p.getChildren()) {
