@@ -86,11 +86,12 @@ export function resolveRoleLabels(roles: unknown): string[] {
 }
 
 export default function ProfileTab({ detail, pickAttributeValue }: ProfileTabProps) {
-  const { fullName, firstName, username, email, roles, enabled, id, attributes } = useUserInfo();
+  const { fullName, firstName, username, email, roles, enabled, id, attributes, department } = useUserInfo();
   const detailAttributes = detail?.attributes as AttributeMap;
   const storeAttributes = attributes as AttributeMap;
 
   const resolvedUsername = detail?.username || username || "-";
+  const resolvedUsernameDisplay = detail?.username || username || "-";
   const normalizedUsernameLower = typeof resolvedUsername === "string" ? resolvedUsername.trim().toLowerCase() : "";
   const fallbackName = normalizedUsernameLower ? USERNAME_FALLBACK_NAME[normalizedUsernameLower] ?? "" : "";
 
@@ -117,10 +118,24 @@ export default function ProfileTab({ detail, pickAttributeValue }: ProfileTabPro
   const accountStatus = detail?.enabled ?? enabled;
   const accountId = detail?.id || id || "-";
 
+  const resolvedDepartment = useMemo(() => {
+    const primary =
+      pickAttributeValue(detailAttributes, ["department", "deptCode", "dept_code", "ou", "departmentName"]) ||
+      pickAttributeValue(storeAttributes, ["department", "deptCode", "dept_code", "ou", "departmentName"]);
+    if (primary && primary.trim()) {
+      return primary.trim();
+    }
+    if (typeof department === "string" && department.trim()) {
+      return department.trim();
+    }
+    return "-";
+  }, [detailAttributes, storeAttributes, department, pickAttributeValue]);
+
   const basicInfo = [
     { label: "姓名", value: resolvedName || "-", key: "name" },
-    { label: "用户名", value: resolvedName || "-", key: "username" },
+    { label: "用户名", value: resolvedUsernameDisplay || "-", key: "username" },
     { label: "邮箱", value: resolvedEmail || "-", key: "email" },
+    { label: "所属部门", value: resolvedDepartment, key: "department" },
     { label: "角色", value: roleLabels.length ? roleLabels.join("、") : "-", key: "roles" },
     { label: "账号状态", value: accountStatus === false ? "已停用" : "正常", key: "status" },
     { label: "账号标识", value: accountId || "-", key: "id" },

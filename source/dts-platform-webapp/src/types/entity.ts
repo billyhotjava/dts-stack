@@ -22,6 +22,7 @@ export interface UserInfo {
     fullName?: string;
     // Optional Keycloak-style attributes map
     attributes?: Record<string, string[]>;
+    department?: string;
     enabled?: boolean;
     roles?: Role[] | string[]; // 支持两种格式：对象数组或字符串数组
     status?: BasicStatus;

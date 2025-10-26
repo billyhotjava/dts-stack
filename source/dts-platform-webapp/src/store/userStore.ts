@@ -160,6 +160,10 @@ export const useSignIn = () => {
 				// 处理角色/权限信息 - 统一为字符串数组
 				roles: normalizeToStringArray(rawUser.roles),
 				permissions: normalizeToStringArray(rawUser.permissions),
+				department:
+					typeof rawUser.department === "string" && rawUser.department.trim()
+						? rawUser.department.trim()
+						: undefined,
 				// 为用户设置默认头像（使用 public 目录下的静态资源路径，兼容生产环境）
 				avatar: resolveAvatar(rawUser.avatar),
 				// 确保必要的字段存在
