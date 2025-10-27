@@ -10,5 +10,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ResultSetRepository extends JpaRepository<ResultSet, UUID> {
     List<ResultSet> findByExpiresAtBefore(Instant cutOff);
-}
 
+    List<ResultSet> findByCreatedByOrderByCreatedDateDesc(String createdBy);
+}

@@ -155,6 +155,12 @@ export const useSignIn = () => {
 		try {
 			const res = await signInMutation.mutateAsync(data);
 			const { user, accessToken, refreshToken } = res;
+			if (res.sessionTakeover) {
+				toast.warning("检测到该账号已在其他位置登录，已结束之前的会话。", {
+					position: "top-center",
+					closeButton: true,
+				});
+			}
 
 			// 适配后端数据格式：处理角色和权限信息
 			const getAttr = (key: string) => {

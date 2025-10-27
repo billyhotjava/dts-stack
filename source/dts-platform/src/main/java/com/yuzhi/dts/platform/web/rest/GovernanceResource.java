@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -64,13 +65,17 @@ public class GovernanceResource {
     // Quality rule APIs ------------------------------------------------------
 
     @GetMapping("/quality/rules")
-    public ApiResponse<List<QualityRuleDto>> listQualityRules() {
-        return ApiResponses.ok(qualityRuleService.listAll());
+    public ApiResponse<List<QualityRuleDto>> listQualityRules(
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return ApiResponses.ok(qualityRuleService.listAll(activeDept));
     }
 
     @GetMapping("/rules")
-    public ApiResponse<List<QualityRuleDto>> legacyListRules() {
-        return listQualityRules();
+    public ApiResponse<List<QualityRuleDto>> legacyListRules(
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return listQualityRules(activeDept);
     }
 
     @PostMapping("/quality/rules")
@@ -134,27 +139,37 @@ public class GovernanceResource {
 
     @PostMapping("/compliance/batches")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<ComplianceBatchDto> createComplianceBatch(@RequestBody ComplianceBatchRequest request) {
-        return ApiResponses.ok(complianceService.createBatch(request, currentUser()));
+    public ApiResponse<ComplianceBatchDto> createComplianceBatch(
+        @RequestBody ComplianceBatchRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return ApiResponses.ok(complianceService.createBatch(request, currentUser(), activeDept));
     }
 
     @GetMapping("/compliance/batches")
     public ApiResponse<List<ComplianceBatchDto>> listComplianceBatches(
         @RequestParam(value = "limit", defaultValue = "10") int limit,
-        @RequestParam(value = "status", required = false) String status
+        @RequestParam(value = "status", required = false) String status,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        return ApiResponses.ok(complianceService.recentBatches(limit, parseStatuses(status)));
+        return ApiResponses.ok(complianceService.recentBatches(limit, parseStatuses(status), activeDept));
     }
 
     @GetMapping("/compliance/batches/{id}")
-    public ApiResponse<ComplianceBatchDto> getComplianceBatch(@PathVariable UUID id) {
-        return ApiResponses.ok(complianceService.getBatch(id));
+    public ApiResponse<ComplianceBatchDto> getComplianceBatch(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return ApiResponses.ok(complianceService.getBatch(id, activeDept));
     }
 
     @DeleteMapping("/compliance/batches/{id}")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<Boolean> deleteComplianceBatch(@PathVariable UUID id) {
-        complianceService.deleteBatch(id, currentUser());
+    public ApiResponse<Boolean> deleteComplianceBatch(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        complianceService.deleteBatch(id, currentUser(), activeDept);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -162,9 +177,10 @@ public class GovernanceResource {
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<ComplianceBatchItemDto> updateComplianceItem(
         @PathVariable UUID id,
-        @RequestBody ComplianceItemUpdateRequest request
+        @RequestBody ComplianceItemUpdateRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        return ApiResponses.ok(complianceService.updateItem(id, request, currentUser()));
+        return ApiResponses.ok(complianceService.updateItem(id, request, currentUser(), activeDept));
     }
 
     // Issue & remediation APIs ----------------------------------------------

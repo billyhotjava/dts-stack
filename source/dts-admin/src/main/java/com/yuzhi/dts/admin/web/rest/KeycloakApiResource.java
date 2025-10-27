@@ -46,6 +46,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @RestController
 @RequestMapping("/api")
@@ -722,9 +725,9 @@ public class KeycloakApiResource {
         return trimmed;
     }
 
-    private void registerSession(String username, KeycloakAuthService.TokenResponse tokens) {
+    private boolean registerSession(String username, KeycloakAuthService.TokenResponse tokens) {
         if (tokens == null) {
-            return;
+            return false;
         }
         String actor = sanitizeActor(username);
         if (!StringUtils.hasText(actor)) {
@@ -733,7 +736,7 @@ public class KeycloakApiResource {
         if (!StringUtils.hasText(actor)) {
             actor = currentUser();
         }
-        adminSessionRegistry.registerLogin(
+        AdminSessionRegistry.SessionRegistration registration = adminSessionRegistry.registerLogin(
             actor,
             tokens.sessionState(),
             tokens.accessToken(),
@@ -741,6 +744,15 @@ public class KeycloakApiResource {
             resolveExpiry(tokens.expiresIn()),
             resolveExpiry(tokens.refreshExpiresIn())
         );
+        if (registration.takeover() && LOG.isInfoEnabled()) {
+            LOG.info(
+                "User {} took over {} active session(s); new session id = {}",
+                actor,
+                registration.terminatedSessions(),
+                registration.session().getSessionId()
+            );
+        }
+        return registration.takeover();
     }
 
     private String resolveActorForLogout(Map<String, String> body, String refreshToken) {
@@ -826,6 +838,28 @@ public class KeycloakApiResource {
         return resolved != null ? resolved : "unknown";
     }
 
+    private boolean isAuditSuppressed() {
+        try {
+            RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+            if (attrs instanceof ServletRequestAttributes servletAttrs) {
+                HttpServletRequest request = servletAttrs.getRequest();
+                if (request != null) {
+                    String header = request.getHeader("X-Audit-Silent");
+                    if (header != null && header.trim().equalsIgnoreCase("true")) {
+                        return true;
+                    }
+                    String param = request.getParameter("auditSilent");
+                    if (param != null && param.trim().equalsIgnoreCase("true")) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            LOG.debug("Audit suppression check failed: {}", ex.getMessage());
+        }
+        return false;
+    }
+
     private Instant resolveExpiry(Long seconds) {
         if (seconds == null || seconds <= 0) {
             return null;
@@ -857,13 +891,15 @@ public class KeycloakApiResource {
         if (StringUtils.hasText(targetPrincipal)) {
             payload.put("username", targetPrincipal);
         }
-        auditService.recordAction(
-            currentUser(),
-            "ADMIN_USER_VIEW",
-            AuditStage.SUCCESS,
-            displayTarget,
-            payload
-        );
+        if (!isAuditSuppressed()) {
+            auditService.recordAction(
+                currentUser(),
+                "ADMIN_ROLE_ASSIGNMENT_VIEW",
+                AuditStage.SUCCESS,
+                displayTarget,
+                payload
+            );
+        }
         return ResponseEntity.ok(roles);
     }
 
@@ -1312,13 +1348,15 @@ public class KeycloakApiResource {
         Optional<ApprovalDTOs.ApprovalRequestDetail> detail = adminUserService.findApprovalDetail(id);
         return detail
             .map(found -> {
-                auditService.recordAction(
-                    SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
-                    "ADMIN_APPROVAL_VIEW",
-                    AuditStage.SUCCESS,
-                    String.valueOf(id),
-                    Map.of("status", found.status)
-                );
+                if (!isAuditSuppressed()) {
+                    auditService.recordAction(
+                        SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+                        "ADMIN_APPROVAL_VIEW",
+                        AuditStage.SUCCESS,
+                        String.valueOf(id),
+                        Map.of("status", found.status)
+                    );
+                }
                 return ResponseEntity.ok(ApiResponse.ok(found));
             })
             .orElseGet(() -> ResponseEntity.status(404).body(ApiResponse.error("审批请求不存在")));
@@ -1466,7 +1504,10 @@ public class KeycloakApiResource {
             if (loginResult.tokens().expiresIn() != null) data.put("expiresIn", loginResult.tokens().expiresIn());
             if (loginResult.tokens().refreshExpiresIn() != null) data.put("refreshExpiresIn", loginResult.tokens().refreshExpiresIn());
             String sessionUser = (principal != null && !principal.isBlank()) ? principal : username;
-            registerSession(sessionUser, loginResult.tokens());
+            boolean takeover = registerSession(sessionUser, loginResult.tokens());
+            if (takeover) {
+                data.put("sessionTakeover", Boolean.TRUE);
+            }
             return ResponseEntity.ok(ApiResponse.ok(data));
         } catch (org.springframework.security.authentication.BadCredentialsException ex) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
@@ -1550,14 +1591,10 @@ public class KeycloakApiResource {
                 .map(v -> (String) v)
                 .filter(StringUtils::hasText)
                 .orElse(username);
-            registerSession(sessionUser, loginResult.tokens());
-            auditService.recordAction(
-                username,
-                "ADMIN_AUTH_LOGIN",
-                AuditStage.SUCCESS,
-                username,
-                Map.of("audience", "admin", "mode", "password")
-            );
+            boolean takeover = registerSession(sessionUser, loginResult.tokens());
+            if (takeover) {
+                data.put("sessionTakeover", Boolean.TRUE);
+            }
             return ResponseEntity.ok(ApiResponse.ok(data));
         } catch (BadCredentialsException ex) {
             auditService.recordAction(
@@ -1947,7 +1984,10 @@ public class KeycloakApiResource {
             if (loginResult.tokens().expiresIn() != null) data.put("expiresIn", loginResult.tokens().expiresIn());
             if (loginResult.tokens().refreshExpiresIn() != null) data.put("refreshExpiresIn", loginResult.tokens().refreshExpiresIn());
             String sessionUser = (principal != null && !principal.isBlank()) ? principal : mappedUsername;
-            registerSession(sessionUser, loginResult.tokens());
+            boolean takeover = registerSession(sessionUser, loginResult.tokens());
+            if (takeover) {
+                data.put("sessionTakeover", Boolean.TRUE);
+            }
 
             Map<String, Object> successAudit = new HashMap<>(auditContext);
             successAudit.put("principal", principal);

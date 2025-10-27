@@ -69,7 +69,7 @@ public class InfraResource {
     @GetMapping("/data-sources")
     public ApiResponse<List<InfraDataSourceDto>> listDataSources() {
         var list = managementService.listDataSources();
-        audit.audit("READ", "infra.dataSource", "list");
+        audit.recordAuxiliary("READ", "infra.dataSource", "infra.dataSource", "list", "SUCCESS", null);
         return ApiResponses.ok(list);
     }
 
@@ -131,7 +131,7 @@ public class InfraResource {
     @GetMapping("/data-storages")
     public ApiResponse<List<InfraDataStorageDto>> listDataStorages() {
         var list = managementService.listDataStorages();
-        audit.audit("READ", "infra.dataStorage", "list");
+        audit.recordAuxiliary("READ", "infra.dataStorage", "infra.dataStorage", "list", "SUCCESS", null);
         return ApiResponses.ok(list);
     }
 
@@ -164,7 +164,8 @@ public class InfraResource {
     @GetMapping("/data-sources/test-logs")
     public ApiResponse<List<ConnectionTestLogDto>> recentTestLogs(@RequestParam(required = false) UUID dataSourceId) {
         var logs = managementService.recentTestLogs(dataSourceId);
-        audit.audit("READ", "infra.dataSource.testLogs", dataSourceId != null ? dataSourceId.toString() : "recent");
+        String targetId = dataSourceId != null ? dataSourceId.toString() : "recent";
+        audit.recordAuxiliary("READ", "infra.dataSource.testLogs", "infra.dataSource.testLogs", targetId, "SUCCESS", null);
         return ApiResponses.ok(logs);
     }
 

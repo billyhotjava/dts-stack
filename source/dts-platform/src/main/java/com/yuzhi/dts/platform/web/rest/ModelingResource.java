@@ -36,6 +36,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
@@ -66,7 +67,8 @@ public class ModelingResource {
         @RequestParam(required = false) String status,
         @RequestParam(required = false) String domain,
         @RequestParam(required = false) String securityLevel,
-        @RequestParam(required = false) String keyword
+        @RequestParam(required = false) String keyword,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdDate").descending());
         DataStandardFilter filter = new DataStandardFilter();
@@ -75,7 +77,7 @@ public class ModelingResource {
         filter.setStatus(parseStatus(status));
         filter.setSecurityLevel(parseSecurityLevel(securityLevel));
 
-        Page<DataStandardDto> result = standards.list(filter, pageable);
+        Page<DataStandardDto> result = standards.list(filter, pageable, activeDept);
         Map<String, Object> payload = Map.of(
             "content",
             result.getContent(),
@@ -86,62 +88,100 @@ public class ModelingResource {
             "size",
             result.getSize()
         );
-        audit.audit("READ", "modeling.standard", "page=" + page);
+        audit.record(
+            "READ",
+            "modeling.standard",
+            "modeling.standard",
+            null,
+            "SUCCESS",
+            java.util.Map.of("summary", "查看数据标准列表")
+        );
         return ApiResponses.ok(payload);
     }
 
     @GetMapping("/standards/{id}")
-    public ApiResponse<DataStandardDto> get(@PathVariable UUID id) {
-        DataStandardDto dto = standards.get(id);
-        audit.audit("READ", "modeling.standard", id.toString());
+    public ApiResponse<DataStandardDto> get(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        DataStandardDto dto = standards.get(id, activeDept);
+        Map<String, Object> detail = new java.util.LinkedHashMap<>();
+        detail.put("targetId", id.toString());
+        detail.put("targetName", dto.getName());
+        detail.put("summary", "查看数据标准：" + dto.getName());
+        audit.record("READ", "modeling.standard", "modeling.standard", id.toString(), "SUCCESS", detail);
         return ApiResponses.ok(dto);
     }
 
     @PostMapping("/standards")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<DataStandardDto> create(@Valid @RequestBody DataStandardUpsertRequest request) {
+    public ApiResponse<DataStandardDto> create(
+        @Valid @RequestBody DataStandardUpsertRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         try {
-            DataStandardDto saved = standards.create(request);
-            audit.audit("CREATE", "modeling.standard", saved.getId().toString());
+            DataStandardDto saved = standards.create(request, activeDept);
             return ApiResponses.ok(saved);
         } catch (RuntimeException e) {
-            audit.auditFailure("CREATE", "modeling.standard", request.getCode(), e.getMessage());
+            audit.auditFailure("CREATE", "modeling.standard", request.getCode(), java.util.Map.of("summary", "新建数据标准失败：" + request.getName()));
             throw e;
         }
     }
 
     @PutMapping("/standards/{id}")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<DataStandardDto> update(@PathVariable UUID id, @Valid @RequestBody DataStandardUpsertRequest request) {
+    public ApiResponse<DataStandardDto> update(
+        @PathVariable UUID id,
+        @Valid @RequestBody DataStandardUpsertRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         try {
-            DataStandardDto saved = standards.update(id, request);
-            audit.audit("UPDATE", "modeling.standard", id.toString());
+            DataStandardDto saved = standards.update(id, request, activeDept);
             return ApiResponses.ok(saved);
         } catch (RuntimeException e) {
-            audit.auditFailure("UPDATE", "modeling.standard", id.toString(), e.getMessage());
+            audit.auditFailure(
+                "UPDATE",
+                "modeling.standard",
+                id.toString(),
+                java.util.Map.of("summary", "更新数据标准失败：" + request.getName(), "error", e.getMessage())
+            );
             throw e;
         }
     }
 
     @DeleteMapping("/standards/{id}")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<Boolean> delete(@PathVariable UUID id) {
-        standards.delete(id);
-        audit.audit("DELETE", "modeling.standard", id.toString());
+    public ApiResponse<Boolean> delete(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        standards.delete(id, activeDept);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
     @GetMapping("/standards/{id}/versions")
-    public ApiResponse<List<DataStandardVersionDto>> listVersions(@PathVariable UUID id) {
-        List<DataStandardVersionDto> versions = standards.listVersions(id);
-        audit.audit("READ", "modeling.standard.version", id.toString());
+    public ApiResponse<List<DataStandardVersionDto>> listVersions(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<DataStandardVersionDto> versions = standards.listVersions(id, activeDept);
+        audit.record(
+            "READ",
+            "modeling.standard.version",
+            "modeling.standard.version",
+            id.toString(),
+            "SUCCESS",
+            java.util.Map.of("targetId", id.toString(), "summary", "查看数据标准版本列表")
+        );
         return ApiResponses.ok(versions);
     }
 
     @GetMapping("/standards/{id}/attachments")
-    public ApiResponse<List<DataStandardAttachmentDto>> listAttachments(@PathVariable UUID id) {
-        List<DataStandardAttachmentDto> data = attachments.list(id);
-        audit.audit("READ", "modeling.standard.attachment", id.toString());
+    public ApiResponse<List<DataStandardAttachmentDto>> listAttachments(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<DataStandardAttachmentDto> data = attachments.list(id, activeDept);
         return ApiResponses.ok(data);
     }
 
@@ -150,14 +190,32 @@ public class ModelingResource {
     public ApiResponse<DataStandardAttachmentDto> uploadAttachment(
         @PathVariable UUID id,
         @RequestPart("file") MultipartFile file,
-        @RequestParam(required = false) String version
+        @RequestParam(required = false) String version,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         try {
-            DataStandardAttachmentDto dto = attachments.upload(id, file, version);
-            audit.audit("CREATE", "modeling.standard.attachment", id + ":" + dto.getId());
+            DataStandardAttachmentDto dto = attachments.upload(id, file, version, activeDept);
+            Map<String, Object> detail = new java.util.LinkedHashMap<>();
+            detail.put("targetId", dto.getId().toString());
+            detail.put("targetName", dto.getFileName());
+            detail.put("standardId", id.toString());
+            detail.put("summary", "上传数据标准附件：" + dto.getFileName());
+            audit.record(
+                "CREATE",
+                "modeling.standard.attachment",
+                "modeling.standard.attachment",
+                dto.getId().toString(),
+                "SUCCESS",
+                detail
+            );
             return ApiResponses.ok(dto);
         } catch (RuntimeException e) {
-            audit.auditFailure("CREATE", "modeling.standard.attachment", id.toString(), e.getMessage());
+            audit.auditFailure(
+                "CREATE",
+                "modeling.standard.attachment",
+                id.toString(),
+                java.util.Map.of("summary", "上传数据标准附件失败：" + file.getOriginalFilename(), "error", e.getMessage())
+            );
             throw e;
         }
     }
@@ -165,10 +223,23 @@ public class ModelingResource {
     @GetMapping("/standards/{id}/attachments/{attachmentId}/download")
     public ResponseEntity<byte[]> download(
         @PathVariable UUID id,
-        @PathVariable UUID attachmentId
+        @PathVariable UUID attachmentId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        DataStandardAttachmentContent content = attachments.download(id, attachmentId);
-        audit.audit("READ", "modeling.standard.attachment", id + ":" + attachmentId);
+        DataStandardAttachmentContent content = attachments.download(id, attachmentId, activeDept);
+        Map<String, Object> detail = new java.util.LinkedHashMap<>();
+        detail.put("targetId", attachmentId.toString());
+        detail.put("targetName", content.getFileName());
+        detail.put("standardId", id.toString());
+        detail.put("summary", "下载数据标准附件：" + content.getFileName());
+        audit.record(
+            "READ",
+            "modeling.standard.attachment",
+            "modeling.standard.attachment",
+            attachmentId.toString(),
+            "SUCCESS",
+            detail
+        );
         MediaType mediaType = resolveMediaType(content.getContentType());
         String encodedFileName = URLEncoder.encode(content.getFileName(), StandardCharsets.UTF_8).replaceAll("\\+", "%20");
         ContentDisposition disposition = ContentDisposition.attachment().filename(encodedFileName).build();
@@ -180,9 +251,26 @@ public class ModelingResource {
 
     @DeleteMapping("/standards/{id}/attachments/{attachmentId}")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<Boolean> deleteAttachment(@PathVariable UUID id, @PathVariable UUID attachmentId) {
-        attachments.delete(id, attachmentId);
-        audit.audit("DELETE", "modeling.standard.attachment", id + ":" + attachmentId);
+    public ApiResponse<Boolean> deleteAttachment(
+        @PathVariable UUID id,
+        @PathVariable UUID attachmentId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        DataStandardAttachmentDto attachment = attachments.getMetadata(id, attachmentId, activeDept);
+        attachments.delete(id, attachmentId, activeDept);
+        Map<String, Object> detail = new java.util.LinkedHashMap<>();
+        detail.put("targetId", attachmentId.toString());
+        detail.put("targetName", attachment.getFileName());
+        detail.put("standardId", id.toString());
+        detail.put("summary", "删除数据标准附件：" + attachment.getFileName());
+        audit.record(
+            "DELETE",
+            "modeling.standard.attachment",
+            "modeling.standard.attachment",
+            attachmentId.toString(),
+            "SUCCESS",
+            detail
+        );
         return ApiResponses.ok(Boolean.TRUE);
     }
 

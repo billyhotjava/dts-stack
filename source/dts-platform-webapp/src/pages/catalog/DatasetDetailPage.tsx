@@ -212,10 +212,10 @@ const grantDeptOptions = useMemo(
 	[sortedDeptOptions],
 );
 	const enforcedOwnerDept = useMemo(() => {
-		if (isInstituteDataAdmin) return undefined;
+		if (isOpadmin || isInstituteDataAdmin) return undefined;
 		const code = (userDeptCode || "").trim();
 		return code || undefined;
-	}, [isInstituteDataAdmin, userDeptCode]);
+	}, [isInstituteDataAdmin, isOpadmin, userDeptCode]);
 	const deptOptionsForSelect = useMemo(() => {
 		if (isInstituteDataAdmin) {
 			return deptSelectOptions;
@@ -237,7 +237,7 @@ const grantDeptOptions = useMemo(
 			},
 		];
 	}, [isInstituteDataAdmin, deptSelectOptions, enforcedOwnerDept]);
-	const deptSelectDisabled = !editable || (!isInstituteDataAdmin && Boolean(enforcedOwnerDept));
+	const deptSelectDisabled = !editable || !isOpadmin;
 	const resetGrantForm = useCallback(() => {
 		setGrantForm({
 			username: "",
@@ -665,30 +665,33 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 										onChange={(e) => setDataset({ ...(dataset as DatasetAsset), owner: e.target.value })}
 									/>
 								</div>
-				<div className="grid gap-2">
-					<Label>所属部门</Label>
-					<p className="text-xs text-muted-foreground">未指定或选择 ROOT 节点时，数据集将对所有部门开放。</p>
-					<Select
-						value={ownerDeptSelectValue}
-						disabled={deptSelectDisabled}
-						onValueChange={(v) =>
-							setDataset({
-								...(dataset as DatasetAsset),
-								ownerDept: v === "__PUBLIC__" ? "" : v,
-							})
-						}
-					>
-						<SelectTrigger>
-							<SelectValue
-								placeholder={
-									deptLoading
-										? "加载中…"
-										: !isInstituteDataAdmin && enforcedOwnerDept
-										? "仅可查看所属部门"
-										: "选择部门…"
-								}
-							/>
-						</SelectTrigger>
+			<div className="grid gap-2">
+				<Label>所属部门</Label>
+				<p className="text-xs text-muted-foreground">
+					未指定或选择 ROOT 节点时，数据集将对所有部门开放。
+					{!isOpadmin && "（当前账号仅可查看所属部门）"}
+				</p>
+				<Select
+					value={ownerDeptSelectValue}
+					disabled={deptSelectDisabled}
+					onValueChange={(v) =>
+						setDataset({
+							...(dataset as DatasetAsset),
+							ownerDept: v === "__PUBLIC__" ? "" : v,
+						})
+					}
+				>
+					<SelectTrigger>
+						<SelectValue
+							placeholder={
+								deptLoading
+									? "加载中…"
+									: !isOpadmin
+									? "仅运维管理员可调整所属部门"
+									: "选择部门…"
+							}
+						/>
+					</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="__PUBLIC__">未指定（全局可见）</SelectItem>
 							{deptOptionsForSelect.map((d) => {

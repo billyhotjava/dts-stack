@@ -18,6 +18,7 @@ public class ComplianceBatchDto {
     private Instant finishedAt;
     private String triggeredBy;
     private String triggeredType;
+    private String ownerDept;
     private String summary;
     private String metadataJson;
     private Instant createdDate;
@@ -125,6 +126,14 @@ public class ComplianceBatchDto {
 
     public void setTriggeredType(String triggeredType) {
         this.triggeredType = triggeredType;
+    }
+
+    public String getOwnerDept() {
+        return ownerDept;
+    }
+
+    public void setOwnerDept(String ownerDept) {
+        this.ownerDept = ownerDept;
     }
 
     public String getSummary() {

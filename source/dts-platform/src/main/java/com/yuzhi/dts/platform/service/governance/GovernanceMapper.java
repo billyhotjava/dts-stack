@@ -177,6 +177,7 @@ final class GovernanceMapper {
         dto.setFinishedAt(entity.getFinishedAt());
         dto.setTriggeredBy(entity.getTriggeredBy());
         dto.setTriggeredType(entity.getTriggeredType());
+        dto.setOwnerDept(entity.getOwnerDept());
         dto.setSummary(entity.getSummary());
         dto.setMetadataJson(entity.getMetadataJson());
         dto.setCreatedDate(entity.getCreatedDate());

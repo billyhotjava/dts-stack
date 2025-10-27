@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.service.audit;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.config.AuditProperties;
 import com.yuzhi.dts.admin.domain.AuditEvent;
@@ -16,13 +17,18 @@ import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -35,6 +41,7 @@ import javax.crypto.SecretKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -53,54 +60,107 @@ public class AdminAuditService {
     private static final Logger log = LoggerFactory.getLogger(AdminAuditService.class);
 
     public static class AuditEventView {
-        public String eventId;
-        public long id;
-        public Instant occurredAt;
-        public String actor;
-        public String actorRole;
-        public String module;
-        public String action;
-        public String resourceType;
-        public String resourceId;
-        public String clientIp;
-        public String clientAgent;
-        public String httpMethod;
-        public String result;
-        public String resultText; // SUCCESS/FAILED -> 成功/失败（只读显示）
-        public String extraTags;
-        public String payloadPreview;
-        // extended view fields
-        public String sourceSystem;
-        public String sourceSystemText; // admin/platform -> 管理端/业务端（只读显示）
-        public String eventClass;
-        public String eventType;
-        public String summary;
-        public String operatorId;
-        public String operatorName;
-        public String operatorRoles; // JSON array string
-        public String orgCode;
-        public String orgName;
-        public String departmentName; // 别名（用于前端显示“部门”）
-        // extracted from details for convenience
-        public String requestId;
-        public String targetTable;
-        public String targetTableLabel; // 表中文名（只读显示）
-        public String targetId;
-        public String targetRef;
-        public String changeRequestRef; // 审批关联号（CR-XXXX）
-        public String approvalSummary;  // 审批内容摘要
-        // derived presentation fields (新口径)
-        public String operationTypeCode; // CREATE/UPDATE/DELETE/READ...
-        public String operationType;     // 本地化显示
-        public String operationContent;  // 如：修改了用户/查询了用户列表
-        public String logTypeText;       // 安全审计/操作审计
-        // rule engine metadata
-        public Boolean operationRuleHit;
-        public Long operationRuleId;
-        public String operationModule;
-        public String operationSourceTable;
-        public String operationEventClass;
-        public String correlationId;
+        private String eventId;
+        private long id;
+        private Instant occurredAt;
+        private String actor;
+        private String actorRole;
+        private String actorName;
+        private String module;
+        private String moduleLabel;
+        private String action;
+        private String resourceType;
+        private String resourceId;
+        private String clientIp;
+        private String clientAgent;
+        private String httpMethod;
+        private String result;
+        private String resultText;
+        private String extraTags;
+        private String payloadPreview;
+        private String sourceSystem;
+        private String sourceSystemText;
+        private String eventClass;
+        private String eventType;
+        private String summary;
+        private String operationCode;
+        private String operationGroup;
+        private String operationName;
+        private String operationTypeCode;
+        private String operationTypeText;
+        private String operationContent;
+        private Boolean operationRuleHit;
+        private Long operationRuleId;
+        private String operationModule;
+        private String operationSourceTable;
+        private String operatorId;
+        private String operatorName;
+        private List<String> operatorRoles = List.of();
+        private String orgCode;
+        private String orgName;
+        private String departmentName;
+        private String requestId;
+        private String targetTable;
+        private String targetTableLabel;
+        private List<String> targetIds = List.of();
+        private Map<String, Object> targetLabels = Map.of();
+        private Map<String, Object> targetSnapshot = Map.of();
+        private String targetId;
+        private String targetRef;
+        private String changeRequestRef;
+        private String approvalSummary;
+        private Map<String, Object> details = Map.of();
+
+        public String eventId() { return eventId; }
+        public long id() { return id; }
+        public Instant occurredAt() { return occurredAt; }
+        public String actor() { return actor; }
+        public String actorRole() { return actorRole; }
+        public String actorName() { return actorName; }
+        public String module() { return module; }
+        public String moduleLabel() { return moduleLabel; }
+        public String action() { return action; }
+        public String resourceType() { return resourceType; }
+        public String resourceId() { return resourceId; }
+        public String clientIp() { return clientIp; }
+        public String clientAgent() { return clientAgent; }
+        public String httpMethod() { return httpMethod; }
+        public String result() { return result; }
+        public String resultText() { return resultText; }
+        public String extraTags() { return extraTags; }
+        public String payloadPreview() { return payloadPreview; }
+        public String sourceSystem() { return sourceSystem; }
+        public String sourceSystemText() { return sourceSystemText; }
+        public String eventClass() { return eventClass; }
+        public String eventType() { return eventType; }
+        public String summary() { return summary; }
+        public String operationCode() { return operationCode; }
+        public String operationGroup() { return operationGroup; }
+        public String operationName() { return operationName; }
+        public String operationType() { return operationTypeCode; }
+        public String operationTypeText() { return operationTypeText; }
+        public String operationContent() { return operationContent; }
+        public Boolean operationRuleHit() { return operationRuleHit; }
+        public Long operationRuleId() { return operationRuleId; }
+        public String operationModule() { return operationModule; }
+        public String operationSourceTable() { return operationSourceTable; }
+        public String operatorId() { return operatorId; }
+        public String operatorName() { return operatorName; }
+        public List<String> operatorRoles() { return operatorRoles; }
+        public String orgCode() { return orgCode; }
+        public String orgName() { return orgName; }
+        public String departmentName() { return departmentName; }
+        public String requestId() { return requestId; }
+        public String targetTable() { return targetTable; }
+        public String targetTableLabel() { return targetTableLabel; }
+        public List<String> targetIds() { return targetIds; }
+        public Map<String, Object> targetLabels() { return targetLabels; }
+        public Map<String, Object> targetSnapshot() { return targetSnapshot; }
+        public String targetId() { return targetId; }
+        public String targetRef() { return targetRef; }
+        public String changeRequestRef() { return changeRequestRef; }
+        public String approvalSummary() { return approvalSummary; }
+        public Map<String, Object> details() { return details; }
     }
 
     public record ModuleOption(String code, String label) {}
@@ -158,9 +218,17 @@ public class AdminAuditService {
         public Instant occurredAt;
         public String actor;
         public String actorRole;
+        public String actorName;
         public String sourceSystem; // admin|platform（缺省admin）
         public String module;
         public String action;
+        public String moduleLabel;
+        public String operationCode;
+        public String operationName;
+        public String operationType;
+        public String operationTypeText;
+        public String operationContent;
+        public String operationGroup;
         public String resourceType;
         public String resourceId;
         public String clientIp;
@@ -170,14 +238,457 @@ public class AdminAuditService {
         public String result;
         public Integer latencyMs;
         public Object payload;
+        public Map<String, Object> details;
+        public AuditTarget target;
+        public String summary;
         public String extraTags;
         // captured entity info (propagated from request thread by aspect)
         public String capturedTable;
         public String capturedId;
-        public String correlationId;
         public int retryCount;
         public Instant firstFailureAt;
         public String lastError;
+    }
+
+    public enum AuditResult {
+        SUCCESS("SUCCESS", "成功"),
+        FAILED("FAILED", "失败"),
+        PENDING("PENDING", "处理中");
+
+        private final String code;
+        private final String display;
+
+        AuditResult(String code, String display) {
+            this.code = code;
+            this.display = display;
+        }
+
+        public String code() {
+            return code;
+        }
+
+        public String display() {
+            return display;
+        }
+
+        public static AuditResult from(String value) {
+            if (!StringUtils.hasText(value)) {
+                return SUCCESS;
+            }
+            String normalized = value.trim().toUpperCase(Locale.ROOT);
+            for (AuditResult candidate : values()) {
+                if (candidate.code.equals(normalized)) {
+                    return candidate;
+                }
+            }
+            return switch (normalized) {
+                case "OK", "SUCCEEDED", "APPROVED", "通过" -> SUCCESS;
+                case "FAIL", "FAILED", "ERROR", "异常", "驳回", "拒绝" -> FAILED;
+                case "PROCESSING", "PROCESS", "PENDING", "处理中", "排队" -> PENDING;
+                default -> SUCCESS;
+            };
+        }
+    }
+
+    public static final class AuditTarget {
+        private final String table;
+        private final List<String> ids;
+        private final Map<String, String> labels;
+        private final Map<String, Object> snapshot;
+
+        public AuditTarget(String table, Collection<String> ids, Map<String, String> labels, Map<String, Object> snapshot) {
+            this.table = StringUtils.hasText(table) ? table.trim() : null;
+            this.ids = normalizeIds(ids);
+            this.labels = labels == null ? Map.of() : Map.copyOf(labels);
+            this.snapshot = snapshot == null ? Map.of() : Map.copyOf(snapshot);
+        }
+
+        public static AuditTarget of(String table, Collection<String> ids) {
+            return new AuditTarget(table, ids, Map.of(), Map.of());
+        }
+
+        public String table() {
+            return table;
+        }
+
+        public List<String> ids() {
+            return ids;
+        }
+
+        public Map<String, String> labels() {
+            return labels;
+        }
+
+        public Map<String, Object> snapshot() {
+            return snapshot;
+        }
+
+        private List<String> normalizeIds(Collection<String> ids) {
+            if (ids == null || ids.isEmpty()) {
+                return List.of();
+            }
+            java.util.LinkedHashSet<String> normalized = new java.util.LinkedHashSet<>();
+            for (String id : ids) {
+                if (!StringUtils.hasText(id)) {
+                    continue;
+                }
+                normalized.add(id.trim());
+            }
+            return List.copyOf(normalized);
+        }
+    }
+
+    public static final class AuditSearchCriteria {
+        private final String actor;
+        private final String module;
+        private final String operationType;
+        private final String actionCode;
+        private final String operationGroup;
+        private final String sourceSystem;
+        private final String result;
+        private final String targetTable;
+        private final String targetId;
+        private final String clientIp;
+        private final String keyword;
+        private final Instant from;
+        private final Instant to;
+        private final List<String> allowedActors;
+        private final List<String> excludedActors;
+        private final boolean includeDetails;
+
+        public AuditSearchCriteria(
+            String actor,
+            String module,
+            String operationType,
+            String actionCode,
+            String operationGroup,
+            String sourceSystem,
+            String result,
+            String targetTable,
+            String targetId,
+            String clientIp,
+            String keyword,
+            Instant from,
+            Instant to,
+            Collection<String> allowedActors,
+            Collection<String> excludedActors,
+            boolean includeDetails
+        ) {
+            this.actor = sanitize(actor);
+            this.module = sanitize(module);
+            this.operationType = sanitize(operationType);
+            this.actionCode = sanitize(actionCode);
+            this.operationGroup = sanitize(operationGroup);
+            this.sourceSystem = sanitize(sourceSystem);
+            this.result = sanitize(result);
+            this.targetTable = sanitize(targetTable);
+            this.targetId = sanitize(targetId);
+            this.clientIp = sanitize(clientIp);
+            this.keyword = sanitize(keyword);
+            this.from = from;
+            this.to = to;
+            this.allowedActors = sanitizeActorList(allowedActors);
+            this.excludedActors = sanitizeActorList(excludedActors);
+            this.includeDetails = includeDetails;
+        }
+
+        public String actor() { return actor; }
+        public String module() { return module; }
+        public String operationType() { return operationType; }
+        public String actionCode() { return actionCode; }
+        public String operationGroup() { return operationGroup; }
+        public String sourceSystem() { return sourceSystem; }
+        public String result() { return result; }
+        public String targetTable() { return targetTable; }
+        public String targetId() { return targetId; }
+        public String clientIp() { return clientIp; }
+        public String keyword() { return keyword; }
+        public Instant from() { return from; }
+        public Instant to() { return to; }
+        public List<String> allowedActors() { return allowedActors; }
+        public List<String> excludedActors() { return excludedActors; }
+        public boolean includeDetails() { return includeDetails; }
+
+        private static String sanitize(String value) {
+            if (!StringUtils.hasText(value)) {
+                return null;
+            }
+            return value.trim();
+        }
+
+        private static List<String> sanitizeActorList(Collection<String> actors) {
+            if (actors == null || actors.isEmpty()) {
+                return List.of();
+            }
+            LinkedHashSet<String> normalized = new LinkedHashSet<>();
+            for (String actor : actors) {
+                if (!StringUtils.hasText(actor)) {
+                    continue;
+                }
+                normalized.add(actor.trim().toLowerCase(Locale.ROOT));
+            }
+            return normalized.isEmpty() ? List.of() : List.copyOf(normalized);
+        }
+    }
+
+    public AuditRecordBuilder builder() {
+        return new AuditRecordBuilder();
+    }
+
+    public Page<AuditEventView> search(AuditSearchCriteria criteria, Pageable pageable) {
+        AuditSearchCriteria effective = criteria != null
+            ? criteria
+            : new AuditSearchCriteria(null, null, null, null, null, null, null, null, null, null, null, null, null, List.of(), List.of(), true);
+
+        Page<AuditEvent> page = search(
+            effective.actor(),
+            effective.module(),
+            effective.actionCode(),
+            effective.sourceSystem(),
+            null,
+            effective.result(),
+            effective.targetTable(),
+            effective.targetId(),
+            null,
+            effective.from(),
+            effective.to(),
+            effective.clientIp(),
+            effective.operationGroup(),
+            pageable
+        );
+
+        List<AuditEvent> filtered = page.getContent();
+        boolean mutated = false;
+        if (!effective.allowedActors().isEmpty()) {
+            Set<String> allowed = new HashSet<>(effective.allowedActors());
+            filtered = filtered
+                .stream()
+                .filter(event -> allowed.contains(Optional.ofNullable(event.getActor()).orElse("" ).trim().toLowerCase(Locale.ROOT)))
+                .toList();
+            mutated = true;
+        }
+        if (!effective.excludedActors().isEmpty()) {
+            Set<String> excluded = new HashSet<>(effective.excludedActors());
+            filtered = filtered
+                .stream()
+                .filter(event -> !excluded.contains(Optional.ofNullable(event.getActor()).orElse("" ).trim().toLowerCase(Locale.ROOT)))
+                .toList();
+            mutated = true;
+        }
+        Page<AuditEvent> effectivePage = mutated
+            ? new PageImpl<>(filtered, pageable, filtered.size())
+            : page;
+        boolean includeDetails = effective.includeDetails();
+        return effectivePage.map(event -> toView(event, includeDetails));
+    }
+
+    public Optional<AuditEventView> fetchById(Long id, boolean includeDetails) {
+        if (id == null) {
+            return Optional.empty();
+        }
+        return repository.findById(id).map(event -> toView(event, includeDetails));
+    }
+
+    public final class AuditRecordBuilder {
+        private final PendingAuditEvent event = new PendingAuditEvent();
+        private final Map<String, Object> detailMap = new LinkedHashMap<>();
+
+        public AuditRecordBuilder actor(String actor) {
+            event.actor = actor;
+            return this;
+        }
+
+        public AuditRecordBuilder actorName(String actorName) {
+            event.actorName = actorName;
+            return this;
+        }
+
+        public AuditRecordBuilder actorRole(String actorRole) {
+            event.actorRole = actorRole;
+            return this;
+        }
+
+        public AuditRecordBuilder sourceSystem(String sourceSystem) {
+            event.sourceSystem = sourceSystem;
+            return this;
+        }
+
+        public AuditRecordBuilder occurredAt(Instant occurredAt) {
+            event.occurredAt = occurredAt;
+            return this;
+        }
+
+        public AuditRecordBuilder module(String module) {
+            event.module = module;
+            return this;
+        }
+
+        public AuditRecordBuilder moduleLabel(String moduleLabel) {
+            event.moduleLabel = moduleLabel;
+            return this;
+        }
+
+        public AuditRecordBuilder action(String action) {
+            event.action = action;
+            return this;
+        }
+
+        public AuditRecordBuilder summary(String summary) {
+            event.summary = summary;
+            return this;
+        }
+
+        public AuditRecordBuilder operationName(String operationName) {
+            event.operationName = operationName;
+            return this;
+        }
+
+        public AuditRecordBuilder operationCode(String operationCode) {
+            event.operationCode = operationCode;
+            return this;
+        }
+
+        public AuditRecordBuilder operationGroup(String operationGroup) {
+            event.operationGroup = operationGroup;
+            return this;
+        }
+
+        public AuditRecordBuilder operationType(AuditOperationType type) {
+            if (type != null && type != AuditOperationType.UNKNOWN) {
+                event.operationType = type.getCode();
+                if (!StringUtils.hasText(event.operationTypeText)) {
+                    event.operationTypeText = type.getDisplayName();
+                }
+            }
+            return this;
+        }
+
+        public AuditRecordBuilder operationTypeText(String text) {
+            event.operationTypeText = text;
+            return this;
+        }
+
+        public AuditRecordBuilder operationContent(String content) {
+            event.operationContent = content;
+            return this;
+        }
+
+        public AuditRecordBuilder details(Map<String, ?> details) {
+            this.detailMap.clear();
+            if (details != null) {
+                details.forEach((k, v) -> {
+                    if (k != null) {
+                        this.detailMap.put(String.valueOf(k), v);
+                    }
+                });
+            }
+            return this;
+        }
+
+        public AuditRecordBuilder detail(String key, Object value) {
+            if (StringUtils.hasText(key)) {
+                this.detailMap.put(key, value);
+            }
+            return this;
+        }
+
+        public AuditRecordBuilder clientIp(String clientIp) {
+            event.clientIp = clientIp;
+            return this;
+        }
+
+        public AuditRecordBuilder clientAgent(String clientAgent) {
+            event.clientAgent = clientAgent;
+            return this;
+        }
+
+        public AuditRecordBuilder requestUri(String requestUri) {
+            event.requestUri = requestUri;
+            return this;
+        }
+
+        public AuditRecordBuilder httpMethod(String httpMethod) {
+            event.httpMethod = httpMethod;
+            return this;
+        }
+
+        public AuditRecordBuilder target(AuditTarget target) {
+            event.target = target;
+            return this;
+        }
+
+        public AuditRecordBuilder resource(String resourceType, String resourceId) {
+            event.resourceType = resourceType;
+            event.resourceId = resourceId;
+            return this;
+        }
+
+        public AuditRecordBuilder result(AuditResult result) {
+            AuditResult effective = result == null ? AuditResult.SUCCESS : result;
+            event.result = effective.code();
+            return this;
+        }
+
+        public AuditRecordBuilder fromOperation(AdminAuditOperation operation) {
+            if (operation == null) {
+                return this;
+            }
+            event.operationCode = operation.code();
+            event.module = operation.moduleKey();
+            event.moduleLabel = operation.moduleLabel();
+            if (!StringUtils.hasText(event.operationType)) {
+                event.operationType = operation.type().getCode();
+            }
+            if (!StringUtils.hasText(event.operationTypeText)) {
+                event.operationTypeText = operation.type().getDisplayName();
+            }
+            if (!StringUtils.hasText(event.action)) {
+                event.action = operation.defaultName();
+            }
+            if (!StringUtils.hasText(event.operationName)) {
+                event.operationName = operation.defaultName();
+            }
+            if (!StringUtils.hasText(event.resourceType)) {
+                event.resourceType = operation.targetTable();
+            }
+            return this;
+        }
+
+        public PendingAuditEvent build() {
+            PendingAuditEvent built = new PendingAuditEvent();
+            built.actor = defaultString(event.actor, SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
+            built.actorRole = event.actorRole;
+            built.actorName = event.actorName;
+            built.sourceSystem = defaultString(event.sourceSystem, "admin");
+            built.occurredAt = event.occurredAt != null ? event.occurredAt : Instant.now();
+            built.module = defaultString(event.module, "general");
+            built.moduleLabel = event.moduleLabel;
+            built.action = defaultString(event.action, "UNKNOWN");
+            built.operationCode = event.operationCode;
+            built.operationGroup = event.operationGroup;
+            built.operationName = StringUtils.hasText(event.operationName) ? event.operationName : built.action;
+            AuditOperationType resolvedType = StringUtils.hasText(event.operationType)
+                ? AuditOperationType.from(event.operationType)
+                : AuditOperationType.from(event.action);
+            built.operationType = resolvedType.getCode();
+            built.operationTypeText = StringUtils.hasText(event.operationTypeText) ? event.operationTypeText : resolvedType.getDisplayName();
+            built.operationContent = event.operationContent;
+            built.resourceType = event.resourceType;
+            built.resourceId = event.resourceId;
+            built.clientIp = event.clientIp;
+            built.clientAgent = event.clientAgent;
+            built.requestUri = event.requestUri;
+            built.httpMethod = event.httpMethod;
+            built.result = defaultString(event.result, AuditResult.SUCCESS.code());
+            built.summary = event.summary;
+            built.target = event.target;
+            if (!detailMap.isEmpty()) {
+                built.details = Map.copyOf(detailMap);
+                built.payload = new LinkedHashMap<>(detailMap);
+            }
+            built.extraTags = event.extraTags;
+            return built;
+        }
     }
 
     private final AuditEventRepository repository;
@@ -484,6 +995,20 @@ public class AdminAuditService {
         event.payload = payload;
         event.extraTags = serializeTags(extraTags);
         event.correlationId = correlationId;
+        AuditOperationType opType = AuditOperationType.from(action);
+        event.operationType = opType.getCode();
+        event.operationTypeText = opType.getDisplayName();
+        if (payload instanceof Map<?, ?> mapPayload) {
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            mapPayload.forEach((k, v) -> {
+                if (k != null) {
+                    normalized.put(String.valueOf(k), v);
+                }
+            });
+            if (!normalized.isEmpty()) {
+                event.details = normalized;
+            }
+        }
         enrichWithRequestContext(event);
         // capture last entity from current thread (aspect)
         try {
@@ -518,6 +1043,24 @@ public class AdminAuditService {
         }
         if (!StringUtils.hasText(event.actorRole)) {
             event.actorRole = resolveActorRole(event.actor);
+        }
+        if (!StringUtils.hasText(event.operationType)) {
+            AuditOperationType inferred = AuditOperationType.from(event.action);
+            event.operationType = inferred.getCode();
+            if (!StringUtils.hasText(event.operationTypeText)) {
+                event.operationTypeText = inferred.getDisplayName();
+            }
+        }
+        if (event.details == null && event.payload instanceof Map<?, ?> payloadMap) {
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            payloadMap.forEach((k, v) -> {
+                if (k != null) {
+                    normalized.put(String.valueOf(k), v);
+                }
+            });
+            if (!normalized.isEmpty()) {
+                event.details = normalized;
+            }
         }
         // If not prefilled, attempt to capture entity snapshot at record time
         if (!StringUtils.hasText(event.capturedId)) {
@@ -757,6 +1300,56 @@ public class AdminAuditService {
         return text;
     }
 
+    private Map<String, Object> parseJsonMap(String json) {
+        if (!StringUtils.hasText(json)) {
+            return Map.of();
+        }
+        try {
+            Map<String, Object> map = objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
+            if (map == null || map.isEmpty()) {
+                return Map.of();
+            }
+            return Collections.unmodifiableMap(new LinkedHashMap<>(map));
+        } catch (Exception ex) {
+            if (log.isDebugEnabled()) {
+                log.debug("Failed to parse JSON map: {}", ex.toString());
+            }
+            return Map.of();
+        }
+    }
+
+    private List<String> parseJsonStringList(String json) {
+        if (!StringUtils.hasText(json)) {
+            return List.of();
+        }
+        try {
+            List<String> raw = objectMapper.readValue(json, new TypeReference<List<String>>() {});
+            if (raw == null || raw.isEmpty()) {
+                return List.of();
+            }
+            LinkedHashSet<String> normalized = new LinkedHashSet<>();
+            for (String item : raw) {
+                if (StringUtils.hasText(item)) {
+                    normalized.add(item.trim());
+                }
+            }
+            return normalized.isEmpty() ? List.of() : List.copyOf(normalized);
+        } catch (Exception ex) {
+            if (log.isDebugEnabled()) {
+                log.debug("Failed to parse JSON list: {}", ex.toString());
+            }
+            return List.of();
+        }
+    }
+
+    private String asText(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
     private String localizeStatus(String statusText) {
         if (!StringUtils.hasText(statusText)) {
             return statusText;
@@ -820,6 +1413,9 @@ public class AdminAuditService {
         entity.setOccurredAt(pending.occurredAt);
         entity.setActor(defaultString(pending.actor, "anonymous"));
         entity.setActorRole(pending.actorRole);
+        if (StringUtils.hasText(pending.actorName)) {
+            entity.setActorName(pending.actorName);
+        }
         entity.setCorrelationId(pending.correlationId);
         // source_system：默认admin，可由调用方覆盖（平台转发时置为platform）
         String src = pending.sourceSystem;
@@ -853,15 +1449,34 @@ public class AdminAuditService {
                 if (StringUtils.hasText(ruleResolution.description)) {
                     entity.setSummary(ruleResolution.description);
                 }
-                if (StringUtils.hasText(ruleResolution.eventClass)) {
-                    entity.setEventClass(ruleResolution.eventClass);
-                }
                 if (StringUtils.hasText(ruleResolution.description) && !StringUtils.hasText(entity.getAction())) {
                     entity.setAction(ruleResolution.description);
                 }
             }
         } catch (Exception ex) {
             log.error("Error during audit rule engine resolution", ex);
+        }
+
+        if (StringUtils.hasText(pending.moduleLabel) && !StringUtils.hasText(entity.getModuleLabel())) {
+            entity.setModuleLabel(pending.moduleLabel);
+        }
+        if (StringUtils.hasText(pending.operationGroup) && !StringUtils.hasText(entity.getOperationGroup())) {
+            entity.setOperationGroup(pending.operationGroup);
+        }
+        if (StringUtils.hasText(pending.operationCode) && !StringUtils.hasText(entity.getOperationCode())) {
+            entity.setOperationCode(pending.operationCode);
+        }
+        if (StringUtils.hasText(pending.operationName) && !StringUtils.hasText(entity.getOperationName())) {
+            entity.setOperationName(pending.operationName);
+        }
+        if (StringUtils.hasText(pending.operationType)) {
+            entity.setOperationType(pending.operationType);
+        }
+        if (StringUtils.hasText(pending.operationTypeText)) {
+            entity.setOperationTypeText(pending.operationTypeText);
+        }
+        if (StringUtils.hasText(pending.summary) && !StringUtils.hasText(entity.getSummary())) {
+            entity.setSummary(pending.summary);
         }
 
         if (!StringUtils.hasText(entity.getModule())) {
@@ -885,6 +1500,30 @@ public class AdminAuditService {
         String explicitTableRaw = pending.capturedTable;
         String resourceTypeRaw = pending.resourceType;
         String moduleRaw = pending.module;
+
+        if (pending.target != null) {
+            AuditTarget target = pending.target;
+            if (StringUtils.hasText(target.table())) {
+                entity.setTargetTable(target.table());
+                if (!StringUtils.hasText(entity.getResourceType())) {
+                    entity.setResourceType(target.table());
+                }
+            }
+            if (!target.ids().isEmpty()) {
+                entity.setTargetIds(objectMapper.writeValueAsString(target.ids()));
+                entity.setTargetIdText(String.join(",", target.ids()));
+                if (!StringUtils.hasText(entity.getResourceId())) {
+                    entity.setResourceId(target.ids().get(0));
+                }
+            }
+            if (!target.labels().isEmpty()) {
+                entity.setTargetLabels(objectMapper.writeValueAsString(target.labels()));
+            }
+            if (!target.snapshot().isEmpty()) {
+                entity.setTargetSnapshot(objectMapper.writeValueAsString(target.snapshot()));
+            }
+        }
+        resourceTypeRaw = entity.getResourceType();
 
         String ruleTable = sanitizeTableName(ruleSourceRaw);
         String contextTable = sanitizeTableName(contextTableRaw);
@@ -979,6 +1618,13 @@ public class AdminAuditService {
 
         // 详情：中文键
         java.util.Map<String, Object> det = new java.util.LinkedHashMap<>();
+        if (pending.details != null && !pending.details.isEmpty()) {
+            pending.details.forEach((k, v) -> {
+                if (k != null) {
+                    det.put(String.valueOf(k), v);
+                }
+            });
+        }
         if (StringUtils.hasText(resolvedTable)) {
             det.put("源表", resolvedTable);
             String tableLabel = mapTableLabel(resolvedTable);
@@ -1887,29 +2533,106 @@ public class AdminAuditService {
         }
     }
 
-    public AuditEventView toView(AuditEvent event) {
+    private AuditEventView assembleAuditView(AuditEvent event) {
         AuditEventView view = new AuditEventView();
-        view.id = event.getId();
+        view.id = event.getId() == null ? 0L : event.getId();
+        view.eventId = event.getEventUuid() != null ? event.getEventUuid().toString() : null;
         view.occurredAt = event.getOccurredAt();
         view.actor = event.getActor();
+        view.actorRole = event.getActorRole();
+        view.actorName = event.getActorName();
         view.module = event.getModule();
+        view.moduleLabel = StringUtils.hasText(event.getModuleLabel())
+            ? event.getModuleLabel()
+            : resourceDictionary.resolveLabel(event.getModule()).orElse(event.getModule());
         view.action = event.getAction();
         view.resourceType = event.getResourceType();
         view.resourceId = event.getResourceId();
-        view.clientIp = event.getClientIp();
+        view.clientIp = event.getClientIp() == null ? null : event.getClientIp().getHostAddress();
         view.clientAgent = event.getClientAgent();
         view.httpMethod = event.getHttpMethod();
         view.result = event.getResult();
+        view.resultText = localizeStatus(event.getResult());
         view.extraTags = event.getExtraTags();
-        view.actorRole = event.getActorRole();
+        view.sourceSystem = event.getSourceSystem();
+        view.sourceSystemText = "platform".equalsIgnoreCase(view.sourceSystem) ? "业务端审计" : "管理端审计";
+        view.eventClass = event.getEventClass();
+        view.eventType = event.getEventType();
+        view.operationCode = event.getOperationCode();
+        view.operationGroup = event.getOperationGroup();
+        view.operationName = StringUtils.hasText(event.getOperationName()) ? event.getOperationName() : event.getAction();
         AuditOperationType operationType = AuditOperationType.from(event.getOperationType());
-        if (operationType != AuditOperationType.UNKNOWN) {
-            view.operationTypeCode = operationType.getCode();
-            view.operationType = operationType.getDisplayName();
+        view.operationTypeCode = operationType.getCode();
+        view.operationTypeText = StringUtils.hasText(event.getOperationTypeText()) ? event.getOperationTypeText() : operationType.getDisplayName();
+        view.operationContent = view.operationName;
+        view.summary = event.getSummary();
+        if (StringUtils.hasText(view.summary)) {
+            view.operationContent = view.summary;
         }
-        if (StringUtils.hasText(event.getSourceSystem())) {
-            view.sourceSystem = event.getSourceSystem();
-            view.sourceSystemText = "platform".equalsIgnoreCase(event.getSourceSystem()) ? "业务管理" : "系统管理";
+        view.operationModule = event.getModule();
+        view.operationSourceTable = event.getResourceType();
+        view.operatorId = event.getOperatorId();
+        view.operatorName = event.getOperatorName();
+        view.operatorRoles = parseJsonStringList(event.getOperatorRoles());
+        view.orgCode = event.getOrgCode();
+        view.orgName = event.getOrgName();
+        view.departmentName = event.getDepartmentName();
+        view.targetTable = StringUtils.hasText(event.getTargetTable()) ? event.getTargetTable() : event.getResourceType();
+        String targetTableLabel = view.targetTable == null
+            ? null
+            : resourceDictionary.resolveLabel(view.targetTable).orElse(view.targetTable);
+        view.targetTableLabel = targetTableLabel;
+        view.targetIds = parseJsonStringList(event.getTargetIds());
+        view.targetLabels = parseJsonMap(event.getTargetLabels());
+        view.targetSnapshot = parseJsonMap(event.getTargetSnapshot());
+        view.targetId = StringUtils.hasText(event.getResourceId())
+            ? event.getResourceId()
+            : (view.targetIds.isEmpty() ? null : view.targetIds.get(0));
+        Map<String, Object> details = parseJsonMap(event.getDetails());
+        view.details = details;
+        view.requestId = firstNonBlank(
+            asText(details.get("请求ID")),
+            asText(details.get("requestId")),
+            asText(details.get("request_id"))
+        );
+        view.changeRequestRef = firstNonBlank(
+            asText(details.get("审批单号")),
+            asText(details.get("changeRequestRef")),
+            asText(details.get("change_request_ref"))
+        );
+        if (!StringUtils.hasText(view.changeRequestRef) && StringUtils.hasText(event.getCorrelationId()) && event.getCorrelationId().toUpperCase(Locale.ROOT).startsWith("CR-")) {
+            view.changeRequestRef = event.getCorrelationId();
+        }
+        view.approvalSummary = firstNonBlank(
+            asText(details.get("审批内容")),
+            asText(details.get("approvalSummary"))
+        );
+        if (StringUtils.hasText(view.approvalSummary)) {
+            view.operationContent = view.approvalSummary;
+        }
+        view.targetRef = firstNonBlank(
+            event.getTargetIdText(),
+            asText(details.get("目标引用")),
+            view.changeRequestRef,
+            view.targetId
+        );
+        if (view.targetRef == null && !view.targetIds.isEmpty()) {
+            view.targetRef = view.targetIds.get(0);
+        }
+        view.correlationId = event.getCorrelationId();
+        return view;
+    }
+
+    public AuditEventView toView(AuditEvent event) {
+        return toView(event, true);
+    }
+
+    public AuditEventView toView(AuditEvent event, boolean includeDetails) {
+        AuditEventView view = assembleAuditView(event);
+        if (!includeDetails) {
+            view.details = Map.of();
+            view.targetSnapshot = Map.of();
+            view.targetLabels = Map.of();
         }
         return view;
     }

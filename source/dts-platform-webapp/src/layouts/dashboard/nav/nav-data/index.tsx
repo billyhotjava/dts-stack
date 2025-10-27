@@ -24,23 +24,23 @@ type AllowedRouteIndex = {
 	codes: Set<string>;
 };
 
-const DEFAULT_MENU_ICON = "solar:menu-dots-bold-duotone";
+const DEFAULT_MENU_ICON = "local:ic-menu";
 const MENU_ICON_OVERRIDES: Record<string, string> = {
 	// Root sections
-	catalog: "solar:book-bold-duotone",
-	modeling: "solar:documents-bold-duotone",
-	governance: "solar:shield-check-bold-duotone",
-	explore: "solar:compass-bold-duotone",
+	catalog: "local:ic-catalog",
+	modeling: "local:ic-modeling",
+	governance: "local:ic-governance",
+	explore: "local:ic-explore",
 	// Section entries
-	"catalog.assets": "solar:database-bold-duotone",
-	"modeling.standards": "solar:document-text-bold-duotone",
-	"governance.rules": "solar:checklist-bold-duotone",
-	"governance.compliance": "solar:shield-warning-bold-duotone",
-	"explore.workbench": "solar:code-square-bold-duotone",
-	"explore.savedqueries": "solar:folder-with-files-bold-duotone",
-	"explore.saved.queries": "solar:folder-with-files-bold-duotone",
-	"savesavedqueries": "solar:folder-with-files-bold-duotone",
-	"savedqueries": "solar:folder-with-files-bold-duotone",
+	"catalog.assets": "local:ic-assets",
+	"modeling.standards": "local:ic-standards",
+	"governance.rules": "local:ic-rules",
+	"governance.compliance": "local:ic-compliance",
+	"explore.workbench": "local:ic-workbench",
+	"explore.savedqueries": "local:ic-savedqueries",
+	"explore.saved.queries": "local:ic-savedqueries",
+	"savesavedqueries": "local:ic-savedqueries",
+	"savedqueries": "local:ic-savedqueries",
 };
 
 const normalizeAuthCode = (value: unknown): string => {

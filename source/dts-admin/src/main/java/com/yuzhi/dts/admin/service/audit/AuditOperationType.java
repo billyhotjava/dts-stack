@@ -19,6 +19,10 @@ public enum AuditOperationType {
     EXPORT("EXPORT", "导出", false),
     EXECUTE("EXECUTE", "执行", false),
     GRANT("GRANT", "授权", true),
+    ENABLE("ENABLE", "启用", true),
+    DISABLE("DISABLE", "禁用", true),
+    APPROVE("APPROVE", "批准", true),
+    REJECT("REJECT", "拒绝", true),
     REVOKE("REVOKE", "撤销", true),
     PUBLISH("PUBLISH", "发布", false),
     REFRESH("REFRESH", "刷新", false),
@@ -74,6 +78,10 @@ public enum AuditOperationType {
             case "导出", "EXPORT" -> EXPORT;
             case "执行", "运行", "EXECUTE" -> EXECUTE;
             case "授权", "GRANT" -> GRANT;
+            case "启用", "ENABLE" -> ENABLE;
+            case "禁用", "DISABLE" -> DISABLE;
+            case "批准", "APPROVE" -> APPROVE;
+            case "拒绝", "REJECT" -> REJECT;
             case "撤销", "REVOKE" -> REVOKE;
             case "发布", "PUBLISH" -> PUBLISH;
             case "刷新", "REFRESH" -> REFRESH;

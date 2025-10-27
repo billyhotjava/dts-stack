@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260322-01-governance-compliance-owner-dept" author="codex">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="gov_compliance_batch"/>
+        </preConditions>
+
+        <addColumn tableName="gov_compliance_batch">
+            <column name="owner_dept" type="VARCHAR(128)"/>
+        </addColumn>
+
+        <createIndex indexName="idx_gov_compliance_batch_owner_dept" tableName="gov_compliance_batch">
+            <column name="owner_dept"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

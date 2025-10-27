@@ -108,9 +108,10 @@ export class KeycloakUserService {
 	/**
 	 * 获取用户的角色
 	 */
-	static getUserRoles(userId: string): Promise<KeycloakRole[]> {
+	static getUserRoles(userId: string, options?: { silent?: boolean }): Promise<KeycloakRole[]> {
 		return apiClient.get<KeycloakRole[]>({
 			url: `${KeycloakUserService.BASE_URL}/${userId}/roles`,
+			headers: options?.silent ? { "X-Audit-Silent": "true" } : undefined,
 		});
 	}
 

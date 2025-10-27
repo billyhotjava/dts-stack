@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
@@ -10,6 +10,7 @@ import { Badge } from "@/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { cleanupExpiredResultSets, deleteResultSet, listDatasets, listResultSets, previewResultSet } from "@/api/platformApi";
 import { useActiveDept } from "@/store/contextStore";
+import { cn } from "@/utils";
 type Dataset = {
 	id: string;
 	name: string;
@@ -70,6 +71,13 @@ function isExpiringSoon(expiresAt?: string) {
 	return days >= 0 && days <= SOON_EXPIRE_DAYS;
 }
 
+function isExpired(expiresAt?: string) {
+	if (!expiresAt) return false;
+	const date = new Date(expiresAt);
+	if (Number.isNaN(date.getTime())) return false;
+	return date.getTime() < Date.now();
+}
+
 export default function SavedQueriesPage() {
 	const activeDept = useActiveDept();
 	const [datasets, setDatasets] = useState<Dataset[]>([]);
@@ -116,16 +124,16 @@ export default function SavedQueriesPage() {
 				? (resultResp as any).data
 				: resultResp;
 			const resultSetList: ResultSet[] = (Array.isArray(resultSetListRaw) ? resultSetListRaw : []).map((item: any) => {
-			const datasetInfo = item?.datasetId ? datasetLookup[item.datasetId] : undefined;
-					const columns = Array.isArray(item?.columns)
-						? item.columns.join(", ")
-						: typeof item?.columns === "string"
-						? item.columns
-						: "";
-					return {
-						id: String(item?.id ?? ""),
-						name: typeof item?.name === "string" ? item.name : undefined,
-						datasetId: item?.datasetId ? String(item.datasetId) : undefined,
+				const datasetInfo = item?.datasetId ? datasetLookup[item.datasetId] : undefined;
+				const columns = Array.isArray(item?.columns)
+					? item.columns.join(", ")
+					: typeof item?.columns === "string"
+					? item.columns
+					: "";
+				return {
+					id: String(item?.id ?? ""),
+					name: typeof item?.name === "string" ? item.name : undefined,
+					datasetId: item?.datasetId ? String(item.datasetId) : undefined,
 					datasetName: datasetInfo?.name ?? item?.datasetName,
 					columns,
 					rowCount: item?.rowCount,
@@ -152,22 +160,27 @@ export default function SavedQueriesPage() {
 		() => resultSets.filter((item) => isExpiringSoon(item.expiresAt)).length,
 		[resultSets],
 	);
+	const missingDatasetCount = useMemo(
+		() => resultSets.filter((item) => !item.datasetId).length,
+		[resultSets],
+	);
 
 	const filteredResultSets = useMemo(() => {
+		const normalizedKeyword = keyword.trim().toLowerCase();
+		const hasKeyword = Boolean(normalizedKeyword);
 		return resultSets.filter((item) => {
-			if (keyword.trim()) {
-				const key = keyword.trim().toLowerCase();
+			if (hasKeyword) {
 				const match =
-					item.id.toLowerCase().includes(key) ||
-					(item.datasetName ?? "").toLowerCase().includes(key) ||
-					(item.columns ?? "").toLowerCase().includes(key);
+					item.id.toLowerCase().includes(normalizedKeyword) ||
+					(item.datasetName ?? "").toLowerCase().includes(normalizedKeyword) ||
+					(item.columns ?? "").toLowerCase().includes(normalizedKeyword);
 				if (!match) return false;
 			}
 			if (datasetFilter !== "all" && item.datasetId !== datasetFilter) return false;
-				if (onlySoonExpire && !isExpiringSoon(item.expiresAt)) return false;
-				return true;
-			});
-		}, [resultSets, keyword, datasetFilter, onlySoonExpire]);
+			if (onlySoonExpire && !isExpiringSoon(item.expiresAt)) return false;
+			return true;
+		});
+	}, [resultSets, keyword, datasetFilter, onlySoonExpire]);
 
 	const handlePreview = async (id: string) => {
 		try {
@@ -224,7 +237,7 @@ export default function SavedQueriesPage() {
 
 	return (
 		<>
-			<div className="space-y-4">
+			<div className="space-y-6">
 				{showDatasetHint ? (
 					<div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
 						<span>当前尚未同步任何数据集，请联系管理员完成数据源配置后再查看结果集台账。</span>
@@ -235,122 +248,180 @@ export default function SavedQueriesPage() {
 				) : null}
 
 				<Card>
-					<CardHeader className="space-y-4">
-						<div className="flex flex-wrap items-center justify-between gap-3">
-							<div>
-								<CardTitle className="text-base">结果集台账</CardTitle>
-								<p className="text-xs text-muted-foreground">
-									结果集统一在「数据查询和预览」运行产生，此处用于盘点、巡检与清理。
-								</p>
-							</div>
-							<div className="flex flex-wrap items-center gap-2">
-								<Button variant="outline" size="sm" onClick={load} disabled={isLoading}>
-									刷新
-								</Button>
-								<Button
-									size="sm"
-									onClick={async () => {
-										try {
-											const resp: any = await cleanupExpiredResultSets();
-											const count = Number(resp?.deleted ?? 0);
-											toast.success(`已清理 ${count} 条过期结果集`);
-											await load();
-										} catch (error) {
-											console.error(error);
-											toast.error("清理失败");
-										}
-									}}
-									disabled={isLoading}
-								>
-									清理过期
-								</Button>
-							</div>
+					<CardHeader className="gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+						<div className="space-y-2">
+							<CardTitle className="text-lg">结果集台账</CardTitle>
+							<CardDescription>结果集统一在「数据查询和预览」运行产生，此处用于盘点、巡检与清理。</CardDescription>
 						</div>
-
-						<div className="grid gap-3 lg:grid-cols-3">
-							<div className="lg:col-span-2 space-y-1">
-								<Label>关键字</Label>
-								<Input
-									value={keyword}
-									onChange={(event) => setKeyword(event.target.value)}
-									placeholder="按编号 / 数据集 / 列名检索"
-								/>
-							</div>
-							<div className="space-y-1">
-								<Label>所属数据集</Label>
-								<Select value={datasetFilter} onValueChange={setDatasetFilter}>
-									<SelectTrigger>
-										<SelectValue placeholder="全部数据集" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="all">全部数据集</SelectItem>
-										{datasets.map((dataset) => (
-										<SelectItem key={dataset.id} value={dataset.id}>
-											{dataset.name}
-										</SelectItem>
-									))}
-									</SelectContent>
-								</Select>
-							</div>
-						</div>
-
-						<div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-							<div className="flex items-center gap-2">
-								<span>
-									当前展示 <strong>{filteredResultSets.length}</strong> 条 / 全部 {resultSets.length} 条
-								</span>
-								<Badge variant="secondary">7 天内到期 {expiringSoonCount} 条</Badge>
-							</div>
-							<label className="flex items-center gap-2">
-								<Checkbox checked={onlySoonExpire} onCheckedChange={(value) => setOnlySoonExpire(Boolean(value))} />
-								<span>仅查看 7 天内即将到期</span>
-							</label>
-						</div>
+						<CardAction className="flex flex-wrap items-center gap-2">
+							<Button variant="outline" size="sm" onClick={load} disabled={isLoading}>
+								刷新
+							</Button>
+							<Button
+								size="sm"
+								onClick={async () => {
+									try {
+										const resp: any = await cleanupExpiredResultSets();
+										const count = Number(resp?.deleted ?? 0);
+										toast.success(`已清理 ${count} 条过期结果集`);
+										await load();
+									} catch (error) {
+										console.error(error);
+										toast.error("清理失败");
+									}
+								}}
+								disabled={isLoading}
+							>
+								清理过期
+							</Button>
+						</CardAction>
 					</CardHeader>
-					<CardContent>
+					<CardContent className="space-y-6">
+						<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+							<div className="rounded-lg border border-border/70 bg-muted/30 p-4 shadow-sm">
+								<p className="text-xs text-muted-foreground">全部结果集</p>
+								<p className="mt-2 text-2xl font-semibold">{resultSets.length}</p>
+							</div>
+							<div className="rounded-lg border border-border/70 bg-muted/30 p-4 shadow-sm">
+								<p className="text-xs text-muted-foreground">7 天内即将到期</p>
+								<p className="mt-2 text-2xl font-semibold">{expiringSoonCount}</p>
+							</div>
+							<div className="rounded-lg border border-border/70 bg-muted/30 p-4 shadow-sm">
+								<p className="text-xs text-muted-foreground">未关联数据集</p>
+								<p className="mt-2 text-2xl font-semibold">{missingDatasetCount}</p>
+							</div>
+							<div className="rounded-lg border border-border/70 bg-muted/30 p-4 shadow-sm">
+								<p className="text-xs text-muted-foreground">当前展示</p>
+								<p className="mt-2 text-2xl font-semibold">{filteredResultSets.length}</p>
+							</div>
+						</div>
+
+						<div className="rounded-lg border border-border/60 bg-card/40 p-4 shadow-sm">
+							<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,16rem)]">
+								<div className="space-y-3">
+									<div className="space-y-1.5">
+										<Label className="text-xs uppercase text-muted-foreground">关键字</Label>
+										<Input
+											value={keyword}
+											onChange={(event) => setKeyword(event.target.value)}
+											placeholder="按编号 / 数据集 / 列名检索"
+										/>
+									</div>
+									<label className="flex items-center gap-2 text-xs text-muted-foreground">
+										<Checkbox
+											checked={onlySoonExpire}
+											onCheckedChange={(value) => setOnlySoonExpire(Boolean(value))}
+										/>
+										<span>仅查看 7 天内即将到期</span>
+									</label>
+								</div>
+								<div className="space-y-1.5">
+									<Label className="text-xs uppercase text-muted-foreground">所属数据集</Label>
+									<Select value={datasetFilter} onValueChange={setDatasetFilter}>
+										<SelectTrigger className="h-10">
+											<SelectValue placeholder="全部数据集" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">全部数据集</SelectItem>
+											{datasets.map((dataset) => (
+												<SelectItem key={dataset.id} value={dataset.id}>
+													{dataset.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
+							</div>
+						</div>
+
+						<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+							<Badge variant="secondary" className="rounded-full px-3 py-1">
+								已筛选 {filteredResultSets.length} / {resultSets.length}
+							</Badge>
+							{onlySoonExpire ? <Badge variant="outline">聚焦即将到期</Badge> : null}
+							{datasetFilter !== "all" ? <Badge variant="outline">仅显示所选数据集</Badge> : null}
+							{keyword.trim() ? <Badge variant="outline">关键词：{keyword.trim()}</Badge> : null}
+						</div>
+
 						{filteredResultSets.length ? (
-							<div className="overflow-hidden rounded-md border">
-								<table className="w-full border-collapse text-sm">
-									<thead className="bg-muted/50">
+							<div className="overflow-x-auto rounded-md border">
+								<table className="w-full min-w-[960px] border-collapse text-sm">
+									<thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
 										<tr>
-											<th className="border-b px-3 py-2 text-left font-medium">编号</th>
-											<th className="border-b px-3 py-2 text-left font-medium">名称</th>
-											<th className="border-b px-3 py-2 text-left font-medium">所属数据集</th>
-							<th className="border-b px-3 py-2 text-left font-medium">列</th>
-											<th className="border-b px-3 py-2 text-left font-medium">行数</th>
-											<th className="border-b px-3 py-2 text-left font-medium">生成时间</th>
-											<th className="border-b px-3 py-2 text-left font-medium">过期时间</th>
-											<th className="border-b px-3 py-2 text-left font-medium">操作</th>
+											<th className="border-b px-3 py-3 text-left font-medium">编号</th>
+											<th className="border-b px-3 py-3 text-left font-medium">名称</th>
+											<th className="border-b px-3 py-3 text-left font-medium">所属数据集</th>
+											<th className="border-b px-3 py-3 text-left font-medium">列</th>
+											<th className="border-b px-3 py-3 text-left font-medium">行数</th>
+											<th className="border-b px-3 py-3 text-left font-medium">生成时间</th>
+											<th className="border-b px-3 py-3 text-left font-medium">过期时间</th>
+											<th className="border-b px-3 py-3 text-left font-medium">操作</th>
 										</tr>
 									</thead>
 									<tbody>
 										{filteredResultSets.map((item) => {
 											const soon = isExpiringSoon(item.expiresAt);
+											const expired = isExpired(item.expiresAt);
 											return (
 												<tr
 													key={item.id}
-													className={`border-b last:border-b-0 ${soon ? "bg-amber-50/60" : ""}`}
+													className={cn(
+														"border-b last:border-b-0 transition-colors",
+														soon ? "bg-amber-50/60" : "hover:bg-muted/40",
+													)}
 												>
-													<td className="px-3 py-2 font-mono text-xs text-muted-foreground">{item.id}</td>
-													<td className="px-3 py-2">{item.name || "-"}</td>
+													<td className="px-3 py-3">
+														<span className="inline-flex max-w-[220px] items-center gap-2 rounded-md border bg-background px-2 py-1 font-mono text-xs text-muted-foreground">
+															{item.id}
+														</span>
+													</td>
+													<td className="px-3 py-3">
+														<div className="flex flex-col gap-1">
+															<span className="font-medium text-sm">{item.name || "-"}</span>
+															{item.rowCount ? (
+																<Badge variant="outline" className="w-fit text-xs font-normal">
+																	行数 {item.rowCount}
+																</Badge>
+															) : null}
+														</div>
+													</td>
 													<td className="px-3 py-2">
 														{item.datasetName ? (
-															<span>{item.datasetName}</span>
+															<Badge variant="secondary" className="w-fit">
+																{item.datasetName}
+															</Badge>
 														) : (
 															<span className="text-muted-foreground">未关联</span>
 														)}
 													</td>
-													<td className="px-3 py-2 text-xs text-muted-foreground">{item.columns || "-"}</td>
-													<td className="px-3 py-2">{item.rowCount ?? "-"}</td>
-													<td className="px-3 py-2 text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</td>
-													<td className="px-3 py-2 text-xs text-muted-foreground">{formatExpiryDetail(item.expiresAt)}</td>
-													<td className="px-3 py-2 space-x-2 text-nowrap">
+													<td className="px-3 py-3 text-xs text-muted-foreground">
+														<div className="line-clamp-2 max-w-[320px] leading-relaxed">{item.columns || "-"}</div>
+													</td>
+													<td className="px-3 py-3 text-sm">{item.rowCount ?? "-"}</td>
+													<td className="px-3 py-3 text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</td>
+													<td className="px-3 py-3 text-xs text-muted-foreground">
+														<div className="flex flex-col gap-1">
+															<span>{formatExpiryDetail(item.expiresAt)}</span>
+															{soon ? (
+																<Badge variant="destructive" className="w-fit bg-amber-500/90 text-white hover:bg-amber-500">
+																	即将到期
+																</Badge>
+															) : null}
+															{!soon && expired ? (
+																<Badge variant="destructive" className="w-fit">
+																	已过期
+																</Badge>
+															) : null}
+														</div>
+													</td>
+													<td className="px-3 py-3">
 														<Button size="sm" variant="outline" onClick={() => handlePreview(item.id)} disabled={isLoading}>
 															查看 SQL
 														</Button>
 														<Button
 															size="sm"
 															variant="ghost"
+															className="ml-1"
 															onClick={async () => {
 																try {
 																	await deleteResultSet(item.id);

@@ -5,7 +5,6 @@ import static org.springframework.security.oauth2.core.oidc.StandardClaimNames.P
 
 import com.yuzhi.dts.admin.security.*;
 import com.yuzhi.dts.admin.security.oauth2.AudienceValidator;
-import com.yuzhi.dts.admin.web.filter.AuditLoggingFilter;
 import com.yuzhi.dts.admin.web.filter.SessionInactivityFilter;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,7 +43,6 @@ public class SecurityConfiguration {
     public SecurityFilterChain filterChain(
         HttpSecurity http,
         MvcRequestMatcher.Builder mvc,
-        AuditLoggingFilter auditLoggingFilter,
         SessionInactivityFilter sessionInactivityFilter
     ) throws Exception {
         http
@@ -128,8 +126,7 @@ public class SecurityConfiguration {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter())))
             .oauth2Client(withDefaults());
-        http.addFilterAfter(auditLoggingFilter, AnonymousAuthenticationFilter.class);
-        http.addFilterAfter(sessionInactivityFilter, AuditLoggingFilter.class);
+        http.addFilterAfter(sessionInactivityFilter, AnonymousAuthenticationFilter.class);
         return http.build();
     }
 

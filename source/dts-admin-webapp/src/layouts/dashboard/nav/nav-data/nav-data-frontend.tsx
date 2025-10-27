@@ -12,7 +12,7 @@ export const frontendNavData: NavProps["data"] = [
 			{
 				title: "sys.nav.usermgmt.system.my_changes",
 				path: "/admin/my-changes",
-				icon: <Icon icon="local:ic-mail" size={24} />,
+				icon: <Icon icon="local:ic-my-requests" size={24} />,
 				auth: SYSADMIN_ROLES,
 			},
 			{

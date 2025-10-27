@@ -9,6 +9,7 @@ import com.yuzhi.dts.platform.domain.modeling.DataStandardVersion;
 import com.yuzhi.dts.platform.domain.modeling.DataStandardVersionStatus;
 import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.DataStandardVersionRepository;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardDto;
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardVersionDto;
 import jakarta.persistence.EntityNotFoundException;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.LinkedHashMap;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -31,28 +33,46 @@ public class DataStandardService {
     private final DataStandardRepository repository;
     private final DataStandardVersionRepository versionRepository;
     private final ObjectMapper objectMapper;
+    private final AuditService auditService;
+    private final DataStandardSecurity security;
 
     public DataStandardService(
         DataStandardRepository repository,
         DataStandardVersionRepository versionRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        AuditService auditService,
+        DataStandardSecurity security
     ) {
         this.repository = repository;
         this.versionRepository = versionRepository;
         this.objectMapper = objectMapper;
+        this.auditService = auditService;
+        this.security = security;
     }
 
-    public Page<DataStandardDto> list(DataStandardFilter filter, Pageable pageable) {
-        Specification<DataStandard> spec = buildSpecification(filter);
+    public Page<DataStandardDto> list(DataStandardFilter filter, Pageable pageable, String activeDeptHeader) {
+        DataStandardFilter effectiveFilter = filter != null ? filter : new DataStandardFilter();
+        if (!security.hasInstituteScope()) {
+            String activeDept = security.resolveActiveDept(activeDeptHeader);
+            if (!StringUtils.hasText(activeDept)) {
+                return Page.empty(pageable);
+            }
+            effectiveFilter.setDomain(activeDept);
+        }
+        Specification<DataStandard> spec = buildSpecification(effectiveFilter);
         return repository.findAll(spec, pageable).map(DataStandardMapper::toDto);
     }
 
-    public DataStandardDto get(UUID id) {
-        return DataStandardMapper.toDto(load(id));
+    public DataStandardDto get(UUID id, String activeDeptHeader) {
+        DataStandard entity = load(id);
+        security.ensureReadable(entity, activeDeptHeader);
+        return DataStandardMapper.toDto(entity);
     }
 
-    public DataStandardDto create(DataStandardUpsertRequest request) {
+    public DataStandardDto create(DataStandardUpsertRequest request, String activeDeptHeader) {
         DataStandard entity = new DataStandard();
+        String enforcedDomain = security.enforceUpsertDomain(request.getDomain(), activeDeptHeader);
+        request.setDomain(enforcedDomain);
         applyUpsert(entity, request);
         entity.setStatus(Objects.requireNonNullElse(request.getStatus(), DataStandardStatus.DRAFT));
         entity.setSecurityLevel(Objects.requireNonNullElse(request.getSecurityLevel(), DataSecurityLevel.INTERNAL));
@@ -65,11 +85,30 @@ public class DataStandardService {
             ? request.getVersionStatus()
             : DataStandardVersionStatus.DRAFT;
         createVersionSnapshot(entity, version, request.getChangeSummary(), versionStatus);
+        java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+        auditPayload.put("before", java.util.Map.of());
+        auditPayload.put("after", toStandardAuditView(entity));
+        auditPayload.put("targetId", entity.getId().toString());
+        auditPayload.put("targetName", entity.getName());
+        auditPayload.put("summary", "新增数据标准：" + entity.getName());
+        auditService.record(
+            "CREATE",
+            "modeling.standard",
+            "modeling.standard",
+            entity.getId().toString(),
+            "SUCCESS",
+            auditPayload
+        );
         return DataStandardMapper.toDto(entity);
     }
 
-    public DataStandardDto update(UUID id, DataStandardUpsertRequest request) {
+    public DataStandardDto update(UUID id, DataStandardUpsertRequest request, String activeDeptHeader) {
         DataStandard entity = load(id);
+        security.ensureWritable(entity, activeDeptHeader);
+        String domainCandidate = StringUtils.hasText(request.getDomain()) ? request.getDomain() : entity.getDomain();
+        String enforcedDomain = security.enforceUpsertDomain(domainCandidate, activeDeptHeader);
+        request.setDomain(enforcedDomain);
+        java.util.Map<String, Object> before = toStandardAuditView(entity);
         applyUpsert(entity, request);
         if (request.getStatus() != null) {
             entity.setStatus(request.getStatus());
@@ -87,16 +126,47 @@ public class DataStandardService {
         entity.setLastReviewAt(request.getLastReviewAt());
         repository.save(entity);
         createVersionSnapshot(entity, version, request.getChangeSummary(), request.getVersionStatus());
+        java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+        auditPayload.put("before", before);
+        auditPayload.put("after", toStandardAuditView(entity));
+        auditPayload.put("targetId", entity.getId().toString());
+        auditPayload.put("targetName", entity.getName());
+        auditPayload.put("summary", "修改数据标准：" + entity.getName());
+        auditService.record(
+            "UPDATE",
+            "modeling.standard",
+            "modeling.standard",
+            entity.getId().toString(),
+            "SUCCESS",
+            auditPayload
+        );
         return DataStandardMapper.toDto(entity);
     }
 
-    public void delete(UUID id) {
+    public void delete(UUID id, String activeDeptHeader) {
         DataStandard entity = load(id);
+        security.ensureWritable(entity, activeDeptHeader);
+        java.util.Map<String, Object> before = toStandardAuditView(entity);
         repository.delete(entity);
+        java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+        auditPayload.put("before", before);
+        auditPayload.put("after", java.util.Map.of("deleted", true));
+        auditPayload.put("targetId", id.toString());
+        auditPayload.put("targetName", entity.getName());
+        auditPayload.put("summary", "删除数据标准：" + entity.getName());
+        auditService.record(
+            "DELETE",
+            "modeling.standard",
+            "modeling.standard",
+            id.toString(),
+            "SUCCESS",
+            auditPayload
+        );
     }
 
-    public List<DataStandardVersionDto> listVersions(UUID id) {
+    public List<DataStandardVersionDto> listVersions(UUID id, String activeDeptHeader) {
         DataStandard entity = load(id);
+        security.ensureReadable(entity, activeDeptHeader);
         return versionRepository
             .findByStandardOrderByCreatedDateDesc(entity)
             .stream()
@@ -199,5 +269,24 @@ public class DataStandardService {
         }
 
         return spec;
+    }
+
+    private java.util.Map<String, Object> toStandardAuditView(DataStandard entity) {
+        if (entity == null) {
+            return java.util.Map.of();
+        }
+        java.util.Map<String, Object> view = new LinkedHashMap<>();
+        view.put("id", entity.getId());
+        view.put("code", entity.getCode());
+        view.put("name", entity.getName());
+        view.put("domain", entity.getDomain());
+        view.put("scope", entity.getScope());
+        view.put("owner", entity.getOwner());
+        view.put("status", entity.getStatus());
+        view.put("securityLevel", entity.getSecurityLevel());
+        view.put("currentVersion", entity.getCurrentVersion());
+        view.put("tags", entity.getTags());
+        view.put("reviewCycle", entity.getReviewCycle());
+        return view;
     }
 }

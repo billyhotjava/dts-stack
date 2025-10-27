@@ -3,10 +3,10 @@ package com.yuzhi.dts.admin.web.rest;
 import com.yuzhi.dts.admin.domain.PortalMenu;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.service.PortalMenuService;
+import com.yuzhi.dts.admin.service.audit.AdminAuditOperation;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.dto.menu.MenuTreeDTO;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
-import com.yuzhi.dts.common.audit.AuditStage;
 import io.swagger.v3.oas.annotations.Operation;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -62,12 +62,15 @@ public class BasicApiResource {
                 out.add(dto);
             }
         }
-        auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
-            "PORTAL_MENU_FETCH",
-            AuditStage.SUCCESS,
-            "portal",
-            Map.of("roleCount", roleCodes.size(), "permissionCount", permissionCodes.size())
+        auditService.record(
+            auditService
+                .builder()
+                .actor(SecurityUtils.getCurrentUserLogin().orElse(null))
+                .fromOperation(AdminAuditOperation.PORTAL_MENU_FETCH)
+                .summary("查询门户菜单")
+                .details(Map.of("roleCount", roleCodes.size(), "permissionCount", permissionCodes.size()))
+                .result(AdminAuditService.AuditResult.SUCCESS)
+                .build()
         );
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
@@ -77,12 +80,15 @@ public class BasicApiResource {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successful operation")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getDemoUsers() {
         List<Map<String, Object>> demo = List.of();
-        auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
-            "ADMIN_USER_VIEW",
-            AuditStage.SUCCESS,
-            "demo",
-            Map.of("source", "demo")
+        auditService.record(
+            auditService
+                .builder()
+                .actor(SecurityUtils.getCurrentUserLogin().orElse(null))
+                .fromOperation(AdminAuditOperation.ADMIN_USER_VIEW)
+                .summary("查看示例用户列表")
+                .details(Map.of("source", "demo"))
+                .result(AdminAuditService.AuditResult.SUCCESS)
+                .build()
         );
         return ResponseEntity.ok(ApiResponse.ok(demo));
     }

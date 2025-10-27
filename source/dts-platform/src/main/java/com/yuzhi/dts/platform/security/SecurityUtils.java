@@ -75,6 +75,47 @@ public final class SecurityUtils {
         return Optional.empty();
     }
 
+    public static Optional<String> getCurrentUserDisplayName() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return Optional.empty();
+        }
+        try {
+            if (authentication instanceof JwtAuthenticationToken token) {
+                String display = extractDisplayNameFromClaims(token.getToken().getClaims());
+                if (display != null) {
+                    return Optional.of(display);
+                }
+            }
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof DefaultOidcUser oidcUser) {
+                String display = extractDisplayNameFromClaims(oidcUser.getAttributes());
+                if (display != null) {
+                    return Optional.of(display);
+                }
+            } else if (principal instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal oauth) {
+                String display = extractDisplayNameFromClaims(oauth.getAttributes());
+                if (display != null) {
+                    return Optional.of(display);
+                }
+            } else if (principal instanceof UserDetails springSecurityUser) {
+                String display = firstNonBlank(
+                    springSecurityUser.getUsername(),
+                    springSecurityUser.getClass().getSimpleName()
+                );
+                if (display != null) {
+                    return Optional.of(display);
+                }
+            } else if (principal instanceof String s) {
+                String text = s == null ? null : s.trim();
+                if (text != null && !text.isEmpty()) {
+                    return Optional.of(text);
+                }
+            }
+        } catch (Exception ignored) {}
+        return Optional.empty();
+    }
+
     public static boolean isOpAdminAccount() {
         return getCurrentUserLogin()
             .map(String::trim)
@@ -192,5 +233,96 @@ public final class SecurityUtils {
             .filter(authority -> authority != null)
             .distinct()
             .collect(Collectors.toList());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String extractDisplayNameFromClaims(Map<String, Object> claims) {
+        if (claims == null || claims.isEmpty()) {
+            return null;
+        }
+        Object direct = firstNonBlank(
+            claims.get("fullName"),
+            claims.get("full_name"),
+            claims.get("displayName"),
+            claims.get("display_name"),
+            claims.get("name")
+        );
+        if (direct != null) {
+            String text = String.valueOf(direct).trim();
+            if (!text.isEmpty()) {
+                return text;
+            }
+        }
+        Object given = claims.get("given_name");
+        Object family = claims.get("family_name");
+        String combined = joinNameParts(given, family);
+        if (combined != null) {
+            return combined;
+        }
+        Object preferred = claims.get("preferred_username");
+        if (preferred != null) {
+            String text = String.valueOf(preferred).trim();
+            if (!text.isEmpty()) {
+                return text;
+            }
+        }
+        if (claims.containsKey("attributes")) {
+            Object attributes = claims.get("attributes");
+            if (attributes instanceof Map<?, ?> attrMap) {
+                Object attrName = firstNonBlank(attrMap.get("fullName"), attrMap.get("displayName"));
+                if (attrName != null) {
+                    String text = String.valueOf(attrName).trim();
+                    if (!text.isEmpty()) {
+                        return text;
+                    }
+                }
+                if (attrMap.containsKey("fullName")) {
+                    Object value = attrMap.get("fullName");
+                    if (value instanceof Collection<?> collection && !collection.isEmpty()) {
+                        String candidate = String.valueOf(collection.iterator().next()).trim();
+                        if (!candidate.isEmpty()) {
+                            return candidate;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String firstNonBlank(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            if (value == null) {
+                continue;
+            }
+            if (value instanceof Collection<?> collection) {
+                for (Object element : collection) {
+                    String candidate = String.valueOf(element).trim();
+                    if (!candidate.isEmpty()) {
+                        return candidate;
+                    }
+                }
+            }
+            String text = String.valueOf(value).trim();
+            if (!text.isEmpty()) {
+                return text;
+            }
+        }
+        return null;
+    }
+
+    private static String joinNameParts(Object given, Object family) {
+        String givenText = given == null ? null : String.valueOf(given).trim();
+        String familyText = family == null ? null : String.valueOf(family).trim();
+        if ((givenText == null || givenText.isEmpty()) && (familyText == null || familyText.isEmpty())) {
+            return null;
+        }
+        if (givenText != null && !givenText.isEmpty() && familyText != null && !familyText.isEmpty()) {
+            return givenText + " " + familyText;
+        }
+        return givenText != null && !givenText.isEmpty() ? givenText : familyText;
     }
 }

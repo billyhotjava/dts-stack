@@ -14,8 +14,10 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleDto;
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleBindingRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleUpsertRequest;
+import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -26,6 +28,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 @Service
 @Transactional
@@ -40,6 +46,7 @@ public class QualityRuleService {
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final GovernanceProperties properties;
+    private final AccessChecker accessChecker;
 
     public QualityRuleService(
         GovRuleRepository ruleRepository,
@@ -48,7 +55,8 @@ public class QualityRuleService {
         CatalogDatasetRepository datasetRepository,
         AuditService auditService,
         ObjectMapper objectMapper,
-        GovernanceProperties properties
+        GovernanceProperties properties,
+        AccessChecker accessChecker
     ) {
         this.ruleRepository = ruleRepository;
         this.versionRepository = versionRepository;
@@ -57,11 +65,102 @@ public class QualityRuleService {
         this.auditService = auditService;
         this.objectMapper = objectMapper;
         this.properties = properties;
+        this.accessChecker = accessChecker;
     }
 
     @Transactional(readOnly = true)
-    public List<QualityRuleDto> listAll() {
-        return ruleRepository.findAll().stream().map(GovernanceMapper::toDto).collect(Collectors.toList());
+    public List<QualityRuleDto> listAll(String activeDeptHeader) {
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        return ruleRepository
+            .findAll()
+            .stream()
+            .filter(rule -> isRuleVisible(rule, activeDept))
+            .map(GovernanceMapper::toDto)
+            .collect(Collectors.toList());
+    }
+
+    private boolean isRuleVisible(GovRule rule, String activeDept) {
+        if (rule == null) {
+            return false;
+        }
+        if (rule.getDatasetId() == null) {
+            return true;
+        }
+        return datasetRepository
+            .findById(rule.getDatasetId())
+            .filter(accessChecker::canRead)
+            .filter(dataset -> accessChecker.departmentAllowed(dataset, activeDept))
+            .isPresent();
+    }
+
+    private String resolveActiveDept(String activeDeptHeader) {
+        if (org.springframework.util.StringUtils.hasText(activeDeptHeader)) {
+            return activeDeptHeader.trim();
+        }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        try {
+            if (authentication instanceof JwtAuthenticationToken token) {
+                String candidate = extractDeptClaim(token.getToken().getClaims().get("dept_code"));
+                if (candidate != null) {
+                    return candidate;
+                }
+                candidate = extractDeptClaim(token.getToken().getClaims().get("deptCode"));
+                if (candidate != null) {
+                    return candidate;
+                }
+                return extractDeptClaim(token.getToken().getClaims().get("department"));
+            }
+            if (authentication != null && authentication.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
+                String candidate = extractDeptClaim(principal.getAttribute("dept_code"));
+                if (candidate != null) {
+                    return candidate;
+                }
+                candidate = extractDeptClaim(principal.getAttribute("deptCode"));
+                if (candidate != null) {
+                    return candidate;
+                }
+                return extractDeptClaim(principal.getAttribute("department"));
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private String extractDeptClaim(Object raw) {
+        Object flattened = flattenValue(raw);
+        if (flattened == null) {
+            return null;
+        }
+        String text = flattened.toString();
+        if (!org.springframework.util.StringUtils.hasText(text)) {
+            return null;
+        }
+        String trimmed = text.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Object flattenValue(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Iterable<?> iterable) {
+            for (Object element : iterable) {
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        if (raw.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(raw);
+            for (int i = 0; i < length; i++) {
+                Object element = java.lang.reflect.Array.get(raw, i);
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        return raw;
     }
 
     @Transactional(readOnly = true)
@@ -96,12 +195,28 @@ public class QualityRuleService {
         rule.setLatestVersion(version);
         ruleRepository.save(rule);
 
-        auditService.audit("CREATE", "governance.rule", rule.getId().toString());
-        return GovernanceMapper.toDto(ruleRepository.findById(rule.getId()).orElseThrow());
+        GovRule persisted = ruleRepository.findById(rule.getId()).orElseThrow();
+        Map<String, Object> after = toRuleAuditView(persisted);
+        Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+        auditPayload.put("before", Map.of());
+        auditPayload.put("after", after);
+        auditPayload.put("targetId", persisted.getId().toString());
+        auditPayload.put("targetName", persisted.getName());
+        auditPayload.put("summary", "新增质量规则：" + persisted.getName());
+        auditService.record(
+            "CREATE",
+            "governance.rule",
+            "governance.rule",
+            persisted.getId().toString(),
+            "SUCCESS",
+            auditPayload
+        );
+        return GovernanceMapper.toDto(persisted);
     }
 
     public QualityRuleDto updateRule(UUID id, QualityRuleUpsertRequest request, String actor) {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        Map<String, Object> before = toRuleAuditView(rule);
         if (request.getDatasetId() != null) {
             validateDataset(request.getDatasetId());
         }
@@ -122,21 +237,65 @@ public class QualityRuleService {
         rule.setLatestVersion(version);
         ruleRepository.save(rule);
 
-        auditService.audit("UPDATE", "governance.rule", id.toString());
-        return GovernanceMapper.toDto(ruleRepository.findById(id).orElseThrow());
+        GovRule persisted = ruleRepository.findById(id).orElseThrow();
+        Map<String, Object> after = toRuleAuditView(persisted);
+        Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+        auditPayload.put("before", before);
+        auditPayload.put("after", after);
+        auditPayload.put("targetId", id.toString());
+        auditPayload.put("targetName", persisted.getName());
+        auditPayload.put("summary", "修改质量规则：" + persisted.getName());
+        auditService.record(
+            "UPDATE",
+            "governance.rule",
+            "governance.rule",
+            id.toString(),
+            "SUCCESS",
+            auditPayload
+        );
+        return GovernanceMapper.toDto(persisted);
     }
 
     public void deleteRule(UUID id) {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        Map<String, Object> before = toRuleAuditView(rule);
         ruleRepository.delete(rule);
-        auditService.audit("DELETE", "governance.rule", id.toString());
+        Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+        auditPayload.put("before", before);
+        auditPayload.put("after", Map.of("deleted", true));
+        auditPayload.put("targetId", id.toString());
+        auditPayload.put("targetName", rule.getName());
+        auditPayload.put("summary", "删除质量规则：" + rule.getName());
+        auditService.record(
+            "DELETE",
+            "governance.rule",
+            "governance.rule",
+            id.toString(),
+            "SUCCESS",
+            auditPayload
+        );
     }
 
     public QualityRuleDto toggleRule(UUID id, boolean enabled) {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        Map<String, Object> before = toRuleAuditView(rule);
         rule.setEnabled(enabled);
         ruleRepository.save(rule);
-        auditService.audit("UPDATE", "governance.rule.toggle", id.toString());
+        Map<String, Object> after = toRuleAuditView(rule);
+        Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+        auditPayload.put("before", before);
+        auditPayload.put("after", after);
+        auditPayload.put("targetId", id.toString());
+        auditPayload.put("targetName", rule.getName());
+        auditPayload.put("summary", (enabled ? "启用" : "禁用") + "质量规则：" + rule.getName());
+        auditService.record(
+            "UPDATE",
+            "governance.rule.toggle",
+            "governance.rule",
+            id.toString(),
+            "SUCCESS",
+            auditPayload
+        );
         return GovernanceMapper.toDto(rule);
     }
 
@@ -197,6 +356,27 @@ public class QualityRuleService {
             log.warn("Failed to serialize rule definition: {}", e.getMessage());
             return "{}";
         }
+    }
+
+    private Map<String, Object> toRuleAuditView(GovRule rule) {
+        if (rule == null) {
+            return Map.of();
+        }
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("id", rule.getId());
+        view.put("code", rule.getCode());
+        view.put("name", rule.getName());
+        view.put("datasetId", rule.getDatasetId());
+        view.put("category", rule.getCategory());
+        view.put("severity", rule.getSeverity());
+        view.put("dataLevel", rule.getDataLevel());
+        view.put("owner", rule.getOwner());
+        view.put("enabled", rule.getEnabled());
+        view.put("template", rule.getTemplate());
+        if (rule.getLatestVersion() != null) {
+            view.put("latestVersion", rule.getLatestVersion().getVersion());
+        }
+        return view;
     }
 
     private void validateDataset(UUID datasetId) {

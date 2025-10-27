@@ -1,0 +1,17 @@
+<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="myRequestsBody" x1="4" y1="5" x2="20" y2="19" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4facfe"/>
+      <stop offset="1" stop-color="#00f2fe"/>
+    </linearGradient>
+    <linearGradient id="myRequestsBadge" x1="6" y1="4" x2="18" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff9a9e"/>
+      <stop offset="1" stop-color="#fad0c4"/>
+    </linearGradient>
+  </defs>
+  <path d="M4.75 7.5C4.75 6.39543 5.64543 5.5 6.75 5.5H17.25C18.3546 5.5 19.25 6.39543 19.25 7.5V16.5C19.25 17.6046 18.3546 18.5 17.25 18.5H6.75C5.64543 18.5 4.75 17.6046 4.75 16.5V7.5Z" fill="url(#myRequestsBody)"/>
+  <path d="M6 8.5L11.1615 11.882C11.6774 12.2176 12.3226 12.2176 12.8385 11.882L18 8.5" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16.5 4C17.8807 4 19 5.11929 19 6.5C19 7.88071 17.8807 9 16.5 9C15.1193 9 14 7.88071 14 6.5C14 5.11929 15.1193 4 16.5 4Z" fill="url(#myRequestsBadge)"/>
+  <path d="M16.5 5.75V7.25" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+  <path d="M15.75 6.5H17.25" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+</svg>

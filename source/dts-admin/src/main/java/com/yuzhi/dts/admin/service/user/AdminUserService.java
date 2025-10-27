@@ -12,7 +12,10 @@ import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.service.approval.ApprovalStatus;
+import com.yuzhi.dts.admin.service.audit.AdminAuditOperation;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
+import com.yuzhi.dts.admin.service.audit.AuditOperationType;
+import com.yuzhi.dts.admin.service.audit.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
@@ -20,6 +23,7 @@ import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -79,10 +83,12 @@ public class AdminUserService {
     private final AdminRoleAssignmentRepository roleAssignRepo;
     private final ObjectMapper objectMapper;
     private final KeycloakAuthService keycloakAuthService;
+    private final ChangeSnapshotFormatter changeSnapshotFormatter;
     private final String managementClientId;
     private final String managementClientSecret;
     private final String targetClientId;
     private final boolean useClientRoles;
+    private final ThreadLocal<ApprovalAuditCollector> approvalAuditCollector = new ThreadLocal<>();
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
@@ -96,6 +102,7 @@ public class AdminUserService {
         ChangeRequestService changeRequestService,
         ChangeRequestRepository changeRequestRepository,
         AdminRoleAssignmentRepository roleAssignRepo,
+        ChangeSnapshotFormatter changeSnapshotFormatter,
         ObjectMapper objectMapper,
         KeycloakAuthService keycloakAuthService,
         @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}") String managementClientId,
@@ -110,6 +117,7 @@ public class AdminUserService {
         this.changeRequestService = changeRequestService;
         this.changeRequestRepository = changeRequestRepository;
         this.roleAssignRepo = roleAssignRepo;
+        this.changeSnapshotFormatter = changeSnapshotFormatter;
         this.objectMapper = objectMapper;
         this.keycloakAuthService = keycloakAuthService;
         this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
@@ -585,6 +593,13 @@ public class AdminUserService {
         detail.put("payload", detailSource);
         detail.put("ip", ip);
         detail.put("timestamp", Instant.now().toString());
+        SubjectInfo subject = resolveAuditSubject(target, detailSource);
+        if (subject != null && StringUtils.isNotBlank(subject.id())) {
+            detail.put("targetIds", List.of(subject.id()));
+            if (StringUtils.isNotBlank(subject.label())) {
+                detail.put("targetLabels", Map.of(subject.id(), subject.label()));
+            }
+        }
         String code = switch (action) {
             case "USER_CREATE_REQUEST" -> "ADMIN_USER_CREATE";
             case "USER_UPDATE_REQUEST", "USER_SET_PERSON_LEVEL_REQUEST" -> "ADMIN_USER_UPDATE";
@@ -594,12 +609,210 @@ public class AdminUserService {
             case "USER_RESET_PASSWORD_REQUEST" -> "ADMIN_USER_RESET_PASSWORD";
             default -> action;
         };
+        String summary = buildApprovalRequestSummary(action, subject, detailSource);
+        if (StringUtils.isNotBlank(summary)) {
+            detail.put("summary", summary);
+            detail.put("operationName", summary);
+        }
+        detail.put("operationType", AuditOperationType.REQUEST.getCode());
+        detail.put("operationTypeText", AuditOperationType.REQUEST.getDisplayName());
         String correlationId = correlationIdFrom(correlationRef);
         if (correlationId != null) {
             detail.put("correlationId", correlationId);
         }
+        ChangeSnapshot snapshot = extractChangeSnapshot(detailSource, correlationRef);
+        if (snapshot != null && (snapshot.hasChanges() || !snapshot.getBefore().isEmpty() || !snapshot.getAfter().isEmpty())) {
+            detail.put("changeSnapshot", snapshot.toMap());
+        }
         String effectiveTarget = correlationId != null ? correlationId : target;
         auditService.recordAction(actor, code, AuditStage.SUCCESS, effectiveTarget, detail, correlationId);
+    }
+
+    private ChangeSnapshot extractChangeSnapshot(Object detailSource, Object correlationRef) {
+        ChangeSnapshot snapshot = tryExtractSnapshot(correlationRef);
+        if (snapshot == null || (!snapshot.hasChanges() && snapshot.getBefore().isEmpty() && snapshot.getAfter().isEmpty())) {
+            ChangeSnapshot fallback = tryExtractSnapshot(detailSource);
+            if (fallback != null) {
+                snapshot = fallback;
+            }
+        }
+        return snapshot;
+    }
+
+    private ChangeSnapshot tryExtractSnapshot(Object candidate) {
+        if (candidate == null) {
+            return null;
+        }
+        if (candidate instanceof Optional<?> optional) {
+            return tryExtractSnapshot(optional.orElse(null));
+        }
+        if (candidate instanceof ChangeRequest changeRequest) {
+            ChangeSnapshot fromDiff = ChangeSnapshot.fromJson(changeRequest.getDiffJson(), objectMapper);
+            if (fromDiff != null && (fromDiff.hasChanges() || !fromDiff.getBefore().isEmpty() || !fromDiff.getAfter().isEmpty())) {
+                return fromDiff;
+            }
+            Map<String, Object> after = readJsonMap(changeRequest.getPayloadJson());
+            if (!after.isEmpty()) {
+                return ChangeSnapshot.of(Map.of(), after);
+            }
+            return null;
+        }
+        if (candidate instanceof Map<?, ?> map) {
+            Map<String, Object> normalized = toStringKeyMap(map);
+            Object embedded = normalized.get("changeSnapshot");
+            if (embedded instanceof Map<?, ?> embeddedMap) {
+                return ChangeSnapshot.fromMap(toStringKeyMap(embeddedMap));
+            }
+            boolean hasExplicit = normalized.containsKey("before") || normalized.containsKey("after");
+            if (hasExplicit) {
+                Map<String, Object> before = toStringKeyMap(normalized.get("before"));
+                Map<String, Object> after = toStringKeyMap(normalized.get("after"));
+                return ChangeSnapshot.of(before, after);
+            }
+        }
+        return null;
+    }
+
+    private Map<String, Object> toStringKeyMap(Object value) {
+        if (value == null) {
+            return Map.of();
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            map.forEach((k, v) -> {
+                if (k != null) {
+                    result.put(String.valueOf(k), v);
+                }
+            });
+            return result;
+        }
+        try {
+            return objectMapper.convertValue(value, MAP_TYPE);
+        } catch (IllegalArgumentException ex) {
+            return Map.of();
+        }
+    }
+
+    private Map<String, Object> readJsonMap(String json) {
+        if (StringUtils.isBlank(json)) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, MAP_TYPE);
+        } catch (Exception ex) {
+            return Map.of();
+        }
+    }
+
+    private SubjectInfo resolveAuditSubject(String target, Object detailSource) {
+        String username = stringValue(target);
+        String fullName = null;
+        if (detailSource instanceof UserOperationRequest req) {
+            if (StringUtils.isNotBlank(req.getUsername())) {
+                username = req.getUsername().trim();
+            }
+            if (StringUtils.isNotBlank(req.getFullName())) {
+                fullName = req.getFullName().trim();
+            }
+        } else if (detailSource instanceof Map<?, ?> map) {
+            Object directUsername = map.get("username");
+            if (directUsername != null && StringUtils.isNotBlank(stringValue(directUsername))) {
+                username = stringValue(directUsername);
+            }
+            Object directFullName = map.get("fullName");
+            if (directFullName != null) {
+                fullName = stringValue(directFullName);
+            }
+        }
+        if (StringUtils.isBlank(username) && StringUtils.isBlank(fullName)) {
+            return null;
+        }
+        String label = buildDisplayLabel(username, fullName);
+        return new SubjectInfo(username, label);
+    }
+
+    private String buildApprovalRequestSummary(String action, SubjectInfo subject, Object detailSource) {
+        String label = subject != null ? StringUtils.defaultIfBlank(subject.label(), subject.id()) : null;
+        switch (action) {
+            case "USER_CREATE_REQUEST":
+                return label == null ? null : "提交新增用户审批：" + label;
+            case "USER_UPDATE_REQUEST":
+                return label == null ? null : "提交修改用户审批：" + label;
+            case "USER_GRANT_ROLE_REQUEST":
+                return label == null ? null : "提交用户授权审批：" + label + describeRoles(detailSource);
+            case "USER_REVOKE_ROLE_REQUEST":
+                return label == null ? null : "提交撤销用户授权审批：" + label + describeRoles(detailSource);
+            case "USER_ENABLE_REQUEST":
+                return label == null ? null : "提交" + resolveEnableAction(detailSource) + "审批：" + label;
+            case "USER_DISABLE_REQUEST":
+                return label == null ? null : "提交禁用用户审批：" + label;
+            case "USER_SET_PERSON_LEVEL_REQUEST":
+                return label == null ? null : "提交调整用户密级审批：" + label + describePersonLevel(detailSource);
+            case "USER_RESET_PASSWORD_REQUEST":
+                return label == null ? null : "提交重置用户密码审批：" + label + describeResetPassword(detailSource);
+            default:
+                return label == null ? null : "提交用户操作审批：" + label;
+        }
+    }
+
+    private String describeRoles(Object detailSource) {
+        if (!(detailSource instanceof Map<?, ?> map)) {
+            return "";
+        }
+        Object rolesValue = map.get("roles");
+        if (!(rolesValue instanceof Collection<?> roles) || roles.isEmpty()) {
+            return "";
+        }
+        String joined = roles
+            .stream()
+            .map(this::stringValue)
+            .filter(StringUtils::isNotBlank)
+            .collect(Collectors.joining(","));
+        return joined.isEmpty() ? "" : "，角色：" + joined;
+    }
+
+    private String resolveEnableAction(Object detailSource) {
+        if (detailSource instanceof Map<?, ?> map) {
+            Boolean enabled = booleanValue(map.get("enabled"));
+            if (Boolean.TRUE.equals(enabled)) {
+                return "启用用户";
+            }
+            if (Boolean.FALSE.equals(enabled)) {
+                return "禁用用户";
+            }
+        }
+        return "设置用户状态";
+    }
+
+    private String describePersonLevel(Object detailSource) {
+        if (!(detailSource instanceof Map<?, ?> map)) {
+            return "";
+        }
+        String level = stringValue(map.get("personLevel"));
+        return StringUtils.isBlank(level) ? "" : "，目标密级：" + level;
+    }
+
+    private String describeResetPassword(Object detailSource) {
+        if (!(detailSource instanceof Map<?, ?> map)) {
+            return "";
+        }
+        Boolean temporary = booleanValue(map.get("temporary"));
+        return Boolean.TRUE.equals(temporary) ? "（临时口令）" : "";
+    }
+
+    private String buildDisplayLabel(String username, String fullName) {
+        String trimmedUsername = StringUtils.trimToNull(username);
+        String trimmedFullName = StringUtils.trimToNull(fullName);
+        if (trimmedUsername == null && trimmedFullName == null) {
+            return null;
+        }
+        if (trimmedFullName == null || trimmedFullName.equals(trimmedUsername)) {
+            return trimmedUsername != null ? trimmedUsername : trimmedFullName;
+        }
+        if (trimmedUsername == null) {
+            return trimmedFullName;
+        }
+        return trimmedFullName + "（" + trimmedUsername + "）";
     }
 
     private void auditUserChange(String actor, String action, String target, String result, Object detail) {
@@ -646,13 +859,19 @@ public class AdminUserService {
         String code = switch (action) {
             case "USER_CREATE_EXECUTE" -> "ADMIN_USER_CREATE";
             case "USER_UPDATE_EXECUTE", "USER_SET_PERSON_LEVEL_EXECUTE" -> "ADMIN_USER_UPDATE";
-            case "USER_DELETE_EXECUTE", "USER_DISABLE_EXECUTE" -> "ADMIN_USER_DISABLE";
+            case "USER_DELETE_EXECUTE" -> "ADMIN_USER_DELETE";
+            case "USER_DISABLE_EXECUTE" -> "ADMIN_USER_DISABLE";
             case "USER_ENABLE_EXECUTE" -> "ADMIN_USER_ENABLE";
             case "USER_GRANT_ROLE_EXECUTE", "USER_REVOKE_ROLE_EXECUTE" -> "ADMIN_USER_ASSIGN_ROLE";
             case "USER_RESET_PASSWORD_EXECUTE" -> "ADMIN_USER_RESET_PASSWORD";
             default -> action;
         };
         AuditStage stage = "SUCCESS".equalsIgnoreCase(result) ? AuditStage.SUCCESS : AuditStage.FAIL;
+        ApprovalAuditCollector collector = approvalAuditCollector.get();
+        if (collector != null && StringUtils.isNotBlank(correlationId) && stage == AuditStage.SUCCESS) {
+            collector.collect(code, stage, normalizedTarget, new LinkedHashMap<>(payload));
+            return;
+        }
         auditService.recordAction(actor, code, stage, normalizedTarget, payload, correlationId);
     }
 
@@ -671,6 +890,241 @@ public class AdminUserService {
             }
         }
         return correlationIdFrom(direct);
+    }
+
+    private record SubjectInfo(String id, String label) {}
+
+    private static final class ApprovalAuditCollector {
+
+        private final Map<String, LinkedHashSet<String>> targetIdsByTable = new LinkedHashMap<>();
+        private final List<Map<String, Object>> steps = new ArrayList<>();
+        private final LinkedHashSet<String> summaryLines = new LinkedHashSet<>();
+
+        void collect(String operationCode, AuditStage stage, String targetId, Map<String, Object> payload) {
+            AdminAuditOperation op = AdminAuditOperation.fromCode(operationCode).orElse(null);
+            String table = op != null ? op.targetTable() : null;
+            String opName = op != null ? op.defaultName() : operationCode;
+            String effectiveId = determineEffectiveId(targetId, payload);
+            String label = extractLabel(payload);
+            if (stage == AuditStage.SUCCESS) {
+                if (StringUtils.isNotBlank(table) && StringUtils.isNotBlank(effectiveId)) {
+                    targetIdsByTable.computeIfAbsent(table, k -> new LinkedHashSet<>()).add(effectiveId);
+                }
+                summaryLines.add(buildSummaryLine(opName, effectiveId, label));
+            }
+            Map<String, Object> step = new LinkedHashMap<>();
+            step.put("operationCode", operationCode);
+            step.put("operationName", opName);
+            step.put("result", stage == AuditStage.SUCCESS ? "SUCCESS" : "FAILED");
+            if (StringUtils.isNotBlank(table)) {
+                step.put("targetTable", table);
+            }
+            if (StringUtils.isNotBlank(effectiveId)) {
+                step.put("targetId", effectiveId);
+            }
+            if (StringUtils.isNotBlank(label)) {
+                step.put("targetLabel", label);
+            }
+            step.put("payload", sanitizePayload(payload));
+            steps.add(step);
+        }
+
+        boolean hasData() {
+            return !steps.isEmpty();
+        }
+
+        Optional<AdminAuditService.AuditTarget> primaryTarget() {
+            if (targetIdsByTable.size() == 1) {
+                Map.Entry<String, LinkedHashSet<String>> entry = targetIdsByTable.entrySet().iterator().next();
+                return Optional.of(AdminAuditService.AuditTarget.of(entry.getKey(), entry.getValue()));
+            }
+            return Optional.empty();
+        }
+
+        String summaryText() {
+            if (summaryLines.isEmpty()) {
+                return null;
+            }
+            return String.join("；", summaryLines);
+        }
+
+        String primaryOperationName() {
+            if (summaryLines.isEmpty()) {
+                return null;
+            }
+            return summaryLines.iterator().next();
+        }
+
+        void appendDetails(Map<String, Object> detail) {
+            if (!targetIdsByTable.isEmpty()) {
+                Map<String, Object> targets = new LinkedHashMap<>();
+                targetIdsByTable.forEach((table, ids) -> targets.put(table, List.copyOf(ids)));
+                detail.put("approvalTargets", targets);
+            }
+            if (!steps.isEmpty()) {
+                detail.put("steps", steps);
+            }
+        }
+
+        private static String buildSummaryLine(String operationName, String targetId, String label) {
+            String base = StringUtils.defaultIfBlank(operationName, "审批操作");
+            if (StringUtils.isNotBlank(label)) {
+                return base + "：" + label;
+            }
+            if (StringUtils.isNotBlank(targetId)) {
+                return base + "：" + targetId;
+            }
+            return base;
+        }
+
+        private static Map<String, Object> sanitizePayload(Map<String, Object> payload) {
+            Map<String, Object> sanitized = new LinkedHashMap<>();
+            if (payload == null || payload.isEmpty()) {
+                return sanitized;
+            }
+            Object inner = payload.get("payload");
+            if (inner instanceof Map<?, ?> innerMap) {
+                Map<String, Object> compact = new LinkedHashMap<>();
+                copyIfPresent(innerMap, compact, "action");
+                copyIfPresent(innerMap, compact, "actionDisplay");
+                copyIfPresent(innerMap, compact, "username");
+                copyIfPresent(innerMap, compact, "fullName");
+                copyIfPresent(innerMap, compact, "changeRequestId");
+                copyIfPresent(innerMap, compact, "target");
+                sanitized.put("payload", compact);
+            }
+            copyIfPresent(payload, sanitized, "keycloakId");
+            copyIfPresent(payload, sanitized, "realmRoles");
+            copyIfPresent(payload, sanitized, "defaultPasswordApplied");
+            copyIfPresent(payload, sanitized, "defaultPasswordError");
+            copyIfPresent(payload, sanitized, "error");
+            return sanitized;
+        }
+
+        private static void copyIfPresent(Map<?, ?> source, Map<String, Object> target, String key) {
+            if (source == null) {
+                return;
+            }
+            Object value = source.get(key);
+            if (value != null) {
+                target.put(key, value);
+            }
+        }
+
+        private static String determineEffectiveId(String rawTarget, Map<String, Object> payload) {
+            String candidate = StringUtils.trimToNull(rawTarget);
+            if (candidate != null && !"UNKNOWN".equalsIgnoreCase(candidate)) {
+                return candidate;
+            }
+            Object inner = payload != null ? payload.get("payload") : null;
+            if (inner instanceof Map<?, ?> map) {
+                Object value = map.get("username");
+                if (value == null) {
+                    Object target = map.get("target");
+                    if (target instanceof Map<?, ?> targetMap) {
+                        value = targetMap.get("id");
+                        if (value == null) {
+                            value = targetMap.get("username");
+                        }
+                    }
+                }
+                if (value != null) {
+                    return value.toString();
+                }
+            }
+            return null;
+        }
+
+        private static String extractLabel(Map<String, Object> payload) {
+            Object inner = payload != null ? payload.get("payload") : null;
+            if (!(inner instanceof Map<?, ?> map)) {
+                return null;
+            }
+            String fullName = text(map.get("fullName"));
+            String username = text(map.get("username"));
+            if (StringUtils.isNotBlank(fullName) && StringUtils.isNotBlank(username) && !fullName.equals(username)) {
+                return fullName + "（" + username + "）";
+            }
+            return StringUtils.defaultIfBlank(fullName, username);
+        }
+
+        private static String text(Object value) {
+            if (value == null) {
+                return null;
+            }
+            String s = value.toString().trim();
+            return s.isEmpty() ? null : s;
+        }
+    }
+
+    private ApprovalAuditCollector collectApprovalSnapshot(AdminApprovalRequest approval) {
+        ApprovalAuditCollector collector = new ApprovalAuditCollector();
+        if (approval == null || approval.getItems() == null) {
+            return collector;
+        }
+        for (AdminApprovalItem item : approval.getItems()) {
+            Map<String, Object> payload = safeReadPayload(item.getPayloadJson());
+            if (payload.isEmpty()) {
+                continue;
+            }
+            String operationCode = resolveOperationCodeForApprovalPayload(item.getTargetKind(), payload);
+            if (operationCode == null) {
+                continue;
+            }
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("payload", payload);
+            collector.collect(operationCode, AuditStage.SUCCESS, item.getTargetId(), detail);
+        }
+        return collector;
+    }
+
+    private Map<String, Object> safeReadPayload(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, MAP_TYPE);
+        } catch (Exception ex) {
+            LOG.warn("Failed to parse approval payload: {}", ex.getMessage());
+            return Map.of();
+        }
+    }
+
+    private String resolveOperationCodeForApprovalPayload(String targetKind, Map<String, Object> payload) {
+        String action = stringValue(payload.get("action"));
+        if (action == null) {
+            return null;
+        }
+        return switch (action) {
+            case "create" -> "ADMIN_USER_CREATE";
+            case "update" -> "ADMIN_USER_UPDATE";
+            case "delete" -> "ADMIN_USER_DELETE";
+            case "grantRoles", "revokeRoles" -> "ADMIN_USER_ASSIGN_ROLE";
+            case "setEnabled" -> Boolean.TRUE.equals(booleanValue(payload.get("enabled"))) ? "ADMIN_USER_ENABLE" : "ADMIN_USER_DISABLE";
+            case "setPersonLevel" -> "ADMIN_USER_UPDATE";
+            case "resetPassword" -> "ADMIN_USER_RESET_PASSWORD";
+            default -> null;
+        };
+    }
+
+    private String buildFallbackApprovalSummary(String status, Long primaryChangeRequestId, long approvalId) {
+        String label = translateApprovalStatus(status);
+        if (primaryChangeRequestId != null && primaryChangeRequestId > 0) {
+            return label + "：CR-" + primaryChangeRequestId;
+        }
+        return label + "：审批单#" + approvalId;
+    }
+
+    private String translateApprovalStatus(String status) {
+        if (status == null) {
+            return "审批结果";
+        }
+        return switch (status.toUpperCase(Locale.ROOT)) {
+            case "APPROVED" -> "审批通过";
+            case "REJECTED" -> "审批拒绝";
+            case "PROCESSING" -> "审批待定";
+            default -> "审批结果";
+        };
     }
 
     private String extractPayloadUsername(Object detail) {
@@ -910,6 +1364,8 @@ public class AdminUserService {
         Long primaryChangeRequestId = changeRequestIds.stream().findFirst().orElse(null);
         String correlationId = correlationIdFrom(primaryChangeRequestId);
         Instant now = Instant.now();
+        ApprovalAuditCollector collector = new ApprovalAuditCollector();
+        approvalAuditCollector.set(collector);
         try {
             // Prefer caller token when provided; fall back to service account for reliability
             List<String> candidateTokens = new ArrayList<>();
@@ -946,45 +1402,19 @@ public class AdminUserService {
             approval.setDecisionNote(note);
             approval.setErrorMessage(null);
             approvalRepository.save(approval);
-            // Per-item audit: target_table=admin_approval_item, target_id=item.id
-            try {
-                if (approval.getItems() != null) {
-                    for (AdminApprovalItem item : approval.getItems()) {
-                        if (item != null && item.getId() != null) {
-                            Map<String, Object> itemDetail = new java.util.LinkedHashMap<>();
-                            itemDetail.put("approvalId", approval.getId());
-                            itemDetail.put("type", approval.getType());
-                            if (item.getSeqNumber() != null) itemDetail.put("seq", item.getSeqNumber());
-                            auditService.record(
-                                approver,
-                                "ADMIN_APPROVAL_APPLY",
-                                "admin.approvals",
-                                "admin_approval_item",
-                                String.valueOf(item.getId()),
-                                "SUCCESS",
-                                itemDetail,
-                                null,
-                                correlationId
-                            );
-                        }
-                    }
-                }
-            } catch (Exception ignore) {}
-            // Decision audit: keep request-level entry for correlation
-            auditService.recordAction(
+            recordApprovalDecisionEntry(
                 approver,
-                "ADMIN_APPROVAL_DECIDE",
-                AuditStage.SUCCESS,
-                String.valueOf(id),
-                new java.util.LinkedHashMap<String, Object>() {{
-                    put("result", "APPROVED");
-                    put("status", "APPROVED");
-                    put("note", note);
-                    put("type", approval.getType());
-                    if (primaryChangeRequestId != null) put("changeRequestId", primaryChangeRequestId);
-                    if (correlationId != null) put("correlationId", correlationId);
-                }},
-                correlationId
+                collector,
+                correlationId,
+                id,
+                primaryChangeRequestId,
+                changeRequestIds,
+                note,
+                approval,
+                "APPROVED",
+                "APPROVED",
+                AuditOperationType.APPROVE,
+                AuditOperationType.APPROVE.getDisplayName()
             );
             updateChangeRequestStatus(changeRequestIds, ApprovalStatus.APPLIED.name(), approver, now, null);
             return toDetailDto(approval);
@@ -1018,6 +1448,144 @@ public class AdminUserService {
             );
             LOG.warn("Approval id={} failed to apply: {}", id, ex.getMessage());
             throw new IllegalStateException("审批执行失败: " + ex.getMessage(), ex);
+        } finally {
+            approvalAuditCollector.remove();
+        }
+    }
+
+    private void recordApprovalDecisionEntry(
+        String approver,
+        ApprovalAuditCollector collector,
+        String correlationId,
+        long approvalId,
+        Long primaryChangeRequestId,
+        Set<Long> changeRequestIds,
+        String note,
+        AdminApprovalRequest approval,
+        String statusCode,
+        String resultCode,
+        AuditOperationType operationType,
+        String operationTypeText
+    ) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("result", resultCode);
+        detail.put("status", statusCode);
+        detail.put("approvalId", approvalId);
+        detail.put("type", approval.getType());
+        if (StringUtils.isNotBlank(note)) {
+            detail.put("note", note);
+        }
+        if (primaryChangeRequestId != null) {
+            detail.put("changeRequestId", primaryChangeRequestId);
+        }
+        if (StringUtils.isNotBlank(correlationId)) {
+            detail.put("correlationId", correlationId);
+        }
+        attachChangeRequestSnapshots(detail, changeRequestIds);
+        if (collector != null && collector.hasData()) {
+            collector.appendDetails(detail);
+        }
+
+        AdminAuditService.AuditRecordBuilder builder = auditService
+            .builder()
+            .actor(approver)
+            .fromOperation(AdminAuditOperation.ADMIN_APPROVAL_DECIDE)
+            .result(AdminAuditService.AuditResult.SUCCESS)
+            .details(detail)
+            .operationType(operationType)
+            .operationTypeText(StringUtils.defaultIfBlank(operationTypeText, operationType.getDisplayName()));
+        String summaryText = collector != null ? collector.summaryText() : null;
+        if (StringUtils.isBlank(summaryText)) {
+            summaryText = buildFallbackApprovalSummary(statusCode, primaryChangeRequestId, approvalId);
+        }
+        builder.summary(summaryText);
+        String operationName = collector != null ? collector.primaryOperationName() : null;
+        if (StringUtils.isNotBlank(operationName)) {
+            builder.operationName(operationName);
+        } else if (StringUtils.isNotBlank(summaryText)) {
+            builder.operationName(summaryText);
+        }
+        boolean targetAssigned = false;
+        if (collector != null) {
+            AdminAuditService.AuditTarget primaryTarget = collector.primaryTarget().orElse(null);
+            if (primaryTarget != null) {
+                builder.target(primaryTarget);
+                targetAssigned = true;
+            }
+        }
+        if (!targetAssigned && primaryChangeRequestId != null) {
+            builder.target(AdminAuditService.AuditTarget.of("change_request", List.of(String.valueOf(primaryChangeRequestId))));
+        }
+        auditService.record(builder.build());
+    }
+
+    private void attachChangeRequestSnapshots(Map<String, Object> detail, Set<Long> changeRequestIds) {
+        if (detail == null || changeRequestIds == null || changeRequestIds.isEmpty()) {
+            return;
+        }
+        List<Map<String, Object>> snapshotEntries = new ArrayList<>();
+        for (Long crId : changeRequestIds) {
+            if (crId == null || crId <= 0) {
+                continue;
+            }
+            changeRequestRepository
+                .findById(crId)
+                .ifPresent(cr -> {
+                    ChangeSnapshot snapshot = ChangeSnapshot.fromJson(cr.getDiffJson(), objectMapper);
+                    if (snapshot != null && (snapshot.hasChanges() || !snapshot.getBefore().isEmpty() || !snapshot.getAfter().isEmpty())) {
+                        Map<String, Object> entry = new LinkedHashMap<>();
+                        entry.put("changeRequestId", crId);
+                        entry.put("changeRequestRef", correlationIdFrom(crId));
+                        entry.put("resourceType", cr.getResourceType());
+                        entry.put("snapshot", snapshot.toMap());
+                        List<Map<String, String>> summary = changeSnapshotFormatter.format(snapshot, cr.getResourceType());
+                        if (!summary.isEmpty()) {
+                            entry.put("summary", summary);
+                        }
+                        snapshotEntries.add(entry);
+                    }
+                });
+        }
+        if (snapshotEntries.isEmpty()) {
+            return;
+        }
+        if (snapshotEntries.size() == 1) {
+            Map<String, Object> single = snapshotEntries.get(0);
+            detail.putIfAbsent("changeRequestId", single.get("changeRequestId"));
+            if (single.containsKey("changeRequestRef")) {
+                detail.putIfAbsent("changeRequestRef", single.get("changeRequestRef"));
+            }
+            detail.putIfAbsent("changeSnapshot", single.get("snapshot"));
+            if (single.containsKey("summary")) {
+                detail.putIfAbsent("changeSummary", single.get("summary"));
+            }
+        } else if (!detail.containsKey("changeSnapshots")) {
+            detail.put("changeSnapshots", snapshotEntries);
+            List<Map<String, String>> combinedSummary = new ArrayList<>();
+            for (Map<String, Object> entry : snapshotEntries) {
+                Object summaryObj = entry.get("summary");
+                if (summaryObj instanceof List<?> list) {
+                    for (Object item : list) {
+                        if (item instanceof Map<?, ?> map) {
+                            Map<String, String> converted = new LinkedHashMap<>();
+                            map.forEach((k, v) -> {
+                                if (k != null && v != null) {
+                                    converted.put(String.valueOf(k), String.valueOf(v));
+                                }
+                            });
+                            if (!converted.isEmpty()) {
+                                if (entry.get("changeRequestRef") != null) {
+                                    converted.putIfAbsent("source", String.valueOf(entry.get("changeRequestRef")));
+                                }
+                                combinedSummary.add(converted);
+                            }
+                        }
+                    }
+                }
+            }
+            if (!combinedSummary.isEmpty()) {
+                detail.put("changeSummaries", combinedSummary);
+            }
         }
     }
 
@@ -1035,20 +1603,20 @@ public class AdminUserService {
         approval.setApprover(approver);
         approval.setDecisionNote(note);
         approvalRepository.save(approval);
-        auditService.recordAction(
+        ApprovalAuditCollector snapshotCollector = collectApprovalSnapshot(approval);
+        recordApprovalDecisionEntry(
             approver,
-            "ADMIN_APPROVAL_DECIDE",
-            AuditStage.SUCCESS,
-            String.valueOf(id),
-            new java.util.LinkedHashMap<String, Object>() {{
-                put("result", "REJECTED");
-                put("status", "REJECTED");
-                put("note", note);
-                put("type", approval.getType());
-                if (primaryChangeRequestId != null) put("changeRequestId", primaryChangeRequestId);
-                if (correlationId != null) put("correlationId", correlationId);
-            }},
-            correlationId
+            snapshotCollector,
+            correlationId,
+            id,
+            primaryChangeRequestId,
+            changeRequestIds,
+            note,
+            approval,
+            "REJECTED",
+            "REJECTED",
+            AuditOperationType.REJECT,
+            AuditOperationType.REJECT.getDisplayName()
         );
         updateChangeRequestStatus(changeRequestIds, ApprovalStatus.REJECTED.name(), approver, now, null);
         return toDetailDto(approval);
@@ -1068,20 +1636,20 @@ public class AdminUserService {
         approval.setApprover(approver);
         approval.setDecisionNote(note);
         approvalRepository.save(approval);
-        auditService.recordAction(
+        ApprovalAuditCollector snapshotCollector = collectApprovalSnapshot(approval);
+        recordApprovalDecisionEntry(
             approver,
-            "ADMIN_APPROVAL_DECIDE",
-            AuditStage.SUCCESS,
-            String.valueOf(id),
-            new java.util.LinkedHashMap<String, Object>() {{
-                put("result", "PROCESS");
-                put("status", "PROCESSING");
-                put("note", note);
-                put("type", approval.getType());
-                if (primaryChangeRequestId != null) put("changeRequestId", primaryChangeRequestId);
-                if (correlationId != null) put("correlationId", correlationId);
-            }},
-            correlationId
+            snapshotCollector,
+            correlationId,
+            id,
+            primaryChangeRequestId,
+            changeRequestIds,
+            note,
+            approval,
+            "PROCESSING",
+            "PROCESSING",
+            AuditOperationType.REQUEST,
+            "待定"
         );
         updateChangeRequestStatus(changeRequestIds, ApprovalStatus.PROCESSING.name(), approver, now, null);
         return toDetailDto(approval);

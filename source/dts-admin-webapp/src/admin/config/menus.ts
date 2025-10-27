@@ -9,7 +9,7 @@ export interface AdminMenuItem {
 }
 
 const sysadminMenus: AdminMenuItem[] = [
-	{ key: "mine", label: "我的申请", path: "/admin/my-changes", icon: "local:ic-mail" },
+	{ key: "mine", label: "我的申请", path: "/admin/my-changes", icon: "local:ic-blank" },
 	{ key: "users", label: "用户管理", path: "/admin/users", icon: "local:ic-users" },
 	{ key: "roles", label: "角色管理", path: "/admin/roles", icon: "local:ic-roles" },
 	{ key: "portal-menus", label: "菜单管理", path: "/admin/portal-menus", icon: "local:ic-menu" },

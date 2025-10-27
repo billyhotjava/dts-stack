@@ -1,27 +1,27 @@
 package com.yuzhi.dts.admin.web.rest;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yuzhi.dts.admin.domain.AuditEvent;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditEventView;
+import com.yuzhi.dts.admin.service.audit.AdminAuditService.ModuleOption;
+import com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditSearchCriteria;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yuzhi.dts.admin.service.audit.OperationMappingEngine;
 import com.yuzhi.dts.admin.service.audit.OperationMappingEngine.RuleSummary;
 import com.yuzhi.dts.admin.service.audit.AuditResourceDictionaryService;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
-import com.yuzhi.dts.admin.web.rest.errors.BadRequestAlertException;
-import com.yuzhi.dts.common.audit.AuditStage;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.text.Normalizer;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -29,7 +29,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -42,7 +42,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.util.StringUtils;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -61,20 +61,165 @@ public class AuditLogResource {
     private static final Logger log = LoggerFactory.getLogger(AuditLogResource.class);
 
     private final AdminAuditService auditService;
-    private final ObjectMapper objectMapper;
     private final OperationMappingEngine opMappingEngine;
     private final AuditResourceDictionaryService resourceDictionary;
-
+    private final ObjectMapper objectMapper;
     public AuditLogResource(
         AdminAuditService auditService,
-        ObjectMapper objectMapper,
         OperationMappingEngine opMappingEngine,
-        AuditResourceDictionaryService resourceDictionary
+        AuditResourceDictionaryService resourceDictionary,
+        ObjectMapper objectMapper
     ) {
         this.auditService = auditService;
-        this.objectMapper = objectMapper;
         this.opMappingEngine = opMappingEngine;
         this.resourceDictionary = resourceDictionary;
+        this.objectMapper = objectMapper.copy().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+    }
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<Map<String, Object>>> list(
+        @RequestParam(value = "page", defaultValue = "0") int page,
+        @RequestParam(value = "size", defaultValue = "20") int size,
+        @RequestParam(value = "sort", defaultValue = "occurredAt,desc") String sort,
+        @RequestParam(value = "actor", required = false) String actor,
+        @RequestParam(value = "module", required = false) String module,
+        @RequestParam(value = "action", required = false) String actionCode,
+        @RequestParam(value = "operationType", required = false) String operationType,
+        @RequestParam(value = "operationGroup", required = false) String operationGroup,
+        @RequestParam(value = "sourceSystem", required = false) String sourceSystem,
+        @RequestParam(value = "result", required = false) String result,
+        @RequestParam(value = "resourceType", required = false) String targetTable,
+        @RequestParam(value = "resource", required = false) String targetId,
+        @RequestParam(value = "clientIp", required = false) String clientIp,
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "from", required = false) String from,
+        @RequestParam(value = "to", required = false) String to
+    ) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(size, 200), parseSort(sort));
+        Instant fromDate = parseInstant(from);
+        Instant toDate = parseInstant(to);
+        VisibilityScope scope = resolveVisibilityScope();
+        AuditSearchCriteria criteria = new AuditSearchCriteria(
+            actor,
+            module,
+            operationType,
+            actionCode,
+            operationGroup,
+            sourceSystem,
+            result,
+            targetTable,
+            targetId,
+            clientIp,
+            keyword,
+            fromDate,
+            toDate,
+            scope.allowedActors(),
+            scope.excludedActors(),
+            false
+        );
+        Page<AuditEventView> resultPage = auditService.search(criteria, pageable);
+        List<Map<String, Object>> content = resultPage.getContent().stream().map(view -> toResponse(view, false)).toList();
+        Map<String, Object> payload = Map.of(
+            "content",
+            content,
+            "page",
+            resultPage.getNumber(),
+            "size",
+            resultPage.getSize(),
+            "totalElements",
+            resultPage.getTotalElements(),
+            "totalPages",
+            resultPage.getTotalPages()
+        );
+        return ResponseEntity.ok(ApiResponse.ok(payload));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> detail(@PathVariable Long id) {
+        VisibilityScope scope = resolveVisibilityScope();
+        AuditEventView view = auditService
+            .fetchById(id, true)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "审计日志不存在"));
+        ensureReadable(scope, view);
+        return ResponseEntity.ok(ApiResponse.ok(toResponse(view, true)));
+    }
+
+    @DeleteMapping
+    public ResponseEntity<ApiResponse<Map<String, Object>>> purge() {
+        long removed = auditService.purgeAll();
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("removed", removed)));
+    }
+
+    @GetMapping(value = "/export", produces = MediaType.TEXT_PLAIN_VALUE)
+    public void export(
+        @RequestParam(value = "actor", required = false) String actor,
+        @RequestParam(value = "module", required = false) String module,
+        @RequestParam(value = "action", required = false) String actionCode,
+        @RequestParam(value = "operationType", required = false) String operationType,
+        @RequestParam(value = "operationGroup", required = false) String operationGroup,
+        @RequestParam(value = "sourceSystem", required = false) String sourceSystem,
+        @RequestParam(value = "result", required = false) String result,
+        @RequestParam(value = "resourceType", required = false) String targetTable,
+        @RequestParam(value = "resource", required = false) String targetId,
+        @RequestParam(value = "clientIp", required = false) String clientIp,
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "from", required = false) String from,
+        @RequestParam(value = "to", required = false) String to,
+        HttpServletResponse response
+    ) throws IOException {
+        Instant fromDate = parseInstant(from);
+        Instant toDate = parseInstant(to);
+        VisibilityScope scope = resolveVisibilityScope();
+        AuditSearchCriteria criteria = new AuditSearchCriteria(
+            actor,
+            module,
+            operationType,
+            actionCode,
+            operationGroup,
+            sourceSystem,
+            result,
+            targetTable,
+            targetId,
+            clientIp,
+            keyword,
+            fromDate,
+            toDate,
+            scope.allowedActors(),
+            scope.excludedActors(),
+            true
+        );
+        List<Map<String, Object>> records = auditService
+            .search(criteria, Pageable.unpaged())
+            .getContent()
+            .stream()
+            .map(view -> toResponse(view, true))
+            .toList();
+        StringBuilder sb = new StringBuilder();
+        sb.append(
+            "id,occurred_at,source_system,module,action,actor,result,result_text,summary,target_table,target_id,operation_type,operation_content,client_ip,client_agent\n"
+        );
+        for (Map<String, Object> record : records) {
+            sb
+                .append(record.get("id")).append(',')
+                .append(escapeCsv(record.get("occurredAt"))).append(',')
+                .append(escapeCsv(record.get("sourceSystem"))).append(',')
+                .append(escapeCsv(record.get("module"))).append(',')
+                .append(escapeCsv(record.get("action"))).append(',')
+                .append(escapeCsv(record.get("actor"))).append(',')
+                .append(escapeCsv(record.get("result"))).append(',')
+                .append(escapeCsv(record.get("resultText"))).append(',')
+                .append(escapeCsv(record.get("summary"))).append(',')
+                .append(escapeCsv(record.get("targetTable"))).append(',')
+                .append(escapeCsv(record.get("targetId"))).append(',')
+                .append(escapeCsv(record.get("operationType"))).append(',')
+                .append(escapeCsv(record.get("operationContent"))).append(',')
+                .append(escapeCsv(record.get("clientIp"))).append(',')
+                .append(escapeCsv(record.get("clientAgent")))
+                .append('\n');
+        }
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audit-logs.csv");
+        response.setContentType("text/csv;charset=UTF-8");
+        response.getOutputStream().write(sb.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     @GetMapping("/modules")
@@ -88,7 +233,7 @@ public class AuditLogResource {
     }
 
     @GetMapping("/groups")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> operationGroups() {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> groups() {
         List<RuleSummary> summaries = opMappingEngine.describeRules();
         if (summaries.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.ok(List.of()));
@@ -96,7 +241,7 @@ public class AuditLogResource {
         LinkedHashMap<String, Map<String, Object>> grouped = new LinkedHashMap<>();
         for (RuleSummary summary : summaries) {
             String key = resolveGroupKey(summary);
-            if (!StringUtils.hasText(key)) {
+            if (StringUtils.isBlank(key)) {
                 continue;
             }
             grouped.computeIfAbsent(key, k -> {
@@ -111,19 +256,15 @@ public class AuditLogResource {
                 if (groupLabel != null) {
                     entry.put("groupDisplayName", groupLabel);
                 }
-                String sourceSystem = safeTrim(summary.getSourceSystem());
-                if (sourceSystem != null) {
-                    entry.put("sourceSystem", sourceSystem);
-                    String sourceLabel = mapSourceSystemLabel(sourceSystem);
-                    if (sourceLabel != null) {
-                        entry.put("sourceSystemLabel", sourceLabel);
-                    }
+                String source = safeTrim(summary.getSourceSystem());
+                if (source != null) {
+                    entry.put("sourceSystem", source);
+                    entry.put("sourceSystemLabel", mapSourceSystemText(source));
                 }
                 return entry;
             });
         }
-        List<Map<String, Object>> payload = new ArrayList<>(grouped.values());
-        return ResponseEntity.ok(ApiResponse.ok(payload));
+        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>(grouped.values())));
     }
 
     @GetMapping("/categories")
@@ -131,7 +272,8 @@ public class AuditLogResource {
         LinkedHashMap<String, ModuleView> modules = collectModulesFromRules();
         LinkedHashMap<String, CategoryView> categories = collectCategoriesFromRules(modules);
         List<Map<String, Object>> out = new ArrayList<>(categories.size());
-        categories.values()
+        categories
+            .values()
             .forEach(category ->
                 out.add(
                     Map.of(
@@ -149,17 +291,180 @@ public class AuditLogResource {
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
+    private Map<String, Object> toResponse(AuditEventView view, boolean includeDetails) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", view.id());
+        map.put("occurredAt", view.occurredAt() != null ? view.occurredAt().toString() : null);
+        map.put("sourceSystem", view.sourceSystem());
+        map.put("sourceSystemText", mapSourceSystemText(view.sourceSystem()));
+        map.put("module", StringUtils.defaultIfBlank(view.moduleLabel(), view.module()));
+        map.put("moduleKey", view.module());
+        map.put("action", StringUtils.defaultIfBlank(view.operationName(), view.operationCode()));
+        map.put("actor", view.actor());
+        map.put("actorRole", view.actorRole());
+        map.put("actorName", view.actorName());
+        String firstTargetId = !view.targetIds().isEmpty() ? view.targetIds().get(0) : null;
+        map.put("resourceType", view.targetTable());
+        map.put("resourceId", firstTargetId);
+        map.put("targetTable", view.targetTable());
+        map.put("targetTableLabel", resourceDictionary.resolveLabel(view.targetTable()).orElse(view.targetTable()));
+        map.put("targetId", firstTargetId);
+        map.put("targetIds", view.targetIds());
+        map.put("clientIp", view.clientIp());
+        map.put("clientAgent", view.clientAgent());
+        map.put("result", view.result());
+        map.put("resultText", mapResultText(view.result()));
+        map.put("summary", view.summary());
+        map.put("operationTypeCode", view.operationType());
+        map.put("operationType", view.operationTypeText());
+        map.put("operationContent", view.summary());
+        map.put("operationGroup", view.operationGroup());
+        map.put("operationCode", view.operationCode());
+        map.put("logTypeText", mapLogType(view.sourceSystem()));
+        map.put("operatorId", view.operatorId());
+        map.put("operatorName", view.operatorName());
+        map.put("operatorRoles", toJson(view.operatorRoles()));
+        map.put("orgCode", view.orgCode());
+        map.put("orgName", view.orgName());
+        map.put("departmentName", view.departmentName());
+        Map<String, Object> detailPayload;
+        if (includeDetails) {
+            detailPayload = new LinkedHashMap<>();
+            if (view.details() != null) {
+                detailPayload.putAll(view.details());
+            }
+            if (StringUtils.isNotBlank(view.targetTable())) {
+                detailPayload.putIfAbsent("targetTable", view.targetTable());
+                detailPayload.putIfAbsent(
+                    "targetTableLabel",
+                    resourceDictionary.resolveLabel(view.targetTable()).orElse(view.targetTable())
+                );
+            }
+            if (!CollectionUtils.isEmpty(view.targetIds())) {
+                detailPayload.putIfAbsent("targetIds", view.targetIds());
+            }
+        } else {
+            detailPayload = Map.of();
+        }
+        map.put("details", detailPayload);
+        map.put("payload", detailPayload);
+        map.put("targetSnapshot", includeDetails ? view.targetSnapshot() : Map.of());
+        map.put("targetLabels", includeDetails ? view.targetLabels() : Map.of());
+        String correlationId = extractCorrelationId(view.details());
+        if (StringUtils.isNotBlank(correlationId)) {
+            map.put("correlationId", correlationId);
+            if (correlationId.startsWith("CR-")) {
+                map.put("changeRequestRef", correlationId);
+            }
+        }
+        map.put("requestId", view.details().getOrDefault("requestId", view.details().get("request_id")));
+        map.put("approvalSummary", view.details().get("approvalSummary"));
+        return map;
+    }
+
+    private String extractCorrelationId(Map<String, Object> details) {
+        if (CollectionUtils.isEmpty(details)) {
+            return null;
+        }
+        Object value = details.get("correlationId");
+        if (value == null) {
+            value = details.get("correlation_id");
+        }
+        return value == null ? null : value.toString();
+    }
+
+    private void ensureReadable(VisibilityScope scope, AuditEventView view) {
+        if (scope.allowedActors().isEmpty() && scope.excludedActors().isEmpty()) {
+            return;
+        }
+        String actor = Optional.ofNullable(view.actor()).map(String::toLowerCase).orElse("");
+        if (!scope.allowedActors().isEmpty() && !scope.allowedActors().contains(actor)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问该审计日志");
+        }
+        if (!scope.excludedActors().isEmpty() && scope.excludedActors().contains(actor)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问该审计日志");
+        }
+    }
+
+    private Sort parseSort(String sort) {
+        if (StringUtils.isBlank(sort)) {
+            return Sort.by(Sort.Order.desc("occurredAt"));
+        }
+        try {
+            String[] parts = sort.split(",");
+            String property = parts[0];
+            String direction = parts.length > 1 ? parts[1] : "desc";
+            Sort.Order order = "asc".equalsIgnoreCase(direction)
+                ? Sort.Order.asc(property)
+                : Sort.Order.desc(property);
+            return Sort.by(order);
+        } catch (Exception ex) {
+            return Sort.by(Sort.Order.desc("occurredAt"));
+        }
+    }
+
+    private Instant parseInstant(String value) {
+        if (StringUtils.isBlank(value)) {
+            return null;
+        }
+        try {
+            return Instant.parse(value.trim());
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
+    }
+
+    private String mapSourceSystemText(String sourceSystem) {
+        if (StringUtils.isBlank(sourceSystem)) {
+            return "系统管理";
+        }
+        return switch (sourceSystem.trim().toLowerCase(Locale.ROOT)) {
+            case "platform" -> "业务管理";
+            default -> "系统管理";
+        };
+    }
+
+    private String mapResultText(String result) {
+        if (StringUtils.isBlank(result)) {
+            return "成功";
+        }
+        return switch (result.trim().toUpperCase(Locale.ROOT)) {
+            case "FAILED", "FAIL", "ERROR" -> "失败";
+            case "PENDING" -> "处理中";
+            default -> "成功";
+        };
+    }
+
+    private String mapLogType(String sourceSystem) {
+        return "platform".equalsIgnoreCase(StringUtils.trimToEmpty(sourceSystem)) ? "业务端审计" : "管理端审计";
+    }
+
+    private VisibilityScope resolveVisibilityScope() {
+        Optional<String> login = SecurityUtils.getCurrentUserLogin();
+        if (login.isEmpty()) {
+            return VisibilityScope.unrestricted();
+        }
+        String normalized = login.orElseThrow().trim().toLowerCase(Locale.ROOT);
+        if ("authadmin".equals(normalized)) {
+            return new VisibilityScope(Set.of("auditadmin"), Set.of());
+        }
+        if ("auditadmin".equals(normalized)) {
+            return new VisibilityScope(Set.of(), Set.of("auditadmin"));
+        }
+        return VisibilityScope.unrestricted();
+    }
+
     private String resolveGroupKey(RuleSummary summary) {
         String rawKey = safeTrim(summary.getOperationGroup());
-        if (StringUtils.hasText(rawKey)) {
+        if (StringUtils.isNotBlank(rawKey)) {
             return rawKey;
         }
         String label = safeTrim(summary.getGroupDisplayName());
-        if (StringUtils.hasText(label)) {
+        if (StringUtils.isNotBlank(label)) {
             return slugify(label, "audit-group");
         }
         String module = safeTrim(summary.getModuleName());
-        if (StringUtils.hasText(module)) {
+        if (StringUtils.isNotBlank(module)) {
             return slugify(module, "audit-module");
         }
         Long id = summary.getId();
@@ -173,19 +478,18 @@ public class AuditLogResource {
         String module = safeTrim(summary.getModuleName());
         String groupLabel = safeTrim(summary.getGroupDisplayName());
         String sourceSystem = safeTrim(summary.getSourceSystem());
-        String sourceLabel = mapSourceSystemLabel(sourceSystem);
-
+        String sourceLabel = mapSourceSystemText(sourceSystem);
         StringBuilder label = new StringBuilder();
-        if (StringUtils.hasText(sourceLabel)) {
+        if (StringUtils.isNotBlank(sourceLabel)) {
             label.append(sourceLabel);
         }
-        if (StringUtils.hasText(module)) {
+        if (StringUtils.isNotBlank(module)) {
             if (label.length() > 0) {
                 label.append(" · ");
             }
             label.append(module);
         }
-        if (StringUtils.hasText(groupLabel) && !Objects.equals(groupLabel, module)) {
+        if (StringUtils.isNotBlank(groupLabel) && !Objects.equals(groupLabel, module)) {
             if (label.length() > 0) {
                 label.append(" · ");
             }
@@ -197,33 +501,17 @@ public class AuditLogResource {
         return label.toString();
     }
 
-    private String mapSourceSystemLabel(String sourceSystem) {
-        if (!StringUtils.hasText(sourceSystem)) {
-            return null;
-        }
-        String normalized = sourceSystem.trim().toLowerCase(Locale.ROOT);
-        return switch (normalized) {
-            case "admin" -> "系统管理";
-            case "platform" -> "业务管理";
-            default -> sourceSystem;
-        };
-    }
-
     private LinkedHashMap<String, ModuleView> collectModulesFromRules() {
         LinkedHashMap<String, ModuleView> modules = new LinkedHashMap<>();
-        List<String> canonicalModules = resourceDictionary.listModuleCategories();
-        if (!canonicalModules.isEmpty()) {
-            for (String moduleName : canonicalModules) {
-                ensureModuleView(moduleName, modules);
-            }
-            return modules;
-        }
         for (RuleSummary summary : opMappingEngine.describeRules()) {
-            ensureModuleView(summary.getModuleName(), modules);
-        }
-        if (modules.isEmpty()) {
-            ModuleView fallback = new ModuleView("general", "通用");
-            modules.put(fallback.key(), fallback);
+            String rawModuleKey = safeTrim(summary.getModuleName());
+            String moduleKey = StringUtils.isBlank(rawModuleKey) ? "general" : rawModuleKey;
+            String rawModuleTitle = safeTrim(summary.getModuleName());
+            String moduleTitle = StringUtils.isBlank(rawModuleTitle)
+                ? resourceDictionary.resolveLabel(moduleKey).orElse(moduleKey)
+                : rawModuleTitle;
+            final String title = moduleTitle;
+            modules.computeIfAbsent(moduleKey, k -> new ModuleView(k, title));
         }
         return modules;
     }
@@ -231,813 +519,63 @@ public class AuditLogResource {
     private LinkedHashMap<String, CategoryView> collectCategoriesFromRules(LinkedHashMap<String, ModuleView> modules) {
         LinkedHashMap<String, CategoryView> categories = new LinkedHashMap<>();
         for (RuleSummary summary : opMappingEngine.describeRules()) {
-            ModuleView module = ensureModuleView(summary.getModuleName(), modules);
-            String entryTitle = safeTrim(deriveEntryTitle(summary));
-            if (!StringUtils.hasText(entryTitle)) {
-                continue;
+            String rawModuleKey = safeTrim(summary.getModuleName());
+            String moduleKey = StringUtils.isBlank(rawModuleKey) ? "general" : rawModuleKey;
+            final String moduleKeyFinal = moduleKey;
+            ModuleView module = modules.computeIfAbsent(
+                moduleKeyFinal,
+                k -> new ModuleView(k, resourceDictionary.resolveLabel(k).orElse(k))
+            );
+            String entryKey = safeTrim(summary.getModuleName()) + ":" + safeTrim(summary.getOperationGroup());
+            String entryTitle = safeTrim(summary.getGroupDisplayName());
+            if (StringUtils.isBlank(entryTitle)) {
+                entryTitle = module.title();
             }
-            String entryKey = slugify(entryTitle, module.key() + "-entry");
-            String unique = module.key() + "::" + entryKey;
-            categories.putIfAbsent(unique, new CategoryView(module.key(), module.title(), entryKey, entryTitle));
-        }
-        if (categories.isEmpty()) {
-            ModuleView primary = modules.values().stream().findFirst().orElseGet(() -> ensureModuleView("通用", modules));
-            String entryKey = primary.key() + "-default";
-            categories.putIfAbsent(primary.key() + "::" + entryKey, new CategoryView(primary.key(), primary.title(), entryKey, "全部操作"));
+            categories.putIfAbsent(entryKey, new CategoryView(module.key(), module.title(), entryKey, entryTitle));
         }
         return categories;
     }
 
-    private ModuleView ensureModuleView(String moduleTitle, LinkedHashMap<String, ModuleView> modules) {
-        String normalizedTitle = safeTrim(moduleTitle);
-        if (!StringUtils.hasText(normalizedTitle)) {
-            normalizedTitle = "通用";
+    private String slugify(String value, String fallback) {
+        if (StringUtils.isBlank(value)) {
+            return fallback;
         }
-        for (ModuleView existing : modules.values()) {
-            if (existing.title().equals(normalizedTitle)) {
-                return existing;
-            }
-        }
-        String key = slugify(normalizedTitle, "module");
-        ModuleView view = new ModuleView(key, normalizedTitle);
-        modules.putIfAbsent(key, view);
-        return view;
-    }
-
-    private String deriveEntryTitle(RuleSummary summary) {
-        if (StringUtils.hasText(summary.getOperationTypeLabel())) {
-            return summary.getOperationTypeLabel();
-        }
-        if (StringUtils.hasText(summary.getDescriptionTemplate())) {
-            return summary.getDescriptionTemplate();
-        }
-        if (StringUtils.hasText(summary.getSourceTableTemplate())) {
-            return summary.getSourceTableTemplate();
-        }
-        return null;
-    }
-
-    private String resolveTableLabel(String key) {
-        if (!StringUtils.hasText(key)) {
-            return null;
-        }
-        String trimmed = key.trim();
-        return resourceDictionary.resolveLabel(trimmed).orElse(trimmed);
+        return value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
     }
 
     private String safeTrim(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        return value == null ? null : value.trim();
     }
 
-    private String slugify(String input, String prefix) {
-        String trimmed = safeTrim(input);
-        String effectivePrefix = StringUtils.hasText(prefix) ? prefix : "key";
-        if (!StringUtils.hasText(trimmed)) {
-            return effectivePrefix + "-" + "default";
+    private String escapeCsv(Object value) {
+        if (value == null) {
+            return "";
         }
-        String normalized = Normalizer.normalize(trimmed, Normalizer.Form.NFKD);
-        String slug = normalized
-            .replaceAll("\\p{M}", "")
-            .toLowerCase(Locale.ROOT)
-            .replaceAll("[^a-z0-9]+", "-")
-            .replaceAll("^-+|-+$", "");
-        if (!StringUtils.hasText(slug)) {
-            slug = effectivePrefix + "-" + Math.abs(trimmed.hashCode());
+        String str = value.toString();
+        if (str.contains(",") || str.contains("\"")) {
+            return '"' + str.replace("\"", "\"\"") + '"';
         }
-        return slug;
+        return str;
     }
 
     private record ModuleView(String key, String title) {}
 
     private record CategoryView(String moduleKey, String moduleTitle, String entryKey, String entryTitle) {}
 
+    private String toJson(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (IOException ex) {
+            return value.toString();
+        }
+    }
+
     private record VisibilityScope(Set<String> allowedActors, Set<String> excludedActors) {
-        VisibilityScope {
-            allowedActors = allowedActors == null ? Set.of() : allowedActors;
-            excludedActors = excludedActors == null ? Set.of() : excludedActors;
+        static VisibilityScope unrestricted() {
+            return new VisibilityScope(Set.of(), Set.of());
         }
-
-        boolean hasAllowedActors() {
-            return !allowedActors.isEmpty();
-        }
-
-        boolean hasExcludedActors() {
-            return !excludedActors.isEmpty();
-        }
-    }
-
-    private static final VisibilityScope UNRESTRICTED_SCOPE = new VisibilityScope(Set.of(), Set.of());
-
-    @GetMapping
-    public ResponseEntity<ApiResponse<Map<String, Object>>> list(
-        @RequestParam(value = "page", defaultValue = "0") int page,
-        @RequestParam(value = "size", defaultValue = "20") int size,
-        @RequestParam(value = "sort", defaultValue = "occurredAt,desc") String sort,
-        @RequestParam(value = "eventType", required = false) String eventType,
-        @RequestParam(value = "actor", required = false) String actor,
-        @RequestParam(value = "module", required = false) String module,
-        @RequestParam(value = "action", required = false) String action,
-        @RequestParam(value = "sourceSystem", required = false) String sourceSystem,
-        @RequestParam(value = "result", required = false) String result,
-        @RequestParam(value = "resourceType", required = false) String resourceType,
-        @RequestParam(value = "resource", required = false) String resource,
-        @RequestParam(value = "requestUri", required = false) String requestUri,
-        @RequestParam(value = "from", required = false) String from,
-        @RequestParam(value = "to", required = false) String to,
-        @RequestParam(value = "clientIp", required = false) String clientIp,
-        @RequestParam(value = "operationGroup", required = false) String operationGroup
-    ) {
-        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(size, 200), parseSort(sort));
-        Instant fromDate = parseInstant(from, "from");
-        Instant toDate = parseInstant(to, "to");
-        VisibilityScope scope = resolveVisibilityScope();
-        Page<AuditEvent> pageResult = executeSearch(
-            scope,
-            actor,
-            module,
-            action,
-            sourceSystem,
-            eventType,
-            result,
-            resourceType,
-            resource,
-            requestUri,
-            fromDate,
-            toDate,
-            clientIp,
-            operationGroup,
-            pageable
-        );
-        List<AuditEventView> views = pageResult.getContent().stream().map(this::toView).toList();
-        Page<AuditEventView> viewPage = new PageImpl<>(views, pageable, pageResult.getTotalElements());
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("content", viewPage.getContent());
-        payload.put("page", viewPage.getNumber());
-        payload.put("size", viewPage.getSize());
-        payload.put("totalElements", viewPage.getTotalElements());
-        payload.put("totalPages", viewPage.getTotalPages());
-        return ResponseEntity.ok(ApiResponse.ok(payload));
-    }
-
-    @GetMapping(value = "/export", produces = MediaType.TEXT_PLAIN_VALUE)
-    public void export(
-        @RequestParam(value = "actor", required = false) String actor,
-        @RequestParam(value = "module", required = false) String module,
-        @RequestParam(value = "action", required = false) String action,
-        @RequestParam(value = "sourceSystem", required = false) String sourceSystem,
-        @RequestParam(value = "eventType", required = false) String eventType,
-        @RequestParam(value = "result", required = false) String result,
-        @RequestParam(value = "resourceType", required = false) String resourceType,
-        @RequestParam(value = "resource", required = false) String resource,
-        @RequestParam(value = "requestUri", required = false) String requestUri,
-        @RequestParam(value = "from", required = false) String from,
-        @RequestParam(value = "to", required = false) String to,
-        @RequestParam(value = "clientIp", required = false) String clientIp,
-        @RequestParam(value = "operationGroup", required = false) String operationGroup,
-        HttpServletResponse response
-    ) throws IOException {
-        Instant fromDate = parseInstant(from, "from");
-        Instant toDate = parseInstant(to, "to");
-        VisibilityScope scope = resolveVisibilityScope();
-        List<AuditEvent> events = executeSearch(
-            scope,
-            actor,
-            module,
-            action,
-            sourceSystem,
-            eventType,
-            result,
-            resourceType,
-            resource,
-            requestUri,
-            fromDate,
-            toDate,
-            clientIp,
-            operationGroup,
-            Pageable.unpaged()
-        ).getContent();
-        StringBuilder sb = new StringBuilder();
-        sb.append("id,correlation_id,timestamp,source,event_class,event_type,module,action,summary,operator_id,operator_name,org_code,org_name,result,resource_type,resource_id,client_ip,client_agent,http_method,request_uri,来源系统,结果中文,目标表,目标ID,操作类型,操作内容,日志类型\n");
-        for (AuditEvent event : events) {
-            // Derive readable fields via the same logic as list view (rule engine + fallbacks)
-            AuditEventView view = toView(event);
-            String sourceText = view.sourceSystemText != null ? view.sourceSystemText : mapSourceSystemText(event.getSourceSystem());
-            String resultText = view.resultText != null ? view.resultText : mapResultText(event.getResult());
-            java.util.Map<String, Object> details = parseDetails(event);
-            String targetTable = details.getOrDefault("target_table", "").toString();
-            String targetId = details.getOrDefault("target_id", "").toString();
-            String opType = view.operationType != null ? view.operationType : "";
-            String opContent = view.operationContent != null ? view.operationContent : "";
-            String logTypeText = view.logTypeText != null ? view.logTypeText : (event.getEventClass() != null && event.getEventClass().trim().equalsIgnoreCase("SecurityEvent") ? "安全审计" : "操作审计");
-            sb
-                .append(event.getId()).append(',')
-                .append(escape(view.correlationId)).append(',')
-                .append(event.getOccurredAt()).append(',')
-                .append(escape(event.getSourceSystem())).append(',')
-                .append(escape(event.getEventClass())).append(',')
-                .append(escape(event.getEventType())).append(',')
-                .append(escape(event.getModule())).append(',')
-                .append(escape(event.getAction())).append(',')
-                .append(escape(event.getSummary())).append(',')
-                .append(escape(event.getOperatorId())).append(',')
-                .append(escape(event.getOperatorName())).append(',')
-                .append(escape(event.getOrgCode())).append(',')
-                .append(escape(event.getOrgName())).append(',')
-                .append(escape(event.getResult())).append(',')
-                .append(escape(event.getResourceType())).append(',')
-                .append(escape(event.getResourceId())).append(',')
-                .append(escape(event.getClientIp())).append(',')
-                .append(escape(event.getClientAgent())).append(',')
-                .append(escape(event.getHttpMethod())).append(',')
-                .append(escape(event.getRequestUri())).append(',')
-                .append(escape(sourceText)).append(',')
-                .append(escape(resultText)).append(',')
-                .append(escape(targetTable)).append(',')
-                .append(escape(targetId)).append(',')
-                .append(escape(opType)).append(',')
-                .append(escape(opContent)).append(',')
-                .append(escape(logTypeText))
-                .append('\n');
-        }
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audits.csv");
-        response.setContentType("text/csv;charset=UTF-8");
-        response.getOutputStream().write(sb.toString().getBytes(StandardCharsets.UTF_8));
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<AuditEventDetailView>> detail(@PathVariable Long id) {
-        VisibilityScope scope = resolveVisibilityScope();
-        AuditEvent event = auditService
-            .findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "审计日志不存在"));
-        ensureReadable(scope, event);
-        AuditEventDetailView view = toDetailView(event);
-        return ResponseEntity.ok(ApiResponse.ok(view));
-    }
-
-    @DeleteMapping
-    public ResponseEntity<ApiResponse<Map<String, Object>>> purge() {
-        long removed = auditService.purgeAll();
-        return ResponseEntity.ok(ApiResponse.ok(Map.of("removed", removed)));
-    }
-
-    private Page<AuditEvent> executeSearch(
-        VisibilityScope scope,
-        String actor,
-        String module,
-        String action,
-        String sourceSystem,
-        String eventType,
-        String result,
-        String resourceType,
-        String resource,
-        String requestUri,
-        Instant from,
-        Instant to,
-        String clientIp,
-        String operationGroup,
-        Pageable pageable
-    ) {
-        if (scope.hasAllowedActors()) {
-            return auditService.searchAllowedActors(
-                actor,
-                module,
-                action,
-                sourceSystem,
-                eventType,
-                result,
-                resourceType,
-                resource,
-                requestUri,
-                from,
-                to,
-                clientIp,
-                operationGroup,
-                List.copyOf(scope.allowedActors()),
-                pageable
-            );
-        }
-        if (scope.hasExcludedActors()) {
-            return auditService.searchExcludeActors(
-                actor,
-                module,
-                action,
-                sourceSystem,
-                eventType,
-                result,
-                resourceType,
-                resource,
-                requestUri,
-                from,
-                to,
-                clientIp,
-                operationGroup,
-                List.copyOf(scope.excludedActors()),
-                pageable
-            );
-        }
-        return auditService.search(
-            actor,
-            module,
-            action,
-            sourceSystem,
-            eventType,
-            result,
-            resourceType,
-            resource,
-            requestUri,
-            from,
-            to,
-            clientIp,
-            operationGroup,
-            pageable
-        );
-    }
-
-    private VisibilityScope resolveVisibilityScope() {
-        Optional<String> login = SecurityUtils.getCurrentUserLogin();
-        if (login.isEmpty()) {
-            return UNRESTRICTED_SCOPE;
-        }
-        String normalized = login.orElseThrow().trim().toLowerCase(Locale.ROOT);
-        if ("authadmin".equals(normalized)) {
-            return new VisibilityScope(Set.of("auditadmin"), Set.of());
-        }
-        if ("auditadmin".equals(normalized)) {
-            return new VisibilityScope(Set.of(), Set.of("auditadmin"));
-        }
-        return UNRESTRICTED_SCOPE;
-    }
-
-    private void ensureReadable(VisibilityScope scope, AuditEvent event) {
-        if (event == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "审计日志不存在");
-        }
-        String actor = Optional.ofNullable(event.getActor()).map(String::trim).orElse("").toLowerCase(Locale.ROOT);
-        if (scope.hasAllowedActors() && !scope.allowedActors().contains(actor)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权查看该审计记录");
-        }
-        if (scope.hasExcludedActors() && scope.excludedActors().contains(actor)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权查看该审计记录");
-        }
-    }
-
-    private AuditEventView toView(AuditEvent event) {
-        AuditEventView view = new AuditEventView();
-        view.eventId = event.getEventUuid() != null ? event.getEventUuid().toString() : null;
-        view.id = event.getId();
-        view.occurredAt = event.getOccurredAt();
-        view.actor = event.getActor();
-        view.module = event.getModule();
-        view.action = event.getAction();
-        view.resourceType = event.getResourceType();
-        view.resourceId = event.getResourceId();
-        view.clientIp = event.getClientIp();
-        view.clientAgent = event.getClientAgent();
-        view.httpMethod = event.getHttpMethod();
-        view.result = event.getResult();
-        view.correlationId = event.getCorrelationId();
-        String normalizedActor = Optional.ofNullable(event.getActor()).map(String::trim).map(s -> s.toLowerCase(Locale.ROOT)).orElse("");
-        String correlationId = optionalString(event.getCorrelationId());
-        boolean isApprovalActor = normalizedActor.equals("authadmin");
-        boolean hasApprovalCorrelation = correlationId != null && correlationId.toUpperCase(Locale.ROOT).startsWith("CR-");
-        boolean resourceSuggestsChangeRequest = Optional
-            .ofNullable(event.getResourceType())
-            .map(String::toLowerCase)
-            .map(s -> s.contains("change_request"))
-            .orElse(false);
-        boolean moduleSuggestsChangeRequest = Optional
-            .ofNullable(event.getModule())
-            .map(String::toLowerCase)
-            .map(s -> s.contains("approval") || s.contains("审批") || s.contains("change_request"))
-            .orElse(false);
-        boolean allowChangeRequestBinding = hasApprovalCorrelation || resourceSuggestsChangeRequest || moduleSuggestsChangeRequest;
-        if (hasApprovalCorrelation) {
-            view.changeRequestRef = correlationId;
-        }
-        view.operationRuleHit = Boolean.FALSE;
-        if (view.result != null) {
-            String r = view.result.trim().toUpperCase(java.util.Locale.ROOT);
-            view.resultText = switch (r) {
-                case "SUCCESS" -> "成功";
-                case "FAILED", "FAILURE" -> "失败";
-                case "PENDING" -> "处理中";
-                default -> view.result;
-            };
-        }
-        view.extraTags = event.getExtraTags();
-        view.payloadPreview = decodePayloadPreview(event);
-        // extended mapping for new audit schema
-        view.sourceSystem = event.getSourceSystem();
-        if (view.sourceSystem != null) {
-            String s = view.sourceSystem.trim().toLowerCase(java.util.Locale.ROOT);
-            view.sourceSystemText = s.equals("admin") ? "系统管理" : (s.equals("platform") ? "业务管理" : view.sourceSystem);
-        }
-        view.eventClass = event.getEventClass();
-        view.eventType = event.getEventType();
-        view.summary = event.getSummary();
-        view.operatorId = event.getOperatorId();
-        view.operatorName = event.getOperatorName();
-        view.operatorRoles = event.getOperatorRoles();
-        view.orgCode = event.getOrgCode();
-        view.orgName = event.getOrgName();
-        view.departmentName = view.orgName;
-        // Extract minimal details for quick list rendering (requestId/target info)
-        try {
-            if (event.getDetails() != null && !event.getDetails().isBlank()) {
-                Map<?,?> det = objectMapper.readValue(event.getDetails(), Map.class);
-                Object req = det.get("请求ID");
-                if (req == null) req = det.get("request_id");
-                if (req != null) view.requestId = String.valueOf(req);
-                Object tbl = det.get("源表");
-                if (tbl == null) tbl = det.get("target_table");
-                if (tbl != null) {
-                    view.targetTable = String.valueOf(tbl);
-                    view.targetTableLabel = resolveTableLabel(view.targetTable);
-                }
-                Object tid = det.get("目标ID");
-                if (tid == null) tid = det.get("target_id");
-                if (tid != null) view.targetId = String.valueOf(tid);
-                Object tref = det.get("目标引用");
-                if (tref == null) tref = det.get("target_ref");
-                if (tref != null) {
-                    view.targetRef = String.valueOf(tref);
-                }
-                Object crRef = det.get("审批单号");
-                if (crRef == null) crRef = det.get("changeRequestRef");
-                if (crRef == null) {
-                    Object crId = det.get("changeRequestId");
-                    if (crId == null) crId = det.get("change_request_id");
-                    if (crId != null) {
-                        String text = String.valueOf(crId).trim();
-                        if (!text.isEmpty()) {
-                            crRef = text.toUpperCase(Locale.ROOT).startsWith("CR-") ? text : "CR-" + text;
-                        }
-                    }
-                }
-                if (crRef != null && allowChangeRequestBinding) {
-                    view.changeRequestRef = String.valueOf(crRef);
-                    if (!StringUtils.hasText(view.targetRef)) {
-                        view.targetRef = view.changeRequestRef;
-                    }
-                }
-                String statusCode = optionalString(det.get("status"));
-                if (statusCode == null) {
-                    statusCode = optionalString(det.get("result"));
-                }
-                String stageCode = optionalString(det.get("stageCode"));
-                String stageText = optionalString(det.get("stage"));
-                Object approvalSummary = det.get("审批内容");
-                if (approvalSummary == null) approvalSummary = det.get("approvalSummary");
-                if (approvalSummary != null) {
-                    String summaryText = String.valueOf(approvalSummary).trim();
-                    if (StringUtils.hasText(summaryText)) {
-                        view.approvalSummary = summaryText;
-                    }
-                }
-                boolean changeRequestEvent = allowChangeRequestBinding && (
-                    StringUtils.hasText(view.changeRequestRef) ||
-                    (StringUtils.hasText(view.targetTable) && view.targetTable.toLowerCase(Locale.ROOT).contains("change_request"))
-                );
-                boolean approvalContext = isApprovalActor && hasApprovalCorrelation;
-                if (approvalContext && changeRequestEvent) {
-                    String approvalStatusText = formatApprovalStatus(statusCode, stageCode, stageText, changeRequestEvent ? event.getResult() : null);
-                    String composed = composeApprovalOperationContent(
-                        view.changeRequestRef,
-                        approvalStatusText,
-                        view.approvalSummary
-                    );
-                    if (StringUtils.hasText(composed)) {
-                        view.operationContent = composed;
-                    }
-                } else if (approvalContext && !StringUtils.hasText(view.operationContent)) {
-                    String approvalStatusText = formatApprovalStatus(statusCode, stageCode, stageText, changeRequestEvent ? event.getResult() : null);
-                    if (StringUtils.hasText(approvalStatusText) &&
-                        (StringUtils.hasText(statusCode) || StringUtils.hasText(stageCode) || StringUtils.hasText(stageText))) {
-                        view.operationContent = approvalStatusText;
-                    }
-                }
-                if (approvalContext && hasApprovalCorrelation) {
-                    view.operationType = "审批";
-                }
-            }
-        } catch (Exception ignore) {}
-
-        if (isApprovalActor && hasApprovalCorrelation) {
-            view.operationType = "审批";
-        }
-
-        // Rule engine: try mapping first (query-time rendering). Only uses event/requestUri/details; body/resp not persisted yet
-        try {
-            var mapped = opMappingEngine.resolveWithFallback(event);
-            if (mapped.isPresent()) {
-                var m = mapped.orElseThrow();
-                if (m.ruleMatched && m.ruleId != null) {
-                    view.operationRuleId = m.ruleId;
-                    view.operationRuleHit = Boolean.TRUE;
-                }
-                if (StringUtils.hasText(m.moduleName)) {
-                    view.operationModule = m.moduleName;
-                    if (!StringUtils.hasText(view.module)) {
-                        view.module = m.moduleName;
-                    }
-                }
-                if (m.operationType != null) {
-                    view.operationTypeCode = m.operationType.getCode();
-                    view.operationType = m.operationTypeLabel;
-                } else if (StringUtils.hasText(m.operationTypeLabel) && !StringUtils.hasText(view.operationType)) {
-                    view.operationType = m.operationTypeLabel;
-                }
-                if (StringUtils.hasText(m.description) && !StringUtils.hasText(view.operationContent)) {
-                    view.operationContent = m.description;
-                }
-                if (StringUtils.hasText(m.sourceTable)) {
-                    if (!StringUtils.hasText(view.operationSourceTable)) {
-                        view.operationSourceTable = m.sourceTable;
-                    }
-                    if (!StringUtils.hasText(view.targetTableLabel)) {
-                        view.targetTableLabel = resolveTableLabel(m.sourceTable);
-                    }
-                    if (!StringUtils.hasText(view.targetTable)) {
-                        view.targetTable = m.sourceTable;
-                    }
-                }
-                if (StringUtils.hasText(m.eventClass)) {
-                    view.operationEventClass = m.eventClass;
-                    if (!StringUtils.hasText(view.eventClass)) {
-                        view.eventClass = m.eventClass;
-                    }
-                }
-            }
-        } catch (Exception ignore) {}
-
-        if (isApprovalActor && hasApprovalCorrelation) {
-            view.operationType = "审批";
-        }
-
-        // Non-content derived field stays
-        view.logTypeText = (view.eventClass != null && view.eventClass.trim().equalsIgnoreCase("SecurityEvent")) ? "安全审计" : "操作审计";
-        return view;
-    }
-
-    private String decodePayloadPreview(AuditEvent event) {
-        Object payload = decodePayload(event);
-        if (payload == null) {
-            return null;
-        }
-        if (payload instanceof Map<?, ?> map) {
-            return map
-                .entrySet()
-                .stream()
-                .limit(5)
-                .map(entry -> entry.getKey() + "=" + entry.getValue())
-                .collect(Collectors.joining("; "));
-        }
-        if (payload instanceof Collection<?> collection) {
-            return collection
-                .stream()
-                .limit(3)
-                .map(Object::toString)
-                .collect(Collectors.joining(", "));
-        }
-        String text = payload.toString();
-        return text.length() > 160 ? text.substring(0, 157) + "..." : text;
-    }
-
-    private AuditEventDetailView toDetailView(AuditEvent event) {
-        AuditEventView base = toView(event);
-        AuditEventDetailView detail = new AuditEventDetailView();
-        detail.id = base.id;
-        detail.occurredAt = base.occurredAt;
-        detail.actor = base.actor;
-        detail.module = base.module;
-        detail.action = base.action;
-        detail.resourceType = base.resourceType;
-        detail.resourceId = base.resourceId;
-        detail.clientIp = base.clientIp;
-        detail.clientAgent = base.clientAgent;
-        detail.httpMethod = base.httpMethod;
-        detail.result = base.result;
-        detail.logTypeText = base.logTypeText;
-        detail.extraTags = base.extraTags;
-        detail.payloadPreview = base.payloadPreview;
-        // extended
-        detail.sourceSystem = base.sourceSystem;
-        detail.eventClass = base.eventClass;
-        detail.eventType = base.eventType;
-        detail.summary = base.summary;
-        detail.operatorId = base.operatorId;
-        detail.operatorName = base.operatorName;
-        detail.operatorRoles = base.operatorRoles;
-        detail.orgCode = base.orgCode;
-        detail.orgName = base.orgName;
-        detail.departmentName = base.departmentName;
-        detail.requestId = base.requestId;
-        detail.targetTable = base.targetTable;
-        detail.targetTableLabel = base.targetTableLabel;
-        detail.targetId = base.targetId;
-        detail.targetRef = base.targetRef;
-        detail.changeRequestRef = base.changeRequestRef;
-        detail.approvalSummary = base.approvalSummary;
-        detail.operationType = base.operationType;
-        detail.operationTypeCode = base.operationTypeCode;
-        detail.operationContent = base.operationContent;
-        detail.operationRuleHit = base.operationRuleHit;
-        detail.operationRuleId = base.operationRuleId;
-        detail.operationModule = base.operationModule;
-        detail.operationSourceTable = base.operationSourceTable;
-        detail.operationEventClass = base.operationEventClass;
-        detail.payload = decodePayload(event);
-        // parse details json if present
-        try {
-            if (event.getDetails() != null && !event.getDetails().isBlank()) {
-                detail.details = objectMapper.readValue(event.getDetails(), Object.class);
-            }
-        } catch (Exception ignore) {}
-        return detail;
-    }
-
-    private Object decodePayload(AuditEvent event) {
-        try {
-            byte[] decrypted = auditService.decryptPayload(event);
-            if (decrypted.length == 0) {
-                return null;
-            }
-            try {
-                return objectMapper.readValue(decrypted, Object.class);
-            } catch (Exception parseEx) {
-                String fallback = new String(decrypted, StandardCharsets.UTF_8);
-                return fallback;
-            }
-        } catch (Exception ex) {
-            log.warn("Failed to decode audit payload for id {}", event.getId(), ex);
-            return null;
-        }
-    }
-
-    private Sort parseSort(String sortExpression) {
-        if (!StringUtils.hasText(sortExpression)) {
-            return Sort.by(Sort.Direction.DESC, "occurredAt");
-        }
-        String[] parts = sortExpression.split(",");
-        if (parts.length != 2) {
-            return Sort.by(Sort.Direction.DESC, "occurredAt");
-        }
-        Sort.Direction direction = "asc".equalsIgnoreCase(parts[1]) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        return Sort.by(direction, parts[0]);
-    }
-
-    private Instant parseInstant(String value, String parameter) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        try {
-            return Instant.parse(value);
-        } catch (DateTimeParseException ex) {
-            throw new BadRequestAlertException("Invalid timestamp for parameter " + parameter, "audit", "invalidTimestamp");
-        }
-    }
-
-    private String escape(String value) {
-        if (value == null) {
-            return "";
-        }
-        return '"' + value.replace("\"", "\"\"") + '"';
-    }
-
-    private String mapSourceSystemText(String source) {
-        if (source == null || source.isBlank()) return "";
-        String s = source.trim().toLowerCase();
-        if (s.equals("admin") || s.equals("management") || s.equals("manager")) return "系统管理";
-        if (s.equals("platform")) return "业务管理";
-        return source;
-    }
-
-    private String mapResultText(String result) {
-        if (result == null) return "";
-        String r = result.trim().toUpperCase();
-        if ("SUCCESS".equals(r)) return "成功";
-        if ("FAILED".equals(r) || "FAILURE".equals(r)) return "失败";
-        if ("PENDING".equals(r)) return "处理中";
-        return result;
-    }
-
-    private String optionalString(Object value) {
-        if (value == null) {
-            return null;
-        }
-        String text = String.valueOf(value).trim();
-        return text.isEmpty() ? null : text;
-    }
-
-    private String formatApprovalStatus(String statusCode, String stageCode, String stageText, String eventResult) {
-        String normalizedStatus = normalizedStatusCode(statusCode);
-        if (StringUtils.hasText(normalizedStatus)) {
-            return "审批结果：" + normalizedStatus;
-        }
-        String stageLabel = mapStageDisplay(stageCode, stageText);
-        if (StringUtils.hasText(stageLabel)) {
-            return "审批结果：" + stageLabel;
-        }
-        if (StringUtils.hasText(eventResult)) {
-            String mapped = mapResultText(eventResult);
-            if (StringUtils.hasText(mapped)) {
-                return "审批结果：" + mapped;
-            }
-        }
-        return null;
-    }
-
-    private String normalizedStatusCode(String statusCode) {
-        if (!StringUtils.hasText(statusCode)) {
-            return null;
-        }
-        String normalized = statusCode.trim().toUpperCase(Locale.ROOT);
-        return switch (normalized) {
-            case "APPROVED", "APPLIED", "COMPLETED", "SUCCESS" -> "通过";
-            case "REJECTED", "DENIED" -> "驳回";
-            case "FAILED", "FAILURE", "ERROR" -> "失败";
-            case "CANCELLED", "CANCELED" -> "撤回";
-            case "PENDING", "SUBMITTED", "APPROVAL_PENDING", "WAITING" -> "待处理";
-            case "IN_PROGRESS", "PROCESSING" -> "处理中";
-            default -> null;
-        };
-    }
-
-    private String mapStageDisplay(String stageCode, String stageText) {
-        if (StringUtils.hasText(stageCode)) {
-            String normalized = stageCode.trim().toUpperCase(Locale.ROOT);
-            return switch (normalized) {
-                case "SUCCESS" -> "通过";
-                case "FAIL" -> "失败";
-                case "BEGIN", "PENDING" -> "处理中";
-                default -> stageText != null ? stageText.trim() : null;
-            };
-        }
-        if (StringUtils.hasText(stageText)) {
-            return stageText.trim();
-        }
-        return null;
-    }
-
-    private String composeApprovalOperationContent(String changeRequestRef, String statusText, String summary) {
-        StringBuilder builder = new StringBuilder();
-        if (StringUtils.hasText(changeRequestRef)) {
-            builder.append(changeRequestRef);
-        }
-        if (StringUtils.hasText(statusText)) {
-            if (builder.length() > 0) {
-                builder.append(' ');
-            }
-            builder.append(statusText);
-        }
-        if (StringUtils.hasText(summary) && !isLikelyStructured(summary)) {
-            if (builder.length() > 0) {
-                builder.append(" · ");
-            }
-            builder.append(summary);
-        }
-        String combined = builder.toString().trim();
-        return combined.isEmpty() ? null : combined;
-    }
-
-    private boolean isLikelyStructured(String value) {
-        if (!StringUtils.hasText(value)) {
-            return false;
-        }
-        String trimmed = value.trim();
-        if (trimmed.length() > 160) {
-            return true;
-        }
-        char first = trimmed.charAt(0);
-        if (first == '{' || first == '[') {
-            return true;
-        }
-        return trimmed.contains(":") && trimmed.contains("{");
-    }
-
-    private java.util.Map<String, Object> parseDetails(AuditEvent event) {
-        try {
-            if (event.getDetails() == null || event.getDetails().isBlank()) return java.util.Map.of();
-            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
-            java.util.Map<?, ?> raw = om.readValue(event.getDetails(), java.util.Map.class);
-            java.util.Map<String, Object> out = new java.util.HashMap<>();
-            if (raw.containsKey("源表")) out.put("target_table", raw.get("源表"));
-            else if (raw.containsKey("target_table")) out.put("target_table", raw.get("target_table"));
-            if (raw.containsKey("目标ID")) out.put("target_id", raw.get("目标ID"));
-            else if (raw.containsKey("target_id")) out.put("target_id", raw.get("target_id"));
-            return out;
-        } catch (Exception ignore) {
-            return java.util.Map.of();
-        }
-    }
-
-    private static final class AuditEventDetailView extends AuditEventView {
-        public Object payload;
-        public Object details;
     }
 }

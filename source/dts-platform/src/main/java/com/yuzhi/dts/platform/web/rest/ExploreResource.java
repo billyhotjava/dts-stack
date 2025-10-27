@@ -21,8 +21,9 @@ import com.yuzhi.dts.platform.service.security.DatasetSqlBuilder;
 import com.yuzhi.dts.platform.service.security.DatasetSecurityMetadataResolver;
 import com.yuzhi.dts.platform.service.security.SecurityGuardException;
 import com.yuzhi.dts.platform.service.security.SecuritySqlRewriter;
-import com.yuzhi.dts.platform.service.security.SecuritySqlRewriter;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import jakarta.validation.Valid;
 import java.lang.reflect.Array;
 import java.time.Instant;
@@ -41,12 +42,14 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/explore")
@@ -103,16 +106,31 @@ public class ExploreResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset dataset = resolveDataset(body.get("datasetId"));
+        String datasetLabel = datasetName(dataset, body.get("datasetId"));
         if (body.get("datasetId") != null && dataset == null) {
-            audit.audit("DENY", "explore.preview", Objects.toString(body.get("datasetId"), "unknown"));
+            recordAudit(
+                "DENY",
+                "explore.preview",
+                Objects.toString(body.get("datasetId"), "unknown"),
+                "预览数据集被拒绝",
+                datasetLabel,
+                "FAILED"
+            );
             return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
         }
         if (dataset != null) {
-            String effDept = activeDept != null ? activeDept : claim("dept_code");
+            String effDept = resolveActiveDeptContext(activeDept);
             boolean read = accessChecker.canRead(dataset);
             boolean deptOk = accessChecker.departmentAllowed(dataset, effDept);
             if (!read || !deptOk) {
-                audit.audit("DENY", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
+                recordAudit(
+                    "DENY",
+                    "explore.preview",
+                    datasetIdentifier(dataset, body.get("datasetId")),
+                    "预览数据集被拒绝：" + safeLabel(datasetLabel),
+                    datasetLabel,
+                    "FAILED"
+                );
                 String code = !deptOk
                     ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT
                     : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY;
@@ -121,19 +139,49 @@ public class ExploreResource {
         }
         try {
             Map<String, Object> payload = generateResult(dataset, extractSql(body), false);
-            audit.audit("EXECUTE", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
+            recordAudit(
+                "EXECUTE",
+                "explore.preview",
+                datasetIdentifier(dataset, body.get("datasetId")),
+                "预览数据集：" + safeLabel(datasetLabel),
+                datasetLabel
+            );
             return ApiResponses.ok(payload);
         } catch (SecurityGuardException ex) {
             LOG.warn("Explore preview denied: {}", ex.getMessage());
-            audit.audit("DENY", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
+            recordAudit(
+                "DENY",
+                "explore.preview",
+                datasetIdentifier(dataset, body.get("datasetId")),
+                "预览数据集被拒绝：" + safeLabel(datasetLabel),
+                datasetLabel,
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
             return ApiResponses.error(ex.getMessage());
         } catch (IllegalStateException ex) {
             LOG.warn("Explore preview failed: {}", ex.getMessage());
-            audit.audit("ERROR", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
+            recordAudit(
+                "ERROR",
+                "explore.preview",
+                datasetIdentifier(dataset, body.get("datasetId")),
+                "预览数据集失败：" + safeLabel(datasetLabel),
+                datasetLabel,
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
             return ApiResponses.error(ex.getMessage());
         } catch (Exception ex) {
             LOG.error("Explore preview unexpected failure", ex);
-            audit.audit("ERROR", "explore.preview", datasetIdentifier(dataset, body.get("datasetId")));
+            recordAudit(
+                "ERROR",
+                "explore.preview",
+                datasetIdentifier(dataset, body.get("datasetId")),
+                "预览数据集失败：" + safeLabel(datasetLabel),
+                datasetLabel,
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
             return ApiResponses.error("查询预览失败: " + ex.getMessage());
         }
     }
@@ -144,16 +192,31 @@ public class ExploreResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset dataset = resolveDataset(body.get("datasetId"));
+        String datasetLabel = datasetName(dataset, body.get("datasetId"));
         if (body.get("datasetId") != null && dataset == null) {
-            audit.audit("DENY", "explore.execute", Objects.toString(body.get("datasetId"), "unknown"));
+            recordAudit(
+                "DENY",
+                "explore.execute",
+                Objects.toString(body.get("datasetId"), "unknown"),
+                "执行数据查询被拒绝",
+                datasetLabel,
+                "FAILED"
+            );
             return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
         }
         if (dataset != null) {
-            String effDept = activeDept != null ? activeDept : claim("dept_code");
+            String effDept = resolveActiveDeptContext(activeDept);
             boolean read = accessChecker.canRead(dataset);
             boolean deptOk = accessChecker.departmentAllowed(dataset, effDept);
             if (!read || !deptOk) {
-                audit.audit("DENY", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
+                recordAudit(
+                    "DENY",
+                    "explore.execute",
+                    datasetIdentifier(dataset, body.get("datasetId")),
+                    "执行数据查询被拒绝：" + safeLabel(datasetLabel),
+                    datasetLabel,
+                    "FAILED"
+                );
                 String code = !deptOk
                     ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT
                     : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY;
@@ -162,19 +225,49 @@ public class ExploreResource {
         }
         try {
             Map<String, Object> payload = generateResult(dataset, extractSql(body), true);
-            audit.audit("EXECUTE", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
+            recordAudit(
+                "EXECUTE",
+                "explore.execute",
+                datasetIdentifier(dataset, body.get("datasetId")),
+                "执行数据查询：" + safeLabel(datasetLabel),
+                datasetLabel
+            );
             return ApiResponses.ok(payload);
         } catch (SecurityGuardException ex) {
             LOG.warn("Explore execute denied: {}", ex.getMessage());
-            audit.audit("DENY", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
+            recordAudit(
+                "DENY",
+                "explore.execute",
+                datasetIdentifier(dataset, body.get("datasetId")),
+                "执行数据查询被拒绝：" + safeLabel(datasetLabel),
+                datasetLabel,
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
             return ApiResponses.error(ex.getMessage());
         } catch (IllegalStateException ex) {
             LOG.warn("Explore execute failed: {}", ex.getMessage());
-            audit.audit("ERROR", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
+            recordAudit(
+                "ERROR",
+                "explore.execute",
+                datasetIdentifier(dataset, body.get("datasetId")),
+                "执行数据查询失败：" + safeLabel(datasetLabel),
+                datasetLabel,
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
             return ApiResponses.error(ex.getMessage());
         } catch (Exception ex) {
             LOG.error("Explore execute unexpected failure", ex);
-            audit.audit("ERROR", "explore.execute", datasetIdentifier(dataset, body.get("datasetId")));
+            recordAudit(
+                "ERROR",
+                "explore.execute",
+                datasetIdentifier(dataset, body.get("datasetId")),
+                "执行数据查询失败：" + safeLabel(datasetLabel),
+                datasetLabel,
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
             return ApiResponses.error("查询执行失败: " + ex.getMessage());
         }
     }
@@ -188,7 +281,15 @@ public class ExploreResource {
         resp.put("steps", steps);
         double cost = ThreadLocalRandom.current().nextDouble(1.5, 15.0);
         resp.put("estimatedCost", String.format(Locale.ROOT, "%.2f", cost));
-        audit.audit("READ", "explore.explain", Integer.toString(steps.size()));
+        recordAudit(
+            "READ",
+            "explore.explain",
+            null,
+            "查看查询执行计划",
+            null,
+            "SUCCESS",
+            Map.of("stepCount", steps.size())
+        );
         return ApiResponses.ok(resp);
     }
 
@@ -217,7 +318,13 @@ public class ExploreResource {
                 record.setExpiresAt(now.plus(ttlDays, ChronoUnit.DAYS));
                 record.setStorageUri("oss://datalake/explore/" + executionId + ".parquet");
                 resultSetRepo.save(record);
-                audit.audit("UPDATE", "explore.result.save", executionId.toString());
+                recordAudit(
+                    "UPDATE",
+                    "explore.result.save",
+                    executionId.toString(),
+                    "保存查询结果集：" + safeLabel(record.getName()),
+                    record.getName()
+                );
                 Map<String, Object> resp = new LinkedHashMap<>();
                 resp.put("id", executionId);
                 resp.put("name", record.getName());
@@ -229,7 +336,9 @@ public class ExploreResource {
     }
 
     @GetMapping("/query-executions")
-    public ApiResponse<List<Map<String, Object>>> listExecutions() {
+    public ApiResponse<List<Map<String, Object>>> listExecutions(
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         List<QueryExecution> executions = executionRepo
             .findAll(PageRequest.of(0, HISTORY_LIMIT, Sort.by(Sort.Direction.DESC, "startedAt", "createdDate")))
             .getContent();
@@ -239,23 +348,52 @@ public class ExploreResource {
             .map(QueryExecution::getDatasetId)
             .filter(Objects::nonNull)
             .collect(Collectors.toCollection(LinkedHashSet::new));
+        String effDept = resolveActiveDeptContext(activeDept);
         Map<UUID, CatalogDataset> datasets = datasetRepo
             .findAllById(datasetIds)
             .stream()
+            .filter(ds -> datasetWithinScope(ds, effDept))
             .collect(Collectors.toMap(CatalogDataset::getId, it -> it));
 
         List<Map<String, Object>> list = executions
             .stream()
+            .filter(exec -> exec.getDatasetId() == null || datasets.containsKey(exec.getDatasetId()))
             .map(exec -> toExecutionMap(exec, datasets.get(exec.getDatasetId())))
             .collect(Collectors.toList());
-        audit.audit("READ", "explore.execution", Integer.toString(list.size()));
+        recordAudit(
+            "READ",
+            "explore.execution",
+            null,
+            "查看查询任务历史",
+            null,
+            "SUCCESS",
+            Map.of("count", list.size())
+        );
         return ApiResponses.ok(list);
     }
 
     @GetMapping("/result-sets")
-    public ApiResponse<List<Map<String, Object>>> listResultSets() {
-        List<ResultSet> all = resultSetRepo.findAll(Sort.by(Sort.Direction.DESC, "createdDate"));
-        List<ResultSet> filtered = all
+    public ApiResponse<List<Map<String, Object>>> listResultSets(
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String currentUser = SecurityUtils
+            .getCurrentUserLogin()
+            .map(String::trim)
+            .filter(StringUtils::hasText)
+            .orElse(null);
+        if (!StringUtils.hasText(currentUser)) {
+            recordAudit(
+                "READ",
+                "explore.resultSet",
+                null,
+                "查看查询结果集列表",
+                null
+            );
+            return ApiResponses.ok(List.of());
+        }
+        List<ResultSet> records = resultSetRepo.findByCreatedByOrderByCreatedDateDesc(currentUser);
+
+        List<ResultSet> filtered = records
             .stream()
             .filter(rs -> rs.getTtlDays() != null)
             .collect(Collectors.toList());
@@ -272,38 +410,80 @@ public class ExploreResource {
             }
         }
 
+        String effDept = resolveActiveDeptContext(activeDept);
         Map<UUID, CatalogDataset> datasets = datasetRepo
             .findAllById(datasetIds)
             .stream()
+            .filter(ds -> datasetWithinScope(ds, effDept))
             .collect(Collectors.toMap(CatalogDataset::getId, it -> it));
 
         List<Map<String, Object>> list = new ArrayList<>();
         for (ResultSet rs : filtered) {
             QueryExecution exec = execByResult.get(rs.getId());
             CatalogDataset dataset = exec != null ? datasets.get(exec.getDatasetId()) : null;
+            if (exec != null && exec.getDatasetId() != null && dataset == null) {
+                // Underlying dataset no longer visible to current user
+                continue;
+            }
             list.add(toResultSetMap(rs, exec, dataset));
         }
-        audit.audit("READ", "explore.resultSet", Integer.toString(list.size()));
+        recordAudit(
+            "READ",
+            "explore.resultSet",
+            null,
+            "查看查询结果集列表",
+            null,
+            "SUCCESS",
+            Map.of("count", list.size())
+        );
         return ApiResponses.ok(list);
     }
 
     @GetMapping("/result-preview/{id}")
-    public ApiResponse<Map<String, Object>> previewResultSet(@PathVariable UUID id) {
+    public ApiResponse<Map<String, Object>> previewResultSet(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         return resultSetRepo
             .findById(id)
             .map(record -> {
+                assertResultSetAccess(record);
                 QueryExecution execution = executionRepo
                     .findByResultSetId(record.getId())
                     .stream()
                     .findFirst()
                     .orElse(null);
                 if (execution == null) {
-                    audit.audit("WARN", "explore.result.sql", id + ":missing-execution");
+                    recordAudit(
+                        "WARN",
+                        "explore.result.sql",
+                        id.toString(),
+                        "查询结果缺少执行记录",
+                        null,
+                        "FAILED",
+                        Map.of("resultSetId", id.toString())
+                    );
                     return ApiResponses.<Map<String, Object>>error("未找到结果集关联的查询记录");
                 }
                 CatalogDataset dataset = execution.getDatasetId() != null
                     ? datasetRepo.findById(execution.getDatasetId()).orElse(null)
                     : null;
+                String datasetLabel = datasetName(dataset, execution.getDatasetId());
+                String effDept = resolveActiveDeptContext(activeDept);
+                if (dataset != null && !datasetWithinScope(dataset, effDept)) {
+                    recordAudit(
+                        "DENY",
+                        "explore.result.sql",
+                        id.toString(),
+                        "无权查看查询结果：" + safeLabel(datasetLabel),
+                        datasetLabel,
+                        "FAILED"
+                    );
+                    return ApiResponses.<Map<String, Object>>error(
+                        com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
+                        "Access denied for result set dataset"
+                    );
+                }
                 Map<String, Object> resp = new LinkedHashMap<>();
                 resp.put("sqlText", execution.getSqlText());
                 resp.put("datasetId", execution.getDatasetId());
@@ -312,24 +492,74 @@ public class ExploreResource {
                 resp.put("engine", execution.getEngine() != null ? execution.getEngine().name() : null);
                 resp.put("finishedAt", execution.getFinishedAt());
                 resp.put("limitApplied", execution.getLimitApplied());
-                audit.audit("READ", "explore.result.sql", id.toString());
+                recordAudit(
+                    "READ",
+                    "explore.result.sql",
+                    id.toString(),
+                    "查看查询语句：" + safeLabel(datasetLabel),
+                    datasetLabel
+                );
                 return ApiResponses.ok(resp);
             })
             .orElseGet(() -> ApiResponses.<Map<String, Object>>error("Result set not found"));
     }
 
     @DeleteMapping("/result-sets/{id}")
-    public ApiResponse<Boolean> deleteResultSet(@PathVariable UUID id) {
-        if (resultSetRepo.existsById(id)) {
-            resultSetRepo.deleteById(id);
-            executionRepo.clearResultSetReferences(id);
-            audit.audit("DELETE", "explore.result.delete", id.toString());
-        }
-        return ApiResponses.ok(Boolean.TRUE);
+    public ApiResponse<Boolean> deleteResultSet(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return resultSetRepo
+            .findById(id)
+            .map(rs -> {
+                assertResultSetAccess(rs);
+                String effDept = resolveActiveDeptContext(activeDept);
+                List<QueryExecution> executions = executionRepo.findByResultSetId(id);
+                CatalogDataset dataset = executions
+                    .stream()
+                    .map(QueryExecution::getDatasetId)
+                    .filter(Objects::nonNull)
+                    .map(datasetRepo::findById)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .findFirst()
+                    .orElse(null);
+                if (dataset != null && !datasetWithinScope(dataset, effDept)) {
+                    String datasetLabel = datasetName(dataset, id);
+                    recordAudit(
+                        "DENY",
+                        "explore.result.delete",
+                        id.toString(),
+                        "删除查询结果集被拒绝：" + safeLabel(datasetLabel),
+                        datasetLabel,
+                        "FAILED"
+                    );
+                    return ApiResponses.<Boolean>error(
+                        com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
+                        "Access denied for result set dataset"
+                    );
+                }
+                resultSetRepo.deleteById(id);
+                executionRepo.clearResultSetReferences(id);
+                String resultLabel = rs.getName();
+                String summary = "删除查询结果集：" + safeLabel(resultLabel != null ? resultLabel : dataset != null ? dataset.getName() : null);
+                recordAudit(
+                    "DELETE",
+                    "explore.result.delete",
+                    id.toString(),
+                    summary,
+                    resultLabel
+                );
+                return ApiResponses.ok(Boolean.TRUE);
+            })
+            .orElseGet(() -> ApiResponses.ok(Boolean.TRUE));
     }
 
     @PostMapping("/result-sets/cleanup")
     public ApiResponse<Map<String, Object>> cleanupResultSets() {
+        if (!canManageAllResultSets()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅运维管理员可以批量清理结果集");
+        }
         Instant now = Instant.now();
         List<ResultSet> expired = resultSetRepo
             .findByExpiresAtBefore(now)
@@ -339,15 +569,37 @@ public class ExploreResource {
             resultSetRepo.delete(rs);
             executionRepo.clearResultSetReferences(rs.getId());
         });
-        audit.audit("DELETE", "explore.result.cleanup", Integer.toString(expired.size()));
+        recordAudit(
+            "DELETE",
+            "explore.result.cleanup",
+            null,
+            "批量清理查询结果集",
+            null,
+            "SUCCESS",
+            Map.of("deleted", expired.size())
+        );
         return ApiResponses.ok(Map.of("deleted", expired.size()));
     }
 
     @GetMapping("/saved-queries")
-    public ApiResponse<List<Map<String, Object>>> listSaved() {
-        var list = savedRepo
-            .findAll()
+    public ApiResponse<List<Map<String, Object>>> listSaved(
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<ExploreSavedQuery> saved = savedRepo.findAll();
+        Set<UUID> datasetIds = saved
             .stream()
+            .map(ExploreSavedQuery::getDatasetId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        String effDept = resolveActiveDeptContext(activeDept);
+        Map<UUID, CatalogDataset> datasets = datasetRepo
+            .findAllById(datasetIds)
+            .stream()
+            .filter(ds -> datasetWithinScope(ds, effDept))
+            .collect(Collectors.toMap(CatalogDataset::getId, it -> it));
+        var list = saved
+            .stream()
+            .filter(it -> it.getDatasetId() == null || datasets.containsKey(it.getDatasetId()))
             .map(
                 it -> {
                     Map<String, Object> m = new LinkedHashMap<>();
@@ -359,20 +611,40 @@ public class ExploreResource {
                 }
             )
             .collect(Collectors.toList());
-        audit.audit("READ", "explore.savedQuery", "list");
+        recordAudit(
+            "READ",
+            "explore.savedQuery",
+            null,
+            "查看保存查询列表",
+            null,
+            "SUCCESS",
+            Map.of("count", list.size())
+        );
         return ApiResponses.ok(list);
     }
 
     @PostMapping("/saved-queries")
-    public ApiResponse<ExploreSavedQuery> createSaved(@Valid @RequestBody CreateSavedQueryRequest request) {
+    public ApiResponse<ExploreSavedQuery> createSaved(
+        @Valid @RequestBody CreateSavedQueryRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         UUID datasetId = null;
+        String datasetLabel = null;
         if (StringUtils.hasText(request.getDatasetId())) {
-            var datasetCheck = validateDatasetAssociation(request.getDatasetId().trim());
+            var datasetCheck = validateDatasetAssociation(request.getDatasetId().trim(), activeDept);
             if (!datasetCheck.success()) {
-                audit.audit("DENY", "explore.savedQuery", datasetCheck.auditHint());
+                recordAudit(
+                    "DENY",
+                    "explore.savedQuery",
+                    datasetCheck.auditHint(),
+                    "新建保存查询失败：数据集不可用",
+                    request.getName(),
+                    "FAILED"
+                );
                 return ApiResponses.error(datasetCheck.message());
             }
             datasetId = datasetCheck.dataset() != null ? datasetCheck.dataset().getId() : null;
+            datasetLabel = datasetCheck.dataset() != null ? datasetCheck.dataset().getName() : null;
         }
 
         ExploreSavedQuery entity = new ExploreSavedQuery();
@@ -381,22 +653,78 @@ public class ExploreResource {
         entity.setDatasetId(datasetId);
 
         ExploreSavedQuery saved = savedRepo.save(entity);
-        audit.audit("CREATE", "explore.savedQuery", saved.getId().toString());
+        recordAudit(
+            "CREATE",
+            "explore.savedQuery",
+            saved.getId().toString(),
+            "新建保存查询：" + safeLabel(saved.getName()),
+            saved.getName(),
+            "SUCCESS",
+            datasetLabel != null ? Map.of("dataset", datasetLabel) : null
+        );
         return ApiResponses.ok(saved);
     }
 
     @DeleteMapping("/saved-queries/{id}")
-    public ApiResponse<Boolean> deleteSaved(@PathVariable UUID id) {
+    public ApiResponse<Boolean> deleteSaved(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ExploreSavedQuery existing = savedRepo.findById(id).orElse(null);
+        if (existing != null && existing.getDatasetId() != null) {
+            CatalogDataset dataset = datasetRepo.findById(existing.getDatasetId()).orElse(null);
+            if (!datasetWithinScope(dataset, resolveActiveDeptContext(activeDept))) {
+                recordAudit(
+                    "DENY",
+                    "explore.savedQuery",
+                    id.toString(),
+                    "删除保存查询被拒绝：" + safeLabel(existing.getName()),
+                    existing.getName(),
+                    "FAILED"
+                );
+                return ApiResponses.error(
+                    com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
+                    "Access denied for dataset"
+                );
+            }
+        }
         savedRepo.deleteById(id);
-        audit.audit("DELETE", "explore.savedQuery", id.toString());
+        recordAudit(
+            "DELETE",
+            "explore.savedQuery",
+            id.toString(),
+            "删除保存查询：" + safeLabel(existing != null ? existing.getName() : null),
+            existing != null ? existing.getName() : null
+        );
         return ApiResponses.ok(Boolean.TRUE);
     }
 
     @PutMapping("/saved-queries/{id}")
-    public ApiResponse<ExploreSavedQuery> updateSaved(@PathVariable UUID id, @Valid @RequestBody UpdateSavedQueryRequest request) {
+    public ApiResponse<ExploreSavedQuery> updateSaved(
+        @PathVariable UUID id,
+        @Valid @RequestBody UpdateSavedQueryRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         ExploreSavedQuery existing = savedRepo.findById(id).orElse(null);
         if (existing == null) {
             return ApiResponses.error("Saved query not found");
+        }
+        if (existing.getDatasetId() != null) {
+            CatalogDataset original = datasetRepo.findById(existing.getDatasetId()).orElse(null);
+            if (!datasetWithinScope(original, resolveActiveDeptContext(activeDept))) {
+                recordAudit(
+                    "DENY",
+                    "explore.savedQuery",
+                    id.toString(),
+                    "更新保存查询被拒绝：" + safeLabel(existing.getName()),
+                    existing.getName(),
+                    "FAILED"
+                );
+                return ApiResponses.error(
+                    com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
+                    "Access denied for dataset"
+                );
+            }
         }
 
         boolean mutated = false;
@@ -422,9 +750,16 @@ public class ExploreResource {
                 existing.setDatasetId(null);
                 mutated = true;
             } else {
-                var datasetCheck = validateDatasetAssociation(datasetIdRaw.trim());
+                var datasetCheck = validateDatasetAssociation(datasetIdRaw.trim(), activeDept);
                 if (!datasetCheck.success()) {
-                    audit.audit("DENY", "explore.savedQuery", datasetCheck.auditHint());
+                    recordAudit(
+                        "DENY",
+                        "explore.savedQuery",
+                        datasetCheck.auditHint(),
+                        "更新保存查询失败：数据集不可用",
+                        existing.getName(),
+                        "FAILED"
+                    );
                     return ApiResponses.error(datasetCheck.message());
                 }
                 existing.setDatasetId(datasetCheck.dataset() != null ? datasetCheck.dataset().getId() : null);
@@ -437,15 +772,47 @@ public class ExploreResource {
         }
 
         ExploreSavedQuery saved = savedRepo.save(existing);
-        audit.audit("UPDATE", "explore.savedQuery", id.toString());
+        recordAudit(
+            "UPDATE",
+            "explore.savedQuery",
+            id.toString(),
+            "更新保存查询：" + safeLabel(saved.getName()),
+            saved.getName()
+        );
         return ApiResponses.ok(saved);
     }
 
     @GetMapping("/saved-queries/{id}")
-    public ApiResponse<ExploreSavedQuery> getSaved(@PathVariable UUID id) {
+    public ApiResponse<ExploreSavedQuery> getSaved(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         var q = savedRepo.findById(id).orElse(null);
+        if (q != null && q.getDatasetId() != null) {
+            CatalogDataset dataset = datasetRepo.findById(q.getDatasetId()).orElse(null);
+            if (!datasetWithinScope(dataset, resolveActiveDeptContext(activeDept))) {
+                recordAudit(
+                    "DENY",
+                    "explore.savedQuery",
+                    id.toString(),
+                    "查看保存查询被拒绝：" + safeLabel(q.getName()),
+                    q.getName(),
+                    "FAILED"
+                );
+                return ApiResponses.error(
+                    com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
+                    "Access denied for dataset"
+                );
+            }
+        }
         if (q != null) {
-            audit.audit("READ", "explore.savedQuery", id.toString());
+            recordAudit(
+                "READ",
+                "explore.savedQuery",
+                id.toString(),
+                "查看保存查询：" + safeLabel(q.getName()),
+                q.getName()
+            );
         }
         return ApiResponses.ok(q);
     }
@@ -460,45 +827,92 @@ public class ExploreResource {
         if (q.getDatasetId() != null) {
             dataset = resolveDataset(q.getDatasetId().toString());
             if (dataset == null) {
-                audit.audit("DENY", "explore.savedQuery.run", id.toString());
+                recordAudit(
+                    "DENY",
+                    "explore.savedQuery.run",
+                    id.toString(),
+                    "执行保存查询被拒绝：数据集不可用",
+                    q.getName(),
+                    "FAILED"
+                );
                 return ApiResponses.error("Access denied for dataset");
             }
             // Enforce scope gate similar to preview/execute
-            String effDept = activeDept != null ? activeDept : claim("dept_code");
+            String effDept = resolveActiveDeptContext(activeDept);
             boolean read = accessChecker.canRead(dataset);
             boolean deptOk = accessChecker.departmentAllowed(dataset, effDept);
             if (!read || !deptOk) {
-                audit.audit("DENY", "explore.savedQuery.run", id.toString());
+                recordAudit(
+                    "DENY",
+                    "explore.savedQuery.run",
+                    id.toString(),
+                    "执行保存查询被拒绝：" + safeLabel(q.getName()),
+                    q.getName(),
+                    "FAILED"
+                );
                 String code = !deptOk
                     ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT
                     : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY;
                 return ApiResponses.error(code, "Access denied for dataset");
             }
         }
+        String datasetLabel = datasetName(dataset, q.getDatasetId());
         try {
             Map<String, Object> payload = generateResult(
                 dataset,
                 Optional.ofNullable(q.getSqlText()).orElse(""),
                 true
             );
-            audit.audit("EXECUTE", "explore.savedQuery.run", id.toString());
+            recordAudit(
+                "EXECUTE",
+                "explore.savedQuery.run",
+                id.toString(),
+                "执行保存查询：" + safeLabel(q.getName()),
+                q.getName(),
+                "SUCCESS",
+                datasetLabel != null ? Map.of("dataset", datasetLabel) : null
+            );
             return ApiResponses.ok(payload);
         } catch (SecurityGuardException ex) {
             LOG.warn("Saved query run denied: {}", ex.getMessage());
-            audit.audit("DENY", "explore.savedQuery.run", id.toString());
+            recordAudit(
+                "DENY",
+                "explore.savedQuery.run",
+                id.toString(),
+                "执行保存查询被拒绝：" + safeLabel(q.getName()),
+                q.getName(),
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
             return ApiResponses.error(ex.getMessage());
         } catch (IllegalStateException ex) {
             LOG.warn("Saved query run failed: {}", ex.getMessage());
-            audit.audit("ERROR", "explore.savedQuery.run", id.toString());
+            recordAudit(
+                "ERROR",
+                "explore.savedQuery.run",
+                id.toString(),
+                "执行保存查询失败：" + safeLabel(q.getName()),
+                q.getName(),
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
             return ApiResponses.error(ex.getMessage());
         } catch (Exception ex) {
             LOG.error("Saved query run unexpected failure", ex);
-            audit.audit("ERROR", "explore.savedQuery.run", id.toString());
+            recordAudit(
+                "ERROR",
+                "explore.savedQuery.run",
+                id.toString(),
+                "执行保存查询失败：" + safeLabel(q.getName()),
+                q.getName(),
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
             return ApiResponses.error("查询执行失败: " + ex.getMessage());
         }
     }
 
-    private DatasetAssociationResult validateDatasetAssociation(String datasetIdRaw) {
+    private DatasetAssociationResult validateDatasetAssociation(String datasetIdRaw, String activeDeptHeader) {
         if (!StringUtils.hasText(datasetIdRaw)) {
             return DatasetAssociationResult.success(null);
         }
@@ -512,7 +926,8 @@ public class ExploreResource {
         if (dataset == null) {
             return DatasetAssociationResult.failure("指定的数据集不存在", "missing:" + datasetId);
         }
-        if (!accessChecker.canRead(dataset)) {
+        String effDept = resolveActiveDeptContext(activeDeptHeader);
+        if (!datasetWithinScope(dataset, effDept)) {
             return DatasetAssociationResult.failure("Access denied for dataset", datasetId.toString());
         }
         return DatasetAssociationResult.success(dataset);
@@ -866,6 +1281,34 @@ public class ExploreResource {
         return map;
     }
 
+    private boolean canManageAllResultSets() {
+        return SecurityUtils.isOpAdminAccount() ||
+            SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DATA_MAINTAINER_ROLES);
+    }
+
+    private boolean isResultSetOwner(ResultSet rs) {
+        if (rs == null || rs.getCreatedBy() == null) {
+            return false;
+        }
+        String owner = rs.getCreatedBy().trim();
+        if (!StringUtils.hasText(owner)) {
+            return false;
+        }
+        String currentUser = SecurityUtils
+            .getCurrentUserLogin()
+            .map(String::trim)
+            .filter(StringUtils::hasText)
+            .orElse(null);
+        return currentUser != null && owner.equalsIgnoreCase(currentUser);
+    }
+
+    private void assertResultSetAccess(ResultSet rs) {
+        if (isResultSetOwner(rs)) {
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "当前结果集仅创建人可访问");
+    }
+
     private List<String> buildHeaders(CatalogDataset dataset) {
         List<String> headers = new ArrayList<>();
         if (dataset != null && dataset.getHiveTable() != null) {
@@ -923,6 +1366,30 @@ public class ExploreResource {
         return cloneRows(buildRows(headers), limit);
     }
 
+    private boolean datasetWithinScope(CatalogDataset dataset, String activeDept) {
+        if (dataset == null) {
+            return true;
+        }
+        if (!accessChecker.canRead(dataset)) {
+            return false;
+        }
+        return accessChecker.departmentAllowed(dataset, activeDept);
+    }
+
+    private String resolveActiveDeptContext(String activeDeptHeader) {
+        if (StringUtils.hasText(activeDeptHeader)) {
+            return activeDeptHeader.trim();
+        }
+        String candidate = claim("dept_code");
+        if (!StringUtils.hasText(candidate)) {
+            candidate = claim("deptCode");
+        }
+        if (!StringUtils.hasText(candidate)) {
+            candidate = claim("department");
+        }
+        return StringUtils.hasText(candidate) ? candidate.trim() : null;
+    }
+
     private Map<String, Object> buildMasking(List<String> headers) {
         List<String> masked = headers
             .stream()
@@ -964,6 +1431,27 @@ public class ExploreResource {
             return dataset.getId().toString();
         }
         return Objects.toString(raw, "adhoc");
+    }
+
+    private String datasetName(CatalogDataset dataset, Object raw) {
+        if (dataset != null && dataset.getName() != null && !dataset.getName().isBlank()) {
+            return dataset.getName();
+        }
+        if (raw != null) {
+            String text = String.valueOf(raw).trim();
+            if (!text.isEmpty()) {
+                return text;
+            }
+        }
+        return "未命名数据集";
+    }
+
+    private String safeLabel(String label) {
+        if (label == null) {
+            return "未命名资源";
+        }
+        String trimmed = label.trim();
+        return trimmed.isEmpty() ? "未命名资源" : trimmed;
     }
 
     private String claim(String name) {
@@ -1075,6 +1563,39 @@ public class ExploreResource {
         } catch (Exception e) {
             return new PreviewPayload();
         }
+    }
+
+    private void recordAudit(String action, String module, String resourceId, String summary, String targetName) {
+        recordAudit(action, module, resourceId, summary, targetName, "SUCCESS", null);
+    }
+
+    private void recordAudit(String action, String module, String resourceId, String summary, String targetName, String result) {
+        recordAudit(action, module, resourceId, summary, targetName, result, null);
+    }
+
+    private void recordAudit(
+        String action,
+        String module,
+        String resourceId,
+        String summary,
+        String targetName,
+        String result,
+        Map<String, Object> extra
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (summary != null && !summary.isBlank()) {
+            payload.put("summary", summary);
+        }
+        if (resourceId != null && !resourceId.isBlank()) {
+            payload.put("targetId", resourceId);
+        }
+        if (targetName != null && !targetName.isBlank()) {
+            payload.put("targetName", targetName);
+        }
+        if (extra != null && !extra.isEmpty()) {
+            payload.putAll(extra);
+        }
+        audit.record(action, module, module, resourceId, result, payload);
     }
 
     private static final class PreviewPayload {

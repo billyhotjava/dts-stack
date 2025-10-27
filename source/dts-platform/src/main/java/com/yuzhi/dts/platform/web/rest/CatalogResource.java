@@ -330,7 +330,7 @@ public class CatalogResource {
     public ApiResponse<CatalogDataset> createDataset(@Valid @RequestBody CatalogDataset dataset) {
         applySourcePolicy(dataset);
         normalizeClassification(dataset);
-        validateOwnerDepartment(dataset);
+        applyOwnerDepartmentPolicy(dataset, null, false);
         ensurePrimarySourceIfRequired(dataset);
         ensureDatasetEditPermission(dataset);
         CatalogDataset saved = datasetRepo.save(dataset);
@@ -345,7 +345,7 @@ public class CatalogResource {
         for (CatalogDataset item : items) {
             applySourcePolicy(item);
             normalizeClassification(item);
-            validateOwnerDepartment(item);
+            applyOwnerDepartmentPolicy(item, null, false);
             ensurePrimarySourceIfRequired(item);
             ensureDatasetEditPermission(item);
             prepared.add(item);
@@ -360,6 +360,7 @@ public class CatalogResource {
     public ApiResponse<CatalogDataset> updateDataset(@PathVariable UUID id, @Valid @RequestBody CatalogDataset patch) {
         CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
         ensureDatasetEditPermission(existing);
+        String previousOwnerDept = existing.getOwnerDept();
         existing.setName(patch.getName());
         existing.setType(patch.getType());
         // Keep dataset type normalization, but do not hard-require primary source when updating
@@ -370,7 +371,7 @@ public class CatalogResource {
         existing.setClassification(patch.getClassification());
         normalizeClassification(existing);
         existing.setOwnerDept(patch.getOwnerDept());
-        validateOwnerDepartment(existing);
+        applyOwnerDepartmentPolicy(existing, previousOwnerDept, true);
         existing.setOwner(patch.getOwner());
         existing.setDomain(patch.getDomain());
         existing.setHiveDatabase(patch.getHiveDatabase());
@@ -383,13 +384,20 @@ public class CatalogResource {
         return ApiResponses.ok(saved);
     }
 
-    private void validateOwnerDepartment(CatalogDataset d) {
-        String ownerDept = Optional.ofNullable(d.getOwnerDept()).map(String::trim).orElse("");
-        if (ownerDept.isEmpty()) {
-            d.setOwnerDept(null);
+    private void applyOwnerDepartmentPolicy(CatalogDataset dataset, String previousOwnerDept, boolean enforceNoChangeForNonOp) {
+        String trimmedPrevious = Optional.ofNullable(previousOwnerDept).map(String::trim).filter(s -> !s.isEmpty()).orElse(null);
+        String requested = Optional.ofNullable(dataset.getOwnerDept()).map(String::trim).filter(s -> !s.isEmpty()).orElse(null);
+
+        if (SecurityUtils.isOpAdminAccount()) {
+            dataset.setOwnerDept(requested);
             return;
         }
-        d.setOwnerDept(ownerDept);
+
+        if (enforceNoChangeForNonOp && !Objects.equals(requested, trimmedPrevious)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅运维管理员可以调整数据资产归属部门");
+        }
+
+        dataset.setOwnerDept(trimmedPrevious);
     }
 
     @DeleteMapping("/datasets/{id}")

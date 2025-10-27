@@ -154,6 +154,13 @@ export default function RoleManagementView() {
                 return;
             }
             const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
+            const resolvedScope =
+                role.scope ??
+                ((role as any).zone === "INST"
+                    ? "INSTITUTE"
+                    : (role as any).zone === "DEPT"
+                        ? "DEPARTMENT"
+                        : undefined);
             const entry: RoleRow = {
                 id: role.id,
                 key: role.id?.toString() ?? authorityCode,
@@ -165,7 +172,7 @@ export default function RoleManagementView() {
                 nameEn: (role as any).nameEn,
                 zone: (role as any).zone,
                 description: role.description,
-                scope: role.scope ?? undefined,
+                scope: resolvedScope ?? undefined,
                 operations: role.operations ?? [],
                 canManage: (role as any).canManage ?? canonical.endsWith("_OWNER"),
                 menuIds,
@@ -188,10 +195,17 @@ export default function RoleManagementView() {
             if (hideBuiltinRoles && isKeycloakBuiltInRole({ name: role.name } as any)) {
                 return;
             }
+            const normalizedScope =
+                role.scope ??
+                ((role as any).zone === "INST"
+                    ? "INSTITUTE"
+                    : (role as any).zone === "DEPT"
+                        ? "DEPARTMENT"
+                        : undefined);
             const existing = map.get(canonical);
             if (existing) {
                 existing.description = existing.description ?? role.description;
-                existing.scope = existing.scope ?? role.scope;
+                existing.scope = existing.scope ?? normalizedScope;
                 if (!existing.operations.length && role.operations?.length) {
                     existing.operations = role.operations;
                 }
@@ -212,7 +226,7 @@ export default function RoleManagementView() {
                     displayName: role.name,
                     canonical,
                     description: role.description,
-                    scope: role.scope,
+                    scope: normalizedScope ?? undefined,
                     operations: role.operations ?? [],
                     canManage: canonical.endsWith("_OWNER"),
                     menuIds,
@@ -231,6 +245,9 @@ export default function RoleManagementView() {
             }
             if (!entry.operations.length) {
                 entry.operations = ["read"];
+            }
+            if (!entry.scope && entry.zone) {
+                entry.scope = entry.zone === "INST" ? "INSTITUTE" : entry.zone === "DEPT" ? "DEPARTMENT" : undefined;
             }
             if (!entry.menuIds.length) {
                 const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
@@ -296,6 +313,23 @@ export default function RoleManagementView() {
                             未填写
                         </Text>
                     );
+                },
+            },
+            {
+                title: "所属域",
+                dataIndex: "scope",
+                key: "scope",
+                width: 160,
+                onCell: () => ({ style: { verticalAlign: "middle" } }),
+                render: (_value, record) => {
+                    const scope = record.scope ?? (record.zone === "INST" ? "INSTITUTE" : record.zone === "DEPT" ? "DEPARTMENT" : undefined);
+                    const label =
+                        scope === "INSTITUTE"
+                            ? "全所共享域"
+                            : scope === "DEPARTMENT"
+                                ? "部门域"
+                                : "未配置";
+                    return <span className="truncate block max-w-full">{label}</span>;
                 },
             },
             {
@@ -521,7 +555,7 @@ export default function RoleManagementView() {
                             className="text-sm"
                             rowClassName={() => "text-sm"}
                             tableLayout="fixed"
-                            scroll={{ x: 1400 }}
+                            scroll={{ x: 1500 }}
                             expandable={{
                                 expandedRowRender,
                                 expandRowByClick: true,
@@ -575,6 +609,7 @@ interface CreateRoleDialogProps {
 function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRoleMap, menuParentMap, menuChildrenMap }: CreateRoleDialogProps) {
     const [name, setName] = useState("");
     const [displayName, setDisplayName] = useState("");
+    const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE" | undefined>(undefined);
     const [allowDesensitize, setAllowDesensitize] = useState(true);
     const [description, setDescription] = useState("");
     const [reason, setReason] = useState("");
@@ -584,6 +619,7 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
     const resetState = useCallback(() => {
         setName("");
         setDisplayName("");
+        setScope(undefined);
         setAllowDesensitize(true);
         setDescription("");
         setReason("");
@@ -662,12 +698,16 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
             toast.error("请输入说明");
             return;
         }
+        if (!scope) {
+            toast.error("请选择所属域");
+            return;
+        }
         setSubmitting(true);
         try {
             const trimmedReason = reason.trim() || undefined;
             const payload = {
                 name: trimmedName.toUpperCase(),
-                scope: "DEPARTMENT" as const,
+                scope,
                 operations: ["read"] as DataOperation[],
                 allowDesensitizeJson: allowDesensitize,
                 description: trimmedDescription,
@@ -748,6 +788,23 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                             />
                             <Text variant="body3" className="text-muted-foreground">
                                 展示给平台和审批流程的名称
+                            </Text>
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                            <label htmlFor="role-scope" className="font-medium">
+                                所属域
+                            </label>
+                            <Select value={scope} onValueChange={(value) => setScope(value as "DEPARTMENT" | "INSTITUTE")}>
+                                <SelectTrigger id="role-scope">
+                                    <SelectValue placeholder="请选择所属域" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="DEPARTMENT">部门域</SelectItem>
+                                    <SelectItem value="INSTITUTE">全所共享域</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Text variant="body3" className="text-muted-foreground">
+                                决定角色在审批与菜单绑定中的组织范围。
                             </Text>
                         </div>
                     </div>
@@ -1000,15 +1057,15 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
                                 <label className="font-medium" htmlFor="edit-scope">
-                                    作用域
+                                    所属域
                                 </label>
                                 <Select value={scope} onValueChange={(value) => setScope(value as "DEPARTMENT" | "INSTITUTE")}> 
                                     <SelectTrigger id="edit-scope">
-                                        <SelectValue placeholder="请选择作用域" />
+                                        <SelectValue placeholder="请选择所属域" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="DEPARTMENT">部门</SelectItem>
-                                        <SelectItem value="INSTITUTE">全所共享区</SelectItem>
+                                        <SelectItem value="DEPARTMENT">部门域</SelectItem>
+                                        <SelectItem value="INSTITUTE">全所共享域</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

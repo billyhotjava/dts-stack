@@ -148,6 +148,17 @@ public class PortalSessionRegistry {
         return allowTakeover;
     }
 
+    public Optional<String> resolveUsernameByRefreshToken(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            return Optional.empty();
+        }
+        return sessionRepository
+            .findByRefreshToken(refreshToken)
+            .map(PortalSessionEntity::getUsername)
+            .map(name -> name == null ? null : name.trim())
+            .filter(StringUtils::hasText);
+    }
+
     private PortalSession createSessionInternal(
         String username,
         List<String> roles,

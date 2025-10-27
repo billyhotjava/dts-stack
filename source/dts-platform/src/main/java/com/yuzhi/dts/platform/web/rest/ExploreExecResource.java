@@ -12,13 +12,21 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogMaskingRule;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/explore/legacy")
@@ -54,14 +62,17 @@ public class ExploreExecResource {
     public record ExecuteRequest(String sqlText, String connection, String engine, UUID datasetId, Map<String, Object> variables) {}
 
     @PostMapping("/execute")
-    public ApiResponse<Map<String, Object>> execute(@RequestBody ExecuteRequest req) {
+    public ApiResponse<Map<String, Object>> execute(
+        @RequestBody ExecuteRequest req,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         String sql = Objects.toString(req.sqlText, "");
         if (sql.isBlank()) return ApiResponses.error("sqlText is required");
 
         // Optional dataset-based permission check
         if (req.datasetId != null) {
             CatalogDataset ds = datasetRepo.findById(req.datasetId).orElse(null);
-            if (ds == null || !accessChecker.canRead(ds)) {
+            if (!datasetWithinScope(ds, resolveActiveDeptContext(activeDept))) {
                 audit.audit("DENY", "explore.execute", Objects.toString(req.datasetId));
                 return ApiResponses.error("Access denied for dataset");
             }
@@ -138,9 +149,23 @@ public class ExploreExecResource {
     public record SaveResultRequest(Integer ttlDays) {}
 
     @PostMapping("/save-result/{executionId}")
-    public ApiResponse<ResultSet> saveResult(@PathVariable UUID executionId, @RequestBody(required = false) SaveResultRequest req) {
+    public ApiResponse<ResultSet> saveResult(
+        @PathVariable UUID executionId,
+        @RequestBody(required = false) SaveResultRequest req,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         var exec = executionRepository.findById(executionId).orElse(null);
         if (exec == null) return ApiResponses.error("Execution not found");
+        assertExecutionAccess(exec);
+        CatalogDataset dataset = exec.getDatasetId() != null ? datasetRepo.findById(exec.getDatasetId()).orElse(null) : null;
+        String effDept = resolveActiveDeptContext(activeDept);
+        if (dataset != null && !datasetWithinScope(dataset, effDept)) {
+            audit.audit("DENY", "explore.saveResult", executionId.toString());
+            return ApiResponses.error(
+                com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
+                "Access denied for dataset"
+            );
+        }
         int ttl = req != null && req.ttlDays != null ? Math.max(1, req.ttlDays) : 7;
 
         // Build a fake storage URI and columns from execution SQL (not parsing; placeholder)
@@ -166,10 +191,13 @@ public class ExploreExecResource {
     public ApiResponse<Map<String, Object>> resultPreview(
         @PathVariable UUID resultSetId,
         @RequestParam(name = "rows", defaultValue = "100") int rows,
-        @RequestParam(name = "datasetId", required = false) UUID datasetId
+        @RequestParam(name = "datasetId", required = false) UUID datasetId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         var rs = resultSetRepository.findById(resultSetId).orElse(null);
         if (rs == null) return ApiResponses.error("Result set not found");
+        assertResultSetAccess(rs);
+        String effDept = resolveActiveDeptContext(activeDept);
 
         List<String> headers = new ArrayList<>();
         for (String c : rs.getColumns().split(",")) headers.add(c.trim());
@@ -191,6 +219,13 @@ public class ExploreExecResource {
         }
         if (effectiveDatasetId != null) {
             var ds = datasetRepo.findById(effectiveDatasetId).orElse(null);
+            if (!datasetWithinScope(ds, effDept)) {
+                audit.audit("DENY", "explore.resultPreview", resultSetId.toString());
+                return ApiResponses.error(
+                    com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
+                    "Access denied for dataset"
+                );
+            }
             if (ds != null) {
                 var rules = maskingRepository.findByDataset(ds);
                 data = applyMasking(data, headers, rules, null);
@@ -213,7 +248,31 @@ public class ExploreExecResource {
     }
 
     @DeleteMapping("/result-sets/{id}")
-    public ApiResponse<Boolean> deleteResultSet(@PathVariable UUID id) {
+    public ApiResponse<Boolean> deleteResultSet(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ResultSet rs = resultSetRepository.findById(id).orElse(null);
+        if (rs == null) {
+            return ApiResponses.ok(Boolean.TRUE);
+        }
+        assertResultSetAccess(rs);
+        String effDept = resolveActiveDeptContext(activeDept);
+        UUID datasetId = executionRepository
+            .findByResultSetId(id)
+            .stream()
+            .map(QueryExecution::getDatasetId)
+            .filter(Objects::nonNull)
+            .findFirst()
+            .orElse(null);
+        CatalogDataset dataset = datasetId != null ? datasetRepo.findById(datasetId).orElse(null) : null;
+        if (dataset != null && !datasetWithinScope(dataset, effDept)) {
+            audit.audit("DENY", "explore.resultSet", id.toString());
+            return ApiResponses.error(
+                com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
+                "Access denied for dataset"
+            );
+        }
         // Remove link from executions then delete result set
         executionRepository.clearResultSetReferences(id);
         resultSetRepository.deleteById(id);
@@ -221,8 +280,117 @@ public class ExploreExecResource {
         return ApiResponses.ok(Boolean.TRUE);
     }
 
+    private String resolveCurrentUsername() {
+        return SecurityUtils
+            .getCurrentUserLogin()
+            .map(name -> name == null ? null : name.trim())
+            .filter(name -> name != null && !name.isEmpty())
+            .orElse(null);
+    }
+
+    private boolean isResultSetOwner(ResultSet rs) {
+        if (rs == null || rs.getCreatedBy() == null) {
+            return false;
+        }
+        String owner = rs.getCreatedBy().trim();
+        if (owner.isEmpty()) {
+            return false;
+        }
+        String current = resolveCurrentUsername();
+        return current != null && owner.equalsIgnoreCase(current);
+    }
+
+    private boolean isExecutionOwner(QueryExecution exec) {
+        if (exec == null || exec.getCreatedBy() == null) {
+            return false;
+        }
+        String owner = exec.getCreatedBy().trim();
+        if (owner.isEmpty()) {
+            return false;
+        }
+        String current = resolveCurrentUsername();
+        return current != null && owner.equalsIgnoreCase(current);
+    }
+
+    private void assertResultSetAccess(ResultSet rs) {
+        if (isResultSetOwner(rs)) {
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "当前结果集仅创建人可访问");
+    }
+
+    private void assertExecutionAccess(QueryExecution exec) {
+        if (isExecutionOwner(exec)) {
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "当前查询仅创建人可保存为结果集");
+    }
+
     private ExecEnums.ExecEngine parseEngine(String engine) {
         try { return ExecEnums.ExecEngine.valueOf(Objects.toString(engine, "TRINO").toUpperCase()); } catch (Exception e) { return ExecEnums.ExecEngine.TRINO; }
+    }
+
+    private boolean datasetWithinScope(CatalogDataset dataset, String activeDept) {
+        if (dataset == null) {
+            return false;
+        }
+        if (!accessChecker.canRead(dataset)) {
+            return false;
+        }
+        return accessChecker.departmentAllowed(dataset, activeDept);
+    }
+
+    private String resolveActiveDeptContext(String header) {
+        if (StringUtils.hasText(header)) {
+            return header.trim();
+        }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        try {
+            if (authentication instanceof JwtAuthenticationToken token) {
+                String candidate = extractDeptClaim(token.getToken().getClaims().get("dept_code"));
+                if (candidate != null) return candidate;
+                candidate = extractDeptClaim(token.getToken().getClaims().get("deptCode"));
+                if (candidate != null) return candidate;
+                return extractDeptClaim(token.getToken().getClaims().get("department"));
+            }
+            if (authentication != null && authentication.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
+                String candidate = extractDeptClaim(principal.getAttribute("dept_code"));
+                if (candidate != null) return candidate;
+                candidate = extractDeptClaim(principal.getAttribute("deptCode"));
+                if (candidate != null) return candidate;
+                return extractDeptClaim(principal.getAttribute("department"));
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private String extractDeptClaim(Object raw) {
+        Object flattened = flattenValue(raw);
+        if (flattened == null) {
+            return null;
+        }
+        String text = flattened.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private Object flattenValue(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Collection<?> collection) {
+            return collection.stream().filter(Objects::nonNull).findFirst().orElse(null);
+        }
+        if (raw.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(raw);
+            for (int i = 0; i < length; i++) {
+                Object element = java.lang.reflect.Array.get(raw, i);
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        return raw;
     }
 
     private static String applyVariables(String sql, Map<String, Object> variables) {

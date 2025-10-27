@@ -12,19 +12,24 @@ import com.yuzhi.dts.platform.repository.governance.GovComplianceBatchRepository
 import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleVersionRepository;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.DepartmentUtils;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.dto.ComplianceBatchDto;
 import com.yuzhi.dts.platform.service.governance.dto.ComplianceBatchItemDto;
 import com.yuzhi.dts.platform.service.governance.request.ComplianceBatchRequest;
 import com.yuzhi.dts.platform.service.governance.request.ComplianceItemUpdateRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
+import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -36,6 +41,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 @Service
 @Transactional
@@ -54,6 +64,7 @@ public class ComplianceService {
     private final GovQualityRunRepository qualityRunRepository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final OrganizationVisibilityService organizationVisibilityService;
 
     public ComplianceService(
         GovComplianceBatchRepository batchRepository,
@@ -63,7 +74,8 @@ public class ComplianceService {
         QualityRunService qualityRunService,
         GovQualityRunRepository qualityRunRepository,
         AuditService auditService,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        OrganizationVisibilityService organizationVisibilityService
     ) {
         this.batchRepository = batchRepository;
         this.itemRepository = itemRepository;
@@ -73,9 +85,10 @@ public class ComplianceService {
         this.qualityRunRepository = qualityRunRepository;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.organizationVisibilityService = organizationVisibilityService;
     }
 
-    public ComplianceBatchDto createBatch(ComplianceBatchRequest request, String actor) {
+    public ComplianceBatchDto createBatch(ComplianceBatchRequest request, String actor, String activeDeptHeader) {
         List<GovRule> rules = resolveRules(request.getRuleIds());
         if (rules.isEmpty()) {
             throw new IllegalArgumentException("请选择至少一个规则");
@@ -91,6 +104,7 @@ public class ComplianceService {
         batch.setTriggeredBy(actor);
         batch.setTriggeredType("MANUAL");
         batch.setScheduledAt(Instant.now());
+        batch.setOwnerDept(enforceOwnerDept(request.getOwnerDept(), activeDeptHeader));
         batch.setMetadataJson(writeMetadata(request.getMetadata()));
         batchRepository.save(batch);
 
@@ -131,42 +145,60 @@ public class ComplianceService {
         }
 
         refreshBatchState(batch, items);
-        auditService.audit("EXECUTE", "governance.compliance.batch", batch.getId().toString());
+        Map<String, Object> auditDetail = new LinkedHashMap<>();
+        auditDetail.put("targetId", batch.getId().toString());
+        auditDetail.put("targetName", batch.getName());
+        auditDetail.put("ruleCount", rules.size());
+        auditDetail.put("summary", "启动合规批次：" + batch.getName());
+        auditService.record(
+            "EXECUTE",
+            "governance.compliance.batch",
+            "governance.compliance.batch",
+            batch.getId().toString(),
+            "SUCCESS",
+            auditDetail
+        );
         return GovernanceMapper.toDto(batch, items);
     }
 
     @Transactional(readOnly = true)
-    public ComplianceBatchDto getBatch(UUID id) {
+    public ComplianceBatchDto getBatch(UUID id, String activeDeptHeader) {
         GovComplianceBatch batch = batchRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureBatchReadable(batch, activeDeptHeader);
         List<GovComplianceBatchItem> items = itemRepository.findByBatchId(id);
         return GovernanceMapper.toDto(batch, items);
     }
 
     @Transactional(readOnly = true)
-    public List<ComplianceBatchDto> recentBatches(int limit, List<String> statusFilter) {
+    public List<ComplianceBatchDto> recentBatches(int limit, List<String> statusFilter, String activeDeptHeader) {
         int pageSize = limit > 0 ? limit : 10;
         List<GovComplianceBatch> batches;
         List<String> normalizedStatuses = normalizeStatuses(statusFilter);
         if (!normalizedStatuses.isEmpty()) {
             batches = batchRepository.findByStatusInOrderByCreatedDateDesc(normalizedStatuses);
-            if (batches.size() > pageSize) {
-                batches = batches.subList(0, pageSize);
-            }
         } else {
-            Pageable pageable = PageRequest.of(0, pageSize, Sort.Direction.DESC, "createdDate");
+            int fetchSize = Math.max(pageSize, 20);
+            Pageable pageable = PageRequest.of(0, fetchSize, Sort.Direction.DESC, "createdDate");
             batches = batchRepository.findAll(pageable).getContent();
         }
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = hasInstituteScope();
         return batches
             .stream()
+            .filter(batch -> isBatchVisible(batch, activeDept, instituteScope))
+            .limit(pageSize)
             .map(batch -> GovernanceMapper.toDto(batch, itemRepository.findByBatchId(batch.getId())))
             .collect(Collectors.toList());
     }
 
-    public ComplianceBatchItemDto updateItem(UUID itemId, ComplianceItemUpdateRequest request, String actor) {
+    public ComplianceBatchItemDto updateItem(UUID itemId, ComplianceItemUpdateRequest request, String actor, String activeDeptHeader) {
         if (request == null) {
             throw new IllegalArgumentException("请求参数不可为空");
         }
         GovComplianceBatchItem item = itemRepository.findById(itemId).orElseThrow(EntityNotFoundException::new);
+        GovComplianceBatch batch = item.getBatch();
+        ensureBatchWritable(batch, activeDeptHeader);
+        Map<String, Object> before = toComplianceItemAuditView(item);
         if (StringUtils.isNotBlank(request.getStatus())) {
             item.setStatus(request.getStatus().trim().toUpperCase(Locale.ROOT));
         }
@@ -177,9 +209,26 @@ public class ComplianceService {
             item.setEvidenceRef(StringUtils.trimToNull(request.getEvidenceRef()));
         }
         itemRepository.save(item);
-        GovComplianceBatch batch = item.getBatch();
         refreshBatchState(batch, null);
-        auditService.audit("UPDATE", "governance.compliance.item", actor + ":" + item.getId() + "@" + batch.getId());
+        Map<String, Object> after = toComplianceItemAuditView(item);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("before", before);
+        detail.put("after", after);
+        detail.put("batchId", batch.getId());
+        detail.put("batchName", batch.getName());
+        String ruleName = item.getRule() != null ? item.getRule().getName() : item.getId().toString();
+        detail.put("targetId", item.getId().toString());
+        detail.put("targetName", ruleName);
+        detail.put("summary", "处理合规检查项：" + ruleName);
+        detail.put("actor", actor);
+        auditService.record(
+            "UPDATE",
+            "governance.compliance.item",
+            "governance.compliance.item",
+            item.getId() + "@" + batch.getId(),
+            "SUCCESS",
+            detail
+        );
         return GovernanceMapper.toDto(item);
     }
 
@@ -214,10 +263,26 @@ public class ComplianceService {
         batchRepository.save(batch);
     }
 
-    public void deleteBatch(UUID batchId, String actor) {
+    public void deleteBatch(UUID batchId, String actor, String activeDeptHeader) {
         GovComplianceBatch batch = batchRepository.findById(batchId).orElseThrow(EntityNotFoundException::new);
+        ensureBatchWritable(batch, activeDeptHeader);
+        Map<String, Object> before = toComplianceBatchAuditView(batch);
         batchRepository.delete(batch);
-        auditService.audit("DELETE", "governance.compliance.batch", actor + ":" + batchId);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("before", before);
+        detail.put("after", Map.of("deleted", true));
+        detail.put("targetId", batchId.toString());
+        detail.put("targetName", batch.getName());
+        detail.put("summary", "删除合规批次：" + batch.getName());
+        detail.put("actor", actor);
+        auditService.record(
+            "DELETE",
+            "governance.compliance.batch",
+            "governance.compliance.batch",
+            batchId.toString(),
+            "SUCCESS",
+            detail
+        );
     }
 
     private List<String> normalizeStatuses(List<String> statuses) {
@@ -257,6 +322,183 @@ public class ComplianceService {
             return List.of();
         }
         return ruleIds.stream().map(id -> ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new)).collect(Collectors.toList());
+    }
+
+    private Map<String, Object> toComplianceItemAuditView(GovComplianceBatchItem item) {
+        if (item == null) {
+            return Map.of();
+        }
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("id", item.getId());
+        view.put("ruleId", item.getRule() != null ? item.getRule().getId() : null);
+        view.put("status", item.getStatus());
+        view.put("severity", item.getSeverity());
+        view.put("conclusion", item.getConclusion());
+        view.put("evidenceRef", item.getEvidenceRef());
+        if (item.getQualityRun() != null) {
+            view.put("qualityRunId", item.getQualityRun().getId());
+        }
+        return view;
+    }
+
+    private Map<String, Object> toComplianceBatchAuditView(GovComplianceBatch batch) {
+        if (batch == null) {
+            return Map.of();
+        }
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("id", batch.getId());
+        view.put("name", batch.getName());
+        view.put("status", batch.getStatus());
+        view.put("summary", batch.getSummary());
+        view.put("progressPct", batch.getProgressPct());
+        view.put("startedAt", batch.getStartedAt());
+        view.put("finishedAt", batch.getFinishedAt());
+        view.put("ownerDept", batch.getOwnerDept());
+        return view;
+    }
+
+    private String enforceOwnerDept(String requestedOwnerDept, String activeDeptHeader) {
+        String requested = StringUtils.trimToNull(requestedOwnerDept);
+        if (hasInstituteScope()) {
+            if (requested != null) {
+                return requested;
+            }
+            return StringUtils.trimToNull(resolveActiveDept(activeDeptHeader));
+        }
+        if (!hasDepartmentScope()) {
+            throw new AccessDeniedException("当前账号无权创建合规批次");
+        }
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        if (StringUtils.isBlank(activeDept)) {
+            throw new AccessDeniedException("当前账号未配置所属部门，无法执行该操作");
+        }
+        if (requested != null && !DepartmentUtils.matches(requested, activeDept)) {
+            throw new AccessDeniedException("合规批次仅可归属当前登录部门");
+        }
+        return activeDept.trim();
+    }
+
+    private boolean isBatchVisible(GovComplianceBatch batch, String activeDept, boolean instituteScope) {
+        if (batch == null) {
+            return false;
+        }
+        String ownerDept = StringUtils.trimToNull(batch.getOwnerDept());
+        if (ownerDept == null) {
+            return true;
+        }
+        if (instituteScope) {
+            return true;
+        }
+        if (organizationVisibilityService.isRoot(ownerDept)) {
+            return true;
+        }
+        if (StringUtils.isBlank(activeDept)) {
+            return false;
+        }
+        return DepartmentUtils.matches(ownerDept, activeDept);
+    }
+
+    private void ensureBatchReadable(GovComplianceBatch batch, String activeDeptHeader) {
+        if (batch == null) {
+            throw new EntityNotFoundException("合规批次不存在");
+        }
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        if (!isBatchVisible(batch, activeDept, hasInstituteScope())) {
+            throw new AccessDeniedException("当前账号无权访问该合规批次");
+        }
+    }
+
+    private void ensureBatchWritable(GovComplianceBatch batch, String activeDeptHeader) {
+        ensureBatchReadable(batch, activeDeptHeader);
+        if (hasInstituteScope()) {
+            return;
+        }
+        if (!hasDepartmentScope()) {
+            throw new AccessDeniedException("当前账号无权操作该合规批次");
+        }
+        String ownerDept = StringUtils.trimToNull(batch.getOwnerDept());
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        if (ownerDept == null || StringUtils.isBlank(activeDept) || !DepartmentUtils.matches(ownerDept, activeDept)) {
+            throw new AccessDeniedException("当前账号无权操作该合规批次");
+        }
+    }
+
+    private String resolveActiveDept(String activeDeptHeader) {
+        if (StringUtils.isNotBlank(activeDeptHeader)) {
+            return activeDeptHeader.trim();
+        }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        try {
+            if (authentication instanceof JwtAuthenticationToken token) {
+                String candidate = extractDeptClaim(token.getToken().getClaims().get("dept_code"));
+                if (candidate != null) return candidate;
+                candidate = extractDeptClaim(token.getToken().getClaims().get("deptCode"));
+                if (candidate != null) return candidate;
+                return extractDeptClaim(token.getToken().getClaims().get("department"));
+            }
+            if (authentication != null && authentication.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
+                String candidate = extractDeptClaim(principal.getAttribute("dept_code"));
+                if (candidate != null) return candidate;
+                candidate = extractDeptClaim(principal.getAttribute("deptCode"));
+                if (candidate != null) return candidate;
+                return extractDeptClaim(principal.getAttribute("department"));
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private String extractDeptClaim(Object raw) {
+        Object flattened = flattenValue(raw);
+        if (flattened == null) {
+            return null;
+        }
+        String text = flattened.toString();
+        if (StringUtils.isBlank(text)) {
+            return null;
+        }
+        String trimmed = text.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Object flattenValue(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Iterable<?> iterable) {
+            for (Object element : iterable) {
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        if (raw.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(raw);
+            for (int i = 0; i < length; i++) {
+                Object element = java.lang.reflect.Array.get(raw, i);
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        return raw;
+    }
+
+    private boolean hasInstituteScope() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.ADMIN,
+            AuthoritiesConstants.OP_ADMIN,
+            AuthoritiesConstants.INST_DATA_DEV,
+            AuthoritiesConstants.INST_DATA_OWNER
+        );
+    }
+
+    private boolean hasDepartmentScope() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.DEPT_DATA_DEV,
+            AuthoritiesConstants.DEPT_DATA_OWNER
+        );
     }
 
     private GovRuleVersion resolveVersion(GovRule rule) {

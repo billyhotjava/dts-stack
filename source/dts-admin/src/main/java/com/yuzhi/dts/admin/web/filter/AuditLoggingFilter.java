@@ -87,7 +87,8 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             try { responseWrapper.copyBodyToResponse(); } catch (Exception ignore) {}
             try {
                 boolean alreadyAudited = com.yuzhi.dts.admin.service.audit.AuditRequestContext.wasDomainAudited();
-                if (!alreadyAudited) {
+                boolean fallbackRequested = com.yuzhi.dts.admin.service.audit.AuditRequestContext.consumeHttpFallbackRequest();
+                if (fallbackRequested && !alreadyAudited) {
                     PendingAuditEvent event = buildEvent(requestWrapper, responseWrapper, System.nanoTime() - start);
                     // 仅记录有人为操作上下文：必须是已认证用户，且排除 anonymous/anonymousUser
                     boolean authenticated = com.yuzhi.dts.admin.security.SecurityUtils.isAuthenticated();
@@ -96,10 +97,21 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                         !"anonymous".equalsIgnoreCase(actor) &&
                         !"anonymoususer".equalsIgnoreCase(actor)) {
                         auditService.record(event);
+                    } else if (log.isDebugEnabled()) {
+                        log.debug("Skip HTTP fallback audit for actor='{}', uri={}", actor, request.getRequestURI());
                     }
+                } else if (log.isTraceEnabled()) {
+                    log.trace(
+                        "HTTP fallback audit bypassed: alreadyAudited={}, fallbackRequested={}, uri={}",
+                        alreadyAudited,
+                        fallbackRequested,
+                        request.getRequestURI()
+                    );
                 }
             } catch (Exception ex) {
                 log.warn("Failed to record audit trail for {} {}", request.getMethod(), request.getRequestURI(), ex);
+            } finally {
+                com.yuzhi.dts.admin.service.audit.AuditRequestContext.clear();
             }
         }
     }

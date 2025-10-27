@@ -30,19 +30,23 @@ public class DataStandardAttachmentService {
     private final DataStandardRepository standardRepository;
     private final DataStandardAttachmentRepository attachmentRepository;
     private final DataStandardProperties properties;
+    private final DataStandardSecurity security;
 
     public DataStandardAttachmentService(
         DataStandardRepository standardRepository,
         DataStandardAttachmentRepository attachmentRepository,
-        DataStandardProperties properties
+        DataStandardProperties properties,
+        DataStandardSecurity security
     ) {
         this.standardRepository = standardRepository;
         this.attachmentRepository = attachmentRepository;
         this.properties = properties;
+        this.security = security;
     }
 
-    public DataStandardAttachmentDto upload(UUID standardId, MultipartFile file, String version) {
+    public DataStandardAttachmentDto upload(UUID standardId, MultipartFile file, String version, String activeDeptHeader) {
         DataStandard standard = loadStandard(standardId);
+        security.ensureWritable(standard, activeDeptHeader);
         String extension = validateFile(file);
         SecretKey secretKey = resolveKey();
         byte[] bytes = toBytes(file);
@@ -75,8 +79,9 @@ public class DataStandardAttachmentService {
         }
     }
 
-    public List<DataStandardAttachmentDto> list(UUID standardId) {
+    public List<DataStandardAttachmentDto> list(UUID standardId, String activeDeptHeader) {
         DataStandard standard = loadStandard(standardId);
+        security.ensureReadable(standard, activeDeptHeader);
         return attachmentRepository
             .findByStandardOrderByCreatedDateDesc(standard)
             .stream()
@@ -84,8 +89,9 @@ public class DataStandardAttachmentService {
             .toList();
     }
 
-    public DataStandardAttachmentContent download(UUID standardId, UUID attachmentId) {
+    public DataStandardAttachmentContent download(UUID standardId, UUID attachmentId, String activeDeptHeader) {
         DataStandard standard = loadStandard(standardId);
+        security.ensureReadable(standard, activeDeptHeader);
         DataStandardAttachment attachment = attachmentRepository
             .findByIdAndStandard(attachmentId, standard)
             .orElseThrow(() -> new EntityNotFoundException("附件不存在"));
@@ -101,8 +107,18 @@ public class DataStandardAttachmentService {
         return new DataStandardAttachmentContent(data, attachment.getFileName(), attachment.getContentType());
     }
 
-    public void delete(UUID standardId, UUID attachmentId) {
+    public DataStandardAttachmentDto getMetadata(UUID standardId, UUID attachmentId, String activeDeptHeader) {
         DataStandard standard = loadStandard(standardId);
+        security.ensureReadable(standard, activeDeptHeader);
+        DataStandardAttachment attachment = attachmentRepository
+            .findByIdAndStandard(attachmentId, standard)
+            .orElseThrow(() -> new EntityNotFoundException("附件不存在"));
+        return DataStandardMapper.toDto(attachment);
+    }
+
+    public void delete(UUID standardId, UUID attachmentId, String activeDeptHeader) {
+        DataStandard standard = loadStandard(standardId);
+        security.ensureWritable(standard, activeDeptHeader);
         DataStandardAttachment attachment = attachmentRepository
             .findByIdAndStandard(attachmentId, standard)
             .orElseThrow(() -> new EntityNotFoundException("附件不存在"));

@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { KeycloakUser } from "#/keycloak";
 import { useUserInfo } from "@/store/userStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
 import { resolveProfileName } from "./profile-utils";
+import deptService from "@/api/services/deptService";
 
 type AttributeMap = Record<string, string[]> | undefined;
 
@@ -89,6 +90,7 @@ export default function ProfileTab({ detail, pickAttributeValue }: ProfileTabPro
   const { fullName, firstName, username, email, roles, enabled, id, attributes, department } = useUserInfo();
   const detailAttributes = detail?.attributes as AttributeMap;
   const storeAttributes = attributes as AttributeMap;
+  const [deptLabelMap, setDeptLabelMap] = useState<Map<string, string>>(new Map());
 
   const resolvedUsername = detail?.username || username || "-";
   const resolvedUsernameDisplay = detail?.username || username || "-";
@@ -118,18 +120,69 @@ export default function ProfileTab({ detail, pickAttributeValue }: ProfileTabPro
   const accountStatus = detail?.enabled ?? enabled;
   const accountId = detail?.id || id || "-";
 
-  const resolvedDepartment = useMemo(() => {
-    const primary =
-      pickAttributeValue(detailAttributes, ["department", "deptCode", "dept_code", "ou", "departmentName"]) ||
-      pickAttributeValue(storeAttributes, ["department", "deptCode", "dept_code", "ou", "departmentName"]);
-    if (primary && primary.trim()) {
-      return primary.trim();
+  const departmentCandidates = useMemo(() => {
+    const pick = (source: AttributeMap, keys: string[]): string => {
+      const value = pickAttributeValue(source, keys);
+      return typeof value === "string" ? value.trim() : "";
+    };
+
+    const nameCandidates = [
+      pick(detailAttributes, ["departmentName", "deptName", "department_label", "departmentDisplay"]),
+      pick(storeAttributes, ["departmentName", "deptName", "department_label", "departmentDisplay"]),
+    ].filter((item) => item);
+
+    const codeCandidates = [
+      pick(detailAttributes, ["dept_code", "deptCode", "departmentCode", "department"]),
+      pick(storeAttributes, ["dept_code", "deptCode", "departmentCode", "department"]),
+      typeof department === "string" ? department.trim() : "",
+    ].filter((item) => item);
+
+    return { names: nameCandidates, codes: codeCandidates };
+  }, [detailAttributes, storeAttributes, department, pickAttributeValue]);
+
+  useEffect(() => {
+    const missingCodes = departmentCandidates.codes.filter((code) => code && !deptLabelMap.has(code));
+    if (!missingCodes.length) {
+      return;
     }
-    if (typeof department === "string" && department.trim()) {
-      return department.trim();
+    let cancelled = false;
+    (async () => {
+      const updates = new Map<string, string>();
+      for (const code of missingCodes) {
+        try {
+          const list = await deptService.listDepartments(code);
+          const matched = list.find((item) => String(item.code) === code);
+          if (matched) {
+            updates.set(code, matched.nameZh || matched.nameEn || String(matched.code));
+          }
+        } catch (error) {
+          console.warn("Failed to resolve department name for", code, error);
+        }
+      }
+      if (!cancelled && updates.size) {
+        setDeptLabelMap((prev) => {
+          const next = new Map(prev);
+          updates.forEach((label, code) => next.set(code, label));
+          return next;
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [departmentCandidates.codes, deptLabelMap]);
+
+  const resolvedDepartment = useMemo(() => {
+    const nameCandidate = departmentCandidates.names.find((item) => item && item.trim());
+    if (nameCandidate) {
+      return nameCandidate.trim();
+    }
+    const codeCandidate = departmentCandidates.codes.find((item) => item && item.trim());
+    if (codeCandidate) {
+      return deptLabelMap.get(codeCandidate) ?? codeCandidate;
     }
     return "-";
-  }, [detailAttributes, storeAttributes, department, pickAttributeValue]);
+  }, [departmentCandidates, deptLabelMap]);
 
   const basicInfo = [
     { label: "姓名", value: resolvedName || "-", key: "name" },

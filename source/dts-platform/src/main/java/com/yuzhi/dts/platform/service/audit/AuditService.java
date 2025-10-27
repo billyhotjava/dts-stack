@@ -141,10 +141,104 @@ public class AuditService {
         Object payload,
         Map<String, Object> extraTags
     ) {
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        submitAudit(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            action,
+            module,
+            resourceType,
+            resourceId,
+            result,
+            payload,
+            extraTags
+        );
+    }
+
+    public void recordAuxiliary(
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        Object payload
+    ) {
+        recordAuxiliary(action, module, resourceType, resourceId, "SUCCESS", payload, null);
+    }
+
+    public void recordAuxiliary(
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload
+    ) {
+        recordAuxiliary(action, module, resourceType, resourceId, result, payload, null);
+    }
+
+    public void recordAuxiliary(
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
+        submitAuditInternal(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            action,
+            module,
+            resourceType,
+            resourceId,
+            result,
+            payload,
+            extraTags,
+            true
+        );
+    }
+
+    // Explicit-actor variant used for events occurring before SecurityContext is populated (e.g., login)
+    public void recordAs(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
+        String resolvedActor = StringUtils.hasText(actor) ? actor : "anonymous";
+        submitAuditInternal(resolvedActor, action, module, resourceType, resourceId, result, payload, extraTags, false);
+    }
+
+    private void submitAudit(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
+        submitAuditInternal(actor, action, module, resourceType, resourceId, result, payload, extraTags, false);
+    }
+
+    private void submitAuditInternal(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags,
+        boolean auxiliary
+    ) {
+        String safeActor = StringUtils.hasText(actor) ? actor.trim() : "anonymous";
         log.info(
             "AUDIT actor={} action={} module={} resourceType={} resourceId={} result={}",
-            actor,
+            safeActor,
             action,
             module,
             resourceType,
@@ -153,15 +247,54 @@ public class AuditService {
         );
         AuditTrailService.PendingAuditEvent event = new AuditTrailService.PendingAuditEvent();
         event.occurredAt = Instant.now();
-        event.actor = actor;
+        event.actor = safeActor;
         event.actorRole = resolvePrimaryAuthority();
-        event.module = module;
-        event.action = action;
+        event.module = StringUtils.hasText(module) ? module : "general";
+        event.action = StringUtils.hasText(action) ? action : "READ";
         event.resourceType = resourceType;
         event.resourceId = resourceId;
-        event.result = result;
-        event.payload = payload;
-        event.extraTags = serializeTags(extraTags);
+        event.result = StringUtils.hasText(result) ? result : "SUCCESS";
+
+        Map<String, Object> payloadMap = toPayloadMap(payload);
+        if (!payloadMap.isEmpty()) {
+            event.payload = payloadMap;
+        } else {
+            event.payload = payload;
+        }
+        String actorDisplayName = resolveActorName(payloadMap);
+        if (StringUtils.hasText(actorDisplayName)) {
+            event.actorName = actorDisplayName;
+        }
+        if (extraTags != null && !extraTags.isEmpty()) {
+            event.extraTags = serializeTags(extraTags);
+        }
+
+        String summary = extractText(payloadMap, "summary");
+        String targetName = extractText(payloadMap, "targetName");
+        if (StringUtils.hasText(targetName)) {
+            event.resourceName = targetName;
+        } else {
+            String resourceName = extractText(payloadMap, "resourceName");
+            if (StringUtils.hasText(resourceName)) {
+                event.resourceName = resourceName;
+            }
+        }
+        if (!StringUtils.hasText(summary)) {
+            if (StringUtils.hasText(event.action) && StringUtils.hasText(event.resourceName)) {
+                summary = event.action + "：" + event.resourceName;
+            } else if (StringUtils.hasText(event.action)) {
+                summary = event.action;
+            }
+        }
+        event.summary = summary;
+        event.operationType = deriveOperationType(action, payloadMap);
+
+        Map<String, Object> attributes = extractNestedAttributes(payloadMap);
+        if (!attributes.isEmpty()) {
+            event.attributes = attributes;
+        }
+        event.auxiliary = auxiliary;
+
         // Best-effort populate client/network fields from current request
         try {
             ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
@@ -182,55 +315,116 @@ public class AuditService {
         }
     }
 
-    // Explicit-actor variant used for events occurring before SecurityContext is populated (e.g., login)
-    public void recordAs(
-        String actor,
-        String action,
-        String module,
-        String resourceType,
-        String resourceId,
-        String result,
-        Object payload,
-        Map<String, Object> extraTags
-    ) {
-        if (!StringUtils.hasText(actor)) {
-            actor = "anonymous";
+    private Map<String, Object> toPayloadMap(Object payload) {
+        if (payload instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new java.util.LinkedHashMap<>();
+            map.forEach((k, v) -> {
+                if (k != null) {
+                    copy.put(String.valueOf(k), v);
+                }
+            });
+            return copy;
         }
-        if (log.isInfoEnabled()) {
-            log.info(
-                "AUDIT actor={} action={} module={} resourceType={} resourceId={} result={}",
-                actor, action, module, resourceType, resourceId, result
-            );
+        return new java.util.LinkedHashMap<>();
+    }
+
+    private Map<String, Object> extractNestedAttributes(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return java.util.Collections.emptyMap();
         }
-        AuditTrailService.PendingAuditEvent event = new AuditTrailService.PendingAuditEvent();
-        event.occurredAt = Instant.now();
-        event.actor = actor;
-        event.actorRole = resolvePrimaryAuthority();
-        event.module = module;
-        event.action = action;
-        event.resourceType = resourceType;
-        event.resourceId = resourceId;
-        event.result = result;
-        event.payload = payload;
-        event.extraTags = serializeTags(extraTags);
-        // Best-effort populate client/network fields from current request
-        try {
-            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-            if (attrs != null && attrs.getRequest() != null) {
-                var req = attrs.getRequest();
-                event.clientIp = resolveClientIp(req);
-                event.clientAgent = req.getHeader("User-Agent");
-                event.requestUri = req.getRequestURI();
-                event.httpMethod = req.getMethod();
+        Object attributes = payload.get("attributes");
+        if (attributes instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new java.util.LinkedHashMap<>();
+            map.forEach((k, v) -> {
+                if (k != null) {
+                    copy.put(String.valueOf(k), v);
+                }
+            });
+            return copy;
+        }
+        return java.util.Collections.emptyMap();
+    }
+
+    private String extractText(Map<String, Object> map, String key) {
+        if (map == null || map.isEmpty()) {
+            return null;
+        }
+        Object value = map.get(key);
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private String deriveOperationType(String action, Map<String, Object> payload) {
+        String direct = extractText(payload, "operationType");
+        if (!StringUtils.hasText(direct)) {
+            direct = extractText(payload, "operation_type");
+        }
+        if (StringUtils.hasText(direct)) {
+            return canonicalOperationType(direct);
+        }
+        if (StringUtils.hasText(action)) {
+            return canonicalOperationType(action);
+        }
+        String summary = extractText(payload, "summary");
+        if (StringUtils.hasText(summary)) {
+            return canonicalOperationType(summary);
+        }
+        return "READ";
+    }
+
+    private String canonicalOperationType(String candidate) {
+        if (!StringUtils.hasText(candidate)) {
+            return "READ";
+        }
+        String upper = candidate.trim().toUpperCase(Locale.ROOT);
+        String lower = candidate.trim().toLowerCase(Locale.ROOT);
+        if (upper.startsWith("CREATE") || containsAny(lower, "新增", "新建", "创建", "提交", "申请", "导入", "上传")) {
+            return "CREATE";
+        }
+        if (upper.startsWith("DELETE") || containsAny(lower, "删除", "移除", "下线", "注销")) {
+            return "DELETE";
+        }
+        if (
+            upper.startsWith("UPDATE") ||
+            upper.startsWith("MODIFY") ||
+            containsAny(lower, "修改", "更新", "调整", "批准", "审批", "拒绝", "执行", "运行", "启用", "禁用", "发布", "保存", "编辑")
+        ) {
+            return "UPDATE";
+        }
+        if (
+            upper.startsWith("EXPORT") ||
+            upper.startsWith("DOWNLOAD") ||
+            upper.startsWith("READ") ||
+            upper.startsWith("QUERY") ||
+            upper.startsWith("GET") ||
+            containsAny(lower, "查看", "查询", "预览", "下载", "导出", "浏览", "列表", "检索")
+        ) {
+            return "READ";
+        }
+        return "READ";
+    }
+
+    private boolean containsAny(String source, String... needles) {
+        if (!StringUtils.hasText(source) || needles == null) {
+            return false;
+        }
+        for (String needle : needles) {
+            if (needle != null && source.contains(needle)) {
+                return true;
             }
-        } catch (Exception ignore) {}
-        markDomainAuditSafe();
-        AuditTrailService svc = auditTrailServiceProvider.getIfAvailable();
-        if (svc != null) {
-            svc.record(event);
-        } else if (log.isDebugEnabled()) {
-            log.debug("AuditTrailService not available; skipping audit record action={} module={} resourceId={}", action, module, resourceId);
         }
+        return false;
+    }
+
+    private String resolveActorName(Map<String, Object> payload) {
+        String fromPayload = extractText(payload, "actorName");
+        if (StringUtils.hasText(fromPayload)) {
+            return fromPayload;
+        }
+        return SecurityUtils.getCurrentUserDisplayName().orElse(null);
     }
 
     private String resolveClientIp(HttpServletRequest request) {

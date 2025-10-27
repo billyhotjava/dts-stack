@@ -12,6 +12,7 @@ public class ComplianceBatchRequest {
     private String dataLevel;
     private List<UUID> ruleIds;
     private Map<String, Object> metadata;
+    private String ownerDept;
 
     public String getName() {
         return name;
@@ -60,5 +61,12 @@ public class ComplianceBatchRequest {
     public void setMetadata(Map<String, Object> metadata) {
         this.metadata = metadata;
     }
-}
 
+    public String getOwnerDept() {
+        return ownerDept;
+    }
+
+    public void setOwnerDept(String ownerDept) {
+        this.ownerDept = ownerDept;
+    }
+}

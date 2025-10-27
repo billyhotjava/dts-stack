@@ -60,6 +60,9 @@ public class GovComplianceBatch extends AbstractAuditingEntity<UUID> implements 
     @Column(name = "triggered_type", length = 32)
     private String triggeredType;
 
+    @Column(name = "owner_dept", length = 128)
+    private String ownerDept;
+
     @Column(name = "summary", length = 4096)
     private String summary;
 
@@ -166,6 +169,14 @@ public class GovComplianceBatch extends AbstractAuditingEntity<UUID> implements 
 
     public void setTriggeredType(String triggeredType) {
         this.triggeredType = triggeredType;
+    }
+
+    public String getOwnerDept() {
+        return ownerDept;
+    }
+
+    public void setOwnerDept(String ownerDept) {
+        this.ownerDept = ownerDept;
     }
 
     public String getSummary() {

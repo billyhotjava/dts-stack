@@ -4,6 +4,7 @@ import type { BasicStatus, PermissionType } from "./enum";
 export interface UserToken {
 	accessToken?: string;
 	refreshToken?: string;
+	sessionTakeover?: boolean;
 }
 
 export interface UserInfo {
@@ -133,6 +134,8 @@ export interface AuditLog {
 	targetTable?: string;
 	targetTableLabel?: string; // localized table label
 	targetId?: string;
+	targetIds?: string[];
+	targetLabels?: Record<string, string>;
 	targetRef?: string;
 	changeRequestRef?: string;
 	approvalSummary?: string;

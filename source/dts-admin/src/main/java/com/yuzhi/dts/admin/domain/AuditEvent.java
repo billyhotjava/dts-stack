@@ -8,18 +8,26 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Lob;
 import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Transient;
 import jakarta.persistence.Table;
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.time.Instant;
+import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * 重构后的审计事件实体。
+ * 仅保存人工操作留痕所需的核心字段，剔除旧的加密链及 HTTP 明细。
+ */
 @Entity
 @Table(name = "audit_event")
 public class AuditEvent implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
@@ -29,23 +37,67 @@ public class AuditEvent implements Serializable {
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 
+    @Column(name = "source_system", nullable = false, length = 32)
+    private String sourceSystem;
+
     @Column(name = "actor", nullable = false, length = 128)
     private String actor;
 
     @Column(name = "actor_role", length = 64)
     private String actorRole;
 
+    @Column(name = "actor_name", length = 128)
+    private String actorName;
+
     @Column(name = "module", nullable = false, length = 64)
     private String module;
 
-    @Column(name = "action", nullable = false, length = 128)
-    private String action;
+    @Column(name = "module_label", length = 128)
+    private String moduleLabel;
 
-    @Column(name = "resource_type", length = 64)
-    private String resourceType;
+    @Column(name = "operation_group", length = 64)
+    private String operationGroup;
 
-    @Column(name = "resource_id", length = 256)
-    private String resourceId;
+    @Column(name = "operation_code", length = 128)
+    private String operationCode;
+
+    @Column(name = "operation_name", nullable = false, length = 256)
+    private String operationName;
+
+    @Column(name = "operation_type", nullable = false, length = 32)
+    private String operationType;
+
+    @Column(name = "operation_type_text", length = 64)
+    private String operationTypeText;
+
+    @Column(name = "result", nullable = false, length = 32)
+    private String result;
+
+    @Lob
+    @Column(name = "summary")
+    private String summary;
+
+    @Column(name = "target_table", length = 128)
+    private String targetTable;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "target_ids")
+    private String targetIds;
+
+    @Column(name = "target_id_text", length = 512)
+    private String targetIdText;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "target_labels")
+    private String targetLabels;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "target_snapshot")
+    private String targetSnapshot;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "details")
+    private String details;
 
     @JdbcTypeCode(SqlTypes.INET)
     @Column(name = "client_ip")
@@ -53,51 +105,6 @@ public class AuditEvent implements Serializable {
 
     @Column(name = "client_agent", length = 256)
     private String clientAgent;
-
-    @Column(name = "request_uri")
-    private String requestUri;
-
-    @Column(name = "http_method", length = 16)
-    private String httpMethod;
-
-    @Column(name = "result", nullable = false, length = 32)
-    private String result;
-
-    @Column(name = "latency_ms")
-    private Integer latencyMs;
-
-    @JdbcTypeCode(SqlTypes.BINARY)
-    @Column(name = "payload_iv")
-    @JsonIgnore
-    private byte[] payloadIv;
-
-    @JdbcTypeCode(SqlTypes.BINARY)
-    @Column(name = "payload_cipher")
-    @JsonIgnore
-    private byte[] payloadCipher;
-
-    @Column(name = "payload_hmac", nullable = false, length = 128)
-    private String payloadHmac;
-
-    @Column(name = "chain_signature", nullable = false, length = 128)
-    private String chainSignature;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "extra_tags")
-    private String extraTags;
-
-    // ---- extended columns ----
-    @Column(name = "event_uuid")
-    private java.util.UUID eventUuid;
-
-    @Column(name = "event_class", length = 32)
-    private String eventClass;
-
-    @Column(name = "event_type", length = 64)
-    private String eventType;
-
-    @Column(name = "source_system", length = 32)
-    private String sourceSystem;
 
     @Column(name = "operator_id", length = 128)
     private String operatorId;
@@ -107,7 +114,7 @@ public class AuditEvent implements Serializable {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "operator_roles")
-    private String operatorRoles; // JSON array as string
+    private String operatorRoles;
 
     @Column(name = "org_code", length = 64)
     private String orgCode;
@@ -115,27 +122,8 @@ public class AuditEvent implements Serializable {
     @Column(name = "org_name", length = 128)
     private String orgName;
 
-    @Column(name = "summary")
-    private String summary;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "details")
-    private String details;
-
-    @Column(name = "correlation_id", length = 128)
-    private String correlationId;
-
-    @Column(name = "record_signature", length = 128)
-    private String recordSignature;
-
-    @Column(name = "signature_key_ver", length = 16)
-    private String signatureKeyVer;
-
-    @Column(name = "operation_group", length = 64)
-    private String operationGroup;
-
-    @Column(name = "operation_type", length = 32)
-    private String operationType;
+    @Column(name = "department_name", length = 128)
+    private String departmentName;
 
     @Column(name = "created_by", length = 128)
     private String createdBy;
@@ -151,7 +139,56 @@ public class AuditEvent implements Serializable {
     @Column(name = "last_modified_date")
     private Instant lastModifiedDate;
 
-    // getters and setters omitted for brevity
+    @Transient
+    private String legacyAction;
+
+    @Transient
+    private String legacyResourceType;
+
+    @Transient
+    private String legacyResourceId;
+
+    @Transient
+    private String requestUri;
+
+    @Transient
+    private String httpMethod;
+
+    @Transient
+    private Integer latencyMs;
+
+    @Transient
+    private String extraTags;
+
+    @Transient
+    private UUID eventUuid;
+
+    @Transient
+    private String eventClass;
+
+    @Transient
+    private String eventType;
+
+    @Transient
+    private byte[] payloadIv;
+
+    @Transient
+    private byte[] payloadCipher;
+
+    @Transient
+    private String payloadHmac;
+
+    @Transient
+    private String chainSignature;
+
+    @Transient
+    private String recordSignature;
+
+    @Transient
+    private String signatureKeyVer;
+
+    @Transient
+    private String correlationId;
 
     public Long getId() {
         return id;
@@ -167,6 +204,14 @@ public class AuditEvent implements Serializable {
 
     public void setOccurredAt(Instant occurredAt) {
         this.occurredAt = occurredAt;
+    }
+
+    public String getSourceSystem() {
+        return sourceSystem;
+    }
+
+    public void setSourceSystem(String sourceSystem) {
+        this.sourceSystem = sourceSystem;
     }
 
     public String getActor() {
@@ -185,6 +230,14 @@ public class AuditEvent implements Serializable {
         this.actorRole = actorRole;
     }
 
+    public String getActorName() {
+        return actorName;
+    }
+
+    public void setActorName(String actorName) {
+        this.actorName = actorName;
+    }
+
     public String getModule() {
         return module;
     }
@@ -193,48 +246,155 @@ public class AuditEvent implements Serializable {
         this.module = module;
     }
 
+    public String getModuleLabel() {
+        return moduleLabel;
+    }
+
+    public void setModuleLabel(String moduleLabel) {
+        this.moduleLabel = moduleLabel;
+    }
+
+    public String getOperationGroup() {
+        return operationGroup;
+    }
+
+    public void setOperationGroup(String operationGroup) {
+        this.operationGroup = operationGroup;
+    }
+
+    public String getOperationCode() {
+        return operationCode;
+    }
+
+    public void setOperationCode(String operationCode) {
+        this.operationCode = operationCode;
+    }
+
+    public String getOperationName() {
+        return operationName;
+    }
+
+    public void setOperationName(String operationName) {
+        this.operationName = operationName;
+    }
+
     public String getAction() {
-        return action;
+        if (legacyAction != null && !legacyAction.isBlank()) {
+            return legacyAction;
+        }
+        return operationCode;
     }
 
     public void setAction(String action) {
-        this.action = action;
+        this.legacyAction = action;
+        this.operationCode = action;
+        if (action != null && !action.isBlank() && (this.operationName == null || this.operationName.isBlank())) {
+            this.operationName = action;
+        }
+    }
+
+    public String getOperationType() {
+        return operationType;
+    }
+
+    public void setOperationType(String operationType) {
+        this.operationType = operationType;
+    }
+
+    public String getOperationTypeText() {
+        return operationTypeText;
+    }
+
+    public void setOperationTypeText(String operationTypeText) {
+        this.operationTypeText = operationTypeText;
+    }
+
+    public String getResult() {
+        return result;
+    }
+
+    public void setResult(String result) {
+        this.result = result;
+    }
+
+    public String getSummary() {
+        return summary;
+    }
+
+    public void setSummary(String summary) {
+        this.summary = summary;
     }
 
     public String getResourceType() {
-        return resourceType;
+        if (legacyResourceType != null && !legacyResourceType.isBlank()) {
+            return legacyResourceType;
+        }
+        return targetTable;
     }
 
     public void setResourceType(String resourceType) {
-        this.resourceType = resourceType;
+        this.legacyResourceType = resourceType;
+        this.targetTable = resourceType;
+    }
+
+    public String getTargetTable() {
+        return targetTable;
+    }
+
+    public void setTargetTable(String targetTable) {
+        this.targetTable = targetTable;
     }
 
     public String getResourceId() {
-        return resourceId;
+        if (legacyResourceId != null && !legacyResourceId.isBlank()) {
+            return legacyResourceId;
+        }
+        return targetIdText;
     }
 
     public void setResourceId(String resourceId) {
-        this.resourceId = resourceId;
+        this.legacyResourceId = resourceId;
+        this.targetIdText = resourceId;
     }
 
-    public String getClientIp() {
-        return clientIp != null ? clientIp.getHostAddress() : null;
+    public String getTargetIds() {
+        return targetIds;
     }
 
-    public InetAddress getClientIpAddress() {
-        return clientIp;
+    public void setTargetIds(String targetIds) {
+        this.targetIds = targetIds;
     }
 
-    public void setClientIp(InetAddress clientIp) {
-        this.clientIp = clientIp;
+    public String getTargetIdText() {
+        return targetIdText;
     }
 
-    public String getClientAgent() {
-        return clientAgent;
+    public void setTargetIdText(String targetIdText) {
+        this.targetIdText = targetIdText;
     }
 
-    public void setClientAgent(String clientAgent) {
-        this.clientAgent = clientAgent;
+    public String getTargetLabels() {
+        return targetLabels;
+    }
+
+    public void setTargetLabels(String targetLabels) {
+        this.targetLabels = targetLabels;
+    }
+
+    public String getTargetSnapshot() {
+        return targetSnapshot;
+    }
+
+    public void setTargetSnapshot(String targetSnapshot) {
+        this.targetSnapshot = targetSnapshot;
+    }
+
+    public String getDetails() {
+        return details;
+    }
+
+    public void setDetails(String details) {
+        this.details = details;
     }
 
     public String getRequestUri() {
@@ -253,12 +413,20 @@ public class AuditEvent implements Serializable {
         this.httpMethod = httpMethod;
     }
 
-    public String getResult() {
-        return result;
+    public InetAddress getClientIp() {
+        return clientIp;
     }
 
-    public void setResult(String result) {
-        this.result = result;
+    public void setClientIp(InetAddress clientIp) {
+        this.clientIp = clientIp;
+    }
+
+    public String getClientAgent() {
+        return clientAgent;
+    }
+
+    public void setClientAgent(String clientAgent) {
+        this.clientAgent = clientAgent;
     }
 
     public Integer getLatencyMs() {
@@ -267,6 +435,86 @@ public class AuditEvent implements Serializable {
 
     public void setLatencyMs(Integer latencyMs) {
         this.latencyMs = latencyMs;
+    }
+
+    public String getOperatorId() {
+        return operatorId;
+    }
+
+    public void setOperatorId(String operatorId) {
+        this.operatorId = operatorId;
+    }
+
+    public String getOperatorName() {
+        return operatorName;
+    }
+
+    public void setOperatorName(String operatorName) {
+        this.operatorName = operatorName;
+    }
+
+    public String getOperatorRoles() {
+        return operatorRoles;
+    }
+
+    public void setOperatorRoles(String operatorRoles) {
+        this.operatorRoles = operatorRoles;
+    }
+
+    public String getOrgCode() {
+        return orgCode;
+    }
+
+    public void setOrgCode(String orgCode) {
+        this.orgCode = orgCode;
+    }
+
+    public String getOrgName() {
+        return orgName;
+    }
+
+    public void setOrgName(String orgName) {
+        this.orgName = orgName;
+    }
+
+    public String getDepartmentName() {
+        return departmentName;
+    }
+
+    public void setDepartmentName(String departmentName) {
+        this.departmentName = departmentName;
+    }
+
+    public String getExtraTags() {
+        return extraTags;
+    }
+
+    public void setExtraTags(String extraTags) {
+        this.extraTags = extraTags;
+    }
+
+    public UUID getEventUuid() {
+        return eventUuid;
+    }
+
+    public void setEventUuid(UUID eventUuid) {
+        this.eventUuid = eventUuid;
+    }
+
+    public String getEventClass() {
+        return eventClass;
+    }
+
+    public void setEventClass(String eventClass) {
+        this.eventClass = eventClass;
+    }
+
+    public String getEventType() {
+        return eventType;
+    }
+
+    public void setEventType(String eventType) {
+        this.eventType = eventType;
     }
 
     public byte[] getPayloadIv() {
@@ -301,47 +549,29 @@ public class AuditEvent implements Serializable {
         this.chainSignature = chainSignature;
     }
 
-    public String getExtraTags() {
-        return extraTags;
+    public String getRecordSignature() {
+        return recordSignature;
     }
 
-    public void setExtraTags(String extraTags) {
-        this.extraTags = extraTags;
+    public void setRecordSignature(String recordSignature) {
+        this.recordSignature = recordSignature;
     }
 
-    public java.util.UUID getEventUuid() { return eventUuid; }
-    public void setEventUuid(java.util.UUID eventUuid) { this.eventUuid = eventUuid; }
-    public String getEventClass() { return eventClass; }
-    public void setEventClass(String eventClass) { this.eventClass = eventClass; }
-    public String getEventType() { return eventType; }
-    public void setEventType(String eventType) { this.eventType = eventType; }
-    public String getSourceSystem() { return sourceSystem; }
-    public void setSourceSystem(String sourceSystem) { this.sourceSystem = sourceSystem; }
-    public String getOperatorId() { return operatorId; }
-    public void setOperatorId(String operatorId) { this.operatorId = operatorId; }
-    public String getOperatorName() { return operatorName; }
-    public void setOperatorName(String operatorName) { this.operatorName = operatorName; }
-    public String getOperatorRoles() { return operatorRoles; }
-    public void setOperatorRoles(String operatorRoles) { this.operatorRoles = operatorRoles; }
-    public String getOrgCode() { return orgCode; }
-    public void setOrgCode(String orgCode) { this.orgCode = orgCode; }
-    public String getOrgName() { return orgName; }
-    public void setOrgName(String orgName) { this.orgName = orgName; }
-    public String getSummary() { return summary; }
-    public void setSummary(String summary) { this.summary = summary; }
-    public String getDetails() { return details; }
-    public void setDetails(String details) { this.details = details; }
-    public String getCorrelationId() { return correlationId; }
-    public void setCorrelationId(String correlationId) { this.correlationId = correlationId; }
-    public String getRecordSignature() { return recordSignature; }
-    public void setRecordSignature(String recordSignature) { this.recordSignature = recordSignature; }
-    public String getSignatureKeyVer() { return signatureKeyVer; }
-    public void setSignatureKeyVer(String signatureKeyVer) { this.signatureKeyVer = signatureKeyVer; }
+    public String getSignatureKeyVer() {
+        return signatureKeyVer;
+    }
 
-    public String getOperationGroup() { return operationGroup; }
-    public void setOperationGroup(String operationGroup) { this.operationGroup = operationGroup; }
-    public String getOperationType() { return operationType; }
-    public void setOperationType(String operationType) { this.operationType = operationType; }
+    public void setSignatureKeyVer(String signatureKeyVer) {
+        this.signatureKeyVer = signatureKeyVer;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
 
     public String getCreatedBy() {
         return createdBy;

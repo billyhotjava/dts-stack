@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,7 +43,9 @@ public class AdminSessionRegistry {
         this.repository = repository;
     }
 
-    public AdminSessionEntity registerLogin(
+    public record SessionRegistration(AdminSessionEntity session, boolean takeover, int terminatedSessions) {}
+
+    public SessionRegistration registerLogin(
         String username,
         String sessionState,
         String accessToken,
@@ -62,30 +65,37 @@ public class AdminSessionRegistry {
 
         Instant now = Instant.now();
         UUID newSessionId = UUID.randomUUID();
-
-        repository
-            .findActiveForUpdate(normalized)
-            .ifPresent(existing -> {
-                if (isExpired(existing, now)) {
-                    revoke(existing, AdminSessionCloseReason.EXPIRED, null, now);
-                    return;
-                }
-                revoke(existing, AdminSessionCloseReason.CONCURRENT, newSessionId, now);
-            });
+        boolean takeover = false;
+        int terminated = 0;
+        String trimmedState = clean(sessionState);
+        List<AdminSessionEntity> activeSessions = repository.findActiveSessionsForUpdate(normalized);
+        for (AdminSessionEntity existing : activeSessions) {
+            if (existing.getRevokedAt() != null) {
+                continue;
+            }
+            if (isExpired(existing, now)) {
+                revoke(existing, AdminSessionCloseReason.EXPIRED, null, now);
+                terminated++;
+                continue;
+            }
+            takeover = true;
+            terminated++;
+            revoke(existing, AdminSessionCloseReason.CONCURRENT, newSessionId, now);
+        }
 
         AdminSessionEntity entity = new AdminSessionEntity();
         entity.setId(UUID.randomUUID());
         entity.setUsername(username == null ? normalized : username);
         entity.setNormalizedUsername(normalized);
         entity.setSessionId(newSessionId);
-        entity.setSessionState(clean(sessionState));
+        entity.setSessionState(trimmedState);
         entity.setAccessTokenHash(accessHash);
         entity.setRefreshTokenHash(refreshHash);
         entity.setCreatedAt(now);
         entity.setLastSeenAt(now);
         entity.setExpiresAt(resolveExpiry(now, accessExpiresAt));
         repository.save(entity);
-        return entity;
+        return new SessionRegistration(entity, takeover, terminated);
     }
 
     public AdminSessionEntity refreshSession(

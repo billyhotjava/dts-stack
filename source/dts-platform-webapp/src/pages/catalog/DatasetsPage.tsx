@@ -16,6 +16,22 @@ import { useUserInfo } from "@/store/userStore";
 import { normalizeClassification } from "@/utils/classification";
 import type { SecurityLevel } from "@/types/catalog";
 
+const parseStringList = (value: unknown): string[] => {
+	if (!value) return [];
+	if (Array.isArray(value)) {
+		return value
+			.map((entry) => (typeof entry === "string" ? entry.trim() : String(entry ?? "").trim()))
+			.filter(Boolean);
+	}
+	if (typeof value === "string") {
+		return value
+			.split(/[;,]/)
+			.map((token) => token.trim())
+			.filter(Boolean);
+	}
+	return [];
+};
+
 type ListItem = {
 	id: string;
 	name: string;
@@ -73,6 +89,34 @@ export default function DatasetsPage() {
 		return "";
 	}, [userInfo]);
 	const isOpadmin = useMemo(() => preferredUsername.toLowerCase() === "opadmin", [preferredUsername]);
+	const userDeptCode = useMemo(() => {
+		if (!userInfo) return undefined;
+		const attrs = ((userInfo as any)?.attributes || {}) as Record<string, unknown>;
+		const candidateKeys = ["dept_code", "deptCode", "department", "org_code", "orgCode", "organization"];
+		for (const key of candidateKeys) {
+			const tokens = parseStringList(attrs[key]);
+			const first = tokens.find((token) => token && token.trim().length > 0);
+			if (first) return first.trim();
+		}
+		const inlineCandidates = [
+			(userInfo as any)?.deptCode,
+			(userInfo as any)?.department,
+			(userInfo as any)?.ownerDept,
+		];
+		for (const value of inlineCandidates) {
+			if (typeof value === "string" && value.trim()) {
+				return value.trim();
+			}
+			const tokens = parseStringList(value);
+			const first = tokens.find((token) => token && token.trim().length > 0);
+			if (first) return first.trim();
+		}
+		return undefined;
+	}, [userInfo]);
+	const normalizedUserDept = useMemo(() => {
+		const trimmed = (userDeptCode || "").trim();
+		return trimmed.length > 0 ? trimmed : undefined;
+	}, [userDeptCode]);
 	const [items, setItems] = useState<ListItem[]>([]);
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(false);
@@ -107,6 +151,28 @@ const deptSelectOptions = useMemo(() => {
 	const others = sortedDeptOptions.filter((d) => !d.isRoot && d.parentId != null && d.parentId !== 0);
 	return root ? [root, ...others] : others;
 }, [sortedDeptOptions]);
+const deptOptionsForDialog = useMemo(() => {
+	if (isOpadmin) {
+		return deptSelectOptions;
+	}
+	if (!normalizedUserDept) {
+		return deptSelectOptions;
+	}
+	const exists = deptSelectOptions.some((d) => String(d.code) === normalizedUserDept);
+	if (exists) {
+		return deptSelectOptions;
+	}
+	return [
+		...deptSelectOptions,
+		{
+			code: normalizedUserDept,
+			nameZh: normalizedUserDept,
+			nameEn: normalizedUserDept,
+			parentId: null,
+			isRoot: false,
+		} as DeptDto,
+	];
+}, [deptSelectOptions, isOpadmin, normalizedUserDept]);
 const [deptLoading, setDeptLoading] = useState(false);
 	const [catalogConfig, setCatalogConfig] = useState({
 		multiSourceEnabled: false,
@@ -123,7 +189,16 @@ const isInceptorSource = sourceTypeUpper === "INCEPTOR" || sourceTypeUpper === "
 const isPostgresSource = sourceTypeUpper === "POSTGRES";
 const databaseLabel = isPostgresSource ? "Schema" : "Hive Database";
 const tableLabel = isPostgresSource ? "Table" : "Hive Table";
-const ownerDeptSelectValue = form.ownerDept && form.ownerDept.trim().length > 0 ? form.ownerDept.trim() : "__PUBLIC__";
+const ownerDeptSelectValue = useMemo(() => {
+	const current = form.ownerDept && form.ownerDept.trim().length > 0 ? form.ownerDept.trim() : undefined;
+	if (!isOpadmin) {
+		if (normalizedUserDept) {
+			return normalizedUserDept;
+		}
+		return current ?? "__PUBLIC__";
+	}
+	return current ?? "__PUBLIC__";
+}, [form.ownerDept, isOpadmin, normalizedUserDept]);
 // Note: import-from-file feature removed in this build; re-enable when UI wires the input
 
 // const levels = SECURITY_LEVELS; // removed
@@ -313,8 +388,24 @@ const renderSourceLabel = (value: string) => {
 	}, []);
 
 useEffect(() => {
-		void fetchList();
-	}, [page, size, resolvedDefaultSource, deptFilter, keyword]);
+	void fetchList();
+}, [page, size, resolvedDefaultSource, deptFilter, keyword]);
+
+	useEffect(() => {
+		if (!open) return;
+		if (isOpadmin) return;
+		const enforced = normalizedUserDept ?? "";
+		setForm((prev) => {
+			const previous = prev.ownerDept?.trim() ?? "";
+			if (previous === enforced) {
+				return prev;
+			}
+			return {
+				...prev,
+				ownerDept: enforced,
+			};
+		});
+	}, [open, isOpadmin, normalizedUserDept]);
 
 	// In keep-alive/multi-tab layouts, the list view may not unmount when navigating
 	// to the detail page. Refresh the list on window focus/history navigation.
@@ -665,9 +756,13 @@ const filtered = useMemo(() => {
 
 		<div className="grid gap-2">
 			<Label>所属部门</Label>
-			<p className="text-xs text-muted-foreground">未指定或选择 ROOT 节点时，数据集将对全部部门开放。</p>
+			<p className="text-xs text-muted-foreground">
+				未指定或选择 ROOT 节点时，数据集将对全部部门开放。
+				{!isOpadmin && "（当前账号仅可查看所属部门）"}
+			</p>
 			<Select
 				value={ownerDeptSelectValue}
+				disabled={!isOpadmin}
 				onValueChange={(v) =>
 					setForm((f) => ({
 						...f,
@@ -676,11 +771,15 @@ const filtered = useMemo(() => {
 				}
 			>
 				<SelectTrigger>
-					<SelectValue placeholder={deptLoading ? "加载中…" : "选择部门…"} />
+					<SelectValue
+						placeholder={
+							deptLoading ? "加载中…" : !isOpadmin ? "仅运维管理员可调整所属部门" : "选择部门…"
+						}
+					/>
 				</SelectTrigger>
 				<SelectContent>
 					<SelectItem value="__PUBLIC__">未指定（全局可见）</SelectItem>
-					{deptSelectOptions.map((d) => {
+					{deptOptionsForDialog.map((d) => {
 						const optionLabel = d.isRoot
 							? `${d.nameZh || d.nameEn || d.code}（ROOT）`
 							: d.nameZh || d.nameEn || d.code;

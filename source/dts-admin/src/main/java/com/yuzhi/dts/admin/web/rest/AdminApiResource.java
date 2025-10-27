@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
+import com.yuzhi.dts.admin.service.audit.AuditOperationType;
+import com.yuzhi.dts.admin.service.audit.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.web.rest.api.ResultStatus;
 import java.security.Principal;
@@ -50,10 +52,10 @@ import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
-import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.audit.ChangeSnapshot;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -180,13 +182,6 @@ public class AdminApiResource {
                 .findFirst()
                 .orElse(null);
         WhoAmI payload = new WhoAmI(allowed, role, principal != null ? principal.getName() : null, null);
-        auditService.recordAction(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
-            "ADMIN_SETTING_VIEW",
-            AuditStage.SUCCESS,
-            "whoami",
-            Map.of()
-        );
         return ResponseEntity.ok(ApiResponse.ok(payload));
     }
 
@@ -236,6 +231,7 @@ public class AdminApiResource {
     private final OrganizationRepository organizationRepository;
     private final AdminUserService adminUserService;
     private final TransactionTemplate changeApplyTx;
+    private final ChangeSnapshotFormatter changeSnapshotFormatter;
 
     private static final Set<String> MENU_SECURITY_LEVELS = Set.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> VISIBILITY_DATA_LEVELS = Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
@@ -330,6 +326,7 @@ public class AdminApiResource {
         DtsCommonNotifyClient notifyClient,
         OrganizationRepository organizationRepository,
         AdminUserService adminUserService,
+        ChangeSnapshotFormatter changeSnapshotFormatter,
         PlatformTransactionManager transactionManager
     ) {
         this.auditService = auditService;
@@ -348,6 +345,7 @@ public class AdminApiResource {
         this.notifyClient = notifyClient;
         this.organizationRepository = organizationRepository;
         this.adminUserService = adminUserService;
+        this.changeSnapshotFormatter = changeSnapshotFormatter;
         TransactionTemplate template = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         template.setReadOnly(false);
@@ -475,7 +473,7 @@ public class AdminApiResource {
                 approvalPayload.put("changeRequestId", cr.getId());
                 attachChangeRequestMetadata(approvalPayload, cr);
                 // 记录变更单本身：target_table=change_request, target_id=cr.id
-                auditService.record(actor, "ADMIN_MENU_CREATE", "PORTAL_MENU", "change_request", String.valueOf(cr.getId()), "SUCCESS", approvalPayload, null, correlationId(cr));
+                auditService.recordAction(actor, "ADMIN_MENU_CREATE", AuditStage.SUCCESS, String.valueOf(cr.getId()), approvalPayload, correlationId(cr));
                 return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
             }
             String name = trimToNull(payload.get("name"));
@@ -514,7 +512,9 @@ public class AdminApiResource {
 
             PortalMenu persisted = portalMenuRepo.findById(menu.getId()).orElse(menu);
             Map<String, Object> successDetail = new LinkedHashMap<>(auditDetail);
-            successDetail.put("created", toPortalMenuPayload(persisted));
+            Map<String, Object> createdPayload = toPortalMenuPayload(persisted);
+            successDetail.put("created", createdPayload);
+            appendChangeSummary(successDetail, "PORTAL_MENU", Map.of(), createdPayload);
             auditService.recordAction(actor, "ADMIN_MENU_CREATE", AuditStage.SUCCESS, String.valueOf(persisted.getId()), successDetail);
             try {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "create", "id", String.valueOf(persisted.getId())));
@@ -611,7 +611,9 @@ public class AdminApiResource {
             PortalMenu persisted = portalMenuRepo.findById(menuId).orElse(beforeEntity);
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
-            detail.put("after", toPortalMenuPayload(persisted));
+            Map<String, Object> after = toPortalMenuPayload(persisted);
+            detail.put("after", after);
+            appendChangeSummary(detail, "PORTAL_MENU", before, after);
             auditService.recordAction(actor, "ADMIN_MENU_UPDATE", AuditStage.SUCCESS, id, detail);
             try {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "update", "id", String.valueOf(persisted.getId())));
@@ -694,7 +696,9 @@ public class AdminApiResource {
             portalMenuRepo.save(entity);
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
-            detail.put("after", toPortalMenuPayload(entity));
+            Map<String, Object> after = toPortalMenuPayload(entity);
+            detail.put("after", after);
+            appendChangeSummary(detail, "PORTAL_MENU", before, after);
             auditService.recordAction(actor, "ADMIN_MENU_DISABLE", AuditStage.SUCCESS, id, detail);
             try {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "disable", "id", String.valueOf(entity.getId())));
@@ -1206,12 +1210,21 @@ public class AdminApiResource {
         }
         cr.setStatus("PENDING");
         crRepo.save(cr);
+        ChangeContext submitContext = computeChangeContext(cr);
+        Map<String, Object> submitDetail = buildChangeAuditDetail(cr);
+        submitDetail.put("action", "SUBMIT");
+        populateDetailWithContext(submitDetail, submitContext);
+        String requesterOperation = buildRequesterOperationName(cr, submitContext);
+        if (StringUtils.hasText(requesterOperation)) {
+            submitDetail.put("operationName", requesterOperation);
+            submitDetail.put("summary", requesterOperation);
+        }
         auditService.recordAction(
             SecurityUtils.getCurrentUserLogin().orElse("unknown"),
             "ADMIN_CHANGE_REQUEST_MANAGE",
             AuditStage.SUCCESS,
             id,
-            Map.of("action", "SUBMIT"),
+            submitDetail,
             correlationId(cr)
         );
         try {
@@ -1267,14 +1280,16 @@ public class AdminApiResource {
         }
 
         AuditStage requesterStage = resolveStageForChangeOutcome(cr, applied);
+        ChangeContext changeContext = computeChangeContext(cr);
         recordPortalMenuDecisionAudit(cr, requesterStage);
-        recordChangeExecutionAudit(cr, requesterStage);
+        recordChangeExecutionAudit(cr, requesterStage, changeContext);
         crRepo.save(cr);
         Map<String, Object> approverDetail = buildChangeAuditDetail(cr);
         approverDetail.put("action", "APPROVE");
         if (!applied && StringUtils.hasText(cr.getLastError())) {
             approverDetail.put("error", cr.getLastError());
         }
+        applyApproverContext(approverDetail, cr, changeContext);
         auditService.recordAction(
             actor,
             "ADMIN_CHANGE_REQUEST_MANAGE",
@@ -1310,10 +1325,12 @@ public class AdminApiResource {
         cr.setDecidedAt(Instant.now());
         cr.setReason(body != null ? Objects.toString(body.get("reason"), null) : null);
         cr.setLastError(null);
-        recordChangeExecutionAudit(cr, AuditStage.FAIL);
+        ChangeContext changeContext = computeChangeContext(cr);
+        recordChangeExecutionAudit(cr, AuditStage.FAIL, changeContext);
         crRepo.save(cr);
         Map<String, Object> approverDetail = buildChangeAuditDetail(cr);
         approverDetail.put("action", "REJECT");
+        applyApproverContext(approverDetail, cr, changeContext);
         auditService.recordAction(
             SecurityUtils.getCurrentUserLogin().orElse("unknown"),
             "ADMIN_CHANGE_REQUEST_MANAGE",
@@ -2284,7 +2301,16 @@ public class AdminApiResource {
     }
 
     void recordChangeExecutionAudit(ChangeRequest cr, AuditStage stage) {
+        ChangeContext context = computeChangeContext(cr);
+        recordChangeExecutionAudit(cr, stage, context);
+    }
+
+    void recordChangeExecutionAudit(ChangeRequest cr, AuditStage stage, ChangeContext context) {
         if (cr == null || stage == null) {
+            return;
+        }
+        if (stage == AuditStage.SUCCESS) {
+            // 成功执行已经由审批日志覆盖，避免再次以提交人身份重复记录
             return;
         }
         String actor = Optional.ofNullable(cr.getRequestedBy()).map(String::trim).filter(s -> !s.isEmpty()).orElse(null);
@@ -2295,12 +2321,547 @@ public class AdminApiResource {
         if (!StringUtils.hasText(actionCode)) {
             return;
         }
+        String requesterSummary = context != null ? buildRequesterOperationName(cr, context) : null;
+        if (StringUtils.hasText(requesterSummary)) {
+            cr.setSummary(requesterSummary);
+        }
         Map<String, Object> detail = buildChangeAuditDetail(cr);
+        populateDetailWithContext(detail, context);
+        if (StringUtils.hasText(requesterSummary)) {
+            detail.put("operationName", requesterSummary);
+        }
         detail.put("stage", stageDisplay(stage));
         detail.put("stageCode", stage.name());
         detail.put("correlationId", correlationId(cr));
         String resourceId = StringUtils.hasText(cr.getResourceId()) ? cr.getResourceId() : String.valueOf(cr.getId());
         auditService.recordAction(actor, actionCode, stage, resourceId, detail, correlationId(cr));
+    }
+
+    private ChangeContext computeChangeContext(ChangeRequest cr) {
+        if (cr == null) {
+            return null;
+        }
+        String resourceType = normalizeActionToken(cr.getResourceType());
+        String action = normalizeActionToken(cr.getAction());
+        Map<String, Object> payload = safeChangePayload(cr);
+        return switch (resourceType) {
+            case "ROLE" -> buildRoleLikeContext("ROLE", cr, action, payload);
+            case "CUSTOM_ROLE" -> buildRoleLikeContext("CUSTOM_ROLE", cr, action, payload);
+            case "ROLE_ASSIGNMENT" -> buildRoleAssignmentContext(cr, action, payload);
+            case "PORTAL_MENU" -> buildPortalMenuContext(cr, action, payload);
+            default -> null;
+        };
+    }
+
+    private Map<String, Object> safeChangePayload(ChangeRequest cr) {
+        if (cr == null || !StringUtils.hasText(cr.getPayloadJson())) {
+            return Map.of();
+        }
+        try {
+            return fromJson(cr.getPayloadJson());
+        } catch (Exception ex) {
+            log.debug("Failed to parse change payload for CR {}: {}", cr.getId(), ex.getMessage());
+            return Map.of();
+        }
+    }
+
+    private ChangeContext buildRoleLikeContext(String resourceType, ChangeRequest cr, String action, Map<String, Object> payload) {
+        String canonical = stripRolePrefix(stringValue(payload != null ? payload.get("name") : null));
+        if (!StringUtils.hasText(canonical)) {
+            canonical = stripRolePrefix(stringValue(cr.getResourceId()));
+        }
+        String label = firstNonBlank(
+            stringValue(payload != null ? payload.get("titleCn") : null),
+            stringValue(payload != null ? payload.get("nameZh") : null),
+            stringValue(payload != null ? payload.get("displayName") : null),
+            stringValue(payload != null ? payload.get("title") : null),
+            canonical
+        );
+        Map<String, Object> extras = new LinkedHashMap<>();
+        if (StringUtils.hasText(canonical)) {
+            extras.put("roleName", canonical);
+        }
+        String primaryId = resolveRolePrimaryId(canonical, cr);
+        if (!StringUtils.hasText(label)) {
+            label = firstNonBlank(stringValue(cr.getResourceId()), canonical, primaryId);
+        }
+        if (payload != null) {
+            Object operations = payload.get("operations");
+            if (operations != null) {
+                extras.put("roleOperations", operations);
+            }
+            String scope = stringValue(payload.get("scope"));
+            if (scope != null) {
+                extras.put("roleScope", scope);
+            }
+            String description = stringValue(payload.get("description"));
+            if (description != null) {
+                extras.put("roleDescription", description);
+            }
+            Object maxRows = payload.get("maxRows");
+            if (maxRows != null) {
+                extras.put("maxRows", maxRows);
+            }
+            Object allowDesensitize = payload.get("allowDesensitizeJson");
+            if (allowDesensitize != null) {
+                extras.put("allowDesensitize", allowDesensitize);
+            }
+        }
+        if (StringUtils.hasText(label)) {
+            extras.put("roleLabel", label);
+        }
+        return new ChangeContext(resourceType, action, "admin_custom_role", primaryId, label, canonical, extras);
+    }
+
+    private String resolveRolePrimaryId(String canonical, ChangeRequest cr) {
+        if (StringUtils.hasText(canonical)) {
+            AdminCustomRole role = locateCustomRole(canonical).orElse(null);
+            if (role != null) {
+                return String.valueOf(role.getId());
+            }
+        }
+        String resourceId = stringValue(cr != null ? cr.getResourceId() : null);
+        if (StringUtils.hasText(resourceId)) {
+            return resourceId;
+        }
+        return canonical;
+    }
+
+    private ChangeContext buildRoleAssignmentContext(ChangeRequest cr, String action, Map<String, Object> payload) {
+        String assignmentId = stringValue(cr != null ? cr.getResourceId() : null);
+        if (!StringUtils.hasText(assignmentId) && payload != null) {
+            assignmentId = stringValue(payload.get("assignmentId"));
+        }
+        String username = payload != null ? stringValue(payload.get("username")) : null;
+        String displayName = payload != null ? stringValue(payload.get("displayName")) : null;
+        String userLabel = firstNonBlank(displayName, username);
+        String rawRole = payload != null ? stringValue(payload.get("role")) : null;
+        String canonicalRole = stripRolePrefix(rawRole);
+        String roleLabel = firstNonBlank(
+            stringValue(payload != null ? payload.get("roleLabel") : null),
+            stringValue(payload != null ? payload.get("roleDisplayName") : null),
+            canonicalRole
+        );
+        String combinedLabel;
+        if (StringUtils.hasText(userLabel) && StringUtils.hasText(roleLabel)) {
+            combinedLabel = userLabel + " -> " + roleLabel;
+        } else {
+            combinedLabel = firstNonBlank(userLabel, roleLabel, assignmentId);
+        }
+        Map<String, Object> extras = new LinkedHashMap<>();
+        if (StringUtils.hasText(username)) {
+            extras.put("username", username);
+        }
+        if (StringUtils.hasText(displayName)) {
+            extras.put("displayName", displayName);
+        }
+        if (StringUtils.hasText(canonicalRole)) {
+            extras.put("roleName", canonicalRole);
+        }
+        if (StringUtils.hasText(roleLabel)) {
+            extras.put("roleLabel", roleLabel);
+        }
+        Object datasetIds = payload != null ? payload.get("datasetIds") : null;
+        if (datasetIds != null) {
+            extras.put("datasetIds", datasetIds);
+        }
+        Object operations = payload != null ? payload.get("operations") : null;
+        if (operations != null) {
+            extras.put("operations", operations);
+        }
+        return new ChangeContext("ROLE_ASSIGNMENT", action, "admin_role_assignment", assignmentId, combinedLabel, username, extras);
+    }
+
+    private ChangeContext buildPortalMenuContext(ChangeRequest cr, String action, Map<String, Object> payload) {
+        Map<String, Object> source = payload == null ? Map.of() : payload;
+        Map<String, Object> extras = new LinkedHashMap<>();
+        if ("BATCH_UPDATE".equals(action) || "BULK_UPDATE".equals(action)) {
+            return buildPortalMenuBatchContext(cr, action, source, extras);
+        }
+        String resourceId = stringValue(cr != null ? cr.getResourceId() : null);
+        Long menuId = parseLongSafe(resourceId);
+        if (menuId == null) {
+            menuId = parseLongSafe(source.get("id"));
+        }
+        String name = stringValue(source.get("name"));
+        String path = stringValue(source.get("path"));
+        String label = extractMenuLabelFromMetadata(source.get("metadata"));
+        if (label == null) {
+            label = firstNonBlank(
+                stringValue(source.get("displayName")),
+                stringValue(source.get("title")),
+                stringValue(source.get("titleCn")),
+                stringValue(source.get("nameZh"))
+            );
+        }
+        PortalMenu existing = null;
+        if (menuId != null) {
+            existing = portalMenuRepo.findById(menuId).orElse(null);
+        }
+        if (existing != null) {
+            if (!StringUtils.hasText(label)) {
+                label = resolveMenuDisplayName(existing);
+            }
+            if (!StringUtils.hasText(name)) {
+                name = existing.getName();
+            }
+            if (!StringUtils.hasText(path)) {
+                path = existing.getPath();
+            }
+            extras.putIfAbsent("menuId", existing.getId());
+        }
+        if (!StringUtils.hasText(label)) {
+            label = firstNonBlank(name, path, resourceId);
+        }
+        if (StringUtils.hasText(name)) {
+            extras.put("menuName", name);
+        }
+        if (StringUtils.hasText(path)) {
+            extras.put("menuPath", path);
+        }
+        if (source.containsKey("parentId")) {
+            extras.put("parentId", source.get("parentId"));
+        }
+        if (source.containsKey("securityLevel")) {
+            extras.put("securityLevel", source.get("securityLevel"));
+        }
+        if (source.containsKey("visibilityRules")) {
+            extras.put("visibilityRules", source.get("visibilityRules"));
+        }
+        if (StringUtils.hasText(label)) {
+            extras.put("menuLabel", label);
+        }
+        String canonical = StringUtils.hasText(name) ? name : path;
+        if (!StringUtils.hasText(canonical)) {
+            canonical = resourceId;
+        }
+        String targetId = resourceId;
+        if (!StringUtils.hasText(targetId)) {
+            if (menuId != null) {
+                targetId = String.valueOf(menuId);
+            } else if (StringUtils.hasText(path)) {
+                targetId = path;
+            } else if (StringUtils.hasText(name)) {
+                targetId = name;
+            } else if (cr != null && cr.getId() != null) {
+                targetId = "CR-" + cr.getId();
+            }
+        }
+        return new ChangeContext("PORTAL_MENU", action, "portal_menu", trimToNull(targetId), label, canonical, extras);
+    }
+
+    private ChangeContext buildPortalMenuBatchContext(
+        ChangeRequest cr,
+        String action,
+        Map<String, Object> payload,
+        Map<String, Object> extras
+    ) {
+        Object updatesObj = payload.get("updates");
+        List<Map<String, Object>> updates = new ArrayList<>();
+        if (updatesObj instanceof Collection<?> collection) {
+            for (Object item : collection) {
+                if (item instanceof Map<?, ?> map) {
+                    updates.add(toStringKeyMap(map));
+                }
+            }
+        }
+        LinkedHashSet<String> targetIds = new LinkedHashSet<>();
+        LinkedHashMap<String, String> labelMap = new LinkedHashMap<>();
+        for (Map<String, Object> update : updates) {
+            Long menuId = parseLongSafe(update.get("id"));
+            String label = extractMenuLabelFromMetadata(update.get("metadata"));
+            if (!StringUtils.hasText(label)) {
+                label =
+                    firstNonBlank(
+                        stringValue(update.get("displayName")),
+                        stringValue(update.get("title")),
+                        stringValue(update.get("titleCn")),
+                        stringValue(update.get("name"))
+                    );
+            }
+            if (menuId != null) {
+                PortalMenu menu = portalMenuRepo.findById(menuId).orElse(null);
+                if (menu != null) {
+                    if (!StringUtils.hasText(label)) {
+                        label = resolveMenuDisplayName(menu);
+                    }
+                    targetIds.add(String.valueOf(menu.getId()));
+                    labelMap.put(String.valueOf(menu.getId()), StringUtils.hasText(label) ? label : menu.getName());
+                    continue;
+                }
+                targetIds.add(String.valueOf(menuId));
+            }
+            if (StringUtils.hasText(label)) {
+                String key = StringUtils.hasText(menuId != null ? String.valueOf(menuId) : null) ? String.valueOf(menuId) : label;
+                labelMap.put(key, label);
+                targetIds.add(key);
+            }
+        }
+        extras.put("batchSize", updates.size());
+        if (!targetIds.isEmpty()) {
+            extras.put("targetIds", List.copyOf(targetIds));
+            extras.put("menuIds", List.copyOf(targetIds));
+        }
+        if (!labelMap.isEmpty()) {
+            extras.put("targetLabelMap", Map.copyOf(labelMap));
+            extras.put("menuLabels", List.copyOf(labelMap.values()));
+        }
+        String targetId = targetIds.isEmpty()
+            ? stringValue(cr != null ? cr.getResourceId() : null)
+            : targetIds.iterator().next();
+        if (!StringUtils.hasText(targetId) && cr != null && cr.getId() != null) {
+            targetId = "CR-" + cr.getId();
+        }
+        String targetLabel;
+        if (labelMap.isEmpty()) {
+            targetLabel = "批量菜单";
+        } else {
+            List<String> previews = new ArrayList<>(labelMap.values());
+            int previewSize = Math.min(3, previews.size());
+            targetLabel = previews.subList(0, previewSize).stream().collect(Collectors.joining("、"));
+            if (previews.size() > previewSize) {
+                targetLabel = targetLabel + " 等" + previews.size() + "项";
+            }
+        }
+        return new ChangeContext("PORTAL_MENU", action, "portal_menu", trimToNull(targetId), targetLabel, null, extras);
+    }
+
+    private Long parseLongSafe(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        String text = stringValue(value);
+        if (text == null) {
+            return null;
+        }
+        try {
+            String trimmed = text.trim();
+            if (trimmed.isEmpty()) {
+                return null;
+            }
+            return Long.valueOf(trimmed);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private Map<String, Object> toStringKeyMap(Map<?, ?> source) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (source == null) {
+            return result;
+        }
+        source.forEach((k, v) -> {
+            if (k != null) {
+                result.put(String.valueOf(k), v);
+            }
+        });
+        return result;
+    }
+
+    private String extractMenuLabelFromMetadata(Object metadata) {
+        if (metadata == null) {
+            return null;
+        }
+        Map<String, Object> meta = null;
+        if (metadata instanceof Map<?, ?> map) {
+            meta = toStringKeyMap(map);
+        } else if (metadata instanceof String s && !s.isBlank()) {
+            try {
+                meta = fromJson(s);
+            } catch (Exception ignored) {
+                meta = null;
+            }
+        }
+        if (meta == null || meta.isEmpty()) {
+            return null;
+        }
+        return firstNonBlank(
+            stringValue(meta.get("title")),
+            stringValue(meta.get("label")),
+            stringValue(meta.get("titleCn")),
+            stringValue(meta.get("nameZh")),
+            stringValue(meta.get("displayName"))
+        );
+    }
+
+    private void populateDetailWithContext(Map<String, Object> detail, ChangeContext context) {
+        if (detail == null || context == null) {
+            return;
+        }
+        boolean targetIdsSet = false;
+        Map<String, Object> extras = context.extras();
+        if (extras != null && !extras.isEmpty()) {
+            Object extraIds = extras.get("targetIds");
+            if (extraIds instanceof Collection<?> collection) {
+                List<String> ids = new ArrayList<>();
+                for (Object item : collection) {
+                    String id = stringValue(item);
+                    if (StringUtils.hasText(id)) {
+                        String trimmed = id.trim();
+                        if (!ids.contains(trimmed)) {
+                            ids.add(trimmed);
+                        }
+                    }
+                }
+                if (!ids.isEmpty()) {
+                    detail.put("targetIds", ids);
+                    targetIdsSet = true;
+                }
+            }
+            Object labelMapObj = extras.get("targetLabelMap");
+            if (labelMapObj instanceof Map<?, ?> map) {
+                Map<String, String> labelMap = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    String key = stringValue(entry.getKey());
+                    String value = stringValue(entry.getValue());
+                    if (StringUtils.hasText(key) && StringUtils.hasText(value)) {
+                        labelMap.put(key.trim(), value.trim());
+                    }
+                }
+                if (!labelMap.isEmpty()) {
+                    detail.put("targetLabels", labelMap);
+                    if (!detail.containsKey("targetLabel")) {
+                        detail.put("targetLabel", labelMap.values().iterator().next());
+                    }
+                }
+            }
+        }
+        if (!targetIdsSet && StringUtils.hasText(context.targetId())) {
+            detail.put("targetIds", List.of(context.targetId()));
+        }
+        if (!detail.containsKey("targetLabel") && StringUtils.hasText(context.targetLabel())) {
+            detail.put("targetLabel", context.targetLabel());
+        }
+        if (!detail.containsKey("targetLabels") && StringUtils.hasText(context.targetLabel()) && StringUtils.hasText(context.targetId())) {
+            detail.put("targetLabels", Map.of(context.targetId(), context.targetLabel()));
+        }
+        if (extras != null && !extras.isEmpty()) {
+            extras.forEach((k, v) -> {
+                if ("targetIds".equals(k) || "targetLabelMap".equals(k)) {
+                    return;
+                }
+                detail.putIfAbsent(k, v);
+            });
+        }
+        if (StringUtils.hasText(context.canonical())) {
+            detail.putIfAbsent("canonicalTarget", context.canonical());
+        }
+        if (StringUtils.hasText(context.targetTable())) {
+            detail.put("targetTable", context.targetTable());
+        }
+    }
+
+    private String buildRequesterOperationName(ChangeRequest cr, ChangeContext context) {
+        if (context == null) {
+            return null;
+        }
+        String resourceLabel = resolveResourceLabel(context);
+        String targetLabel = resolveTargetLabel(context);
+        if (targetLabel == null) {
+            return null;
+        }
+        String action = context.action();
+        String verb = switch (action) {
+            case "CREATE" -> "新增";
+            case "DELETE" -> "删除";
+            case "UPDATE" -> "修改";
+            case "BATCH_UPDATE" -> "批量更新";
+            case "ASSIGN" -> "授权";
+            default -> "处理";
+        };
+        return verb + resourceLabel + "：" + targetLabel;
+    }
+
+    private String buildApproverOperationName(ChangeRequest cr, ChangeContext context) {
+        if (context == null) {
+            return null;
+        }
+        String resourceLabel = resolveResourceLabel(context);
+        String targetLabel = resolveTargetLabel(context);
+        if (targetLabel == null) {
+            return null;
+        }
+        String status = normalizeActionToken(cr != null ? cr.getStatus() : null);
+        return switch (status) {
+            case "APPROVED", "APPLIED", "COMPLETED" -> "批准" + resourceLabel + "：" + targetLabel;
+            case "REJECTED", "CANCELLED" -> "拒绝" + resourceLabel + "：" + targetLabel;
+            case "PROCESSING", "PENDING", "APPROVAL_PENDING" -> "暂缓" + resourceLabel + "：" + targetLabel;
+            case "FAILED" -> "处理" + resourceLabel + "失败：" + targetLabel;
+            default -> "处理" + resourceLabel + "：" + targetLabel;
+        };
+    }
+
+    private AuditOperationType determineApproverOperationType(ChangeRequest cr) {
+        String status = normalizeActionToken(cr != null ? cr.getStatus() : null);
+        return switch (status) {
+            case "APPROVED", "APPLIED", "COMPLETED" -> AuditOperationType.APPROVE;
+            case "REJECTED", "CANCELLED" -> AuditOperationType.REJECT;
+            case "PROCESSING", "PENDING", "APPROVAL_PENDING" -> AuditOperationType.REQUEST;
+            case "FAILED" -> AuditOperationType.APPROVE;
+            default -> AuditOperationType.UNKNOWN;
+        };
+    }
+
+    private String resolveResourceLabel(ChangeContext context) {
+        if (context == null) {
+            return "变更";
+        }
+        return switch (context.resourceType()) {
+            case "ROLE" -> "角色";
+            case "CUSTOM_ROLE" -> "自定义角色";
+            case "ROLE_ASSIGNMENT" -> "角色指派";
+            case "PORTAL_MENU" -> "菜单";
+            default -> "变更";
+        };
+    }
+
+    private String resolveTargetLabel(ChangeContext context) {
+        if (context == null) {
+            return null;
+        }
+        String label = trimToNull(context.targetLabel());
+        if (label != null) {
+            return label;
+        }
+        label = trimToNull(context.canonical());
+        if (label != null) {
+            return label;
+        }
+        return trimToNull(context.targetId());
+    }
+
+    private void applyApproverContext(Map<String, Object> detail, ChangeRequest cr, ChangeContext context) {
+        if (detail == null) {
+            return;
+        }
+        populateDetailWithContext(detail, context);
+        String operationName = buildApproverOperationName(cr, context);
+        if (StringUtils.hasText(operationName)) {
+            detail.put("operationName", operationName);
+            detail.put("summary", operationName);
+        }
+        AuditOperationType type = determineApproverOperationType(cr);
+        if (type != null && type != AuditOperationType.UNKNOWN) {
+            detail.put("operationType", type.getCode());
+            detail.put("operationTypeText", type.getDisplayName());
+        }
+    }
+
+    private record ChangeContext(
+        String resourceType,
+        String action,
+        String targetTable,
+        String targetId,
+        String targetLabel,
+        String canonical,
+        Map<String, Object> extras
+    ) {
+        ChangeContext {
+            extras = extras == null ? Map.of() : Map.copyOf(extras);
+        }
     }
 
     private static String correlationId(ChangeRequest cr) {
@@ -2350,6 +2911,7 @@ public class AdminApiResource {
         if (!"PORTAL_MENU".equalsIgnoreCase(cr.getResourceType())) {
             return;
         }
+        ChangeContext context = computeChangeContext(cr);
         String actor = Optional
             .ofNullable(cr.getDecidedBy())
             .map(String::trim)
@@ -2359,6 +2921,9 @@ public class AdminApiResource {
             return;
         }
         String resourceId = StringUtils.hasText(cr.getResourceId()) ? cr.getResourceId() : String.valueOf(cr.getId());
+        if (context != null && StringUtils.hasText(context.targetId())) {
+            resourceId = context.targetId();
+        }
         Map<String, Object> detail = buildChangeAuditDetail(cr);
         detail.put("stage", stageDisplay(stage));
         detail.put("stageCode", stage.name());
@@ -2395,6 +2960,7 @@ public class AdminApiResource {
                 log.debug("Failed to parse diff/payload for change request {}: {}", cr.getId(), ex.getMessage());
             }
         }
+        applyApproverContext(detail, cr, context);
         auditService.recordAction(actor, buildChangeActionCode(cr), stage, resourceId, detail, correlationId(cr));
     }
 
@@ -2423,6 +2989,9 @@ public class AdminApiResource {
         if (target == null || cr == null) {
             return;
         }
+        if (!target.containsKey("changeRequestId") && cr.getId() != null) {
+            target.put("changeRequestId", cr.getId());
+        }
         String ref = correlationId(cr);
         if (StringUtils.hasText(ref) && !target.containsKey("changeRequestRef")) {
             target.put("changeRequestRef", ref);
@@ -2432,6 +3001,36 @@ public class AdminApiResource {
         }
         if (StringUtils.hasText(cr.getReason()) && !target.containsKey("reason")) {
             target.put("reason", cr.getReason());
+        }
+        ChangeSnapshot snapshot = ChangeSnapshot.fromJson(cr.getDiffJson(), JSON_MAPPER);
+        if (snapshot != null && (snapshot.hasChanges() || !snapshot.getBefore().isEmpty() || !snapshot.getAfter().isEmpty())) {
+            target.putIfAbsent("changeSnapshot", snapshot.toMap());
+            List<Map<String, String>> summary = changeSnapshotFormatter.format(snapshot, cr.getResourceType());
+            if (!summary.isEmpty()) {
+                target.putIfAbsent("changeSummary", summary);
+            }
+        }
+    }
+
+    private void appendChangeSummary(
+        Map<String, Object> detail,
+        String resourceType,
+        Map<String, Object> before,
+        Map<String, Object> after
+    ) {
+        if (detail == null) {
+            return;
+        }
+        List<Map<String, String>> summary = changeSnapshotFormatter.format(before, after, resourceType);
+        if (summary.isEmpty()) {
+            return;
+        }
+        detail.put("changeSummary", summary);
+        if (!detail.containsKey("changeSnapshot")) {
+            ChangeSnapshot snapshot = ChangeSnapshot.of(before, after);
+            if (snapshot.hasChanges() || !snapshot.getBefore().isEmpty() || !snapshot.getAfter().isEmpty()) {
+                detail.put("changeSnapshot", snapshot.toMap());
+            }
         }
     }
 

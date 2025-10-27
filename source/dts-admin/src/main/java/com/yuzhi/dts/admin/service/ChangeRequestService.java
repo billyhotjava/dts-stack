@@ -2,6 +2,7 @@ package com.yuzhi.dts.admin.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
 import com.yuzhi.dts.admin.security.SecurityUtils;
@@ -88,35 +89,8 @@ public class ChangeRequestService {
     }
 
     private Map<String, Object> buildDiff(Map<String, Object> before, Map<String, Object> after) {
-        Map<String, Object> diff = new LinkedHashMap<>();
-        diff.put("before", before);
-        diff.put("after", after);
-        diff.put("changes", computeChanges(before, after));
-        return diff;
-    }
-
-    private List<Map<String, Object>> computeChanges(Map<String, Object> before, Map<String, Object> after) {
-        if ((before == null || before.isEmpty()) && (after == null || after.isEmpty())) {
-            return List.of();
-        }
-        Map<String, Object> lhs = before == null ? Map.of() : before;
-        Map<String, Object> rhs = after == null ? Map.of() : after;
-        Set<String> keys = new LinkedHashSet<>();
-        keys.addAll(lhs.keySet());
-        keys.addAll(rhs.keySet());
-        List<Map<String, Object>> changes = new ArrayList<>();
-        for (String key : keys) {
-            Object b = lhs.get(key);
-            Object a = rhs.get(key);
-            if (!Objects.equals(normalizeValue(b), normalizeValue(a))) {
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("field", key);
-                item.put("before", b);
-                item.put("after", a);
-                changes.add(item);
-            }
-        }
-        return changes;
+        ChangeSnapshot snapshot = ChangeSnapshot.of(before, after);
+        return snapshot.toMap();
     }
 
     private Object normalizeValue(Object value) {

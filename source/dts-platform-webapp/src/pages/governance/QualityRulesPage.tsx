@@ -33,6 +33,7 @@ interface DatasetOption {
   hiveDatabase?: string;
   hiveTable?: string;
   classification?: string;
+  ownerDept?: string;
 }
 
 interface RuleBindingView {
@@ -278,6 +279,7 @@ const QualityRulesPage = () => {
         hiveDatabase: item.hiveDatabase,
         hiveTable: item.hiveTable,
         classification: item.classification,
+        ownerDept: item.ownerDept,
       }));
       setDatasets(list);
       const map = new Map<string, DatasetOption>();

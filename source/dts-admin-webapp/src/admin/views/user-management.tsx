@@ -395,7 +395,7 @@ export default function UserManagementView() {
 						continue;
 					}
 					try {
-						const roles: KeycloakRole[] = await KeycloakUserService.getUserRoles(userId);
+					const roles: KeycloakRole[] = await KeycloakUserService.getUserRoles(userId, { silent: true });
 						const filtered = (roles || []).filter((r) => {
 							const name = (r?.name || "").toString();
 							if (!name) return false;

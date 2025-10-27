@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -456,9 +457,8 @@ public class KeycloakAuthResource {
 
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<Map<String, String>>> refresh(@RequestBody RefreshPayload payload) {
-        try {
-            String currentActor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
-            String actor = currentActor != null ? currentActor : "unknown";
+        String actor = resolveRefreshActor(payload.refreshToken());
+        if (actor != null) {
             audit.recordAs(
                 actor,
                 "AUTH REFRESH",
@@ -469,6 +469,8 @@ public class KeycloakAuthResource {
                 Map.of("audience", "platform"),
                 null
             );
+        }
+        try {
             PortalSession refreshed = sessionRegistry.refreshSession(
                 payload.refreshToken(),
                 existing -> {
@@ -507,42 +509,52 @@ public class KeycloakAuthResource {
                     data.put("adminRefreshTokenExpiresAt", adminTokens.refreshExpiresAt().toString());
                 }
             }
-            audit.recordAs(
-                actor,
-                "AUTH REFRESH",
-                "platform",
-                "portal_user",
-                actor,
-                "SUCCESS",
-                Map.of("audience", "platform"),
-                null
-            );
+            String refreshedActor = sanitizeActor(refreshed.username());
+            if (refreshedActor != null) {
+                actor = refreshedActor;
+            }
+            if (actor != null) {
+                audit.recordAs(
+                    actor,
+                    "AUTH REFRESH",
+                    "platform",
+                    "portal_user",
+                    actor,
+                    "SUCCESS",
+                    Map.of("audience", "platform"),
+                    null
+                );
+            }
             return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (IllegalArgumentException ex) {
-            String actor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
-            audit.recordAs(
-                actor != null ? actor : "unknown",
-                "AUTH REFRESH",
-                "platform",
-                "portal_user",
-                actor != null ? actor : "unknown",
-                "FAILED",
-                Map.of("audience", "platform", "error", ex.getMessage()),
-                null
-            );
+            String failureActor = actor != null ? actor : resolveRefreshActor(payload.refreshToken());
+            if (failureActor != null) {
+                audit.recordAs(
+                    failureActor,
+                    "AUTH REFRESH",
+                    "platform",
+                    "portal_user",
+                    failureActor,
+                    "FAILED",
+                    Map.of("audience", "platform", "error", ex.getMessage()),
+                    null
+                );
+            }
             return ResponseEntity.status(401).body(ApiResponses.error("刷新令牌无效，请重新登录"));
         } catch (IllegalStateException ex) {
-            String actor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
-            audit.recordAs(
-                actor != null ? actor : "unknown",
-                "AUTH REFRESH",
-                "platform",
-                "portal_user",
-                actor != null ? actor : "unknown",
-                "FAILED",
-                Map.of("audience", "platform", "error", ex.getMessage()),
-                null
-            );
+            String failureActor = actor != null ? actor : resolveRefreshActor(payload.refreshToken());
+            if (failureActor != null) {
+                audit.recordAs(
+                    failureActor,
+                    "AUTH REFRESH",
+                    "platform",
+                    "portal_user",
+                    failureActor,
+                    "FAILED",
+                    Map.of("audience", "platform", "error", ex.getMessage()),
+                    null
+                );
+            }
             return ResponseEntity.status(401).body(ApiResponses.error("会话已过期，请重新登录"));
         }
     }
@@ -556,6 +568,17 @@ public class KeycloakAuthResource {
             return null;
         }
         return trimmed;
+    }
+
+    private String resolveRefreshActor(String refreshToken) {
+        String actor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
+        if (actor != null) {
+            return actor;
+        }
+        return sessionRegistry
+            .resolveUsernameByRefreshToken(refreshToken)
+            .flatMap(name -> Optional.ofNullable(sanitizeActor(name)))
+            .orElse(null);
     }
 
     private String firstNonBlank(String... values) {
