@@ -40,15 +40,7 @@ public class AuditV2Service {
             throw new IllegalArgumentException("request must not be null");
         }
         if ("system".equalsIgnoreCase(request.actorId()) && !request.allowSystemActor()) {
-            String uri = Optional.ofNullable(request.requestUri()).map(String::trim).orElse("");
-            boolean internalEndpoint =
-                uri.startsWith("/internal") ||
-                uri.startsWith("/api/internal") ||
-                uri.startsWith("/system/") ||
-                uri.startsWith("/actuator");
-            if (internalEndpoint || (!StringUtils.hasText(uri) && request.targets().isEmpty())) {
-                return null;
-            }
+            return null;
         }
         AuditButtonMetadata metadata = buttonRegistry.resolve(request.buttonCode()).orElse(null);
 

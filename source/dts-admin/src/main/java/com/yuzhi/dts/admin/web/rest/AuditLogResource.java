@@ -473,8 +473,16 @@ public class AuditLogResource {
 
     private String normalizeOperationTypeCode(AuditEntryView view) {
         AuditOperationKind kind = view.operationKind();
-        if (kind == AuditOperationKind.CREATE || kind == AuditOperationKind.UPDATE || kind == AuditOperationKind.DELETE) {
-            return kind.code();
+        if (kind != null) {
+            return switch (kind) {
+                case CREATE -> AuditOperationKind.CREATE.code();
+                case UPDATE -> AuditOperationKind.UPDATE.code();
+                case DELETE -> AuditOperationKind.DELETE.code();
+                case QUERY -> AuditOperationKind.QUERY.code();
+                case APPROVE, REJECT, EXECUTE, IMPORT, EXPORT -> AuditOperationKind.UPDATE.code();
+                case LOGIN, LOGOUT -> AuditOperationKind.QUERY.code();
+                default -> AuditOperationKind.QUERY.code();
+            };
         }
         String httpMethod = Optional.ofNullable(view.httpMethod()).orElse("").trim().toUpperCase(Locale.ROOT);
         if ("DELETE".equals(httpMethod)) {

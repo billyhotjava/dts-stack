@@ -50,6 +50,8 @@ export interface ChangeDiffViewerProps {
 const DEFAULT_DELETE_MESSAGE = "记录待删除";
 const FINAL_DELETE_MESSAGE = "记录已删除";
 const FINAL_DELETE_STATUSES = new Set(["APPROVED", "APPLIED", "SUCCESS", "COMPLETED"]);
+const HIDDEN_FIELD_KEYS = new Set(["attributes", "target", "payload", "targetid", "targetlabel", "payloadjson"]);
+const HIDDEN_FIELD_LABELS = new Set(["attributes", "target", "详细信息", "目标信息"]);
 
 export function ChangeDiffViewer({
 	snapshot,
@@ -181,13 +183,15 @@ function buildSections({ snapshot, summary, mode }: SectionInput): Section[] {
 			.map(([field, value], idx) => ({
 				key: field || String(idx),
 				label: formatFieldLabel(field),
+				field,
 				after: value,
-			}));
+			}))
+			.filter((entry) => !shouldHideField(entry.field, entry.label));
 		if (entries.length > 0) {
 			sections.push({
 				key: "create",
 				title: "新增内容",
-				entries,
+				entries: entries.map(({ field: _field, ...rest }) => rest),
 			});
 		}
 		return sections;
@@ -213,8 +217,11 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 				label: formatSummaryLabel(row, idx),
 				before: row.before,
 				after: row.after,
+				field: typeof row.field === "string" ? row.field : undefined,
 			}))
-			.filter((entry) => !valuesEqual(entry.before, entry.after));
+			.filter((entry) => !valuesEqual(entry.before, entry.after))
+			.filter((entry) => !shouldHideField(entry.field, entry.label))
+			.map(({ field: _field, ...rest }) => rest);
 	}
 
 	if (snapshot && Array.isArray(snapshot.changes)) {
@@ -224,8 +231,11 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 				label: formatFieldLabel(change.label ?? change.field ?? `字段${idx + 1}`),
 				before: change.before,
 				after: change.after,
+				field: typeof change.field === "string" ? change.field : undefined,
 			}))
-			.filter((entry) => !valuesEqual(entry.before, entry.after));
+			.filter((entry) => !valuesEqual(entry.before, entry.after))
+			.filter((entry) => !shouldHideField(entry.field, entry.label))
+			.map(({ field: _field, ...rest }) => rest);
 	}
 
 	const before = sanitizeRecord(snapshot.before);
@@ -237,8 +247,11 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 			label: formatFieldLabel(field),
 			before: before[field],
 			after: after[field],
+			field,
 		}))
-		.filter((entry) => !valuesEqual(entry.before, entry.after));
+		.filter((entry) => !valuesEqual(entry.before, entry.after))
+		.filter((entry) => !shouldHideField(entry.field, entry.label))
+		.map(({ field: _field, ...rest }) => rest);
 }
 
 function sanitizeRecord(record?: SnapshotRecord | null): SnapshotRecord {
@@ -415,11 +428,19 @@ function buildCreateEntriesFromSummary(summary?: ChangeSummaryEntry[] | null): S
 	if (!summary || summary.length === 0) {
 		return [];
 	}
-	return summary.map((row, idx) => ({
-		key: `${row.field ?? row.label ?? idx}`,
-		label: formatSummaryLabel(row, idx),
-		after: row.after ?? row.before,
-	}));
+	return summary
+		.map((row, idx) => {
+			const label = formatSummaryLabel(row, idx);
+			const field = typeof row.field === "string" ? row.field : undefined;
+			return {
+				key: `${row.field ?? row.label ?? idx}`,
+				label,
+				field,
+				after: row.after ?? row.before,
+			};
+		})
+		.filter((entry) => !shouldHideField(entry.field, entry.label))
+		.map(({ field: _field, ...rest }) => rest);
 }
 
 function shouldSkipInitialField(field?: string): boolean {
@@ -440,6 +461,18 @@ function formatSummaryLabel(row: ChangeSummaryEntry, index: number): string {
 		return formatFieldLabel(rawField);
 	}
 	return `字段${index + 1}`;
+}
+
+function shouldHideField(field?: string, label?: string): boolean {
+	const normalizedField = field ? field.trim().toLowerCase() : "";
+	if (normalizedField && HIDDEN_FIELD_KEYS.has(normalizedField)) {
+		return true;
+	}
+	const normalizedLabel = label ? label.trim().toLowerCase() : "";
+	if (normalizedLabel && HIDDEN_FIELD_LABELS.has(normalizedLabel)) {
+		return true;
+	}
+	return false;
 }
 
 function toSnapshotRecord(value: unknown): SnapshotRecord | null {

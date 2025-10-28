@@ -322,8 +322,11 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             return true;
         }
         String actor = event.actor;
-        if (actor != null && actor.trim().toLowerCase(Locale.ROOT).startsWith("service:")) {
-            return true;
+        if (actor != null) {
+            String normalizedActor = actor.trim().toLowerCase(Locale.ROOT);
+            if (normalizedActor.startsWith("service:") || "system".equals(normalizedActor)) {
+                return true;
+            }
         }
         return false;
     }

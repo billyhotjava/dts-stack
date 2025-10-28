@@ -17,6 +17,8 @@ import com.yuzhi.dts.admin.service.auditv2.AuditOperationType;
 import com.yuzhi.dts.admin.service.auditv2.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
@@ -259,7 +261,7 @@ public class AdminUserService {
 
     public ApprovalDTOs.ApprovalRequestDetail submitUpdate(String username, UserOperationRequest request, String requester, String ip) {
         validateOperation(request, false);
-        AdminKeycloakUser snapshot = ensureSnapshot(username);
+        AdminKeycloakUser snapshot = ensureFreshSnapshot(username);
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, request.getReason(), "USER_UPDATE");
         Map<String, Object> payload = buildUpdatePayload(request, snapshot);
         ChangeRequest changeRequest = createChangeRequest(
@@ -292,7 +294,7 @@ public class AdminUserService {
         if (sanitizedRoles.isEmpty()) {
             throw new IllegalArgumentException("请选择要分配的角色");
         }
-        AdminKeycloakUser snapshot = ensureSnapshot(username);
+        AdminKeycloakUser snapshot = ensureFreshSnapshot(username);
         List<String> currentRoles = sanitizeRealmRoleList(snapshot.getRealmRoles());
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, null, "GRANT_ROLE");
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -357,7 +359,7 @@ public class AdminUserService {
         if (sanitizedRoles.isEmpty()) {
             throw new IllegalArgumentException("请选择要移除的角色");
         }
-        AdminKeycloakUser snapshot = ensureSnapshot(username);
+        AdminKeycloakUser snapshot = ensureFreshSnapshot(username);
         List<String> currentRoles = sanitizeRealmRoleList(snapshot.getRealmRoles());
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, null, "REVOKE_ROLE");
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -414,7 +416,7 @@ public class AdminUserService {
         if (StringUtils.isBlank(username)) {
             throw new IllegalArgumentException("用户名不能为空");
         }
-        AdminKeycloakUser snapshot = ensureSnapshot(username);
+        AdminKeycloakUser snapshot = ensureFreshSnapshot(username);
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, null, "SET_ENABLED");
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("action", "setEnabled");
@@ -449,7 +451,7 @@ public class AdminUserService {
         if (StringUtils.isBlank(username)) {
             throw new IllegalArgumentException("用户名不能为空");
         }
-        AdminKeycloakUser snapshot = ensureSnapshot(username);
+        AdminKeycloakUser snapshot = ensureFreshSnapshot(username);
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, reason, "SET_PERSON_LEVEL");
         String normalizedPersonLevel = normalizeSecurityLevel(personLevel);
         ensureAllowedSecurityLevel(normalizedPersonLevel, "人员密级不允许为非密");
@@ -1362,6 +1364,63 @@ public class AdminUserService {
         if (!SUPPORTED_SECURITY_LEVELS.contains(securityLevel)) {
             throw new IllegalStateException("用户密级无效: " + securityLevel);
         }
+    }
+
+    private void refreshSnapshotFromKeycloak(String username) {
+        if (!StringUtils.isNotBlank(username)) {
+            return;
+        }
+        try {
+            String managementToken = resolveManagementToken();
+            keycloakAdminClient
+                .findByUsername(username, managementToken)
+                .ifPresent(remote -> {
+                    refreshUserGroups(remote, managementToken);
+                    syncSnapshot(remote);
+                });
+        } catch (Exception ex) {
+            LOG.warn("Failed to refresh snapshot for user {} before submission: {}", username, ex.getMessage());
+        }
+    }
+
+    private AdminKeycloakUser ensureFreshSnapshot(String username) {
+        refreshSnapshotFromKeycloak(username);
+        return ensureSnapshot(username);
+    }
+
+    private void refreshUserGroups(KeycloakUserDTO dto, String accessToken) {
+        if (dto == null || !StringUtils.isNotBlank(dto.getId()) || !StringUtils.isNotBlank(accessToken)) {
+            return;
+        }
+        try {
+            List<KeycloakGroupDTO> groups = keycloakAdminClient.listUserGroups(dto.getId(), accessToken);
+            if (groups == null || groups.isEmpty()) {
+                dto.setGroups(List.of());
+                return;
+            }
+            List<String> paths = new ArrayList<>();
+            for (KeycloakGroupDTO group : groups) {
+                if (group == null) continue;
+                String path = normalizeGroupPath(group.getPath());
+                if (StringUtils.isNotBlank(path)) {
+                    paths.add(path);
+                }
+            }
+            dto.setGroups(paths);
+        } catch (Exception ex) {
+            LOG.warn("Failed to refresh group paths for user {}: {}", dto.getUsername(), ex.getMessage());
+        }
+    }
+
+    private String normalizeGroupPath(String path) {
+        if (!StringUtils.isNotBlank(path)) {
+            return null;
+        }
+        String trimmed = path.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
     }
 
     private String resolveFullName(KeycloakUserDTO dto) {
@@ -2676,6 +2735,7 @@ public class AdminUserService {
             } catch (Exception e) {
                 LOG.warn("Failed to assign groups on create for {}: {}", target.getUsername(), e.getMessage());
             }
+            refreshUserGroups(target, accessToken);
             AdminKeycloakUser savedEntity = syncSnapshot(target);
             detail.put("keycloakId", target.getId());
             detail.put("realmRoles", target.getRealmRoles());
@@ -2821,6 +2881,7 @@ public class AdminUserService {
                     updated.setRealmRoles(new ArrayList<>(names));
                 }
             } catch (Exception ignored) {}
+            refreshUserGroups(updated, accessToken);
             AdminKeycloakUser updatedEntity = syncSnapshot(updated);
             detail.put("keycloakId", existing.getId());
             detail.put("realmRoles", updated.getRealmRoles());
@@ -2905,6 +2966,7 @@ public class AdminUserService {
                     updated.setRealmRoles(new ArrayList<>(names));
                 }
             } catch (Exception ignored) {}
+            refreshUserGroups(updated, accessToken);
             syncSnapshot(updated);
             detail.put("keycloakId", existing.getId());
             detail.put("resultRoles", updated.getRealmRoles());
@@ -2949,6 +3011,7 @@ public class AdminUserService {
                 List<String> names = keycloakAdminClient.listUserRealmRoles(existing.getId(), accessToken);
                 updated.setRealmRoles(new ArrayList<>(names));
             } catch (Exception ignored) {}
+            refreshUserGroups(updated, accessToken);
             syncSnapshot(updated);
             detail.put("keycloakId", existing.getId());
             detail.put("resultRoles", updated.getRealmRoles());
@@ -2972,6 +3035,7 @@ public class AdminUserService {
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
             existing.setEnabled(enabled);
             KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
+            refreshUserGroups(updated, accessToken);
             syncSnapshot(updated);
             detail.put("keycloakId", existing.getId());
             auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
@@ -3003,6 +3067,7 @@ public class AdminUserService {
             attributes.remove("data_levels");
             existing.setAttributes(attributes);
             KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), existing, accessToken);
+            refreshUserGroups(updated, accessToken);
             syncSnapshot(updated);
             detail.put("keycloakId", existing.getId());
             auditUserChange(actor, auditAction, existing.getUsername(), "SUCCESS", detail);
