@@ -18,6 +18,7 @@ import com.yuzhi.dts.admin.service.auditv2.OperationMappingEngine.RuleSummary;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,6 +29,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -69,18 +71,21 @@ public class AuditLogResource {
     private final OperationMappingEngine opMappingEngine;
     private final AuditResourceDictionaryService resourceDictionary;
     private final AuditV2Service auditV2Service;
+    private final AdminUserService adminUserService;
     private final ObjectMapper objectMapper;
     public AuditLogResource(
         AuditEntryQueryService auditQueryService,
         OperationMappingEngine opMappingEngine,
         AuditResourceDictionaryService resourceDictionary,
         AuditV2Service auditV2Service,
+        AdminUserService adminUserService,
         ObjectMapper objectMapper
     ) {
         this.auditQueryService = auditQueryService;
         this.opMappingEngine = opMappingEngine;
         this.resourceDictionary = resourceDictionary;
         this.auditV2Service = auditV2Service;
+        this.adminUserService = adminUserService;
         this.objectMapper = objectMapper.copy().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
     }
 
@@ -127,7 +132,14 @@ public class AuditLogResource {
             false
         );
         Page<AuditEntryView> resultPage = auditQueryService.search(criteria, pageable);
-        List<Map<String, Object>> content = resultPage.getContent().stream().map(view -> toResponse(view, false)).toList();
+        List<AuditEntryView> views = resultPage.getContent();
+        Map<String, String> displayOverrides = resolvePlatformDisplayNames(views);
+        List<Map<String, Object>> content = new ArrayList<>(views.size());
+        for (AuditEntryView view : views) {
+            Map<String, Object> row = toResponse(view, false);
+            applyDisplayNameOverride(row, displayOverrides);
+            content.add(row);
+        }
         Map<String, Object> payload = Map.of(
             "content",
             content,
@@ -158,7 +170,9 @@ public class AuditLogResource {
             .findById(id, true)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "审计日志不存在"));
         ensureReadable(scope, view);
-        return ResponseEntity.ok(ApiResponse.ok(toResponse(view, true)));
+        Map<String, Object> body = toResponse(view, true);
+        applyDisplayNameOverride(body, resolvePlatformDisplayNames(List.of(view)));
+        return ResponseEntity.ok(ApiResponse.ok(body));
     }
 
     @DeleteMapping
@@ -207,7 +221,14 @@ public class AuditLogResource {
             true
         );
         Page<AuditEntryView> exportPage = auditQueryService.search(criteria, Pageable.unpaged());
-        List<Map<String, Object>> records = exportPage.getContent().stream().map(view -> toResponse(view, true)).toList();
+        List<AuditEntryView> views = exportPage.getContent();
+        Map<String, String> displayOverrides = resolvePlatformDisplayNames(views);
+        List<Map<String, Object>> records = new ArrayList<>(views.size());
+        for (AuditEntryView view : views) {
+            Map<String, Object> row = toResponse(view, true);
+            applyDisplayNameOverride(row, displayOverrides);
+            records.add(row);
+        }
         StringBuilder sb = new StringBuilder();
         sb.append(
             "id,occurred_at,source_system,module,action,actor,result,result_text,summary,target_table,target_id,operation_type,operation_content,client_ip,client_agent\n"
@@ -809,6 +830,72 @@ public class AuditLogResource {
 
     private String safeTrim(String value) {
         return value == null ? null : value.trim();
+    }
+
+    private Map<String, String> resolvePlatformDisplayNames(List<AuditEntryView> views) {
+        if (views == null || views.isEmpty()) {
+            return Map.of();
+        }
+        LinkedHashSet<String> usernames = new LinkedHashSet<>();
+        for (AuditEntryView view : views) {
+            if (view == null) {
+                continue;
+            }
+            String source = safeTrim(view.sourceSystem());
+            if (source == null || !"platform".equalsIgnoreCase(source)) {
+                continue;
+            }
+            String actorId = safeTrim(view.actorId());
+            if (!org.springframework.util.StringUtils.hasText(actorId)) {
+                continue;
+            }
+            String actorName = safeTrim(view.actorName());
+            if (org.springframework.util.StringUtils.hasText(actorName) && !actorName.equals(actorId)) {
+                continue;
+            }
+            usernames.add(actorId);
+        }
+        if (usernames.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            Map<String, String> resolved = adminUserService.resolveDisplayNames(usernames);
+            if (resolved == null || resolved.isEmpty()) {
+                return Map.of();
+            }
+            Map<String, String> normalized = new LinkedHashMap<>();
+            resolved.forEach((key, value) -> {
+                if (org.springframework.util.StringUtils.hasText(key) && org.springframework.util.StringUtils.hasText(value)) {
+                    normalized.put(key.trim().toLowerCase(Locale.ROOT), value.trim());
+                }
+            });
+            return normalized;
+        } catch (Exception ex) {
+            if (log.isDebugEnabled()) {
+                log.debug("Failed to resolve platform actor display names: {}", ex.getMessage());
+            }
+            return Map.of();
+        }
+    }
+
+    private void applyDisplayNameOverride(Map<String, Object> record, Map<String, String> overrides) {
+        if (record == null || overrides == null || overrides.isEmpty()) {
+            return;
+        }
+        Object actorObj = record.get("actor");
+        if (actorObj == null) {
+            return;
+        }
+        String actor = safeTrim(actorObj.toString());
+        if (!org.springframework.util.StringUtils.hasText(actor)) {
+            return;
+        }
+        String override = overrides.get(actor.toLowerCase(Locale.ROOT));
+        if (!org.springframework.util.StringUtils.hasText(override)) {
+            return;
+        }
+        record.put("actorName", override);
+        record.put("operatorName", override);
     }
 
     private String escapeCsv(Object value) {
