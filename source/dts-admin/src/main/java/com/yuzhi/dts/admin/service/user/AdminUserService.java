@@ -1630,7 +1630,8 @@ public class AdminUserService {
         }
         Optional<OrganizationNode> current = organizationRepository.findFirstByNameAndParentIsNull(segments[0]);
         for (int i = 1; i < segments.length && current.isPresent(); i++) {
-            current = organizationRepository.findFirstByParentIdAndName(current.get().getId(), segments[i]);
+            OrganizationNode parent = current.orElseThrow();
+            current = organizationRepository.findFirstByParentIdAndName(parent.getId(), segments[i]);
         }
         return current.map(OrganizationNode::getId);
     }

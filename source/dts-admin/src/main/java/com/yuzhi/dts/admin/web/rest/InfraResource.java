@@ -309,7 +309,7 @@ public class InfraResource {
                 if (StringUtils.hasText(bearer)) {
                     Optional<String> sessionActor = adminSessionRegistry.resolveUsernameFromAccessToken(bearer);
                     if (sessionActor.isPresent()) {
-                        String candidate = SecurityUtils.sanitizeLogin(sessionActor.get());
+                        String candidate = SecurityUtils.sanitizeLogin(sessionActor.orElseThrow());
                         if (!needsOverride(candidate) || "system".equalsIgnoreCase(resolved)) {
                             resolved = candidate;
                             source = "session";
