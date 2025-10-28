@@ -9,7 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.OrderBy;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.io.Serializable;
@@ -102,12 +102,12 @@ public class AuditEntry implements Serializable {
     private Instant createdAt;
 
     @OneToMany(mappedBy = "entry", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @OrderBy("position ASC")
+    @OrderColumn(name = "position")
     @JsonIgnore
     private List<AuditEntryTarget> targets = new ArrayList<>();
 
     @OneToMany(mappedBy = "entry", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @OrderBy("position ASC")
+    @OrderColumn(name = "position")
     @JsonIgnore
     private List<AuditEntryDetail> details = new ArrayList<>();
 

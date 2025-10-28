@@ -93,6 +93,7 @@ public class AdminUserService {
     private final String targetClientId;
     private final boolean useClientRoles;
     private final ThreadLocal<ApprovalAuditCollector> approvalAuditCollector = new ThreadLocal<>();
+    private final ThreadLocal<Boolean> suppressAuditFailure = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
@@ -873,6 +874,12 @@ public class AdminUserService {
             default -> action;
         };
         AuditStage stage = "SUCCESS".equalsIgnoreCase(result) ? AuditStage.SUCCESS : AuditStage.FAIL;
+        if (stage != AuditStage.SUCCESS && Boolean.TRUE.equals(suppressAuditFailure.get())) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Suppressing intermediate failure audit for action={} target={} due to retry", action, normalizedTarget);
+            }
+            return;
+        }
         ApprovalAuditCollector collector = approvalAuditCollector.get();
         if (collector != null && StringUtils.isNotBlank(changeRequestRef) && stage == AuditStage.SUCCESS) {
             collector.collect(code, stage, normalizedTarget, new LinkedHashMap<>(payload));
@@ -1401,7 +1408,10 @@ public class AdminUserService {
             candidateTokens.add(resolveManagementToken());
 
             Exception last = null;
-            for (String token : candidateTokens) {
+            for (int i = 0; i < candidateTokens.size(); i++) {
+                String token = candidateTokens.get(i);
+                boolean lastAttempt = i == candidateTokens.size() - 1;
+                suppressAuditFailure.set(!lastAttempt);
                 try {
                     LOG.info(
                         "Applying approval id={} type={} items={} by approver={} using {} token",
@@ -1417,6 +1427,8 @@ public class AdminUserService {
                 } catch (Exception exInner) {
                     last = exInner;
                     LOG.warn("Approval apply attempt failed with current token: {}", exInner.getMessage());
+                } finally {
+                    suppressAuditFailure.remove();
                 }
             }
             if (last != null) {

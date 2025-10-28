@@ -5,10 +5,12 @@ import com.yuzhi.dts.admin.domain.audit.AuditEntry;
 import com.yuzhi.dts.admin.domain.audit.AuditEntryDetail;
 import com.yuzhi.dts.admin.domain.audit.AuditEntryTarget;
 import com.yuzhi.dts.admin.repository.audit.AuditEntryRepository;
+import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import org.springframework.beans.factory.ObjectProvider;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -19,6 +21,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -31,10 +36,14 @@ public class AuditRecorder {
 
     private static final Logger log = LoggerFactory.getLogger(AuditRecorder.class);
     private static final String DEFAULT_SOURCE_SYSTEM = "admin";
+    private static final Duration QUERY_DEDUP_WINDOW = Duration.ofSeconds(2);
+    private static final Duration QUERY_DEDUP_RETENTION = Duration.ofMinutes(1);
+    private static final int QUERY_DEDUP_MAX_ENTRIES = 4096;
 
     private final AuditEntryRepository repository;
     private final Clock clock;
     private final ObjectMapper objectMapper;
+    private final ConcurrentMap<String, Instant> recentQueryFingerprints = new ConcurrentHashMap<>();
 
     public AuditRecorder(AuditEntryRepository repository, ObjectProvider<Clock> clockProvider, ObjectMapper objectMapper) {
         this.repository = repository;
@@ -47,6 +56,17 @@ public class AuditRecorder {
     }
 
     AuditEntry persist(ResolvedAudit audit) {
+        if (shouldSkipForDedup(audit)) {
+            if (log.isDebugEnabled()) {
+                log.debug(
+                    "Skip duplicate query audit entry for actor={} button={} uri={}",
+                    audit.actorId(),
+                    audit.buttonCode(),
+                    audit.requestUri()
+                );
+            }
+            return null;
+        }
         AuditEntry entry = new AuditEntry();
         entry.setOccurredAt(audit.occurredAt());
         entry.setSourceSystem(audit.sourceSystem());
@@ -110,21 +130,122 @@ public class AuditRecorder {
         }
     }
 
+    private boolean shouldSkipForDedup(ResolvedAudit audit) {
+        if (audit.operationKind() != AuditOperationKind.QUERY) {
+            return false;
+        }
+        Instant occurredAt = audit.occurredAt();
+        String key = dedupKey(audit);
+        AtomicBoolean duplicate = new AtomicBoolean(false);
+        recentQueryFingerprints.compute(key, (k, previous) -> {
+            if (previous != null && isWithinDedupWindow(previous, occurredAt)) {
+                duplicate.set(true);
+                return previous;
+            }
+            return occurredAt;
+        });
+        if (!duplicate.get() && recentQueryFingerprints.size() > QUERY_DEDUP_MAX_ENTRIES) {
+            pruneDedupCache(occurredAt != null ? occurredAt.minus(QUERY_DEDUP_RETENTION) : null);
+        }
+        return duplicate.get();
+    }
+
+    private boolean isWithinDedupWindow(Instant previous, Instant current) {
+        if (previous == null || current == null) {
+            return false;
+        }
+        long diff = Math.abs(current.toEpochMilli() - previous.toEpochMilli());
+        return diff <= QUERY_DEDUP_WINDOW.toMillis();
+    }
+
+    private void pruneDedupCache(Instant cutoff) {
+        if (cutoff == null) {
+            return;
+        }
+        recentQueryFingerprints.entrySet().removeIf(entry -> entry.getValue() == null || entry.getValue().isBefore(cutoff));
+    }
+
+    private String dedupKey(ResolvedAudit audit) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(safeString(audit.actorId())).append('|');
+        sb.append(safeString(audit.buttonCode())).append('|');
+        sb.append(safeString(audit.moduleKey())).append('|');
+        sb.append(safeString(audit.requestUri())).append('|');
+        sb.append(safeString(audit.summary())).append('|');
+        sb.append(audit.clientIp() != null ? audit.clientIp().getHostAddress() : "");
+        return sb.toString();
+    }
+
+    private String safeString(String value) {
+        return value == null ? "" : value;
+    }
+
     private Object sanitizeDetailValue(Object value) {
+        Object normalized = normalizeDetailValue(value);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized instanceof Map<?, ?> || normalized instanceof Collection<?> || normalized.getClass().isArray()) {
+            return serializeStructured(normalized);
+        }
+        return normalized;
+    }
+
+    private Object normalizeDetailValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof ChangeSnapshot snapshot) {
+            return snapshot.toMap();
+        }
+        if (value instanceof CharSequence text) {
+            String trimmed = text.toString().trim();
+            return trimmed.isEmpty() ? "" : trimmed;
+        }
+        if (value instanceof Number || value instanceof Boolean) {
+            return value;
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            map.forEach((k, v) -> {
+                if (k != null) {
+                    normalized.put(String.valueOf(k), normalizeDetailValue(v));
+                }
+            });
+            return normalized;
+        }
+        if (value instanceof Collection<?> collection) {
+            List<Object> normalized = new ArrayList<>();
+            for (Object item : collection) {
+                normalized.add(normalizeDetailValue(item));
+            }
+            return normalized;
+        }
+        if (value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            List<Object> normalized = new ArrayList<>(length);
+            for (int i = 0; i < length; i++) {
+                normalized.add(normalizeDetailValue(java.lang.reflect.Array.get(value, i)));
+            }
+            return normalized;
+        }
+        return value.toString();
+    }
+
+    private Object serializeStructured(Object value) {
         if (value == null) {
             return null;
         }
         if (value instanceof CharSequence || value instanceof Number || value instanceof Boolean) {
             return value;
         }
-        if (value instanceof Map<?, ?> || value instanceof Collection<?> || value.getClass().isArray()) {
+        if (objectMapper != null) {
             try {
-                return objectMapper != null ? objectMapper.writeValueAsString(value) : String.valueOf(value);
+                return objectMapper.writeValueAsString(value);
             } catch (Exception ex) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Failed to serialize audit detail value of type {}: {}", value.getClass().getName(), ex.getMessage());
+                    log.debug("Failed to serialize structured detail value: {}", ex.getMessage());
                 }
-                return String.valueOf(value);
             }
         }
         return String.valueOf(value);

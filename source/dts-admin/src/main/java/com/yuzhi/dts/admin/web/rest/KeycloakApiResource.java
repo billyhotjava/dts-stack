@@ -866,7 +866,14 @@ public class KeycloakApiResource {
     }
 
     private String currentUser() {
-        return SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = sanitizeActor(SecurityUtils.getCurrentUserLogin().orElse(null));
+        if (!StringUtils.hasText(actor)) {
+            actor = sanitizeActor(extractUsernameFromToken(currentAccessToken()));
+        }
+        if (!StringUtils.hasText(actor)) {
+            actor = "system";
+        }
+        return actor;
     }
 
     private String changeRequestRef(ApprovalDTOs.ApprovalRequest approval) {
@@ -1132,15 +1139,19 @@ public class KeycloakApiResource {
         String fallbackMethod,
         String summary
     ) {
-        if (!StringUtils.hasText(actor) || !StringUtils.hasText(buttonCode)) {
+        String normalizedActor = sanitizeActor(actor);
+        if (!StringUtils.hasText(normalizedActor)) {
+            normalizedActor = "system";
+        }
+        if (!StringUtils.hasText(buttonCode)) {
             return;
         }
         try {
             String uri = Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse(fallbackUri);
             String method = request != null ? request.getMethod() : fallbackMethod;
             AuditActionRequest.Builder builder = AuditActionRequest
-                .builder(actor, buttonCode)
-                .actorName(resolveActorDisplayName(actor))
+                .builder(normalizedActor, buttonCode)
+                .actorName(resolveActorDisplayName(normalizedActor))
                 .actorRoles(SecurityUtils.getCurrentUserAuthorities())
                 .summary(summary)
                 .result(result)
@@ -1245,6 +1256,20 @@ public class KeycloakApiResource {
             return null;
         }
         return trimmed;
+    }
+
+    private String resolveActorForRefresh(String refreshToken) {
+        String actor = sanitizeActor(SecurityUtils.getCurrentUserLogin().orElse(null));
+        if (!StringUtils.hasText(actor)) {
+            actor = sanitizeActor(extractUsernameFromToken(refreshToken));
+        }
+        if (!StringUtils.hasText(actor)) {
+            actor = sanitizeActor(extractUsernameFromToken(currentAccessToken()));
+        }
+        if (!StringUtils.hasText(actor)) {
+            actor = "system";
+        }
+        return actor;
     }
 
     private String firstNonBlank(String... values) {
@@ -1824,7 +1849,7 @@ public class KeycloakApiResource {
 
     @PostMapping("/keycloak/groups")
     public ResponseEntity<ApiResponse<KeycloakGroupDTO>> createGroup(@RequestBody KeycloakGroupDTO payload, HttpServletRequest request) {
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("name", payload.getName());
         if (!StringUtils.hasText(payload.getName())) {
@@ -1919,7 +1944,7 @@ public class KeycloakApiResource {
 
     @DeleteMapping("/keycloak/groups/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteGroup(@PathVariable String id, HttpServletRequest request) {
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         KeycloakGroupDTO removed = stores.groups.remove(id);
         if (removed == null) {
             recordGroupActionV2(
@@ -2100,7 +2125,7 @@ public class KeycloakApiResource {
             .filter(val -> val != null && !val.isBlank())
             .orElse(currentUser());
         String note = Optional.ofNullable(body).map(b -> b.note).orElse(null);
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("action", normalized);
         auditDetail.put("approver", approver);
@@ -2513,7 +2538,7 @@ public class KeycloakApiResource {
         String refreshToken = Optional.ofNullable(body).map(b -> b.get("refreshToken")).orElse(null);
         if (refreshToken == null || refreshToken.isBlank()) {
             recordAuthActionV2(
-                currentUser(),
+                resolveActorForRefresh(refreshToken),
                 ButtonCodes.AUTH_ADMIN_REFRESH,
                 AuditResultStatus.FAILED,
                 Map.of("error", "MISSING_REFRESH_TOKEN"),
@@ -2555,7 +2580,7 @@ public class KeycloakApiResource {
                 data.put("sessionState", tokens.sessionState());
             }
             recordAuthActionV2(
-                currentUser(),
+                resolveActorForRefresh(refreshToken),
                 ButtonCodes.AUTH_ADMIN_REFRESH,
                 AuditResultStatus.SUCCESS,
                 Map.of("refreshTokenRotated", tokens.refreshToken() != null && !tokens.refreshToken().isBlank()),
@@ -2567,7 +2592,7 @@ public class KeycloakApiResource {
             return ResponseEntity.ok(ApiResponse.ok(data));
         } catch (BadCredentialsException ex) {
             recordAuthActionV2(
-                currentUser(),
+                resolveActorForRefresh(refreshToken),
                 ButtonCodes.AUTH_ADMIN_REFRESH,
                 AuditResultStatus.FAILED,
                 Map.of("error", ex.getMessage()),
@@ -2580,7 +2605,7 @@ public class KeycloakApiResource {
         } catch (Exception ex) {
             String message = Optional.ofNullable(ex.getMessage()).filter(m -> !m.isBlank()).orElse("刷新失败，请稍后再试");
             recordAuthActionV2(
-                currentUser(),
+                resolveActorForRefresh(refreshToken),
                 ButtonCodes.AUTH_ADMIN_REFRESH,
                 AuditResultStatus.FAILED,
                 Map.of("error", message),

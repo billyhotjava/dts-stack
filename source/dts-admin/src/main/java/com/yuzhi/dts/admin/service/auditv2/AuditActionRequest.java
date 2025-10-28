@@ -1,5 +1,6 @@
 package com.yuzhi.dts.admin.service.auditv2;
 
+import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -33,7 +34,10 @@ public record AuditActionRequest(
     Map<String, Object> attributes,
     List<AuditTarget> targets,
     List<AuditDetail> details,
-    boolean allowEmptyTargets
+    boolean allowSystemActor,
+    boolean allowEmptyTargets,
+    ChangeSnapshot changeSnapshot,
+    String changeResourceType
 ) {
     public AuditActionRequest {
         Objects.requireNonNull(actorId, "actorId");
@@ -43,6 +47,11 @@ public record AuditActionRequest(
         attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
         targets = targets == null ? List.of() : List.copyOf(targets);
         details = details == null ? List.of() : List.copyOf(details);
+        if (changeResourceType != null && !changeResourceType.isBlank()) {
+            changeResourceType = changeResourceType.trim();
+        } else {
+            changeResourceType = null;
+        }
     }
 
     public static Builder builder(String actorId, String buttonCode) {
@@ -76,7 +85,10 @@ public record AuditActionRequest(
         private final Map<String, Object> attributes = new LinkedHashMap<>();
         private final List<AuditTarget> targets = new ArrayList<>();
         private final List<AuditDetail> details = new ArrayList<>();
+        private boolean allowSystemActor;
         private boolean allowEmptyTargets;
+        private ChangeSnapshot changeSnapshot;
+        private String changeResourceType;
 
         private Builder(String actorId, String buttonCode) {
             if (!StringUtils.hasText(actorId)) {
@@ -181,6 +193,44 @@ public record AuditActionRequest(
             return this;
         }
 
+        public Builder allowSystemActor() {
+            this.allowSystemActor = true;
+            return this;
+        }
+
+        public Builder resourceType(String resourceType) {
+            if (StringUtils.hasText(resourceType)) {
+                this.changeResourceType = resourceType.trim();
+            }
+            return this;
+        }
+
+        public Builder changeSnapshot(ChangeSnapshot snapshot) {
+            if (snapshot != null) {
+                this.changeSnapshot = snapshot;
+            }
+            return this;
+        }
+
+        public Builder changeSnapshot(Map<String, Object> before, Map<String, Object> after) {
+            Map<String, Object> safeBefore = before == null ? Map.of() : before;
+            Map<String, Object> safeAfter = after == null ? Map.of() : after;
+            this.changeSnapshot = ChangeSnapshot.of(safeBefore, safeAfter);
+            return this;
+        }
+
+        public Builder changeSnapshot(Map<String, Object> before, Map<String, Object> after, String resourceType) {
+            changeSnapshot(before, after);
+            resourceType(resourceType);
+            return this;
+        }
+
+        public Builder changeSnapshot(ChangeSnapshot snapshot, String resourceType) {
+            changeSnapshot(snapshot);
+            resourceType(resourceType);
+            return this;
+        }
+
         public AuditActionRequest build() {
             return new AuditActionRequest(
                 occurredAt,
@@ -204,7 +254,10 @@ public record AuditActionRequest(
                 Map.copyOf(attributes),
                 List.copyOf(targets),
                 List.copyOf(details),
-                allowEmptyTargets
+                allowSystemActor,
+                allowEmptyTargets,
+                changeSnapshot,
+                changeResourceType
             );
         }
     }

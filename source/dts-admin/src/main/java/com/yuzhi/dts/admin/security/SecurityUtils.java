@@ -18,6 +18,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.util.StringUtils;
 
 /**
  * Utility class for Spring Security.
@@ -36,6 +37,25 @@ public final class SecurityUtils {
     public static Optional<String> getCurrentUserLogin() {
         SecurityContext securityContext = SecurityContextHolder.getContext();
         return Optional.ofNullable(extractPrincipal(securityContext.getAuthentication()));
+    }
+
+    /**
+     * 获取当前用户在审计日志中使用的账号标识；若未登录或为匿名用户则返回 "system"。
+     */
+    public static String getCurrentAuditableLogin() {
+        return sanitizeLogin(getCurrentUserLogin().orElse(null));
+    }
+
+    public static String sanitizeLogin(String login) {
+        if (!StringUtils.hasText(login)) {
+            return "system";
+        }
+        String trimmed = login.trim();
+        String lowered = trimmed.toLowerCase(Locale.ROOT);
+        if ("anonymous".equals(lowered) || "anonymoususer".equals(lowered) || "unknown".equals(lowered)) {
+            return "system";
+        }
+        return trimmed;
     }
 
     private static String extractPrincipal(Authentication authentication) {

@@ -374,7 +374,7 @@ public class AdminApiResource {
             m.put("description", c.getDescription());
             list.add(m);
         }
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         try {
             auditV2Service.record(
                 AuditActionRequest
@@ -411,7 +411,7 @@ public class AdminApiResource {
             auditDetail.put("draft", Boolean.TRUE);
             attachChangeRequestMetadata(auditDetail, cr);
             recordSystemConfigSubmitV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 cfg,
                 before,
                 after,
@@ -423,7 +423,7 @@ public class AdminApiResource {
             return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
         } catch (IllegalStateException ex) {
             recordSystemConfigSubmitFailureV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 cfg,
                 before,
                 ex,
@@ -444,7 +444,7 @@ public class AdminApiResource {
         }
         Object menus = payload.get("menus");
         int sectionCount = menus instanceof java.util.Collection<?> col ? col.size() : 0;
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         try {
             auditV2Service.record(
                 AuditActionRequest
@@ -467,7 +467,7 @@ public class AdminApiResource {
     @PostMapping("/portal/menus")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createMenu(@RequestBody Map<String, Object> body, HttpServletRequest request) {
         Map<String, Object> payload = readPortalMenuPayload(body);
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("request", payload);
         String pendingRef = Objects.toString(payload.get("name"), "portal-menu");
@@ -632,7 +632,7 @@ public class AdminApiResource {
     @PostMapping("/portal/menus/reset")
     public ResponseEntity<ApiResponse<Map<String, Object>>> resetMenus(HttpServletRequest request) {
         portalMenuService.resetMenusToSeed();
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         try {
             auditV2Service.record(
                 AuditActionRequest
@@ -661,7 +661,7 @@ public class AdminApiResource {
         }
         Map<String, Object> payload = readPortalMenuPayload(body);
         Map<String, Object> before = toPortalMenuPayload(beforeEntity);
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         Map<String, Object> auditBase = new LinkedHashMap<>();
         auditBase.put("before", before);
         auditBase.put("payload", payload);
@@ -808,7 +808,7 @@ public class AdminApiResource {
             return ResponseEntity.status(404).body(ApiResponse.error("菜单不存在"));
         }
         Map<String, Object> before = toPortalMenuPayload(entity);
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("before", before);
         if (requireMenuStructureApproval) {
@@ -924,7 +924,7 @@ public class AdminApiResource {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> orgs(HttpServletRequest request) {
         List<Map<String, Object>> tree = buildOrgTree();
         recordOrgViewV2(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            SecurityUtils.getCurrentAuditableLogin(),
             tree.size(),
             request,
             false
@@ -937,7 +937,7 @@ public class AdminApiResource {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> orgsForPlatform(HttpServletRequest request) {
         List<Map<String, Object>> tree = buildOrgTree();
         recordOrgViewV2(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            SecurityUtils.getCurrentAuditableLogin(),
             tree.size(),
             request,
             true
@@ -953,7 +953,7 @@ public class AdminApiResource {
             log.warn("ensureUnassignedRoot failed: {}", ex.getMessage());
         }
         List<Map<String, Object>> tree = buildOrgTree();
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         recordOrgActionV2(
             actor,
             ButtonCodes.ORG_SYNC,
@@ -977,7 +977,7 @@ public class AdminApiResource {
         String description = trimToNull(payload.get("description"));
         Boolean isRoot = parseBoolean(payload.get("isRoot"));
         boolean rootFlag = Boolean.TRUE.equals(isRoot);
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         String parentRef = parentId == null ? "root" : String.valueOf(parentId);
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("name", name);
@@ -1063,7 +1063,7 @@ public class AdminApiResource {
         OrganizationNode existing = organizationRepository.findById(id).orElse(null);
         if (existing == null) {
             recordOrgActionV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 ButtonCodes.ORG_UPDATE,
                 AuditResultStatus.FAILED,
                 id,
@@ -1117,7 +1117,7 @@ public class AdminApiResource {
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("before", beforeView);
         auditDetail.put("request", requestView);
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
 
         Optional<OrganizationNode> updated;
         try {
@@ -1193,7 +1193,7 @@ public class AdminApiResource {
         OrganizationNode existing = organizationRepository.findById(id).orElse(null);
         if (existing == null) {
             recordOrgActionV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 ButtonCodes.ORG_DELETE,
                 AuditResultStatus.FAILED,
                 id,
@@ -1207,7 +1207,7 @@ public class AdminApiResource {
             );
             return ResponseEntity.status(404).body(ApiResponse.error("部门不存在"));
         }
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("id", existing.getId());
         detail.put("name", existing.getName());
@@ -1271,7 +1271,7 @@ public class AdminApiResource {
 
     @PostMapping("/orgs/sync")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> syncOrganizations(HttpServletRequest request) {
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("unknown");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("sync", "keycloak");
         try {
@@ -1316,7 +1316,7 @@ public class AdminApiResource {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> datasets(HttpServletRequest request) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (AdminDataset d : datasetRepo.findAll()) out.add(toDatasetVM(d));
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         recordDatasetListV2(actor, out.size(), request);
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
@@ -1324,7 +1324,7 @@ public class AdminApiResource {
     @GetMapping("/custom-roles")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> customRoles(HttpServletRequest request) {
         var list = customRoleRepo.findAll().stream().map(this::toCustomRoleVM).toList();
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         recordCustomRoleListV2(actor, list.size(), request);
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
@@ -1334,7 +1334,7 @@ public class AdminApiResource {
         String rawName = Objects.toString(payload.get("name"), "").trim();
         if (rawName.isEmpty()) {
             recordCustomRoleCreateV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 null,
                 payload,
                 Map.of("error", "角色 ID 不能为空"),
@@ -1347,7 +1347,7 @@ public class AdminApiResource {
         String normalizedName = stripRolePrefix(rawName);
         if (isReservedRealmRoleName(normalizedName)) {
             recordCustomRoleCreateV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 null,
                 payload,
                 Map.of("error", "内置角色不可创建"),
@@ -1359,7 +1359,7 @@ public class AdminApiResource {
         }
         if (locateCustomRole(normalizedName).isPresent()) {
             recordCustomRoleCreateV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 null,
                 payload,
                 Map.of("error", "角色名称已存在"),
@@ -1372,7 +1372,7 @@ public class AdminApiResource {
         String titleCn = Objects.toString(payload.getOrDefault("titleCn", payload.get("nameZh")), "").trim();
         if (titleCn.isEmpty()) {
             recordCustomRoleCreateV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 null,
                 payload,
                 Map.of("error", "角色名称不能为空"),
@@ -1427,7 +1427,7 @@ public class AdminApiResource {
             detail.put("name", normalizedName);
             attachChangeRequestMetadata(detail, cr);
             recordCustomRoleCreateV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 cr,
                 after,
                 detail,
@@ -1438,7 +1438,7 @@ public class AdminApiResource {
             return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
         } catch (IllegalStateException ex) {
             recordCustomRoleCreateV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 null,
                 after,
                 Map.of("error", ex.getMessage()),
@@ -1454,7 +1454,7 @@ public class AdminApiResource {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> roleAssignments(HttpServletRequest request) {
         Map<String, String> roleLabels = buildRoleDisplayNameMap();
         var list = roleAssignRepo.findAll().stream().map(a -> toRoleAssignmentVM(a, roleLabels)).toList();
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         recordRoleAssignmentListV2(actor, list.size(), request);
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
@@ -1479,7 +1479,7 @@ public class AdminApiResource {
         String error = validateAssignment(role, username, displayName, userSecurityLevel, scopeOrgId, ops, datasetIds);
         if (error != null) {
             recordRoleAssignmentCreateV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 null,
                 after,
                 Map.of("error", error),
@@ -1503,7 +1503,7 @@ public class AdminApiResource {
             detail.put("role", role);
             attachChangeRequestMetadata(detail, cr);
             recordRoleAssignmentCreateV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 cr,
                 after,
                 detail,
@@ -1514,7 +1514,7 @@ public class AdminApiResource {
             return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
         } catch (IllegalStateException ex) {
             recordRoleAssignmentCreateV2(
-                SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+                SecurityUtils.getCurrentAuditableLogin(),
                 null,
                 after,
                 Map.of("error", ex.getMessage()),
@@ -1542,7 +1542,7 @@ public class AdminApiResource {
         augmentChangeRequestViewsFromApprovals(viewById);
         List<Map<String, Object>> responseList = new ArrayList<>(viewById.values());
         responseList.sort((a, b) -> compareByRequestedAtDesc(a, b));
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         recordChangeRequestListV2(actor, responseList.size(), request, false);
         return ResponseEntity.ok(ApiResponse.ok(responseList));
     }
@@ -1557,7 +1557,7 @@ public class AdminApiResource {
         augmentChangeRequestViewsFromApprovalsForActor(viewById, me);
         List<Map<String, Object>> list = new ArrayList<>(viewById.values());
         list.sort((a, b) -> compareByRequestedAtDesc(a, b));
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         recordChangeRequestListV2(actor, list.size(), request, true);
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
@@ -1601,7 +1601,7 @@ public class AdminApiResource {
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("action", "CREATE");
         attachChangeRequestMetadata(auditDetail, cr);
-        recordChangeRequestDraftV2(SecurityUtils.getCurrentUserLogin().orElse("unknown"), cr, request, auditDetail);
+        recordChangeRequestDraftV2(SecurityUtils.getCurrentAuditableLogin(), cr, request, auditDetail);
         return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
     }
 
@@ -1642,7 +1642,7 @@ public class AdminApiResource {
             submitDetail.put("summary", requesterOperation);
         }
         recordChangeRequestSubmitV2(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            SecurityUtils.getCurrentAuditableLogin(),
             cr,
             new LinkedHashMap<>(submitDetail),
             submitContext,
@@ -1756,7 +1756,7 @@ public class AdminApiResource {
         approverDetail.put("action", "REJECT");
         applyApproverContext(approverDetail, cr, changeContext);
         recordChangeRequestRejectV2(
-            SecurityUtils.getCurrentUserLogin().orElse("unknown"),
+            SecurityUtils.getCurrentAuditableLogin(),
             cr,
             new LinkedHashMap<>(approverDetail),
             changeContext,
@@ -1972,7 +1972,7 @@ public class AdminApiResource {
                 }
             }
         );
-        recordPermissionCatalogV2(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), sections.size(), request);
+        recordPermissionCatalogV2(SecurityUtils.getCurrentAuditableLogin(), sections.size(), request);
         return ResponseEntity.ok(ApiResponse.ok(sections));
     }
 

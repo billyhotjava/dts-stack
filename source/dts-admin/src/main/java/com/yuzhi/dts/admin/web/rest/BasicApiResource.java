@@ -181,7 +181,7 @@ public class BasicApiResource {
     }
 
     private void recordMenuFetchAudit(int roleCount, int permissionCount, String dataLevel) {
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         AuditActionRequest.Builder builder = AuditActionRequest
             .builder(actor, ButtonCodes.PORTAL_MENU_VIEW)
             .actorName(actor)
@@ -197,7 +197,7 @@ public class BasicApiResource {
     }
 
     private void recordDemoUserAudit() {
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String actor = SecurityUtils.getCurrentAuditableLogin();
         AuditActionRequest.Builder builder = AuditActionRequest
             .builder(actor, ButtonCodes.USER_LIST)
             .actorName(actor)
@@ -207,4 +207,5 @@ public class BasicApiResource {
             .allowEmptyTargets();
         auditV2Service.record(builder.build());
     }
+
 }

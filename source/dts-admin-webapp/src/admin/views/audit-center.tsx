@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -11,7 +11,7 @@ import userStore from "@/store/userStore";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Calendar } from "@/ui/calendar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
 import { Text } from "@/ui/typography";
@@ -276,7 +276,7 @@ const MODULE_TOKEN_TRANSLATIONS: Record<string, string> = {
 	workbench: "工作台",
 };
 
-const DEFAULT_PAGE_SIZE = 10;
+const DEFAULT_PAGE_SIZE = 20;
 const MODULE_FILTER_ENABLED = false;
 
 function translateModuleLabel(key?: string, fallback?: string): string {
@@ -561,153 +561,144 @@ export default function AuditCenterView() {
 	);
 
 	return (
-		<div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
-			{/* 老页面布局样式：页眉 + 右侧操作区 */}
-			<div className="flex flex-wrap items-center gap-3">
-				<Text variant="body1" className="text-lg font-semibold">
-					日志审计
-				</Text>
-				<div className="ml-auto flex items-center gap-2">
-					<Button onClick={handleExport} disabled={exporting || logs.length === 0}>
-						{exporting ? "正在导出..." : "导出日志"}
-					</Button>
-				</div>
-			</div>
+		<div className="mx-auto w-full px-6 py-6">
 			<Card>
-				<CardHeader className="space-y-2">
-					<CardTitle>查询条件</CardTitle>
-					<Text variant="body3" className="text-muted-foreground">
-						支持按时间范围、来源系统、功能模块、操作人、目标位置与 IP 筛选审计记录。
-					</Text>
+				<CardHeader className="gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+					<div className="space-y-1.5">
+						<CardTitle className="text-lg">日志审计</CardTitle>
+						<CardDescription>
+							支持按时间范围、来源系统、功能模块、操作人、目标位置与 IP 筛选审计记录。
+						</CardDescription>
+					</div>
+					<CardAction>
+						<Button onClick={handleExport} disabled={exporting || logs.length === 0}>
+							{exporting ? "正在导出..." : "导出日志"}
+						</Button>
+					</CardAction>
 				</CardHeader>
-				<CardContent className="space-y-4">
-					<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-						<DateTimeField
-							label="起始时间"
-							value={filters.from}
-							onChange={(value) => setFilters((prev) => ({ ...prev, from: value }))}
-						/>
-						<DateTimeField
-							label="终止时间"
-							value={filters.to}
-							onChange={(value) => setFilters((prev) => ({ ...prev, to: value }))}
-						/>
-						<SelectField
-							label="来源系统"
-							value={filters.sourceSystem || ""}
-							onChange={(value) => setFilters((prev) => ({ ...prev, sourceSystem: value || undefined }))}
-							options={[
-								{ value: "", label: "全部来源" },
-								{ value: "admin", label: "系统管理" },
-								{ value: "platform", label: "业务管理" },
-							]}
-						/>
-						{MODULE_FILTER_ENABLED && (
+				<CardContent className="space-y-6">
+					<section className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+						<Text variant="subTitle1" color="secondary" className="block">
+							查询条件
+						</Text>
+						<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+							<DateTimeField
+								label="起始时间"
+								value={filters.from}
+								onChange={(value) => setFilters((prev) => ({ ...prev, from: value }))}
+							/>
+							<DateTimeField
+								label="终止时间"
+								value={filters.to}
+								onChange={(value) => setFilters((prev) => ({ ...prev, to: value }))}
+							/>
 							<SelectField
-								label="功能模块"
-								value={filters.module || ""}
+								label="来源系统"
+								value={filters.sourceSystem || ""}
+								onChange={(value) => setFilters((prev) => ({ ...prev, sourceSystem: value || undefined }))}
+								options={[
+									{ value: "", label: "全部来源" },
+									{ value: "admin", label: "系统管理" },
+									{ value: "platform", label: "业务管理" },
+								]}
+							/>
+							{MODULE_FILTER_ENABLED && (
+								<SelectField
+									label="功能模块"
+									value={filters.module || ""}
+									onChange={(value) => {
+										const trimmed = value.trim();
+										setFilters((prev) => ({ ...prev, module: trimmed ? trimmed : undefined }));
+									}}
+									options={moduleOptions}
+								/>
+							)}
+							<SelectField
+								label="功能分组"
+								value={filters.operationGroup || ""}
 								onChange={(value) => {
 									const trimmed = value.trim();
-									setFilters((prev) => ({ ...prev, module: trimmed ? trimmed : undefined }));
+									setFilters((prev) => ({ ...prev, operationGroup: trimmed ? trimmed : undefined }));
 								}}
-								options={moduleOptions}
+								options={groupOptions}
 							/>
-						)}
-						<SelectField
-							label="功能分组"
-							value={filters.operationGroup || ""}
-							onChange={(value) => {
-								const trimmed = value.trim();
-								setFilters((prev) => ({ ...prev, operationGroup: trimmed ? trimmed : undefined }));
-							}}
-							options={groupOptions}
-						/>
-						<InputField
-							label="操作者"
-							placeholder="如 系统管理员 或 sysadmin"
-							value={filters.actor ?? ""}
-							onChange={(value) => setFilters((prev) => ({ ...prev, actor: value || undefined }))}
-						/>
-						<InputField
-							label="目标位置"
-							placeholder="例如 /admin/approval"
-							value={filters.resource ?? ""}
-							onChange={(value) => setFilters((prev) => ({ ...prev, resource: value || undefined }))}
-						/>
-						<InputField
-							label="IP 地址"
-							placeholder="例如 10.10."
-							value={filters.clientIp ?? ""}
-							onChange={(value) => setFilters((prev) => ({ ...prev, clientIp: value || undefined }))}
-						/>
-						<InputField
-							label="操作关键词"
-							placeholder="创建/审批/导出"
-							value={filters.action ?? ""}
-							onChange={(value) => setFilters((prev) => ({ ...prev, action: value || undefined }))}
-						/>
-						{/* 事件类型筛选已移除 */}
-					</div>
-					<div className="flex flex-wrap gap-3">
-						<Button type="button" variant="outline" className="w-32" onClick={() => setFilters({})}>
-							重置条件
-						</Button>
-						<Button type="button" variant="secondary" className="w-32" onClick={handleRefresh} disabled={loading}>
-							{loading ? "刷新中..." : "刷新"}
-						</Button>
-					</div>
-				</CardContent>
-			</Card>
+							<InputField
+								label="操作者"
+								placeholder="如 系统管理员 或 sysadmin"
+								value={filters.actor ?? ""}
+								onChange={(value) => setFilters((prev) => ({ ...prev, actor: value || undefined }))}
+							/>
+							<InputField
+								label="目标位置"
+								placeholder="例如 /admin/approval"
+								value={filters.resource ?? ""}
+								onChange={(value) => setFilters((prev) => ({ ...prev, resource: value || undefined }))}
+							/>
+							<InputField
+								label="IP 地址"
+								placeholder="例如 10.10."
+								value={filters.clientIp ?? ""}
+								onChange={(value) => setFilters((prev) => ({ ...prev, clientIp: value || undefined }))}
+							/>
+							<InputField
+								label="操作关键词"
+								placeholder="创建/审批/导出"
+								value={filters.action ?? ""}
+								onChange={(value) => setFilters((prev) => ({ ...prev, action: value || undefined }))}
+							/>
+							{/* 事件类型筛选已移除 */}
+						</div>
+						<div className="flex flex-wrap gap-3">
+							<Button type="button" variant="secondary" className="w-32 text-black" onClick={() => setFilters({})}>
+								重置条件
+							</Button>
+							<Button type="button" variant="secondary" className="w-32 text-black" onClick={handleRefresh} disabled={loading}>
+								{loading ? "刷新中..." : "刷新"}
+							</Button>
+						</div>
+					</section>
 
-			<Card>
-				<CardHeader className="pb-2">
-					<CardTitle>日志记录</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<Table<AuditLog>
-						rowKey="id"
-						columns={columns}
-						dataSource={logs}
-						loading={loading}
-							expandable={{
-								columnWidth: 48,
-								expandRowByClick: true,
-								onExpand: handleExpandRow,
-								expandedRowRender: (record) => {
-									const loadingRow = rowLoading[record.id];
-									const detail = rowDetails[record.id];
-									if (loadingRow) {
-										return <div className="text-xs text-muted-foreground">加载详情...</div>;
-									}
-									const rawDetails = detail?.details;
-									const sanitized = sanitizeAuditDetails(rawDetails);
-									if (isAuditDetailEmpty(sanitized)) {
-										return <div className="text-xs text-muted-foreground">无详情</div>;
-									}
-									return (
-										<pre className="whitespace-pre-wrap break-words rounded border border-border bg-muted/40 p-3 text-xs">
-											{JSON.stringify(sanitized, null, 2)}
-										</pre>
-									);
-								},
-							}}
-						pagination={{
-							current: page + 1,
-							pageSize: size,
-							total: totalElements,
-							showSizeChanger: true,
-							pageSizeOptions: [10, 20, 50, 100],
-							showQuickJumper: true,
-							showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
-							onChange: (current, pageSize) => {
-								setPage(current - 1);
-								setSize(pageSize);
-							},
-						}}
-							size="small"
-							tableLayout="fixed"
-							scroll={{ x: 1300 }}
-					/>
+					<section className="space-y-4">
+						<Text variant="subTitle1" color="secondary" className="block">
+							日志记录
+						</Text>
+						<div className="overflow-x-auto rounded-lg border border-border/60 bg-card">
+							<Table<AuditLog>
+								rowKey="id"
+								columns={columns}
+								dataSource={logs}
+								loading={loading}
+								expandable={{
+									columnWidth: 48,
+									expandRowByClick: true,
+									onExpand: handleExpandRow,
+									expandedRowRender: (record) => {
+										const loadingRow = rowLoading[record.id];
+										const detail = rowDetails[record.id];
+										if (loadingRow) {
+											return <div className="text-xs text-muted-foreground">加载详情...</div>;
+										}
+										return renderAuditDetail(detail);
+									},
+								}}
+								pagination={{
+									current: page + 1,
+									pageSize: size,
+									total: totalElements,
+									showSizeChanger: true,
+									pageSizeOptions: [10, 20, 50, 100],
+									showQuickJumper: true,
+									showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+									onChange: (current, pageSize) => {
+										setPage(current - 1);
+										setSize(pageSize);
+									},
+								}}
+								size="small"
+								scroll={{ x: "max-content" }}
+							/>
+						</div>
+					</section>
 				</CardContent>
 			</Card>
 		</div>
@@ -748,62 +739,418 @@ function buildQuery(filters: FilterState): Record<string, string> {
 	return params;
 }
 
-const DETAIL_KEYS_TO_HIDE = new Set([
-	"before",
-	"after",
-	"changes",
-	"payload",
-	"payloadJson",
-	"diff",
-	"diffJson",
-	"originalValue",
-	"updatedValue",
-]);
+type AuditDetailSource = {
+	details?: unknown;
+	metadata?: unknown;
+	extraAttributes?: unknown;
+};
 
-function sanitizeAuditDetails(value: unknown): unknown {
-	if (value === null || value === undefined) {
-		return null;
-	}
-	if (Array.isArray(value)) {
-		const cleaned = value
-			.map((item) => sanitizeAuditDetails(item))
-			.filter((item) => !isAuditDetailEmpty(item));
-		return cleaned.length > 0 ? cleaned : null;
-	}
-	if (typeof value === "object") {
-		const source = value as Record<string, unknown>;
-		const target: Record<string, unknown> = {};
-		for (const [key, raw] of Object.entries(source)) {
-			if (DETAIL_KEYS_TO_HIDE.has(key)) {
-				continue;
-			}
-			const sanitized = sanitizeAuditDetails(raw);
-			if (!isAuditDetailEmpty(sanitized)) {
-				target[key] = sanitized;
-			}
-		}
-		return Object.keys(target).length > 0 ? target : null;
-	}
-	if (typeof value === "string") {
-		return value.trim() === "" ? null : value;
-	}
-	return value;
+interface DiffRow {
+	field: string;
+	label: string;
+	before: string;
+	after: string;
 }
 
-function isAuditDetailEmpty(value: unknown): boolean {
-	if (value === null || value === undefined) {
-		return true;
+interface ParsedAuditDetail {
+	diffRows: DiffRow[];
+	before?: Record<string, unknown> | null;
+	after?: Record<string, unknown> | null;
+	infoEntries: Array<{ key: string; value: string; multiline: boolean }>;
+	rawJson?: string;
+}
+
+interface SnapshotData {
+	before: Record<string, unknown>;
+	after: Record<string, unknown>;
+	changes: Array<{ field: string; label?: string; before: unknown; after: unknown }>;
+}
+
+const DETAIL_KEYS_TO_SKIP = new Set([
+	"changeSnapshot",
+	"changeSnapshots",
+	"changeSummary",
+	"before",
+	"after",
+	"diff",
+	"diffJson",
+	"payload",
+	"payloadJson",
+	"context",
+	"detail",
+	"items",
+]);
+
+function renderAuditDetail(detail?: AuditLogDetail | null): ReactNode {
+	const parsed = parseAuditDetail({
+		details: detail?.details,
+		metadata: detail?.metadata,
+		extraAttributes: detail?.extraAttributes,
+	});
+	if (!parsed) {
+		return <div className="text-xs text-muted-foreground">无详情</div>;
+	}
+	const hasDiff = parsed.diffRows.length > 0;
+	const hasBeforeAfter = !!(parsed.before && Object.keys(parsed.before).length) || !!(parsed.after && Object.keys(parsed.after).length);
+	const hasInfo = parsed.infoEntries.length > 0;
+	return (
+		<div className="space-y-3 text-xs leading-5">
+			{hasDiff ? (
+				<div className="space-y-2">
+					<Text variant="body3" className="text-muted-foreground">
+						字段变更
+					</Text>
+					<div className="overflow-x-auto rounded border border-border/60 bg-muted/40">
+						<table className="min-w-full divide-y divide-border text-left text-[11px]">
+							<thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+								<tr>
+									<th className="px-3 py-2 font-medium">字段</th>
+									<th className="px-3 py-2 font-medium">变更前</th>
+									<th className="px-3 py-2 font-medium">变更后</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-border bg-card">
+								{parsed.diffRows.map((row) => (
+									<tr key={row.field || row.label}>
+										<td className="px-3 py-2 font-medium text-foreground">{row.label}</td>
+										<td className="px-3 py-2 text-muted-foreground">{row.before || "—"}</td>
+										<td className="px-3 py-2 text-destructive">{row.after || "—"}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			) : null}
+			{hasBeforeAfter ? (
+				<div className="grid gap-3 md:grid-cols-2">
+					<div className="space-y-2">
+						<Text variant="body3" className="text-muted-foreground">
+							变更前
+						</Text>
+						<pre className="max-h-64 overflow-auto rounded border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-5">
+							{formatJson(parsed.before && Object.keys(parsed.before).length ? parsed.before : "—")}
+						</pre>
+					</div>
+					<div className="space-y-2">
+						<Text variant="body3" className="text-muted-foreground">
+							变更后
+						</Text>
+						<pre className="max-h-64 overflow-auto rounded border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-5">
+							{formatJson(parsed.after && Object.keys(parsed.after).length ? parsed.after : "—")}
+						</pre>
+					</div>
+				</div>
+			) : null}
+			{hasInfo ? (
+				<div className="space-y-2">
+					<Text variant="body3" className="text-muted-foreground">
+						其他信息
+					</Text>
+					<div className="grid gap-2">
+						{parsed.infoEntries.map((entry) => (
+							<div key={entry.key} className="rounded border border-border/60 bg-muted/30 px-3 py-2">
+								<div className="text-muted-foreground">{entry.key}</div>
+								{entry.multiline ? (
+									<pre className="mt-1 whitespace-pre-wrap font-mono text-[11px] leading-5 text-foreground">{entry.value}</pre>
+								) : (
+									<div className="text-foreground">{entry.value}</div>
+								)}
+							</div>
+						))}
+					</div>
+				</div>
+			) : null}
+			{parsed.rawJson ? (
+				<details className="rounded border border-border/60 bg-muted/20 px-3 py-2">
+					<summary className="cursor-pointer text-xs text-muted-foreground">查看原始详情</summary>
+					<pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap font-mono text-[11px] leading-5">
+						{parsed.rawJson}
+					</pre>
+				</details>
+			) : null}
+		</div>
+	);
+}
+
+function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
+	const root = parseRecord(source.details) ?? {};
+	const detailLayer = parseRecord(root.detail);
+	const contextLayer = parseRecord(root.context);
+	const metadataLayer = parseRecord(source.metadata);
+	const extraLayer = parseRecord(source.extraAttributes);
+	const snapshotLayers = [root, detailLayer, contextLayer].filter(Boolean) as Record<string, unknown>[];
+
+	const snapshot = findSnapshot(snapshotLayers);
+	const summaryRows = findSummaryRows(snapshotLayers);
+
+	const diffRows = summaryRows.length > 0
+		? summaryRows.map((row) => ({
+				field: row.field,
+				label: row.label,
+				before: formatDisplayValue(row.before),
+				after: formatDisplayValue(row.after),
+			}))
+		: snapshot
+			? buildRowsFromSnapshot(snapshot)
+			: [];
+
+	const before = snapshot?.before ?? (parseRecord(root.before) ?? null);
+	const after = snapshot?.after ?? (parseRecord(root.after) ?? null);
+	const infoEntries = collectInfoEntries(
+		[root, detailLayer, contextLayer, metadataLayer, extraLayer],
+		new Set([...DETAIL_KEYS_TO_SKIP, ...diffRows.map((row) => row.field)]),
+	);
+
+	const rawJson = Object.keys(root).length > 0 ? formatJson(root) : undefined;
+
+	if (diffRows.length === 0 && infoEntries.length === 0 && !rawJson) {
+		return null;
+	}
+
+	return {
+		diffRows,
+		before,
+		after,
+		infoEntries,
+		rawJson,
+	};
+}
+
+function findSnapshot(layers: Record<string, unknown>[]): SnapshotData | null {
+	for (const layer of layers) {
+		const direct = parseChangeSnapshot(layer["changeSnapshot"]);
+		if (direct) {
+			return direct;
+		}
+		const multi = layer["changeSnapshots"];
+		if (Array.isArray(multi)) {
+			for (const entry of multi) {
+				const snapshot = parseChangeSnapshot(entry);
+				if (snapshot) {
+					return snapshot;
+				}
+			}
+		}
+	}
+	return null;
+}
+
+function findSummaryRows(layers: Record<string, unknown>[]) {
+	for (const layer of layers) {
+		const summary = parseSummaryRows(layer["changeSummary"]);
+		if (summary.length > 0) {
+			return summary;
+		}
+	}
+	return [];
+}
+
+function parseSummaryRows(value: unknown): Array<{ field: string; label: string; before: unknown; after: unknown }> {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+	const rows: Array<{ field: string; label: string; before: unknown; after: unknown }> = [];
+	for (const item of value) {
+		const record = parseRecord(item);
+		if (!record) continue;
+		const fieldRaw = typeof record.field === "string" ? record.field : record.field != null ? String(record.field) : "";
+		const field = fieldRaw.trim();
+		const labelRaw = typeof record.label === "string" ? record.label : "";
+		const label = labelRaw.trim() || deriveFieldLabel(field);
+		rows.push({
+			field: field || label,
+			label,
+			before: record.before,
+			after: record.after,
+		});
+	}
+	return rows;
+}
+
+function parseChangeSnapshot(value: unknown): SnapshotData | null {
+	const record = parseRecord(value);
+	if (!record) {
+		return null;
+	}
+	const before = parseRecord(record.before) ?? {};
+	const after = parseRecord(record.after) ?? {};
+	const changesRaw = Array.isArray(record.changes) ? record.changes : [];
+	const changes: Array<{ field: string; label?: string; before: unknown; after: unknown }> = [];
+	for (const item of changesRaw) {
+		const entry = parseRecord(item);
+		if (!entry) continue;
+		const fieldRaw = typeof entry.field === "string" ? entry.field : entry.field != null ? String(entry.field) : "";
+		const field = fieldRaw.trim();
+		if (!field) continue;
+		const labelRaw = typeof entry.label === "string" ? entry.label : "";
+		const label = labelRaw.trim() || deriveFieldLabel(field);
+		changes.push({
+			field,
+			label,
+			before: entry.before,
+			after: entry.after,
+		});
+	}
+	return { before, after, changes };
+}
+
+function buildRowsFromSnapshot(snapshot: SnapshotData): DiffRow[] {
+	const rows: DiffRow[] = [];
+	if (snapshot.changes.length > 0) {
+		for (const change of snapshot.changes) {
+			const field = change.field || change.label || "";
+			if (!field) continue;
+			rows.push({
+				field,
+				label: change.label ?? deriveFieldLabel(change.field),
+				before: formatDisplayValue(change.before),
+				after: formatDisplayValue(change.after),
+			});
+		}
+	} else {
+		const keys = new Set<string>([
+			...Object.keys(snapshot.before ?? {}),
+			...Object.keys(snapshot.after ?? {}),
+		]);
+		for (const field of keys) {
+			const beforeValue = snapshot.before?.[field];
+			const afterValue = snapshot.after?.[field];
+			if (JSON.stringify(beforeValue) === JSON.stringify(afterValue)) {
+				continue;
+			}
+			rows.push({
+				field,
+				label: deriveFieldLabel(field),
+				before: formatDisplayValue(beforeValue),
+				after: formatDisplayValue(afterValue),
+			});
+		}
+	}
+	return rows;
+}
+
+function collectInfoEntries(
+	sources: Array<Record<string, unknown> | null | undefined>,
+	ignoreKeys: Set<string>,
+): Array<{ key: string; value: string; multiline: boolean }> {
+	const entries: Array<{ key: string; value: string; multiline: boolean }> = [];
+	const seen = new Set<string>();
+	for (const source of sources) {
+		if (!source) continue;
+		for (const [key, raw] of Object.entries(source)) {
+			if (!key || ignoreKeys.has(key)) continue;
+			if (raw === null || raw === undefined) continue;
+			if (seen.has(key)) continue;
+			const display = formatDisplayValue(raw);
+			if (!display) continue;
+			const multiline = display.includes("\n");
+			entries.push({ key, value: display, multiline });
+			seen.add(key);
+		}
+	}
+	return entries;
+}
+
+function parseRecord(value: unknown): Record<string, unknown> | null {
+	const direct = asRecord(value);
+	if (direct) {
+		return direct;
 	}
 	if (typeof value === "string") {
-		return value.trim().length === 0;
+		const trimmed = value.trim();
+		if (!trimmed) {
+			return null;
+		}
+		if (
+			(trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+			(trimmed.startsWith("[") && trimmed.endsWith("]"))
+		) {
+			try {
+				const parsed = JSON.parse(trimmed);
+				return asRecord(parsed);
+			} catch {
+				return null;
+			}
+		}
+	}
+	return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (value && typeof value === "object" && !Array.isArray(value)) {
+		return value as Record<string, unknown>;
+	}
+	return null;
+}
+
+function formatDisplayValue(value: unknown): string {
+	if (value === null || value === undefined) {
+		return "";
+	}
+	if (typeof value === "string") {
+		return value;
+	}
+	if (typeof value === "number" || typeof value === "boolean") {
+		return String(value);
 	}
 	if (Array.isArray(value)) {
-		return value.length === 0 || value.every((item) => isAuditDetailEmpty(item));
+		if (value.length === 0) {
+			return "[]";
+		}
+		const primitives = value.every(
+			(item) => item === null || ["string", "number", "boolean"].includes(typeof item),
+		);
+		if (primitives) {
+			return value.map((item) => (item === null || item === undefined ? "" : String(item))).join("，");
+		}
+		return formatJson(value);
 	}
-	if (typeof value === "object") {
-		return Object.keys(value as Record<string, unknown>).length === 0;
+	const record = asRecord(value);
+	if (record) {
+		return formatJson(record);
 	}
-	return false;
+	return String(value);
+}
+
+function formatJson(value: unknown): string {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed) {
+			return "";
+		}
+		if (
+			(trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+			(trimmed.startsWith("[") && trimmed.endsWith("]"))
+		) {
+			try {
+				return JSON.stringify(JSON.parse(trimmed), null, 2);
+			} catch {
+				return value;
+			}
+		}
+		return value;
+	}
+	try {
+		return JSON.stringify(value, null, 2);
+	} catch {
+		return String(value ?? "");
+	}
+}
+
+function deriveFieldLabel(field: string | undefined): string {
+	if (!field) {
+		return "-";
+	}
+	const normalized = field.replace(/[_\-\.]+/g, " ").trim();
+	if (!normalized) {
+		return field;
+	}
+	return normalized
+		.split(" ")
+		.filter((token) => token.length > 0)
+		.map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+		.join(" ");
 }
 
 function resolveAccessToken(): string {
