@@ -101,7 +101,7 @@ export default function SavedQueriesPage() {
 		setLoadError(null);
 		try {
 			const [datasetResp, resultResp] = await Promise.all([
-				listDatasets({ page: 0, size: 200 }),
+				listDatasets({ page: 0, size: 200, auditPurpose: "explore.preview" }),
 				listResultSets(),
 			]);
 

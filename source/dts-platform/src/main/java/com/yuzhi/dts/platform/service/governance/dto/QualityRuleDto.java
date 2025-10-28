@@ -13,6 +13,7 @@ public class QualityRuleDto {
     private String category;
     private String description;
     private String owner;
+    private String ownerDept;
     private String severity;
     private String dataLevel;
     private String executor;
@@ -82,6 +83,14 @@ public class QualityRuleDto {
 
     public void setOwner(String owner) {
         this.owner = owner;
+    }
+
+    public String getOwnerDept() {
+        return ownerDept;
+    }
+
+    public void setOwnerDept(String ownerDept) {
+        this.ownerDept = ownerDept;
     }
 
     public String getSeverity() {
@@ -196,4 +205,3 @@ public class QualityRuleDto {
         this.latestVersion = latestVersion;
     }
 }
-

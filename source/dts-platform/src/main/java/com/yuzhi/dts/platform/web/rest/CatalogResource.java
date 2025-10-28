@@ -231,7 +231,8 @@ public class CatalogResource {
         @RequestParam(required = false) String tag,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "10") int size,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
+        @RequestParam(value = "auditPurpose", required = false) String auditPurpose
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdDate").descending());
         Page<CatalogDataset> p = datasetRepo.findAll(pageable);
@@ -266,10 +267,28 @@ public class CatalogResource {
         data.put("size", p.getSize());
         data.put("returned", filtered.size());
         Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("summary", "查看数据资产列表");
-        auditPayload.put("page", page);
-        auditPayload.put("size", size);
-        auditPayload.put("returned", filtered.size());
+        String purpose = trimToNull(auditPurpose);
+        String summary;
+        String actionCode;
+        if ("explore.workbench".equalsIgnoreCase(purpose)) {
+            summary = "进入SQL查询工作台";
+            actionCode = "EXPLORE_SQL_OPEN";
+            auditPayload.put("datasetCount", filtered.size());
+        } else if ("explore.preview".equalsIgnoreCase(purpose)) {
+            summary = "进入查询结果预览";
+            actionCode = "EXPLORE_RESULTSET_VIEW";
+            auditPayload.put("datasetCount", filtered.size());
+        } else {
+            summary = "查看数据资产列表";
+            actionCode = "CATALOG_ASSET_LIST";
+            auditPayload.put("page", page);
+            auditPayload.put("size", size);
+            auditPayload.put("returned", filtered.size());
+        }
+        auditPayload.put("summary", summary);
+        if (purpose != null) {
+            auditPayload.put("purpose", purpose);
+        }
         if (domainId != null) {
             auditPayload.put("domainId", domainId.toString());
         }
@@ -280,7 +299,8 @@ public class CatalogResource {
         putIfHasText(auditPayload, "exposedBy", exposedBy);
         putIfHasText(auditPayload, "owner", owner);
         putIfHasText(auditPayload, "tag", tag);
-        audit.auditAction("CATALOG_ASSET_LIST", AuditStage.SUCCESS, "page=" + page, auditPayload);
+        String resourceRef = "CATALOG_ASSET_LIST".equals(actionCode) ? "page=" + page : null;
+        audit.auditAction(actionCode, AuditStage.SUCCESS, resourceRef, auditPayload);
         return ApiResponses.ok(data);
     }
 
@@ -1122,6 +1142,14 @@ public class CatalogResource {
         }
         String cleaned = message.replaceAll("\\s+", " ").trim();
         return cleaned.length() > 160 ? cleaned.substring(0, 160) : cleaned;
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private String claim(String name) {

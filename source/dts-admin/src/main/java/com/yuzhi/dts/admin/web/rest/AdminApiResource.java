@@ -2948,9 +2948,27 @@ public class AdminApiResource {
         if (menuId != null) {
             existing = portalMenuRepo.findById(menuId).orElse(null);
         }
+        if (existing == null && StringUtils.hasText(name)) {
+            existing = portalMenuRepo.findFirstByNameIgnoreCase(name.trim()).orElse(null);
+        }
+        if (existing == null && StringUtils.hasText(path)) {
+            existing = portalMenuRepo.findFirstByPath(path.trim()).orElse(null);
+        }
+        if (existing == null && StringUtils.hasText(resourceId)) {
+            String trimmedId = resourceId.trim();
+            existing = portalMenuRepo.findFirstByNameIgnoreCase(trimmedId).orElse(null);
+            if (existing == null) {
+                existing = portalMenuRepo.findFirstByPath(trimmedId).orElse(null);
+            }
+        }
         if (existing != null) {
             if (!StringUtils.hasText(label)) {
                 label = resolveMenuDisplayName(existing);
+            } else if (label.equals(existing.getName())) {
+                String resolved = resolveMenuDisplayName(existing);
+                if (StringUtils.hasText(resolved)) {
+                    label = resolved;
+                }
             }
             if (!StringUtils.hasText(name)) {
                 name = existing.getName();

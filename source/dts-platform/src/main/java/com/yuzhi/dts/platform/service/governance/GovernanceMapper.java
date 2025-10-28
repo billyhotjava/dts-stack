@@ -52,6 +52,7 @@ final class GovernanceMapper {
         dto.setCategory(entity.getCategory());
         dto.setDescription(entity.getDescription());
         dto.setOwner(entity.getOwner());
+        dto.setOwnerDept(entity.getOwnerDept());
         dto.setSeverity(entity.getSeverity());
         dto.setDataLevel(entity.getDataLevel());
         dto.setExecutor(entity.getExecutor());

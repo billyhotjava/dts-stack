@@ -144,8 +144,28 @@ public class QualityRunService {
                 );
             }
         }
-        auditService.audit("EXECUTE", "governance.quality.run",
-            rule.getId() + ":" + runs.stream().map(dto -> dto.getId().toString()).collect(Collectors.joining(",")));
+        String runIdSummary = runs
+            .stream()
+            .map(dto -> dto.getId().toString())
+            .collect(Collectors.joining(","));
+        String targetRef = rule.getId() + ":" + runIdSummary;
+        auditService.record(
+            "EXECUTE",
+            "governance.quality.run",
+            "governance.quality.run",
+            targetRef,
+            "SUCCESS",
+            Map.of(
+                "summary",
+                "运行质量规则：" + rule.getName(),
+                "ruleId",
+                rule.getId().toString(),
+                "ruleName",
+                rule.getName(),
+                "runIds",
+                runIdSummary
+            )
+        );
         return runs;
     }
 
@@ -202,7 +222,17 @@ public class QualityRunService {
                 run.setFinishedAt(Instant.now());
                 run.setMessage("未配置检测语句");
                 runRepository.save(run);
-                auditService.audit("SKIP", "governance.quality.run", runId.toString());
+                Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
+                payload.put("status", run.getStatus());
+                payload.put("message", run.getMessage());
+                auditService.record(
+                    "SKIP",
+                    "governance.quality.run",
+                    "governance.quality.run",
+                    runId.toString(),
+                    "SUCCESS",
+                    payload
+                );
                 return;
             }
 
@@ -217,9 +247,30 @@ public class QualityRunService {
             run.setMetricsJson(writeMetrics(results));
             runRepository.save(run);
             if (aggregate == StatementExecutionResult.Status.FAILED) {
-                auditService.auditFailure("EXECUTE", "governance.quality.run", runId.toString(), results);
+                Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
+                payload.put("status", run.getStatus());
+                payload.put("message", run.getMessage());
+                payload.put("results", results);
+                auditService.record(
+                    "EXECUTE",
+                    "governance.quality.run",
+                    "governance.quality.run",
+                    runId.toString(),
+                    "FAILED",
+                    payload
+                );
             } else {
-                auditService.audit("EXECUTE", "governance.quality.run", runId.toString());
+                Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
+                payload.put("status", run.getStatus());
+                payload.put("message", run.getMessage());
+                auditService.record(
+                    "EXECUTE",
+                    "governance.quality.run",
+                    "governance.quality.run",
+                    runId.toString(),
+                    "SUCCESS",
+                    payload
+                );
             }
         } catch (Exception ex) {
             log.error("Quality run failed: {}", ex.getMessage(), ex);
@@ -228,8 +279,70 @@ public class QualityRunService {
             run.setMessage(ex.getMessage());
             run.setDurationMs(java.time.Duration.between(start, run.getFinishedAt()).toMillis());
             runRepository.save(run);
-            auditService.auditFailure("EXECUTE", "governance.quality.run", runId.toString(), ex.getMessage());
+            Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
+            payload.put("status", run.getStatus());
+            payload.put("message", run.getMessage());
+            payload.put("error", ex.getMessage());
+            auditService.record(
+                "EXECUTE",
+                "governance.quality.run",
+                "governance.quality.run",
+                runId.toString(),
+                "FAILED",
+                payload
+            );
         }
+    }
+
+    private String resolveRuleName(GovRule rule) {
+        if (rule == null) {
+            return "未知规则";
+        }
+        if (StringUtils.isNotBlank(rule.getName())) {
+            return rule.getName();
+        }
+        if (StringUtils.isNotBlank(rule.getCode())) {
+            return rule.getCode();
+        }
+        return rule.getId() != null ? rule.getId().toString() : "未知规则";
+    }
+
+    private String resolveRunRuleName(GovQualityRun run) {
+        if (run == null) {
+            return "未知规则";
+        }
+        GovRule rule = run.getRule();
+        if (rule != null) {
+            return resolveRuleName(rule);
+        }
+        GovRuleVersion version = run.getRuleVersion();
+        if (version != null && version.getRule() != null) {
+            return resolveRuleName(version.getRule());
+        }
+        return run.getId() != null ? run.getId().toString() : "未知规则";
+    }
+
+    private Map<String, Object> buildRunAuditPayload(GovQualityRun run, String summary) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", summary);
+        if (run != null) {
+            if (run.getId() != null) {
+                payload.put("runId", run.getId().toString());
+            }
+            GovRule rule = run.getRule();
+            if (rule != null && rule.getId() != null) {
+                payload.put("ruleId", rule.getId().toString());
+                payload.put("ruleName", resolveRuleName(rule));
+            } else if (run.getRuleVersion() != null && run.getRuleVersion().getRule() != null) {
+                GovRule vrule = run.getRuleVersion().getRule();
+                if (vrule.getId() != null) {
+                    payload.put("ruleId", vrule.getId().toString());
+                }
+                payload.put("ruleName", resolveRuleName(vrule));
+            }
+            payload.putIfAbsent("ruleName", resolveRunRuleName(run));
+        }
+        return payload;
     }
 
     private GovRule resolveRule(UUID ruleId) {

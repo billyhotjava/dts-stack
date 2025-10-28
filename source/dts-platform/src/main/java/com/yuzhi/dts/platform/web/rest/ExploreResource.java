@@ -320,7 +320,7 @@ public class ExploreResource {
                 resultSetRepo.save(record);
                 recordAudit(
                     "UPDATE",
-                    "explore.result.save",
+                    "explore.saveResult",
                     executionId.toString(),
                     "保存查询结果集：" + safeLabel(record.getName()),
                     record.getName()
@@ -382,13 +382,6 @@ public class ExploreResource {
             .filter(StringUtils::hasText)
             .orElse(null);
         if (!StringUtils.hasText(currentUser)) {
-            recordAudit(
-                "READ",
-                "explore.resultSet",
-                null,
-                "查看查询结果集列表",
-                null
-            );
             return ApiResponses.ok(List.of());
         }
         List<ResultSet> records = resultSetRepo.findByCreatedByOrderByCreatedDateDesc(currentUser);
@@ -427,15 +420,6 @@ public class ExploreResource {
             }
             list.add(toResultSetMap(rs, exec, dataset));
         }
-        recordAudit(
-            "READ",
-            "explore.resultSet",
-            null,
-            "查看查询结果集列表",
-            null,
-            "SUCCESS",
-            Map.of("count", list.size())
-        );
         return ApiResponses.ok(list);
     }
 
@@ -571,7 +555,7 @@ public class ExploreResource {
         });
         recordAudit(
             "DELETE",
-            "explore.result.cleanup",
+            "explore.resultSet.cleanup",
             null,
             "批量清理查询结果集",
             null,

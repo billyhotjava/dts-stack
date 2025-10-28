@@ -149,9 +149,9 @@ public class ComplianceService {
         auditDetail.put("targetId", batch.getId().toString());
         auditDetail.put("targetName", batch.getName());
         auditDetail.put("ruleCount", rules.size());
-        auditDetail.put("summary", "启动合规批次：" + batch.getName());
+        auditDetail.put("summary", "新建合规批次：" + batch.getName());
         auditService.record(
-            "EXECUTE",
+            "CREATE",
             "governance.compliance.batch",
             "governance.compliance.batch",
             batch.getId().toString(),

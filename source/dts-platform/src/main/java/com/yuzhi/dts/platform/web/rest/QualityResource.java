@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,8 +41,12 @@ public class QualityResource {
      * Triggers a quality rule execution resolved by dataset or explicit rule.
      */
     @PostMapping("/data-quality-runs/trigger")
-    public ApiResponse<Map<String, Object>> trigger(@RequestParam(required = false) UUID datasetId, @RequestParam(required = false) UUID ruleId) {
-        QualityRuleDto rule = resolveRule(datasetId, ruleId);
+    public ApiResponse<Map<String, Object>> trigger(
+        @RequestParam(required = false) UUID datasetId,
+        @RequestParam(required = false) UUID ruleId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        QualityRuleDto rule = resolveRule(datasetId, ruleId, activeDept);
         if (rule == null) {
             return ApiResponses.ok(Map.of("status", "NO_RULE"));
         }
@@ -98,12 +103,12 @@ public class QualityResource {
         );
     }
 
-    private QualityRuleDto resolveRule(UUID datasetId, UUID ruleId) {
+    private QualityRuleDto resolveRule(UUID datasetId, UUID ruleId, String activeDept) {
         if (ruleId != null) {
-            return qualityRuleService.getRule(ruleId);
+            return qualityRuleService.getRule(ruleId, activeDept);
         }
         return qualityRuleService
-            .findByDataset(datasetId)
+            .findByDataset(datasetId, activeDept)
             .stream()
             .findFirst()
             .orElse(null);

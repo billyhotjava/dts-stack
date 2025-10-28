@@ -110,6 +110,17 @@ public class InceptorCatalogSyncService {
         try {
             metadata = fetchMetadata(state, database);
         } catch (Exception ex) {
+            if (isKerberosUnavailable(ex)) {
+                LOG.warn(
+                    "Skipping Inceptor catalog synchronization because Kerberos authentication failed (KDC unreachable): {}",
+                    ex.getMessage()
+                );
+                if (postgresCatalogSyncService != null && postgresCatalogSyncService.isFallbackActive()) {
+                    LOG.warn("Falling back to PostgreSQL catalog sync because Kerberos authentication is unavailable");
+                    return postgresCatalogSyncService.synchronize();
+                }
+                return CatalogSyncResult.inactive();
+            }
             LOG.error("Failed to enumerate tables from Inceptor: {}", ex.getMessage(), ex);
             if (postgresCatalogSyncService != null && postgresCatalogSyncService.isFallbackActive()) {
                 LOG.warn("Falling back to PostgreSQL catalog sync due to Inceptor failure: {}", ex.getMessage());
@@ -359,6 +370,32 @@ public class InceptorCatalogSyncService {
             request.setPassword(state.password());
         }
         return request;
+    }
+
+    private boolean isKerberosUnavailable(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof javax.security.auth.login.LoginException && containsConnectionRefused(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return containsConnectionRefused(throwable);
+    }
+
+    private boolean containsConnectionRefused(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof java.net.ConnectException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        if (throwable != null && throwable.getMessage() != null) {
+            String message = throwable.getMessage().toLowerCase(Locale.ROOT);
+            return message.contains("connection refused");
+        }
+        return false;
     }
 
     private String sanitizeDatabase(String database) {

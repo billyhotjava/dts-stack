@@ -44,6 +44,8 @@
           "key": "governance.rules",
           "title": "质量规则",
           "actions": [
+            { "code": "GOV_RULE_LIST", "display": "查看质量规则列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_RULE_VIEW", "display": "查看质量规则", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "GOV_RULE_MANAGE", "display": "维护质量规则", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "GOV_RULE_EXECUTE", "display": "执行质量检测", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
@@ -69,6 +71,13 @@
           "actions": [
             { "code": "EXPLORE_SQL_OPEN", "display": "打开工作台", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "EXPLORE_SQL_RUN", "display": "执行查询", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "explore.results",
+          "title": "查询结果",
+          "actions": [
+            { "code": "EXPLORE_RESULTSET_VIEW", "display": "查看查询结果预览", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
         }
       ]

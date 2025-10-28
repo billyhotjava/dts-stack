@@ -50,6 +50,9 @@ public class GovRule extends AbstractAuditingEntity<UUID> implements Serializabl
     @Column(name = "owner", length = 64)
     private String owner;
 
+    @Column(name = "owner_dept", length = 128)
+    private String ownerDept;
+
     @Column(name = "severity", length = 32)
     private String severity;
 
@@ -148,6 +151,14 @@ public class GovRule extends AbstractAuditingEntity<UUID> implements Serializabl
 
     public void setOwner(String owner) {
         this.owner = owner;
+    }
+
+    public String getOwnerDept() {
+        return ownerDept;
+    }
+
+    public void setOwnerDept(String ownerDept) {
+        this.ownerDept = ownerDept;
     }
 
     public String getSeverity() {

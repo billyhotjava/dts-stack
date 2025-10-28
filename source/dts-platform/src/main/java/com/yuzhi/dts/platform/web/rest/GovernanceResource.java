@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.ComplianceService;
 import com.yuzhi.dts.platform.service.governance.IssueTicketService;
 import com.yuzhi.dts.platform.service.governance.QualityRuleService;
@@ -18,11 +19,12 @@ import com.yuzhi.dts.platform.service.governance.request.QualityRuleUpsertReques
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.Locale;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -49,17 +51,20 @@ public class GovernanceResource {
     private final QualityRunService qualityRunService;
     private final ComplianceService complianceService;
     private final IssueTicketService issueTicketService;
+    private final AuditService auditService;
 
     public GovernanceResource(
         QualityRuleService qualityRuleService,
         QualityRunService qualityRunService,
         ComplianceService complianceService,
-        IssueTicketService issueTicketService
+        IssueTicketService issueTicketService,
+        AuditService auditService
     ) {
         this.qualityRuleService = qualityRuleService;
         this.qualityRunService = qualityRunService;
         this.complianceService = complianceService;
         this.issueTicketService = issueTicketService;
+        this.auditService = auditService;
     }
 
     // Quality rule APIs ------------------------------------------------------
@@ -68,7 +73,15 @@ public class GovernanceResource {
     public ApiResponse<List<QualityRuleDto>> listQualityRules(
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        return ApiResponses.ok(qualityRuleService.listAll(activeDept));
+        List<QualityRuleDto> data = qualityRuleService.listAll(activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "刷新质量规则列表");
+        detail.put("count", data.size());
+        if (StringUtils.hasText(activeDept)) {
+            detail.put("activeDept", activeDept.trim());
+        }
+        auditService.record("LIST", "governance.rule", "governance.rule", null, "SUCCESS", detail);
+        return ApiResponses.ok(data);
     }
 
     @GetMapping("/rules")
@@ -80,34 +93,76 @@ public class GovernanceResource {
 
     @PostMapping("/quality/rules")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<QualityRuleDto> createRule(@RequestBody QualityRuleUpsertRequest request) {
-        return ApiResponses.ok(qualityRuleService.createRule(request, currentUser()));
+    public ApiResponse<QualityRuleDto> createRule(
+        @RequestBody QualityRuleUpsertRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return ApiResponses.ok(qualityRuleService.createRule(request, currentUser(), activeDept));
     }
 
     @PostMapping("/rules")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<QualityRuleDto> legacyCreateRule(@RequestBody QualityRuleUpsertRequest request) {
-        return createRule(request);
+    public ApiResponse<QualityRuleDto> legacyCreateRule(
+        @RequestBody QualityRuleUpsertRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return createRule(request, activeDept);
     }
 
     @PutMapping("/quality/rules/{id}")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<QualityRuleDto> updateRule(@PathVariable UUID id, @RequestBody QualityRuleUpsertRequest request) {
-        return ApiResponses.ok(qualityRuleService.updateRule(id, request, currentUser()));
+    public ApiResponse<QualityRuleDto> updateRule(
+        @PathVariable UUID id,
+        @RequestBody QualityRuleUpsertRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return ApiResponses.ok(qualityRuleService.updateRule(id, request, currentUser(), activeDept));
     }
 
     @DeleteMapping("/quality/rules/{id}")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<Boolean> deleteRule(@PathVariable UUID id) {
-        qualityRuleService.deleteRule(id);
+    public ApiResponse<Boolean> deleteRule(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        qualityRuleService.deleteRule(id, activeDept);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
     @PostMapping("/quality/rules/{id}/toggle")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<QualityRuleDto> toggleRule(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+    public ApiResponse<QualityRuleDto> toggleRule(
+        @PathVariable UUID id,
+        @RequestBody Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         boolean enabled = Boolean.TRUE.equals(body.getOrDefault("enabled", Boolean.TRUE));
-        return ApiResponses.ok(qualityRuleService.toggleRule(id, enabled));
+        return ApiResponses.ok(qualityRuleService.toggleRule(id, enabled, activeDept));
+    }
+
+    @GetMapping("/quality/rules/{id}")
+    public ApiResponse<QualityRuleDto> getRule(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        QualityRuleDto dto = qualityRuleService.getRule(id, activeDept);
+        Map<String, Object> detail = new java.util.LinkedHashMap<>();
+        detail.put("targetId", id.toString());
+        if (dto != null && StringUtils.hasText(dto.getName())) {
+            detail.put("targetName", dto.getName());
+            detail.put("summary", "查看质量规则：" + dto.getName());
+        } else {
+            detail.put("summary", "查看质量规则详情");
+        }
+        auditService.record(
+            "READ",
+            "governance.rule",
+            "governance.rule",
+            id.toString(),
+            "SUCCESS",
+            detail
+        );
+        return ApiResponses.ok(dto);
     }
 
     @PostMapping("/quality/runs")
@@ -117,7 +172,33 @@ public class GovernanceResource {
 
     @GetMapping("/quality/runs/{id}")
     public ApiResponse<QualityRunDto> getQualityRun(@PathVariable UUID id) {
-        return ApiResponses.ok(qualityRunService.getRun(id));
+        QualityRunDto dto = qualityRunService.getRun(id);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("targetId", id.toString());
+        detail.put("summary", "查看质量运行详情");
+        if (dto != null) {
+            if (dto.getStatus() != null) {
+                detail.put("status", dto.getStatus());
+            }
+            if (dto.getRuleId() != null) {
+                detail.put("ruleId", dto.getRuleId().toString());
+            }
+            if (dto.getDatasetId() != null) {
+                detail.put("datasetId", dto.getDatasetId().toString());
+            }
+            if (dto.getTriggerType() != null) {
+                detail.put("triggerType", dto.getTriggerType());
+            }
+        }
+        auditService.record(
+            "READ",
+            "governance.compliance.qualityRun",
+            "governance.compliance.qualityRun",
+            id.toString(),
+            "SUCCESS",
+            detail
+        );
+        return ApiResponses.ok(dto);
     }
 
     @GetMapping("/quality/runs")
@@ -152,7 +233,20 @@ public class GovernanceResource {
         @RequestParam(value = "status", required = false) String status,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        return ApiResponses.ok(complianceService.recentBatches(limit, parseStatuses(status), activeDept));
+        List<String> statuses = parseStatuses(status);
+        List<ComplianceBatchDto> data = complianceService.recentBatches(limit, statuses, activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "刷新合规检查列表");
+        detail.put("limit", limit);
+        detail.put("count", data.size());
+        if (!statuses.isEmpty()) {
+            detail.put("statusFilter", statuses);
+        }
+        if (StringUtils.hasText(activeDept)) {
+            detail.put("activeDept", activeDept.trim());
+        }
+        auditService.record("LIST", "governance.compliance", "governance.compliance.batch", null, "SUCCESS", detail);
+        return ApiResponses.ok(data);
     }
 
     @GetMapping("/compliance/batches/{id}")
@@ -160,7 +254,37 @@ public class GovernanceResource {
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        return ApiResponses.ok(complianceService.getBatch(id, activeDept));
+        ComplianceBatchDto dto = complianceService.getBatch(id, activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("targetId", id.toString());
+        if (dto != null) {
+            if (StringUtils.hasText(dto.getName())) {
+                detail.put("targetName", dto.getName());
+                detail.put("summary", "查看合规批次：" + dto.getName());
+            } else {
+                detail.put("summary", "查看合规批次详情");
+            }
+            if (StringUtils.hasText(dto.getStatus())) {
+                detail.put("status", dto.getStatus());
+            }
+            if (dto.getTotalItems() != null) {
+                detail.put("itemCount", dto.getTotalItems());
+            }
+        } else {
+            detail.put("summary", "查看合规批次详情");
+        }
+        if (StringUtils.hasText(activeDept)) {
+            detail.put("activeDept", activeDept.trim());
+        }
+        auditService.record(
+            "READ",
+            "governance.compliance.batch",
+            "governance.compliance.batch",
+            id.toString(),
+            "SUCCESS",
+            detail
+        );
+        return ApiResponses.ok(dto);
     }
 
     @DeleteMapping("/compliance/batches/{id}")

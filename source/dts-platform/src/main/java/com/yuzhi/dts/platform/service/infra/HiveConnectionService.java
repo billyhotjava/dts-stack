@@ -178,17 +178,34 @@ public class HiveConnectionService {
             // Use pure JAAS for both KEYTAB and PASSWORD to avoid Hadoop Shell native process checks
             // that may fail in restricted/containerized environments.
             LoginContext loginContext = buildLoginContext(request, keytabPath);
-            loginContext.login();
+            boolean loginSucceeded = false;
+            try {
+                loginContext.login();
+                loginSucceeded = true;
+            } catch (LoginException e) {
+                if (isConnectionRefused(e)) {
+                    log.warn(
+                        "Kerberos login failed because KDC is unreachable (principal={}, url={}): {}",
+                        request.getLoginPrincipal(),
+                        request.getJdbcUrl(),
+                        e.getMessage()
+                    );
+                    throw new IOException("Kerberos authentication failed: KDC unreachable", e);
+                }
+                throw e;
+            }
             try {
                 Subject subject = loginContext.getSubject();
                 // Register Subject to vendor UserGroupInformation (e.g., Transwarp), if available
                 bridgeKerberosSubjectToVendor(subject);
                 return Subject.doAs(subject, action);
             } finally {
-                try {
-                    loginContext.logout();
-                } catch (LoginException e) {
-                    log.debug("Kerberos logout failure: {}", e.getMessage());
+                if (loginSucceeded) {
+                    try {
+                        loginContext.logout();
+                    } catch (LoginException e) {
+                        log.debug("Kerberos logout failure: {}", e.getMessage());
+                    }
                 }
             }
         } catch (PrivilegedActionException pae) {
@@ -211,6 +228,21 @@ public class HiveConnectionService {
             }
             kerberosLock.unlock();
         }
+    }
+
+    private boolean isConnectionRefused(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof java.net.ConnectException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        if (throwable != null && throwable.getMessage() != null) {
+            String message = throwable.getMessage().toLowerCase(Locale.ROOT);
+            return message.contains("connection refused");
+        }
+        return false;
     }
 
     private void tryLoadExternalDrivers() {

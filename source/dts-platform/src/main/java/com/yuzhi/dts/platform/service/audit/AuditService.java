@@ -129,6 +129,38 @@ public class AuditService {
         registerLegacy("explore.saveResult", "EXPORT", legacyMapping("EXPLORE_RESULTSET_EXPORT", "保存查询结果集", "保存查询结果集失败", null, "EXPORT", false, AuditStage.SUCCESS));
         registerLegacy("explore.saveResult", "DENY", legacyMapping("EXPLORE_RESULTSET_EXPORT", "保存查询结果集", "保存查询结果集被拒绝", null, "EXPORT", false, AuditStage.FAIL));
 
+        // Governance compliance
+        registerLegacy(
+            "governance.compliance",
+            "LIST",
+            legacyMapping("GOV_COMPLIANCE_RUN", "刷新合规批次列表", "刷新合规批次列表失败", null, "READ", true, AuditStage.SUCCESS)
+        );
+        registerLegacy(
+            "governance.compliance.batch",
+            "CREATE",
+            legacyMapping("GOV_COMPLIANCE_PLAN", "新建合规批次", "新建合规批次失败", null, "CREATE", false, AuditStage.SUCCESS)
+        );
+        registerLegacy(
+            "governance.compliance.batch",
+            "READ",
+            legacyMapping("GOV_COMPLIANCE_REVIEW", "查看合规批次", "查看合规批次失败", null, "READ", true, AuditStage.SUCCESS)
+        );
+        registerLegacy(
+            "governance.compliance.batch",
+            "DELETE",
+            legacyMapping("GOV_COMPLIANCE_PLAN", "删除合规批次", "删除合规批次失败", null, "DELETE", false, AuditStage.SUCCESS)
+        );
+        registerLegacy(
+            "governance.compliance.item",
+            "UPDATE",
+            legacyMapping("GOV_COMPLIANCE_REVIEW", "登记合规检查结果", "登记合规检查结果失败", null, "UPDATE", false, AuditStage.SUCCESS)
+        );
+        registerLegacy(
+            "governance.compliance.qualityRun",
+            "READ",
+            legacyMapping("GOV_COMPLIANCE_REVIEW", "查看质量运行详情", "查看质量运行详情失败", null, "READ", true, AuditStage.SUCCESS)
+        );
+
         // IAM classification
         registerLegacy("iam.classification", "READ", legacyMapping("IAM_CLASSIFICATION_VIEW", "查看密级映射", null, null, "READ", true, AuditStage.SUCCESS));
         registerLegacy("iam.classification", "CREATE", legacyMapping("IAM_CLASSIFICATION_SYNC", "新增密级映射", "新增密级映射失败", null, "CREATE", false, AuditStage.SUCCESS));
@@ -176,6 +208,7 @@ public class AuditService {
         registerLegacy("sql.query", "EXECUTE", legacyMapping("EXPLORE_WORKBENCH_QUERY", "执行 SQL 查询", "执行 SQL 查询失败", null, "EXECUTE", false, AuditStage.SUCCESS));
         registerLegacy("sql.query", "DENY", legacyMapping("EXPLORE_WORKBENCH_QUERY", "执行 SQL 查询", "执行 SQL 查询被拒绝", null, "EXECUTE", false, AuditStage.FAIL));
         registerLegacy("sql.query", "ERROR", legacyMapping("EXPLORE_WORKBENCH_QUERY", "执行 SQL 查询", "执行 SQL 查询失败", null, "EXECUTE", false, AuditStage.FAIL));
+        registerLegacy("sql.query", "CANCEL", legacyMapping("EXPLORE_WORKBENCH_QUERY", "停止 SQL 查询", "停止 SQL 查询失败", null, "CANCEL", false, AuditStage.SUCCESS));
 
         // Service tokens
         registerLegacy("svc.token", "READ", legacyMapping("SERVICE_TOKEN_ISSUE", "查看访问令牌", null, null, "READ", true, AuditStage.SUCCESS));

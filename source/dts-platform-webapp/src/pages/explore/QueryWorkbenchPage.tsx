@@ -883,7 +883,7 @@ const [saveTtlDays, setSaveTtlDays] = useState<string>("7");
         setDatasetsLoading(true);
         setDatasetsError(null);
         try {
-            const resp: any = await listDatasets({ page: 0, size: 100 });
+            const resp: any = await listDatasets({ page: 0, size: 100, auditPurpose: "explore.workbench" });
             const list = Array.isArray(resp?.content) ? resp.content : [];
             const ui: Dataset[] = list.map(toUiDataset);
             setRemoteDatasets(ui);

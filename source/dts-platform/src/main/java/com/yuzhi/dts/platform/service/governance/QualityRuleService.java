@@ -10,11 +10,15 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleVersionRepository;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.DepartmentUtils;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleDto;
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleBindingRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleUpsertRequest;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -26,12 +30,13 @@ import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
@@ -47,6 +52,7 @@ public class QualityRuleService {
     private final ObjectMapper objectMapper;
     private final GovernanceProperties properties;
     private final AccessChecker accessChecker;
+    private final OrganizationVisibilityService organizationVisibilityService;
 
     public QualityRuleService(
         GovRuleRepository ruleRepository,
@@ -56,7 +62,8 @@ public class QualityRuleService {
         AuditService auditService,
         ObjectMapper objectMapper,
         GovernanceProperties properties,
-        AccessChecker accessChecker
+        AccessChecker accessChecker,
+        OrganizationVisibilityService organizationVisibilityService
     ) {
         this.ruleRepository = ruleRepository;
         this.versionRepository = versionRepository;
@@ -66,21 +73,26 @@ public class QualityRuleService {
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.accessChecker = accessChecker;
+        this.organizationVisibilityService = organizationVisibilityService;
     }
 
     @Transactional(readOnly = true)
     public List<QualityRuleDto> listAll(String activeDeptHeader) {
         String activeDept = resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = hasInstituteScope();
         return ruleRepository
             .findAll()
             .stream()
-            .filter(rule -> isRuleVisible(rule, activeDept))
+            .filter(rule -> isRuleVisible(rule, activeDept, instituteScope))
             .map(GovernanceMapper::toDto)
             .collect(Collectors.toList());
     }
 
-    private boolean isRuleVisible(GovRule rule, String activeDept) {
+    private boolean isRuleVisible(GovRule rule, String activeDept, boolean instituteScope) {
         if (rule == null) {
+            return false;
+        }
+        if (!isOwnerDeptVisible(rule.getOwnerDept(), activeDept, instituteScope)) {
             return false;
         }
         if (rule.getDatasetId() == null) {
@@ -89,8 +101,25 @@ public class QualityRuleService {
         return datasetRepository
             .findById(rule.getDatasetId())
             .filter(accessChecker::canRead)
-            .filter(dataset -> accessChecker.departmentAllowed(dataset, activeDept))
+            .filter(dataset -> instituteScope || accessChecker.departmentAllowed(dataset, activeDept))
             .isPresent();
+    }
+
+    private boolean isOwnerDeptVisible(String ownerDept, String activeDept, boolean instituteScope) {
+        String trimmedOwner = StringUtils.trimToNull(ownerDept);
+        if (trimmedOwner == null) {
+            return true;
+        }
+        if (instituteScope) {
+            return true;
+        }
+        if (organizationVisibilityService.isRoot(trimmedOwner)) {
+            return true;
+        }
+        if (StringUtils.isBlank(activeDept)) {
+            return false;
+        }
+        return DepartmentUtils.matches(trimmedOwner, activeDept);
     }
 
     private String resolveActiveDept(String activeDeptHeader) {
@@ -165,30 +194,116 @@ public class QualityRuleService {
 
     @Transactional(readOnly = true)
     public QualityRuleDto getRule(UUID id) {
+        return getRule(id, null);
+    }
+
+    public QualityRuleDto getRule(UUID id, String activeDeptHeader) {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureRuleReadable(rule, activeDeptHeader);
         return GovernanceMapper.toDto(rule);
+    }
+
+    private void ensureRuleReadable(GovRule rule, String activeDeptHeader) {
+        if (rule == null) {
+            throw new EntityNotFoundException("质量规则不存在");
+        }
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = hasInstituteScope();
+        if (!isOwnerDeptVisible(rule.getOwnerDept(), activeDept, instituteScope)) {
+            throw new AccessDeniedException("当前账号无权访问该质量规则");
+        }
+        if (rule.getDatasetId() == null) {
+            return;
+        }
+        boolean datasetAllowed = datasetRepository
+            .findById(rule.getDatasetId())
+            .filter(accessChecker::canRead)
+            .filter(dataset -> instituteScope || accessChecker.departmentAllowed(dataset, activeDept))
+            .isPresent();
+        if (!datasetAllowed) {
+            throw new AccessDeniedException("当前账号无权访问该质量规则");
+        }
+    }
+
+    private void ensureRuleWritable(GovRule rule, String activeDeptHeader) {
+        ensureRuleReadable(rule, activeDeptHeader);
+        if (hasInstituteScope()) {
+            return;
+        }
+        if (!hasDepartmentScope()) {
+            throw new AccessDeniedException("当前账号无权维护质量规则");
+        }
+        String ownerDept = StringUtils.trimToNull(rule.getOwnerDept());
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        if (StringUtils.isBlank(activeDept)) {
+            throw new AccessDeniedException("当前账号未配置所属部门，无法执行该操作");
+        }
+        if (ownerDept != null && !DepartmentUtils.matches(ownerDept, activeDept)) {
+            throw new AccessDeniedException("当前账号无权维护该质量规则");
+        }
+    }
+
+    private String enforceOwnerDept(String requestedOwnerDept, String activeDeptHeader, String currentOwnerDept) {
+        String requested = trimToNull(requestedOwnerDept);
+        String current = trimToNull(currentOwnerDept);
+        if (hasInstituteScope()) {
+            if (requested != null) {
+                return requested;
+            }
+            if (current != null) {
+                return current;
+            }
+            return trimToNull(resolveActiveDept(activeDeptHeader));
+        }
+        if (!hasDepartmentScope()) {
+            throw new AccessDeniedException("当前账号无权维护质量规则");
+        }
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        if (StringUtils.isBlank(activeDept)) {
+            throw new AccessDeniedException("当前账号未配置所属部门，无法执行该操作");
+        }
+        if (current != null && !DepartmentUtils.matches(current, activeDept)) {
+            throw new AccessDeniedException("当前账号无权维护该质量规则");
+        }
+        if (requested != null && !DepartmentUtils.matches(requested, activeDept)) {
+            throw new AccessDeniedException("质量规则仅可归属当前登录部门");
+        }
+        return requested != null ? requested : (current != null ? current : activeDept.trim());
     }
 
     @Transactional(readOnly = true)
     public List<QualityRuleDto> findByDataset(UUID datasetId) {
+        return findByDataset(datasetId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<QualityRuleDto> findByDataset(UUID datasetId, String activeDeptHeader) {
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = hasInstituteScope();
         return ruleRepository
             .findAll()
             .stream()
             .filter(rule -> datasetId == null || datasetId.equals(rule.getDatasetId()))
+            .filter(rule -> isRuleVisible(rule, activeDept, instituteScope))
             .map(GovernanceMapper::toDto)
             .collect(Collectors.toList());
     }
 
     public QualityRuleDto createRule(QualityRuleUpsertRequest request, String actor) {
+        return createRule(request, actor, null);
+    }
+
+    public QualityRuleDto createRule(QualityRuleUpsertRequest request, String actor, String activeDeptHeader) {
         validateDataset(request.getDatasetId());
         String code = resolveRuleCode(request.getCode());
         if (ruleRepository.findByCode(code).isPresent()) {
             throw new IllegalArgumentException("编码重复: " + code);
         }
 
+        String ownerDept = enforceOwnerDept(request.getOwnerDept(), activeDeptHeader, null);
         GovRule rule = new GovRule();
         rule.setCode(code);
-        applyRuleMetadata(rule, request);
+        applyRuleMetadata(rule, request, ownerDept);
         ruleRepository.save(rule);
 
         GovRuleVersion version = persistVersion(rule, request, 1, actor);
@@ -215,7 +330,12 @@ public class QualityRuleService {
     }
 
     public QualityRuleDto updateRule(UUID id, QualityRuleUpsertRequest request, String actor) {
+        return updateRule(id, request, actor, null);
+    }
+
+    public QualityRuleDto updateRule(UUID id, QualityRuleUpsertRequest request, String actor, String activeDeptHeader) {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureRuleWritable(rule, activeDeptHeader);
         Map<String, Object> before = toRuleAuditView(rule);
         if (request.getDatasetId() != null) {
             validateDataset(request.getDatasetId());
@@ -229,7 +349,12 @@ public class QualityRuleService {
                 });
             rule.setCode(request.getCode().trim());
         }
-        applyRuleMetadata(rule, request);
+        String ownerDept = enforceOwnerDept(
+            request.getOwnerDept() != null ? request.getOwnerDept() : rule.getOwnerDept(),
+            activeDeptHeader,
+            rule.getOwnerDept()
+        );
+        applyRuleMetadata(rule, request, ownerDept);
         ruleRepository.save(rule);
 
         int nextVersion = versionRepository.findFirstByRuleIdOrderByVersionDesc(id).map(v -> v.getVersion() + 1).orElse(1);
@@ -257,7 +382,12 @@ public class QualityRuleService {
     }
 
     public void deleteRule(UUID id) {
+        deleteRule(id, null);
+    }
+
+    public void deleteRule(UUID id, String activeDeptHeader) {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureRuleWritable(rule, activeDeptHeader);
         Map<String, Object> before = toRuleAuditView(rule);
         ruleRepository.delete(rule);
         Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
@@ -277,7 +407,12 @@ public class QualityRuleService {
     }
 
     public QualityRuleDto toggleRule(UUID id, boolean enabled) {
+        return toggleRule(id, enabled, null);
+    }
+
+    public QualityRuleDto toggleRule(UUID id, boolean enabled, String activeDeptHeader) {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureRuleWritable(rule, activeDeptHeader);
         Map<String, Object> before = toRuleAuditView(rule);
         rule.setEnabled(enabled);
         ruleRepository.save(rule);
@@ -299,13 +434,30 @@ public class QualityRuleService {
         return GovernanceMapper.toDto(rule);
     }
 
-    private void applyRuleMetadata(GovRule rule, QualityRuleUpsertRequest request) {
+    private boolean hasInstituteScope() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.ADMIN,
+            AuthoritiesConstants.OP_ADMIN,
+            AuthoritiesConstants.INST_DATA_DEV,
+            AuthoritiesConstants.INST_DATA_OWNER
+        );
+    }
+
+    private boolean hasDepartmentScope() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.DEPT_DATA_DEV,
+            AuthoritiesConstants.DEPT_DATA_OWNER
+        );
+    }
+
+    private void applyRuleMetadata(GovRule rule, QualityRuleUpsertRequest request, String ownerDept) {
         rule.setName(trimToNull(request.getName()));
         rule.setType(trimToNull(request.getType()));
         rule.setDatasetId(request.getDatasetId());
         rule.setCategory(trimToNull(request.getCategory()));
         rule.setDescription(trimToNull(request.getDescription()));
         rule.setOwner(trimToNull(request.getOwner()));
+        rule.setOwnerDept(trimToNull(ownerDept));
         rule.setSeverity(trimToNull(request.getSeverity()));
         rule.setDataLevel(trimToNull(request.getDataLevel()));
         rule.setFrequencyCron(trimToNull(request.getFrequencyCron()));
@@ -371,6 +523,7 @@ public class QualityRuleService {
         view.put("severity", rule.getSeverity());
         view.put("dataLevel", rule.getDataLevel());
         view.put("owner", rule.getOwner());
+        view.put("ownerDept", rule.getOwnerDept());
         view.put("enabled", rule.getEnabled());
         view.put("template", rule.getTemplate());
         if (rule.getLatestVersion() != null) {
