@@ -1426,20 +1426,26 @@ public class AdminUserService {
             return;
         }
         try {
+            List<String> resolvedPaths = new ArrayList<>();
             List<KeycloakGroupDTO> groups = keycloakAdminClient.listUserGroups(dto.getId(), accessToken);
-            if (groups == null || groups.isEmpty()) {
-                dto.setGroups(List.of());
-                return;
-            }
-            List<String> paths = new ArrayList<>();
-            for (KeycloakGroupDTO group : groups) {
-                if (group == null) continue;
-                String path = normalizeGroupPath(group.getPath());
-                if (StringUtils.isNotBlank(path)) {
-                    paths.add(path);
+            if (groups != null && !groups.isEmpty()) {
+                for (KeycloakGroupDTO group : groups) {
+                    if (group == null) {
+                        continue;
+                    }
+                    String path = normalizeGroupPath(group.getPath());
+                    if (StringUtils.isNotBlank(path)) {
+                        resolvedPaths.add(path);
+                    }
                 }
             }
-            dto.setGroups(paths);
+            if (resolvedPaths.isEmpty()) {
+                String deptCode = extractDeptCode(dto);
+                if (StringUtils.isNotBlank(deptCode)) {
+                    resolveGroupPathByOrgId(deptCode, accessToken).ifPresent(resolvedPaths::add);
+                }
+            }
+            dto.setGroups(resolvedPaths);
         } catch (Exception ex) {
             LOG.warn("Failed to refresh group paths for user {}: {}", dto.getUsername(), ex.getMessage());
         }
@@ -1454,6 +1460,77 @@ public class AdminUserService {
             return null;
         }
         return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
+    }
+
+    private String extractDeptCode(KeycloakUserDTO dto) {
+        if (dto == null || dto.getAttributes() == null || dto.getAttributes().isEmpty()) {
+            return null;
+        }
+        List<String> candidates = dto.getAttributes().get("dept_code");
+        if (candidates != null) {
+            for (String val : candidates) {
+                if (StringUtils.isNotBlank(val)) {
+                    return val.trim();
+                }
+            }
+        }
+        candidates = dto.getAttributes().get("deptCode");
+        if (candidates != null) {
+            for (String val : candidates) {
+                if (StringUtils.isNotBlank(val)) {
+                    return val.trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    private Optional<String> resolveGroupPathByOrgId(String orgId, String accessToken) {
+        if (!StringUtils.isNotBlank(orgId) || !StringUtils.isNotBlank(accessToken)) {
+            return Optional.empty();
+        }
+        try {
+            List<KeycloakGroupDTO> roots = keycloakAdminClient.listGroups(accessToken);
+            if (roots == null || roots.isEmpty()) {
+                return Optional.empty();
+            }
+            for (KeycloakGroupDTO root : roots) {
+                Optional<String> match = findGroupPathByOrgId(root, orgId.trim());
+                if (match.isPresent()) {
+                    return match;
+                }
+            }
+        } catch (Exception ex) {
+            LOG.warn("Failed to resolve group path for org {}: {}", orgId, ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    private Optional<String> findGroupPathByOrgId(KeycloakGroupDTO node, String orgId) {
+        if (node == null || !StringUtils.isNotBlank(orgId)) {
+            return Optional.empty();
+        }
+        try {
+            if (node.getAttributes() != null) {
+                List<String> values = node.getAttributes().get("dts_org_id");
+                if (values != null) {
+                    for (String value : values) {
+                        if (value != null && orgId.equals(value)) {
+                            return Optional.ofNullable(normalizeGroupPath(node.getPath()));
+                        }
+                    }
+                }
+            }
+            if (node.getSubGroups() != null) {
+                for (KeycloakGroupDTO child : node.getSubGroups()) {
+                    Optional<String> match = findGroupPathByOrgId(child, orgId);
+                    if (match.isPresent()) {
+                        return match;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return Optional.empty();
     }
 
     private String resolveFullName(KeycloakUserDTO dto) {
