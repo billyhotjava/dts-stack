@@ -165,12 +165,24 @@ function buildSections({ snapshot, summary, mode }: SectionInput): Section[] {
 	}
 
 	if (mode === "create") {
+		const summaryEntries = buildCreateEntriesFromSummary(summary);
+		if (summaryEntries.length > 0) {
+			sections.push({
+				key: "create",
+				title: "新增内容",
+				entries: summaryEntries,
+			});
+			return sections;
+		}
+
 		const after = sanitizeRecord(effectiveSnapshot.after);
-		const entries = Object.entries(after).map(([field, value]) => ({
-			key: field,
-			label: formatFieldLabel(field),
-			after: value,
-		}));
+		const entries = Object.entries(after)
+			.filter(([field]) => !shouldSkipInitialField(field))
+			.map(([field, value], idx) => ({
+				key: field || String(idx),
+				label: formatFieldLabel(field),
+				after: value,
+			}));
 		if (entries.length > 0) {
 			sections.push({
 				key: "create",
@@ -198,7 +210,7 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 		return summary
 			.map((row, idx) => ({
 				key: `${row.field ?? row.label ?? idx}`,
-				label: formatFieldLabel(row.label ?? row.field ?? `字段${idx + 1}`),
+				label: formatSummaryLabel(row, idx),
 				before: row.before,
 				after: row.after,
 			}))
@@ -397,6 +409,37 @@ export function normalizeSnapshotChanges(source: unknown): ChangeSnapshotLike["c
 		});
 	});
 	return mapped.length > 0 ? mapped : undefined;
+}
+
+function buildCreateEntriesFromSummary(summary?: ChangeSummaryEntry[] | null): SectionEntry[] {
+	if (!summary || summary.length === 0) {
+		return [];
+	}
+	return summary.map((row, idx) => ({
+		key: `${row.field ?? row.label ?? idx}`,
+		label: formatSummaryLabel(row, idx),
+		after: row.after ?? row.before,
+	}));
+}
+
+function shouldSkipInitialField(field?: string): boolean {
+	if (!field) {
+		return false;
+	}
+	const normalized = field.trim().toLowerCase();
+	return normalized === "target";
+}
+
+function formatSummaryLabel(row: ChangeSummaryEntry, index: number): string {
+	const rawLabel = typeof row.label === "string" ? row.label.trim() : "";
+	if (rawLabel.length > 0) {
+		return rawLabel;
+	}
+	const rawField = typeof row.field === "string" ? row.field.trim() : "";
+	if (rawField.length > 0) {
+		return formatFieldLabel(rawField);
+	}
+	return `字段${index + 1}`;
 }
 
 function toSnapshotRecord(value: unknown): SnapshotRecord | null {

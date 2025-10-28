@@ -5,10 +5,16 @@ import { Table } from "antd";
 import { adminApi } from "@/admin/api/adminApi";
 import type { ChangeRequest } from "@/admin/types";
 import { useAdminLocale } from "@/admin/lib/locale";
-import { beautifyBatchItemLabel, formatChangeValue, labelForChangeField } from "@/admin/lib/change-request-format";
+import {
+	buildContextForChangeRequest,
+	summarizeChangeDisplayContext,
+} from "@/admin/utils/change-detail-context";
+import { ChangeDiffViewer } from "@/admin/components/change-diff-viewer";
+import { MenuChangeViewer } from "@/admin/components/menu-change-viewer";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Text } from "@/ui/typography";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 
@@ -49,6 +55,7 @@ export default function MyChangesView() {
 	});
 
 	const [categoryFilter, setCategoryFilter] = useState<CategoryKey | null>(null);
+const [activeChange, setActiveChange] = useState<ChangeRequest | null>(null);
 
 	const normalized = useMemo(() => {
 		return (data ?? []).filter((item) => resolveCategory(item) !== null);
@@ -86,6 +93,12 @@ export default function MyChangesView() {
 			.sort(byRequestedAtDesc);
 	}, [normalized, categoryFilter]);
 
+const activeContext = useMemo(
+	() => (activeChange ? buildContextForChangeRequest(activeChange) : null),
+	[activeChange],
+);
+	const activePayloadData = useMemo(() => (activeChange ? parseJson(activeChange.payloadJson) : null), [activeChange]);
+
 	const formatDateTime = (value?: string | null) => {
 		if (!value) return "-";
 		const d = new Date(value);
@@ -114,7 +127,11 @@ export default function MyChangesView() {
 			dataIndex: "diffJson",
 			key: "diffJson",
 			ellipsis: true,
-			render: (_: unknown, record) => <div className="text-xs text-muted-foreground">{summarizeChange(record)}</div>,
+			render: (_: unknown, record) => {
+				const context = buildContextForChangeRequest(record);
+				const text = summarizeChangeDisplayContext(context, { maxEntries: 2 });
+				return <div className="text-xs text-muted-foreground">{text || "—"}</div>;
+			},
 		},
 		{
 			title: "状态",
@@ -132,10 +149,21 @@ export default function MyChangesView() {
 			width: 220,
 			render: (value?: string) => <span>{formatDateTime(value) || "--"}</span>,
 		},
+		{
+			title: "操作",
+			key: "actions",
+			width: 120,
+			render: (_: unknown, record) => (
+				<Button variant="ghost" size="sm" onClick={() => setActiveChange(record)}>
+					查看详情
+				</Button>
+			),
+		},
 	];
 
 	return (
-		<div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
+		<>
+			<div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
 			{/* 页面标题 */}
 			<div className="flex items-center justify-between">
 				<Text variant="body1" className="text-lg font-semibold">
@@ -223,7 +251,107 @@ export default function MyChangesView() {
 					/>
 				</CardContent>
 			</Card>
-		</div>
+			</div>
+			<Dialog
+			open={Boolean(activeChange)}
+			onOpenChange={(open) => {
+				if (!open) {
+					setActiveChange(null);
+				}
+			}}
+		>
+			<DialogContent className="max-w-3xl">
+				<DialogHeader>
+					<DialogTitle>变更详情</DialogTitle>
+				</DialogHeader>
+				{activeChange && activeContext ? (
+					<div className="max-h-[70vh] space-y-4 overflow-auto pr-1 text-sm">
+						<section>
+							<Text variant="body3" className="text-muted-foreground">
+								基础信息
+							</Text>
+							<div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
+								<div>
+									<span className="text-muted-foreground">操作编号：</span>CR-{activeChange.id}
+								</div>
+								<div>
+									<span className="text-muted-foreground">资源类型：</span>
+									{translateResource(activeChange.resourceType, activeChange.resourceType)}
+								</div>
+								<div>
+									<span className="text-muted-foreground">动作：</span>
+									{translateAction(activeChange.action, activeChange.action)}
+								</div>
+								<div>
+									<span className="text-muted-foreground">状态：</span>
+									{translateStatus(activeChange.status, activeChange.status)}
+								</div>
+								<div>
+									<span className="text-muted-foreground">提交时间：</span>
+									{formatDateTime(activeChange.requestedAt)}
+								</div>
+								<div>
+									<span className="text-muted-foreground">审批人：</span>
+									{activeChange.decidedBy || "—"}
+								</div>
+								<div>
+									<span className="text-muted-foreground">审批时间：</span>
+									{formatDateTime(activeChange.decidedAt)}
+								</div>
+								<div>
+									<span className="text-muted-foreground">备注：</span>
+									{activeChange.reason || "—"}
+								</div>
+							</div>
+						</section>
+
+						<section className="space-y-2">
+							<Text variant="body3" className="text-muted-foreground">
+								变更摘要
+							</Text>
+							<div className="rounded border border-border/60 bg-muted/20 px-3 py-2 text-xs leading-5">
+								{summarizeChangeDisplayContext(activeContext) || "—"}
+							</div>
+						</section>
+
+						<section className="space-y-2">
+							<Text variant="body3" className="text-muted-foreground">
+								变更详情
+							</Text>
+							<ChangeDiffViewer
+								snapshot={activeContext.snapshot}
+								summary={activeContext.summary.length > 0 ? activeContext.summary : undefined}
+								action={activeChange.action}
+								operationTypeCode={activeChange.action}
+								status={activeChange.status}
+								className="text-xs"
+							/>
+						</section>
+
+						{activeContext.menuChanges.length > 0 ? (
+							<section className="space-y-2">
+								<Text variant="body3" className="text-muted-foreground">
+									菜单变动
+								</Text>
+								<MenuChangeViewer entries={activeContext.menuChanges} />
+							</section>
+						) : null}
+
+						{activePayloadData ? (
+							<section className="space-y-2">
+								<Text variant="body3" className="text-muted-foreground">
+									提交内容
+								</Text>
+								<pre className="max-h-56 overflow-auto rounded border border-border/60 bg-muted/20 px-3 py-2 text-xs whitespace-pre-wrap leading-5">
+									{formatJson(activePayloadData)}
+								</pre>
+							</section>
+						) : null}
+					</div>
+				) : null}
+			</DialogContent>
+			</Dialog>
+		</>
 	);
 }
 
@@ -243,121 +371,13 @@ function parseJson(value?: string | null): unknown {
 	}
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-	if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
-	return null;
-}
-
-function fmtValue(v: unknown): string {
-	if (v == null) return "—";
-	if (Array.isArray(v)) return `[${v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ")}]`;
-	if (typeof v === "string") return v;
-	return JSON.stringify(v);
-}
-
-function isPortalMenuRequest(request: ChangeRequest): boolean {
-	const resource = (request.resourceType || request.category || "").toString().toUpperCase();
-	return resource === "PORTAL_MENU" || resource === "MENU" || resource === "MENU_MANAGEMENT";
-}
-
-function formatMenuStatus(value: unknown): string {
-	if (value === true || value === "true") return "禁用";
-	if (value === false || value === "false" || value == null) return "启用";
-	return fmtValue(value);
-}
-
-function formatChangeEntry(request: ChangeRequest, key: string, before: unknown, after: unknown): string {
-	if (isPortalMenuRequest(request) && key === "deleted") {
-		const label = "状态";
-		const beforeDefined = before !== undefined;
-		const beforeLabel = beforeDefined ? formatMenuStatus(before) : null;
-		const afterLabel = formatMenuStatus(after);
-		return beforeDefined ? `${label}: ${beforeLabel} → ${afterLabel}` : `${label}: ${afterLabel}`;
+function formatJson(value: unknown): string {
+	if (!value) {
+		return "—";
 	}
-	const label = labelForChangeField(key);
-	const beforeLabel = before !== undefined ? formatChangeValue(key, before) : null;
-	const afterLabel = formatChangeValue(key, after);
-	return beforeLabel != null ? `${label}: ${beforeLabel} → ${afterLabel}` : `${label}: ${afterLabel}`;
-}
-
-function formatSingleEntry(request: ChangeRequest, key: string, value: unknown): string {
-	if (isPortalMenuRequest(request) && key === "deleted") {
-		return `状态: ${formatMenuStatus(value)}`;
+	try {
+		return JSON.stringify(value, null, 2);
+	} catch {
+		return String(value);
 	}
-	const label = labelForChangeField(key);
-	return `${label}: ${formatChangeValue(key, value)}`;
-}
-
-function resolveBatchItemLabel(
-	item: Record<string, unknown> | null,
-	before: Record<string, unknown>,
-	after: Record<string, unknown>,
-	index: number,
-): string {
-	const candidates = [
-		item?.label,
-		item?.name,
-		item?.displayName,
-		item?.title,
-		after?.name,
-		after?.displayName,
-		after?.title,
-		before?.name,
-		before?.displayName,
-		before?.title,
-		item?.id,
-	];
-	for (const candidate of candidates) {
-		if (typeof candidate === "string" && candidate.trim().length > 0) {
-			return beautifyBatchItemLabel(candidate.trim());
-		}
-	}
-	if (item?.id != null) {
-		return `菜单${item.id}`;
-	}
-	return `第${index + 1}项`;
-}
-
-function summarizeChange(request: ChangeRequest): string {
-	const payload = asRecord(parseJson(request.payloadJson));
-	const diff = asRecord(parseJson(request.diffJson));
-	if (diff && Array.isArray((diff as any).items) && ((diff as any).items as any[]).length > 0) {
-		const items = ((diff as any).items as any[]).slice(0, 3);
-		const parts: string[] = [];
-		items.forEach((it, itemIndex) => {
-			const before = asRecord(it?.before) || {};
-			const after = asRecord(it?.after) || {};
-			const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
-			const changed = keys.filter((k) => JSON.stringify((before as any)[k]) !== JSON.stringify((after as any)[k]));
-			if (changed.length === 0) return;
-			const detail = changed
-				.slice(0, 2)
-				.map((k) => formatChangeEntry(request, k, (before as any)[k], (after as any)[k]))
-				.join("，");
-			const label = resolveBatchItemLabel(asRecord(it) || null, before, after, itemIndex);
-			parts.push(`${label}: ${detail}`);
-		});
-		const extra = ((diff as any).items as any[]).length - items.length;
-		return parts.length ? parts.join("；") + (extra > 0 ? `（等${extra}项）` : "") : "—";
-	}
-	if (payload) {
-		const entries = Object.entries(payload).filter(([, v]) => v != null);
-		if (entries.length === 0) return "—";
-		return entries
-			.slice(0, 3)
-			.map(([k, v]) => formatSingleEntry(request, k, v))
-			.join("；");
-	}
-	if (diff) {
-		const before = asRecord((diff as any).before) || {};
-		const after = asRecord((diff as any).after) || {};
-		const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
-		const changed = keys.filter((k) => JSON.stringify((before as any)[k]) !== JSON.stringify((after as any)[k]));
-		if (changed.length === 0) return "—";
-		return changed
-			.slice(0, 3)
-			.map((k) => formatChangeEntry(request, k, (before as any)[k], (after as any)[k]))
-			.join("；");
-	}
-	return "—";
 }

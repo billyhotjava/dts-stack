@@ -1765,6 +1765,7 @@ public class AdminUserService {
         try {
             String subjectLabel = subject != null ? firstNonBlank(subject.label(), subject.id()) : null;
             String fallbackSummary = buildUserRequestSummary(actionCode, subjectLabel);
+            enrichDetailWithSnapshotSummary(detail, changeRequest);
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, buttonCode)
                 .actorRoles(SecurityUtils.getCurrentUserAuthorities())
@@ -1802,6 +1803,40 @@ public class AdminUserService {
             LOG.warn("Failed to record V2 user approval request [{}]: {}", actionCode, ex.getMessage());
         }
     }
+
+    private void enrichDetailWithSnapshotSummary(Map<String, Object> detail, ChangeRequest changeRequest) {
+        if (detail == null) {
+            return;
+        }
+        try {
+            ChangeSnapshot snapshot = extractChangeSnapshot(detail, changeRequest);
+            if (snapshot == null || !hasSnapshotContent(snapshot)) {
+                return;
+            }
+            if (!detail.containsKey("changeSnapshot")) {
+                detail.put("changeSnapshot", snapshot.toMap());
+            }
+            if (detail.containsKey("changeSummary")) {
+                return;
+            }
+            String resourceType = changeRequest != null && org.springframework.util.StringUtils.hasText(changeRequest.getResourceType())
+                ? changeRequest.getResourceType()
+                : "USER";
+            if (changeSnapshotFormatter != null) {
+                List<Map<String, String>> summaryRows = changeSnapshotFormatter.format(snapshot, resourceType);
+                if (summaryRows != null && !summaryRows.isEmpty()) {
+                    detail.put("changeSummary", summaryRows);
+                }
+            }
+        } catch (Exception ex) {
+            LOG.warn("Failed to enrich change summary for approval request: {}", ex.getMessage());
+        }
+    }
+
+    private boolean hasSnapshotContent(ChangeSnapshot snapshot) {
+        return snapshot != null && (snapshot.hasChanges() || !snapshot.getBefore().isEmpty() || !snapshot.getAfter().isEmpty());
+    }
+
 
     private void recordUserApprovalExecutionV2(
         String actor,

@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.modeling.DataSecurityLevel;
 import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.domain.modeling.DataStandardStatus;
@@ -15,11 +16,11 @@ import com.yuzhi.dts.platform.service.modeling.dto.DataStandardVersionDto;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.LinkedHashMap;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -91,14 +92,7 @@ public class DataStandardService {
         auditPayload.put("targetId", entity.getId().toString());
         auditPayload.put("targetName", entity.getName());
         auditPayload.put("summary", "新增数据标准：" + entity.getName());
-        auditService.record(
-            "CREATE",
-            "modeling.standard",
-            "modeling.standard",
-            entity.getId().toString(),
-            "SUCCESS",
-            auditPayload
-        );
+        auditService.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, entity.getId().toString(), auditPayload);
         return DataStandardMapper.toDto(entity);
     }
 
@@ -132,14 +126,7 @@ public class DataStandardService {
         auditPayload.put("targetId", entity.getId().toString());
         auditPayload.put("targetName", entity.getName());
         auditPayload.put("summary", "修改数据标准：" + entity.getName());
-        auditService.record(
-            "UPDATE",
-            "modeling.standard",
-            "modeling.standard",
-            entity.getId().toString(),
-            "SUCCESS",
-            auditPayload
-        );
+        auditService.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, entity.getId().toString(), auditPayload);
         return DataStandardMapper.toDto(entity);
     }
 
@@ -154,14 +141,7 @@ public class DataStandardService {
         auditPayload.put("targetId", id.toString());
         auditPayload.put("targetName", entity.getName());
         auditPayload.put("summary", "删除数据标准：" + entity.getName());
-        auditService.record(
-            "DELETE",
-            "modeling.standard",
-            "modeling.standard",
-            id.toString(),
-            "SUCCESS",
-            auditPayload
-        );
+        auditService.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, id.toString(), auditPayload);
     }
 
     public List<DataStandardVersionDto> listVersions(UUID id, String activeDeptHeader) {

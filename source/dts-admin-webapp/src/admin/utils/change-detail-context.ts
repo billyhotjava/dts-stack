@@ -9,6 +9,7 @@ import {
 	pruneMenuSnapshot,
 } from "@/admin/utils/menu-change-parser";
 import type { MenuChangeDisplayEntry } from "@/admin/components/menu-change-viewer";
+import type { ChangeRequest } from "@/admin/types";
 
 type PlainRecord = Record<string, unknown>;
 
@@ -63,6 +64,127 @@ export function buildChangeDisplayContext({
 		summary,
 		menuChanges,
 	};
+}
+
+export interface ChangeRequestContextOptions {
+	includePayloadLayer?: boolean;
+	includeOriginalUpdatedValues?: boolean;
+}
+
+export function buildContextForChangeRequest(
+	request: ChangeRequest,
+	options?: ChangeRequestContextOptions,
+): ChangeDisplayContext {
+	const diffRecord = parseJsonRecord(request.diffJson);
+	const payloadRecord = options?.includePayloadLayer === false ? null : parseJsonRecord(request.payloadJson);
+	const originalRecord = options?.includeOriginalUpdatedValues === false ? null : toRecord(request.originalValue);
+	const updatedRecord = options?.includeOriginalUpdatedValues === false ? null : toRecord(request.updatedValue);
+
+	const layers: Array<PlainRecord | null | undefined> = [
+		diffRecord,
+		diffRecord ? toRecord(diffRecord["detail"]) : null,
+		diffRecord ? toRecord(diffRecord["context"]) : null,
+		diffRecord ? toRecord(diffRecord["metadata"]) : null,
+		diffRecord ? toRecord(diffRecord["extraAttributes"]) : null,
+		payloadRecord,
+		originalRecord,
+		updatedRecord,
+	];
+
+	const baseSnapshot = diffRecord ? buildChangeSnapshotFromDiff(diffRecord) : null;
+
+	return buildChangeDisplayContext({
+		layers,
+		baseSnapshot,
+		fallbackDiff: diffRecord,
+	});
+}
+
+export interface SummarizeContextOptions {
+	maxEntries?: number;
+}
+
+export function summarizeChangeDisplayContext(
+	context: ChangeDisplayContext,
+	{ maxEntries = 3 }: SummarizeContextOptions = {},
+): string {
+	const { summary, menuChanges } = context;
+	if (summary.length > 0) {
+		return summary
+			.slice(0, maxEntries)
+			.map((entry, index) => {
+				const label = entry.label || entry.field || `字段${index + 1}`;
+				const beforeDefined = entry.before !== undefined && entry.before !== null && entry.before !== "";
+				const beforeText = formatSummaryValue(entry.before);
+				const afterText = formatSummaryValue(entry.after);
+				return beforeDefined ? `${label}: ${beforeText} → ${afterText}` : `${label}: ${afterText}`;
+			})
+			.join("；");
+	}
+
+	if (menuChanges.length > 0) {
+		const parts: string[] = [];
+		menuChanges.slice(0, maxEntries).forEach((entry) => {
+			const label = entry.menuTitle || entry.menuName || entry.menuPath || entry.id || "菜单";
+			const changeSegments: string[] = [];
+			if (entry.addedRoles?.length) {
+				changeSegments.push(`新增角色 ${entry.addedRoles.join("、")}`);
+			}
+			if (entry.removedRoles?.length) {
+				changeSegments.push(`移除角色 ${entry.removedRoles.join("、")}`);
+			}
+			if (entry.allowedRolesAfter && entry.allowedRolesBefore) {
+				const before = entry.allowedRolesBefore.join("、");
+				const after = entry.allowedRolesAfter.join("、");
+				if (before !== after && !entry.addedRoles?.length && !entry.removedRoles?.length) {
+					changeSegments.push(`角色 ${before || "无"} → ${after || "无"}`);
+				}
+			}
+			if (entry.addedPermissions?.length) {
+				changeSegments.push(`新增权限 ${entry.addedPermissions.join("、")}`);
+			}
+			if (entry.removedPermissions?.length) {
+				changeSegments.push(`移除权限 ${entry.removedPermissions.join("、")}`);
+			}
+			const statusChanged =
+				entry.statusBeforeLabel !== undefined &&
+				entry.statusAfterLabel !== undefined &&
+				entry.statusBeforeLabel !== entry.statusAfterLabel;
+			if (statusChanged) {
+				changeSegments.push(`状态 ${entry.statusBeforeLabel} → ${entry.statusAfterLabel}`);
+			}
+			if (
+				entry.maxDataLevelBeforeLabel &&
+				entry.maxDataLevelAfterLabel &&
+				entry.maxDataLevelBeforeLabel !== entry.maxDataLevelAfterLabel
+			) {
+				changeSegments.push(`最大数据密级 ${entry.maxDataLevelBeforeLabel} → ${entry.maxDataLevelAfterLabel}`);
+			}
+			if (
+				entry.securityLevelBeforeLabel &&
+				entry.securityLevelAfterLabel &&
+				entry.securityLevelBeforeLabel !== entry.securityLevelAfterLabel
+			) {
+				changeSegments.push(`访问密级 ${entry.securityLevelBeforeLabel} → ${entry.securityLevelAfterLabel}`);
+			}
+			if (entry.addedRules?.length) {
+				changeSegments.push(
+					`新增可见性规则 ${entry.addedRules.map((rule) => formatVisibilityRule(rule)).join("、")}`,
+				);
+			}
+			if (entry.removedRules?.length) {
+				changeSegments.push(
+					`移除可见性规则 ${entry.removedRules.map((rule) => formatVisibilityRule(rule)).join("、")}`,
+				);
+			}
+			if (changeSegments.length > 0) {
+				parts.push(`菜单「${label}」${changeSegments.join("；")}`);
+			}
+		});
+		return parts.join("；") || "—";
+	}
+
+	return "—";
 }
 
 function buildSummary(layers: Array<PlainRecord | null | undefined>, baseSummary?: ChangeSummaryEntry[]): ChangeSummaryEntry[] {
@@ -200,3 +322,51 @@ function deriveFieldLabel(field?: string): string {
 		.join(" ");
 }
 
+function parseJsonRecord(value?: string | null): PlainRecord | null {
+	if (!value) {
+		return null;
+	}
+	try {
+		const parsed = JSON.parse(value);
+		return toRecord(parsed);
+	} catch {
+		return null;
+	}
+}
+
+function formatSummaryValue(value: unknown): string {
+	if (value === null || value === undefined || value === "") {
+		return "—";
+	}
+	if (Array.isArray(value)) {
+		if (value.length === 0) {
+			return "[]";
+		}
+		return value
+			.map((item) => formatSummaryValue(item))
+			.filter((item) => item !== "—")
+			.join("、");
+	}
+	if (typeof value === "object") {
+		try {
+			return JSON.stringify(value, null, 0);
+		} catch {
+			return String(value);
+		}
+	}
+	return String(value);
+}
+
+function formatVisibilityRule(rule: { role?: string; permission?: string; dataLevelLabel?: string }): string {
+	const parts: string[] = [];
+	if (rule.role) {
+		parts.push(rule.role);
+	}
+	if (rule.permission) {
+		parts.push(`权限:${rule.permission}`);
+	}
+	if (rule.dataLevelLabel) {
+		parts.push(`密级:${rule.dataLevelLabel}`);
+	}
+	return parts.join(" ");
+}

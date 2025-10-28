@@ -293,6 +293,9 @@ public class AuditService {
         if (!attributes.isEmpty()) {
             event.attributes = attributes;
         }
+        if (extraTags != null && !extraTags.isEmpty()) {
+            event.metadata = new java.util.LinkedHashMap<>(extraTags);
+        }
         event.auxiliary = auxiliary;
 
         // Best-effort populate client/network fields from current request

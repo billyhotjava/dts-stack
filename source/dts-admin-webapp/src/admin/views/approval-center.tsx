@@ -20,7 +20,11 @@ import {
 	buildChangeSnapshotFromDiff,
 } from "@/admin/components/change-diff-viewer";
 import { MenuChangeViewer } from "@/admin/components/menu-change-viewer";
-import { buildChangeDisplayContext } from "@/admin/utils/change-detail-context";
+import {
+	buildChangeDisplayContext,
+	buildContextForChangeRequest,
+	summarizeChangeDisplayContext,
+} from "@/admin/utils/change-detail-context";
 import { snapshotHasContent } from "@/admin/utils/menu-change-parser";
 import { formatChangeValue, labelForChangeField, type ChangeRequestFormatContext } from "@/admin/lib/change-request-format";
 
@@ -180,6 +184,15 @@ function resolveTarget(request: ChangeRequest, ctx?: DiffFormatContext): string 
 }
 
 function summarizeDetails(request: ChangeRequest, ctx?: DiffFormatContext): string {
+	const context = buildContextForChangeRequest(request);
+	const summary = summarizeChangeDisplayContext(context, { maxEntries: 2 });
+	if (summary && summary !== "—") {
+		return summary;
+	}
+	return legacySummarizeDetails(request, ctx);
+}
+
+function legacySummarizeDetails(request: ChangeRequest, ctx?: DiffFormatContext): string {
 	const payload = asRecord(parseJson(request.payloadJson));
 	const diff = asRecord(parseJson(request.diffJson));
 	// Prefer diff summary for batch updates
@@ -863,22 +876,23 @@ export default function ApprovalCenterView() {
 			const diff = asRecord(parseJson(record.diffJson));
 			const diffLayer = diff ?? null;
 			const baseSnapshot = diffLayer ? buildChangeSnapshotFromDiff(diffLayer) : null;
-			const displayContext = buildChangeDisplayContext({
-				layers: [
-					diffLayer,
-					diffLayer ? asRecord(diffLayer["detail"]) : null,
-					diffLayer ? asRecord(diffLayer["context"]) : null,
-					diffLayer ? asRecord(diffLayer["metadata"]) : null,
+		const displayContext = buildChangeDisplayContext({
+			layers: [
+				diffLayer,
+				diffLayer ? asRecord(diffLayer["detail"]) : null,
+				diffLayer ? asRecord(diffLayer["context"]) : null,
+				diffLayer ? asRecord(diffLayer["metadata"]) : null,
 					diffLayer ? asRecord(diffLayer["extraAttributes"]) : null,
 					payload,
 				],
 				baseSnapshot,
 				fallbackDiff: diffLayer ?? undefined,
 			});
-			const snapshot = displayContext.snapshot;
-			const summary = displayContext.summary;
-			const menuChanges = displayContext.menuChanges;
-			const showDiffViewer = summary.length > 0 || snapshotHasContent(snapshot);
+		const snapshot = displayContext.snapshot;
+		const summary = displayContext.summary;
+		const menuChanges = displayContext.menuChanges;
+		const summaryText = summarizeChangeDisplayContext(displayContext, { maxEntries: 2 });
+		const showDiffViewer = summary.length > 0 || snapshotHasContent(snapshot);
 			return (
 				<div className="border-t border-muted pt-4 text-sm">
 					<div className="grid gap-4 md:grid-cols-3">
@@ -888,35 +902,43 @@ export default function ApprovalCenterView() {
 							</Text>
 							{renderChangeRequestBasics(record, userDisplayMap, operatorNameMap)}
 						</div>
-						<div className="md:col-span-2">
-							<Text variant="body3" className="text-muted-foreground">
-								变更详情
-							</Text>
-							{showDiffViewer ? (
-								<div className="mt-2">
-									<ChangeDiffViewer
-										snapshot={snapshot}
-										summary={summary.length > 0 ? summary : undefined}
-										action={record.action}
-										operationTypeCode={record.action}
-										status={record.effectiveStatus}
-										className="text-xs"
-									/>
-								</div>
-							) : (
-								<Text variant="caption" className="text-muted-foreground">
-									无结构化变更
-								</Text>
-							)}
-							{menuChanges.length > 0 ? (
-								<div className="mt-3">
-									<Text variant="body3" className="text-muted-foreground">
-										菜单变更
-									</Text>
-									<MenuChangeViewer entries={menuChanges} />
-								</div>
-							) : null}
-						</div>
+		<div className="md:col-span-2 space-y-3">
+			<section className="space-y-2">
+				<Text variant="body3" className="text-muted-foreground">
+					变更摘要
+				</Text>
+				<div className="rounded border border-border/60 bg-muted/20 px-3 py-2 text-xs leading-5">
+					{summaryText || "—"}
+				</div>
+			</section>
+			<section className="space-y-2">
+				<Text variant="body3" className="text-muted-foreground">
+					变更详情
+				</Text>
+				{showDiffViewer ? (
+					<ChangeDiffViewer
+						snapshot={snapshot}
+						summary={summary.length > 0 ? summary : undefined}
+						action={record.action}
+						operationTypeCode={record.action}
+						status={record.effectiveStatus}
+						className="text-xs"
+					/>
+				) : (
+					<Text variant="caption" className="text-muted-foreground">
+						无结构化变更
+					</Text>
+				)}
+			</section>
+			{menuChanges.length > 0 ? (
+				<section className="space-y-2">
+					<Text variant="body3" className="text-muted-foreground">
+						菜单变更
+					</Text>
+					<MenuChangeViewer entries={menuChanges} />
+				</section>
+			) : null}
+		</div>
 					</div>
 					{payload && Object.keys(payload).length > 0 ? (
 						<div className="mt-4 space-y-2">

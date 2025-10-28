@@ -137,7 +137,14 @@ public class ModelingResource {
             DataStandardDto saved = standards.create(request, activeDept);
             return ApiResponses.ok(saved);
         } catch (RuntimeException e) {
-            audit.auditFailure("CREATE", "modeling.standard", request.getCode(), java.util.Map.of("summary", "新建数据标准失败：" + request.getName()));
+            Map<String, Object> detail = new java.util.LinkedHashMap<>();
+            detail.put("summary", "新建数据标准失败：" + request.getName());
+            detail.put("error", e.getMessage());
+            detail.put("requestDomain", request.getDomain());
+            detail.put("requestCode", request.getCode());
+            detail.put("requestName", request.getName());
+            String resourceRef = resolveResourceRef(request.getCode(), request.getName(), request.getDomain());
+            audit.auditAction("MODELING_STANDARD_EDIT", AuditStage.FAIL, resourceRef, detail);
             throw e;
         }
     }
@@ -153,12 +160,13 @@ public class ModelingResource {
             DataStandardDto saved = standards.update(id, request, activeDept);
             return ApiResponses.ok(saved);
         } catch (RuntimeException e) {
-            audit.auditFailure(
-                "UPDATE",
-                "modeling.standard",
-                id.toString(),
-                java.util.Map.of("summary", "更新数据标准失败：" + request.getName(), "error", e.getMessage())
-            );
+            Map<String, Object> detail = new java.util.LinkedHashMap<>();
+            detail.put("summary", "更新数据标准失败：" + request.getName());
+            detail.put("error", e.getMessage());
+            detail.put("targetId", id.toString());
+            detail.put("requestDomain", request.getDomain());
+            detail.put("requestCode", request.getCode());
+            audit.auditAction("MODELING_STANDARD_EDIT", AuditStage.FAIL, id.toString(), detail);
             throw e;
         }
     }
@@ -169,8 +177,17 @@ public class ModelingResource {
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        standards.delete(id, activeDept);
-        return ApiResponses.ok(Boolean.TRUE);
+        try {
+            standards.delete(id, activeDept);
+            return ApiResponses.ok(Boolean.TRUE);
+        } catch (RuntimeException e) {
+            Map<String, Object> detail = new java.util.LinkedHashMap<>();
+            detail.put("summary", "删除数据标准失败");
+            detail.put("error", e.getMessage());
+            detail.put("targetId", id.toString());
+            audit.auditAction("MODELING_STANDARD_EDIT", AuditStage.FAIL, id.toString(), detail);
+            throw e;
+        }
     }
 
     @GetMapping("/standards/{id}/versions")
@@ -217,22 +234,15 @@ public class ModelingResource {
             detail.put("targetName", dto.getFileName());
             detail.put("standardId", id.toString());
             detail.put("summary", "上传数据标准附件：" + dto.getFileName());
-            audit.record(
-                "CREATE",
-                "modeling.standard.attachment",
-                "modeling.standard.attachment",
-                dto.getId().toString(),
-                "SUCCESS",
-                detail
-            );
+            detail.put("operationType", "CREATE");
+            audit.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, dto.getId().toString(), detail);
             return ApiResponses.ok(dto);
         } catch (RuntimeException e) {
-            audit.auditFailure(
-                "CREATE",
-                "modeling.standard.attachment",
-                id.toString(),
-                java.util.Map.of("summary", "上传数据标准附件失败：" + file.getOriginalFilename(), "error", e.getMessage())
-            );
+            Map<String, Object> detail = new java.util.LinkedHashMap<>();
+            detail.put("summary", "上传数据标准附件失败：" + file.getOriginalFilename());
+            detail.put("error", e.getMessage());
+            detail.put("standardId", id.toString());
+            audit.auditAction("MODELING_STANDARD_EDIT", AuditStage.FAIL, id.toString(), detail);
             throw e;
         }
     }
@@ -249,14 +259,8 @@ public class ModelingResource {
         detail.put("targetName", content.getFileName());
         detail.put("standardId", id.toString());
         detail.put("summary", "下载数据标准附件：" + content.getFileName());
-        audit.record(
-            "READ",
-            "modeling.standard.attachment",
-            "modeling.standard.attachment",
-            attachmentId.toString(),
-            "SUCCESS",
-            detail
-        );
+        detail.put("operationType", "READ");
+        audit.auditAction("MODELING_STANDARD_VIEW", AuditStage.SUCCESS, attachmentId.toString(), detail);
         MediaType mediaType = resolveMediaType(content.getContentType());
         String encodedFileName = URLEncoder.encode(content.getFileName(), StandardCharsets.UTF_8).replaceAll("\\+", "%20");
         ContentDisposition disposition = ContentDisposition.attachment().filename(encodedFileName).build();
@@ -280,14 +284,8 @@ public class ModelingResource {
         detail.put("targetName", attachment.getFileName());
         detail.put("standardId", id.toString());
         detail.put("summary", "删除数据标准附件：" + attachment.getFileName());
-        audit.record(
-            "DELETE",
-            "modeling.standard.attachment",
-            "modeling.standard.attachment",
-            attachmentId.toString(),
-            "SUCCESS",
-            detail
-        );
+        detail.put("operationType", "DELETE");
+        audit.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, attachmentId.toString(), detail);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -322,5 +320,17 @@ public class ModelingResource {
         } catch (Exception ignored) {
             return MediaType.APPLICATION_OCTET_STREAM;
         }
+    }
+
+    private String resolveResourceRef(String... candidates) {
+        if (candidates == null) {
+            return "unknown";
+        }
+        for (String candidate : candidates) {
+            if (StringUtils.hasText(candidate)) {
+                return candidate.trim();
+            }
+        }
+        return "unknown";
     }
 }

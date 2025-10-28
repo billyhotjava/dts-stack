@@ -6,8 +6,10 @@ import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +53,7 @@ public class AuditTrailService {
         public Integer latencyMs;
         public Object payload;
         public Map<String, Object> attributes;
+        public Map<String, Object> metadata;
         public String extraTags;
         public boolean disableDefaultResourceFallback;
         public boolean auxiliary;
@@ -156,11 +159,17 @@ public class AuditTrailService {
         }
         if (StringUtils.hasText(event.resourceId)) {
             body.put("resourceId", event.resourceId);
+            body.put("targetIds", java.util.List.of(event.resourceId));
         }
+        body.put("targetTable", defaultString(event.resourceType, null));
         if (StringUtils.hasText(event.resourceName)) {
             body.put("resourceName", event.resourceName);
         }
         body.put("result", defaultString(event.result, "SUCCESS"));
+        if (StringUtils.hasText(event.operationType)) {
+            body.put("operationType", event.operationType);
+            body.put("operationTypeCode", event.operationType);
+        }
         if (event.latencyMs != null) {
             body.put("latencyMs", event.latencyMs);
         }
@@ -181,6 +190,39 @@ public class AuditTrailService {
         }
         if (event.attributes != null && !event.attributes.isEmpty()) {
             body.put("attributes", event.attributes);
+        }
+        Map<String, Object> metadata = prepareMetadata(event);
+        if (!metadata.isEmpty()) {
+            body.put("metadata", metadata);
+        }
+        String buttonCode = textValue(metadata.get("actionCode"));
+        if (!StringUtils.hasText(buttonCode)) {
+            buttonCode = textValue(metadata.get("buttonCode"));
+        }
+        if (StringUtils.hasText(buttonCode)) {
+            body.put("buttonCode", buttonCode);
+            body.putIfAbsent("operationCode", buttonCode);
+        }
+        String moduleKey = textValue(metadata.get("moduleKey"));
+        if (StringUtils.hasText(moduleKey)) {
+            body.put("moduleKey", moduleKey);
+        }
+        String moduleTitle = textValue(metadata.get("moduleTitle"));
+        if (StringUtils.hasText(moduleTitle)) {
+            body.put("moduleName", moduleTitle);
+        }
+        String entryKey = textValue(metadata.get("entryKey"));
+        if (StringUtils.hasText(entryKey)) {
+            body.put("targetTable", entryKey);
+            body.putIfAbsent("resourceType", entryKey);
+        }
+        String entryTitle = textValue(metadata.get("entryTitle"));
+        if (StringUtils.hasText(entryTitle)) {
+            body.putIfAbsent("resourceName", entryTitle);
+        }
+        String stage = textValue(metadata.get("stage"));
+        if (StringUtils.hasText(stage)) {
+            body.put("stage", stage);
         }
         if (StringUtils.hasText(event.extraTags)) {
             body.put("extraTags", event.extraTags);
@@ -299,6 +341,27 @@ public class AuditTrailService {
 
     private String defaultString(String value, String fallback) {
         return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    private Map<String, Object> prepareMetadata(PendingAuditEvent event) {
+        if (event == null || event.metadata == null || event.metadata.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> copy = new LinkedHashMap<>();
+        event.metadata.forEach((k, v) -> {
+            if (k != null && v != null) {
+                copy.put(String.valueOf(k), v);
+            }
+        });
+        return copy;
+    }
+
+    private String textValue(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        String text = String.valueOf(raw).trim();
+        return text.isEmpty() ? null : text;
     }
 
     private String firstNonBlank(String... values) {
