@@ -12,6 +12,7 @@ import com.yuzhi.dts.admin.service.user.UserOperationRequest;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
 import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
+import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
 import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
@@ -1059,6 +1060,7 @@ public class KeycloakApiResource {
                 .result(result)
                 .client(clientIp(request), request != null ? request.getHeader("User-Agent") : null)
                 .request(uri, method);
+            applyRoleOperationOverride(builder, buttonCode);
             if (detail != null && !detail.isEmpty()) {
                 builder.detail("detail", new LinkedHashMap<>(detail));
             }
@@ -1075,6 +1077,33 @@ public class KeycloakApiResource {
         } catch (Exception ex) {
             LOG.warn("Failed to record V2 audit for role action [{}]: {}", buttonCode, ex.getMessage());
         }
+    }
+
+    private void applyRoleOperationOverride(AuditActionRequest.Builder builder, String buttonCode) {
+        if (builder == null || !StringUtils.hasText(buttonCode)) {
+            return;
+        }
+        AuditOperationKind kind;
+        String normalized = buttonCode.trim().toUpperCase(Locale.ROOT);
+        String operationName;
+        switch (normalized) {
+            case ButtonCodes.ROLE_CREATE -> {
+                kind = AuditOperationKind.CREATE;
+                operationName = "新增角色";
+            }
+            case ButtonCodes.ROLE_UPDATE -> {
+                kind = AuditOperationKind.UPDATE;
+                operationName = "修改角色";
+            }
+            case ButtonCodes.ROLE_DELETE -> {
+                kind = AuditOperationKind.DELETE;
+                operationName = "删除角色";
+            }
+            default -> {
+                return;
+            }
+        }
+        builder.operationOverride(normalized, operationName, kind);
     }
 
     private void recordApprovalActionV2(
@@ -1139,6 +1168,10 @@ public class KeycloakApiResource {
         String fallbackMethod,
         String summary
     ) {
+        if (ButtonCodes.AUTH_ADMIN_REFRESH.equals(buttonCode)) {
+            // Token refresh happens automatically; suppress audit noise.
+            return;
+        }
         String normalizedActor = sanitizeActor(actor);
         if (!StringUtils.hasText(normalizedActor)) {
             normalizedActor = "system";
@@ -2090,19 +2123,21 @@ public class KeycloakApiResource {
         if (!isAuditSuppressed()) {
         }
         String ref = changeRequestRefFrom(id);
-        recordApprovalActionV2(
-            actor,
-            ButtonCodes.APPROVAL_VIEW,
-            AuditResultStatus.SUCCESS,
-            id,
-            ref,
-            new LinkedHashMap<>(auditDetail),
-            request,
-            "/api/approval-requests/" + id,
-            "GET",
-            "查看审批请求：" + (ref != null ? ref : id),
-            false
-        );
+        if (!isAuditSuppressed()) {
+            recordApprovalActionV2(
+                actor,
+                ButtonCodes.APPROVAL_VIEW,
+                AuditResultStatus.SUCCESS,
+                id,
+                ref,
+                new LinkedHashMap<>(auditDetail),
+                request,
+                "/api/approval-requests/" + id,
+                "GET",
+                "查看审批请求：" + (ref != null ? ref : id),
+                false
+            );
+        }
         return ResponseEntity.ok(ApiResponse.ok(detail));
     }
 

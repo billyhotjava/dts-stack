@@ -1180,11 +1180,11 @@ function formatDateTime(value: string) {
 	return date.toLocaleString("zh-CN", { hour12: false });
 }
 
-function formatOperatorName(value: string) {
-	const normalized = value?.toLowerCase?.();
-	if (!normalized) {
-		return value;
+function formatOperatorName(value?: string) {
+	if (!value) {
+		return "-";
 	}
+	const normalized = value.toLowerCase();
 	const label = ADMIN_LABELS[normalized];
 	if (label) {
 		return `${label}（${value}）`;

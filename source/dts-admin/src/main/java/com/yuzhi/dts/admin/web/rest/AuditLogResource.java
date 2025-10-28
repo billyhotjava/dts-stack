@@ -9,6 +9,7 @@ import com.yuzhi.dts.admin.service.auditv2.AuditEntryQueryService;
 import com.yuzhi.dts.admin.service.auditv2.AuditEntryView;
 import com.yuzhi.dts.admin.service.auditv2.AuditSearchCriteria;
 import com.yuzhi.dts.admin.service.auditv2.ModuleOption;
+import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
@@ -301,8 +302,11 @@ public class AuditLogResource {
         map.put("buttonCode", view.buttonCode());
         map.put("action", StringUtils.defaultIfBlank(view.operationName(), view.operationCode()));
         map.put("operationCode", view.operationCode());
-        map.put("operationTypeCode", view.operationKind() != null ? view.operationKind().code() : null);
-        map.put("operationType", view.operationKindLabel());
+        AuditOperationKind kind = view.operationKind();
+        String normalizedCode = normalizeOperationTypeCode(kind);
+        map.put("operationTypeCode", normalizedCode);
+        map.put("operationType", mapOperationTypeLabel(normalizedCode));
+        map.put("operationTypeRaw", kind != null ? kind.displayName() : null);
         map.put("operationContent", StringUtils.defaultIfBlank(view.summary(), view.operationName()));
         map.put("summary", view.summary());
         map.put("operationGroup", view.operationGroup());
@@ -465,6 +469,32 @@ public class AuditLogResource {
 
     private String mapLogType(String sourceSystem) {
         return "platform".equalsIgnoreCase(StringUtils.trimToEmpty(sourceSystem)) ? "业务端审计" : "管理端审计";
+    }
+
+    private String normalizeOperationTypeCode(AuditOperationKind kind) {
+        if (kind == null) {
+            return "QUERY";
+        }
+        return switch (kind) {
+            case QUERY, OTHER -> "QUERY";
+            case READ -> "QUERY";
+            case CREATE -> "CREATE";
+            case DELETE -> "DELETE";
+            default -> "UPDATE";
+        };
+    }
+
+    private String mapOperationTypeLabel(String normalizedCode) {
+        if (normalizedCode == null) {
+            return "查询";
+        }
+        return switch (normalizedCode) {
+            case "CREATE" -> "新增";
+            case "UPDATE" -> "修改";
+            case "DELETE" -> "删除";
+            case "QUERY" -> "查询";
+            default -> "查询";
+        };
     }
 
     private VisibilityScope resolveVisibilityScope() {
