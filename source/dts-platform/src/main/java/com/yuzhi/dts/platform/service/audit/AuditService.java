@@ -584,6 +584,12 @@ public class AuditService {
         ) {
             return "READ";
         }
+        if (upper.startsWith("LOGIN") || containsAny(lower, "登录", "登入")) {
+            return "LOGIN";
+        }
+        if (upper.startsWith("LOGOUT") || containsAny(lower, "登出", "退出登录", "注销登录")) {
+            return "LOGOUT";
+        }
         return "READ";
     }
 

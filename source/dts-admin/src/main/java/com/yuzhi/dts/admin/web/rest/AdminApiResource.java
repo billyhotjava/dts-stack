@@ -3643,6 +3643,9 @@ public class AdminApiResource {
         if (!StringUtils.hasText(actor)) {
             return;
         }
+        if (result == AuditResultStatus.SUCCESS && changeRequest != null) {
+            return;
+        }
         try {
             String name = asText(payload != null ? payload.get("name") : null);
             String scope = asText(payload != null ? payload.get("scope") : null);

@@ -9,16 +9,15 @@ import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
-import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
+import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
+import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.service.approval.ApprovalStatus;
 import com.yuzhi.dts.admin.service.auditv2.AdminAuditOperation;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationType;
 import com.yuzhi.dts.admin.service.auditv2.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
-import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
-import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
@@ -30,9 +29,11 @@ import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
+import com.yuzhi.dts.admin.domain.OrganizationNode;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,6 +66,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminUserService {
 
     private static final Logger LOG = LoggerFactory.getLogger(AdminUserService.class);
+    private static final Set<String> SUPPRESS_PENDING_APPROVAL_ACTIONS = Set.of(
+        "ADMIN_USER_CREATE",
+        "ADMIN_CUSTOM_ROLE_CREATE",
+        "ADMIN_ROLE_CREATE"
+    );
 
     private static final Set<String> SUPPORTED_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> FORBIDDEN_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET");
@@ -92,6 +98,7 @@ public class AdminUserService {
     private final ChangeRequestService changeRequestService;
     private final ChangeRequestRepository changeRequestRepository;
     private final AdminRoleAssignmentRepository roleAssignRepo;
+    private final OrganizationRepository organizationRepository;
     private final ObjectMapper objectMapper;
     private final KeycloakAuthService keycloakAuthService;
     private final ChangeSnapshotFormatter changeSnapshotFormatter;
@@ -114,6 +121,7 @@ public class AdminUserService {
         ChangeRequestService changeRequestService,
         ChangeRequestRepository changeRequestRepository,
         AdminRoleAssignmentRepository roleAssignRepo,
+        OrganizationRepository organizationRepository,
         ChangeSnapshotFormatter changeSnapshotFormatter,
         ObjectMapper objectMapper,
         KeycloakAuthService keycloakAuthService,
@@ -129,6 +137,7 @@ public class AdminUserService {
         this.changeRequestService = changeRequestService;
         this.changeRequestRepository = changeRequestRepository;
         this.roleAssignRepo = roleAssignRepo;
+        this.organizationRepository = organizationRepository;
         this.changeSnapshotFormatter = changeSnapshotFormatter;
         this.objectMapper = objectMapper;
         this.keycloakAuthService = keycloakAuthService;
@@ -1422,32 +1431,28 @@ public class AdminUserService {
     }
 
     private void refreshUserGroups(KeycloakUserDTO dto, String accessToken) {
-        if (dto == null || !StringUtils.isNotBlank(dto.getId()) || !StringUtils.isNotBlank(accessToken)) {
+        if (dto == null) {
             return;
         }
-        try {
-            List<String> resolvedPaths = new ArrayList<>();
-            List<KeycloakGroupDTO> groups = keycloakAdminClient.listUserGroups(dto.getId(), accessToken);
-            if (groups != null && !groups.isEmpty()) {
-                for (KeycloakGroupDTO group : groups) {
-                    if (group == null) {
-                        continue;
-                    }
-                    String path = normalizeGroupPath(group.getPath());
-                    if (StringUtils.isNotBlank(path)) {
-                        resolvedPaths.add(path);
-                    }
-                }
-            }
-            if (resolvedPaths.isEmpty()) {
-                String deptCode = extractDeptCode(dto);
-                if (StringUtils.isNotBlank(deptCode)) {
-                    resolveGroupPathByOrgId(deptCode, accessToken).ifPresent(resolvedPaths::add);
-                }
-            }
-            dto.setGroups(resolvedPaths);
-        } catch (Exception ex) {
-            LOG.warn("Failed to refresh group paths for user {}: {}", dto.getUsername(), ex.getMessage());
+        List<String> current = normalizeGroupPathList(dto.getGroups());
+        if (!current.isEmpty()) {
+            dto.setGroups(current);
+            ensureDeptCodeAttribute(dto, current);
+            return;
+        }
+        String username = StringUtils.trimToNull(dto.getUsername());
+        if (username != null) {
+            userRepository
+                .findByUsernameIgnoreCase(username)
+                .map(AdminKeycloakUser::getGroupPaths)
+                .ifPresent(paths -> {
+                    List<String> normalized = normalizeGroupPathList(paths);
+                    dto.setGroups(normalized);
+                    ensureDeptCodeAttribute(dto, normalized);
+                });
+        }
+        if (dto.getGroups() == null) {
+            dto.setGroups(List.of());
         }
     }
 
@@ -1462,75 +1467,56 @@ public class AdminUserService {
         return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
     }
 
-    private String extractDeptCode(KeycloakUserDTO dto) {
-        if (dto == null || dto.getAttributes() == null || dto.getAttributes().isEmpty()) {
-            return null;
+    private List<String> normalizeGroupPathList(Collection<?> source) {
+        List<String> result = new ArrayList<>();
+        if (source == null) {
+            return result;
         }
-        List<String> candidates = dto.getAttributes().get("dept_code");
-        if (candidates != null) {
-            for (String val : candidates) {
-                if (StringUtils.isNotBlank(val)) {
-                    return val.trim();
-                }
+        for (Object item : source) {
+            if (item == null) {
+                continue;
+            }
+            String normalized = normalizeGroupPath(item.toString());
+            if (normalized != null && !result.contains(normalized)) {
+                result.add(normalized);
             }
         }
-        candidates = dto.getAttributes().get("deptCode");
-        if (candidates != null) {
-            for (String val : candidates) {
-                if (StringUtils.isNotBlank(val)) {
-                    return val.trim();
-                }
-            }
-        }
-        return null;
+        return result;
     }
 
-    private Optional<String> resolveGroupPathByOrgId(String orgId, String accessToken) {
-        if (!StringUtils.isNotBlank(orgId) || !StringUtils.isNotBlank(accessToken)) {
-            return Optional.empty();
+    private void ensureDeptCodeAttribute(KeycloakUserDTO dto, List<String> groupPaths) {
+        if (dto == null || groupPaths == null || groupPaths.isEmpty()) {
+            return;
         }
-        try {
-            List<KeycloakGroupDTO> roots = keycloakAdminClient.listGroups(accessToken);
-            if (roots == null || roots.isEmpty()) {
-                return Optional.empty();
-            }
-            for (KeycloakGroupDTO root : roots) {
-                Optional<String> match = findGroupPathByOrgId(root, orgId.trim());
-                if (match.isPresent()) {
-                    return match;
-                }
-            }
-        } catch (Exception ex) {
-            LOG.warn("Failed to resolve group path for org {}: {}", orgId, ex.getMessage());
-        }
-        return Optional.empty();
+        resolveOrganizationIdFromPath(groupPaths.get(0)).ifPresent(orgId -> {
+            Map<String, List<String>> attributes = dto.getAttributes() == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(dto.getAttributes());
+            attributes.put("dept_code", List.of(String.valueOf(orgId)));
+            dto.setAttributes(attributes);
+        });
     }
 
-    private Optional<String> findGroupPathByOrgId(KeycloakGroupDTO node, String orgId) {
-        if (node == null || !StringUtils.isNotBlank(orgId)) {
+    private Optional<Long> resolveOrganizationIdFromPath(String groupPath) {
+        if (!StringUtils.isNotBlank(groupPath)) {
             return Optional.empty();
         }
-        try {
-            if (node.getAttributes() != null) {
-                List<String> values = node.getAttributes().get("dts_org_id");
-                if (values != null) {
-                    for (String value : values) {
-                        if (value != null && orgId.equals(value)) {
-                            return Optional.ofNullable(normalizeGroupPath(node.getPath()));
-                        }
-                    }
-                }
-            }
-            if (node.getSubGroups() != null) {
-                for (KeycloakGroupDTO child : node.getSubGroups()) {
-                    Optional<String> match = findGroupPathByOrgId(child, orgId);
-                    if (match.isPresent()) {
-                        return match;
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
-        return Optional.empty();
+        String normalized = groupPath.trim();
+        if (normalized.startsWith("/")) {
+            normalized = normalized.substring(1);
+        }
+        if (normalized.isEmpty()) {
+            return Optional.empty();
+        }
+        String[] segments = Arrays.stream(normalized.split("/")).map(String::trim).filter(segment -> !segment.isEmpty()).toArray(String[]::new);
+        if (segments.length == 0) {
+            return Optional.empty();
+        }
+        Optional<OrganizationNode> current = organizationRepository.findFirstByNameAndParentIsNull(segments[0]);
+        for (int i = 1; i < segments.length && current.isPresent(); i++) {
+            current = organizationRepository.findFirstByParentIdAndName(current.get().getId(), segments[i]);
+        }
+        return current.map(OrganizationNode::getId);
     }
 
     private String resolveFullName(KeycloakUserDTO dto) {
@@ -1809,9 +1795,7 @@ public class AdminUserService {
         detail.put("operationTypeText", StringUtils.defaultIfBlank(operationTypeText, operationType.getDisplayName()));
         Map<String, Object> detailForV2 = new LinkedHashMap<>(detail);
         String summaryText = collector != null ? collector.summaryText() : null;
-        if (StringUtils.isBlank(summaryText)) {
-            summaryText = buildFallbackApprovalSummary(statusCode, primaryChangeRequestId, approvalId);
-        }
+        summaryText = buildApprovalDecisionSummary(collector, summaryText, statusCode, primaryChangeRequestId, approvalId);
         recordApprovalDecisionV2(
             approver,
             statusCode,
@@ -1857,9 +1841,6 @@ public class AdminUserService {
                 case "PROCESSING", "PROCESS", "PENDING" -> AuditResultStatus.PENDING;
                 default -> AuditResultStatus.SUCCESS;
             };
-            if (resultStatus == AuditResultStatus.SUCCESS && collector != null && collector.hasData()) {
-                return;
-            }
             String resolvedSummary = org.springframework.util.StringUtils.hasText(summaryText)
                 ? summaryText
                 : buildFallbackApprovalSummary(statusCode, primaryChangeRequestId, approvalId);
@@ -1917,6 +1898,69 @@ public class AdminUserService {
         }
     }
 
+    private String buildApprovalDecisionSummary(
+        ApprovalAuditCollector collector,
+        String existingSummary,
+        String statusCode,
+        Long primaryChangeRequestId,
+        long approvalId
+    ) {
+        String fallback = StringUtils.isNotBlank(existingSummary)
+            ? existingSummary
+            : buildFallbackApprovalSummary(statusCode, primaryChangeRequestId, approvalId);
+        if (collector == null || !collector.hasData()) {
+            return fallback;
+        }
+        String operationCode = collector.primaryOperationCode().orElse(null);
+        String targetLabel = collector.primaryTarget()
+            .flatMap(target -> {
+                if (target.ids().isEmpty()) {
+                    return Optional.<String>empty();
+                }
+                String firstId = target.ids().get(0);
+                String label = target.labels().getOrDefault(firstId, firstId);
+                return Optional.ofNullable(label);
+            })
+            .orElse(null);
+        String prefix;
+        if (operationCode != null) {
+            prefix = switch (operationCode) {
+                case "ADMIN_USER_CREATE" -> "审批用户新增请求";
+                case "ADMIN_USER_UPDATE" -> "审批用户修改请求";
+                case "ADMIN_USER_ASSIGN_ROLE" -> "审批用户角色调整请求";
+                case "ADMIN_USER_DELETE" -> "审批用户删除请求";
+                case "ADMIN_USER_ENABLE" -> "审批用户启用请求";
+                case "ADMIN_USER_DISABLE" -> "审批用户停用请求";
+                case "ADMIN_USER_RESET_PASSWORD" -> "审批用户重置密码请求";
+                case "ADMIN_USER_SET_PERSON_LEVEL", "ADMIN_USER_SET_LEVEL" -> "审批用户密级调整请求";
+                default -> null;
+            };
+        } else {
+            prefix = null;
+        }
+        if (prefix == null) {
+            String primaryName = collector.primaryOperationName();
+            if (StringUtils.isNotBlank(primaryName)) {
+                int colonIndex = primaryName.indexOf('：');
+                String operationName = colonIndex >= 0 ? primaryName.substring(0, colonIndex) : primaryName;
+                String subject = colonIndex >= 0 ? primaryName.substring(colonIndex + 1) : targetLabel;
+                if (StringUtils.isNotBlank(operationName)) {
+                    prefix = "审批" + operationName + "请求";
+                }
+                if (StringUtils.isBlank(targetLabel) && StringUtils.isNotBlank(subject)) {
+                    targetLabel = subject;
+                }
+            }
+        }
+        if (StringUtils.isBlank(prefix)) {
+            return fallback;
+        }
+        if (StringUtils.isNotBlank(targetLabel)) {
+            return prefix + "：" + targetLabel;
+        }
+        return prefix;
+    }
+
     private void recordUserApprovalRequestV2(
         String actor,
         String actionCode,
@@ -1929,6 +1973,9 @@ public class AdminUserService {
     ) {
         String buttonCode = resolveUserButtonCode(actionCode);
         if (!StringUtils.isNotBlank(actor) || buttonCode == null) {
+            return;
+        }
+        if (shouldSuppressPendingApprovalAudit(actionCode)) {
             return;
         }
         try {
@@ -2078,6 +2125,13 @@ public class AdminUserService {
             case "ADMIN_USER_SET_PERSON_LEVEL" -> ButtonCodes.USER_SET_PERSON_LEVEL;
             default -> null;
         };
+    }
+
+    private boolean shouldSuppressPendingApprovalAudit(String actionCode) {
+        if (!StringUtils.isNotBlank(actionCode)) {
+            return false;
+        }
+        return SUPPRESS_PENDING_APPROVAL_ACTIONS.contains(actionCode.trim().toUpperCase(Locale.ROOT));
     }
 
     private String buildUserRequestSummary(String actionCode, String subjectLabel) {
@@ -2652,6 +2706,11 @@ public class AdminUserService {
         try {
             KeycloakUserDTO dto = toUserDto(payload);
             ensureAllowedSecurityLevel(extractPersonLevel(dto), "人员密级不允许为非密");
+            List<String> requestedGroupPaths = normalizeGroupPathList(stringList(payload.get("groupPaths")));
+            if (!requestedGroupPaths.isEmpty()) {
+                dto.setGroups(new ArrayList<>(requestedGroupPaths));
+                ensureDeptCodeAttribute(dto, requestedGroupPaths);
+            }
             Optional<KeycloakUserDTO> existing = keycloakAdminClient.findByUsername(dto.getUsername(), accessToken);
             KeycloakUserDTO target;
             if (existing.isPresent()) {
@@ -2659,30 +2718,6 @@ public class AdminUserService {
                 String keycloakId = current.getId();
                 if (keycloakId != null && !keycloakId.isBlank()) {
                     dto.setId(keycloakId);
-                    // Ensure dept_code aligns with Keycloak group dts_org_id if groups are provided
-                    try {
-                        List<String> groupPaths = stringList(payload.get("groupPaths"));
-                        if (groupPaths != null && !groupPaths.isEmpty()) {
-                            String firstPath = groupPaths.get(0);
-                            if (firstPath != null && !firstPath.isBlank()) {
-                                keycloakAdminClient
-                                    .findGroupByPath(firstPath.trim(), accessToken)
-                                    .ifPresent(grp -> {
-                                        Map<String, List<String>> attrs = dto.getAttributes();
-                                        if (attrs == null) attrs = new java.util.LinkedHashMap<>();
-                                        String deptCode = null;
-                                        if (grp.getAttributes() != null) {
-                                            List<String> vals = grp.getAttributes().get("dts_org_id");
-                                            if (vals != null && !vals.isEmpty()) deptCode = stringValue(vals.get(0));
-                                        }
-                                        if (deptCode != null && !deptCode.isBlank()) {
-                                            attrs.put("dept_code", java.util.List.of(deptCode));
-                                            dto.setAttributes(attrs);
-                                        }
-                                    });
-                            }
-                        }
-                    } catch (Exception ignored) {}
                     try {
                         target = keycloakAdminClient.updateUser(keycloakId, dto, accessToken);
                         LOG.info("Keycloak user {} already existed; attributes updated", dto.getUsername());
@@ -2693,30 +2728,6 @@ public class AdminUserService {
                     }
                 } else {
                     dto.setId(null);
-                    // Ensure dept_code aligns with Keycloak group dts_org_id if groups are provided
-                    try {
-                        List<String> groupPaths = stringList(payload.get("groupPaths"));
-                        if (groupPaths != null && !groupPaths.isEmpty()) {
-                            String firstPath = groupPaths.get(0);
-                            if (firstPath != null && !firstPath.isBlank()) {
-                                keycloakAdminClient
-                                    .findGroupByPath(firstPath.trim(), accessToken)
-                                    .ifPresent(grp -> {
-                                        Map<String, List<String>> attrs = dto.getAttributes();
-                                        if (attrs == null) attrs = new java.util.LinkedHashMap<>();
-                                        String deptCode = null;
-                                        if (grp.getAttributes() != null) {
-                                            List<String> vals = grp.getAttributes().get("dts_org_id");
-                                            if (vals != null && !vals.isEmpty()) deptCode = stringValue(vals.get(0));
-                                        }
-                                        if (deptCode != null && !deptCode.isBlank()) {
-                                            attrs.put("dept_code", java.util.List.of(deptCode));
-                                            dto.setAttributes(attrs);
-                                        }
-                                    });
-                            }
-                        }
-                    } catch (Exception ignored) {}
                     try {
                         target = keycloakAdminClient.createUser(dto, accessToken);
                     } catch (RuntimeException exCreate) {
@@ -2741,30 +2752,6 @@ public class AdminUserService {
                     }
                 }
             } else {
-                // Ensure dept_code aligns with Keycloak group dts_org_id if groups are provided
-                try {
-                    List<String> groupPaths = stringList(payload.get("groupPaths"));
-                    if (groupPaths != null && !groupPaths.isEmpty()) {
-                        String firstPath = groupPaths.get(0);
-                        if (firstPath != null && !firstPath.isBlank()) {
-                            keycloakAdminClient
-                                .findGroupByPath(firstPath.trim(), accessToken)
-                                .ifPresent(grp -> {
-                                    Map<String, List<String>> attrs = dto.getAttributes();
-                                    if (attrs == null) attrs = new java.util.LinkedHashMap<>();
-                                    String deptCode = null;
-                                    if (grp.getAttributes() != null) {
-                                        List<String> vals = grp.getAttributes().get("dts_org_id");
-                                        if (vals != null && !vals.isEmpty()) deptCode = stringValue(vals.get(0));
-                                    }
-                                    if (deptCode != null && !deptCode.isBlank()) {
-                                        attrs.put("dept_code", java.util.List.of(deptCode));
-                                        dto.setAttributes(attrs);
-                                    }
-                                });
-                        }
-                    }
-                } catch (Exception ignored) {}
                 try {
                     target = keycloakAdminClient.createUser(dto, accessToken);
                 } catch (RuntimeException exCreate) {
@@ -2830,20 +2817,9 @@ public class AdminUserService {
                     LOG.warn("Failed to assign roles on create for user {}: {}", target.getUsername(), e.getMessage());
                 }
             }
-            // Apply group memberships if provided (resolve by group path)
-            try {
-                List<String> groupPaths = stringList(payload.get("groupPaths"));
-                if (groupPaths != null && !groupPaths.isEmpty()) {
-                    for (String p : groupPaths) {
-                        if (p == null || p.isBlank()) continue;
-                        KeycloakUserDTO finalTarget = target;
-                        keycloakAdminClient.findGroupByPath(p.trim(), accessToken).ifPresent(grp -> {
-                            keycloakAdminClient.addUserToGroup(finalTarget.getId(), grp.getId(), accessToken);
-                        });
-                    }
-                }
-            } catch (Exception e) {
-                LOG.warn("Failed to assign groups on create for {}: {}", target.getUsername(), e.getMessage());
+            if (!requestedGroupPaths.isEmpty()) {
+                target.setGroups(new ArrayList<>(requestedGroupPaths));
+                ensureDeptCodeAttribute(target, requestedGroupPaths);
             }
             refreshUserGroups(target, accessToken);
             AdminKeycloakUser savedEntity = syncSnapshot(target);
@@ -2869,28 +2845,22 @@ public class AdminUserService {
             String keycloakId = stringValue(payload.get("keycloakId"));
             KeycloakUserDTO existing = locateUser(username, keycloakId, accessToken);
             KeycloakUserDTO update = toUserDto(payload);
-            // Ensure dept_code aligns with Keycloak group dts_org_id when group selection provided
-            try {
-                List<String> requestedGroupPaths = stringList(payload.get("groupPaths"));
-                if (requestedGroupPaths != null && !requestedGroupPaths.isEmpty()) {
-                    String firstPath = requestedGroupPaths.get(0);
-                    if (firstPath != null && !firstPath.isBlank()) {
-                        keycloakAdminClient.findGroupByPath(firstPath.trim(), accessToken).ifPresent(grp -> {
-                            Map<String, List<String>> attrs = update.getAttributes();
-                            if (attrs == null) attrs = new java.util.LinkedHashMap<>();
-                            String deptCode = null;
-                            if (grp.getAttributes() != null) {
-                                List<String> vals = grp.getAttributes().get("dts_org_id");
-                                if (vals != null && !vals.isEmpty()) deptCode = stringValue(vals.get(0));
-                            }
-                            if (deptCode != null && !deptCode.isBlank()) {
-                                attrs.put("dept_code", java.util.List.of(deptCode));
-                                update.setAttributes(attrs);
-                            }
-                        });
-                    }
+            boolean groupSpecified = payload.containsKey("groupPaths");
+            List<String> requestedGroupPaths;
+            if (groupSpecified) {
+                requestedGroupPaths = normalizeGroupPathList(stringList(payload.get("groupPaths")));
+            } else {
+                requestedGroupPaths = normalizeGroupPathList(existing.getGroups());
+                if (requestedGroupPaths.isEmpty()) {
+                    requestedGroupPaths = userRepository
+                        .findByUsernameIgnoreCase(existing.getUsername())
+                        .map(AdminKeycloakUser::getGroupPaths)
+                        .map(this::normalizeGroupPathList)
+                        .orElseGet(ArrayList::new);
                 }
-            } catch (Exception ignored) {}
+            }
+            update.setGroups(new ArrayList<>(requestedGroupPaths));
+            ensureDeptCodeAttribute(update, requestedGroupPaths);
             ensureAllowedSecurityLevel(extractPersonLevel(update), "人员密级不允许为非密");
             update.setId(existing.getId());
             // If roles present, split to realm/client and apply via role-mappings APIs
@@ -2953,37 +2923,9 @@ public class AdminUserService {
                 // Avoid including roles in representation update
                 update.setRealmRoles(new ArrayList<>());
             }
-            // Handle group membership delta separately (Keycloak expects user-group endpoints)
-            try {
-                List<String> requestedGroupPaths = stringList(payload.get("groupPaths"));
-                if (requestedGroupPaths != null) {
-                    List<com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO> currentGroups = keycloakAdminClient.listUserGroups(existing.getId(), accessToken);
-                    java.util.Set<String> currentPaths = new java.util.HashSet<>();
-                    java.util.Map<String, String> currentPathToId = new java.util.HashMap<>();
-                    for (var g : currentGroups) {
-                        if (g.getPath() != null) {
-                            currentPaths.add(g.getPath());
-                            currentPathToId.put(g.getPath(), g.getId());
-                        }
-                    }
-                    java.util.Set<String> requestedPaths = new java.util.HashSet<>();
-                    for (String p : requestedGroupPaths) if (p != null && !p.isBlank()) requestedPaths.add(p.trim());
-                    for (String p : requestedPaths) {
-                        if (!currentPaths.contains(p)) {
-                            keycloakAdminClient.findGroupByPath(p, accessToken).ifPresent(grp -> keycloakAdminClient.addUserToGroup(existing.getId(), grp.getId(), accessToken));
-                        }
-                    }
-                    for (String p : currentPaths) {
-                        if (!requestedPaths.contains(p)) {
-                            String gid = currentPathToId.get(p);
-                            if (gid != null) keycloakAdminClient.removeUserFromGroup(existing.getId(), gid, accessToken);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                LOG.warn("Failed to apply group membership delta for {}: {}", existing.getUsername(), e.getMessage());
-            }
             KeycloakUserDTO updated = keycloakAdminClient.updateUser(existing.getId(), update, accessToken);
+            updated.setGroups(new ArrayList<>(requestedGroupPaths));
+            ensureDeptCodeAttribute(updated, requestedGroupPaths);
             // refresh role names from role-mappings to keep snapshot accurate
             try {
                 List<String> names = keycloakAdminClient.listUserRealmRoles(existing.getId(), accessToken);

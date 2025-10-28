@@ -56,6 +56,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuditLogResource {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogResource.class);
+    private static final Set<String> DETAIL_KEYS_TO_HIDE = Set.of("attributes", "actionDisplay", "target");
 
     private final AuditEntryQueryService auditQueryService;
     private final OperationMappingEngine opMappingEngine;
@@ -370,13 +371,16 @@ public class AuditLogResource {
         if (includeDetails) {
             detailPayload = new LinkedHashMap<>();
             if (view.details() != null) {
-                detailPayload.putAll(view.details());
+                view
+                    .details()
+                    .forEach((key, value) -> {
+                        if (!DETAIL_KEYS_TO_HIDE.contains(key)) {
+                            detailPayload.put(key, value);
+                        }
+                    });
             }
             if (!view.metadata().isEmpty()) {
                 detailPayload.putIfAbsent("metadata", view.metadata());
-            }
-            if (!view.extraAttributes().isEmpty()) {
-                detailPayload.putIfAbsent("attributes", view.extraAttributes());
             }
             if (StringUtils.isNotBlank(targetTable)) {
                 detailPayload.putIfAbsent("targetTable", targetTable);

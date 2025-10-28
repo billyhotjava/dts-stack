@@ -289,6 +289,7 @@ const MODULE_TOKEN_TRANSLATIONS: Record<string, string> = {
 
 const DEFAULT_PAGE_SIZE = 20;
 const MODULE_FILTER_ENABLED = false;
+const GROUP_FILTER_ENABLED = false;
 
 function translateModuleLabel(key?: string, fallback?: string): string {
 	const normalizedKey = key?.trim().toLowerCase();
@@ -396,67 +397,70 @@ export default function AuditCenterView() {
 	}, []);
 
 	useEffect(() => {
-	AuditLogService.getAuditGroups()
-		.then((groups) => {
-			const seen = new Set<string>();
-			const orderLabels = ["系统管理", "业务管理"];
-			const itemsWithMeta: Array<{
-				value: string;
-				label: string;
-				sourceLabel: string;
-				order: number;
-			}> = [];
-			for (const item of groups) {
-				const rawKey = (item.key ?? "").trim();
-				const rawTitle = (item.title ?? "").trim();
-				if (!rawKey || seen.has(rawKey)) {
-					continue;
+		if (!GROUP_FILTER_ENABLED) {
+			return;
+		}
+		AuditLogService.getAuditGroups()
+			.then((groups) => {
+				const seen = new Set<string>();
+				const orderLabels = ["系统管理", "业务管理"];
+				const itemsWithMeta: Array<{
+					value: string;
+					label: string;
+					sourceLabel: string;
+					order: number;
+				}> = [];
+				for (const item of groups) {
+					const rawKey = (item.key ?? "").trim();
+					const rawTitle = (item.title ?? "").trim();
+					if (!rawKey || seen.has(rawKey)) {
+						continue;
+					}
+					seen.add(rawKey);
+					const label = rawTitle || rawKey;
+					const sourceLabelRaw =
+						(item as Record<string, unknown>).sourceSystemLabel ??
+						(item as Record<string, unknown>).sourceLabel ??
+						"";
+					const normalizedSource =
+						typeof sourceLabelRaw === "string" && sourceLabelRaw.trim().length > 0
+							? sourceLabelRaw.trim()
+							: orderLabels.find((prefix) => label.startsWith(prefix)) ?? "其他";
+					itemsWithMeta.push({
+						value: rawKey,
+						label,
+						sourceLabel: normalizedSource,
+						order: itemsWithMeta.length,
+					});
 				}
-				seen.add(rawKey);
-				const label = rawTitle || rawKey;
-				const sourceLabelRaw =
-					(item as Record<string, unknown>).sourceSystemLabel ??
-					(item as Record<string, unknown>).sourceLabel ??
-					"";
-				const normalizedSource =
-					typeof sourceLabelRaw === "string" && sourceLabelRaw.trim().length > 0
-						? sourceLabelRaw.trim()
-						: orderLabels.find((prefix) => label.startsWith(prefix)) ?? "其他";
-				itemsWithMeta.push({
-					value: rawKey,
-					label,
-					sourceLabel: normalizedSource,
-					order: itemsWithMeta.length,
-				});
-			}
-			const prioritized: Array<{ value: string; label: string }> = [];
-			const usedValues = new Set<string>();
-			const pushBucket = (bucketLabel: string) => {
+				const prioritized: Array<{ value: string; label: string }> = [];
+				const usedValues = new Set<string>();
+				const pushBucket = (bucketLabel: string) => {
+					itemsWithMeta
+						.filter((entry) => entry.sourceLabel === bucketLabel)
+						.sort((a, b) => a.order - b.order)
+						.forEach((entry) => {
+							if (usedValues.has(entry.value)) {
+								return;
+							}
+							prioritized.push({ value: entry.value, label: entry.label });
+							usedValues.add(entry.value);
+						});
+				};
+				orderLabels.forEach((label) => pushBucket(label));
 				itemsWithMeta
-					.filter((entry) => entry.sourceLabel === bucketLabel)
+					.filter((entry) => !usedValues.has(entry.value))
 					.sort((a, b) => a.order - b.order)
 					.forEach((entry) => {
-						if (usedValues.has(entry.value)) {
-							return;
-						}
 						prioritized.push({ value: entry.value, label: entry.label });
 						usedValues.add(entry.value);
 					});
-			};
-			orderLabels.forEach((label) => pushBucket(label));
-			itemsWithMeta
-				.filter((entry) => !usedValues.has(entry.value))
-				.sort((a, b) => a.order - b.order)
-				.forEach((entry) => {
-					prioritized.push({ value: entry.value, label: entry.label });
-					usedValues.add(entry.value);
-				});
-			setGroupOptions([{ value: "", label: "全部功能分组" }, ...prioritized]);
-		})
-		.catch((error) => {
-			console.error("Failed to load audit groups", error);
-			toast.error("加载功能模块分组失败");
-		});
+				setGroupOptions([{ value: "", label: "全部功能分组" }, ...prioritized]);
+			})
+			.catch((error) => {
+				console.error("Failed to load audit groups", error);
+				toast.error("加载功能模块分组失败");
+			});
 	}, []);
 
 	const handleRefresh = useCallback(() => {
@@ -624,15 +628,17 @@ export default function AuditCenterView() {
 									options={moduleOptions}
 								/>
 							)}
-							<SelectField
-								label="功能分组"
-								value={filters.operationGroup || ""}
-								onChange={(value) => {
-									const trimmed = value.trim();
-									setFilters((prev) => ({ ...prev, operationGroup: trimmed ? trimmed : undefined }));
-								}}
-								options={groupOptions}
-							/>
+							{GROUP_FILTER_ENABLED && (
+								<SelectField
+									label="功能分组"
+									value={filters.operationGroup || ""}
+									onChange={(value) => {
+										const trimmed = value.trim();
+										setFilters((prev) => ({ ...prev, operationGroup: trimmed ? trimmed : undefined }));
+									}}
+									options={groupOptions}
+								/>
+							)}
 							<InputField
 								label="操作者"
 								placeholder="如 系统管理员 或 sysadmin"

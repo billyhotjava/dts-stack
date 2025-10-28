@@ -10,6 +10,7 @@ import {
 } from "@/admin/utils/menu-change-parser";
 import type { MenuChangeDisplayEntry } from "@/admin/components/menu-change-viewer";
 import type { ChangeRequest } from "@/admin/types";
+import { formatDisplayValue } from "@/admin/utils/value-localization";
 
 type PlainRecord = Record<string, unknown>;
 
@@ -116,8 +117,8 @@ export function summarizeChangeDisplayContext(
 			.map((entry, index) => {
 				const label = entry.label || entry.field || `字段${index + 1}`;
 				const beforeDefined = entry.before !== undefined && entry.before !== null && entry.before !== "";
-				const beforeText = formatSummaryValue(entry.before);
-				const afterText = formatSummaryValue(entry.after);
+				const beforeText = formatSummaryValue(entry.before, entry.field, entry.label);
+				const afterText = formatSummaryValue(entry.after, entry.field, entry.label);
 				return beforeDefined ? `${label}: ${beforeText} → ${afterText}` : `${label}: ${afterText}`;
 			})
 			.join("；");
@@ -357,27 +358,8 @@ function parseJsonRecord(value?: string | null): PlainRecord | null {
 	}
 }
 
-function formatSummaryValue(value: unknown): string {
-	if (value === null || value === undefined || value === "") {
-		return "—";
-	}
-	if (Array.isArray(value)) {
-		if (value.length === 0) {
-			return "[]";
-		}
-		return value
-			.map((item) => formatSummaryValue(item))
-			.filter((item) => item !== "—")
-			.join("、");
-	}
-	if (typeof value === "object") {
-		try {
-			return JSON.stringify(value, null, 0);
-		} catch {
-			return String(value);
-		}
-	}
-	return String(value);
+function formatSummaryValue(value: unknown, field?: string, label?: string): string {
+	return formatDisplayValue(value, field, label);
 }
 
 function formatVisibilityRule(rule: { role?: string; permission?: string; dataLevelLabel?: string }): string {

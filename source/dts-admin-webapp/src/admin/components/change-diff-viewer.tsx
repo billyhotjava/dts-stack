@@ -1,6 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { Text } from "@/ui/typography";
 import { cn } from "@/utils";
+import { formatDisplayValue } from "@/admin/utils/value-localization";
 
 type SnapshotRecord = Record<string, unknown>;
 
@@ -100,21 +101,27 @@ export function ChangeDiffViewer({
 						{section.subtitle ? <Text variant="caption" className="text-muted-foreground">{section.subtitle}</Text> : null}
 					</div>
 					<div className="divide-y divide-border/60">
-						{section.entries.map((entry) => (
-							<div key={entry.key} className="px-3 py-2 text-xs leading-5">
-								<Text variant="body3" className="font-medium text-foreground">
-									{entry.label}
-								</Text>
-								{mode === "create" ? (
-									<div className="mt-1 text-muted-foreground">{formatValue(entry.after)}</div>
-								) : (
-									<Fragment>
-										<div className="mt-1 text-muted-foreground">变更前：{formatValue(entry.before)}</div>
-										<div className="mt-1 text-destructive">变更后：{formatValue(entry.after)}</div>
-									</Fragment>
-								)}
-							</div>
-						))}
+					{section.entries.map((entry) => (
+						<div key={entry.key} className="px-3 py-2 text-xs leading-5">
+							<Text variant="body3" className="font-medium text-foreground">
+								{entry.label}
+							</Text>
+							{mode === "create" ? (
+								<div className="mt-1 text-muted-foreground">
+									{formatValue(entry.after, entry.field, entry.label)}
+								</div>
+							) : (
+								<Fragment>
+									<div className="mt-1 text-muted-foreground">
+										变更前：{formatValue(entry.before, entry.field, entry.label)}
+									</div>
+									<div className="mt-1 text-destructive">
+										变更后：{formatValue(entry.after, entry.field, entry.label)}
+									</div>
+								</Fragment>
+							)}
+						</div>
+					))}
 					</div>
 				</div>
 			))}
@@ -131,6 +138,7 @@ interface SectionInput {
 
 type SectionEntry = {
 	key: string;
+	field?: string;
 	label: string;
 	before?: unknown;
 	after?: unknown;
@@ -199,7 +207,7 @@ function buildSections({ snapshot, summary, mode }: SectionInput): Section[] {
 			sections.push({
 				key: "create",
 				title: "新增内容",
-				entries: entries.map(({ field: _field, ...rest }) => rest),
+				entries,
 			});
 		}
 		return sections;
@@ -228,8 +236,7 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 				field: typeof row.field === "string" ? row.field : undefined,
 			}))
 			.filter((entry) => !valuesEqual(entry.before, entry.after))
-			.filter((entry) => !shouldHideField(entry.field, entry.label))
-			.map(({ field: _field, ...rest }) => rest);
+			.filter((entry) => !shouldHideField(entry.field, entry.label));
 	}
 
 	if (snapshot && Array.isArray(snapshot.changes)) {
@@ -242,8 +249,7 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 				field: typeof change.field === "string" ? change.field : undefined,
 			}))
 			.filter((entry) => !valuesEqual(entry.before, entry.after))
-			.filter((entry) => !shouldHideField(entry.field, entry.label))
-			.map(({ field: _field, ...rest }) => rest);
+			.filter((entry) => !shouldHideField(entry.field, entry.label));
 	}
 
 	const before = sanitizeRecord(snapshot.before);
@@ -258,8 +264,7 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 			field,
 		}))
 		.filter((entry) => !valuesEqual(entry.before, entry.after))
-		.filter((entry) => !shouldHideField(entry.field, entry.label))
-		.map(({ field: _field, ...rest }) => rest);
+		.filter((entry) => !shouldHideField(entry.field, entry.label));
 }
 
 function sanitizeRecord(record?: SnapshotRecord | null): SnapshotRecord {
@@ -300,35 +305,8 @@ function normalizeMode(action?: string | null, operationTypeCode?: string | null
 	return "update";
 }
 
-function formatValue(value: unknown): string {
-	if (value === null || value === undefined) {
-		return "—";
-	}
-	if (Array.isArray(value)) {
-		if (value.length === 0) {
-			return "[]";
-		}
-		return `[${value.map(formatPrimitive).join("，")}]`;
-	}
-	if (typeof value === "object") {
-		try {
-			return JSON.stringify(value, null, 2);
-		} catch (err) {
-			console.warn("Failed to stringify value", err, value);
-			return String(value);
-		}
-	}
-	return formatPrimitive(value);
-}
-
-function formatPrimitive(value: unknown): string {
-	if (typeof value === "string") {
-		return value || "—";
-	}
-	if (typeof value === "number" || typeof value === "boolean") {
-		return String(value);
-	}
-	return value === null || value === undefined ? "—" : String(value);
+function formatValue(value: unknown, field?: string, label?: string): string {
+	return formatDisplayValue(value, field, label);
 }
 
 function formatFieldLabel(field: string): string {
@@ -447,8 +425,7 @@ function buildCreateEntriesFromSummary(summary?: ChangeSummaryEntry[] | null): S
 				after: row.after ?? row.before,
 			};
 		})
-		.filter((entry) => !shouldHideField(entry.field, entry.label))
-		.map(({ field: _field, ...rest }) => rest);
+		.filter((entry) => !shouldHideField(entry.field, entry.label));
 }
 
 function shouldSkipInitialField(field?: string): boolean {
