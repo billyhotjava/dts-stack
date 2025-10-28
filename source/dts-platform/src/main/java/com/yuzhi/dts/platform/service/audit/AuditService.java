@@ -48,6 +48,131 @@ public class AuditService {
         AUDIT_CONTEXT_CLASS = ctxClass;
     }
 
+    private static final Map<String, LegacyActionMapping> LEGACY_ACTIONS = new java.util.HashMap<>();
+
+    static {
+        // API catalog actions
+        registerLegacy("api.test", "EXECUTE", map("SERVICE_API_REGISTER", "测试 API 服务", "测试 API 服务失败", null, "EXECUTE", false, AuditStage.SUCCESS));
+        registerLegacy("api.publish", "PUBLISH", map("SERVICE_API_PUBLISH", "发布 API 服务", "发布 API 服务失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("api.execute", "EXECUTE", map("SERVICE_API_REGISTER", "执行 API 服务", "执行 API 服务失败", null, "EXECUTE", false, AuditStage.SUCCESS));
+
+        // Catalog classification mappings
+        registerLegacy("catalog.classificationMapping", "READ", map("CATALOG_ASSET_VIEW", "查看分类映射", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("catalog.classificationMapping", "CREATE", map("CATALOG_ASSET_EDIT", "新增分类映射", "新增分类映射失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.classificationMapping", "UPDATE", map("CATALOG_ASSET_EDIT", "更新分类映射", "更新分类映射失败", null, "UPDATE", false, AuditStage.SUCCESS));
+
+        // Catalog dataset grants
+        registerLegacy("catalog.dataset.grant", "READ", map("CATALOG_ASSET_VIEW", "查看数据集授权", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("catalog.dataset.grant", "CREATE", map("CATALOG_ASSET_EDIT", "新增数据集授权", "新增数据集授权失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.dataset.grant", "DELETE", map("CATALOG_ASSET_EDIT", "删除数据集授权", "删除数据集授权失败", null, "DELETE", false, AuditStage.SUCCESS));
+
+        // Catalog dataset import
+        registerLegacy("catalog.dataset.import", "CREATE", map("CATALOG_ASSET_EDIT", "导入数据资产", "导入数据资产失败", null, "IMPORT", false, AuditStage.SUCCESS));
+
+        // Catalog domains
+        registerLegacy("catalog.domain", "READ", map("CATALOG_ASSET_VIEW", "查看数据域", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain", "CREATE", map("CATALOG_ASSET_EDIT", "新增数据域", "新增数据域失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain", "UPDATE", map("CATALOG_ASSET_EDIT", "更新数据域", "更新数据域失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain", "DELETE", map("CATALOG_ASSET_EDIT", "删除数据域", "删除数据域失败", null, "DELETE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain.move", "UPDATE", map("CATALOG_ASSET_EDIT", "调整数据域顺序", "调整数据域顺序失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain.tree", "READ", map("CATALOG_ASSET_VIEW", "查看数据域树", null, null, "READ", true, AuditStage.SUCCESS));
+
+        // Catalog table metadata
+        registerLegacyCrud("catalog.table", "数据表");
+        registerLegacy("catalog.table.import", "CREATE", map("CATALOG_ASSET_EDIT", "导入数据表", "导入数据表失败", null, "IMPORT", false, AuditStage.SUCCESS));
+        registerLegacyCrud("catalog.column", "数据字段");
+        registerLegacyCrud("catalog.rowFilter", "数据过滤规则");
+        registerLegacyCrud("catalog.masking", "脱敏规则");
+        registerLegacy("catalog.masking.preview", "EXECUTE", map("CATALOG_ASSET_VIEW", "预览脱敏规则效果", "预览脱敏规则效果失败", null, "READ", true, AuditStage.SUCCESS));
+
+        // Catalog domain list / classification mapping read already handled
+        registerLegacy("catalog.classificationMapping", "READ", map("CATALOG_ASSET_VIEW", "查看分类映射", null, null, "READ", true, AuditStage.SUCCESS));
+
+        // Catalog dataset grants already handled above
+
+        // Dashboard
+        registerLegacy("dashboard.list", "READ", map("VIS_DASHBOARD_VIEW", "查看仪表盘列表", null, null, "READ", true, AuditStage.SUCCESS));
+
+        // ETL / job
+        registerLegacy("etl.job", "SUBMIT", map("FOUNDATION_SCHEDULE_DEPLOY", "提交数据集成任务", "提交数据集成任务失败", null, "EXECUTE", false, AuditStage.SUCCESS));
+        registerLegacy("etl.run.status", "READ", map("FOUNDATION_SCHEDULE_REGISTER", "查看任务运行状态", null, null, "READ", true, AuditStage.SUCCESS));
+
+        // Explore workbench
+        registerLegacy("explore.execute", "EXECUTE", map("EXPLORE_WORKBENCH_QUERY", "执行数据查询", "执行数据查询失败", null, "EXECUTE", false, AuditStage.SUCCESS));
+        registerLegacy("explore.execute", "DENY", map("EXPLORE_WORKBENCH_QUERY", "执行数据查询", "执行数据查询被拒绝", null, "EXECUTE", false, AuditStage.FAIL));
+        registerLegacy("explore.execute", "ERROR", map("EXPLORE_WORKBENCH_QUERY", "执行数据查询", "执行数据查询失败", null, "EXECUTE", false, AuditStage.FAIL));
+        registerLegacy("explore.explain", "READ", map("EXPLORE_WORKBENCH_QUERY", "查看查询执行计划", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("explore.resultPreview", "READ", map("EXPLORE_RESULTSET_VIEW", "预览查询结果", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("explore.resultPreview", "DENY", map("EXPLORE_RESULTSET_VIEW", "预览查询结果", "预览查询结果被拒绝", null, "READ", true, AuditStage.FAIL));
+        registerLegacy("explore.resultSet", "DELETE", map("EXPLORE_RESULTSET_PURGE", "删除查询结果集", "删除查询结果集失败", null, "DELETE", false, AuditStage.SUCCESS));
+        registerLegacy("explore.resultSet", "DENY", map("EXPLORE_RESULTSET_PURGE", "删除查询结果集", "删除查询结果集被拒绝", null, "DELETE", false, AuditStage.FAIL));
+        registerLegacy("explore.resultSet.cleanup", "DELETE", map("EXPLORE_RESULTSET_PURGE", "清理查询结果集", "清理查询结果集失败", null, "DELETE", false, AuditStage.SUCCESS));
+        registerLegacy("explore.saveResult", "EXPORT", map("EXPLORE_RESULTSET_EXPORT", "保存查询结果集", "保存查询结果集失败", null, "EXPORT", false, AuditStage.SUCCESS));
+        registerLegacy("explore.saveResult", "DENY", map("EXPLORE_RESULTSET_EXPORT", "保存查询结果集", "保存查询结果集被拒绝", null, "EXPORT", false, AuditStage.FAIL));
+
+        // IAM classification
+        registerLegacy("iam.classification", "READ", map("IAM_CLASSIFICATION_VIEW", "查看密级映射", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("iam.classification", "CREATE", map("IAM_CLASSIFICATION_SYNC", "新增密级映射", "新增密级映射失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("iam.classification", "UPDATE", map("IAM_CLASSIFICATION_SYNC", "更新密级映射", "更新密级映射失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("iam.classification", "DELETE", map("IAM_CLASSIFICATION_SYNC", "删除密级映射", "删除密级映射失败", null, "DELETE", false, AuditStage.SUCCESS));
+
+        // IAM permissions
+        registerLegacy("iam.permission", "READ", map("IAM_AUTH_GRANT", "查看权限策略", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("iam.permission", "CREATE", map("IAM_AUTH_GRANT", "新增权限策略", "新增权限策略失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("iam.permission", "UPDATE", map("IAM_AUTH_GRANT", "更新权限策略", "更新权限策略失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("iam.permission", "DELETE", map("IAM_AUTH_REVOKE", "删除权限策略", "删除权限策略失败", null, "DELETE", false, AuditStage.SUCCESS));
+
+        // IAM requests
+        registerLegacy("iam.request", "READ", map("IAM_REQUEST_SUBMIT", "查看权限申请", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("iam.request", "CREATE", map("IAM_REQUEST_SUBMIT", "提交权限申请", "提交权限申请失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("iam.request.approve", "UPDATE", map("IAM_REQUEST_APPROVE", "审批权限申请", "审批权限申请失败", null, "APPROVE", false, AuditStage.SUCCESS));
+        registerLegacy("iam.request.reject", "UPDATE", map("IAM_REQUEST_REJECT", "驳回权限申请", "驳回权限申请失败", null, "REJECT", false, AuditStage.SUCCESS));
+        registerLegacy("iam.simulate", "EXECUTE", map("IAM_SIMULATION_RUN", "执行策略模拟", "执行策略模拟失败", null, "EXECUTE", false, AuditStage.SUCCESS));
+
+        // Infra data sources
+        registerLegacy("infra.dataSource", "CREATE", map("FOUNDATION_DATASOURCE_REGISTER", "新增数据源", "新增数据源失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.dataSource", "UPDATE", map("FOUNDATION_DATASOURCE_REGISTER", "更新数据源", "更新数据源失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.dataSource", "DELETE", map("FOUNDATION_DATASOURCE_DISABLE", "删除数据源", "删除数据源失败", null, "DELETE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.dataSource", "TEST", map("FOUNDATION_DATASOURCE_TEST", "测试数据源连接", "测试数据源连接失败", null, "EXECUTE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.dataSource.inceptor", "PUBLISH", map("FOUNDATION_DATASOURCE_REGISTER", "发布 Inceptor 数据源", "发布 Inceptor 数据源失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.dataSource.inceptor", "REFRESH", map("FOUNDATION_DATASOURCE_TEST", "刷新 Inceptor 数据源", "刷新 Inceptor 数据源失败", null, "EXECUTE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.dataSource.postgres", "PUBLISH", map("FOUNDATION_DATASOURCE_REGISTER", "发布 Postgres 数据源", "发布 Postgres 数据源失败", null, "UPDATE", false, AuditStage.SUCCESS));
+
+        // Infra data storage
+        registerLegacy("infra.dataStorage", "CREATE", map("FOUNDATION_STORAGE_REGISTER", "新增数据存储", "新增数据存储失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.dataStorage", "UPDATE", map("FOUNDATION_STORAGE_UPDATE", "更新数据存储", "更新数据存储失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.dataStorage", "DELETE", map("FOUNDATION_STORAGE_UPDATE", "删除数据存储", "删除数据存储失败", null, "DELETE", false, AuditStage.SUCCESS));
+
+        // Infra schedule
+        registerLegacy("infra.schedule", "READ", map("FOUNDATION_SCHEDULE_REGISTER", "查看调度任务", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("infra.schedule", "CREATE", map("FOUNDATION_SCHEDULE_REGISTER", "创建调度任务", "创建调度任务失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.schedule", "UPDATE", map("FOUNDATION_SCHEDULE_DEPLOY", "更新调度任务", "更新调度任务失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.schedule", "DELETE", map("FOUNDATION_SCHEDULE_DISABLE", "删除调度任务", "删除调度任务失败", null, "DELETE", false, AuditStage.SUCCESS));
+
+        // Modeling settings
+        registerLegacy("modeling.standard.settings", "READ", map("MODELING_STANDARD_VIEW", "查看数据标准设置", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("modeling.standard.settings", "UPDATE", map("MODELING_STANDARD_EDIT", "更新数据标准设置", "更新数据标准设置失败", null, "UPDATE", false, AuditStage.SUCCESS));
+
+        // SQL query fallback
+        registerLegacy("sql.query", "EXECUTE", map("EXPLORE_WORKBENCH_QUERY", "执行 SQL 查询", "执行 SQL 查询失败", null, "EXECUTE", false, AuditStage.SUCCESS));
+        registerLegacy("sql.query", "DENY", map("EXPLORE_WORKBENCH_QUERY", "执行 SQL 查询", "执行 SQL 查询被拒绝", null, "EXECUTE", false, AuditStage.FAIL));
+        registerLegacy("sql.query", "ERROR", map("EXPLORE_WORKBENCH_QUERY", "执行 SQL 查询", "执行 SQL 查询失败", null, "EXECUTE", false, AuditStage.FAIL));
+
+        // Service tokens
+        registerLegacy("svc.token", "READ", map("SERVICE_TOKEN_ISSUE", "查看访问令牌", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("svc.token", "CREATE", map("SERVICE_TOKEN_ISSUE", "发放访问令牌", "发放访问令牌失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("svc.token", "DELETE", map("SERVICE_TOKEN_REVOKE", "吊销访问令牌", "吊销访问令牌失败", null, "DELETE", false, AuditStage.SUCCESS));
+
+        // Visualization dashboards
+        registerLegacy("vis.dashboards", "READ", map("VIS_DASHBOARD_VIEW", "查看仪表盘", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("vis.cockpit", "READ", map("VIS_COCKPIT_VIEW", "查看驾驶舱", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("vis.finance", "READ", map("VIS_FINANCE_VIEW", "查看财务看板", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("vis.hr", "READ", map("VIS_HR_VIEW", "查看人力看板", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("vis.projects", "READ", map("VIS_PROJECT_VIEW", "查看项目看板", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("vis.supply", "READ", map("VIS_SUPPLYCHAIN_VIEW", "查看供应链看板", null, null, "READ", true, AuditStage.SUCCESS));
+
+    }
+
     private final ObjectProvider<AuditTrailService> auditTrailServiceProvider;
     private final AuditActionCatalog actionCatalog;
     private final ObjectMapper objectMapper;

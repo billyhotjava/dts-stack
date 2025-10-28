@@ -125,7 +125,7 @@ export function summarizeChangeDisplayContext(
 	if (menuChanges.length > 0) {
 		const parts: string[] = [];
 		menuChanges.slice(0, maxEntries).forEach((entry) => {
-			const label = entry.menuTitle || entry.menuName || entry.menuPath || entry.id || "菜单";
+			const label = entry.title || entry.name || entry.path || entry.id || "菜单";
 			const changeSegments: string[] = [];
 			if (entry.addedRoles?.length) {
 				changeSegments.push(`新增角色 ${entry.addedRoles.join("、")}`);

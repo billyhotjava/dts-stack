@@ -53,6 +53,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -1367,15 +1371,19 @@ public class AdminUserService {
     }
 
     private void refreshSnapshotFromKeycloak(String username) {
-        if (!StringUtils.isNotBlank(username)) {
+        if (StringUtils.isBlank(username)) {
+            return;
+        }
+        String accessToken = resolveSnapshotAccessToken();
+        if (StringUtils.isBlank(accessToken)) {
+            LOG.debug("Skip refreshing snapshot for {} because no access token is available", username);
             return;
         }
         try {
-            String managementToken = resolveManagementToken();
             keycloakAdminClient
-                .findByUsername(username, managementToken)
+                .findByUsername(username, accessToken)
                 .ifPresent(remote -> {
-                    refreshUserGroups(remote, managementToken);
+                    refreshUserGroups(remote, accessToken);
                     syncSnapshot(remote);
                 });
         } catch (Exception ex) {
@@ -1386,6 +1394,31 @@ public class AdminUserService {
     private AdminKeycloakUser ensureFreshSnapshot(String username) {
         refreshSnapshotFromKeycloak(username);
         return ensureSnapshot(username);
+    }
+
+    private String resolveSnapshotAccessToken() {
+        try {
+            return resolveManagementToken();
+        } catch (Exception ex) {
+            String fallback = currentRequestAccessToken();
+            if (StringUtils.isNotBlank(fallback)) {
+                LOG.debug("Falling back to current request token for snapshot refresh: {}", ex.getMessage());
+                return fallback;
+            }
+            LOG.warn("Unable to obtain access token for snapshot refresh: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private String currentRequestAccessToken() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication instanceof JwtAuthenticationToken jwt) {
+            return jwt.getToken().getTokenValue();
+        }
+        if (authentication instanceof BearerTokenAuthentication bearer) {
+            return bearer.getToken().getTokenValue();
+        }
+        return null;
     }
 
     private void refreshUserGroups(KeycloakUserDTO dto, String accessToken) {
