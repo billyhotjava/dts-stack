@@ -2101,20 +2101,22 @@ public class KeycloakApiResource {
         Optional<ApprovalDTOs.ApprovalRequestDetail> detailOpt = adminUserService.findApprovalDetail(id);
         String actor = currentUser();
         if (detailOpt.isEmpty()) {
-            Map<String, Object> failure = Map.of("error", "NOT_FOUND");
-            recordApprovalActionV2(
-                actor,
-                ButtonCodes.APPROVAL_VIEW,
-                AuditResultStatus.FAILED,
-                id,
-                changeRequestRefFrom(id),
-                new LinkedHashMap<>(failure),
-                request,
-                "/api/approval-requests/" + id,
-                "GET",
-                "查看审批请求失败：" + changeRequestRefFrom(id),
-                true
-            );
+            if (!isAuditSuppressed()) {
+                Map<String, Object> failure = Map.of("error", "NOT_FOUND");
+                recordApprovalActionV2(
+                    actor,
+                    ButtonCodes.APPROVAL_VIEW,
+                    AuditResultStatus.FAILED,
+                    id,
+                    changeRequestRefFrom(id),
+                    new LinkedHashMap<>(failure),
+                    request,
+                    "/api/approval-requests/" + id,
+                    "GET",
+                    "查看审批请求失败：" + changeRequestRefFrom(id),
+                    true
+                );
+            }
             return ResponseEntity.status(404).body(ApiResponse.error("审批请求不存在"));
         }
         ApprovalDTOs.ApprovalRequestDetail detail = detailOpt.orElse(null);

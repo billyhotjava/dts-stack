@@ -19,9 +19,10 @@ export class KeycloakApprovalService {
 	/**
 	 * 根据ID获取审批请求详情
 	 */
-	static getApprovalRequestById(requestId: number): Promise<ApprovalRequestDetail> {
+	static getApprovalRequestById(requestId: number, options?: { silent?: boolean }): Promise<ApprovalRequestDetail> {
 		return apiClient.get<ApprovalRequestDetail>({
 			url: `/approval-requests/${requestId}`,
+			headers: options?.silent ? { "X-Audit-Silent": "true" } : undefined,
 		});
 	}
 

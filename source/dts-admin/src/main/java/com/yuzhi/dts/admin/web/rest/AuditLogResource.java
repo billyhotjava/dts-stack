@@ -475,13 +475,16 @@ public class AuditLogResource {
         if (kind == null) {
             return "QUERY";
         }
-        return switch (kind) {
-            case QUERY, OTHER -> "QUERY";
-            case READ -> "QUERY";
-            case CREATE -> "CREATE";
-            case DELETE -> "DELETE";
-            default -> "UPDATE";
-        };
+        if (kind == AuditOperationKind.CREATE) {
+            return "CREATE";
+        }
+        if (kind == AuditOperationKind.DELETE) {
+            return "DELETE";
+        }
+        if (kind == AuditOperationKind.UPDATE) {
+            return "UPDATE";
+        }
+        return "QUERY";
     }
 
     private String mapOperationTypeLabel(String normalizedCode) {

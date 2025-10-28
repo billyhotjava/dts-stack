@@ -452,7 +452,7 @@ export default function ApprovalCenterView() {
 				// 按需拉取详情，以提取 payload 中的 changeRequestId
 				for (const item of list || []) {
 					try {
-						const detail = await KeycloakApprovalService.getApprovalRequestById(item.id);
+						const detail = await KeycloakApprovalService.getApprovalRequestById(item.id, { silent: true });
 						if (!detail?.items?.length) continue;
 						for (const it of detail.items) {
 							if (!it?.payload) continue;
