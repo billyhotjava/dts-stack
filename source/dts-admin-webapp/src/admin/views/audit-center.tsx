@@ -791,7 +791,10 @@ function renderAuditDetail(detail?: AuditLogDetail | null): ReactNode {
 		return <div className="text-xs text-muted-foreground">无详情</div>;
 	}
 	const hasDiff = parsed.diffRows.length > 0;
-	const hasBeforeAfter = !!(parsed.before && Object.keys(parsed.before).length) || !!(parsed.after && Object.keys(parsed.after).length);
+	const hasBeforeAfter =
+		!!(parsed.before && Object.keys(parsed.before).length) ||
+		!!(parsed.after && Object.keys(parsed.after).length);
+	const showBeforeAfter = !hasDiff && hasBeforeAfter;
 	const hasInfo = parsed.infoEntries.length > 0;
 	return (
 		<div className="space-y-3 text-xs leading-5">
@@ -822,7 +825,7 @@ function renderAuditDetail(detail?: AuditLogDetail | null): ReactNode {
 					</div>
 				</div>
 			) : null}
-			{hasBeforeAfter ? (
+				{showBeforeAfter ? (
 				<div className="grid gap-3 md:grid-cols-2">
 					<div className="space-y-2">
 						<Text variant="body3" className="text-muted-foreground">
