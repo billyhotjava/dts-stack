@@ -43,17 +43,22 @@ export interface DataStandardAttachmentDto {
     createdBy?: string;
 }
 
+export const STATUS_LABELS: Record<DataStandardStatus, string> = {
+    DRAFT: "草稿",
+    IN_REVIEW: "评审中",
+    ACTIVE: "启用",
+    DEPRECATED: "已停用",
+    RETIRED: "已退役",
+    ARCHIVED: "已归档",
+};
+
 export const STATUS_OPTIONS: { value: DataStandardStatus; label: string }[] = [
-    { value: "DRAFT", label: "草稿" },
-    { value: "IN_REVIEW", label: "评审中" },
-    { value: "ACTIVE", label: "启用" },
-    { value: "DEPRECATED", label: "已停用" },
-    { value: "RETIRED", label: "已退役" },
-    { value: "ARCHIVED", label: "已归档" },
+    { value: "DRAFT", label: STATUS_LABELS.DRAFT },
+    { value: "ACTIVE", label: STATUS_LABELS.ACTIVE },
+    { value: "ARCHIVED", label: STATUS_LABELS.ARCHIVED },
 ];
 
-export const statusLabel = (status: DataStandardStatus) =>
-    STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
+export const statusLabel = (status: DataStandardStatus) => STATUS_LABELS[status] ?? status;
 
 export const toTagList = (input: string): string[] =>
     input

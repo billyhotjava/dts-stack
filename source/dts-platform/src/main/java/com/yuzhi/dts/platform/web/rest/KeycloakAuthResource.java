@@ -11,10 +11,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
@@ -29,17 +30,20 @@ public class KeycloakAuthResource {
     private final AdminAuthClient adminAuthClient;
     private final com.yuzhi.dts.platform.service.audit.AuditService audit;
     private final com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry;
+    private final boolean portalAuditEnabled;
 
     public KeycloakAuthResource(
         PortalSessionRegistry sessionRegistry,
         AdminAuthClient adminAuthClient,
         com.yuzhi.dts.platform.service.audit.AuditService audit,
-        com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry
+        com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry,
+        @Value("${auditing.portal-auth.enabled:true}") boolean portalAuditEnabled
     ) {
         this.sessionRegistry = sessionRegistry;
         this.adminAuthClient = adminAuthClient;
         this.audit = audit;
         this.inceptorRegistry = inceptorRegistry;
+        this.portalAuditEnabled = portalAuditEnabled;
     }
 
     public record LoginPayload(String username, String password) {}
@@ -87,18 +91,19 @@ public class KeycloakAuthResource {
             boolean takeover = sessionRegistry.hasActiveSession(username);
             if (takeover && !sessionRegistry.isTakeoverAllowed()) {
                 log.warn("[login] denied username={} reason=active-session", username);
-                if (shouldRecordPortalLoginAudit()) {
-                    Map<String, Object> failurePayload = authAuditPayload(username);
-                    applyIdentityMetadata(failurePayload, displayName, username);
-                    failurePayload.put("summary", buildSummary("业务端登录失败", displayName, username));
+                String auditActor = sanitizeActor(username);
+                if (shouldRecordPortalLoginAudit() && auditActor != null) {
+                    Map<String, Object> failurePayload = authAuditPayload(auditActor);
+                    applyIdentityMetadata(failurePayload, displayName, auditActor);
+                    failurePayload.put("summary", buildSummary("业务端登录失败", displayName, auditActor));
                     failurePayload.put("operationType", "LOGIN");
                     failurePayload.put("error", "ACTIVE_SESSION");
                     audit.recordAs(
-                        username,
+                        auditActor,
                         "AUTH LOGIN",
                         "platform",
                         "portal_user",
-                        username,
+                        auditActor,
                         "FAILED",
                         failurePayload,
                         Map.of("audience", "platform")
@@ -184,17 +189,18 @@ public class KeycloakAuthResource {
                     log.info("[login] success username={} roles={} perms={}", username, mappedRoles, permissions);
                 }
             }
-            if (shouldRecordPortalLoginAudit()) {
-                Map<String, Object> successPayload = authAuditPayload(username);
-                applyIdentityMetadata(successPayload, displayName, username);
-                successPayload.put("summary", buildSummary("业务端登录成功", displayName, username));
+            String auditActor = sanitizeActor(username);
+            if (shouldRecordPortalLoginAudit() && auditActor != null) {
+                Map<String, Object> successPayload = authAuditPayload(auditActor);
+                applyIdentityMetadata(successPayload, displayName, auditActor);
+                successPayload.put("summary", buildSummary("业务端登录成功", displayName, auditActor));
                 successPayload.put("operationType", "LOGIN");
                 audit.recordAs(
-                    username,
+                    auditActor,
                     "AUTH LOGIN",
                     "platform",
                     "portal_user",
-                    username,
+                    auditActor,
                     "SUCCESS",
                     successPayload,
                     Map.of("audience", "platform")
@@ -214,18 +220,19 @@ public class KeycloakAuthResource {
             return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (org.springframework.security.authentication.BadCredentialsException ex) {
             log.warn("[login] unauthorized username={} reason={}", username, ex.getMessage());
-            if (shouldRecordPortalLoginAudit()) {
-                Map<String, Object> failurePayload = authAuditPayload(username);
-                applyIdentityMetadata(failurePayload, null, username);
-                failurePayload.put("summary", buildSummary("业务端登录失败", null, username));
+            String auditActor = sanitizeActor(username);
+            if (shouldRecordPortalLoginAudit() && auditActor != null) {
+                Map<String, Object> failurePayload = authAuditPayload(auditActor);
+                applyIdentityMetadata(failurePayload, null, auditActor);
+                failurePayload.put("summary", buildSummary("业务端登录失败", null, auditActor));
                 failurePayload.put("operationType", "LOGIN");
                 failurePayload.put("error", ex.getMessage());
                 audit.recordAs(
-                    username,
+                    auditActor,
                     "AUTH LOGIN",
                     "platform",
                     "portal_user",
-                    username,
+                    auditActor,
                     "FAILED",
                     failurePayload,
                     Map.of("audience", "platform")
@@ -235,18 +242,19 @@ public class KeycloakAuthResource {
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
             log.error("[login] error username={} msg={}", username, msg);
-            if (shouldRecordPortalLoginAudit()) {
-                Map<String, Object> failurePayload = authAuditPayload(username);
-                applyIdentityMetadata(failurePayload, null, username);
-                failurePayload.put("summary", buildSummary("业务端登录失败", null, username));
+            String auditActor = sanitizeActor(username);
+            if (shouldRecordPortalLoginAudit() && auditActor != null) {
+                Map<String, Object> failurePayload = authAuditPayload(auditActor);
+                applyIdentityMetadata(failurePayload, null, auditActor);
+                failurePayload.put("summary", buildSummary("业务端登录失败", null, auditActor));
                 failurePayload.put("operationType", "LOGIN");
                 failurePayload.put("error", msg);
                 audit.recordAs(
-                    username,
+                    auditActor,
                     "AUTH LOGIN",
                     "platform",
                     "portal_user",
-                    username,
+                    auditActor,
                     "FAILED",
                     failurePayload,
                     Map.of("audience", "platform")
@@ -263,8 +271,12 @@ public class KeycloakAuthResource {
         String requestedActor = payload != null ? sanitizeActor(payload.username()) : null;
         String sessionActor = session != null ? sanitizeActor(session.username()) : null;
         String contextActor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
-        String actor = firstNonBlank(sessionActor, contextActor, requestedActor);
-        String actorDisplayName = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDisplayName().orElse(null);
+        String actor = firstNonBlank(sessionActor, contextActor, requestedActor, resolveRefreshActor(portalRefresh));
+        String sessionDisplayName = session != null ? stringValue(session.displayName()) : null;
+        String actorDisplayName = firstNonBlank(
+            sessionDisplayName,
+            com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDisplayName().orElse(null)
+        );
 
         boolean revokeFailed = false;
         String revokeError = null;
@@ -280,7 +292,7 @@ public class KeycloakAuthResource {
             }
         }
 
-        if (StringUtils.hasText(actor)) {
+        if (shouldRecordPortalLoginAudit() && StringUtils.hasText(actor)) {
             if (revokeFailed) {
                 Map<String, Object> failurePayload = authAuditPayload(actor);
                 applyIdentityMetadata(failurePayload, actorDisplayName, actor);
@@ -330,6 +342,7 @@ public class KeycloakAuthResource {
         if (!org.springframework.util.StringUtils.hasText(username)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponses.error("缺少用户名"));
         }
+        String auditActor = sanitizeActor(username);
 
         String displayName = null;
         try {
@@ -357,22 +370,22 @@ public class KeycloakAuthResource {
             boolean takeover = sessionRegistry.hasActiveSession(username);
             if (takeover && !sessionRegistry.isTakeoverAllowed()) {
                 log.warn("[pki-login] denied username={} reason=active-session", username);
-                if (shouldRecordPortalLoginAudit()) {
-                    Map<String, Object> failurePayload = authAuditPayload(username);
+                if (shouldRecordPortalLoginAudit() && auditActor != null) {
+                    Map<String, Object> failurePayload = authAuditPayload(auditActor);
                     failurePayload.put("mode", "pki");
-                    applyIdentityMetadata(failurePayload, displayName, username);
-                    failurePayload.put("summary", buildSummary("业务端登录失败", displayName, username));
+                    applyIdentityMetadata(failurePayload, displayName, auditActor);
+                    failurePayload.put("summary", buildSummary("业务端登录失败", displayName, auditActor));
                     failurePayload.put("operationType", "LOGIN");
                     failurePayload.put("error", "ACTIVE_SESSION");
                     Map<String, Object> metadata = new LinkedHashMap<>();
                     metadata.put("audience", "platform");
                     metadata.put("mode", "pki");
                     audit.recordAs(
-                        username,
+                        auditActor,
                         "AUTH LOGIN",
                         "platform",
                         "portal_user",
-                        username,
+                        auditActor,
                         "FAILED",
                         failurePayload,
                         metadata
@@ -430,21 +443,21 @@ public class KeycloakAuthResource {
                 data.put("sessionTakeover", Boolean.TRUE);
             }
 
-            if (shouldRecordPortalLoginAudit()) {
-                Map<String, Object> successPayload = authAuditPayload(username);
+            if (shouldRecordPortalLoginAudit() && auditActor != null) {
+                Map<String, Object> successPayload = authAuditPayload(auditActor);
                 successPayload.put("mode", "pki");
-                applyIdentityMetadata(successPayload, displayName, username);
-                successPayload.put("summary", buildSummary("业务端登录成功", displayName, username));
+                applyIdentityMetadata(successPayload, displayName, auditActor);
+                successPayload.put("summary", buildSummary("业务端登录成功", displayName, auditActor));
                 successPayload.put("operationType", "LOGIN");
                 Map<String, Object> metadata = new LinkedHashMap<>();
                 metadata.put("audience", "platform");
                 metadata.put("mode", "pki");
                 audit.recordAs(
-                    username,
+                    auditActor,
                     "AUTH LOGIN",
                     "platform",
                     "portal_user",
-                    username,
+                    auditActor,
                     "SUCCESS",
                     successPayload,
                     metadata
@@ -453,22 +466,22 @@ public class KeycloakAuthResource {
             return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
-            if (shouldRecordPortalLoginAudit()) {
-                Map<String, Object> failurePayload = authAuditPayload(username);
+            if (shouldRecordPortalLoginAudit() && auditActor != null) {
+                Map<String, Object> failurePayload = authAuditPayload(auditActor);
                 failurePayload.put("mode", "pki");
-                applyIdentityMetadata(failurePayload, displayName, username);
-                failurePayload.put("summary", buildSummary("业务端登录失败", displayName, username));
+                applyIdentityMetadata(failurePayload, displayName, auditActor);
+                failurePayload.put("summary", buildSummary("业务端登录失败", displayName, auditActor));
                 failurePayload.put("operationType", "LOGIN");
                 failurePayload.put("error", msg);
                 Map<String, Object> metadata = new LinkedHashMap<>();
                 metadata.put("audience", "platform");
                 metadata.put("mode", "pki");
                 audit.recordAs(
-                    username,
+                    auditActor,
                     "AUTH LOGIN",
                     "platform",
                     "portal_user",
-                    username,
+                    auditActor,
                     "FAILED",
                     failurePayload,
                     metadata
@@ -612,7 +625,7 @@ public class KeycloakAuthResource {
     }
 
     private boolean shouldRecordPortalLoginAudit() {
-        return false;
+        return portalAuditEnabled;
     }
 
     private void applyIdentityMetadata(Map<String, Object> payload, String displayName, String fallbackName) {

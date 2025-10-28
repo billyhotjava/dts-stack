@@ -91,6 +91,7 @@ public class DataStandardService {
         auditPayload.put("after", toStandardAuditView(entity));
         auditPayload.put("targetId", entity.getId().toString());
         auditPayload.put("targetName", entity.getName());
+        auditPayload.put("operationType", "CREATE");
         auditPayload.put("summary", "新增数据标准：" + entity.getName());
         auditService.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, entity.getId().toString(), auditPayload);
         return DataStandardMapper.toDto(entity);
@@ -125,6 +126,7 @@ public class DataStandardService {
         auditPayload.put("after", toStandardAuditView(entity));
         auditPayload.put("targetId", entity.getId().toString());
         auditPayload.put("targetName", entity.getName());
+        auditPayload.put("operationType", "UPDATE");
         auditPayload.put("summary", "修改数据标准：" + entity.getName());
         auditService.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, entity.getId().toString(), auditPayload);
         return DataStandardMapper.toDto(entity);
@@ -144,6 +146,7 @@ public class DataStandardService {
         auditPayload.put("after", toStandardAuditView(entity));
         auditPayload.put("targetId", entity.getId().toString());
         auditPayload.put("targetName", entity.getName());
+        auditPayload.put("operationType", "ARCHIVE");
         auditPayload.put("summary", "归档数据标准：" + entity.getName());
         auditService.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, entity.getId().toString(), auditPayload);
         return DataStandardMapper.toDto(entity);
@@ -159,6 +162,7 @@ public class DataStandardService {
         auditPayload.put("after", java.util.Map.of("deleted", true));
         auditPayload.put("targetId", id.toString());
         auditPayload.put("targetName", entity.getName());
+        auditPayload.put("operationType", "DELETE");
         auditPayload.put("summary", "删除数据标准：" + entity.getName());
         auditService.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, id.toString(), auditPayload);
     }

@@ -10,6 +10,7 @@ public enum AuditOperationType {
     CREATE("CREATE", "新增", true),
     UPDATE("UPDATE", "修改", true),
     DELETE("DELETE", "删除", true),
+    ARCHIVE("ARCHIVE", "归档", true),
     READ("READ", "查询", false),
     LIST("LIST", "列表查询", false),
     LOGIN("LOGIN", "登录", false),
@@ -66,6 +67,7 @@ public enum AuditOperationType {
             case "新增", "CREATE" -> CREATE;
             case "修改", "UPDATE" -> UPDATE;
             case "删除", "DELETE" -> DELETE;
+            case "归档", "ARCHIVE" -> ARCHIVE;
             case "查询", "READ" -> READ;
             case "列表", "LIST" -> LIST;
             case "登录", "LOGIN" -> LOGIN;

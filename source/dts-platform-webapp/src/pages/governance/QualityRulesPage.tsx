@@ -991,140 +991,143 @@ const QualityRulesPage = () => {
       </Dialog>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl overflow-hidden p-0">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>{formMode === "create" ? "新增质量规则" : "编辑质量规则"}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>规则名称</Label>
-              <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>责任人</Label>
-              <Input value={form.owner} onChange={(event) => setForm((prev) => ({ ...prev, owner: event.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>数据集</Label>
-              <Select
-                value={form.datasetId}
-                onValueChange={(value) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    datasetId: value,
-                    dataLevel: inferDataLevel(value),
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="选择数据集" />
-                </SelectTrigger>
-                <SelectContent>
-                  {datasets.map((dataset) => (
-                    <SelectItem key={dataset.id} value={dataset.id}>
-                      {dataset.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>严重程度</Label>
-              <Select
-                value={form.severity}
-                onValueChange={(value: SeverityLevel) => setForm((prev) => ({ ...prev, severity: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SEVERITY_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>执行频率</Label>
-              <Select
-                value={form.frequencyPreset}
-                onValueChange={(value: RuleForm["frequencyPreset"]) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    frequencyPreset: value,
-                    customCron:
-                      value === "CUSTOM"
-                        ? prev.customCron
-                        : FREQUENCY_PRESETS.find((item) => item.preset === value)?.cron || prev.customCron,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {FREQUENCY_PRESETS.map((option) => (
-                    <SelectItem key={option.preset} value={option.preset}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {form.frequencyPreset === "CUSTOM" && (
-                <Input
-                  placeholder="请输入 Cron 表达式"
-                  value={form.customCron}
-                  onChange={(event) => setForm((prev) => ({ ...prev, customCron: event.target.value }))}
-                />
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={form.enabled} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, enabled: checked }))} />
-              <Label>启用规则</Label>
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <Label>快速模板</Label>
-              <div className="flex flex-wrap gap-2">
-                {SQL_TEMPLATES.map((template) => (
-                  <Button
-                    key={template.id}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleApplyTemplate(template.id)}
-                  >
-                    {template.label}
-                  </Button>
-                ))}
+          <ScrollArea className="max-h-[60vh] px-6">
+            <div className="grid gap-4 py-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>规则名称</Label>
+                <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
               </div>
-              <p className="text-xs text-muted-foreground">
-                根据数据集快速套用常见检测逻辑，SQL 内容由系统生成，仅供查看。
-              </p>
+              <div className="space-y-2">
+                <Label>责任人</Label>
+                <Input value={form.owner} onChange={(event) => setForm((prev) => ({ ...prev, owner: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>数据集</Label>
+                <Select
+                  value={form.datasetId}
+                  onValueChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      datasetId: value,
+                      dataLevel: inferDataLevel(value),
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择数据集" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {datasets.map((dataset) => (
+                      <SelectItem key={dataset.id} value={dataset.id}>
+                        {dataset.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>严重程度</Label>
+                <Select
+                  value={form.severity}
+                  onValueChange={(value: SeverityLevel) => setForm((prev) => ({ ...prev, severity: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEVERITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>执行频率</Label>
+                <Select
+                  value={form.frequencyPreset}
+                  onValueChange={(value: RuleForm["frequencyPreset"]) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      frequencyPreset: value,
+                      customCron:
+                        value === "CUSTOM"
+                          ? prev.customCron
+                          : FREQUENCY_PRESETS.find((item) => item.preset === value)?.cron || prev.customCron,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FREQUENCY_PRESETS.map((option) => (
+                      <SelectItem key={option.preset} value={option.preset}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {form.frequencyPreset === "CUSTOM" && (
+                  <Input
+                    placeholder="请输入 Cron 表达式"
+                    value={form.customCron}
+                    onChange={(event) => setForm((prev) => ({ ...prev, customCron: event.target.value }))}
+                    className="mt-2"
+                  />
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.enabled} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, enabled: checked }))} />
+                <Label>启用规则</Label>
+              </div>
+              <div className="md:col-span-2 space-y-2">
+                <Label>快速模板</Label>
+                <div className="flex flex-wrap gap-2">
+                  {SQL_TEMPLATES.map((template) => (
+                    <Button
+                      key={template.id}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleApplyTemplate(template.id)}
+                    >
+                      {template.label}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  根据数据集快速套用常见检测逻辑，SQL 内容由系统生成，仅供查看。
+                </p>
+              </div>
+              <div className="md:col-span-2 space-y-2">
+                <Label>质量检测 SQL</Label>
+                <Textarea
+                  placeholder="质量检测 SQL 由系统自动生成"
+                  value={form.sql}
+                  readOnly
+                  aria-readonly="true"
+                  rows={8}
+                  className="cursor-not-allowed resize-none bg-muted/40 text-muted-foreground"
+                />
+              </div>
+              <div className="md:col-span-2 space-y-2 pb-2">
+                <Label>规则说明 (可选)</Label>
+                <Textarea
+                  placeholder="描述规则用途、告警阈值等信息"
+                  value={form.description}
+                  onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+                  rows={4}
+                />
+              </div>
             </div>
-            <div className="md:col-span-2 space-y-2">
-              <Label>质量检测 SQL</Label>
-              <Textarea
-                placeholder="质量检测 SQL 由系统自动生成"
-                value={form.sql}
-                readOnly
-                aria-readonly="true"
-                rows={8}
-                className="cursor-not-allowed resize-none bg-muted/40 text-muted-foreground"
-              />
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <Label>规则说明 (可选)</Label>
-              <Textarea
-                placeholder="描述规则用途、告警阈值等信息"
-                value={form.description}
-                onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-                rows={4}
-              />
-            </div>
-          </div>
-          <DialogFooter>
+          </ScrollArea>
+          <DialogFooter className="flex items-center justify-end gap-2 px-6 pb-6">
             <Button variant="outline" onClick={() => setFormOpen(false)}>
               取消
             </Button>

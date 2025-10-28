@@ -683,6 +683,7 @@ public class AdminApiResource {
         }
         Map<String, Object> payload = readPortalMenuPayload(body);
         Map<String, Object> before = toPortalMenuPayload(beforeEntity);
+        String menuLabel = firstNonBlank(resolveMenuDisplayName(beforeEntity), beforeEntity.getName(), beforeEntity.getPath(), id);
         String actor = SecurityUtils.getCurrentAuditableLogin();
         Map<String, Object> auditBase = new LinkedHashMap<>();
         auditBase.put("before", before);
@@ -691,9 +692,18 @@ public class AdminApiResource {
             boolean visibilityTouchedGate = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
             boolean structureTouchedGate = payload.containsKey("name") || payload.containsKey("path") || payload.containsKey("component") || payload.containsKey("icon") || payload.containsKey("sortOrder") || payload.containsKey("parentId") || payload.containsKey("deleted");
             if ((requireMenuVisibilityApproval && visibilityTouchedGate) || (requireMenuStructureApproval && structureTouchedGate)) {
+                boolean beforeDeleted = Boolean.TRUE.equals(before.get("deleted"));
+                boolean togglingDeleted = payload.containsKey("deleted");
+                boolean afterDeleted = togglingDeleted ? toBoolean(payload.get("deleted")) : beforeDeleted;
+                boolean enabling = togglingDeleted && beforeDeleted && !afterDeleted;
+                boolean disabling = togglingDeleted && !beforeDeleted && afterDeleted;
+                String changeAction = enabling ? "ENABLE" : disabling ? "DISABLE" : "UPDATE";
+                String pendingSummary = enabling
+                    ? "提交菜单启用审批：" + menuLabel
+                    : disabling ? "提交菜单禁用审批：" + menuLabel : "提交菜单修改审批：" + menuLabel;
                 ChangeRequest cr = changeRequestService.draft(
                     "PORTAL_MENU",
-                    "UPDATE",
+                    changeAction,
                     id,
                     payload,
                     before,
@@ -717,20 +727,31 @@ public class AdminApiResource {
                 Map<String, Object> approvalDetail = new LinkedHashMap<>(auditBase);
                 approvalDetail.put("status", "APPROVAL_PENDING");
                 approvalDetail.put("changeRequestId", cr.getId());
+                approvalDetail.put("summary", pendingSummary);
+                approvalDetail.put("operationName", pendingSummary);
+                if (enabling) {
+                    approvalDetail.put("operationType", AuditOperationType.ENABLE.getCode());
+                    approvalDetail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+                } else if (disabling) {
+                    approvalDetail.put("operationType", AuditOperationType.DISABLE.getCode());
+                    approvalDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+                }
                 attachChangeRequestMetadata(approvalDetail, cr);
                 recordPortalMenuActionV2(
                     actor,
                     ButtonCodes.PORTAL_MENU_UPDATE,
                     AuditResultStatus.PENDING,
                     menuId,
-                    Objects.toString(beforeEntity.getName(), id),
+                    menuLabel,
                     cr,
                     new LinkedHashMap<>(approvalDetail),
                     request,
                     "/api/admin/portal/menus/" + id,
                     "PUT",
-                    "提交菜单修改审批：" + beforeEntity.getName()
+                    pendingSummary
                 );
+                cr.setSummary(pendingSummary);
+                crRepo.save(cr);
                 return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
             }
             applyMenuUpdates(beforeEntity, payload);
@@ -747,18 +768,29 @@ public class AdminApiResource {
             Map<String, Object> after = toPortalMenuPayload(persisted);
             detail.put("after", after);
             appendChangeSummary(detail, "PORTAL_MENU", before, after);
+            boolean beforeDeleted = Boolean.TRUE.equals(before.get("deleted"));
+            boolean afterDeleted = Boolean.TRUE.equals(after.get("deleted"));
+            boolean enabling = beforeDeleted && !afterDeleted;
+            String persistedLabel = firstNonBlank(resolveMenuDisplayName(persisted), persisted.getName(), persisted.getPath(), id);
+            String successSummary = enabling ? "启用菜单：" + persistedLabel : "修改菜单：" + persistedLabel;
+            detail.put("summary", successSummary);
+            detail.put("operationName", successSummary);
+            if (enabling) {
+                detail.put("operationType", AuditOperationType.ENABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            }
             recordPortalMenuActionV2(
                 actor,
                 ButtonCodes.PORTAL_MENU_UPDATE,
                 AuditResultStatus.SUCCESS,
                 persisted.getId(),
-                persisted.getName(),
+                persistedLabel,
                 null,
                 new LinkedHashMap<>(detail),
                 request,
                 "/api/admin/portal/menus/" + id,
                 "PUT",
-                "修改菜单：" + persisted.getName()
+                successSummary
             );
             try {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "update", "id", String.valueOf(persisted.getId())));
@@ -768,36 +800,58 @@ public class AdminApiResource {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("error", ex.getMessage());
+            boolean beforeDeleted = Boolean.TRUE.equals(before.get("deleted"));
+            boolean togglingDeleted = payload.containsKey("deleted");
+            boolean afterDeleted = togglingDeleted ? toBoolean(payload.get("deleted")) : beforeDeleted;
+            boolean enabling = togglingDeleted && beforeDeleted && !afterDeleted;
+            String failureSummary = enabling ? "启用菜单失败：" + menuLabel : "修改菜单失败：" + menuLabel;
+            detail.put("summary", failureSummary);
+            detail.put("operationName", failureSummary);
+            if (enabling) {
+                detail.put("operationType", AuditOperationType.ENABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            }
             recordPortalMenuActionV2(
                 actor,
                 ButtonCodes.PORTAL_MENU_UPDATE,
                 AuditResultStatus.FAILED,
                 menuId,
-                Objects.toString(beforeEntity.getName(), id),
+                menuLabel,
                 null,
                 new LinkedHashMap<>(detail),
                 request,
                 "/api/admin/portal/menus/" + id,
                 "PUT",
-                "修改菜单失败：" + beforeEntity.getName()
+                failureSummary
             );
             return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
         } catch (IllegalArgumentException ex) {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("error", ex.getMessage());
+            boolean beforeDeleted = Boolean.TRUE.equals(before.get("deleted"));
+            boolean togglingDeleted = payload.containsKey("deleted");
+            boolean afterDeleted = togglingDeleted ? toBoolean(payload.get("deleted")) : beforeDeleted;
+            boolean enabling = togglingDeleted && beforeDeleted && !afterDeleted;
+            String failureSummary = enabling ? "启用菜单失败：" + menuLabel : "修改菜单失败：" + menuLabel;
+            detail.put("summary", failureSummary);
+            detail.put("operationName", failureSummary);
+            if (enabling) {
+                detail.put("operationType", AuditOperationType.ENABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            }
             recordPortalMenuActionV2(
                 actor,
                 ButtonCodes.PORTAL_MENU_UPDATE,
                 AuditResultStatus.FAILED,
                 menuId,
-                Objects.toString(beforeEntity.getName(), id),
+                menuLabel,
                 null,
                 new LinkedHashMap<>(detail),
                 request,
                 "/api/admin/portal/menus/" + id,
                 "PUT",
-                "修改菜单失败：" + beforeEntity.getName()
+                "修改菜单失败：" + menuLabel
             );
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         } catch (Exception ex) {
@@ -805,18 +859,29 @@ public class AdminApiResource {
             detail.put("before", before);
             detail.put("error", ex.getMessage());
             log.error("Failed to update portal menu {}", id, ex);
+            boolean beforeDeleted = Boolean.TRUE.equals(before.get("deleted"));
+            boolean togglingDeleted = payload.containsKey("deleted");
+            boolean afterDeleted = togglingDeleted ? toBoolean(payload.get("deleted")) : beforeDeleted;
+            boolean enabling = togglingDeleted && beforeDeleted && !afterDeleted;
+            String failureSummary = enabling ? "启用菜单失败：" + menuLabel : "修改菜单失败：" + menuLabel;
+            detail.put("summary", failureSummary);
+            detail.put("operationName", failureSummary);
+            if (enabling) {
+                detail.put("operationType", AuditOperationType.ENABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            }
             recordPortalMenuActionV2(
                 actor,
                 ButtonCodes.PORTAL_MENU_UPDATE,
                 AuditResultStatus.FAILED,
                 menuId,
-                Objects.toString(beforeEntity.getName(), id),
+                menuLabel,
                 null,
                 new LinkedHashMap<>(detail),
                 request,
                 "/api/admin/portal/menus/" + id,
                 "PUT",
-                "修改菜单失败：" + beforeEntity.getName()
+                "修改菜单失败：" + menuLabel
             );
             return ResponseEntity.internalServerError().body(ApiResponse.error("更新菜单失败: " + ex.getMessage()));
         }
@@ -831,6 +896,7 @@ public class AdminApiResource {
         }
         Map<String, Object> before = toPortalMenuPayload(entity);
         String actor = SecurityUtils.getCurrentAuditableLogin();
+        String menuLabel = firstNonBlank(resolveMenuDisplayName(entity), entity.getName(), entity.getPath(), id);
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("before", before);
         if (requireMenuStructureApproval) {
@@ -861,36 +927,47 @@ public class AdminApiResource {
                 Map<String, Object> approvalDetail = new LinkedHashMap<>(auditDetail);
                 approvalDetail.put("status", "APPROVAL_PENDING");
                 approvalDetail.put("changeRequestId", cr.getId());
+                String pendingSummary = "提交菜单禁用审批：" + menuLabel;
+                approvalDetail.put("summary", pendingSummary);
+                approvalDetail.put("operationName", pendingSummary);
+                approvalDetail.put("operationType", AuditOperationType.DISABLE.getCode());
+                approvalDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
                 attachChangeRequestMetadata(approvalDetail, cr);
                 recordPortalMenuActionV2(
                     actor,
                     ButtonCodes.PORTAL_MENU_DELETE,
                     AuditResultStatus.PENDING,
                     menuId,
-                    Objects.toString(entity.getName(), id),
+                    menuLabel,
                     cr,
                     new LinkedHashMap<>(approvalDetail),
                     request,
                     "/api/admin/portal/menus/" + id,
                     "DELETE",
-                    "提交菜单禁用审批：" + entity.getName()
+                    pendingSummary
                 );
+                cr.setSummary(pendingSummary);
+                crRepo.save(cr);
                 return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
             } catch (IllegalStateException ex) {
                 Map<String, Object> failureDetail = new LinkedHashMap<>(auditDetail);
                 failureDetail.put("error", ex.getMessage());
+                failureDetail.put("summary", "禁用菜单失败：" + menuLabel);
+                failureDetail.put("operationName", "禁用菜单失败：" + menuLabel);
+                failureDetail.put("operationType", AuditOperationType.DISABLE.getCode());
+                failureDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
                 recordPortalMenuActionV2(
                     actor,
                     ButtonCodes.PORTAL_MENU_DELETE,
                     AuditResultStatus.FAILED,
                     menuId,
-                    Objects.toString(entity.getName(), id),
+                    menuLabel,
                     null,
                     new LinkedHashMap<>(failureDetail),
                     request,
                     "/api/admin/portal/menus/" + id,
                     "DELETE",
-                    "禁用菜单失败：" + entity.getName()
+                    "禁用菜单失败：" + menuLabel
                 );
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
             }
@@ -903,18 +980,22 @@ public class AdminApiResource {
             Map<String, Object> after = toPortalMenuPayload(entity);
             detail.put("after", after);
             appendChangeSummary(detail, "PORTAL_MENU", before, after);
+            detail.put("summary", "禁用菜单：" + menuLabel);
+            detail.put("operationName", "禁用菜单：" + menuLabel);
+            detail.put("operationType", AuditOperationType.DISABLE.getCode());
+            detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
             recordPortalMenuActionV2(
                 actor,
                 ButtonCodes.PORTAL_MENU_DELETE,
                 AuditResultStatus.SUCCESS,
                 entity.getId(),
-                entity.getName(),
+                menuLabel,
                 null,
                 new LinkedHashMap<>(detail),
                 request,
                 "/api/admin/portal/menus/" + id,
                 "DELETE",
-                "禁用菜单：" + entity.getName()
+                "禁用菜单：" + menuLabel
             );
             try {
                 notifyClient.trySend("portal_menu_updated", Map.of("action", "disable", "id", String.valueOf(entity.getId())));
@@ -924,19 +1005,23 @@ public class AdminApiResource {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("error", ex.getMessage());
+            detail.put("summary", "禁用菜单失败：" + menuLabel);
+            detail.put("operationName", "禁用菜单失败：" + menuLabel);
+            detail.put("operationType", AuditOperationType.DISABLE.getCode());
+            detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
             log.error("Failed to disable portal menu {}", id, ex);
             recordPortalMenuActionV2(
                 actor,
                 ButtonCodes.PORTAL_MENU_DELETE,
                 AuditResultStatus.FAILED,
                 menuId,
-                Objects.toString(entity.getName(), id),
+                menuLabel,
                 null,
                 new LinkedHashMap<>(detail),
                 request,
                 "/api/admin/portal/menus/" + id,
                 "DELETE",
-                "禁用菜单失败：" + entity.getName()
+                "禁用菜单失败：" + menuLabel
             );
             return ResponseEntity.internalServerError().body(ApiResponse.error("禁用菜单失败: " + ex.getMessage()));
         }
@@ -2155,6 +2240,7 @@ public class AdminApiResource {
             .distinct()
             .toList());
         m.put("maxDataLevel", deriveMenuMaxDataLevel(visibilityRules));
+        m.put("deleted", menu.isDeleted());
         return m;
     }
 
@@ -3274,6 +3360,10 @@ public class AdminApiResource {
             case "DELETE" -> "删除";
             case "UPDATE" -> "修改";
             case "BATCH_UPDATE" -> "批量更新";
+            case "ENABLE" -> "启用";
+            case "DISABLE" -> "禁用";
+            case "BATCH_ENABLE" -> "批量启用";
+            case "BATCH_DISABLE" -> "批量禁用";
             case "ASSIGN" -> "授权";
             default -> "处理";
         };
@@ -3570,6 +3660,28 @@ public class AdminApiResource {
                 .result(result)
                 .client(resolveClientIp(request), request != null ? request.getHeader("User-Agent") : null)
                 .request(uri, method);
+            AuditOperationType overrideType = null;
+            String operationTypeCode = detail != null ? asText(detail.get("operationType")) : null;
+            if (StringUtils.hasText(operationTypeCode)) {
+                overrideType = AuditOperationType.from(operationTypeCode);
+                if (overrideType == AuditOperationType.UNKNOWN) {
+                    overrideType = null;
+                }
+            }
+            String overrideName = detail != null ? asText(detail.get("operationName")) : null;
+            if (overrideType != null) {
+                AuditOperationKind overrideKind = mapOperationKind(overrideType);
+                if (overrideKind != null) {
+                    String operationCode = switch (overrideType) {
+                        case CREATE -> AdminAuditOperation.ADMIN_MENU_CREATE.code();
+                        case DELETE, DISABLE -> AdminAuditOperation.ADMIN_MENU_DISABLE.code();
+                        case ENABLE -> AdminAuditOperation.ADMIN_MENU_ENABLE.code();
+                        default -> AdminAuditOperation.ADMIN_MENU_UPDATE.code();
+                    };
+                    String effectiveName = StringUtils.hasText(overrideName) ? overrideName : summary;
+                    builder.operationOverride(operationCode, effectiveName, overrideKind);
+                }
+            }
             if (detail != null && !detail.isEmpty()) {
                 builder.detail("detail", new LinkedHashMap<>(detail));
             }

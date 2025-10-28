@@ -27,6 +27,7 @@ public enum AdminAuditOperation {
     ADMIN_MENU_CREATE("ADMIN_MENU_CREATE", "新增门户菜单", AuditOperationType.CREATE, "admin.portal-menus", "门户菜单", "portal_menu"),
     ADMIN_MENU_UPDATE("ADMIN_MENU_UPDATE", "修改门户菜单", AuditOperationType.UPDATE, "admin.portal-menus", "门户菜单", "portal_menu"),
     ADMIN_MENU_DISABLE("ADMIN_MENU_DISABLE", "禁用门户菜单", AuditOperationType.DISABLE, "admin.portal-menus", "门户菜单", "portal_menu"),
+    ADMIN_MENU_ENABLE("ADMIN_MENU_ENABLE", "启用门户菜单", AuditOperationType.ENABLE, "admin.portal-menus", "门户菜单", "portal_menu"),
     ADMIN_DATA_SOURCE_CREATE("ADMIN_DATA_SOURCE_CREATE", "新增数据源", AuditOperationType.CREATE, "admin.infra", "基础设施", "infra_data_source"),
     ADMIN_DATA_SOURCE_REFRESH("ADMIN_DATA_SOURCE_REFRESH", "刷新数据源注册信息", AuditOperationType.REFRESH, "admin.infra", "基础设施", "infra_data_source"),
     ADMIN_DATA_SOURCE_DELETE("ADMIN_DATA_SOURCE_DELETE", "删除数据源", AuditOperationType.DELETE, "admin.infra", "基础设施", "infra_data_source"),

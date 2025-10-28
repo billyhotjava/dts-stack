@@ -73,15 +73,7 @@ public class GovernanceResource {
     public ApiResponse<List<QualityRuleDto>> listQualityRules(
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        List<QualityRuleDto> data = qualityRuleService.listAll(activeDept);
-        Map<String, Object> detail = new LinkedHashMap<>();
-        detail.put("summary", "刷新质量规则列表");
-        detail.put("count", data.size());
-        if (StringUtils.hasText(activeDept)) {
-            detail.put("activeDept", activeDept.trim());
-        }
-        auditService.record("LIST", "governance.rule", "governance.rule", null, "SUCCESS", detail);
-        return ApiResponses.ok(data);
+        return ApiResponses.ok(qualityRuleService.listAll(activeDept));
     }
 
     @GetMapping("/rules")
