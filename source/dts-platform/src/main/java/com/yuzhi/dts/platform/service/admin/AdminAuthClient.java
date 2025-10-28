@@ -47,7 +47,7 @@ public class AdminAuthClient {
 
     public LoginResult login(String username, String password) {
         // Call the platform-friendly login endpoint exposed by dts-admin
-        URI uri = buildUri("/keycloak/auth/platform/login");
+        URI uri = buildUri("/keycloak/auth/platform/login?auditSilent=true");
         Map<String, String> payload = Map.of("username", username == null ? "" : username, "password", password == null ? "" : password);
         ApiEnvelope<Map<String, Object>> resp = exchangeJson(uri, HttpMethod.POST, payload);
         if (resp == null || !resp.isSuccess() || resp.data() == null) {
@@ -67,7 +67,7 @@ public class AdminAuthClient {
     }
 
     public void logout(String refreshToken) {
-        URI uri = buildUri("/keycloak/auth/logout");
+        URI uri = buildUri("/keycloak/auth/logout?auditSilent=true");
         Map<String, String> payload = refreshToken == null || refreshToken.isBlank() ? Map.of() : Map.of("refreshToken", refreshToken);
         try {
             exchangeJson(uri, HttpMethod.POST, payload);
@@ -78,7 +78,7 @@ public class AdminAuthClient {
     }
 
     public RefreshResult refresh(String refreshToken) {
-        URI uri = buildUri("/keycloak/auth/refresh");
+        URI uri = buildUri("/keycloak/auth/refresh?auditSilent=true");
         Map<String, String> payload = Map.of("refreshToken", refreshToken == null ? "" : refreshToken);
         ApiEnvelope<Map<String, Object>> resp = exchangeJson(uri, HttpMethod.POST, payload);
         if (resp == null || !resp.isSuccess() || resp.data() == null) {
@@ -102,6 +102,8 @@ public class AdminAuthClient {
         if (StringUtils.hasText(props.getServiceToken())) {
             headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + props.getServiceToken());
         }
+        // Suppress duplicate audit entries on dts-admin; platform records its own auth audits.
+        headers.set("X-Audit-Silent", "true");
         propagateForwardedHeaders(headers);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(json, headers);
         try {

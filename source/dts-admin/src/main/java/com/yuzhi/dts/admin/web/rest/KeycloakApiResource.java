@@ -1184,6 +1184,12 @@ public class KeycloakApiResource {
         String fallbackMethod,
         String summary
     ) {
+        if (isAuditSuppressed()) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Skip auth audit buttonCode={} summary={} due to audit suppression flag", buttonCode, summary);
+            }
+            return;
+        }
         if (ButtonCodes.AUTH_ADMIN_REFRESH.equals(buttonCode)) {
             // Token refresh happens automatically; suppress audit noise.
             return;
