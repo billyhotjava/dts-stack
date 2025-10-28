@@ -564,7 +564,17 @@ const DataStandardDetailPage = () => {
                     </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={detail.status === "ACTIVE" ? "default" : "secondary"}>{statusLabel(detail.status)}</Badge>
+                    <Badge
+                        variant={
+                            detail.status === "ACTIVE"
+                                ? "default"
+                                : detail.status === "ARCHIVED"
+                                    ? "outline"
+                                    : "secondary"
+                        }
+                    >
+                        {statusLabel(detail.status)}
+                    </Badge>
                     {isEditing ? (
                         <>
                             <Button variant="outline" onClick={handleEditCancel} disabled={saving}>

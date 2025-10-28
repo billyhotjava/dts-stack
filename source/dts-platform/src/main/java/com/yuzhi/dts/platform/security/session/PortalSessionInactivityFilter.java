@@ -23,6 +23,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class PortalSessionInactivityFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(PortalSessionInactivityFilter.class);
+    @SuppressWarnings("unused")
+    private static final Runnable CLASS_COMPAT_HOLDER = new Runnable() {
+        @Override
+        public void run() {
+            // no-op placeholder to retain generated PortalSessionInactivityFilter$1 for older runtimes
+        }
+    };
 
     private final ObjectMapper objectMapper;
     private final PortalSessionActivityService activityService;

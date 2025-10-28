@@ -1,4 +1,4 @@
-export type DataStandardStatus = "DRAFT" | "ACTIVE" | "DEPRECATED";
+export type DataStandardStatus = "DRAFT" | "IN_REVIEW" | "ACTIVE" | "DEPRECATED" | "RETIRED" | "ARCHIVED";
 
 export interface DataStandardDto {
     id: string;
@@ -45,8 +45,11 @@ export interface DataStandardAttachmentDto {
 
 export const STATUS_OPTIONS: { value: DataStandardStatus; label: string }[] = [
     { value: "DRAFT", label: "草稿" },
+    { value: "IN_REVIEW", label: "评审中" },
     { value: "ACTIVE", label: "启用" },
-    { value: "DEPRECATED", label: "已归档" },
+    { value: "DEPRECATED", label: "已停用" },
+    { value: "RETIRED", label: "已退役" },
+    { value: "ARCHIVED", label: "已归档" },
 ];
 
 export const statusLabel = (status: DataStandardStatus) =>

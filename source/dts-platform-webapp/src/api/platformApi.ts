@@ -50,6 +50,7 @@ export const getStandard = (id: string) => api.get({ url: `/modeling/standards/$
 export const createStandard = (data: any) => api.post({ url: "/modeling/standards", data });
 export const updateStandard = (id: string, data: any) => api.put({ url: `/modeling/standards/${id}`, data });
 export const deleteStandard = (id: string) => api.delete({ url: `/modeling/standards/${id}` });
+export const archiveStandard = (id: string) => api.post({ url: `/modeling/standards/${id}/archive` });
 export const listStandardVersions = (id: string) => api.get({ url: `/modeling/standards/${id}/versions` });
 export const listStandardAttachments = (id: string) => api.get({ url: `/modeling/standards/${id}/attachments` });
 export const uploadStandardAttachment = (id: string, formData: FormData) =>

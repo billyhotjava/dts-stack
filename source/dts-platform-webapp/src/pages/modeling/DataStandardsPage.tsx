@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { listStandards, createStandard, updateStandard, deleteStandard } from "@/api/platformApi";
+import { listStandards, createStandard, updateStandard, deleteStandard, archiveStandard } from "@/api/platformApi";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
@@ -96,6 +96,7 @@ const DataStandardsPage = () => {
     const [formState, setFormState] = useState<FormState>(DEFAULT_FORM);
     const [creating, setCreating] = useState(false);
     const [publishingId, setPublishingId] = useState<string | null>(null);
+    const [archivingId, setArchivingId] = useState<string | null>(null);
     const userInfo = useUserInfo() as any;
     const roles = useMemo(() => {
         const raw = userInfo?.roles;
@@ -335,6 +336,27 @@ const DataStandardsPage = () => {
         }
     };
 
+    const handleArchive = async (standard: DataStandardDto) => {
+        if (standard.status === "ARCHIVED") {
+            toast.success("该数据标准已归档");
+            return;
+        }
+        if (!window.confirm("确认归档该数据标准？")) {
+            return;
+        }
+        setArchivingId(standard.id);
+        try {
+            await archiveStandard(standard.id);
+            toast.success("数据标准已归档");
+            await loadStandards();
+        } catch (error: any) {
+            console.error(error);
+            toast.error(error?.message ?? "归档失败");
+        } finally {
+            setArchivingId(null);
+        }
+    };
+
     const totalPages = useMemo(() => Math.ceil(total / PAGE_SIZE), [total]);
 
     const deptLabelMap = useMemo(() => {
@@ -475,7 +497,15 @@ const DataStandardsPage = () => {
                                             <td className="px-3 py-3">{resolveDepartmentLabel(standard.domain)}</td>
                                             <td className="px-3 py-3">{standard.owner ?? "-"}</td>
                                             <td className="px-3 py-3">
-                                                <Badge variant={standard.status === "ACTIVE" ? "default" : "secondary"}>
+                                                <Badge
+                                                    variant={
+                                                        standard.status === "ACTIVE"
+                                                            ? "default"
+                                                            : standard.status === "ARCHIVED"
+                                                                ? "outline"
+                                                                : "secondary"
+                                                    }
+                                                >
                                                     {statusLabel(standard.status)}
                                                 </Badge>
                                             </td>
@@ -497,10 +527,24 @@ const DataStandardsPage = () => {
                                                     <Button
                                                         size="sm"
                                                         onClick={() => handlePublish(standard)}
-                                                        disabled={publishingId === standard.id}
+                                                        disabled={publishingId === standard.id || standard.status === "ARCHIVED"}
                                                     >
                                                         {publishingId === standard.id ? "发布中..." : "发布"}
                                                     </Button>
+                                                    {standard.status !== "ARCHIVED" ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => handleArchive(standard)}
+                                                            disabled={archivingId === standard.id}
+                                                        >
+                                                            {archivingId === standard.id ? "归档中..." : "归档"}
+                                                        </Button>
+                                                    ) : (
+                                                        <Button size="sm" variant="outline" disabled>
+                                                            已归档
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         size="sm"
                                                         variant="destructive"

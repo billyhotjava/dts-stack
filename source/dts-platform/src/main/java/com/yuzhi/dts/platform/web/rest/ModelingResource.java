@@ -105,7 +105,7 @@ public class ModelingResource {
         if (StringUtils.hasText(keyword)) {
             auditPayload.put("keyword", keyword.trim());
         }
-        audit.auditAction("MODELING_STANDARD_LIST", AuditStage.SUCCESS, "page=" + page, auditPayload);
+        audit.auditAction("MODELING_STANDARD_VIEW", AuditStage.SUCCESS, "page=" + page, auditPayload);
         return ApiResponses.ok(payload);
     }
 
@@ -166,6 +166,25 @@ public class ModelingResource {
             detail.put("targetId", id.toString());
             detail.put("requestDomain", request.getDomain());
             detail.put("requestCode", request.getCode());
+            audit.auditAction("MODELING_STANDARD_EDIT", AuditStage.FAIL, id.toString(), detail);
+            throw e;
+        }
+    }
+
+    @PostMapping("/standards/{id}/archive")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<DataStandardDto> archive(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        try {
+            DataStandardDto saved = standards.archive(id, activeDept);
+            return ApiResponses.ok(saved);
+        } catch (RuntimeException e) {
+            Map<String, Object> detail = new java.util.LinkedHashMap<>();
+            detail.put("summary", "归档数据标准失败");
+            detail.put("error", e.getMessage());
+            detail.put("targetId", id.toString());
             audit.auditAction("MODELING_STANDARD_EDIT", AuditStage.FAIL, id.toString(), detail);
             throw e;
         }

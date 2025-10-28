@@ -3284,7 +3284,22 @@ public class AdminApiResource {
         if (context == null) {
             return AuditOperationType.UNKNOWN;
         }
-        String action = normalizeActionToken(context.action());
+        return mapActionToOperationType(normalizeActionToken(context.action()));
+    }
+
+    private AuditOperationType resolveApproverOperationType(ChangeRequest cr, ChangeContext context) {
+        AuditOperationType type = determineRequesterOperationType(context);
+        if (type != null && type != AuditOperationType.UNKNOWN) {
+            return type;
+        }
+        String action = normalizeActionToken(cr != null ? cr.getAction() : null);
+        return mapActionToOperationType(action);
+    }
+
+    private AuditOperationType mapActionToOperationType(String action) {
+        if (!StringUtils.hasText(action)) {
+            return AuditOperationType.UNKNOWN;
+        }
         return switch (action) {
             case "CREATE" -> AuditOperationType.CREATE;
             case "DELETE" -> AuditOperationType.DELETE;
@@ -3298,6 +3313,37 @@ public class AdminApiResource {
             case "RESET_PASSWORD" -> AuditOperationType.UPDATE;
             default -> AuditOperationType.UNKNOWN;
         };
+    }
+
+    private String resolveChangeViewSummary(ChangeRequest cr, ChangeContext context, Map<String, Object> detail) {
+        String label = extractSummaryFromDetail(detail);
+        if (!StringUtils.hasText(label) && cr != null && StringUtils.hasText(cr.getSummary())) {
+            label = cr.getSummary();
+        }
+        if (!StringUtils.hasText(label)) {
+            label = buildRequesterOperationName(cr, context);
+        }
+        if (!StringUtils.hasText(label)) {
+            label = changeRequestRef(cr);
+        }
+        if (!StringUtils.hasText(label) && cr != null && cr.getId() != null) {
+            label = "CR-" + cr.getId();
+        }
+        if (!StringUtils.hasText(label)) {
+            label = "变更详情";
+        }
+        return truncateOperationName(label);
+    }
+
+    private String extractSummaryFromDetail(Map<String, Object> detail) {
+        if (detail == null || detail.isEmpty()) {
+            return null;
+        }
+        String summary = trimToNull(asText(detail.get("summary")));
+        if (!StringUtils.hasText(summary)) {
+            summary = trimToNull(asText(detail.get("operationName")));
+        }
+        return summary;
     }
 
     private String resolveResourceLabel(ChangeContext context) {
@@ -3338,7 +3384,7 @@ public class AdminApiResource {
             .map(Object::toString)
             .map(v -> v.equalsIgnoreCase("APPROVE") || v.equalsIgnoreCase("REJECT"))
             .orElse(false);
-        String requesterOperation = buildRequesterOperationName(cr, context);
+        String requesterOperation = truncateOperationName(buildRequesterOperationName(cr, context));
         if (!approverFlow && StringUtils.hasText(requesterOperation)) {
             detail.put("operationName", requesterOperation);
             detail.put("summary", requesterOperation);
@@ -3366,6 +3412,20 @@ public class AdminApiResource {
             case EXECUTE -> AuditOperationKind.EXECUTE;
             default -> null;
         };
+    }
+
+    private String truncateOperationName(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        return org.apache.commons.lang3.StringUtils.abbreviate(value.trim(), 120);
+    }
+
+    private String truncateSummary(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        return org.apache.commons.lang3.StringUtils.abbreviate(value.trim(), 240);
     }
 
     private record ChangeContext(
@@ -3842,7 +3902,8 @@ public class AdminApiResource {
         try {
             ChangeContext context = computeChangeContext(cr);
             String changeRequestRef = changeRequestRef(cr);
-            String summary = "查看变更详情：" + (StringUtils.hasText(changeRequestRef) ? changeRequestRef : "CR-" + cr.getId());
+            String summaryLabel = resolveChangeViewSummary(cr, context, detail);
+            String summary = truncateSummary("查看变更详情：" + summaryLabel);
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, ButtonCodes.CHANGE_REQUEST_VIEW)
                 .actorRoles(SecurityUtils.getCurrentUserAuthorities())
@@ -3997,6 +4058,8 @@ public class AdminApiResource {
                 buildRequesterOperationName(cr, context),
                 "提交变更申请"
             );
+            summary = truncateSummary(summary);
+            String overrideName = truncateOperationName(summary);
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, ButtonCodes.CHANGE_REQUEST_SUBMIT)
                 .actorRoles(SecurityUtils.getCurrentUserAuthorities())
@@ -4027,7 +4090,7 @@ public class AdminApiResource {
             if (overrideKind != null) {
                 builder.operationOverride(
                     AdminAuditOperation.ADMIN_CHANGE_REQUEST_MANAGE.code(),
-                    summary,
+                    overrideName,
                     overrideKind
                 );
             }
@@ -4055,9 +4118,9 @@ public class AdminApiResource {
         }
         try {
             String primaryRef = changeRequestRef(cr);
-            String baseSummary = buildApprovalOperationName(cr, context, true);
+            String baseSummary = truncateOperationName(buildApprovalOperationName(cr, context, true));
             String decision = applied ? "APPROVED" : "FAILED";
-            String displaySummary = applied ? baseSummary : baseSummary + "（失败）";
+            String displaySummary = truncateSummary(applied ? baseSummary : baseSummary + "（失败）");
             if (approverDetail != null) {
                 approverDetail.put("summary", baseSummary);
                 approverDetail.put("operationName", baseSummary);
@@ -4086,7 +4149,7 @@ public class AdminApiResource {
                     builder.detail("context", new LinkedHashMap<>(context.extras()));
                 }
             }
-            AuditOperationType requesterType = determineRequesterOperationType(context);
+            AuditOperationType requesterType = resolveApproverOperationType(cr, context);
             if (approverDetail != null && requesterType != null && requesterType != AuditOperationType.UNKNOWN) {
                 approverDetail.put("operationType", requesterType.getCode());
                 approverDetail.put("operationTypeText", requesterType.getDisplayName());
@@ -4123,7 +4186,7 @@ public class AdminApiResource {
         try {
             String changeRequestRef = changeRequestRef(cr);
             String decision = "REJECTED";
-            String baseSummary = buildApprovalOperationName(cr, context, false);
+            String baseSummary = truncateOperationName(buildApprovalOperationName(cr, context, false));
             if (detail != null) {
                 detail.put("summary", baseSummary);
                 detail.put("operationName", baseSummary);
@@ -4132,7 +4195,7 @@ public class AdminApiResource {
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, ButtonCodes.CHANGE_REQUEST_REJECT)
                 .actorRoles(SecurityUtils.getCurrentUserAuthorities())
-                .summary(baseSummary)
+                .summary(truncateSummary(baseSummary))
                 .result(AuditResultStatus.SUCCESS)
                 .changeRequestRef(changeRequestRef)
                 .metadata("changeRequestId", cr.getId())
@@ -4151,6 +4214,19 @@ public class AdminApiResource {
                 if (context.extras() != null && !context.extras().isEmpty()) {
                     builder.detail("context", new LinkedHashMap<>(context.extras()));
                 }
+            }
+            AuditOperationType requesterType = resolveApproverOperationType(cr, context);
+            if (detail != null && requesterType != null && requesterType != AuditOperationType.UNKNOWN) {
+                detail.put("operationType", requesterType.getCode());
+                detail.put("operationTypeText", requesterType.getDisplayName());
+            }
+            AuditOperationKind overrideKind = mapOperationKind(requesterType);
+            if (overrideKind != null) {
+                builder.operationOverride(
+                    AdminAuditOperation.ADMIN_CHANGE_REQUEST_MANAGE.code(),
+                    baseSummary,
+                    overrideKind
+                );
             }
             if (detail != null && !detail.isEmpty()) {
                 builder.detail("detail", new LinkedHashMap<>(detail));

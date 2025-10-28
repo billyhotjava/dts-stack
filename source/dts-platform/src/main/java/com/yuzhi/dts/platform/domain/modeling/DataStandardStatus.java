@@ -5,5 +5,6 @@ public enum DataStandardStatus {
     IN_REVIEW,
     ACTIVE,
     DEPRECATED,
-    RETIRED
+    RETIRED,
+    ARCHIVED
 }

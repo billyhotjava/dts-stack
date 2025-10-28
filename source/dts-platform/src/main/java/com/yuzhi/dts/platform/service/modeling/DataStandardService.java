@@ -130,6 +130,25 @@ public class DataStandardService {
         return DataStandardMapper.toDto(entity);
     }
 
+    public DataStandardDto archive(UUID id, String activeDeptHeader) {
+        DataStandard entity = load(id);
+        security.ensureWritable(entity, activeDeptHeader);
+        if (entity.getStatus() == DataStandardStatus.ARCHIVED) {
+            return DataStandardMapper.toDto(entity);
+        }
+        java.util.Map<String, Object> before = toStandardAuditView(entity);
+        entity.setStatus(DataStandardStatus.ARCHIVED);
+        repository.save(entity);
+        java.util.Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("before", before);
+        auditPayload.put("after", toStandardAuditView(entity));
+        auditPayload.put("targetId", entity.getId().toString());
+        auditPayload.put("targetName", entity.getName());
+        auditPayload.put("summary", "归档数据标准：" + entity.getName());
+        auditService.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, entity.getId().toString(), auditPayload);
+        return DataStandardMapper.toDto(entity);
+    }
+
     public void delete(UUID id, String activeDeptHeader) {
         DataStandard entity = load(id);
         security.ensureWritable(entity, activeDeptHeader);
