@@ -85,7 +85,14 @@ public class CatalogResource {
         payload.put("defaultSourceType", defaultSourceType());
         payload.put("hasPrimarySource", hasPrimarySourceConfigured());
         payload.put("primarySourceType", defaultSourceType());
-        audit.audit("READ", "catalog.config", "config");
+        audit.recordAuxiliary(
+            "READ",
+            "catalog.config",
+            "catalog.config",
+            "config",
+            "SUCCESS",
+            Map.of("summary", "获取数据目录配置")
+        );
         return ApiResponses.ok(payload);
     }
 
@@ -96,7 +103,14 @@ public class CatalogResource {
         map.put("datasets", datasetRepo.count());
         map.put("maskingRules", maskingRepo.count());
         map.put("classificationMappings", mappingRepo.count());
-        audit.audit("READ", "catalog.summary", "summary");
+        audit.recordAuxiliary(
+            "READ",
+            "catalog.summary",
+            "catalog.summary",
+            "summary",
+            "SUCCESS",
+            Map.of("summary", "获取数据目录概览")
+        );
         return ApiResponses.ok(map);
     }
 
@@ -251,7 +265,22 @@ public class CatalogResource {
         data.put("page", p.getNumber());
         data.put("size", p.getSize());
         data.put("returned", filtered.size());
-        audit.audit("READ", "catalog.dataset", "page=" + page);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看数据资产列表");
+        auditPayload.put("page", page);
+        auditPayload.put("size", size);
+        auditPayload.put("returned", filtered.size());
+        if (domainId != null) {
+            auditPayload.put("domainId", domainId.toString());
+        }
+        putIfHasText(auditPayload, "keyword", keyword);
+        putIfHasText(auditPayload, "classification", classification);
+        putIfHasText(auditPayload, "ownerDept", ownerDept);
+        putIfHasText(auditPayload, "type", type);
+        putIfHasText(auditPayload, "exposedBy", exposedBy);
+        putIfHasText(auditPayload, "owner", owner);
+        putIfHasText(auditPayload, "tag", tag);
+        audit.auditAction("CATALOG_ASSET_LIST", AuditStage.SUCCESS, "page=" + page, auditPayload);
         return ApiResponses.ok(data);
     }
 
@@ -262,7 +291,15 @@ public class CatalogResource {
             .filter(accessChecker::canRead)
             .map(dataset -> toDatasetDto(dataset, true))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问"));
-        audit.audit("READ", "catalog.dataset", id.toString());
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        String datasetName = safeText(ds.get("name"));
+        auditPayload.put("summary", datasetName == null ? "查看数据资产详情" : "查看数据资产：" + datasetName);
+        putIfHasText(auditPayload, "targetName", datasetName);
+        auditPayload.put("datasetId", id.toString());
+        putIfHasText(auditPayload, "classification", safeText(ds.get("classification")));
+        putIfHasText(auditPayload, "ownerDept", safeText(ds.get("ownerDept")));
+        putIfHasText(auditPayload, "owner", safeText(ds.get("owner")));
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
         return ApiResponses.ok(ds);
     }
     private Map<String, Object> toDatasetDto(CatalogDataset d) {
@@ -1060,6 +1097,24 @@ public class CatalogResource {
     }
 
     private record DatasetGrantRequest(String userId, String username, String displayName, String deptCode) {}
+
+    private void putIfHasText(Map<String, Object> target, String key, Object raw) {
+        if (target == null || key == null) {
+            return;
+        }
+        String text = safeText(raw);
+        if (text != null) {
+            target.put(key, text);
+        }
+    }
+
+    private String safeText(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        String text = String.valueOf(raw).trim();
+        return text.isEmpty() ? null : text;
+    }
 
     private String sanitize(String message) {
         if (!StringUtils.hasText(message)) {

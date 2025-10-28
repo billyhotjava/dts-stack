@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -18,16 +18,10 @@ import { useUserInfo } from "@/store/userStore";
 import {
 	ChangeDiffViewer,
 	buildChangeSnapshotFromDiff,
-	type ChangeSummaryEntry,
-	type ChangeSnapshotLike,
 } from "@/admin/components/change-diff-viewer";
-import { MenuChangeViewer, type MenuChangeDisplayEntry } from "@/admin/components/menu-change-viewer";
-import {
-	extractMenuChanges,
-	filterMenuSummaryRows,
-	pruneMenuSnapshot,
-	snapshotHasContent,
-} from "@/admin/utils/menu-change-parser";
+import { MenuChangeViewer } from "@/admin/components/menu-change-viewer";
+import { buildChangeDisplayContext } from "@/admin/utils/change-detail-context";
+import { snapshotHasContent } from "@/admin/utils/menu-change-parser";
 import { formatChangeValue, labelForChangeField, type ChangeRequestFormatContext } from "@/admin/lib/change-request-format";
 
 type TaskCategory = "user" | "role" | "menu";
@@ -130,7 +124,22 @@ function parseJson(value?: string | null): unknown {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-	if (value && typeof value === "object" && !Array.isArray(value)) {
+	if (!value) {
+		return null;
+	}
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed) return null;
+		try {
+			const parsed = JSON.parse(trimmed);
+			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+				return parsed as Record<string, unknown>;
+			}
+		} catch {
+			return null;
+		}
+	}
+	if (typeof value === "object" && !Array.isArray(value)) {
 		return value as Record<string, unknown>;
 	}
 	return null;
@@ -314,125 +323,6 @@ function normalizeStatus(status?: string | null): DecisionStatus {
 	}
 	return "PENDING";
 }
-
-interface ChangeDisplayContext {
-	snapshot: ChangeSnapshotLike | null;
-	summary: ChangeSummaryEntry[];
-	menuChanges: MenuChangeDisplayEntry[];
-}
-
-function buildChangeDisplayContext(
-	diff?: Record<string, unknown> | null,
-	payload?: Record<string, unknown> | null,
-): ChangeDisplayContext {
-	const baseLayers: Array<Record<string, unknown> | null | undefined> = [];
-	if (diff) {
-		baseLayers.push(diff);
-		baseLayers.push(coerceRecord(diff["detail"]));
-		baseLayers.push(coerceRecord(diff["context"]));
-		baseLayers.push(coerceRecord(diff["metadata"]));
-		baseLayers.push(coerceRecord(diff["extraAttributes"]));
-	}
-	baseLayers.push(payload);
-
-	const menuChanges = extractMenuChanges(baseLayers);
-	const summary = collectSummaryEntries(baseLayers);
-	const filteredSummary = menuChanges.length > 0 ? filterMenuSummaryRows(summary) : summary;
-
-	const rawSnapshot = buildChangeSnapshotFromDiff(diff);
-	const snapshot = menuChanges.length > 0 ? pruneMenuSnapshot(rawSnapshot) : rawSnapshot;
-
-	return {
-		snapshot,
-		summary: filteredSummary,
-		menuChanges,
-	};
-}
-
-function collectSummaryEntries(layers: Array<Record<string, unknown> | null | undefined>): ChangeSummaryEntry[] {
-	const result: ChangeSummaryEntry[] = [];
-	const seen = new Set<string>();
-	for (const layer of layers) {
-		if (!layer) continue;
-		const candidates = [layer["changeSummary"], layer["change_summary"], layer["summary"]];
-		for (const candidate of candidates) {
-			const entries = parseSummaryEntryList(candidate);
-			for (const entry of entries) {
-				const key = `${entry.field ?? entry.label ?? ""}|${JSON.stringify(entry.before)}|${JSON.stringify(entry.after)}`;
-				if (seen.has(key)) continue;
-				result.push(entry);
-				seen.add(key);
-			}
-		}
-	}
-	return result;
-}
-
-function parseSummaryEntryList(value: unknown): ChangeSummaryEntry[] {
-	const array = coerceArray(value);
-	if (!array) {
-		return [];
-	}
-	const rows: ChangeSummaryEntry[] = [];
-	array.forEach((item, index) => {
-		const record = coerceRecord(item);
-		if (!record) return;
-		const fieldRaw = record["field"] ?? record["code"] ?? record["name"] ?? record["key"] ?? `field_${index}`;
-		const field = typeof fieldRaw === "string" ? fieldRaw.trim() : fieldRaw != null ? String(fieldRaw) : "";
-		const labelRaw = record["label"] ?? record["title"] ?? record["name"];
-		const label = typeof labelRaw === "string" && labelRaw.trim().length > 0 ? labelRaw.trim() : deriveFieldLabel(field);
-		rows.push({
-			field: field || label,
-			label,
-			before: record["before"],
-			after: record["after"],
-		});
-	});
-	return rows;
-}
-
-function coerceRecord(value: unknown): Record<string, unknown> | null {
-	if (!value) {
-		return null;
-	}
-	if (typeof value === "string") {
-		return asRecord(parseJson(value));
-	}
-	if (typeof value === "object" && !Array.isArray(value)) {
-		return value as Record<string, unknown>;
-	}
-	return null;
-}
-
-function coerceArray(value: unknown): unknown[] | null {
-	if (!value) {
-		return null;
-	}
-	if (Array.isArray(value)) {
-		return value;
-	}
-	if (typeof value === "string") {
-		const parsed = parseJson(value);
-		return Array.isArray(parsed) ? parsed : null;
-	}
-	return null;
-}
-
-function deriveFieldLabel(field?: string): string {
-	if (!field) {
-		return "字段";
-	}
-	const replaced = field.replace(/[_\-.]+/g, " ").trim();
-	if (!replaced) {
-		return field;
-	}
-	return replaced
-		.split(" ")
-		.filter(Boolean)
-		.map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-		.join(" ");
-}
-
 export default function ApprovalCenterView() {
 	const queryClient = useQueryClient();
 	const sessionContext = useContext(AdminSessionContext);
@@ -971,7 +861,20 @@ export default function ApprovalCenterView() {
 		(record: AugmentedChangeRequest) => {
 			const payload = asRecord(parseJson(record.payloadJson));
 			const diff = asRecord(parseJson(record.diffJson));
-			const displayContext = buildChangeDisplayContext(diff, payload);
+			const diffLayer = diff ?? null;
+			const baseSnapshot = diffLayer ? buildChangeSnapshotFromDiff(diffLayer) : null;
+			const displayContext = buildChangeDisplayContext({
+				layers: [
+					diffLayer,
+					diffLayer ? asRecord(diffLayer["detail"]) : null,
+					diffLayer ? asRecord(diffLayer["context"]) : null,
+					diffLayer ? asRecord(diffLayer["metadata"]) : null,
+					diffLayer ? asRecord(diffLayer["extraAttributes"]) : null,
+					payload,
+				],
+				baseSnapshot,
+				fallbackDiff: diffLayer ?? undefined,
+			});
 			const snapshot = displayContext.snapshot;
 			const summary = displayContext.summary;
 			const menuChanges = displayContext.menuChanges;
@@ -983,50 +886,7 @@ export default function ApprovalCenterView() {
 							<Text variant="body3" className="text-muted-foreground">
 								基础信息
 							</Text>
-							<div className="space-y-1 text-xs">
-								<div>
-									<span className="text-muted-foreground">操作编号：</span>
-									CR-{record.id}
-								</div>
-								<div>
-									<span className="text-muted-foreground">操作类型：</span>
-									{getActionText(record)}
-								</div>
-								<div>
-									<span className="text-muted-foreground">影响对象：</span>
-									{resolveTarget(record, { userDisplay: userDisplayMap })}
-								</div>
-								<div>
-									<span className="text-muted-foreground">提交人：</span>
-									{resolveOperatorDisplayName(record.requestedBy, operatorNameMap)}
-								</div>
-								<div>
-									<span className="text-muted-foreground">提交时间：</span>
-									{formatDateTime(record.requestedAt)}
-								</div>
-								<div>
-									<span className="text-muted-foreground">当前状态：</span>
-									{getStatusLabel(record.effectiveStatus)}
-								</div>
-								{record.effectiveDecidedBy ? (
-									<div>
-										<span className="text-muted-foreground">审批人：</span>
-										{resolveOperatorDisplayName(record.effectiveDecidedBy, operatorNameMap)}
-									</div>
-								) : null}
-								{record.effectiveDecidedAt ? (
-									<div>
-										<span className="text-muted-foreground">审批时间：</span>
-										{formatDateTime(record.effectiveDecidedAt)}
-									</div>
-								) : null}
-								{record.reason ? (
-									<div>
-										<span className="text-muted-foreground">备注：</span>
-										{record.reason}
-									</div>
-								) : null}
-							</div>
+							{renderChangeRequestBasics(record, userDisplayMap, operatorNameMap)}
 						</div>
 						<div className="md:col-span-2">
 							<Text variant="body3" className="text-muted-foreground">
@@ -1043,9 +903,16 @@ export default function ApprovalCenterView() {
 										className="text-xs"
 									/>
 								</div>
-							) : null}
+							) : (
+								<Text variant="caption" className="text-muted-foreground">
+									无结构化变更
+								</Text>
+							)}
 							{menuChanges.length > 0 ? (
 								<div className="mt-3">
+									<Text variant="body3" className="text-muted-foreground">
+										菜单变更
+									</Text>
 									<MenuChangeViewer entries={menuChanges} />
 								</div>
 							) : null}
@@ -1063,19 +930,87 @@ export default function ApprovalCenterView() {
 					) : null}
 				</div>
 			);
-		},
-		[operatorNameMap, userDisplayMap],
-	);
+	},
+	[operatorNameMap, userDisplayMap],
+);
 
-	const handleCloseDialog = () => {
-		if (!decisionLoading) {
-			setActiveTaskId(null);
-		}
-	};
+function renderChangeRequestBasics(
+	record: AugmentedChangeRequest,
+	userDisplayMap: Record<string, string>,
+	operatorNameMap: Record<string, string>,
+): ReactNode {
+	return (
+		<div className="space-y-1 text-xs">
+			<div>
+				<span className="text-muted-foreground">操作编号：</span>
+				CR-{record.id}
+			</div>
+			<div>
+				<span className="text-muted-foreground">操作类型：</span>
+				{getActionText(record)}
+			</div>
+			<div>
+				<span className="text-muted-foreground">影响对象：</span>
+				{resolveTarget(record, { userDisplay: userDisplayMap })}
+			</div>
+			<div>
+				<span className="text-muted-foreground">提交人：</span>
+				{resolveOperatorDisplayName(record.requestedBy, operatorNameMap)}
+			</div>
+			<div>
+				<span className="text-muted-foreground">提交时间：</span>
+				{formatDateTime(record.requestedAt)}
+			</div>
+			<div>
+				<span className="text-muted-foreground">当前状态：</span>
+				{getStatusLabel(record.effectiveStatus)}
+			</div>
+			{record.effectiveDecidedBy ? (
+				<div>
+					<span className="text-muted-foreground">审批人：</span>
+					{resolveOperatorDisplayName(record.effectiveDecidedBy, operatorNameMap)}
+				</div>
+			) : null}
+			{record.effectiveDecidedAt ? (
+				<div>
+					<span className="text-muted-foreground">审批时间：</span>
+					{formatDateTime(record.effectiveDecidedAt)}
+				</div>
+			) : null}
+			{record.reason ? (
+				<div>
+					<span className="text-muted-foreground">备注：</span>
+					{record.reason}
+				</div>
+			) : null}
+		</div>
+	);
+}
+
+const handleCloseDialog = () => {
+	if (!decisionLoading) {
+		setActiveTaskId(null);
+	}
+};
 
 	const activePayload = useMemo(() => (activeTask ? asRecord(parseJson(activeTask.payloadJson)) : null), [activeTask]);
 	const activeDiff = useMemo(() => (activeTask ? asRecord(parseJson(activeTask.diffJson)) : null), [activeTask]);
-	const activeContext = useMemo(() => buildChangeDisplayContext(activeDiff, activePayload), [activeDiff, activePayload]);
+	const activeContext = useMemo(() => {
+		const diffLayer = activeDiff ?? null;
+		const baseSnapshot = diffLayer ? buildChangeSnapshotFromDiff(diffLayer) : null;
+		return buildChangeDisplayContext({
+			layers: [
+				diffLayer,
+				diffLayer ? asRecord(diffLayer["detail"]) : null,
+				diffLayer ? asRecord(diffLayer["context"]) : null,
+				diffLayer ? asRecord(diffLayer["metadata"]) : null,
+				diffLayer ? asRecord(diffLayer["extraAttributes"]) : null,
+				activePayload,
+			],
+			baseSnapshot,
+			fallbackDiff: diffLayer ?? undefined,
+		});
+	}, [activeDiff, activePayload]);
 	const activeSnapshot = activeContext.snapshot;
 	const activeSummary = activeContext.summary;
 	const activeMenuChanges = activeContext.menuChanges;

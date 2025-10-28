@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.modeling.DataSecurityLevel;
 import com.yuzhi.dts.platform.domain.modeling.DataStandardStatus;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -88,14 +89,23 @@ public class ModelingResource {
             "size",
             result.getSize()
         );
-        audit.record(
-            "READ",
-            "modeling.standard",
-            "modeling.standard",
-            null,
-            "SUCCESS",
-            java.util.Map.of("summary", "查看数据标准列表")
-        );
+        Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+        auditPayload.put("summary", "查看数据标准列表");
+        auditPayload.put("page", page);
+        auditPayload.put("size", size);
+        if (StringUtils.hasText(status)) {
+            auditPayload.put("status", status.trim());
+        }
+        if (StringUtils.hasText(domain)) {
+            auditPayload.put("domain", domain.trim());
+        }
+        if (StringUtils.hasText(securityLevel)) {
+            auditPayload.put("securityLevel", securityLevel.trim());
+        }
+        if (StringUtils.hasText(keyword)) {
+            auditPayload.put("keyword", keyword.trim());
+        }
+        audit.auditAction("MODELING_STANDARD_LIST", AuditStage.SUCCESS, "page=" + page, auditPayload);
         return ApiResponses.ok(payload);
     }
 
@@ -107,9 +117,13 @@ public class ModelingResource {
         DataStandardDto dto = standards.get(id, activeDept);
         Map<String, Object> detail = new java.util.LinkedHashMap<>();
         detail.put("targetId", id.toString());
-        detail.put("targetName", dto.getName());
-        detail.put("summary", "查看数据标准：" + dto.getName());
-        audit.record("READ", "modeling.standard", "modeling.standard", id.toString(), "SUCCESS", detail);
+        if (StringUtils.hasText(dto.getName())) {
+            detail.put("targetName", dto.getName());
+            detail.put("summary", "查看数据标准：" + dto.getName());
+        } else {
+            detail.put("summary", "查看数据标准详情");
+        }
+        audit.auditAction("MODELING_STANDARD_VIEW", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(dto);
     }
 
@@ -165,13 +179,16 @@ public class ModelingResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         List<DataStandardVersionDto> versions = standards.listVersions(id, activeDept);
-        audit.record(
+        Map<String, Object> detail = new java.util.LinkedHashMap<>();
+        detail.put("targetId", id.toString());
+        detail.put("summary", "查看数据标准版本列表");
+        audit.recordAuxiliary(
             "READ",
             "modeling.standard.version",
             "modeling.standard.version",
             id.toString(),
             "SUCCESS",
-            java.util.Map.of("targetId", id.toString(), "summary", "查看数据标准版本列表")
+            detail
         );
         return ApiResponses.ok(versions);
     }

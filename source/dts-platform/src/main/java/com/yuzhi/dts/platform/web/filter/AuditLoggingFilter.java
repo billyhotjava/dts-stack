@@ -344,6 +344,18 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         if (!"GET".equalsIgnoreCase(method)) {
             return false;
         }
+        if (
+            uri.startsWith("/api/catalog/config") ||
+            uri.startsWith("/api/catalog/summary") ||
+            uri.startsWith("/api/catalog/domains") ||
+            uri.startsWith("/api/catalog/classification-mapping") ||
+            uri.startsWith("/api/catalog/masking-rules")
+        ) {
+            return true;
+        }
+        if (uri.startsWith("/api/catalog/datasets/") && uri.endsWith("/grants")) {
+            return true;
+        }
         if (uri.startsWith("/api/modeling/orgs") || uri.startsWith("/api/iam/orgs")) {
             // 组织树查询属于附带请求，不计入审计
             return true;

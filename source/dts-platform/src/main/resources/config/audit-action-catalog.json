@@ -10,6 +10,7 @@
           "key": "catalog.assets",
           "title": "数据资产目录",
           "actions": [
+            { "code": "CATALOG_ASSET_LIST", "display": "查看数据资产列表", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "CATALOG_ASSET_CREATE", "display": "新增数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "CATALOG_ASSET_VIEW", "display": "查看数据资产", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "CATALOG_ASSET_EDIT", "display": "编辑数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
@@ -27,6 +28,7 @@
           "key": "modeling.standards",
           "title": "数据标准",
           "actions": [
+            { "code": "MODELING_STANDARD_LIST", "display": "查看数据标准列表", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "MODELING_STANDARD_VIEW", "display": "查看数据标准", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "MODELING_STANDARD_EDIT", "display": "维护数据标准", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "MODELING_STANDARD_VERSION_PUBLISH", "display": "发布标准版本", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }

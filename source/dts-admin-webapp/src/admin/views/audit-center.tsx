@@ -18,15 +18,13 @@ import { Text } from "@/ui/typography";
 import { cn } from "@/utils";
 import {
 	ChangeDiffViewer,
-	buildChangeSnapshotFromDiff,
 	type ChangeSnapshotLike,
 	type ChangeSummaryEntry,
 } from "@/admin/components/change-diff-viewer";
 import { MenuChangeViewer, type MenuChangeDisplayEntry } from "@/admin/components/menu-change-viewer";
+import { buildChangeDisplayContext } from "@/admin/utils/change-detail-context";
 import {
 	extractMenuChanges,
-	filterMenuSummaryRows,
-	pruneMenuSnapshot,
 	snapshotHasContent,
 } from "@/admin/utils/menu-change-parser";
 
@@ -764,6 +762,7 @@ interface ParsedAuditDetail {
 	infoEntries: Array<{ key: string; value: unknown }>;
 	rawJson?: string;
 	menuChanges: MenuChangeDisplayEntry[];
+	layers: Record<string, unknown>[];
 }
 
 interface SnapshotData {
@@ -803,16 +802,22 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 	if (!parsed) {
 		return <div className="text-xs text-muted-foreground">无详情</div>;
 	}
-	const menuChanges = parsed.menuChanges ?? [];
-	const summaryRows = menuChanges.length > 0 ? filterMenuSummaryRows(parsed.summaryRows) : parsed.summaryRows;
-	const baseSnapshot = convertSnapshotData(parsed.snapshot) ?? buildChangeSnapshotFromDiff(parseRecord(detail?.details));
-	const snapshot = menuChanges.length > 0 ? pruneMenuSnapshot(baseSnapshot) : baseSnapshot;
-	const summary: ChangeSummaryEntry[] = summaryRows.map((row) => ({
-		field: row.field,
+	const baseSnapshot = convertSnapshotData(parsed.snapshot);
+	const baseSummary: ChangeSummaryEntry[] = parsed.summaryRows.map((row, idx) => ({
+		field: row.field ?? `field_${idx}`,
 		label: row.label,
 		before: row.before,
 		after: row.after,
 	}));
+	const displayContext = buildChangeDisplayContext({
+		layers: parsed.layers,
+		baseSnapshot,
+		baseSummary,
+		fallbackDiff: parseRecord(detail?.details) ?? null,
+	});
+	const snapshot = displayContext.snapshot;
+	const summary = displayContext.summary;
+	const menuChanges = displayContext.menuChanges.length > 0 ? displayContext.menuChanges : parsed.menuChanges ?? [];
 	const infoObject = parsed.infoEntries.length
 		? parsed.infoEntries.reduce<Record<string, unknown>>((acc, entry) => {
 			acc[entry.key] = entry.value;
@@ -875,7 +880,8 @@ function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
 	const metadataLayer = parseRecord(source.metadata);
 	const extraLayer = parseRecord(source.extraAttributes);
 	const snapshotLayers = [root, detailLayer, contextLayer].filter(Boolean) as Record<string, unknown>[];
-	const menuChanges = extractMenuChanges([root, detailLayer, contextLayer, metadataLayer, extraLayer]);
+	const layers = [root, detailLayer, contextLayer, metadataLayer, extraLayer].filter(Boolean) as Record<string, unknown>[];
+	const menuChanges = extractMenuChanges(layers);
 
 	let snapshot = findSnapshot(snapshotLayers);
 	if (!snapshot) {
@@ -895,7 +901,7 @@ function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
 		ignoredKeys.add("menu_changes");
 	}
 
-	const infoEntries = collectInfoEntries([root, detailLayer, contextLayer, metadataLayer, extraLayer], ignoredKeys);
+	const infoEntries = collectInfoEntries(layers, ignoredKeys);
 	const rawJson = Object.keys(root).length > 0 ? formatJson(root) : undefined;
 
 	if (!snapshot && summaryRows.length === 0 && infoEntries.length === 0 && !rawJson && menuChanges.length === 0) {
@@ -908,6 +914,7 @@ function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
 		infoEntries,
 		rawJson,
 		menuChanges,
+		layers,
 	};
 }
 
