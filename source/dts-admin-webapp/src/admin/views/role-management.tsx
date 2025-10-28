@@ -80,7 +80,7 @@ export default function RoleManagementView() {
         isError: rolesError,
     } = useQuery<AdminRoleDetail[]>({
         queryKey: ["admin", "roles"],
-        queryFn: adminApi.getAdminRoles,
+        queryFn: () => adminApi.getAdminRoles(),
     });
     const {
         data: customRoles,
@@ -88,7 +88,7 @@ export default function RoleManagementView() {
         isError: customError,
     } = useQuery<AdminCustomRole[]>({
         queryKey: ["admin", "custom-roles"],
-        queryFn: adminApi.getCustomRoles,
+        queryFn: () => adminApi.getCustomRoles(),
     });
     const {
         data: assignments,
@@ -96,7 +96,7 @@ export default function RoleManagementView() {
         isError: assignmentError,
     } = useQuery<AdminRoleAssignment[]>({
         queryKey: ["admin", "role-assignments"],
-        queryFn: adminApi.getRoleAssignments,
+        queryFn: () => adminApi.getRoleAssignments(),
     });
     const {
         data: portalMenus,
@@ -104,7 +104,7 @@ export default function RoleManagementView() {
         isError: menuError,
     } = useQuery<PortalMenuCollection>({
         queryKey: ["admin", "portal-menus"],
-        queryFn: adminApi.getPortalMenus,
+        queryFn: () => adminApi.getPortalMenus(),
     });
 
     const [createOpen, setCreateOpen] = useState(false);

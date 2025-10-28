@@ -12,13 +12,16 @@ import { toast } from "sonner";
 
 export default function PortalMenusView() {
 	const queryClient = useQueryClient();
-	const { data, isLoading } = useQuery({
+	const { data: portalMenus, isLoading } = useQuery<PortalMenuCollection>({
 		queryKey: ["admin", "portal-menus"],
-		queryFn: adminApi.getPortalMenus,
+		queryFn: () => adminApi.getPortalMenus(),
 	});
 
-	const treeMenus = useMemo(() => data?.allMenus ?? data?.menus ?? [], [data?.allMenus, data?.menus]);
-	const activeMenus = useMemo(() => data?.menus ?? [], [data?.menus]);
+	const treeMenus = useMemo(
+		() => portalMenus?.allMenus ?? portalMenus?.menus ?? [],
+		[portalMenus],
+	);
+	const activeMenus = useMemo(() => portalMenus?.menus ?? [], [portalMenus]);
 
 	const [pending, setPending] = useState<Record<number, boolean>>({});
 	const [resetting, setResetting] = useState(false);

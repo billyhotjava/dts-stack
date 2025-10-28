@@ -70,9 +70,9 @@ interface ParentOption {
 
 export default function OrgManagementView() {
 	const queryClient = useQueryClient();
-	const { data: tree = [], isLoading } = useQuery({
+	const { data: tree = [], isLoading } = useQuery<OrganizationNode[]>({
 		queryKey: ["admin", "organizations"],
-		queryFn: adminApi.getOrganizations,
+		queryFn: () => adminApi.getOrganizations(),
 		refetchOnWindowFocus: true,
 		refetchInterval: 60000,
 	});
