@@ -176,8 +176,6 @@ spring:
         implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
   liquibase:
     change-log: classpath:config/liquibase/master.xml
-    search-path: classpath:/config/liquibase
-    duplicate-file-mode: WARN
   messages:
     basename: i18n/messages
   main:
@@ -203,6 +201,10 @@ spring:
         core-size: 2
         max-size: 50
         queue-capacity: 10000
+
+liquibase:
+  searchPath: classpath:/config/liquibase
+  duplicateFileMode: WARN
 
 server:
   forward-headers-strategy: framework
