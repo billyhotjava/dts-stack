@@ -363,22 +363,21 @@ export function normalizeSnapshotChanges(source: unknown): ChangeSnapshotLike["c
 	if (!Array.isArray(source)) {
 		return undefined;
 	}
-	const mapped = source
-		.map((item, idx) => {
-			if (!item || typeof item !== "object") {
-				return null;
-			}
-			const record = item as Record<string, unknown>;
-			const field = record.field != null ? String(record.field) : undefined;
-			const label = typeof record.label === "string" ? record.label : undefined;
-			return {
-				field: field ?? `field_${idx}`,
-				label,
-				before: record.before,
-				after: record.after,
-			};
-		})
-		.filter((entry): entry is NonNullable<ChangeSnapshotLike["changes"]>[number] => entry !== null);
+	const mapped: SnapshotChange[] = [];
+	source.forEach((item, idx) => {
+		if (!item || typeof item !== "object") {
+			return;
+		}
+		const record = item as Record<string, unknown>;
+		const field = record.field != null ? String(record.field) : undefined;
+		const label = typeof record.label === "string" ? record.label : undefined;
+		mapped.push({
+			field: field ?? `field_${idx}`,
+			label,
+			before: record.before,
+			after: record.after,
+		});
+	});
 	return mapped.length > 0 ? mapped : undefined;
 }
 

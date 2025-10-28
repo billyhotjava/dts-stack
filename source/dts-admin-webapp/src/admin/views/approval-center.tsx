@@ -396,30 +396,7 @@ export default function ApprovalCenterView() {
 	const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
 	const [decisionLoading, setDecisionLoading] = useState(false);
 	const [operatorNameMap, setOperatorNameMap] = useState<Record<string, string>>({});
-	const [roleDisplayNameMap, setRoleDisplayNameMap] = useState<Record<string, string>>({});
 	const [userDisplayMap, setUserDisplayMap] = useState<Record<string, string>>({});
-
-	// 载入角色中文名映射（来自管理端角色目录）
-	useEffect(() => {
-		if (!isSysAdmin) return;
-		(async () => {
-			try {
-				const roles = await adminApi.getAdminRoles();
-				const map: Record<string, string> = {};
-				for (const r of roles || []) {
-					const display = (r as any).nameZh || (r as any).displayName || (r as any).name || "";
-					const codeKeys = [(r as any).name, (r as any).code, (r as any).roleId, (r as any).legacyName];
-					for (const k of codeKeys) {
-						const key = (k || "").toString().trim().toUpperCase();
-						if (key && display) map[key] = String(display);
-					}
-				}
-				setRoleDisplayNameMap(map);
-			} catch {
-				// ignore
-			}
-		})();
-	}, []);
 
 	// 收集请求中的用户名，并解析为中文姓名（优先后端接口，其次 Keycloak 搜索）
 	useEffect(() => {

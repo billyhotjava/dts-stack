@@ -816,7 +816,7 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 				<ChangeDiffViewer
 					snapshot={snapshot}
 					summary={summary.length > 0 ? summary : undefined}
-					action={record.operationName || record.operationCode || record.summary || record.buttonCode}
+					action={record.action || record.operationContent || record.operationCode || record.summary || record.buttonCode}
 					operationTypeCode={record.operationTypeCode || record.operationType}
 					className="text-xs"
 				/>
