@@ -436,11 +436,55 @@ public class AuditIngestResource {
             }
             String normalized = token.trim().toUpperCase(Locale.ROOT);
             String lower = token.trim().toLowerCase(Locale.ROOT);
+
+            if (normalized.startsWith("LOGIN") || containsAny(lower, "登录", "登入")) {
+                return AuditOperationKind.LOGIN;
+            }
+            if (normalized.startsWith("LOGOUT") || containsAny(lower, "登出", "退出登录", "注销登录")) {
+                return AuditOperationKind.LOGOUT;
+            }
+            if (normalized.startsWith("DOWNLOAD") || containsAny(lower, "下载", "download")) {
+                return AuditOperationKind.DOWNLOAD;
+            }
+            if (normalized.startsWith("UPLOAD") || containsAny(lower, "上传", "upload")) {
+                return AuditOperationKind.UPLOAD;
+            }
+            if (normalized.startsWith("EXPORT") || containsAny(lower, "导出", "export")) {
+                return AuditOperationKind.EXPORT;
+            }
+            if (normalized.startsWith("IMPORT") || containsAny(lower, "导入", "import")) {
+                return AuditOperationKind.IMPORT;
+            }
+            if (normalized.startsWith("GRANT") || containsAny(lower, "授权", "共享", "grant")) {
+                return AuditOperationKind.GRANT;
+            }
+            if (normalized.startsWith("REVOKE") || containsAny(lower, "撤销授权", "取消授权", "收回", "回收", "revoke")) {
+                return AuditOperationKind.REVOKE;
+            }
+            if (normalized.startsWith("ENABLE") || containsAny(lower, "启用", "开启", "激活", "enable")) {
+                return AuditOperationKind.ENABLE;
+            }
+            if (normalized.startsWith("DISABLE") || containsAny(lower, "禁用", "停用", "关闭", "失效", "disable")) {
+                return AuditOperationKind.DISABLE;
+            }
+            if (normalized.startsWith("APPROVE") || containsAny(lower, "批准", "审批通过")) {
+                return AuditOperationKind.APPROVE;
+            }
+            if (normalized.startsWith("REJECT") || containsAny(lower, "拒绝", "驳回")) {
+                return AuditOperationKind.REJECT;
+            }
+            if (
+                normalized.startsWith("EXECUTE") ||
+                normalized.startsWith("RUN") ||
+                containsAny(lower, "执行", "运行", "run", "apply")
+            ) {
+                return AuditOperationKind.EXECUTE;
+            }
             if (
                 normalized.startsWith("CREATE") ||
                 normalized.startsWith("ADD") ||
                 normalized.startsWith("NEW") ||
-                containsAny(lower, "新增", "新建", "创建", "提交", "申请", "导入", "上传")
+                containsAny(lower, "新增", "新建", "创建", "提交", "申请")
             ) {
                 return AuditOperationKind.CREATE;
             }
@@ -451,20 +495,12 @@ public class AuditIngestResource {
             ) {
                 return AuditOperationKind.DELETE;
             }
-            if (normalized.startsWith("ENABLE") || containsAny(lower, "启用", "开启", "激活")) {
-                return AuditOperationKind.ENABLE;
-            }
-            if (normalized.startsWith("DISABLE") || containsAny(lower, "禁用", "停用", "关闭", "失效")) {
-                return AuditOperationKind.DISABLE;
-            }
             if (
                 normalized.startsWith("UPDATE") ||
                 normalized.startsWith("MODIFY") ||
                 normalized.startsWith("EDIT") ||
                 normalized.startsWith("SAVE") ||
-                normalized.startsWith("APPROVE") ||
-                normalized.startsWith("REJECT") ||
-                containsAny(lower, "修改", "批准", "审批", "拒绝", "执行", "发布")
+                containsAny(lower, "修改", "更新", "调整", "保存", "编辑", "配置")
             ) {
                 return AuditOperationKind.UPDATE;
             }
@@ -475,17 +511,9 @@ public class AuditIngestResource {
                 normalized.startsWith("QUERY") ||
                 normalized.startsWith("SEARCH") ||
                 normalized.startsWith("VIEW") ||
-                normalized.startsWith("DOWNLOAD") ||
-                normalized.startsWith("EXPORT") ||
-                containsAny(lower, "查看", "查询", "预览", "下载", "导出", "浏览", "列表")
+                containsAny(lower, "查看", "查询", "预览", "浏览", "列表", "检索")
             ) {
                 return AuditOperationKind.QUERY;
-            }
-            if (normalized.startsWith("LOGIN")) {
-                return AuditOperationKind.LOGIN;
-            }
-            if (normalized.startsWith("LOGOUT")) {
-                return AuditOperationKind.LOGOUT;
             }
             return AuditOperationKind.OTHER;
         }

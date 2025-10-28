@@ -234,7 +234,7 @@ public class ModelingResource {
             detail.put("targetName", dto.getFileName());
             detail.put("standardId", id.toString());
             detail.put("summary", "上传数据标准附件：" + dto.getFileName());
-            detail.put("operationType", "CREATE");
+            detail.put("operationType", "UPLOAD");
             audit.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, dto.getId().toString(), detail);
             return ApiResponses.ok(dto);
         } catch (RuntimeException e) {
@@ -259,7 +259,7 @@ public class ModelingResource {
         detail.put("targetName", content.getFileName());
         detail.put("standardId", id.toString());
         detail.put("summary", "下载数据标准附件：" + content.getFileName());
-        detail.put("operationType", "READ");
+        detail.put("operationType", "DOWNLOAD");
         audit.auditAction("MODELING_STANDARD_VIEW", AuditStage.SUCCESS, attachmentId.toString(), detail);
         MediaType mediaType = resolveMediaType(content.getContentType());
         String encodedFileName = URLEncoder.encode(content.getFileName(), StandardCharsets.UTF_8).replaceAll("\\+", "%20");

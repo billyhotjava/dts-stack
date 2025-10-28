@@ -2,18 +2,25 @@ package com.yuzhi.dts.admin.web.rest;
 
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
-import com.yuzhi.dts.admin.service.auditv2.OperationMappingEngine;
-import com.yuzhi.dts.admin.service.auditv2.OperationMappingEngine.RuleSummary;
-import com.yuzhi.dts.admin.service.auditv2.AuditResourceDictionaryService;
+import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
 import com.yuzhi.dts.admin.service.auditv2.AuditEntryQueryService;
 import com.yuzhi.dts.admin.service.auditv2.AuditEntryView;
 import com.yuzhi.dts.admin.service.auditv2.AuditEntryTargetView;
 import com.yuzhi.dts.admin.service.auditv2.AuditSearchCriteria;
 import com.yuzhi.dts.admin.service.auditv2.ModuleOption;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
+import com.yuzhi.dts.admin.service.auditv2.AuditOperationType;
+import com.yuzhi.dts.admin.service.auditv2.AuditResourceDictionaryService;
+import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
+import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
+import com.yuzhi.dts.admin.service.auditv2.OperationMappingEngine;
+import com.yuzhi.dts.admin.service.auditv2.OperationMappingEngine.RuleSummary;
+import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
+import com.yuzhi.dts.common.net.IpAddressUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -61,16 +68,19 @@ public class AuditLogResource {
     private final AuditEntryQueryService auditQueryService;
     private final OperationMappingEngine opMappingEngine;
     private final AuditResourceDictionaryService resourceDictionary;
+    private final AuditV2Service auditV2Service;
     private final ObjectMapper objectMapper;
     public AuditLogResource(
         AuditEntryQueryService auditQueryService,
         OperationMappingEngine opMappingEngine,
         AuditResourceDictionaryService resourceDictionary,
+        AuditV2Service auditV2Service,
         ObjectMapper objectMapper
     ) {
         this.auditQueryService = auditQueryService;
         this.opMappingEngine = opMappingEngine;
         this.resourceDictionary = resourceDictionary;
+        this.auditV2Service = auditV2Service;
         this.objectMapper = objectMapper.copy().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
     }
 
@@ -91,7 +101,8 @@ public class AuditLogResource {
         @RequestParam(value = "clientIp", required = false) String clientIp,
         @RequestParam(value = "keyword", required = false) String keyword,
         @RequestParam(value = "from", required = false) String from,
-        @RequestParam(value = "to", required = false) String to
+        @RequestParam(value = "to", required = false) String to,
+        HttpServletRequest request
     ) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(size, 200), parseSort(sort));
         Instant fromDate = parseInstant(from);
@@ -129,6 +140,14 @@ public class AuditLogResource {
             "totalPages",
             resultPage.getTotalPages()
         );
+        recordAuditLogAction(
+            ButtonCodes.AUDIT_LOG_QUERY,
+            criteria,
+            pageable,
+            resultPage.getTotalElements(),
+            content.size(),
+            request
+        );
         return ResponseEntity.ok(ApiResponse.ok(payload));
     }
 
@@ -163,6 +182,7 @@ public class AuditLogResource {
         @RequestParam(value = "keyword", required = false) String keyword,
         @RequestParam(value = "from", required = false) String from,
         @RequestParam(value = "to", required = false) String to,
+        HttpServletRequest request,
         HttpServletResponse response
     ) throws IOException {
         Instant fromDate = parseInstant(from);
@@ -186,12 +206,8 @@ public class AuditLogResource {
             scope.excludedActors(),
             true
         );
-        List<Map<String, Object>> records = auditQueryService
-            .search(criteria, Pageable.unpaged())
-            .getContent()
-            .stream()
-            .map(view -> toResponse(view, true))
-            .toList();
+        Page<AuditEntryView> exportPage = auditQueryService.search(criteria, Pageable.unpaged());
+        List<Map<String, Object>> records = exportPage.getContent().stream().map(view -> toResponse(view, true)).toList();
         StringBuilder sb = new StringBuilder();
         sb.append(
             "id,occurred_at,source_system,module,action,actor,result,result_text,summary,target_table,target_id,operation_type,operation_content,client_ip,client_agent\n"
@@ -215,6 +231,14 @@ public class AuditLogResource {
                 .append(escapeCsv(record.get("clientAgent")))
                 .append('\n');
         }
+        recordAuditLogAction(
+            ButtonCodes.AUDIT_LOG_EXPORT,
+            criteria,
+            Pageable.unpaged(),
+            exportPage.getTotalElements(),
+            records.size(),
+            request
+        );
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audit-logs.csv");
         response.setContentType("text/csv;charset=UTF-8");
         response.getOutputStream().write(sb.toString().getBytes(StandardCharsets.UTF_8));
@@ -410,6 +434,139 @@ public class AuditLogResource {
         return map;
     }
 
+    private void recordAuditLogAction(
+        String buttonCode,
+        AuditSearchCriteria criteria,
+        Pageable pageable,
+        long totalElements,
+        int returnedCount,
+        HttpServletRequest request
+    ) {
+        if (auditV2Service == null) {
+            return;
+        }
+        String actor = SecurityUtils.getCurrentAuditableLogin();
+        AuditActionRequest.Builder builder = AuditActionRequest
+            .builder(actor, buttonCode)
+            .actorName(actor)
+            .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+            .summary(ButtonCodes.AUDIT_LOG_EXPORT.equals(buttonCode) ? "导出审计日志" : "查询审计日志")
+            .result(AuditResultStatus.SUCCESS)
+            .allowEmptyTargets();
+        if ("system".equalsIgnoreCase(actor)) {
+            builder.allowSystemActor();
+        }
+        if (request != null) {
+            builder.client(clientIp(request), request.getHeader("User-Agent"));
+            builder.request(request.getRequestURI(), request.getMethod());
+        } else {
+            builder.request(
+                ButtonCodes.AUDIT_LOG_EXPORT.equals(buttonCode) ? "/api/audit-logs/export" : "/api/audit-logs",
+                "GET"
+            );
+        }
+        Map<String, Object> detail = buildAuditLogDetail(buttonCode, criteria, pageable, totalElements, returnedCount);
+        if (!detail.isEmpty()) {
+            builder.detail("detail", detail);
+        }
+        builder.metadata("totalElements", totalElements);
+        builder.metadata("returnedCount", returnedCount);
+        builder.metadata("export", ButtonCodes.AUDIT_LOG_EXPORT.equals(buttonCode));
+        try {
+            auditV2Service.record(builder.build());
+        } catch (Exception ex) {
+            log.warn("Failed to record audit log action [{}]: {}", buttonCode, ex.getMessage());
+        }
+    }
+
+    private Map<String, Object> buildAuditLogDetail(
+        String buttonCode,
+        AuditSearchCriteria criteria,
+        Pageable pageable,
+        long totalElements,
+        int returnedCount
+    ) {
+        LinkedHashMap<String, Object> detail = new LinkedHashMap<>();
+        Map<String, Object> filters = buildFilterDetail(criteria);
+        if (!filters.isEmpty()) {
+            detail.put("filters", filters);
+        }
+        Map<String, Object> pagination = buildPaginationDetail(pageable, returnedCount, totalElements);
+        if (!pagination.isEmpty()) {
+            detail.put("pagination", pagination);
+        }
+        detail.put("returnedCount", returnedCount);
+        detail.put("totalElements", totalElements);
+        detail.put("actionType", ButtonCodes.AUDIT_LOG_EXPORT.equals(buttonCode) ? "export" : "query");
+        return detail;
+    }
+
+    private Map<String, Object> buildFilterDetail(AuditSearchCriteria criteria) {
+        LinkedHashMap<String, Object> filters = new LinkedHashMap<>();
+        if (criteria == null) {
+            return filters;
+        }
+        putIfHasText(filters, "actor", criteria.actor());
+        putIfHasText(filters, "module", criteria.module());
+        putIfHasText(filters, "operationType", criteria.operationKind());
+        putIfHasText(filters, "actionCode", criteria.action());
+        putIfHasText(filters, "operationGroup", criteria.operationGroup());
+        putIfHasText(filters, "sourceSystem", criteria.sourceSystem());
+        putIfHasText(filters, "result", criteria.result());
+        putIfHasText(filters, "targetTable", criteria.targetTable());
+        putIfHasText(filters, "targetId", criteria.targetId());
+        putIfHasText(filters, "clientIp", criteria.clientIp());
+        putIfHasText(filters, "keyword", criteria.keyword());
+        if (criteria.from() != null) {
+            filters.put("from", formatInstant(criteria.from()));
+        }
+        if (criteria.to() != null) {
+            filters.put("to", formatInstant(criteria.to()));
+        }
+        return filters;
+    }
+
+    private Map<String, Object> buildPaginationDetail(Pageable pageable, int returnedCount, long totalElements) {
+        LinkedHashMap<String, Object> info = new LinkedHashMap<>();
+        info.put("returnedCount", returnedCount);
+        info.put("totalElements", totalElements);
+        if (pageable == null) {
+            info.put("paged", false);
+            return info;
+        }
+        boolean paged = pageable.isPaged();
+        info.put("paged", paged);
+        if (paged) {
+            info.put("page", pageable.getPageNumber());
+            info.put("size", pageable.getPageSize());
+        }
+        if (pageable.getSort() != null && pageable.getSort().isSorted()) {
+            info.put("sort", pageable.getSort().toString());
+        }
+        return info;
+    }
+
+    private void putIfHasText(Map<String, Object> target, String key, String value) {
+        if (StringUtils.isNotBlank(value)) {
+            target.put(key, value.trim());
+        }
+    }
+
+    private String formatInstant(Instant instant) {
+        return instant != null ? instant.toString() : null;
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String header = request.getHeader("X-Forwarded-For");
+        String xfip = StringUtils.isNotBlank(header) ? header.split(",")[0].trim() : null;
+        String realIp = request.getHeader("X-Real-IP");
+        String remote = request.getRemoteAddr();
+        return IpAddressUtils.resolveClientIp(xfip, realIp, remote);
+    }
+
     private void ensureReadable(VisibilityScope scope, AuditEntryView view) {
         if (scope.allowedActors().isEmpty() && scope.excludedActors().isEmpty()) {
             return;
@@ -478,72 +635,28 @@ public class AuditLogResource {
 
     private String normalizeOperationTypeCode(AuditEntryView view) {
         AuditOperationKind kind = view.operationKind();
-        if (kind != null) {
-            return switch (kind) {
-                case CREATE -> AuditOperationKind.CREATE.code();
-                case UPDATE -> AuditOperationKind.UPDATE.code();
-                case ENABLE -> AuditOperationKind.ENABLE.code();
-                case DISABLE -> AuditOperationKind.DISABLE.code();
-                case DELETE -> AuditOperationKind.DELETE.code();
-                case QUERY -> AuditOperationKind.QUERY.code();
-                case LOGIN -> AuditOperationKind.LOGIN.code();
-                case LOGOUT -> AuditOperationKind.LOGOUT.code();
-                case APPROVE, REJECT, EXECUTE, IMPORT, EXPORT -> AuditOperationKind.UPDATE.code();
-                default -> AuditOperationKind.QUERY.code();
-            };
+        if (kind != null && kind != AuditOperationKind.OTHER) {
+            return kind.code();
         }
-        String httpMethod = Optional.ofNullable(view.httpMethod()).orElse("").trim().toUpperCase(Locale.ROOT);
-        if ("DELETE".equals(httpMethod)) {
-            return AuditOperationKind.DELETE.code();
+        String candidate = StringUtils.firstNonBlank(
+            extractOperationToken(view),
+            view.operationCode(),
+            view.operationName(),
+            view.summary()
+        );
+        AuditOperationType type = AuditOperationType.from(candidate);
+        if (type == AuditOperationType.UNKNOWN) {
+            type = AuditOperationType.READ;
         }
-        if ("POST".equals(httpMethod)) {
-            return AuditOperationKind.CREATE.code();
-        }
-        if ("PUT".equals(httpMethod) || "PATCH".equals(httpMethod)) {
-            return AuditOperationKind.UPDATE.code();
-        }
-        String operationCode = Optional.ofNullable(view.operationCode()).orElse("").toUpperCase(Locale.ROOT);
-        String operationName = Optional.ofNullable(view.operationName()).orElse("").toUpperCase(Locale.ROOT);
-        String summary = Optional.ofNullable(view.summary()).orElse("").toUpperCase(Locale.ROOT);
-        if (operationCode.contains("LOGOUT") || operationName.contains("LOGOUT") || summary.contains("登出")) {
-            return AuditOperationKind.LOGOUT.code();
-        }
-        if (operationCode.contains("LOGIN") || operationName.contains("LOGIN") || summary.contains("登录")) {
-            return AuditOperationKind.LOGIN.code();
-        }
-        if (operationCode.contains("DISABLE") || operationName.contains("DISABLE") || summary.contains("禁用")) {
-            return AuditOperationKind.DISABLE.code();
-        }
-        if (operationCode.contains("ENABLE") || operationName.contains("ENABLE") || summary.contains("启用")) {
-            return AuditOperationKind.ENABLE.code();
-        }
-        if (operationCode.contains("DELETE") || operationName.contains("DELETE") || summary.contains("删除")) {
-            return AuditOperationKind.DELETE.code();
-        }
-        if (operationCode.contains("CREATE") || operationName.contains("CREATE") || summary.contains("新增")) {
-            return AuditOperationKind.CREATE.code();
-        }
-        if (operationCode.contains("UPDATE") || operationName.contains("UPDATE") || summary.contains("修改")) {
-            return AuditOperationKind.UPDATE.code();
-        }
-        return AuditOperationKind.QUERY.code();
+        return type.getCode();
     }
 
     private String mapOperationTypeLabel(String normalizedCode) {
-        if (normalizedCode == null) {
-            return "查询";
+        AuditOperationType type = AuditOperationType.from(normalizedCode);
+        if (type == AuditOperationType.UNKNOWN) {
+            type = AuditOperationType.READ;
         }
-        return switch (normalizedCode) {
-            case "CREATE" -> "新增";
-            case "UPDATE" -> "修改";
-            case "DELETE" -> "删除";
-            case "LOGIN" -> "登录";
-            case "LOGOUT" -> "登出";
-            case "ENABLE" -> "启用";
-            case "DISABLE" -> "禁用";
-            case "QUERY" -> "查询";
-            default -> "查询";
-        };
+        return type.getDisplayName();
     }
 
     private VisibilityScope resolveVisibilityScope() {
@@ -641,6 +754,50 @@ public class AuditLogResource {
             categories.putIfAbsent(entryKey, new CategoryView(module.key(), module.title(), entryKey, entryTitle));
         }
         return categories;
+    }
+
+    private String extractOperationToken(AuditEntryView view) {
+        if (view == null) {
+            return null;
+        }
+        String direct = StringUtils.firstNonBlank(
+            extractFromMapLike(view.extraAttributes(), "operationType", "operation_type"),
+            extractFromMapLike(view.metadata(), "operationType", "operation_type"),
+            extractFromMapLike(view.details(), "operationType", "operation_type")
+        );
+        if (StringUtils.isNotBlank(direct)) {
+            return direct;
+        }
+        Object payload = view.details() != null ? view.details().get("payload") : null;
+        if (payload instanceof Map<?, ?> map) {
+            return extractFromMapLike(map, "operationType", "operation_type");
+        }
+        return null;
+    }
+
+    private String extractFromMapLike(Object source, String... keys) {
+        if (!(source instanceof Map<?, ?> map) || keys == null) {
+            return null;
+        }
+        for (String key : keys) {
+            if (key == null) {
+                continue;
+            }
+            Object value = map.get(key);
+            if (value == null) {
+                value = map.get(key.toLowerCase(Locale.ROOT));
+            }
+            if (value == null) {
+                value = map.get(key.toUpperCase(Locale.ROOT));
+            }
+            if (value != null) {
+                String text = safeTrim(value.toString());
+                if (StringUtils.isNotBlank(text)) {
+                    return text;
+                }
+            }
+        }
+        return null;
     }
 
     private String slugify(String value, String fallback) {

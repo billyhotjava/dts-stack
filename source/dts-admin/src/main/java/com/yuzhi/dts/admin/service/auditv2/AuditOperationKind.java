@@ -13,10 +13,13 @@ public enum AuditOperationKind {
     REJECT("REJECT", "驳回"),
     EXPORT("EXPORT", "导出"),
     IMPORT("IMPORT", "导入"),
+    UPLOAD("UPLOAD", "上传"),
+    DOWNLOAD("DOWNLOAD", "下载"),
+    GRANT("GRANT", "授权"),
+    REVOKE("REVOKE", "撤销"),
     EXECUTE("EXECUTE", "执行"),
     LOGIN("LOGIN", "登录"),
     LOGOUT("LOGOUT", "登出"),
-    DOWNLOAD("DOWNLOAD", "下载"),
     OTHER("OTHER", "其他");
 
     private final String code;

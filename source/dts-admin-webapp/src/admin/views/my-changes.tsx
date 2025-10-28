@@ -129,7 +129,11 @@ const activeContext = useMemo(
 			ellipsis: true,
 			render: (_: unknown, record) => {
 				const context = buildContextForChangeRequest(record);
-				const text = summarizeChangeDisplayContext(context, { maxEntries: 2 });
+				const text = summarizeChangeDisplayContext(context, {
+					maxEntries: 2,
+					actionLabel: translateAction(record.action, record.action),
+					request: record,
+				});
 				return <div className="text-xs text-muted-foreground">{text || "—"}</div>;
 			},
 		},
@@ -305,14 +309,17 @@ const activeContext = useMemo(
 							</div>
 						</section>
 
-						<section className="space-y-2">
-							<Text variant="body3" className="text-muted-foreground">
-								变更摘要
-							</Text>
-							<div className="rounded border border-border/60 bg-muted/20 px-3 py-2 text-xs leading-5">
-								{summarizeChangeDisplayContext(activeContext) || "—"}
-							</div>
-						</section>
+							<section className="space-y-2">
+								<Text variant="body3" className="text-muted-foreground">
+									变更摘要
+								</Text>
+								<div className="rounded border border-border/60 bg-muted/20 px-3 py-2 text-xs leading-5">
+									{summarizeChangeDisplayContext(activeContext, {
+										actionLabel: translateAction(activeChange.action, activeChange.action),
+										request: activeChange,
+									}) || "—"}
+								</div>
+							</section>
 
 						<section className="space-y-2">
 							<Text variant="body3" className="text-muted-foreground">

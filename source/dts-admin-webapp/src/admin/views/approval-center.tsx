@@ -185,7 +185,12 @@ function resolveTarget(request: ChangeRequest, ctx?: DiffFormatContext): string 
 
 function summarizeDetails(request: ChangeRequest, ctx?: DiffFormatContext): string {
 	const context = buildContextForChangeRequest(request);
-	const summary = summarizeChangeDisplayContext(context, { maxEntries: 2 });
+	const actionLabel = ACTION_LABELS[request.action] ?? request.action;
+	const summary = summarizeChangeDisplayContext(context, {
+		maxEntries: 2,
+		actionLabel,
+		request,
+	});
 	if (summary && summary !== "—") {
 		return summary;
 	}
@@ -876,23 +881,28 @@ export default function ApprovalCenterView() {
 			const diff = asRecord(parseJson(record.diffJson));
 			const diffLayer = diff ?? null;
 			const baseSnapshot = diffLayer ? buildChangeSnapshotFromDiff(diffLayer) : null;
-		const displayContext = buildChangeDisplayContext({
-			layers: [
-				diffLayer,
-				diffLayer ? asRecord(diffLayer["detail"]) : null,
-				diffLayer ? asRecord(diffLayer["context"]) : null,
-				diffLayer ? asRecord(diffLayer["metadata"]) : null,
+			const displayContext = buildChangeDisplayContext({
+				layers: [
+					diffLayer,
+					diffLayer ? asRecord(diffLayer["detail"]) : null,
+					diffLayer ? asRecord(diffLayer["context"]) : null,
+					diffLayer ? asRecord(diffLayer["metadata"]) : null,
 					diffLayer ? asRecord(diffLayer["extraAttributes"]) : null,
 					payload,
 				],
 				baseSnapshot,
 				fallbackDiff: diffLayer ?? undefined,
 			});
-		const snapshot = displayContext.snapshot;
-		const summary = displayContext.summary;
-		const menuChanges = displayContext.menuChanges;
-		const summaryText = summarizeChangeDisplayContext(displayContext, { maxEntries: 2 });
-		const showDiffViewer = summary.length > 0 || snapshotHasContent(snapshot);
+			const snapshot = displayContext.snapshot;
+			const summary = displayContext.summary;
+			const menuChanges = displayContext.menuChanges;
+			const actionLabel = ACTION_LABELS[record.action] ?? record.action;
+			const summaryText = summarizeChangeDisplayContext(displayContext, {
+				maxEntries: 2,
+				actionLabel,
+				request: record,
+			});
+			const showDiffViewer = summary.length > 0 || snapshotHasContent(snapshot);
 			return (
 				<div className="border-t border-muted pt-4 text-sm">
 					<div className="grid gap-4 md:grid-cols-3">

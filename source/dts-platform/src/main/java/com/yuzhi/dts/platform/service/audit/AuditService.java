@@ -63,8 +63,8 @@ public class AuditService {
 
         // Catalog dataset grants
         registerLegacy("catalog.dataset.grant", "READ", legacyMapping("CATALOG_ASSET_VIEW", "查看数据集授权", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("catalog.dataset.grant", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "新增数据集授权", "新增数据集授权失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.dataset.grant", "DELETE", legacyMapping("CATALOG_ASSET_EDIT", "删除数据集授权", "删除数据集授权失败", null, "DELETE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.dataset.grant", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "新增数据集授权", "新增数据集授权失败", null, "GRANT", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.dataset.grant", "DELETE", legacyMapping("CATALOG_ASSET_EDIT", "删除数据集授权", "删除数据集授权失败", null, "REVOKE", false, AuditStage.SUCCESS));
 
         // Catalog dataset import
         registerLegacy("catalog.dataset.import", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "导入数据资产", "导入数据资产失败", null, "IMPORT", false, AuditStage.SUCCESS));
@@ -559,9 +559,64 @@ public class AuditService {
         if (!StringUtils.hasText(candidate)) {
             return "READ";
         }
-        String upper = candidate.trim().toUpperCase(Locale.ROOT);
-        String lower = candidate.trim().toLowerCase(Locale.ROOT);
-        if (upper.startsWith("CREATE") || containsAny(lower, "新增", "新建", "创建", "提交", "申请", "导入", "上传")) {
+        String trimmed = candidate.trim();
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (upper.startsWith("LOGIN") || containsAny(lower, "登录", "登入")) {
+            return "LOGIN";
+        }
+        if (upper.startsWith("LOGOUT") || containsAny(lower, "登出", "退出登录", "注销登录")) {
+            return "LOGOUT";
+        }
+        if (upper.startsWith("DOWNLOAD") || containsAny(lower, "下载", "download")) {
+            return "DOWNLOAD";
+        }
+        if (upper.startsWith("UPLOAD") || containsAny(lower, "上传", "upload")) {
+            return "UPLOAD";
+        }
+        if (upper.startsWith("EXPORT") || containsAny(lower, "导出", "export")) {
+            return "EXPORT";
+        }
+        if (upper.startsWith("IMPORT") || containsAny(lower, "导入", "import")) {
+            return "IMPORT";
+        }
+        if (upper.startsWith("GRANT") || containsAny(lower, "授权", "共享", "grant")) {
+            return "GRANT";
+        }
+        if (upper.startsWith("REVOKE") || containsAny(lower, "撤销授权", "取消授权", "收回", "回收", "revoke")) {
+            return "REVOKE";
+        }
+        if (upper.startsWith("ENABLE") || containsAny(lower, "启用", "开启", "激活", "enable")) {
+            return "ENABLE";
+        }
+        if (upper.startsWith("DISABLE") || containsAny(lower, "禁用", "停用", "关闭", "失效", "disable")) {
+            return "DISABLE";
+        }
+        if (upper.startsWith("APPROVE") || containsAny(lower, "批准", "审批通过")) {
+            return "APPROVE";
+        }
+        if (upper.startsWith("REJECT") || containsAny(lower, "拒绝", "驳回")) {
+            return "REJECT";
+        }
+        if (
+            upper.startsWith("EXECUTE") ||
+            upper.startsWith("RUN") ||
+            containsAny(lower, "执行", "运行", "run", "apply")
+        ) {
+            return "EXECUTE";
+        }
+        if (upper.startsWith("REFRESH") || containsAny(lower, "刷新", "refresh")) {
+            return "REFRESH";
+        }
+        if (upper.startsWith("TEST") || containsAny(lower, "测试", "校验", "验证", "test")) {
+            return "TEST";
+        }
+        if (
+            upper.startsWith("CREATE") ||
+            upper.startsWith("ADD") ||
+            upper.startsWith("NEW") ||
+            containsAny(lower, "新增", "新建", "创建", "提交", "申请")
+        ) {
             return "CREATE";
         }
         if (upper.startsWith("DELETE") || containsAny(lower, "删除", "移除", "下线", "注销")) {
@@ -570,25 +625,19 @@ public class AuditService {
         if (
             upper.startsWith("UPDATE") ||
             upper.startsWith("MODIFY") ||
-            containsAny(lower, "修改", "更新", "调整", "批准", "审批", "拒绝", "执行", "运行", "启用", "禁用", "发布", "保存", "编辑")
+            upper.startsWith("EDIT") ||
+            upper.startsWith("SAVE") ||
+            containsAny(lower, "修改", "更新", "调整", "保存", "编辑", "配置")
         ) {
             return "UPDATE";
         }
         if (
-            upper.startsWith("EXPORT") ||
-            upper.startsWith("DOWNLOAD") ||
             upper.startsWith("READ") ||
             upper.startsWith("QUERY") ||
             upper.startsWith("GET") ||
-            containsAny(lower, "查看", "查询", "预览", "下载", "导出", "浏览", "列表", "检索")
+            containsAny(lower, "查看", "查询", "预览", "浏览", "列表", "检索")
         ) {
             return "READ";
-        }
-        if (upper.startsWith("LOGIN") || containsAny(lower, "登录", "登入")) {
-            return "LOGIN";
-        }
-        if (upper.startsWith("LOGOUT") || containsAny(lower, "登出", "退出登录", "注销登录")) {
-            return "LOGOUT";
         }
         return "READ";
     }

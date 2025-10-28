@@ -2521,6 +2521,11 @@ public class KeycloakApiResource {
         if (bearer != null && bearer.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())) {
             bearer = bearer.substring("Bearer ".length()).trim();
         }
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("audience", "admin");
+        detail.put("hasRefreshToken", StringUtils.hasText(refreshToken));
+        String fallbackUri = Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/keycloak/auth/logout");
+        String fallbackMethod = request != null ? request.getMethod() : "POST";
         adminSessionRegistry.invalidateByAccessToken(bearer, AdminSessionCloseReason.LOGOUT);
         adminSessionRegistry.invalidateByRefreshToken(refreshToken, AdminSessionCloseReason.LOGOUT);
         try {
@@ -2533,9 +2538,31 @@ public class KeycloakApiResource {
                     throw ex;
                 }
             }
+            recordAuthActionV2(
+                actor,
+                ButtonCodes.AUTH_ADMIN_LOGOUT,
+                AuditResultStatus.SUCCESS,
+                detail,
+                request,
+                fallbackUri,
+                fallbackMethod,
+                "系统端登出成功"
+            );
             return ResponseEntity.ok(ApiResponse.ok(null));
         } catch (Exception ex) {
             // From client perspective, even if Keycloak-side logout fails, we clear local session; return 200 to avoid blocking UX.
+            Map<String, Object> failureDetail = new LinkedHashMap<>(detail);
+            failureDetail.put("error", Optional.ofNullable(ex.getMessage()).filter(m -> !m.isBlank()).orElse("LOGOUT_ERROR"));
+            recordAuthActionV2(
+                actor,
+                ButtonCodes.AUTH_ADMIN_LOGOUT,
+                AuditResultStatus.FAILED,
+                failureDetail,
+                request,
+                fallbackUri,
+                fallbackMethod,
+                "系统端登出失败"
+            );
             return ResponseEntity.ok(ApiResponse.ok(null));
         }
     }

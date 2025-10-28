@@ -95,6 +95,10 @@ public final class ButtonCodes {
     public static final String AUTH_ADMIN_REFRESH = "ADMIN_AUTH_REFRESH";
     public static final String AUTH_PLATFORM_LOGIN = "ADMIN_AUTH_PLATFORM_LOGIN";
 
+    // Audit log management
+    public static final String AUDIT_LOG_QUERY = "ADMIN_AUDIT_LOG_QUERY";
+    public static final String AUDIT_LOG_EXPORT = "ADMIN_AUDIT_LOG_EXPORT";
+
     // Platform ingestion fallback
     public static final String PLATFORM_GENERIC_EVENT = "PLATFORM_GENERIC_EVENT";
 }

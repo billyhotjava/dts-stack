@@ -275,6 +275,9 @@ public class AdminUserService {
     public ApprovalDTOs.ApprovalRequestDetail submitUpdate(String username, UserOperationRequest request, String requester, String ip) {
         validateOperation(request, false);
         AdminKeycloakUser snapshot = ensureFreshSnapshot(username);
+        if (!hasUserModifications(request, snapshot)) {
+            throw new IllegalArgumentException("未检测到用户信息变更，无需提交审批");
+        }
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, request.getReason(), "USER_UPDATE");
         Map<String, Object> payload = buildUpdatePayload(request, snapshot);
         ChangeRequest changeRequest = createChangeRequest(
@@ -557,9 +560,9 @@ public class AdminUserService {
         payload.put("action", action);
         payload.put("actionDisplay", actionDisplay(action));
         payload.put("username", username);
-        payload.put("fullName", request.getFullName());
-        payload.put("email", request.getEmail());
-        payload.put("phone", request.getPhone());
+        payload.put("fullName", normalizeStringValue(request.getFullName()));
+        payload.put("email", normalizeStringValue(request.getEmail()));
+        payload.put("phone", normalizeStringValue(request.getPhone()));
         String normalizedPersonLevel = normalizeSecurityLevel(request.getPersonSecurityLevel());
         ensureAllowedSecurityLevel(normalizedPersonLevel, "人员密级不允许为非密");
         payload.put("personSecurityLevel", normalizedPersonLevel);
@@ -571,7 +574,7 @@ public class AdminUserService {
         }
         payload.put("enabled", request.getEnabled());
         payload.put("reason", request.getReason());
-        payload.put("attributes", request.getAttributes());
+        payload.put("attributes", normalizeAttributesMap(request.getAttributes()));
         sanitizeDefaultRealmRolesInMap(payload);
         return payload;
     }
@@ -637,6 +640,98 @@ public class AdminUserService {
             }
         }
         return filtered;
+    }
+
+    private boolean hasUserModifications(UserOperationRequest request, AdminKeycloakUser snapshot) {
+        if (!Objects.equals(normalizeStringValue(request.getFullName()), normalizeStringValue(snapshot.getFullName()))) {
+            return true;
+        }
+        if (!Objects.equals(normalizeStringValue(request.getEmail()), normalizeStringValue(snapshot.getEmail()))) {
+            return true;
+        }
+        if (!Objects.equals(normalizeStringValue(request.getPhone()), normalizeStringValue(snapshot.getPhone()))) {
+            return true;
+        }
+        String requestedLevel = normalizeSecurityLevel(request.getPersonSecurityLevel());
+        String currentLevel = normalizeSecurityLevel(snapshot.getPersonSecurityLevel());
+        if (!Objects.equals(requestedLevel, currentLevel)) {
+            return true;
+        }
+        Boolean enabled = request.getEnabled();
+        if (enabled != null && enabled.booleanValue() != snapshot.isEnabled()) {
+            return true;
+        }
+        if (request.isRealmRolesSpecified()) {
+            List<String> requestedRoles = normalizeRoleList(request.getRealmRoles());
+            List<String> currentRoles = normalizeRoleList(snapshot.getRealmRoles());
+            if (!requestedRoles.equals(currentRoles)) {
+                return true;
+            }
+        }
+        if (request.isGroupPathsSpecified()) {
+            List<String> requestedGroups = normalizeGroupPathListForDiff(request.getGroupPaths());
+            List<String> currentGroups = normalizeGroupPathListForDiff(snapshot.getGroupPaths());
+            if (!requestedGroups.equals(currentGroups)) {
+                return true;
+            }
+        }
+        Map<String, List<String>> requestedAttributes = normalizeAttributesMap(request.getAttributes());
+        return !requestedAttributes.isEmpty();
+    }
+
+    private String normalizeStringValue(String value) {
+        return StringUtils.trimToNull(value);
+    }
+
+    private List<String> normalizeRoleList(Collection<?> roles) {
+        List<String> sanitized = sanitizeRealmRoleList(roles);
+        if (sanitized == null || sanitized.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> set = new LinkedHashSet<>();
+        for (String role : sanitized) {
+            if (StringUtils.isBlank(role)) {
+                continue;
+            }
+            set.add(role.trim().toUpperCase(Locale.ROOT));
+        }
+        List<String> result = new ArrayList<>(set);
+        result.sort(String::compareTo);
+        return result;
+    }
+
+    private Map<String, List<String>> normalizeAttributesMap(Map<String, List<String>> attributes) {
+        if (attributes == null || attributes.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, List<String>> normalized = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> entry : attributes.entrySet()) {
+            String key = entry.getKey();
+            if (StringUtils.isBlank(key)) {
+                continue;
+            }
+            List<String> values = normalizeAttributeValues(entry.getValue());
+            if (!values.isEmpty()) {
+                normalized.put(key.trim(), values);
+            }
+        }
+        return normalized.isEmpty() ? Map.of() : normalized;
+    }
+
+    private List<String> normalizeAttributeValues(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> set = new LinkedHashSet<>();
+        for (String value : values) {
+            if (StringUtils.isBlank(value)) {
+                continue;
+            }
+            set.add(value.trim());
+        }
+        List<String> result = new ArrayList<>(set);
+        result.sort(String::compareTo);
+        return result;
     }
 
     private static void sanitizeDefaultRealmRolesInMap(Map<String, Object> map) {
@@ -1143,8 +1238,8 @@ public class AdminUserService {
         private static Map<String, Object> sanitizePayload(Map<String, Object> payload) {
             Map<String, Object> sanitized = new LinkedHashMap<>();
             if (payload == null || payload.isEmpty()) {
-                return sanitized;
-            }
+        return sanitized;
+    }
             Object inner = payload.get("payload");
             if (inner instanceof Map<?, ?> innerMap) {
                 Map<String, Object> compact = new LinkedHashMap<>();
@@ -1493,6 +1588,16 @@ public class AdminUserService {
             }
         }
         return result;
+    }
+
+    private List<String> normalizeGroupPathListForDiff(Collection<?> source) {
+        List<String> normalized = normalizeGroupPathList(source);
+        if (normalized == null || normalized.isEmpty()) {
+            return List.of();
+        }
+        List<String> sorted = new ArrayList<>(normalized);
+        sorted.sort(String::compareTo);
+        return sorted;
     }
 
     private void ensureDeptCodeAttribute(KeycloakUserDTO dto, List<String> groupPaths) {

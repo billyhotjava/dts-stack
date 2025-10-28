@@ -556,6 +556,30 @@ public class AuditButtonRegistry {
         register(
             map,
             new AuditButtonMetadata(
+                ButtonCodes.AUDIT_LOG_QUERY,
+                "system-admin",
+                "系统管理",
+                "AUDIT_LOG_QUERY",
+                "查询审计日志",
+                AuditOperationKind.QUERY,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.AUDIT_LOG_EXPORT,
+                "system-admin",
+                "系统管理",
+                "AUDIT_LOG_EXPORT",
+                "导出审计日志",
+                AuditOperationKind.EXPORT,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
                 ButtonCodes.PORTAL_MENU_VIEW,
                 "system-admin",
                 "系统管理",
