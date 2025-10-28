@@ -201,14 +201,16 @@ public class InfraAdminService {
             });
     }
 
-    public boolean deleteDataSource(UUID id) {
-        if (!dataSourceRepository.existsById(id)) {
-            return false;
-        }
-        dataSourceRepository.deleteById(id);
-        cache.remove(id);
-        touchLastUpdated();
-        return true;
+    public Optional<InfraDataSourceDto> deleteDataSource(UUID id) {
+        return dataSourceRepository
+            .findById(id)
+            .map(entity -> {
+                InfraDataSourceDto snapshot = toDto(entity);
+                dataSourceRepository.delete(entity);
+                cache.remove(id);
+                touchLastUpdated();
+                return snapshot;
+            });
     }
 
     public HiveConnectionTestResult testDataSourceConnection(HiveConnectionTestRequest request, UUID dataSourceId) {

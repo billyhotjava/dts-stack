@@ -43,7 +43,7 @@ export interface ChangeDiffViewerProps {
 	className?: string;
 }
 
-const DEFAULT_DELETE_MESSAGE = "记录已删除";
+const DEFAULT_DELETE_MESSAGE = "记录待删除";
 
 export function ChangeDiffViewer({
 	snapshot,

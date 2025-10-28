@@ -548,8 +548,12 @@ public class AdminUserService {
         String normalizedPersonLevel = normalizeSecurityLevel(request.getPersonSecurityLevel());
         ensureAllowedSecurityLevel(normalizedPersonLevel, "人员密级不允许为非密");
         payload.put("personSecurityLevel", normalizedPersonLevel);
-        payload.put("realmRoles", sanitizeRealmRoleList(request.getRealmRoles()));
-        payload.put("groupPaths", request.getGroupPaths());
+        if (request.isRealmRolesSpecified()) {
+            payload.put("realmRoles", sanitizeRealmRoleList(request.getRealmRoles()));
+        }
+        if (request.isGroupPathsSpecified()) {
+            payload.put("groupPaths", request.getGroupPaths());
+        }
         payload.put("enabled", request.getEnabled());
         payload.put("reason", request.getReason());
         payload.put("attributes", request.getAttributes());

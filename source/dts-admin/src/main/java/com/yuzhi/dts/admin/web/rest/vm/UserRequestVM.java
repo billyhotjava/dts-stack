@@ -1,5 +1,6 @@
 package com.yuzhi.dts.admin.web.rest.vm;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +18,10 @@ public class UserRequestVM {
     private Boolean enabled;
     private String reason;
     private Map<String, List<String>> attributes = new HashMap<>();
+    @JsonIgnore
+    private boolean realmRolesSpecified;
+    @JsonIgnore
+    private boolean groupPathsSpecified;
 
     public String getUsername() {
         return username;
@@ -63,6 +68,7 @@ public class UserRequestVM {
     }
 
     public void setRealmRoles(List<String> realmRoles) {
+        this.realmRolesSpecified = true;
         this.realmRoles = realmRoles == null ? new ArrayList<>() : realmRoles;
     }
 
@@ -71,6 +77,7 @@ public class UserRequestVM {
     }
 
     public void setGroupPaths(List<String> groupPaths) {
+        this.groupPathsSpecified = true;
         this.groupPaths = groupPaths == null ? new ArrayList<>() : groupPaths;
     }
 
@@ -96,5 +103,15 @@ public class UserRequestVM {
 
     public void setAttributes(Map<String, List<String>> attributes) {
         this.attributes = attributes == null ? new HashMap<>() : attributes;
+    }
+
+    @JsonIgnore
+    public boolean isRealmRolesSpecified() {
+        return realmRolesSpecified;
+    }
+
+    @JsonIgnore
+    public boolean isGroupPathsSpecified() {
+        return groupPathsSpecified;
     }
 }

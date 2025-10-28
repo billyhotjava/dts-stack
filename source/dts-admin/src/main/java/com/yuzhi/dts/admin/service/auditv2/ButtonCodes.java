@@ -6,6 +6,9 @@ public final class ButtonCodes {
     // System configuration
     public static final String SYSTEM_CONFIG_VIEW = "ADMIN_SYSTEM_CONFIG_VIEW";
     public static final String SYSTEM_CONFIG_SUBMIT = "ADMIN_SYSTEM_CONFIG_SUBMIT";
+    public static final String DATA_SOURCE_CREATE = "ADMIN_DATA_SOURCE_CREATE";
+    public static final String DATA_SOURCE_REFRESH = "ADMIN_DATA_SOURCE_REFRESH";
+    public static final String DATA_SOURCE_DELETE = "ADMIN_DATA_SOURCE_DELETE";
 
     // Change request lifecycle
     public static final String CHANGE_REQUEST_SUBMIT = "ADMIN_CHANGE_REQUEST_SUBMIT";

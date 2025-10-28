@@ -140,8 +140,16 @@ public class AdminUserResource {
         command.setEmail(request.getEmail());
         command.setPhone(request.getPhone());
         command.setPersonSecurityLevel(request.getPersonSecurityLevel());
-        command.setRealmRoles(request.getRealmRoles());
-        command.setGroupPaths(request.getGroupPaths());
+        if (request.isRealmRolesSpecified()) {
+            command.setRealmRoles(request.getRealmRoles());
+        } else {
+            command.markRealmRolesUnspecified();
+        }
+        if (request.isGroupPathsSpecified()) {
+            command.setGroupPaths(request.getGroupPaths());
+        } else {
+            command.markGroupPathsUnspecified();
+        }
         command.setEnabled(request.getEnabled() == null ? Boolean.TRUE : request.getEnabled());
         command.setReason(request.getReason());
         command.setAttributes(request.getAttributes());

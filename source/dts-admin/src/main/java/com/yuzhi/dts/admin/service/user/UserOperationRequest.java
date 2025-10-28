@@ -17,6 +17,8 @@ public class UserOperationRequest {
     private Boolean enabled;
     private String reason;
     private Map<String, List<String>> attributes = new HashMap<>();
+    private boolean realmRolesSpecified;
+    private boolean groupPathsSpecified;
 
     public String getUsername() {
         return username;
@@ -63,7 +65,17 @@ public class UserOperationRequest {
     }
 
     public void setRealmRoles(List<String> realmRoles) {
+        this.realmRolesSpecified = true;
         this.realmRoles = filterDefaultRoles(realmRoles);
+    }
+
+    public boolean isRealmRolesSpecified() {
+        return realmRolesSpecified;
+    }
+
+    public void markRealmRolesUnspecified() {
+        this.realmRolesSpecified = false;
+        this.realmRoles = new ArrayList<>();
     }
 
     public List<String> getGroupPaths() {
@@ -71,7 +83,17 @@ public class UserOperationRequest {
     }
 
     public void setGroupPaths(List<String> groupPaths) {
+        this.groupPathsSpecified = true;
         this.groupPaths = groupPaths == null ? new ArrayList<>() : groupPaths;
+    }
+
+    public boolean isGroupPathsSpecified() {
+        return groupPathsSpecified;
+    }
+
+    public void markGroupPathsUnspecified() {
+        this.groupPathsSpecified = false;
+        this.groupPaths = new ArrayList<>();
     }
 
     public Boolean getEnabled() {

@@ -334,6 +334,16 @@ export default function AdminDataSourcesView() {
 	const handleKeytabUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
 		if (!file) return;
+		if (file.name.includes("机密")) {
+			toast.error("本模块是非密模块，请勿处理机密数据！");
+			form.setError("keytabBase64", { message: "文件名包含“机密”，已拒绝上传" });
+			try {
+				event.target.value = "";
+			} catch {
+				// ignore
+			}
+			return;
+		}
 		if (file.size > 2 * 1024 * 1024) {
 			form.setError("keytabBase64", { message: "Keytab 文件过大（>2MB）" });
 			return;
@@ -355,6 +365,16 @@ export default function AdminDataSourcesView() {
 	const handleKrb5Upload = async (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
 		if (!file) return;
+		if (file.name.includes("机密")) {
+			toast.error("本模块是非密模块，请勿处理机密数据！");
+			form.setError("krb5Conf", { message: "文件名包含“机密”，已拒绝上传" });
+			try {
+				event.target.value = "";
+			} catch {
+				// ignore
+			}
+			return;
+		}
 		if (file.size > 256 * 1024) {
 			form.setError("krb5Conf", { message: "krb5.conf 文件过大（>256KB）" });
 			return;
@@ -455,6 +475,10 @@ export default function AdminDataSourcesView() {
 
 	return (
 		<div className="space-y-4">
+			<div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+				<Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+				<span className="text-center">非密模块禁止处理涉密数据</span>
+			</div>
 			<Form {...form}>
 				<form onSubmit={onSubmit} className="space-y-4">
 					<Card>

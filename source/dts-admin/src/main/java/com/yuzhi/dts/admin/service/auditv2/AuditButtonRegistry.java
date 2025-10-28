@@ -40,6 +40,42 @@ public class AuditButtonRegistry {
         register(
             map,
             new AuditButtonMetadata(
+                ButtonCodes.DATA_SOURCE_REFRESH,
+                "system-admin",
+                "基础设施",
+                "ADMIN_DATA_SOURCE_REFRESH",
+                "刷新数据源注册信息",
+                AuditOperationKind.EXECUTE,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.DATA_SOURCE_CREATE,
+                "system-admin",
+                "基础设施",
+                "ADMIN_DATA_SOURCE_CREATE",
+                "新增数据源",
+                AuditOperationKind.CREATE,
+                false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.DATA_SOURCE_DELETE,
+                "system-admin",
+                "基础设施",
+                "ADMIN_DATA_SOURCE_DELETE",
+                "删除数据源",
+                AuditOperationKind.DELETE,
+                false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
                 ButtonCodes.CHANGE_REQUEST_SUBMIT,
                 "system-admin",
                 "系统管理",

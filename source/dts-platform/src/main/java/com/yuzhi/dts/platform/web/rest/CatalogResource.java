@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.domain.catalog.*;
 import com.yuzhi.dts.platform.repository.catalog.*;
@@ -333,9 +334,29 @@ public class CatalogResource {
         applyOwnerDepartmentPolicy(dataset, null, false);
         ensurePrimarySourceIfRequired(dataset);
         ensureDatasetEditPermission(dataset);
-        CatalogDataset saved = datasetRepo.save(dataset);
-        audit.audit("CREATE", "catalog.dataset", saved.getId().toString());
-        return ApiResponses.ok(saved);
+        Map<String, Object> before = java.util.Collections.emptyMap();
+        Map<String, Object> attempted = datasetSnapshot(dataset);
+        try {
+            CatalogDataset saved = datasetRepo.save(dataset);
+            Map<String, Object> after = datasetSnapshot(saved);
+            audit.auditAction(
+                "CATALOG_ASSET_CREATE",
+                AuditStage.SUCCESS,
+                saved.getId().toString(),
+                datasetChangePayload("新增数据资产：" + displayName(saved), before, after)
+            );
+            return ApiResponses.ok(saved);
+        } catch (RuntimeException ex) {
+            Map<String, Object> failureAfter = new LinkedHashMap<>(attempted);
+            failureAfter.put("error", sanitize(ex.getMessage()));
+            audit.auditAction(
+                "CATALOG_ASSET_CREATE",
+                AuditStage.FAIL,
+                attempted.containsKey("id") ? String.valueOf(attempted.get("id")) : "",
+                datasetChangePayload("新增数据资产失败：" + attempted.getOrDefault("name", ""), before, failureAfter)
+            );
+            throw ex;
+        }
     }
 
     @PostMapping("/datasets/import")
@@ -360,28 +381,136 @@ public class CatalogResource {
     public ApiResponse<CatalogDataset> updateDataset(@PathVariable UUID id, @Valid @RequestBody CatalogDataset patch) {
         CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
         ensureDatasetEditPermission(existing);
-        String previousOwnerDept = existing.getOwnerDept();
-        existing.setName(patch.getName());
-        existing.setType(patch.getType());
-        // Keep dataset type normalization, but do not hard-require primary source when updating
-        // so that metadata changes（如 ownerDept）可以在缺少 Hive/Inceptor 的环境下保存。
-        // Connectivity will still be enforced at execution time
-        // (e.g., preview/sync operations).
-        applySourcePolicy(existing);
-        existing.setClassification(patch.getClassification());
-        normalizeClassification(existing);
-        existing.setOwnerDept(patch.getOwnerDept());
-        applyOwnerDepartmentPolicy(existing, previousOwnerDept, true);
-        existing.setOwner(patch.getOwner());
-        existing.setDomain(patch.getDomain());
-        existing.setHiveDatabase(patch.getHiveDatabase());
-        existing.setHiveTable(patch.getHiveTable());
-        existing.setTrinoCatalog(patch.getTrinoCatalog());
-        existing.setTags(patch.getTags());
-        existing.setExposedBy(patch.getExposedBy());
-        CatalogDataset saved = datasetRepo.save(existing);
-        audit.audit("UPDATE", "catalog.dataset", id.toString());
-        return ApiResponses.ok(saved);
+        Map<String, Object> before = datasetSnapshot(existing);
+        try {
+            String previousOwnerDept = existing.getOwnerDept();
+            existing.setName(patch.getName());
+            existing.setType(patch.getType());
+            // Keep dataset type normalization, but do not hard-require primary source when updating
+            // so that metadata changes（如 ownerDept）可以在缺少 Hive/Inceptor 的环境下保存。
+            // Connectivity will still be enforced at execution time
+            // (e.g., preview/sync operations).
+            applySourcePolicy(existing);
+            existing.setClassification(patch.getClassification());
+            normalizeClassification(existing);
+            existing.setOwnerDept(patch.getOwnerDept());
+            applyOwnerDepartmentPolicy(existing, previousOwnerDept, true);
+            existing.setOwner(patch.getOwner());
+            existing.setDomain(patch.getDomain());
+            existing.setHiveDatabase(patch.getHiveDatabase());
+            existing.setHiveTable(patch.getHiveTable());
+            existing.setTrinoCatalog(patch.getTrinoCatalog());
+            existing.setTags(patch.getTags());
+            existing.setExposedBy(patch.getExposedBy());
+            CatalogDataset saved = datasetRepo.save(existing);
+            Map<String, Object> after = datasetSnapshot(saved);
+            audit.auditAction(
+                "CATALOG_ASSET_EDIT",
+                AuditStage.SUCCESS,
+                id.toString(),
+                datasetChangePayload("修改数据资产：" + displayName(saved), before, after)
+            );
+            return ApiResponses.ok(saved);
+        } catch (RuntimeException ex) {
+            audit.auditAction(
+                "CATALOG_ASSET_EDIT",
+                AuditStage.FAIL,
+                id.toString(),
+                datasetChangePayload("修改数据资产失败：" + displayName(existing), before, Map.of("error", sanitize(ex.getMessage())))
+            );
+            throw ex;
+        }
+    }
+
+    private Map<String, Object> datasetChangePayload(String summary, Map<String, Object> before, Map<String, Object> after) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (StringUtils.hasText(summary)) {
+            payload.put("summary", summary);
+        }
+        payload.put("resourceType", "CATALOG_DATASET");
+        if (before != null && !before.isEmpty()) {
+            payload.put("before", before);
+        }
+        if (after != null && !after.isEmpty()) {
+            payload.put("after", after);
+        }
+        Object targetId = after != null && after.containsKey("id")
+            ? after.get("id")
+            : before != null ? before.get("id") : null;
+        if (targetId != null) {
+            payload.put("targetId", targetId);
+        }
+        String resourceName = null;
+        if (after != null && after.get("name") instanceof String afterName && StringUtils.hasText(afterName)) {
+            resourceName = afterName.trim();
+        } else if (before != null && before.get("name") instanceof String beforeName && StringUtils.hasText(beforeName)) {
+            resourceName = beforeName.trim();
+        }
+        if (StringUtils.hasText(resourceName)) {
+            payload.put("resourceName", resourceName);
+            payload.put("targetName", resourceName);
+        }
+        return payload;
+    }
+
+    private Map<String, Object> datasetSnapshot(CatalogDataset dataset) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        if (dataset == null) {
+            return snapshot;
+        }
+        if (dataset.getId() != null) {
+            snapshot.put("id", dataset.getId().toString());
+        }
+        if (StringUtils.hasText(dataset.getName())) {
+            snapshot.put("name", dataset.getName());
+        }
+        if (dataset.getDomain() != null) {
+            CatalogDomain domain = dataset.getDomain();
+            if (domain.getId() != null) {
+                snapshot.put("domainId", domain.getId().toString());
+            }
+            if (StringUtils.hasText(domain.getName())) {
+                snapshot.put("domainName", domain.getName());
+            }
+        }
+        if (StringUtils.hasText(dataset.getType())) {
+            snapshot.put("type", dataset.getType());
+        }
+        if (StringUtils.hasText(dataset.getClassification())) {
+            snapshot.put("classification", dataset.getClassification());
+        }
+        if (StringUtils.hasText(dataset.getOwnerDept())) {
+            snapshot.put("ownerDept", dataset.getOwnerDept());
+        }
+        if (StringUtils.hasText(dataset.getOwner())) {
+            snapshot.put("owner", dataset.getOwner());
+        }
+        if (StringUtils.hasText(dataset.getHiveDatabase())) {
+            snapshot.put("hiveDatabase", dataset.getHiveDatabase());
+        }
+        if (StringUtils.hasText(dataset.getHiveTable())) {
+            snapshot.put("hiveTable", dataset.getHiveTable());
+        }
+        if (StringUtils.hasText(dataset.getTags())) {
+            snapshot.put("tags", dataset.getTags());
+        }
+        if (StringUtils.hasText(dataset.getExposedBy())) {
+            snapshot.put("exposedBy", dataset.getExposedBy());
+        }
+        if (StringUtils.hasText(dataset.getTrinoCatalog())) {
+            snapshot.put("trinoCatalog", dataset.getTrinoCatalog());
+        }
+        return snapshot;
+    }
+
+    private String displayName(CatalogDataset dataset) {
+        if (dataset == null) {
+            return "";
+        }
+        if (StringUtils.hasText(dataset.getName())) {
+            return dataset.getName();
+        }
+        return dataset.getId() != null ? dataset.getId().toString() : "";
     }
 
     private void applyOwnerDepartmentPolicy(CatalogDataset dataset, String previousOwnerDept, boolean enforceNoChangeForNonOp) {
@@ -403,9 +532,27 @@ public class CatalogResource {
     @DeleteMapping("/datasets/{id}")
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteDataset(@PathVariable UUID id) {
-        datasetRepo.deleteById(id);
-        audit.audit("DELETE", "catalog.dataset", id.toString());
-        return ApiResponses.ok(Boolean.TRUE);
+        CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
+        ensureDatasetEditPermission(existing);
+        Map<String, Object> before = datasetSnapshot(existing);
+        try {
+            datasetRepo.delete(existing);
+            audit.auditAction(
+                "CATALOG_ASSET_DELETE",
+                AuditStage.SUCCESS,
+                id.toString(),
+                datasetChangePayload("删除数据资产：" + displayName(existing), before, Map.of("deleted", true))
+            );
+            return ApiResponses.ok(Boolean.TRUE);
+        } catch (RuntimeException ex) {
+            audit.auditAction(
+                "CATALOG_ASSET_DELETE",
+                AuditStage.FAIL,
+                id.toString(),
+                datasetChangePayload("删除数据资产失败：" + displayName(existing), before, Map.of("error", sanitize(ex.getMessage())))
+            );
+            throw ex;
+        }
     }
 
     private void applySourcePolicy(CatalogDataset dataset) {

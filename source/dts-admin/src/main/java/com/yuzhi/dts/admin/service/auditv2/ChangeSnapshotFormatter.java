@@ -157,13 +157,75 @@ public class ChangeSnapshotFormatter {
         map.put("name", FieldMeta.label("数据集名称"));
         map.put("description", FieldMeta.label("数据集描述"));
         map.put("owner", FieldMeta.label("归属人"));
+        map.put("ownerDept", FieldMeta.label("归属部门"));
         map.put("departmentName", FieldMeta.label("归属部门"));
         map.put("securityLevel", FieldMeta.label("访问密级"));
+        map.put("classification", FieldMeta.mapping("数据密级", Map.of(
+            "PUBLIC", "公开",
+            "INTERNAL", "内部",
+            "GENERAL", "一般",
+            "IMPORTANT", "重要",
+            "SECRET", "秘密",
+            "CONFIDENTIAL", "机密",
+            "CORE", "核心",
+            "NON_SECRET", "非密"
+        )));
         map.put("tags", FieldMeta.label("标签"));
+        map.put("domainId", FieldMeta.label("所属数据域ID"));
+        map.put("domainName", FieldMeta.label("所属数据域"));
+        map.put("type", FieldMeta.mapping("数据源类型", Map.of(
+            "HIVE", "Hive",
+            "JDBC", "JDBC",
+            "INCEPTOR", "Inceptor",
+            "FILE", "文件",
+            "API", "API",
+            "VIEW", "视图"
+        )));
+        map.put("hiveDatabase", FieldMeta.label("Hive 库"));
+        map.put("hiveTable", FieldMeta.label("Hive 表"));
+        map.put("trinoCatalog", FieldMeta.label("Trino Catalog"));
+        map.put("exposedBy", FieldMeta.mapping("对外方式", Map.of(
+            "VIEW", "视图",
+            "RANGER", "Ranger 策略",
+            "API", "开放接口"
+        )));
         map.put("enabled", FieldMeta.mapping("启用状态", Map.of(
             "true", "启用",
             "false", "停用"
         )));
+        return map;
+    }
+
+    private Map<String, FieldMeta> dataSourceDictionary() {
+        Map<String, FieldMeta> map = new LinkedHashMap<>();
+        map.put("name", FieldMeta.label("数据源名称"));
+        map.put("type", FieldMeta.label("数据源类型"));
+        map.put("jdbcUrl", FieldMeta.label("JDBC 地址"));
+        map.put("username", FieldMeta.label("连接用户名"));
+        map.put("description", FieldMeta.label("描述"));
+        map.put("props", FieldMeta.label("连接参数"));
+        map.put("status", FieldMeta.mapping("状态", Map.of(
+            "ACTIVE", "可用",
+            "INACTIVE", "不可用",
+            "UNKNOWN", "未知",
+            "DISABLED", "已禁用"
+        )));
+        map.put("hasSecrets", FieldMeta.mapping("包含密钥", Map.of(
+            "true", "是",
+            "false", "否"
+        )));
+        map.put("engineVersion", FieldMeta.label("引擎版本"));
+        map.put("driverVersion", FieldMeta.label("驱动版本"));
+        map.put("lastTestElapsedMillis", FieldMeta.label("最近测试耗时(ms)"));
+        map.put("lastVerifiedAt", FieldMeta.label("最近验证时间"));
+        map.put("lastHeartbeatAt", FieldMeta.label("最近心跳时间"));
+        map.put("heartbeatStatus", FieldMeta.mapping("心跳状态", Map.of(
+            "UP", "正常",
+            "DOWN", "异常",
+            "UNKNOWN", "未知"
+        )));
+        map.put("heartbeatFailureCount", FieldMeta.label("连续失败次数"));
+        map.put("lastError", FieldMeta.label("最新错误信息"));
         return map;
     }
 
@@ -176,6 +238,8 @@ public class ChangeSnapshotFormatter {
         map.put("ROLE", roleDictionary());
         map.put("CUSTOM_ROLE", roleDictionary());
         map.put("CATALOG_DATASET", datasetDictionary());
+        map.put("INFRA_DATA_SOURCE", dataSourceDictionary());
+        map.put("ADMIN_DATA_SOURCE", dataSourceDictionary());
         return map;
     }
 
