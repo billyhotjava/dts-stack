@@ -884,7 +884,7 @@ function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
 	const snapshot = findSnapshot(snapshotLayers);
 	const summaryRows = findSummaryRows(snapshotLayers);
 
-	const diffRows = summaryRows.length > 0
+	const diffRowsRaw = summaryRows.length > 0
 		? summaryRows.map((row) => ({
 				field: row.field,
 				label: row.label,
@@ -894,6 +894,7 @@ function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
 		: snapshot
 			? buildRowsFromSnapshot(snapshot)
 			: [];
+	const diffRows = dedupeDiffRows(diffRowsRaw);
 
 	const before = snapshot?.before ?? (parseRecord(root.before) ?? null);
 	const after = snapshot?.after ?? (parseRecord(root.after) ?? null);
@@ -1028,6 +1029,21 @@ function buildRowsFromSnapshot(snapshot: SnapshotData): DiffRow[] {
 		}
 	}
 	return rows;
+}
+
+function dedupeDiffRows(rows: DiffRow[]): DiffRow[] {
+	const deduped: DiffRow[] = [];
+	const seen = new Set<string>();
+	for (const row of rows) {
+		const fieldKey = (row.field || row.label || "").toLowerCase();
+		const signature = `${fieldKey}|${row.before}|${row.after}`;
+		if (seen.has(signature)) {
+			continue;
+		}
+		seen.add(signature);
+		deduped.push(row);
+	}
+	return deduped;
 }
 
 function collectInfoEntries(

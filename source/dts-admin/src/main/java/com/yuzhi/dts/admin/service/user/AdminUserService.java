@@ -883,7 +883,6 @@ public class AdminUserService {
         ApprovalAuditCollector collector = approvalAuditCollector.get();
         if (collector != null && StringUtils.isNotBlank(changeRequestRef) && stage == AuditStage.SUCCESS) {
             collector.collect(code, stage, normalizedTarget, new LinkedHashMap<>(payload));
-            return;
         }
         recordUserApprovalExecutionV2(actor, code, normalizedTarget, payloadUsername, changeRequestRef, stage, payload);
     }
@@ -1581,6 +1580,9 @@ public class AdminUserService {
                 case "PROCESSING", "PROCESS", "PENDING" -> AuditResultStatus.PENDING;
                 default -> AuditResultStatus.SUCCESS;
             };
+            if (resultStatus == AuditResultStatus.SUCCESS && collector != null && collector.hasData()) {
+                return;
+            }
             String resolvedSummary = org.springframework.util.StringUtils.hasText(summaryText)
                 ? summaryText
                 : buildFallbackApprovalSummary(statusCode, primaryChangeRequestId, approvalId);
