@@ -303,7 +303,7 @@ public class AuditLogResource {
         map.put("action", StringUtils.defaultIfBlank(view.operationName(), view.operationCode()));
         map.put("operationCode", view.operationCode());
         AuditOperationKind kind = view.operationKind();
-        String normalizedCode = normalizeOperationTypeCode(kind);
+        String normalizedCode = normalizeOperationTypeCode(view);
         map.put("operationTypeCode", normalizedCode);
         map.put("operationType", mapOperationTypeLabel(normalizedCode));
         map.put("operationTypeRaw", kind != null ? kind.displayName() : null);
@@ -471,20 +471,34 @@ public class AuditLogResource {
         return "platform".equalsIgnoreCase(StringUtils.trimToEmpty(sourceSystem)) ? "业务端审计" : "管理端审计";
     }
 
-    private String normalizeOperationTypeCode(AuditOperationKind kind) {
-        if (kind == null) {
-            return "QUERY";
+    private String normalizeOperationTypeCode(AuditEntryView view) {
+        AuditOperationKind kind = view.operationKind();
+        if (kind == AuditOperationKind.CREATE || kind == AuditOperationKind.UPDATE || kind == AuditOperationKind.DELETE) {
+            return kind.code();
         }
-        if (kind == AuditOperationKind.CREATE) {
-            return "CREATE";
+        String httpMethod = Optional.ofNullable(view.httpMethod()).orElse("").trim().toUpperCase(Locale.ROOT);
+        if ("DELETE".equals(httpMethod)) {
+            return AuditOperationKind.DELETE.code();
         }
-        if (kind == AuditOperationKind.DELETE) {
-            return "DELETE";
+        if ("POST".equals(httpMethod)) {
+            return AuditOperationKind.CREATE.code();
         }
-        if (kind == AuditOperationKind.UPDATE) {
-            return "UPDATE";
+        if ("PUT".equals(httpMethod) || "PATCH".equals(httpMethod)) {
+            return AuditOperationKind.UPDATE.code();
         }
-        return "QUERY";
+        String operationCode = Optional.ofNullable(view.operationCode()).orElse("").toUpperCase(Locale.ROOT);
+        String operationName = Optional.ofNullable(view.operationName()).orElse("").toUpperCase(Locale.ROOT);
+        String summary = Optional.ofNullable(view.summary()).orElse("").toUpperCase(Locale.ROOT);
+        if (operationCode.contains("DELETE") || operationName.contains("DELETE") || summary.contains("删除")) {
+            return AuditOperationKind.DELETE.code();
+        }
+        if (operationCode.contains("CREATE") || operationName.contains("CREATE") || summary.contains("新增")) {
+            return AuditOperationKind.CREATE.code();
+        }
+        if (operationCode.contains("UPDATE") || operationName.contains("UPDATE") || summary.contains("修改")) {
+            return AuditOperationKind.UPDATE.code();
+        }
+        return AuditOperationKind.QUERY.code();
     }
 
     private String mapOperationTypeLabel(String normalizedCode) {

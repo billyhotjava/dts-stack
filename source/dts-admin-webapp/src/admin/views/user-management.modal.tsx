@@ -891,13 +891,17 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 													!isReservedBusinessRoleName(role.name) &&
 													!isKeycloakBuiltInRole(role);
 												return (
-													<Badge key={roleKey(role)} variant={resolveRoleBadgeVariant(role.name)}>
-														{displayRoleName(role.name)}
+													<Badge
+														key={roleKey(role)}
+														variant={resolveRoleBadgeVariant(role.name)}
+														className="flex items-center gap-1 bg-primary text-primary-foreground"
+													>
+														<span className="text-primary-foreground">{displayRoleName(role.name)}</span>
 														{allowRemoval && (
 															<Button
 																variant="ghost"
 																size="sm"
-																className="ml-1 h-4 w-4 p-0"
+																className="h-4 w-4 p-0 text-primary-foreground hover:bg-primary/40"
 																onClick={() => handleRoleToggle(role)}
 															>
 																<Icon icon="mdi:close" size={12} />

@@ -245,6 +245,24 @@ public class AdminApiResource {
         "IMPORTANT", "CONFIDENTIAL",
         "CORE", "CONFIDENTIAL"
     );
+    private static final Map<String, String> MENU_DATA_LEVEL_LABELS = Map.of(
+        "PUBLIC", "公开",
+        "NON_SECRET", "非密",
+        "GENERAL", "一般",
+        "INTERNAL", "内部",
+        "IMPORTANT", "重要",
+        "SECRET", "秘密",
+        "CONFIDENTIAL", "机密",
+        "CORE", "核心"
+    );
+    private static final Map<String, String> MENU_SECURITY_LEVEL_LABELS = Map.of(
+        "NON_SECRET", "非密",
+        "PUBLIC", "公开",
+        "GENERAL", "一般",
+        "INTERNAL", "内部",
+        "IMPORTANT", "重要",
+        "CORE", "核心"
+    );
     // Tighten default visibility: ROLE_USER is non-binding and should not be added by default
     private static final List<String> DEFAULT_PORTAL_ROLES = List.of(AuthoritiesConstants.OP_ADMIN);
     private static final Set<String> RESERVED_REALM_ROLES = Set.of("SYSADMIN", "OPADMIN", "AUTHADMIN", "AUDITADMIN");
@@ -4005,11 +4023,27 @@ public class AdminApiResource {
         if (detail == null) {
             return;
         }
-        List<Map<String, String>> summary = changeSnapshotFormatter.format(before, after, resourceType);
-        if (summary.isEmpty()) {
+
+        List<Map<String, String>> summaryEntries = new ArrayList<>();
+        if (changeSnapshotFormatter != null) {
+            summaryEntries.addAll(changeSnapshotFormatter.format(before, after, resourceType));
+        }
+
+        if ("PORTAL_MENU".equalsIgnoreCase(resourceType)) {
+            MenuChangeSummaryResult menuSummary = buildPortalMenuSummary(before, after);
+            if (!menuSummary.menuChanges().isEmpty()) {
+                mergeMenuChanges(detail, menuSummary.menuChanges());
+            }
+            if (!menuSummary.summaryLines().isEmpty()) {
+                summaryEntries.addAll(menuSummary.summaryLines());
+            }
+        }
+
+        if (summaryEntries.isEmpty()) {
             return;
         }
-        detail.put("changeSummary", summary);
+        mergeChangeSummary(detail, summaryEntries);
+
         if (!detail.containsKey("changeSnapshot")) {
             ChangeSnapshot snapshot = ChangeSnapshot.of(before, after);
             if (snapshot.hasChanges() || !snapshot.getBefore().isEmpty() || !snapshot.getAfter().isEmpty()) {
@@ -4017,6 +4051,394 @@ public class AdminApiResource {
             }
         }
     }
+
+    private void mergeMenuChanges(Map<String, Object> detail, List<Map<String, Object>> additions) {
+        if (CollectionUtils.isEmpty(additions)) {
+            return;
+        }
+        List<Map<String, Object>> merged = new ArrayList<>();
+        Object existing = detail.get("menuChanges");
+        if (existing instanceof Collection<?> col) {
+            for (Object item : col) {
+                if (item instanceof Map<?, ?> map) {
+                    merged.add(new LinkedHashMap<>((Map<String, Object>) map));
+                }
+            }
+        }
+        merged.addAll(additions);
+        detail.put("menuChanges", merged);
+    }
+
+    private void mergeChangeSummary(Map<String, Object> detail, List<Map<String, String>> additions) {
+        if (CollectionUtils.isEmpty(additions)) {
+            return;
+        }
+        List<Map<String, String>> merged = new ArrayList<>();
+        Object existing = detail.get("changeSummary");
+        if (existing instanceof Collection<?> col) {
+            for (Object item : col) {
+                if (item instanceof Map<?, ?> map) {
+                    merged.add(new LinkedHashMap<>((Map<String, String>) map));
+                }
+            }
+        }
+        merged.addAll(additions);
+        detail.put("changeSummary", merged);
+    }
+
+    private MenuChangeSummaryResult buildPortalMenuSummary(Map<String, Object> before, Map<String, Object> after) {
+        MenuChangeSummaryResult result = new MenuChangeSummaryResult();
+        Map<String, Object> beforeMap = before == null ? Map.of() : before;
+        Map<String, Object> afterMap = after == null ? Map.of() : after;
+
+        LinkedHashSet<String> beforeRoles = extractMenuRoles(beforeMap);
+        LinkedHashSet<String> afterRoles = extractMenuRoles(afterMap);
+
+        List<String> addedRoles = new ArrayList<>();
+        for (String role : afterRoles) {
+            if (!beforeRoles.contains(role)) {
+                addedRoles.add(displayRoleCode(role));
+            }
+        }
+        List<String> removedRoles = new ArrayList<>();
+        for (String role : beforeRoles) {
+            if (!afterRoles.contains(role)) {
+                removedRoles.add(displayRoleCode(role));
+            }
+        }
+
+        LinkedHashSet<String> beforePermissions = extractMenuPermissions(beforeMap);
+        LinkedHashSet<String> afterPermissions = extractMenuPermissions(afterMap);
+        List<String> addedPermissions = new ArrayList<>();
+        for (String perm : afterPermissions) {
+            if (!beforePermissions.contains(perm)) {
+                addedPermissions.add(perm);
+            }
+        }
+        List<String> removedPermissions = new ArrayList<>();
+        for (String perm : beforePermissions) {
+            if (!afterPermissions.contains(perm)) {
+                removedPermissions.add(perm);
+            }
+        }
+
+        LinkedHashSet<VisibilityRuleKey> beforeRules = extractMenuVisibilityRules(beforeMap);
+        LinkedHashSet<VisibilityRuleKey> afterRules = extractMenuVisibilityRules(afterMap);
+        List<VisibilityRuleKey> addedRuleKeys = new ArrayList<>();
+        for (VisibilityRuleKey key : afterRules) {
+            if (!beforeRules.contains(key)) {
+                addedRuleKeys.add(key);
+            }
+        }
+        List<VisibilityRuleKey> removedRuleKeys = new ArrayList<>();
+        for (VisibilityRuleKey key : beforeRules) {
+            if (!afterRules.contains(key)) {
+                removedRuleKeys.add(key);
+            }
+        }
+
+        String beforeMaxLevel = normalizeMenuLevel(beforeMap.get("maxDataLevel"), true);
+        String afterMaxLevel = normalizeMenuLevel(afterMap.get("maxDataLevel"), true);
+        boolean maxLevelChanged = !Objects.equals(beforeMaxLevel, afterMaxLevel);
+
+        String beforeSecurity = normalizeMenuLevel(beforeMap.get("securityLevel"), false);
+        String afterSecurity = normalizeMenuLevel(afterMap.get("securityLevel"), false);
+        boolean securityChanged = !Objects.equals(beforeSecurity, afterSecurity);
+
+        boolean beforeDeleted = toBoolean(beforeMap.get("deleted"));
+        boolean afterDeleted = toBoolean(afterMap.get("deleted"));
+        boolean statusChanged = (beforeMap.containsKey("deleted") || afterMap.containsKey("deleted")) && beforeDeleted != afterDeleted;
+
+        if (
+            addedRoles.isEmpty() &&
+            removedRoles.isEmpty() &&
+            addedPermissions.isEmpty() &&
+            removedPermissions.isEmpty() &&
+            addedRuleKeys.isEmpty() &&
+            removedRuleKeys.isEmpty() &&
+            !maxLevelChanged &&
+            !securityChanged &&
+            !statusChanged
+        ) {
+            return result;
+        }
+
+        String menuId = stringValue(afterMap.get("id"));
+        if (!StringUtils.hasText(menuId)) {
+            menuId = stringValue(beforeMap.get("id"));
+        }
+        String menuName = firstNonBlank(
+            stringValue(afterMap.get("name")),
+            stringValue(beforeMap.get("name")),
+            stringValue(afterMap.get("path")),
+            stringValue(beforeMap.get("path")),
+            menuId
+        );
+
+        Map<String, Object> entry = new LinkedHashMap<>();
+        if (StringUtils.hasText(menuId)) {
+            entry.put("menuId", menuId);
+        }
+        if (StringUtils.hasText(menuName)) {
+            entry.put("menuName", menuName);
+        }
+        if (!addedRoles.isEmpty()) {
+            entry.put("addedRoles", addedRoles);
+        }
+        if (!removedRoles.isEmpty()) {
+            entry.put("removedRoles", removedRoles);
+        }
+        if (!addedPermissions.isEmpty()) {
+            entry.put("addedPermissions", addedPermissions);
+        }
+        if (!removedPermissions.isEmpty()) {
+            entry.put("removedPermissions", removedPermissions);
+        }
+        if (!addedRuleKeys.isEmpty()) {
+            entry.put("addedRules", addedRuleKeys.stream().map(this::toRuleDetail).toList());
+        }
+        if (!removedRuleKeys.isEmpty()) {
+            entry.put("removedRules", removedRuleKeys.stream().map(this::toRuleDetail).toList());
+        }
+        if (maxLevelChanged) {
+            entry.put("maxDataLevelBefore", beforeMaxLevel);
+            entry.put("maxDataLevelAfter", afterMaxLevel);
+            entry.put("maxDataLevelBeforeLabel", labelForMenuLevel(beforeMaxLevel, null));
+            entry.put("maxDataLevelAfterLabel", labelForMenuLevel(afterMaxLevel, null));
+        }
+        if (securityChanged) {
+            entry.put("securityLevelBefore", beforeSecurity);
+            entry.put("securityLevelAfter", afterSecurity);
+            entry.put("securityLevelBeforeLabel", labelForSecurityLevel(beforeSecurity, null));
+            entry.put("securityLevelAfterLabel", labelForSecurityLevel(afterSecurity, null));
+        }
+        if (statusChanged) {
+            entry.put("deletedBefore", beforeDeleted);
+            entry.put("deletedAfter", afterDeleted);
+            entry.put("statusBeforeLabel", beforeDeleted ? "禁用" : "启用");
+            entry.put("statusAfterLabel", afterDeleted ? "禁用" : "启用");
+        }
+        result.menuChanges().add(entry);
+
+        List<String> summaryParts = new ArrayList<>();
+        if (!addedRoles.isEmpty()) {
+            summaryParts.add("新增角色：" + formatRoleList(addedRoles));
+        }
+        if (!removedRoles.isEmpty()) {
+            summaryParts.add("移除角色：" + formatRoleList(removedRoles));
+        }
+        if (!addedPermissions.isEmpty()) {
+            summaryParts.add("新增权限：" + String.join("、", addedPermissions));
+        }
+        if (!removedPermissions.isEmpty()) {
+            summaryParts.add("移除权限：" + String.join("、", removedPermissions));
+        }
+        if (!addedRuleKeys.isEmpty()) {
+            summaryParts.add("新增规则：" + formatRoleList(addedRuleKeys.stream().map(this::formatRuleLabel).toList()));
+        }
+        if (!removedRuleKeys.isEmpty()) {
+            summaryParts.add("移除规则：" + formatRoleList(removedRuleKeys.stream().map(this::formatRuleLabel).toList()));
+        }
+        if (maxLevelChanged) {
+            summaryParts.add("最大数据密级：" + labelForMenuLevel(beforeMaxLevel, "未设置") + " → " + labelForMenuLevel(afterMaxLevel, "未设置"));
+        }
+        if (securityChanged) {
+            summaryParts.add("访问密级：" + labelForSecurityLevel(beforeSecurity, "未设置") + " → " + labelForSecurityLevel(afterSecurity, "未设置"));
+        }
+        if (statusChanged) {
+            summaryParts.add("状态：" + (beforeDeleted ? "禁用" : "启用") + " → " + (afterDeleted ? "禁用" : "启用"));
+        }
+
+        if (!summaryParts.isEmpty()) {
+            String menuLabel = StringUtils.hasText(menuName) ? menuName : (StringUtils.hasText(menuId) ? "菜单#" + menuId : "菜单");
+            String summaryText = "菜单「" + menuLabel + "」：" + String.join("；", summaryParts);
+            Map<String, String> summaryLine = new LinkedHashMap<>();
+            summaryLine.put("field", StringUtils.hasText(menuId) ? "menu#" + menuId : "menuChanges");
+            summaryLine.put("label", menuLabel);
+            summaryLine.put("before", "");
+            summaryLine.put("after", summaryText);
+            result.summaryLines().add(summaryLine);
+        }
+
+        return result;
+    }
+
+    private LinkedHashSet<String> extractMenuRoles(Map<String, Object> payload) {
+        LinkedHashSet<String> roles = new LinkedHashSet<>();
+        if (payload == null) {
+            return roles;
+        }
+        Object raw = payload.get("allowedRoles");
+        if (raw instanceof Collection<?> collection) {
+            for (Object item : collection) {
+                String normalized = normalizeRoleCode(item);
+                if (StringUtils.hasText(normalized)) {
+                    roles.add(normalized);
+                }
+            }
+        } else if (raw != null) {
+            String normalized = normalizeRoleCode(raw);
+            if (StringUtils.hasText(normalized)) {
+                roles.add(normalized);
+            }
+        }
+        if (roles.isEmpty()) {
+            for (VisibilityRuleKey key : extractMenuVisibilityRules(payload)) {
+                if (StringUtils.hasText(key.role())) {
+                    roles.add("ROLE_" + key.role());
+                }
+            }
+        }
+        return roles;
+    }
+
+    private LinkedHashSet<String> extractMenuPermissions(Map<String, Object> payload) {
+        LinkedHashSet<String> permissions = new LinkedHashSet<>();
+        if (payload == null) {
+            return permissions;
+        }
+        Object raw = payload.get("allowedPermissions");
+        if (raw instanceof Collection<?> collection) {
+            for (Object item : collection) {
+                if (item != null) {
+                    String text = item.toString().trim();
+                    if (!text.isEmpty()) {
+                        permissions.add(text);
+                    }
+                }
+            }
+        } else if (raw != null) {
+            String text = raw.toString().trim();
+            if (!text.isEmpty()) {
+                permissions.add(text);
+            }
+        }
+        if (permissions.isEmpty()) {
+            for (VisibilityRuleKey key : extractMenuVisibilityRules(payload)) {
+                if (StringUtils.hasText(key.permission())) {
+                    permissions.add(key.permission());
+                }
+            }
+        }
+        return permissions;
+    }
+
+    private LinkedHashSet<VisibilityRuleKey> extractMenuVisibilityRules(Map<String, Object> payload) {
+        LinkedHashSet<VisibilityRuleKey> rules = new LinkedHashSet<>();
+        if (payload == null) {
+            return rules;
+        }
+        Object raw = payload.get("visibilityRules");
+        if (!(raw instanceof Collection<?> collection)) {
+            return rules;
+        }
+        for (Object item : collection) {
+            if (!(item instanceof Map<?, ?> map)) {
+                continue;
+            }
+            String normalizedRole = normalizeRoleCode(map.get("role"));
+            if (!StringUtils.hasText(normalizedRole)) {
+                continue;
+            }
+            String permission = map.get("permission") == null ? null : map.get("permission").toString().trim();
+            if (StringUtils.hasText(permission)) {
+                permission = permission;
+            } else {
+                permission = null;
+            }
+            String dataLevel = normalizeMenuLevel(map.get("dataLevel"), true);
+            rules.add(new VisibilityRuleKey(stripRolePrefix(normalizedRole), permission, dataLevel));
+        }
+        return rules;
+    }
+
+    private Map<String, Object> toRuleDetail(VisibilityRuleKey key) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("role", displayRoleCode(key.role()));
+        if (StringUtils.hasText(key.permission())) {
+            map.put("permission", key.permission());
+        }
+        if (StringUtils.hasText(key.dataLevel())) {
+            map.put("dataLevel", key.dataLevel());
+            map.put("dataLevelLabel", labelForMenuLevel(key.dataLevel(), key.dataLevel()));
+        }
+        return map;
+    }
+
+    private String formatRuleLabel(VisibilityRuleKey key) {
+        StringBuilder sb = new StringBuilder(displayRoleCode(key.role()));
+        List<String> attrs = new ArrayList<>();
+        if (StringUtils.hasText(key.permission())) {
+            attrs.add("权限: " + key.permission());
+        }
+        if (StringUtils.hasText(key.dataLevel())) {
+            attrs.add("密级: " + labelForMenuLevel(key.dataLevel(), key.dataLevel()));
+        }
+        if (!attrs.isEmpty()) {
+            sb.append("【").append(String.join("，", attrs)).append("】");
+        }
+        return sb.toString();
+    }
+
+    private String formatRoleList(List<String> roles) {
+        return roles.stream().filter(StringUtils::hasText).collect(Collectors.joining("、"));
+    }
+
+    private String displayRoleCode(String role) {
+        if (!StringUtils.hasText(role)) {
+            return role;
+        }
+        String canonical = stripRolePrefix(role);
+        if (!StringUtils.hasText(canonical)) {
+            canonical = role.trim().replace('-', '_').toUpperCase(Locale.ROOT);
+        }
+        return "ROLE_" + canonical;
+    }
+
+    private String normalizeMenuLevel(Object value, boolean applyAlias) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        String normalized = text.toUpperCase(Locale.ROOT).replace('-', '_');
+        if (applyAlias) {
+            normalized = MENU_DATA_LEVEL_ALIAS.getOrDefault(normalized, normalized);
+        }
+        return normalized;
+    }
+
+    private String labelForMenuLevel(String level, String fallback) {
+        if (!StringUtils.hasText(level)) {
+            return fallback;
+        }
+        return MENU_DATA_LEVEL_LABELS.getOrDefault(level, fallback != null ? fallback : level);
+    }
+
+    private String labelForSecurityLevel(String level, String fallback) {
+        if (!StringUtils.hasText(level)) {
+            return fallback;
+        }
+        return MENU_SECURITY_LEVEL_LABELS.getOrDefault(level, fallback != null ? fallback : level);
+    }
+
+    private static final class MenuChangeSummaryResult {
+
+        private final List<Map<String, Object>> menuChanges = new ArrayList<>();
+        private final List<Map<String, String>> summaryLines = new ArrayList<>();
+
+        List<Map<String, Object>> menuChanges() {
+            return menuChanges;
+        }
+
+        List<Map<String, String>> summaryLines() {
+            return summaryLines;
+        }
+    }
+
+    private record VisibilityRuleKey(String role, String permission, String dataLevel) {}
 
     static String buildChangeActionCode(ChangeRequest cr) {
         if (cr == null) {
