@@ -84,25 +84,24 @@ public class InfraResource {
         @Valid @RequestBody UpsertInfraDataSourcePayload payload
     ) {
         String actor = SecurityUtils.getCurrentUserLogin().orElse("system");
-        Optional<InfraDataSourceDto> updated = infraAdminService.updateDataSource(id, payload, actor);
-        return updated
-            .map(body -> ResponseEntity.ok(ApiResponse.ok(body)))
+        InfraDataSourceDto updated = infraAdminService
+            .updateDataSource(id, payload, actor)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
+        return ResponseEntity.ok(ApiResponse.ok(updated));
     }
 
     @DeleteMapping("/data-sources/{id}")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ResponseEntity<ApiResponse<Boolean>> deleteDataSource(@PathVariable UUID id, HttpServletRequest servletRequest) {
         String actor = SecurityUtils.getCurrentAuditableLogin();
-        Optional<InfraDataSourceDto> removed = infraAdminService.deleteDataSource(id);
-        if (removed.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在");
-        }
+        InfraDataSourceDto removed = infraAdminService
+            .deleteDataSource(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
         recordDataSourceMutationAudit(
             actor,
-            removed.get(),
+            removed,
             null,
-            "删除数据源：" + safeName(removed.get()),
+            "删除数据源：" + safeName(removed),
             ButtonCodes.DATA_SOURCE_DELETE,
             servletRequest
         );

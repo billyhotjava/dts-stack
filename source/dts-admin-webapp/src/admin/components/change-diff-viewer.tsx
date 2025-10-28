@@ -11,18 +11,21 @@ type SnapshotChange = {
 	after?: unknown;
 };
 
+type SnapshotNode = {
+	label?: string;
+	name?: string;
+	displayName?: string;
+	before?: SnapshotRecord | null;
+	after?: SnapshotRecord | null;
+	changes?: SnapshotChange[] | null;
+	items?: SnapshotNode[] | null;
+};
+
 export type ChangeSnapshotLike = {
 	before?: SnapshotRecord | null;
 	after?: SnapshotRecord | null;
 	changes?: SnapshotChange[] | null;
-	items?: Array<{
-		label?: string;
-		name?: string;
-		displayName?: string;
-		before?: SnapshotRecord | null;
-		after?: SnapshotRecord | null;
-		changes?: SnapshotChange[] | null;
-	}>;
+	items?: SnapshotNode[] | null;
 };
 
 export type ChangeSummaryEntry = {
