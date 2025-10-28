@@ -7,6 +7,7 @@ import com.yuzhi.dts.admin.service.auditv2.OperationMappingEngine.RuleSummary;
 import com.yuzhi.dts.admin.service.auditv2.AuditResourceDictionaryService;
 import com.yuzhi.dts.admin.service.auditv2.AuditEntryQueryService;
 import com.yuzhi.dts.admin.service.auditv2.AuditEntryView;
+import com.yuzhi.dts.admin.service.auditv2.AuditEntryTargetView;
 import com.yuzhi.dts.admin.service.auditv2.AuditSearchCriteria;
 import com.yuzhi.dts.admin.service.auditv2.ModuleOption;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
@@ -337,7 +338,7 @@ public class AuditLogResource {
         List<String> targetIds = new ArrayList<>();
         Map<String, String> targetLabels = new LinkedHashMap<>();
         String targetTable = null;
-        for (AuditEntryView.Target target : view.targets()) {
+        for (AuditEntryTargetView target : view.targets()) {
             if (target == null) {
                 continue;
             }

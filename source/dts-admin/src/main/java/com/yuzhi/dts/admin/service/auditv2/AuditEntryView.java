@@ -36,11 +36,9 @@ public record AuditEntryView(
     String httpMethod,
     Map<String, Object> metadata,
     Map<String, Object> extraAttributes,
-    List<Target> targets,
+    List<AuditEntryTargetView> targets,
     Map<String, Object> details
 ) {
-    public record Target(String table, String id, String label) {}
-
     public static AuditEntryView from(AuditEntry entry, boolean includeDetails) {
         if (entry == null) {
             return null;
@@ -50,11 +48,17 @@ public record AuditEntryView(
             ? Map.of()
             : Map.copyOf(entry.getExtraAttributes());
         List<String> roles = entry.getActorRoles() == null ? List.of() : List.copyOf(entry.getActorRoles());
-        List<Target> targets = entry
+        List<AuditEntryTargetView> targets = entry
             .getTargets()
             .stream()
             .sorted(java.util.Comparator.comparingInt(AuditEntryTarget::getPosition))
-            .map(t -> new Target(safeTrim(t.getTargetTable()), safeTrim(t.getTargetId()), safeTrim(t.getTargetLabel())))
+            .map(t ->
+                new AuditEntryTargetView(
+                    safeTrim(t.getTargetTable()),
+                    safeTrim(t.getTargetId()),
+                    safeTrim(t.getTargetLabel())
+                )
+            )
             .toList();
         Map<String, Object> details = includeDetails ? collectDetails(entry) : Map.of();
         return new AuditEntryView(
@@ -130,7 +134,7 @@ public record AuditEntryView(
         return AuditOperationKind.OTHER;
     }
 
-    public Optional<Target> primaryTarget() {
+    public Optional<AuditEntryTargetView> primaryTarget() {
         if (targets == null || targets.isEmpty()) {
             return Optional.empty();
         }

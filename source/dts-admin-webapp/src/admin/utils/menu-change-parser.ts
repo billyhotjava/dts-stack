@@ -157,11 +157,18 @@ function parseMenuChangeList(value: unknown): MenuChangeDisplayEntry[] {
 	for (const item of parsed) {
 		const record = toRecord(item);
 		if (!record) continue;
+		const id = readOptionalString(record["menuId"] ?? record["id"]);
+		const name = readOptionalString(record["menuName"] ?? record["name"]);
+		const title = readOptionalString(record["menuTitle"] ?? record["title"] ?? record["label"]);
+		const path = readOptionalString(record["menuPath"] ?? record["path"] ?? record["route"]);
 		const entry: MenuChangeDisplayEntry = {
-			id: readOptionalString(record["menuId"] ?? record["id"]),
-			name: readOptionalString(record["menuName"] ?? record["name"]),
-			title: readOptionalString(record["menuTitle"] ?? record["title"] ?? record["label"]),
-			path: readOptionalString(record["menuPath"] ?? record["path"] ?? record["route"]),
+			id,
+			name,
+			title,
+			path,
+			menuName: name,
+			menuTitle: title,
+			menuPath: path,
 			allowedRolesBefore: normalizeStringList(record["allowedRolesBefore"]),
 			allowedRolesAfter: normalizeStringList(record["allowedRolesAfter"]),
 			addedRoles: normalizeStringList(record["addedRoles"]),
@@ -290,4 +297,3 @@ function toRecord(value: unknown): PlainRecord | null {
 	}
 	return null;
 }
-

@@ -8,6 +8,9 @@ export interface MenuChangeDisplayEntry {
 	name?: string;
 	title?: string;
 	path?: string;
+	menuName?: string;
+	menuTitle?: string;
+	menuPath?: string;
 	allowedRolesBefore?: string[];
 	allowedRolesAfter?: string[];
 	addedRoles?: string[];
@@ -42,16 +45,19 @@ export function MenuChangeViewer({ entries, className }: MenuChangeViewerProps) 
 		return null;
 }
 
+	const resolveTitle = (entry: MenuChangeDisplayEntry, index: number) =>
+		entry.title ?? entry.menuTitle ?? entry.name ?? entry.menuName ?? entry.path ?? entry.menuPath ?? entry.id ?? `菜单 ${index + 1}`;
+
 	return (
 		<div className={cn("space-y-4", className)}>
 			{entries.map((entry, index) => (
 				<section
-					key={entry.id ?? entry.name ?? entry.title ?? `menu-change-${index}`}
+					key={entry.id ?? entry.name ?? entry.menuName ?? entry.title ?? entry.menuTitle ?? `menu-change-${index}`}
 					className="rounded-md border border-border/60 bg-muted/10"
 				>
 					<header className="border-b border-border/60 bg-muted/30 px-3 py-2">
 						<Text variant="body3" className="font-medium text-foreground">
-							{entry.title ?? entry.name ?? entry.path ?? entry.id ?? `菜单 ${index + 1}`}
+							{resolveTitle(entry, index)}
 						</Text>
 						<Text variant="caption" className="text-muted-foreground">
 							{buildMenuSubtitle(entry)}
@@ -71,11 +77,14 @@ export function MenuChangeViewer({ entries, className }: MenuChangeViewerProps) 
 
 function buildMenuSubtitle(entry: MenuChangeDisplayEntry): string {
 	const parts: string[] = [];
-	if (entry.path) {
-		parts.push(`路径：${entry.path}`);
+	const path = entry.path ?? entry.menuPath;
+	if (path) {
+		parts.push(`路径：${path}`);
 	}
-	if (entry.name && entry.name !== entry.title) {
-		parts.push(`编码：${entry.name}`);
+	const title = entry.title ?? entry.menuTitle;
+	const name = entry.name ?? entry.menuName;
+	if (name && name !== title) {
+		parts.push(`编码：${name}`);
 	}
 	if (entry.id) {
 		parts.push(`ID：${entry.id}`);
