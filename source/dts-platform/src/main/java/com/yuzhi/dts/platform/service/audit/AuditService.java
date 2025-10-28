@@ -7,16 +7,21 @@ import com.yuzhi.dts.common.audit.AuditActionDefinition;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.Instant;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.time.Instant;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -49,6 +54,19 @@ public class AuditService {
     }
 
     private static final Map<String, LegacyActionMapping> LEGACY_ACTIONS = new java.util.HashMap<>();
+    private static final Set<String> ACTOR_HINT_KEYS = Set.of(
+        "username",
+        "user",
+        "operator",
+        "operatorName",
+        "operatorId",
+        "account",
+        "principal",
+        "actor",
+        "login",
+        "owner",
+        "requester"
+    );
 
     static {
         // API catalog actions
@@ -332,8 +350,7 @@ public class AuditService {
         Object payload,
         Map<String, Object> extraTags
     ) {
-        String resolvedActor = StringUtils.hasText(actor) ? actor : "anonymous";
-        submitAuditInternal(resolvedActor, action, module, resourceType, resourceId, result, payload, extraTags, false);
+        submitAuditInternal(actor, action, module, resourceType, resourceId, result, payload, extraTags, false);
     }
 
     private void submitAudit(
@@ -360,8 +377,19 @@ public class AuditService {
         Map<String, Object> extraTags,
         boolean auxiliary
     ) {
-        String safeActor = StringUtils.hasText(actor) ? actor.trim() : "anonymous";
         Map<String, Object> payloadMap = toPayloadMap(payload);
+        String safeActor = resolveActor(actor, payloadMap);
+        if (safeActor == null) {
+            if (log.isDebugEnabled()) {
+                log.debug(
+                    "Skip audit record without resolved actor action={} module={} resourceId={}",
+                    action,
+                    module,
+                    resourceId
+                );
+            }
+            return;
+        }
         Map<String, Object> effectiveExtraTags = extraTags != null ? new java.util.LinkedHashMap<>(extraTags) : null;
         LegacyActionMapping legacyMapping = null;
         AuditActionDefinition legacyDefinition = null;
@@ -493,6 +521,98 @@ public class AuditService {
         } else if (log.isDebugEnabled()) {
             log.debug("AuditTrailService not available; skipping audit record action={} module={} resourceId={}", action, module, resourceId);
         }
+    }
+
+    private String resolveActor(String actor, Map<String, Object> payloadMap) {
+        String primary = sanitizeActorString(actor);
+        if (primary != null) {
+            return primary;
+        }
+        String fromPayload = extractActorFromPayload(payloadMap);
+        if (fromPayload != null) {
+            return fromPayload;
+        }
+        return sanitizeActorString(SecurityUtils.getCurrentUserLogin().orElse(null));
+    }
+
+    private String extractActorFromPayload(Map<String, Object> payloadMap) {
+        if (payloadMap == null || payloadMap.isEmpty()) {
+            return null;
+        }
+        return extractActorFromPayloadInternal(
+            payloadMap,
+            Collections.newSetFromMap(new IdentityHashMap<>())
+        );
+    }
+
+    private String extractActorFromPayloadInternal(Object source, Set<Object> visited) {
+        if (source == null) {
+            return null;
+        }
+        if (source instanceof String s) {
+            return sanitizeActorString(s);
+        }
+        if (source instanceof Map<?, ?> map) {
+            if (!visited.add(map)) {
+                return null;
+            }
+            for (String key : ACTOR_HINT_KEYS) {
+                if (map.containsKey(key)) {
+                    String candidate = extractActorFromPayloadInternal(map.get(key), visited);
+                    if (candidate != null) {
+                        return candidate;
+                    }
+                }
+            }
+            for (Object value : map.values()) {
+                String candidate = extractActorFromPayloadInternal(value, visited);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+        if (source instanceof Collection<?> collection) {
+            if (!visited.add(collection)) {
+                return null;
+            }
+            for (Object value : collection) {
+                String candidate = extractActorFromPayloadInternal(value, visited);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+        if (source.getClass().isArray()) {
+            int length = Array.getLength(source);
+            for (int i = 0; i < length; i++) {
+                String candidate = extractActorFromPayloadInternal(Array.get(source, i), visited);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+        return sanitizeActorString(source.toString());
+    }
+
+    private String sanitizeActorString(String candidate) {
+        if (candidate == null) {
+            return null;
+        }
+        String text = candidate.trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        if (text.startsWith("Bearer ")) {
+            text = text.substring(7).trim();
+        }
+        String lower = text.toLowerCase(Locale.ROOT);
+        if (lower.equals("anonymous") || lower.equals("anonymoususer") || lower.equals("unknown")) {
+            return null;
+        }
+        return text;
     }
 
     private Map<String, Object> toPayloadMap(Object payload) {

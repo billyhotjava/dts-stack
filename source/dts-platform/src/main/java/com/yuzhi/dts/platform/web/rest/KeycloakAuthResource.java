@@ -59,9 +59,7 @@ public class KeycloakAuthResource {
 
         try {
             // audit: login begin
-            java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
-            auditPayload.put("username", username);
-            auditPayload.put("audience", "platform");
+            Map<String, Object> auditPayload = authAuditPayload(username);
             audit.recordAs(
                 username,
                 "AUTH LOGIN",
@@ -107,7 +105,7 @@ public class KeycloakAuthResource {
                     "portal_user",
                     username,
                     "FAILED",
-                    Map.of("audience", "platform", "error", "ACTIVE_SESSION"),
+                    authAuditPayload(username, "error", "ACTIVE_SESSION"),
                     null
                 );
                 return ResponseEntity
@@ -133,7 +131,7 @@ public class KeycloakAuthResource {
                     "portal_user",
                     username,
                     "FAILED",
-                    Map.of("audience", "platform", "error", "ACTIVE_SESSION"),
+                    authAuditPayload(username, "error", "ACTIVE_SESSION"),
                     null
                 );
                 return ResponseEntity
@@ -202,7 +200,7 @@ public class KeycloakAuthResource {
                 "portal_user",
                 username,
                 "SUCCESS",
-                Map.of("audience", "platform", "username", username),
+                authAuditPayload(username),
                 null
             );
             try {
@@ -226,7 +224,7 @@ public class KeycloakAuthResource {
                 "portal_user",
                 username,
                 "FAILED",
-                Map.of("audience", "platform", "username", username, "error", ex.getMessage()),
+                authAuditPayload(username, "error", ex.getMessage()),
                 null
             );
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error(ex.getMessage()));
@@ -240,7 +238,7 @@ public class KeycloakAuthResource {
                 "portal_user",
                 username,
                 "FAILED",
-                Map.of("audience", "platform", "username", username, "error", msg),
+                authAuditPayload(username, "error", msg),
                 null
             );
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
@@ -254,10 +252,9 @@ public class KeycloakAuthResource {
         String requestedActor = payload != null ? sanitizeActor(payload.username()) : null;
         String sessionActor = session != null ? sanitizeActor(session.username()) : null;
         String contextActor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
-        String actor = firstNonBlank(sessionActor, requestedActor, contextActor, "unknown");
+        String actor = firstNonBlank(sessionActor, contextActor, requestedActor, "unknown");
 
-        Map<String, Object> beginPayload = new LinkedHashMap<>();
-        beginPayload.put("hasRefreshToken", StringUtils.hasText(portalRefresh));
+        Map<String, Object> pendingPayload = authAuditPayload(actor, "hasRefreshToken", StringUtils.hasText(portalRefresh));
         audit.recordAs(
             actor,
             "AUTH LOGOUT",
@@ -265,8 +262,8 @@ public class KeycloakAuthResource {
             "portal_user",
             actor,
             "PENDING",
-            beginPayload,
-            Map.of("audience", "platform")
+            pendingPayload,
+            null
         );
 
         boolean revokeFailed = false;
@@ -291,7 +288,7 @@ public class KeycloakAuthResource {
                 "portal_user",
                 actor,
                 "FAILED",
-                Map.of("audience", "platform", "error", revokeError == null ? "LOGOUT_ERROR" : revokeError),
+                authAuditPayload(actor, "error", revokeError == null ? "LOGOUT_ERROR" : revokeError),
                 null
             );
         } else {
@@ -302,7 +299,7 @@ public class KeycloakAuthResource {
                 "portal_user",
                 actor,
                 "SUCCESS",
-                Map.of("audience", "platform"),
+                authAuditPayload(actor),
                 null
             );
         }
@@ -323,10 +320,7 @@ public class KeycloakAuthResource {
 
         try {
             // audit: login begin (pki)
-            java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
-            auditPayload.put("username", username);
-            auditPayload.put("mode", "pki");
-            auditPayload.put("audience", "platform");
+            Map<String, Object> auditPayload = authAuditPayload(username, "mode", "pki");
             audit.recordAs(
                 username,
                 "AUTH LOGIN",
@@ -362,15 +356,15 @@ public class KeycloakAuthResource {
             if (takeover && !sessionRegistry.isTakeoverAllowed()) {
                 log.warn("[pki-login] denied username={} reason=active-session", username);
                 audit.recordAs(
-                    username,
-                    "AUTH LOGIN",
-                    "platform",
-                    "portal_user",
-                    username,
-                    "FAILED",
-                    Map.of("audience", "platform", "mode", "pki", "error", "ACTIVE_SESSION"),
-                    null
-                );
+                username,
+                "AUTH LOGIN",
+                "platform",
+                "portal_user",
+                username,
+                "FAILED",
+                authAuditPayload(username, "mode", "pki", "error", "ACTIVE_SESSION"),
+                null
+            );
            	    return ResponseEntity
                     .status(HttpStatus.CONFLICT)
                     .body(ApiResponses.error("该账号已在其他浏览器登录，请先退出后再尝试"));
@@ -382,15 +376,15 @@ public class KeycloakAuthResource {
             } catch (PortalSessionRegistry.ActiveSessionExistsException ex) {
                 log.warn("[pki-login] denied username={} reason=race-active-session", username);
                 audit.recordAs(
-                    username,
-                    "AUTH LOGIN",
-                    "platform",
-                    "portal_user",
-                    username,
-                    "FAILED",
-                    Map.of("audience", "platform", "mode", "pki", "error", "ACTIVE_SESSION"),
-                    null
-                );
+                username,
+                "AUTH LOGIN",
+                "platform",
+                "portal_user",
+                username,
+                "FAILED",
+                authAuditPayload(username, "mode", "pki", "error", "ACTIVE_SESSION"),
+                null
+            );
                 return ResponseEntity
                     .status(HttpStatus.CONFLICT)
                     .body(ApiResponses.error("该账号已在其他浏览器登录，请先退出后再尝试"));
@@ -435,7 +429,7 @@ public class KeycloakAuthResource {
                 "portal_user",
                 username,
                 "SUCCESS",
-                Map.of("audience", "platform", "mode", "pki"),
+                authAuditPayload(username, "mode", "pki"),
                 null
             );
             return ResponseEntity.ok(ApiResponses.ok(data));
@@ -448,7 +442,7 @@ public class KeycloakAuthResource {
                 "portal_user",
                 username,
                 "FAILED",
-                Map.of("audience", "platform", "mode", "pki", "error", msg),
+                authAuditPayload(username, "mode", "pki", "error", msg),
                 null
             );
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
@@ -466,7 +460,7 @@ public class KeycloakAuthResource {
                 "portal_user",
                 actor,
                 "PENDING",
-                Map.of("audience", "platform"),
+                authAuditPayload(actor),
                 null
             );
         }
@@ -521,7 +515,7 @@ public class KeycloakAuthResource {
                     "portal_user",
                     actor,
                     "SUCCESS",
-                    Map.of("audience", "platform"),
+                    authAuditPayload(actor),
                     null
                 );
             }
@@ -536,7 +530,7 @@ public class KeycloakAuthResource {
                     "portal_user",
                     failureActor,
                     "FAILED",
-                    Map.of("audience", "platform", "error", ex.getMessage()),
+                    authAuditPayload(failureActor, "error", ex.getMessage()),
                     null
                 );
             }
@@ -551,12 +545,33 @@ public class KeycloakAuthResource {
                     "portal_user",
                     failureActor,
                     "FAILED",
-                    Map.of("audience", "platform", "error", ex.getMessage()),
+                    authAuditPayload(failureActor, "error", ex.getMessage()),
                     null
                 );
             }
             return ResponseEntity.status(401).body(ApiResponses.error("会话已过期，请重新登录"));
         }
+    }
+
+    private Map<String, Object> authAuditPayload(String username, Object... kvPairs) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("audience", "platform");
+        if (StringUtils.hasText(username)) {
+            payload.put("username", username.trim());
+        }
+        if (kvPairs != null && kvPairs.length > 0) {
+            if (kvPairs.length % 2 != 0) {
+                throw new IllegalArgumentException("kvPairs length must be even");
+            }
+            for (int i = 0; i < kvPairs.length; i += 2) {
+                Object key = kvPairs[i];
+                Object value = kvPairs[i + 1];
+                if (key != null) {
+                    payload.put(String.valueOf(key), value);
+                }
+            }
+        }
+        return payload;
     }
 
     private String sanitizeActor(String candidate) {

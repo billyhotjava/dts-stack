@@ -190,6 +190,14 @@ public class AdminSessionRegistry {
         repository.findByAccessTokenHash(accessHash).ifPresent(entity -> revoke(entity, reason, null, Instant.now()));
     }
 
+    public Optional<String> resolveUsernameFromAccessToken(String accessToken) {
+        String accessHash = hash(accessToken);
+        if (!StringUtils.hasText(accessHash)) {
+            return Optional.empty();
+        }
+        return repository.findByAccessTokenHash(accessHash).map(AdminSessionEntity::getUsername);
+    }
+
     private void revoke(AdminSessionEntity entity, AdminSessionCloseReason reason, UUID takeoverSessionId, Instant when) {
         if (entity.getRevokedAt() != null) {
             return;

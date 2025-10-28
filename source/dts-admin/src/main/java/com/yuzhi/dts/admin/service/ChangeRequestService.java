@@ -37,6 +37,7 @@ public class ChangeRequestService {
         this.objectMapper = objectMapper;
     }
 
+    @Transactional(noRollbackFor = IllegalStateException.class)
     public ChangeRequest draft(
         String resourceType,
         String action,

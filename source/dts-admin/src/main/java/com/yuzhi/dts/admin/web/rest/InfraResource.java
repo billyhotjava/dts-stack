@@ -2,6 +2,7 @@ package com.yuzhi.dts.admin.web.rest;
 
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
+import com.yuzhi.dts.admin.security.session.AdminSessionRegistry;
 import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
 import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
 import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
@@ -20,14 +21,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,10 +51,16 @@ public class InfraResource {
 
     private final InfraAdminService infraAdminService;
     private final AuditV2Service auditV2Service;
+    private final AdminSessionRegistry adminSessionRegistry;
 
-    public InfraResource(InfraAdminService infraAdminService, AuditV2Service auditV2Service) {
+    public InfraResource(
+        InfraAdminService infraAdminService,
+        AuditV2Service auditV2Service,
+        AdminSessionRegistry adminSessionRegistry
+    ) {
         this.infraAdminService = infraAdminService;
         this.auditV2Service = auditV2Service;
+        this.adminSessionRegistry = adminSessionRegistry;
     }
 
     @GetMapping("/data-sources")
@@ -64,8 +74,8 @@ public class InfraResource {
         @Valid @RequestBody UpsertInfraDataSourcePayload payload,
         HttpServletRequest servletRequest
     ) {
-        String actor = SecurityUtils.getCurrentAuditableLogin();
-        InfraDataSourceDto saved = infraAdminService.createDataSource(payload, actor);
+        ActorResolution actor = resolveActor(servletRequest);
+        InfraDataSourceDto saved = infraAdminService.createDataSource(payload, actor.resolved());
         recordDataSourceMutationAudit(
             actor,
             null,
@@ -81,11 +91,12 @@ public class InfraResource {
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ResponseEntity<ApiResponse<InfraDataSourceDto>> updateDataSource(
         @PathVariable UUID id,
-        @Valid @RequestBody UpsertInfraDataSourcePayload payload
+        @Valid @RequestBody UpsertInfraDataSourcePayload payload,
+        HttpServletRequest servletRequest
     ) {
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("system");
+        ActorResolution actor = resolveActor(servletRequest);
         InfraDataSourceDto updated = infraAdminService
-            .updateDataSource(id, payload, actor)
+            .updateDataSource(id, payload, actor.resolved())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
         return ResponseEntity.ok(ApiResponse.ok(updated));
     }
@@ -93,7 +104,7 @@ public class InfraResource {
     @DeleteMapping("/data-sources/{id}")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ResponseEntity<ApiResponse<Boolean>> deleteDataSource(@PathVariable UUID id, HttpServletRequest servletRequest) {
-        String actor = SecurityUtils.getCurrentAuditableLogin();
+        ActorResolution actor = resolveActor(servletRequest);
         InfraDataSourceDto removed = infraAdminService
             .deleteDataSource(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
@@ -122,9 +133,12 @@ public class InfraResource {
 
     @PostMapping("/data-sources/inceptor/publish")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
-    public ResponseEntity<ApiResponse<InfraDataSourceDto>> publishInceptor(@Valid @RequestBody HiveConnectionPersistRequest request) {
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("system");
-        InfraDataSourceDto saved = infraAdminService.publishInceptor(request, actor);
+    public ResponseEntity<ApiResponse<InfraDataSourceDto>> publishInceptor(
+        @Valid @RequestBody HiveConnectionPersistRequest request,
+        HttpServletRequest servletRequest
+    ) {
+        ActorResolution actor = resolveActor(servletRequest);
+        InfraDataSourceDto saved = infraAdminService.publishInceptor(request, actor.resolved());
         return ResponseEntity.ok(ApiResponse.ok(saved));
     }
 
@@ -135,8 +149,8 @@ public class InfraResource {
             "'" + AuthoritiesConstants.DEPT_DATA_OWNER + "','" + AuthoritiesConstants.DEPT_DATA_DEV + "','" + AuthoritiesConstants.DEPT_DATA_VIEWER + "')"
     )
     public ResponseEntity<ApiResponse<InfraFeatureFlags>> refreshInceptor(HttpServletRequest request) {
-        String actor = SecurityUtils.getCurrentAuditableLogin();
-        InfraFeatureFlags flags = infraAdminService.refreshInceptorRegistry(actor);
+        ActorResolution actor = resolveActor(request);
+        InfraFeatureFlags flags = infraAdminService.refreshInceptorRegistry(actor.resolved());
         recordRefreshAudit(actor, flags, request);
         return ResponseEntity.ok(ApiResponse.ok(flags));
     }
@@ -146,8 +160,8 @@ public class InfraResource {
         return ResponseEntity.ok(ApiResponse.ok(infraAdminService.computeFeatureFlags()));
     }
 
-    private void recordRefreshAudit(String actor, InfraFeatureFlags flags, HttpServletRequest request) {
-        String normalizedActor = SecurityUtils.sanitizeLogin(actor);
+    private void recordRefreshAudit(ActorResolution actor, InfraFeatureFlags flags, HttpServletRequest request) {
+        String normalizedActor = actor.resolved();
         try {
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(normalizedActor, ButtonCodes.DATA_SOURCE_REFRESH)
@@ -157,6 +171,11 @@ public class InfraResource {
                 .result(AuditResultStatus.SUCCESS)
                 .allowEmptyTargets();
             builder.metadata("resourceType", "INFRA_DATA_SOURCE");
+
+            if (actor.overridden()) {
+                builder.metadata("actorOriginal", actor.original());
+                builder.metadata("actorSource", actor.source());
+            }
 
             if (request != null) {
                 String clientIp = IpAddressUtils.resolveClientIp(
@@ -191,14 +210,14 @@ public class InfraResource {
     }
 
     private void recordDataSourceMutationAudit(
-        String actor,
+        ActorResolution actor,
         InfraDataSourceDto before,
         InfraDataSourceDto after,
         String summary,
         String buttonCode,
         HttpServletRequest request
     ) {
-        String normalizedActor = SecurityUtils.sanitizeLogin(actor);
+        String normalizedActor = actor.resolved();
         try {
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(normalizedActor, buttonCode)
@@ -207,6 +226,11 @@ public class InfraResource {
                 .summary(summary)
                 .result(AuditResultStatus.SUCCESS)
                 .metadata("resourceType", "INFRA_DATA_SOURCE");
+
+            if (actor.overridden()) {
+                builder.metadata("actorOriginal", actor.original());
+                builder.metadata("actorSource", actor.source());
+            }
 
             if (request != null) {
                 String clientIp = IpAddressUtils.resolveClientIp(
@@ -262,6 +286,64 @@ public class InfraResource {
         putIfNotNull(snapshot, "heartbeatFailureCount", dto.getHeartbeatFailureCount());
         putIfNotNull(snapshot, "lastError", dto.getLastError());
         return snapshot;
+    }
+
+
+    private ActorResolution resolveActor(HttpServletRequest request) {
+        String raw = SecurityUtils.getCurrentUserLogin().orElse(null);
+        String sanitized = SecurityUtils.sanitizeLogin(raw);
+        String resolved = sanitized;
+        String source = "direct";
+
+        if (needsOverride(resolved) && request != null) {
+            String headerActor = request.getHeader("X-Admin-Actor");
+            if (StringUtils.hasText(headerActor)) {
+                String candidate = SecurityUtils.sanitizeLogin(headerActor);
+                if (!needsOverride(candidate)) {
+                    resolved = candidate;
+                    source = "header";
+                }
+            }
+            if (needsOverride(resolved)) {
+                String bearer = extractBearer(request.getHeader("Authorization"));
+                if (StringUtils.hasText(bearer)) {
+                    Optional<String> sessionActor = adminSessionRegistry.resolveUsernameFromAccessToken(bearer);
+                    if (sessionActor.isPresent()) {
+                        String candidate = SecurityUtils.sanitizeLogin(sessionActor.get());
+                        if (!needsOverride(candidate) || "system".equalsIgnoreCase(resolved)) {
+                            resolved = candidate;
+                            source = "session";
+                        }
+                    }
+                }
+            }
+        }
+        return new ActorResolution(resolved, sanitized, source);
+    }
+
+    private boolean needsOverride(String value) {
+        if (!StringUtils.hasText(value)) {
+            return true;
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return "system".equals(normalized) || normalized.startsWith("service:");
+    }
+
+    private String extractBearer(String authorizationHeader) {
+        if (!StringUtils.hasText(authorizationHeader)) {
+            return null;
+        }
+        String trimmed = authorizationHeader.trim();
+        if (trimmed.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())) {
+            return trimmed.substring("Bearer ".length()).trim();
+        }
+        return null;
+    }
+
+    private record ActorResolution(String resolved, String original, String source) {
+        boolean overridden() {
+            return original != null && !Objects.equals(resolved, original);
+        }
     }
 
     private void putIfNotNull(Map<String, Object> target, String key, Object value) {

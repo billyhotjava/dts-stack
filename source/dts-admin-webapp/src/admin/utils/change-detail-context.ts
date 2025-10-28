@@ -460,6 +460,11 @@ const ACTION_TEXT_FALLBACKS: Record<string, string> = {
 	DISABLE_MENU: "禁用",
 	MENU_ENABLE: "启用",
 	MENU_DISABLE: "禁用",
+	BATCH_CREATE: "批量新增",
+	BATCH_UPDATE: "批量更新",
+	BATCH_DELETE: "批量删除",
+	BATCH_ENABLE: "批量启用",
+	BATCH_DISABLE: "批量禁用",
 };
 
 function resolveActionText(label?: string | null, raw?: string | null): string | null {

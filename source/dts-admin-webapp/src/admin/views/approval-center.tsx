@@ -46,6 +46,20 @@ const ACTION_LABELS: Record<string, string> = {
 	DELETE: "删除",
 	ENABLE: "启用",
 	DISABLE: "禁用",
+	GRANT_ROLE: "授权角色",
+	ASSIGN_ROLE: "授权角色",
+	ADD_ROLE: "授权角色",
+	REVOKE_ROLE: "撤销角色",
+	REMOVE_ROLE: "撤销角色",
+	ENABLE_MENU: "启用菜单",
+	DISABLE_MENU: "禁用菜单",
+	MENU_ENABLE: "启用菜单",
+	MENU_DISABLE: "禁用菜单",
+	BATCH_CREATE: "批量新增",
+	BATCH_UPDATE: "批量更新",
+	BATCH_DELETE: "批量删除",
+	BATCH_ENABLE: "批量启用",
+	BATCH_DISABLE: "批量禁用",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -185,7 +199,8 @@ function resolveTarget(request: ChangeRequest, ctx?: DiffFormatContext): string 
 
 function summarizeDetails(request: ChangeRequest, ctx?: DiffFormatContext): string {
 	const context = buildContextForChangeRequest(request);
-	const actionLabel = ACTION_LABELS[request.action] ?? request.action;
+	const actionKey = request.action?.toUpperCase?.();
+	const actionLabel = (actionKey && ACTION_LABELS[actionKey]) ?? request.action;
 	const summary = summarizeChangeDisplayContext(context, {
 		maxEntries: 2,
 		actionLabel,
@@ -297,7 +312,8 @@ function formatSingleEntry(request: ChangeRequest, key: string, value: unknown, 
 }
 
 function getActionText(request: ChangeRequest): string {
-	const actionLabel = ACTION_LABELS[request.action?.toUpperCase()] ?? request.action;
+	const actionKey = request.action?.toUpperCase?.();
+	const actionLabel = (actionKey && ACTION_LABELS[actionKey]) ?? request.action;
 	const category = resolveCategory(request);
 	const categoryLabel = category ? CATEGORY_LABELS[category] : request.resourceType;
 	return `${actionLabel || "操作"}${categoryLabel ? ` · ${categoryLabel}` : ""}`;
@@ -896,7 +912,8 @@ export default function ApprovalCenterView() {
 			const snapshot = displayContext.snapshot;
 			const summary = displayContext.summary;
 			const menuChanges = displayContext.menuChanges;
-			const actionLabel = ACTION_LABELS[record.action] ?? record.action;
+			const actionKey = record.action?.toUpperCase?.();
+			const actionLabel = (actionKey && ACTION_LABELS[actionKey]) ?? record.action;
 			const summaryText = summarizeChangeDisplayContext(displayContext, {
 				maxEntries: 2,
 				actionLabel,
