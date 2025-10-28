@@ -158,10 +158,6 @@ spring:
       hibernate.connection.provider_disables_autocommit: true
       hibernate.cache.use_second_level_cache: true
       hibernate.cache.use_query_cache: false
-  liquibase:
-    change-log: classpath:config/liquibase/master.xml
-    search-path: classpath:/config/liquibase
-    duplicate-file-mode: WARN
       hibernate.generate_statistics: false
       # modify batch size as necessary
       hibernate.jdbc.batch_size: 25
@@ -178,6 +174,10 @@ spring:
       naming:
         physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
         implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+  liquibase:
+    change-log: classpath:config/liquibase/master.xml
+    search-path: classpath:/config/liquibase
+    duplicate-file-mode: WARN
   messages:
     basename: i18n/messages
   main:

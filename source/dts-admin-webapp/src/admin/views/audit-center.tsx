@@ -16,6 +16,12 @@ import { Input } from "@/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
 import { Text } from "@/ui/typography";
 import { cn } from "@/utils";
+import {
+	ChangeDiffViewer,
+	buildChangeSnapshotFromDiff,
+	type ChangeSnapshotLike,
+	type ChangeSummaryEntry,
+} from "@/admin/components/change-diff-viewer";
 
 interface FilterState {
 	from?: string;
@@ -668,19 +674,19 @@ export default function AuditCenterView() {
 								columns={columns}
 								dataSource={logs}
 								loading={loading}
-								expandable={{
-									columnWidth: 48,
-									expandRowByClick: true,
-									onExpand: handleExpandRow,
-									expandedRowRender: (record) => {
-										const loadingRow = rowLoading[record.id];
-										const detail = rowDetails[record.id];
-										if (loadingRow) {
-											return <div className="text-xs text-muted-foreground">加载详情...</div>;
-										}
-										return renderAuditDetail(detail);
-									},
-								}}
+							expandable={{
+								columnWidth: 48,
+								expandRowByClick: true,
+								onExpand: handleExpandRow,
+								expandedRowRender: (record) => {
+									const loadingRow = rowLoading[record.id];
+									const detail = rowDetails[record.id];
+									if (loadingRow) {
+										return <div className="text-xs text-muted-foreground">加载详情...</div>;
+									}
+									return renderAuditDetail(record, detail);
+								},
+							}}
 								pagination={{
 									current: page + 1,
 									pageSize: size,
@@ -745,18 +751,10 @@ type AuditDetailSource = {
 	extraAttributes?: unknown;
 };
 
-interface DiffRow {
-	field: string;
-	label: string;
-	before: string;
-	after: string;
-}
-
 interface ParsedAuditDetail {
-	diffRows: DiffRow[];
-	before?: Record<string, unknown> | null;
-	after?: Record<string, unknown> | null;
-	infoEntries: Array<{ key: string; value: string; multiline: boolean }>;
+	snapshot: SnapshotData | null;
+	summaryRows: Array<{ field: string; label: string; before: unknown; after: unknown }>;
+	infoEntries: Array<{ key: string; value: unknown }>;
 	rawJson?: string;
 }
 
@@ -768,8 +766,13 @@ interface SnapshotData {
 
 const DETAIL_KEYS_TO_SKIP = new Set([
 	"changeSnapshot",
+	"change_snapshot",
 	"changeSnapshots",
+	"snapshot",
 	"changeSummary",
+	"change_summary",
+	"changeSummaries",
+	"change_summaries",
 	"before",
 	"after",
 	"diff",
@@ -781,7 +784,7 @@ const DETAIL_KEYS_TO_SKIP = new Set([
 	"items",
 ]);
 
-function renderAuditDetail(detail?: AuditLogDetail | null): ReactNode {
+function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): ReactNode {
 	const parsed = parseAuditDetail({
 		details: detail?.details,
 		metadata: detail?.metadata,
@@ -790,78 +793,42 @@ function renderAuditDetail(detail?: AuditLogDetail | null): ReactNode {
 	if (!parsed) {
 		return <div className="text-xs text-muted-foreground">无详情</div>;
 	}
-	const hasDiff = parsed.diffRows.length > 0;
-	const hasBeforeAfter =
-		!!(parsed.before && Object.keys(parsed.before).length) ||
-		!!(parsed.after && Object.keys(parsed.after).length);
-	const showBeforeAfter = !hasDiff && hasBeforeAfter;
-	const hasInfo = parsed.infoEntries.length > 0;
+	const snapshot = convertSnapshotData(parsed.snapshot) ?? buildChangeSnapshotFromDiff(parseRecord(detail?.details));
+	const summary: ChangeSummaryEntry[] = parsed.summaryRows.map((row) => ({
+		field: row.field,
+		label: row.label,
+		before: row.before,
+		after: row.after,
+	}));
+	const infoObject = parsed.infoEntries.length
+		? parsed.infoEntries.reduce<Record<string, unknown>>((acc, entry) => {
+			acc[entry.key] = entry.value;
+			return acc;
+		}, {})
+		: null;
+
 	return (
 		<div className="space-y-3 text-xs leading-5">
-			{hasDiff ? (
-				<div className="space-y-2">
-					<Text variant="body3" className="text-muted-foreground">
-						字段变更
-					</Text>
-					<div className="overflow-x-auto rounded border border-border/60 bg-muted/40">
-						<table className="min-w-full divide-y divide-border text-left text-[11px]">
-							<thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
-								<tr>
-									<th className="px-3 py-2 font-medium">字段</th>
-									<th className="px-3 py-2 font-medium">变更前</th>
-									<th className="px-3 py-2 font-medium">变更后</th>
-								</tr>
-							</thead>
-							<tbody className="divide-y divide-border bg-card">
-								{parsed.diffRows.map((row) => (
-									<tr key={row.field || row.label}>
-										<td className="px-3 py-2 font-medium text-foreground">{row.label}</td>
-										<td className="px-3 py-2 text-muted-foreground">{row.before || "—"}</td>
-										<td className="px-3 py-2 text-destructive">{row.after || "—"}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				</div>
-			) : null}
-				{showBeforeAfter ? (
-				<div className="grid gap-3 md:grid-cols-2">
-					<div className="space-y-2">
-						<Text variant="body3" className="text-muted-foreground">
-							变更前
-						</Text>
-						<pre className="max-h-64 overflow-auto rounded border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-5">
-							{formatJson(parsed.before && Object.keys(parsed.before).length ? parsed.before : "—")}
-						</pre>
-					</div>
-					<div className="space-y-2">
-						<Text variant="body3" className="text-muted-foreground">
-							变更后
-						</Text>
-						<pre className="max-h-64 overflow-auto rounded border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-5">
-							{formatJson(parsed.after && Object.keys(parsed.after).length ? parsed.after : "—")}
-						</pre>
-					</div>
-				</div>
-			) : null}
-			{hasInfo ? (
+			<div className="space-y-2">
+				<Text variant="body3" className="text-muted-foreground">
+					变更详情
+				</Text>
+				<ChangeDiffViewer
+					snapshot={snapshot}
+					summary={summary.length > 0 ? summary : undefined}
+					action={record.operationName || record.operationCode || record.summary || record.buttonCode}
+					operationTypeCode={record.operationTypeCode || record.operationType}
+					className="text-xs"
+				/>
+			</div>
+			{infoObject ? (
 				<div className="space-y-2">
 					<Text variant="body3" className="text-muted-foreground">
 						其他信息
 					</Text>
-					<div className="grid gap-2">
-						{parsed.infoEntries.map((entry) => (
-							<div key={entry.key} className="rounded border border-border/60 bg-muted/30 px-3 py-2">
-								<div className="text-muted-foreground">{entry.key}</div>
-								{entry.multiline ? (
-									<pre className="mt-1 whitespace-pre-wrap font-mono text-[11px] leading-5 text-foreground">{entry.value}</pre>
-								) : (
-									<div className="text-foreground">{entry.value}</div>
-								)}
-							</div>
-						))}
-					</div>
+					<pre className="rounded border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-5">
+						{formatJson(infoObject)}
+					</pre>
 				</div>
 			) : null}
 			{parsed.rawJson ? (
@@ -884,38 +851,30 @@ function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
 	const extraLayer = parseRecord(source.extraAttributes);
 	const snapshotLayers = [root, detailLayer, contextLayer].filter(Boolean) as Record<string, unknown>[];
 
-	const snapshot = findSnapshot(snapshotLayers);
+	let snapshot = findSnapshot(snapshotLayers);
+	if (!snapshot) {
+		snapshot = parseChangeSnapshot(root);
+	}
 	const summaryRows = findSummaryRows(snapshotLayers);
 
-	const diffRowsRaw = summaryRows.length > 0
-		? summaryRows.map((row) => ({
-				field: row.field,
-				label: row.label,
-				before: formatDisplayValue(row.before),
-				after: formatDisplayValue(row.after),
-			}))
-		: snapshot
-			? buildRowsFromSnapshot(snapshot)
-			: [];
-	const diffRows = dedupeDiffRows(diffRowsRaw);
+	const ignoredKeys = new Set<string>(DETAIL_KEYS_TO_SKIP);
+	summaryRows.forEach((row) => {
+		if (row.field) {
+			ignoredKeys.add(row.field);
+			ignoredKeys.add(row.field.toLowerCase());
+		}
+	});
 
-	const before = snapshot?.before ?? (parseRecord(root.before) ?? null);
-	const after = snapshot?.after ?? (parseRecord(root.after) ?? null);
-	const infoEntries = collectInfoEntries(
-		[root, detailLayer, contextLayer, metadataLayer, extraLayer],
-		new Set([...DETAIL_KEYS_TO_SKIP, ...diffRows.map((row) => row.field)]),
-	);
-
+	const infoEntries = collectInfoEntries([root, detailLayer, contextLayer, metadataLayer, extraLayer], ignoredKeys);
 	const rawJson = Object.keys(root).length > 0 ? formatJson(root) : undefined;
 
-	if (diffRows.length === 0 && infoEntries.length === 0 && !rawJson) {
+	if (!snapshot && summaryRows.length === 0 && infoEntries.length === 0 && !rawJson) {
 		return null;
 	}
 
 	return {
-		diffRows,
-		before,
-		after,
+		snapshot: snapshot ?? null,
+		summaryRows,
 		infoEntries,
 		rawJson,
 	};
@@ -999,61 +958,27 @@ function parseChangeSnapshot(value: unknown): SnapshotData | null {
 	return { before, after, changes };
 }
 
-function buildRowsFromSnapshot(snapshot: SnapshotData): DiffRow[] {
-	const rows: DiffRow[] = [];
-	if (snapshot.changes.length > 0) {
-		for (const change of snapshot.changes) {
-			const field = change.field || change.label || "";
-			if (!field) continue;
-			rows.push({
-				field,
-				label: change.label ?? deriveFieldLabel(change.field),
-				before: formatDisplayValue(change.before),
-				after: formatDisplayValue(change.after),
-			});
-		}
-	} else {
-		const keys = new Set<string>([
-			...Object.keys(snapshot.before ?? {}),
-			...Object.keys(snapshot.after ?? {}),
-		]);
-		for (const field of keys) {
-			const beforeValue = snapshot.before?.[field];
-			const afterValue = snapshot.after?.[field];
-			if (JSON.stringify(beforeValue) === JSON.stringify(afterValue)) {
-				continue;
-			}
-			rows.push({
-				field,
-				label: deriveFieldLabel(field),
-				before: formatDisplayValue(beforeValue),
-				after: formatDisplayValue(afterValue),
-			});
-		}
+function convertSnapshotData(snapshot?: SnapshotData | null): ChangeSnapshotLike | null {
+	if (!snapshot) {
+		return null;
 	}
-	return rows;
-}
-
-function dedupeDiffRows(rows: DiffRow[]): DiffRow[] {
-	const deduped: DiffRow[] = [];
-	const seen = new Set<string>();
-	for (const row of rows) {
-		const fieldKey = (row.field || row.label || "").toLowerCase();
-		const signature = `${fieldKey}|${row.before}|${row.after}`;
-		if (seen.has(signature)) {
-			continue;
-		}
-		seen.add(signature);
-		deduped.push(row);
-	}
-	return deduped;
+	return {
+		before: snapshot.before,
+		after: snapshot.after,
+		changes: snapshot.changes?.map((change) => ({
+			field: change.field,
+			label: change.label,
+			before: change.before,
+			after: change.after,
+		})),
+	};
 }
 
 function collectInfoEntries(
 	sources: Array<Record<string, unknown> | null | undefined>,
 	ignoreKeys: Set<string>,
-): Array<{ key: string; value: string; multiline: boolean }> {
-	const entries: Array<{ key: string; value: string; multiline: boolean }> = [];
+): Array<{ key: string; value: unknown }> {
+	const entries: Array<{ key: string; value: unknown }> = [];
 	const seen = new Set<string>();
 	for (const source of sources) {
 		if (!source) continue;
@@ -1061,14 +986,44 @@ function collectInfoEntries(
 			if (!key || ignoreKeys.has(key)) continue;
 			if (raw === null || raw === undefined) continue;
 			if (seen.has(key)) continue;
-			const display = formatDisplayValue(raw);
+			const normalized = normalizeInfoValue(raw);
+			const display = formatDisplayValue(normalized);
 			if (!display) continue;
-			const multiline = display.includes("\n");
-			entries.push({ key, value: display, multiline });
+			entries.push({ key, value: normalized });
 			seen.add(key);
 		}
 	}
 	return entries;
+}
+
+function normalizeInfoValue(value: unknown): unknown {
+	if (value === null || value === undefined) {
+		return value;
+	}
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed) {
+			return "";
+		}
+		if (
+			(trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+			(trimmed.startsWith("[") && trimmed.endsWith("]"))
+		) {
+			try {
+				return JSON.parse(trimmed);
+			} catch {
+				return trimmed;
+			}
+		}
+		return trimmed;
+	}
+	if (Array.isArray(value)) {
+		return value.map((item) => normalizeInfoValue(item));
+	}
+	if (typeof value === "object") {
+		return value;
+	}
+	return value;
 }
 
 function parseRecord(value: unknown): Record<string, unknown> | null {

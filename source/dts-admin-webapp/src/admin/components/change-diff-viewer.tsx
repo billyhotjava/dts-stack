@@ -11,7 +11,7 @@ type SnapshotChange = {
 	after?: unknown;
 };
 
-type ChangeSnapshotLike = {
+export type ChangeSnapshotLike = {
 	before?: SnapshotRecord | null;
 	after?: SnapshotRecord | null;
 	changes?: SnapshotChange[] | null;
@@ -25,7 +25,7 @@ type ChangeSnapshotLike = {
 	}>;
 };
 
-type ChangeSummaryEntry = {
+export type ChangeSummaryEntry = {
 	field?: string;
 	label?: string;
 	before?: unknown;
@@ -319,4 +319,76 @@ function valuesEqual(a: unknown, b: unknown): boolean {
 	} catch {
 		return false;
 	}
+}
+
+export function buildChangeSnapshotFromDiff(diff?: Record<string, unknown> | null): ChangeSnapshotLike | null {
+	if (!diff) {
+		return null;
+	}
+	const before = toSnapshotRecord(diff.before);
+	const after = toSnapshotRecord(diff.after);
+	const changes = normalizeSnapshotChanges(diff.changes);
+	const items = Array.isArray(diff.items)
+		? (diff.items as Array<Record<string, unknown>>).map((item) => ({
+				label: typeof item?.label === "string" ? item.label : undefined,
+				name: typeof item?.name === "string" ? item.name : undefined,
+				displayName: typeof item?.displayName === "string" ? item.displayName : undefined,
+				before: toSnapshotRecord(item?.before),
+				after: toSnapshotRecord(item?.after),
+				changes: normalizeSnapshotChanges(item?.changes),
+			}))
+		: undefined;
+
+	const snapshot: ChangeSnapshotLike = {};
+	if (before && Object.keys(before).length > 0) {
+		snapshot.before = before;
+	}
+	if (after && Object.keys(after).length > 0) {
+		snapshot.after = after;
+	}
+	if (changes && changes.length > 0) {
+		snapshot.changes = changes;
+	}
+	if (items && items.length > 0) {
+		snapshot.items = items;
+	}
+
+	if (!snapshot.before && !snapshot.after && !snapshot.changes && !snapshot.items) {
+		return null;
+	}
+	return snapshot;
+}
+
+export function normalizeSnapshotChanges(source: unknown): ChangeSnapshotLike["changes"] | undefined {
+	if (!Array.isArray(source)) {
+		return undefined;
+	}
+	const mapped = source
+		.map((item, idx) => {
+			if (!item || typeof item !== "object") {
+				return null;
+			}
+			const record = item as Record<string, unknown>;
+			const field = record.field != null ? String(record.field) : undefined;
+			const label = typeof record.label === "string" ? record.label : undefined;
+			return {
+				field: field ?? `field_${idx}`,
+				label,
+				before: record.before,
+				after: record.after,
+			};
+		})
+		.filter((entry): entry is NonNullable<ChangeSnapshotLike["changes"]>[number] => entry !== null);
+	return mapped.length > 0 ? mapped : undefined;
+}
+
+function toSnapshotRecord(value: unknown): SnapshotRecord | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return null;
+	}
+	const result: SnapshotRecord = {};
+	Object.entries(value as Record<string, unknown>).forEach(([key, val]) => {
+		result[key] = val;
+	});
+	return result;
 }

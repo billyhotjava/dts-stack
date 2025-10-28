@@ -1,5 +1,4 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { ReactElement } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -16,12 +15,8 @@ import { toast } from "sonner";
 import { KeycloakApprovalService } from "@/api/services/approvalService";
 import { KeycloakUserService } from "@/api/services/keycloakService";
 import { useUserInfo } from "@/store/userStore";
-import {
-	beautifyBatchItemLabel,
-	formatChangeValue,
-	labelForChangeField,
-	type ChangeRequestFormatContext,
-} from "@/admin/lib/change-request-format";
+import { ChangeDiffViewer, buildChangeSnapshotFromDiff } from "@/admin/components/change-diff-viewer";
+import { formatChangeValue, labelForChangeField, type ChangeRequestFormatContext } from "@/admin/lib/change-request-format";
 
 type TaskCategory = "user" | "role" | "menu";
 
@@ -210,116 +205,7 @@ function summarizeDetails(request: ChangeRequest, ctx?: DiffFormatContext): stri
 	return "—";
 }
 
-// Removed unused summarize helpers (summarizeDiffPairs/summarizeDiffSide) to satisfy TS noUnusedLocals
-
 // 与 summarizeDiffSide 类似，但返回 JSX，并在“变更后”用红色高亮变动值
-function renderDiffSide(request: ChangeRequest, side: "before" | "after", ctx?: DiffFormatContext): ReactElement {
-	const diff = asRecord(parseJson(request.diffJson));
-	const containerClass = "flex flex-col gap-1 text-xs leading-5";
-	const mutedClass = "text-xs text-muted-foreground";
-	if (!diff) return <span className={mutedClass}>—</span>;
-
-	const renderLine = (label: string, value: unknown, key: string, prefix?: string | null, idx?: number) => (
-		<div key={`${prefix ?? ""}${key}-${idx ?? 0}`} className="whitespace-pre-wrap">
-			{prefix ? <span className="text-muted-foreground">{prefix} · </span> : null}
-			<span className="text-muted-foreground">{label}：</span>
-			<span className={side === "after" ? "text-destructive" : undefined}>{formatChangeValue(key, value, ctx)}</span>
-		</div>
-	);
-
-	const collectChangedKeys = (before: Record<string, unknown>, after: Record<string, unknown>, changeList?: any[]) => {
-		if (Array.isArray(changeList) && changeList.length > 0) {
-			return changeList
-				.map((item) => {
-					const field = String(item?.field ?? "");
-					if (!field || shouldIgnoreField(field)) return null;
-					return {
-						field,
-						value: side === "after" ? item?.after : item?.before,
-					};
-				})
-				.filter((entry): entry is { field: string; value: unknown } => entry !== null);
-		}
-		const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
-		return keys
-			.filter((key) => !shouldIgnoreField(key) && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
-			.map((field) => ({
-				field,
-				value: (side === "after" ? after : before)[field],
-			}));
-	};
-
-	// 批量
-	if (Array.isArray((diff as any).items)) {
-		const items = (diff as any).items as any[];
-		const lines: ReactElement[] = [];
-		items.forEach((item, itemIndex) => {
-			const before = asRecord(item?.before) || {};
-			const after = asRecord(item?.after) || {};
-			const changes = collectChangedKeys(before, after, Array.isArray(item?.changes) ? item.changes : undefined);
-			const itemLabel = resolveBatchItemLabel(item, before, after, itemIndex);
-			changes.forEach(({ field, value }, idx) => {
-				lines.push(renderLine(labelForChangeField(field), value, field, itemLabel, idx));
-			});
-		});
-		if (lines.length === 0) {
-			return <span className={mutedClass}>—</span>;
-		}
-		return <div className={containerClass}>{lines}</div>;
-	}
-
-	const before = asRecord(diff.before) || {};
-	const after = asRecord(diff.after) || {};
-	const changes = collectChangedKeys(
-		before,
-		after,
-		Array.isArray((diff as any).changes) ? (diff as any).changes : undefined,
-	);
-
-	if (changes.length === 0) {
-		return <span className={mutedClass}>—</span>;
-	}
-
-	return (
-		<div className={containerClass}>
-			{changes.map(({ field, value }, idx) => renderLine(labelForChangeField(field), value, field, null, idx))}
-		</div>
-	);
-}
-
-function resolveBatchItemLabel(
-	item: Record<string, unknown> | null,
-	before: Record<string, unknown>,
-	after: Record<string, unknown>,
-	index: number,
-): string {
-	const candidates = [
-		item?.label,
-		item?.name,
-		item?.displayName,
-		item?.title,
-		after?.name,
-		after?.displayName,
-		after?.title,
-		before?.name,
-		before?.displayName,
-		before?.title,
-	];
-	for (const candidate of candidates) {
-		if (typeof candidate === "string" && candidate.trim().length > 0) {
-			return beautifyBatchItemLabel(candidate.trim());
-		}
-	}
-	return `第${index + 1}项`;
-}
-
-function fmtValue(v: unknown): string {
-	if (v == null) return "—";
-	if (Array.isArray(v)) return `[${v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ")}]`;
-	if (typeof v === "string") return v.replaceAll("7f3868a1-9c8c-4122-b7e4-7f921a40c019", "***");
-	return JSON.stringify(v);
-}
-
 function isPortalMenuRequest(request: ChangeRequest): boolean {
 	const resource = (request.resourceType || request.category || "").toString().toUpperCase();
 	return resource === "PORTAL_MENU" || resource === "MENU" || resource === "MENU_MANAGEMENT";
@@ -329,6 +215,18 @@ function formatMenuStatus(value: unknown): string {
 	if (value === true || value === "true") return "禁用";
 	if (value === false || value === "false" || value == null) return "启用";
 	return fmtValue(value);
+}
+
+function fmtValue(v: unknown): string {
+	if (v == null) return "—";
+	if (Array.isArray(v)) return `[${v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ")}]`;
+	if (typeof v === "string") return v.replaceAll("7f3868a1-9c8c-4122-b7e4-7f921a40c019", "***");
+	try {
+		return JSON.stringify(v);
+	} catch (error) {
+		console.warn("Failed to stringify value", error, v);
+		return String(v);
+	}
 }
 
 function formatChangeEntry(
@@ -357,17 +255,6 @@ function formatSingleEntry(request: ChangeRequest, key: string, value: unknown, 
 	}
 	const label = labelForChangeField(key);
 	return `${label}: ${formatChangeValue(key, value, ctx)}`;
-}
-
-const IGNORED_FIELD_PREFIXES = new Set(["attributes", "target"]);
-const IGNORED_EXACT_FIELDS = new Set(["keycloakId"]);
-
-function shouldIgnoreField(key: string): boolean {
-	const prefix = key.includes(".") ? key.split(".")[0] : key;
-	if (IGNORED_FIELD_PREFIXES.has(prefix)) return true;
-	const lower = key.toLowerCase();
-	if (IGNORED_EXACT_FIELDS.has(key) || lower === "keycloakid") return true;
-	return false;
 }
 
 function getActionText(request: ChangeRequest): string {
@@ -975,11 +862,9 @@ export default function ApprovalCenterView() {
 
 	const renderExpandedRow = useCallback(
 		(record: AugmentedChangeRequest) => {
-			const ctx: DiffFormatContext = { roleDisplay: roleDisplayNameMap, userDisplay: userDisplayMap };
 			const payload = asRecord(parseJson(record.payloadJson));
 			const diff = asRecord(parseJson(record.diffJson));
-			const hasBefore = diff && ((diff as any).before || (diff as any).items);
-			const hasAfter = diff && ((diff as any).after || (diff as any).items);
+			const snapshot = buildChangeSnapshotFromDiff(diff);
 			return (
 				<div className="border-t border-muted pt-4 text-sm">
 					<div className="grid gap-4 md:grid-cols-3">
@@ -1032,20 +917,17 @@ export default function ApprovalCenterView() {
 								) : null}
 							</div>
 						</div>
-						<div className="space-y-2">
+						<div className="md:col-span-2">
 							<Text variant="body3" className="text-muted-foreground">
-								变更前
+								变更详情
 							</Text>
-							<div className="rounded-md border bg-muted/30 px-3 py-2 text-xs leading-5">
-								{hasBefore ? renderDiffSide(record, "before", ctx) : <span className="text-muted-foreground">—</span>}
-							</div>
-						</div>
-						<div className="space-y-2">
-							<Text variant="body3" className="text-muted-foreground">
-								变更后
-							</Text>
-							<div className="rounded-md border bg-muted/30 px-3 py-2 text-xs leading-5">
-								{hasAfter ? renderDiffSide(record, "after", ctx) : <span className="text-muted-foreground">—</span>}
+							<div className="mt-2">
+								<ChangeDiffViewer
+									snapshot={snapshot}
+									action={record.action}
+									operationTypeCode={record.action}
+									className="text-xs"
+								/>
 							</div>
 						</div>
 					</div>
@@ -1062,7 +944,7 @@ export default function ApprovalCenterView() {
 				</div>
 			);
 		},
-		[roleDisplayNameMap, userDisplayMap, operatorNameMap],
+		[operatorNameMap, userDisplayMap],
 	);
 
 	const handleCloseDialog = () => {
@@ -1073,8 +955,7 @@ export default function ApprovalCenterView() {
 
 	const activePayload = useMemo(() => (activeTask ? asRecord(parseJson(activeTask.payloadJson)) : null), [activeTask]);
 	const activeDiff = useMemo(() => (activeTask ? asRecord(parseJson(activeTask.diffJson)) : null), [activeTask]);
-	const diffBefore = useMemo(() => (activeDiff ? asRecord(activeDiff["before"]) : null), [activeDiff]);
-	const diffAfter = useMemo(() => (activeDiff ? asRecord(activeDiff["after"]) : null), [activeDiff]);
+	const activeSnapshot = useMemo(() => buildChangeSnapshotFromDiff(activeDiff), [activeDiff]);
 
 	return (
 		<>
@@ -1267,34 +1148,17 @@ export default function ApprovalCenterView() {
 								</div>
 							) : null}
 
-							{(diffBefore && Object.keys(diffBefore).length > 0) ||
-							(diffAfter && Object.keys(diffAfter).length > 0) ? (
-								<div className="space-y-3">
-									<Text variant="body3" className="text-muted-foreground">
-										差异信息
-									</Text>
-									{diffBefore && Object.keys(diffBefore).length > 0 ? (
-										<div className="space-y-1">
-											<Text variant="body3" className="text-muted-foreground">
-												变更前
-											</Text>
-											<pre className="max-h-48 overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre-wrap break-words">
-												{formatJson(diffBefore)}
-											</pre>
-										</div>
-									) : null}
-									{diffAfter && Object.keys(diffAfter).length > 0 ? (
-										<div className="space-y-1">
-											<Text variant="body3" className="text-muted-foreground">
-												变更后
-											</Text>
-											<pre className="max-h-48 overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre-wrap break-words">
-												{formatJson(diffAfter)}
-											</pre>
-										</div>
-									) : null}
-								</div>
-							) : null}
+							<div className="space-y-2">
+								<Text variant="body3" className="text-muted-foreground">
+									差异信息
+								</Text>
+								<ChangeDiffViewer
+									snapshot={activeSnapshot}
+									action={activeTask.action}
+									operationTypeCode={activeTask.action}
+									className="text-xs"
+								/>
+							</div>
 						</div>
 					) : null}
 					<DialogFooter>
