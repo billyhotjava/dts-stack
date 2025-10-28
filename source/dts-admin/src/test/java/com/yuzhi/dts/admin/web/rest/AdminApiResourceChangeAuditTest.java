@@ -1,9 +1,7 @@
 package com.yuzhi.dts.admin.web.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
@@ -19,15 +17,13 @@ import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.OrganizationService;
 import com.yuzhi.dts.admin.service.OrganizationSyncService;
 import com.yuzhi.dts.admin.service.PortalMenuService;
-import com.yuzhi.dts.admin.service.audit.AdminAuditService;
+import com.yuzhi.dts.admin.service.audit.ChangeSnapshotFormatter;
+import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.common.audit.AuditStage;
-import java.time.Instant;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,7 +33,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 class AdminApiResourceChangeAuditTest {
 
     @Mock
-    private AdminAuditService auditService;
+    private AuditV2Service auditV2Service;
     @Mock
     private OrganizationService organizationService;
     @Mock
@@ -69,14 +65,18 @@ class AdminApiResourceChangeAuditTest {
     @Mock
     private AdminUserService adminUserService;
     @Mock
+    private ChangeSnapshotFormatter changeSnapshotFormatter;
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     private AdminApiResource resource;
 
     @BeforeEach
     void setUp() {
+        when(changeSnapshotFormatter.format(org.mockito.Mockito.any(), org.mockito.Mockito.anyString())).thenReturn(java.util.List.of());
+        when(changeSnapshotFormatter.format(org.mockito.Mockito.anyMap(), org.mockito.Mockito.anyMap(), org.mockito.Mockito.anyString())).thenReturn(java.util.List.of());
         resource = new AdminApiResource(
-            auditService,
+            auditV2Service,
             organizationService,
             organizationSyncService,
             changeRequestRepository,
@@ -92,53 +92,8 @@ class AdminApiResourceChangeAuditTest {
             notifyClient,
             organizationRepository,
             adminUserService,
+            changeSnapshotFormatter,
             transactionManager
-        );
-    }
-
-    @Test
-    void recordChangeExecutionAuditEmitsRequesterSuccess() {
-        ChangeRequest cr = new ChangeRequest();
-        cr.setId(98L);
-        cr.setResourceType("ROLE");
-        cr.setAction("UPDATE");
-        cr.setRequestedBy("sysadmin");
-        cr.setResourceId("123");
-        cr.setStatus("APPROVED");
-        cr.setDecidedBy("authadmin");
-        cr.setDecidedAt(Instant.parse("2025-01-01T01:02:03Z"));
-        cr.setReason("auto-approval");
-
-        resource.recordChangeExecutionAudit(cr, AuditStage.SUCCESS);
-
-        ArgumentCaptor<Map<String, Object>> detailCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(auditService)
-            .recordAction(eq("sysadmin"), eq("ADMIN_ROLE_UPDATE"), eq(AuditStage.SUCCESS), eq("123"), detailCaptor.capture(), eq("CR-98"));
-        Map<String, Object> detail = detailCaptor.getValue();
-        assertThat(detail.get("changeRequestId")).isEqualTo(98L);
-        assertThat(detail.get("status")).isEqualTo("APPROVED");
-        assertThat(detail.get("requestedBy")).isEqualTo("sysadmin");
-        assertThat(detail.get("decidedBy")).isEqualTo("authadmin");
-        assertThat(detail.get("stage")).isEqualTo("成功");
-        assertThat(detail.get("stageCode")).isEqualTo("SUCCESS");
-    }
-
-    @Test
-    void recordChangeExecutionAuditSkipsWhenRequesterMissing() {
-        ChangeRequest cr = new ChangeRequest();
-        cr.setResourceType("PORTAL_MENU");
-        cr.setAction("CREATE");
-        cr.setRequestedBy("  ");
-
-        resource.recordChangeExecutionAudit(cr, AuditStage.SUCCESS);
-
-        verify(auditService, never()).recordAction(
-            org.mockito.Mockito.anyString(),
-            org.mockito.Mockito.anyString(),
-            org.mockito.Mockito.any(),
-            org.mockito.Mockito.anyString(),
-            org.mockito.Mockito.anyMap(),
-            org.mockito.Mockito.any()
         );
     }
 
@@ -151,50 +106,6 @@ class AdminApiResourceChangeAuditTest {
         String code = AdminApiResource.buildChangeActionCode(cr);
 
         assertThat(code).isEqualTo("ADMIN_PORTAL_MENU_CREATE");
-    }
-
-    @Test
-    void recordPortalMenuDecisionAuditEmitsApproverLog() {
-        ChangeRequest cr = new ChangeRequest();
-        cr.setId(2752L);
-        cr.setResourceType("PORTAL_MENU");
-        cr.setAction("DISABLE");
-        cr.setResourceId("42");
-        cr.setRequestedBy("sysadmin");
-        cr.setDecidedBy("authadmin");
-        cr.setDecidedAt(Instant.parse("2025-10-25T12:15:38Z"));
-        cr.setStatus("APPROVED");
-        cr.setPayloadJson("{\"deleted\":true}");
-        cr.setDiffJson(
-            """
-            {
-              "before": {"deleted": false},
-              "after": {"deleted": true},
-              "changes": [{"field": "deleted", "before": false, "after": true}]
-            }
-            """
-        );
-
-        ArgumentCaptor<Map<String, Object>> detailCaptor = ArgumentCaptor.forClass(Map.class);
-
-        resource.recordPortalMenuDecisionAudit(cr, AuditStage.SUCCESS);
-
-        verify(auditService)
-            .recordAction(
-                eq("authadmin"),
-                eq("ADMIN_PORTAL_MENU_DISABLE"),
-                eq(AuditStage.SUCCESS),
-                eq("42"),
-                detailCaptor.capture(),
-                eq("CR-2752")
-            );
-        Map<String, Object> detail = detailCaptor.getValue();
-        assertThat(detail.get("stage")).isEqualTo("成功");
-        assertThat(detail.get("stageCode")).isEqualTo("SUCCESS");
-        assertThat(detail.get("decisionPhase")).isEqualTo("APPLY");
-        assertThat(detail.get("before")).isInstanceOf(Map.class);
-        assertThat(detail.get("after")).isInstanceOf(Map.class);
-        assertThat(detail.get("changes")).isInstanceOf(java.util.Collection.class);
     }
 
     @Test

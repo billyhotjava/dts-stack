@@ -2,7 +2,6 @@ package com.yuzhi.dts.admin.service.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.domain.AuditEvent;
 import com.yuzhi.dts.admin.domain.AuditOperationMapping;
 import com.yuzhi.dts.admin.domain.AuditResourceDictionary;
@@ -19,7 +18,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 class OperationMappingEngineTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private final JdbcTemplate jdbcTemplate = new StubJdbcTemplate();
     private OperationMappingEngine engine;
     private final AtomicLong idSequence = new AtomicLong(1L);
@@ -72,7 +70,7 @@ class OperationMappingEngineTest {
                 ),
                 jdbcTemplate
             );
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
     }
 
     @Test
@@ -87,7 +85,7 @@ class OperationMappingEngineTest {
         );
         mapping.setParamExtractors("{\"person\":\"path.id\"}");
         repository = createRepository(List.of(mapping));
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
 
         engine.reload();
 
@@ -111,7 +109,7 @@ class OperationMappingEngineTest {
     @Test
     void resolveWithFallbackUsesFallbackWhenNoRuleMatches() {
         repository = createRepository(List.of());
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
         engine.reload();
 
         AuditEvent event = new AuditEvent();
@@ -145,7 +143,7 @@ class OperationMappingEngineTest {
         );
         mapping.setParamExtractors("{\"targetRef\":\"path.id\"}");
         repository = createRepository(List.of(mapping));
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
         engine.reload();
 
         AuditEvent event = new AuditEvent();
@@ -165,7 +163,7 @@ class OperationMappingEngineTest {
     @Test
     void resolveWithFallbackUsesDictionaryCategoryForApprovals() {
         repository = createRepository(List.of());
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
         engine.reload();
 
         AuditEvent event = new AuditEvent();
@@ -187,7 +185,7 @@ class OperationMappingEngineTest {
     @Test
     void resolveWithFallbackCategorizesOrganizationEvents() {
         repository = createRepository(List.of());
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
         engine.reload();
 
         AuditEvent event = new AuditEvent();
@@ -208,7 +206,7 @@ class OperationMappingEngineTest {
     @Test
     void resolveWithFallbackHonorsDisplayNameAliases() {
         repository = createRepository(List.of());
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
         engine.reload();
 
         AuditEvent event = new AuditEvent();
@@ -229,7 +227,7 @@ class OperationMappingEngineTest {
     @Test
     void resolveWithFallbackMapsKeycloakUsers() {
         repository = createRepository(List.of());
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
         engine.reload();
 
         AuditEvent event = new AuditEvent();
@@ -258,7 +256,7 @@ class OperationMappingEngineTest {
             "admin_approval"
         );
         repository = createRepository(List.of(mapping));
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
         engine.reload();
 
         List<OperationMappingEngine.RuleSummary> summaries = engine.describeRules();
@@ -296,7 +294,7 @@ class OperationMappingEngineTest {
         catchAll.setOrderValue(10000);
 
         repository = createRepository(List.of(specific, catchAll));
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
         engine.reload();
 
         AuditEvent event = new AuditEvent();
@@ -339,7 +337,7 @@ class OperationMappingEngineTest {
         catchAll.setOrderValue(10000);
 
         repository = createRepository(List.of(datasetRule, catchAll));
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
         engine.reload();
 
         AuditEvent event = new AuditEvent();
@@ -383,7 +381,7 @@ class OperationMappingEngineTest {
         catchAll.setOrderValue(10000);
 
         repository = createRepository(List.of(specific, catchAll));
-        engine = new OperationMappingEngine(repository, objectMapper, jdbcTemplate, dictionaryService);
+        engine = new OperationMappingEngine(repository, jdbcTemplate, dictionaryService);
         engine.reload();
 
         AuditEvent event = new AuditEvent();

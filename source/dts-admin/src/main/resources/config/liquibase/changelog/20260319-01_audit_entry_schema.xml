@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260319-01-audit-entry-schema" author="codex">
+        <comment>建立全新审计系统的核心数据表</comment>
+
+        <createTable tableName="audit_entry">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="occurred_at" type="TIMESTAMPTZ">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_system" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="module_key" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="module_name" type="VARCHAR(128)"/>
+            <column name="button_code" type="VARCHAR(128)"/>
+            <column name="operation_code" type="VARCHAR(128)"/>
+            <column name="operation_name" type="VARCHAR(256)"/>
+            <column name="operation_kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="result" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="summary" type="TEXT"/>
+            <column name="actor_id" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actor_name" type="VARCHAR(128)"/>
+            <column name="actor_roles" type="JSONB"/>
+            <column name="change_request_ref" type="VARCHAR(64)"/>
+            <column name="client_ip" type="INET"/>
+            <column name="client_agent" type="VARCHAR(256)"/>
+            <column name="request_uri" type="VARCHAR(512)"/>
+            <column name="http_method" type="VARCHAR(16)"/>
+            <column name="metadata" type="JSONB"/>
+            <column name="extra_attributes" type="JSONB"/>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueDate="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <createTable tableName="audit_entry_target">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="entry_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="position" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_table" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_id" type="VARCHAR(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_label" type="VARCHAR(256)"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="audit_entry_target"
+                baseColumnNames="entry_id"
+                constraintName="fk_audit_entry_target_entry"
+                referencedTableName="audit_entry"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <createTable tableName="audit_entry_detail">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="entry_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="position" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="detail_key" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="detail_value" type="JSONB"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="audit_entry_detail"
+                baseColumnNames="entry_id"
+                constraintName="fk_audit_entry_detail_entry"
+                referencedTableName="audit_entry"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <createIndex tableName="audit_entry" indexName="idx_audit_entry_time">
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex tableName="audit_entry" indexName="idx_audit_entry_actor">
+            <column name="actor_id"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex tableName="audit_entry" indexName="idx_audit_entry_module">
+            <column name="module_key"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex tableName="audit_entry" indexName="idx_audit_entry_kind">
+            <column name="operation_kind"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex tableName="audit_entry" indexName="idx_audit_entry_change_ref">
+            <column name="change_request_ref"/>
+        </createIndex>
+
+        <createIndex tableName="audit_entry_target" indexName="idx_audit_entry_target_entry">
+            <column name="entry_id"/>
+        </createIndex>
+        <createIndex tableName="audit_entry_target" indexName="idx_audit_entry_target_table">
+            <column name="target_table"/>
+            <column name="target_id"/>
+        </createIndex>
+
+        <createIndex tableName="audit_entry_detail" indexName="idx_audit_entry_detail_entry">
+            <column name="entry_id"/>
+        </createIndex>
+        <createIndex tableName="audit_entry_detail" indexName="idx_audit_entry_detail_key">
+            <column name="detail_key"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

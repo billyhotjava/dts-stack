@@ -3,8 +3,9 @@ package com.yuzhi.dts.admin.web.rest;
 import com.yuzhi.dts.admin.domain.PortalMenu;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.service.PortalMenuService;
-import com.yuzhi.dts.admin.service.audit.AdminAuditOperation;
-import com.yuzhi.dts.admin.service.audit.AdminAuditService;
+import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
+import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
+import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.admin.service.dto.menu.MenuTreeDTO;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,11 +26,11 @@ import org.springframework.web.bind.annotation.*;
 public class BasicApiResource {
 
     private final PortalMenuService portalMenuService;
-    private final AdminAuditService auditService;
+    private final AuditV2Service auditV2Service;
 
-    public BasicApiResource(PortalMenuService portalMenuService, AdminAuditService auditService) {
+    public BasicApiResource(PortalMenuService portalMenuService, AuditV2Service auditV2Service) {
         this.portalMenuService = portalMenuService;
-        this.auditService = auditService;
+        this.auditV2Service = auditV2Service;
     }
 
     @GetMapping("/menu")
@@ -62,16 +63,7 @@ public class BasicApiResource {
                 out.add(dto);
             }
         }
-        auditService.record(
-            auditService
-                .builder()
-                .actor(SecurityUtils.getCurrentUserLogin().orElse(null))
-                .fromOperation(AdminAuditOperation.PORTAL_MENU_FETCH)
-                .summary("查询门户菜单")
-                .details(Map.of("roleCount", roleCodes.size(), "permissionCount", permissionCodes.size()))
-                .result(AdminAuditService.AuditResult.SUCCESS)
-                .build()
-        );
+        recordMenuFetchAudit(roleCodes.size(), permissionCodes.size(), normalizedLevel);
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
@@ -80,16 +72,7 @@ public class BasicApiResource {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successful operation")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getDemoUsers() {
         List<Map<String, Object>> demo = List.of();
-        auditService.record(
-            auditService
-                .builder()
-                .actor(SecurityUtils.getCurrentUserLogin().orElse(null))
-                .fromOperation(AdminAuditOperation.ADMIN_USER_VIEW)
-                .summary("查看示例用户列表")
-                .details(Map.of("source", "demo"))
-                .result(AdminAuditService.AuditResult.SUCCESS)
-                .build()
-        );
+        recordDemoUserAudit();
         return ResponseEntity.ok(ApiResponse.ok(demo));
     }
 
@@ -195,5 +178,33 @@ public class BasicApiResource {
             .map(GrantedAuthority::getAuthority)
             .filter(StringUtils::hasText)
             .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private void recordMenuFetchAudit(int roleCount, int permissionCount, String dataLevel) {
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        AuditActionRequest.Builder builder = AuditActionRequest
+            .builder(actor, ButtonCodes.PORTAL_MENU_VIEW)
+            .actorName(actor)
+            .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+            .summary("查询门户菜单")
+            .metadata("roleCount", roleCount)
+            .metadata("permissionCount", permissionCount);
+        if (StringUtils.hasText(dataLevel)) {
+            builder.metadata("dataLevel", dataLevel);
+        }
+        builder.allowEmptyTargets();
+        auditV2Service.record(builder.build());
+    }
+
+    private void recordDemoUserAudit() {
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        AuditActionRequest.Builder builder = AuditActionRequest
+            .builder(actor, ButtonCodes.USER_LIST)
+            .actorName(actor)
+            .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+            .summary("查看示例用户列表")
+            .metadata("source", "demo")
+            .allowEmptyTargets();
+        auditV2Service.record(builder.build());
     }
 }

@@ -13,18 +13,22 @@ import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.service.approval.ApprovalStatus;
 import com.yuzhi.dts.admin.service.audit.AdminAuditOperation;
-import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.audit.AuditOperationType;
 import com.yuzhi.dts.admin.service.audit.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
+import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
+import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
+import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
+import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
+import com.yuzhi.dts.admin.security.SecurityUtils;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -77,7 +81,7 @@ public class AdminUserService {
     private final AdminKeycloakUserRepository userRepository;
     private final AdminApprovalRequestRepository approvalRepository;
     private final KeycloakAdminClient keycloakAdminClient;
-    private final AdminAuditService auditService;
+    private final AuditV2Service auditV2Service;
     private final ChangeRequestService changeRequestService;
     private final ChangeRequestRepository changeRequestRepository;
     private final AdminRoleAssignmentRepository roleAssignRepo;
@@ -98,7 +102,7 @@ public class AdminUserService {
         AdminKeycloakUserRepository userRepository,
         AdminApprovalRequestRepository approvalRepository,
         KeycloakAdminClient keycloakAdminClient,
-        AdminAuditService auditService,
+        AuditV2Service auditV2Service,
         ChangeRequestService changeRequestService,
         ChangeRequestRepository changeRequestRepository,
         AdminRoleAssignmentRepository roleAssignRepo,
@@ -113,7 +117,7 @@ public class AdminUserService {
         this.userRepository = userRepository;
         this.approvalRepository = approvalRepository;
         this.keycloakAdminClient = keycloakAdminClient;
-        this.auditService = auditService;
+        this.auditV2Service = auditV2Service;
         this.changeRequestService = changeRequestService;
         this.changeRequestRepository = changeRequestRepository;
         this.roleAssignRepo = roleAssignRepo;
@@ -616,16 +620,18 @@ public class AdminUserService {
         }
         detail.put("operationType", AuditOperationType.REQUEST.getCode());
         detail.put("operationTypeText", AuditOperationType.REQUEST.getDisplayName());
-        String correlationId = correlationIdFrom(correlationRef);
-        if (correlationId != null) {
-            detail.put("correlationId", correlationId);
+        String changeRequestRef = changeRequestRefFrom(correlationRef);
+        if (org.springframework.util.StringUtils.hasText(changeRequestRef)) {
+            detail.put("changeRequestRef", changeRequestRef);
         }
         ChangeSnapshot snapshot = extractChangeSnapshot(detailSource, correlationRef);
         if (snapshot != null && (snapshot.hasChanges() || !snapshot.getBefore().isEmpty() || !snapshot.getAfter().isEmpty())) {
             detail.put("changeSnapshot", snapshot.toMap());
         }
-        String effectiveTarget = correlationId != null ? correlationId : target;
-        auditService.recordAction(actor, code, AuditStage.SUCCESS, effectiveTarget, detail, correlationId);
+        String effectiveTarget = org.springframework.util.StringUtils.hasText(changeRequestRef) ? changeRequestRef : target;
+        ChangeRequest changeRequest = correlationRef instanceof ChangeRequest cr ? cr : null;
+        SubjectInfo finalSubject = subject;
+        recordUserApprovalRequestV2(actor, code, finalSubject, changeRequest, changeRequestRef, summary, detail, ip);
     }
 
     private ChangeSnapshot extractChangeSnapshot(Object detailSource, Object correlationRef) {
@@ -816,7 +822,7 @@ public class AdminUserService {
     }
 
     private void auditUserChange(String actor, String action, String target, String result, Object detail) {
-        String correlationId = extractCorrelationId(detail);
+        String changeRequestRef = extractChangeRequestRef(detail);
         String payloadUsername = extractPayloadUsername(detail);
         String normalizedTarget = target == null ? "UNKNOWN" : target;
         // Prefer recording the local DB primary key for admin_keycloak_user
@@ -847,8 +853,8 @@ public class AdminUserService {
         if (detail instanceof Map<?, ?> map) {
             payload = new HashMap<>();
             map.forEach((k, v) -> payload.put(String.valueOf(k), v));
-            if (correlationId != null && !payload.containsKey("correlationId")) {
-                payload.put("correlationId", correlationId);
+            if (StringUtils.isNotBlank(changeRequestRef) && !payload.containsKey("changeRequestRef")) {
+                payload.put("changeRequestRef", changeRequestRef);
             }
             if (payloadUsername != null && !payload.containsKey("username")) {
                 payload.put("username", payloadUsername);
@@ -868,28 +874,37 @@ public class AdminUserService {
         };
         AuditStage stage = "SUCCESS".equalsIgnoreCase(result) ? AuditStage.SUCCESS : AuditStage.FAIL;
         ApprovalAuditCollector collector = approvalAuditCollector.get();
-        if (collector != null && StringUtils.isNotBlank(correlationId) && stage == AuditStage.SUCCESS) {
+        if (collector != null && StringUtils.isNotBlank(changeRequestRef) && stage == AuditStage.SUCCESS) {
             collector.collect(code, stage, normalizedTarget, new LinkedHashMap<>(payload));
             return;
         }
-        auditService.recordAction(actor, code, stage, normalizedTarget, payload, correlationId);
+        recordUserApprovalExecutionV2(actor, code, normalizedTarget, payloadUsername, changeRequestRef, stage, payload);
     }
 
-    private String extractCorrelationId(Object detail) {
+    private String extractChangeRequestRef(Object detail) {
         if (!(detail instanceof Map<?, ?> map)) {
             return null;
         }
-        Object direct = map.get("correlationId");
+        Object direct = map.get("changeRequestRef");
         if (direct == null) {
             Object payload = map.get("payload");
             if (payload instanceof Map<?, ?> payloadMap) {
-                direct = payloadMap.get("correlationId");
+                direct = payloadMap.get("changeRequestRef");
                 if (direct == null) {
                     direct = payloadMap.get("changeRequestId");
                 }
             }
         }
-        return correlationIdFrom(direct);
+        if (direct == null) {
+            direct = map.get("changeRequestId");
+        }
+        if (direct == null) {
+            direct = map.get("approvalRequestId");
+        }
+        if (direct == null) {
+            direct = map.get("requestId");
+        }
+        return changeRequestRefFrom(direct);
     }
 
     private record SubjectInfo(String id, String label) {}
@@ -897,6 +912,7 @@ public class AdminUserService {
     private static final class ApprovalAuditCollector {
 
         private final Map<String, LinkedHashSet<String>> targetIdsByTable = new LinkedHashMap<>();
+        private final Map<String, Map<String, String>> targetLabelsByTable = new LinkedHashMap<>();
         private final List<Map<String, Object>> steps = new ArrayList<>();
         private final LinkedHashSet<String> summaryLines = new LinkedHashSet<>();
 
@@ -909,6 +925,9 @@ public class AdminUserService {
             if (stage == AuditStage.SUCCESS) {
                 if (StringUtils.isNotBlank(table) && StringUtils.isNotBlank(effectiveId)) {
                     targetIdsByTable.computeIfAbsent(table, k -> new LinkedHashSet<>()).add(effectiveId);
+                    if (StringUtils.isNotBlank(label)) {
+                        targetLabelsByTable.computeIfAbsent(table, k -> new LinkedHashMap<>()).put(effectiveId, label);
+                    }
                 }
                 summaryLines.add(buildSummaryLine(opName, effectiveId, label));
             }
@@ -933,10 +952,15 @@ public class AdminUserService {
             return !steps.isEmpty();
         }
 
-        Optional<AdminAuditService.AuditTarget> primaryTarget() {
+        Optional<CollectorTarget> primaryTarget() {
             if (targetIdsByTable.size() == 1) {
                 Map.Entry<String, LinkedHashSet<String>> entry = targetIdsByTable.entrySet().iterator().next();
-                return Optional.of(AdminAuditService.AuditTarget.of(entry.getKey(), entry.getValue()));
+                String table = entry.getKey();
+                List<String> ids = List.copyOf(entry.getValue());
+                Map<String, String> labels = targetLabelsByTable.containsKey(table)
+                    ? Map.copyOf(targetLabelsByTable.get(table))
+                    : Map.of();
+                return Optional.of(new CollectorTarget(table, ids, labels));
             }
             return Optional.empty();
         }
@@ -1055,6 +1079,8 @@ public class AdminUserService {
             String s = value.toString().trim();
             return s.isEmpty() ? null : s;
         }
+
+        private record CollectorTarget(String table, List<String> ids, Map<String, String> labels) {}
     }
 
     private ApprovalAuditCollector collectApprovalSnapshot(AdminApprovalRequest approval) {
@@ -1151,16 +1177,16 @@ public class AdminUserService {
         return stringValue(username);
     }
 
-    private String correlationIdFrom(Object correlationRef) {
-        if (correlationRef == null) {
+    private String changeRequestRefFrom(Object reference) {
+        if (reference == null) {
             return null;
         }
-        Object raw = correlationRef;
+        Object raw = reference;
         if (raw instanceof Optional<?> optional) {
-            return correlationIdFrom(optional.orElse(null));
+            return changeRequestRefFrom(optional.orElse(null));
         }
         if (raw instanceof ChangeRequest changeRequest) {
-            return correlationIdFrom(changeRequest.getId());
+            return changeRequestRefFrom(changeRequest.getId());
         }
         if (raw instanceof Number number) {
             long value = number.longValue();
@@ -1362,7 +1388,7 @@ public class AdminUserService {
         ensurePending(approval);
         Set<Long> changeRequestIds = extractChangeRequestIds(approval);
         Long primaryChangeRequestId = changeRequestIds.stream().findFirst().orElse(null);
-        String correlationId = correlationIdFrom(primaryChangeRequestId);
+        String changeRequestRef = changeRequestRefFrom(primaryChangeRequestId);
         Instant now = Instant.now();
         ApprovalAuditCollector collector = new ApprovalAuditCollector();
         approvalAuditCollector.set(collector);
@@ -1405,7 +1431,7 @@ public class AdminUserService {
             recordApprovalDecisionEntry(
                 approver,
                 collector,
-                correlationId,
+                changeRequestRef,
                 id,
                 primaryChangeRequestId,
                 changeRequestIds,
@@ -1419,32 +1445,37 @@ public class AdminUserService {
             updateChangeRequestStatus(changeRequestIds, ApprovalStatus.APPLIED.name(), approver, now, null);
             return toDetailDto(approval);
         } catch (Exception ex) {
-            auditService.recordAction(
-                approver,
-                "ADMIN_APPROVAL_DECIDE",
-                AuditStage.BEGIN,
-                String.valueOf(id),
-                new java.util.LinkedHashMap<String, Object>() {{
-                    put("error", ex.getMessage());
-                    put("status", "RETRY_SCHEDULED");
-                    put("type", approval.getType());
-                }},
-                correlationId
-            );
+            Map<String, Object> retryDetail = new LinkedHashMap<>();
+            retryDetail.put("error", ex.getMessage());
+            retryDetail.put("status", "RETRY_SCHEDULED");
+            retryDetail.put("type", approval.getType());
+            if (StringUtils.isNotBlank(changeRequestRef)) {
+                retryDetail.put("changeRequestRef", changeRequestRef);
+            }
             scheduleRetry(approval, note, ex.getMessage());
             approvalRepository.save(approval);
             updateChangeRequestStatus(changeRequestIds, ApprovalStatus.PENDING.name(), null, null, ex.getMessage());
-            auditService.recordAction(
+            Map<String, Object> requeueDetail = new LinkedHashMap<>();
+            requeueDetail.put("status", "REQUEUE");
+            requeueDetail.put("note", ex.getMessage());
+            requeueDetail.put("type", approval.getType());
+            if (StringUtils.isNotBlank(changeRequestRef)) {
+                requeueDetail.put("changeRequestRef", changeRequestRef);
+            }
+            Map<String, Object> v2Detail = new LinkedHashMap<>(retryDetail);
+            recordApprovalDecisionV2(
                 approver,
-                "ADMIN_APPROVAL_DECIDE",
-                AuditStage.BEGIN,
-                String.valueOf(id),
-                new java.util.LinkedHashMap<String, Object>() {{
-                    put("status", "REQUEUE");
-                    put("note", ex.getMessage());
-                    put("type", approval.getType());
-                }},
-                correlationId
+                "FAILED",
+                "FAILED",
+                id,
+                approval,
+                changeRequestRef,
+                primaryChangeRequestId,
+                changeRequestIds,
+                note,
+                v2Detail,
+                collector,
+                buildFallbackApprovalSummary("FAILED", primaryChangeRequestId, id)
             );
             LOG.warn("Approval id={} failed to apply: {}", id, ex.getMessage());
             throw new IllegalStateException("审批执行失败: " + ex.getMessage(), ex);
@@ -1456,7 +1487,7 @@ public class AdminUserService {
     private void recordApprovalDecisionEntry(
         String approver,
         ApprovalAuditCollector collector,
-        String correlationId,
+        String changeRequestRef,
         long approvalId,
         Long primaryChangeRequestId,
         Set<Long> changeRequestIds,
@@ -1478,46 +1509,288 @@ public class AdminUserService {
         if (primaryChangeRequestId != null) {
             detail.put("changeRequestId", primaryChangeRequestId);
         }
-        if (StringUtils.isNotBlank(correlationId)) {
-            detail.put("correlationId", correlationId);
+        if (StringUtils.isNotBlank(changeRequestRef)) {
+            detail.put("changeRequestRef", changeRequestRef);
         }
         attachChangeRequestSnapshots(detail, changeRequestIds);
         if (collector != null && collector.hasData()) {
             collector.appendDetails(detail);
         }
 
-        AdminAuditService.AuditRecordBuilder builder = auditService
-            .builder()
-            .actor(approver)
-            .fromOperation(AdminAuditOperation.ADMIN_APPROVAL_DECIDE)
-            .result(AdminAuditService.AuditResult.SUCCESS)
-            .details(detail)
-            .operationType(operationType)
-            .operationTypeText(StringUtils.defaultIfBlank(operationTypeText, operationType.getDisplayName()));
+        detail.put("operationType", operationType.getCode());
+        detail.put("operationTypeText", StringUtils.defaultIfBlank(operationTypeText, operationType.getDisplayName()));
+        Map<String, Object> detailForV2 = new LinkedHashMap<>(detail);
         String summaryText = collector != null ? collector.summaryText() : null;
         if (StringUtils.isBlank(summaryText)) {
             summaryText = buildFallbackApprovalSummary(statusCode, primaryChangeRequestId, approvalId);
         }
-        builder.summary(summaryText);
-        String operationName = collector != null ? collector.primaryOperationName() : null;
-        if (StringUtils.isNotBlank(operationName)) {
-            builder.operationName(operationName);
-        } else if (StringUtils.isNotBlank(summaryText)) {
-            builder.operationName(summaryText);
+        recordApprovalDecisionV2(
+            approver,
+            statusCode,
+            resultCode,
+            approvalId,
+            approval,
+            changeRequestRef,
+            primaryChangeRequestId,
+            changeRequestIds,
+            note,
+            detailForV2,
+            collector,
+            summaryText
+        );
+    }
+
+    private void recordApprovalDecisionV2(
+        String approver,
+        String statusCode,
+        String resultCode,
+        long approvalId,
+        AdminApprovalRequest approval,
+        String changeRequestRef,
+        Long primaryChangeRequestId,
+        Set<Long> changeRequestIds,
+        String note,
+        Map<String, Object> detail,
+        ApprovalAuditCollector collector,
+        String summaryText
+    ) {
+        if (StringUtils.isBlank(approver)) {
+            return;
         }
-        boolean targetAssigned = false;
-        if (collector != null) {
-            AdminAuditService.AuditTarget primaryTarget = collector.primaryTarget().orElse(null);
-            if (primaryTarget != null) {
-                builder.target(primaryTarget);
-                targetAssigned = true;
+        try {
+            String normalizedStatus = StringUtils.defaultString(statusCode).trim().toUpperCase(Locale.ROOT);
+            String buttonCode = switch (normalizedStatus) {
+                case "REJECTED", "REJECT" -> ButtonCodes.APPROVAL_REJECT;
+                case "PROCESSING", "PROCESS", "PENDING" -> ButtonCodes.APPROVAL_DELAY;
+                default -> ButtonCodes.APPROVAL_APPROVE;
+            };
+            AuditResultStatus resultStatus = switch (normalizedStatus) {
+                case "REJECTED", "REJECT", "FAILED", "FAIL" -> AuditResultStatus.FAILED;
+                case "PROCESSING", "PROCESS", "PENDING" -> AuditResultStatus.PENDING;
+                default -> AuditResultStatus.SUCCESS;
+            };
+            String resolvedSummary = org.springframework.util.StringUtils.hasText(summaryText)
+                ? summaryText
+                : buildFallbackApprovalSummary(statusCode, primaryChangeRequestId, approvalId);
+
+            AuditActionRequest.Builder builder = AuditActionRequest
+                .builder(approver, buttonCode)
+                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .summary(resolvedSummary)
+                .result(resultStatus)
+                .request("/api/admin/approvals/" + approvalId + "/decision", "POST");
+            builder.metadata("approvalId", approvalId);
+            if (approval != null) {
+                builder.metadata("approvalType", approval.getType());
+                builder.metadata("requester", approval.getRequester());
+            }
+            builder.metadata("status", statusCode);
+            builder.metadata("resultCode", resultCode);
+            if (StringUtils.isNotBlank(note)) {
+                builder.metadata("note", note);
+            }
+            if (changeRequestIds != null && !changeRequestIds.isEmpty()) {
+                builder.metadata("changeRequestIds", new ArrayList<>(changeRequestIds));
+            }
+            if (org.springframework.util.StringUtils.hasText(changeRequestRef)) {
+                builder.changeRequestRef(changeRequestRef);
+            }
+            if (detail != null && !detail.isEmpty()) {
+                builder.detail("detail", new LinkedHashMap<>(detail));
+            }
+
+            if (collector != null) {
+                collector
+                    .primaryTarget()
+                    .ifPresent(target -> {
+                        if (StringUtils.isNotBlank(target.table())) {
+                            for (String id : target.ids()) {
+                                String label = target.labels().getOrDefault(id, id);
+                                builder.target(target.table(), id, label);
+                            }
+                        }
+                    });
+            }
+
+            if (primaryChangeRequestId != null) {
+                String label = org.springframework.util.StringUtils.hasText(changeRequestRef) ? changeRequestRef : "CR-" + primaryChangeRequestId;
+                builder.target("change_request", primaryChangeRequestId, label);
+                if (!org.springframework.util.StringUtils.hasText(changeRequestRef)) {
+                    builder.changeRequestRef(label);
+                }
+            }
+
+            auditV2Service.record(builder.build());
+        } catch (Exception ex) {
+            LOG.warn("Failed to record V2 approval decision [{}]: {}", statusCode, ex.getMessage());
+        }
+    }
+
+    private void recordUserApprovalRequestV2(
+        String actor,
+        String actionCode,
+        SubjectInfo subject,
+        ChangeRequest changeRequest,
+        String changeRequestRef,
+        String summary,
+        Map<String, Object> detail,
+        String clientIp
+    ) {
+        String buttonCode = resolveUserButtonCode(actionCode);
+        if (!StringUtils.isNotBlank(actor) || buttonCode == null) {
+            return;
+        }
+        try {
+            String subjectLabel = subject != null ? firstNonBlank(subject.label(), subject.id()) : null;
+            String fallbackSummary = buildUserRequestSummary(actionCode, subjectLabel);
+            AuditActionRequest.Builder builder = AuditActionRequest
+                .builder(actor, buttonCode)
+                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .summary(firstNonBlank(summary, fallbackSummary))
+                .result(AuditResultStatus.PENDING)
+                .client(clientIp, null)
+                .request("/internal/admin/users/approval", "POST")
+                .allowEmptyTargets();
+            builder.metadata("actionCode", actionCode);
+            builder.metadata("status", "PENDING");
+            if (subject != null) {
+                if (StringUtils.isNotBlank(subject.id())) {
+                    builder.metadata("username", subject.id());
+                }
+                if (StringUtils.isNotBlank(subject.label())) {
+                    builder.metadata("displayName", subject.label());
+                }
+            }
+            if (detail != null && !detail.isEmpty()) {
+                builder.detail("detail", new LinkedHashMap<>(detail));
+            }
+            if (changeRequest != null) {
+                String ref = org.springframework.util.StringUtils.hasText(changeRequestRef)
+                    ? changeRequestRef
+                    : "CR-" + changeRequest.getId();
+                builder.target("change_request", changeRequest.getId(), ref);
+                builder.changeRequestRef(ref);
+            } else if (org.springframework.util.StringUtils.hasText(changeRequestRef)) {
+                builder.changeRequestRef(changeRequestRef);
+            } else if (subject != null && StringUtils.isNotBlank(subject.id())) {
+                builder.target("admin_keycloak_user", subject.id(), firstNonBlank(subject.label(), subject.id()));
+            }
+            auditV2Service.record(builder.build());
+        } catch (Exception ex) {
+            LOG.warn("Failed to record V2 user approval request [{}]: {}", actionCode, ex.getMessage());
+        }
+    }
+
+    private void recordUserApprovalExecutionV2(
+        String actor,
+        String actionCode,
+        String normalizedTarget,
+        String username,
+        String changeRequestRef,
+        AuditStage stage,
+        Map<String, Object> payload
+    ) {
+        String buttonCode = resolveUserButtonCode(actionCode);
+        if (!StringUtils.isNotBlank(actor) || buttonCode == null) {
+            return;
+        }
+        try {
+            String summary = firstNonBlank(
+                stringValue(payload != null ? payload.get("summary") : null),
+                stringValue(payload != null ? payload.get("operationName") : null),
+                buildUserExecutionSummary(actionCode, firstNonBlank(username, normalizedTarget))
+            );
+            AuditResultStatus resultStatus = stage == AuditStage.SUCCESS ? AuditResultStatus.SUCCESS : AuditResultStatus.FAILED;
+            AuditActionRequest.Builder builder = AuditActionRequest
+                .builder(actor, buttonCode)
+                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .summary(summary)
+                .result(resultStatus)
+                .client(null, null)
+                .request("/internal/admin/users/execute", "POST")
+                .allowEmptyTargets();
+            builder.metadata("actionCode", actionCode);
+            builder.metadata("stage", stage.name());
+            if (StringUtils.isNotBlank(username)) {
+                builder.metadata("username", username);
+            }
+            if (StringUtils.isNotBlank(normalizedTarget)) {
+                builder.metadata("targetId", normalizedTarget);
+            }
+            if (org.springframework.util.StringUtils.hasText(changeRequestRef)) {
+                builder.changeRequestRef(changeRequestRef);
+            }
+            if (payload != null && !payload.isEmpty()) {
+                builder.detail("detail", new LinkedHashMap<>(payload));
+            }
+            String targetId = firstNonBlank(normalizedTarget, username);
+            if (StringUtils.isNotBlank(targetId)) {
+                builder.target("admin_keycloak_user", targetId, firstNonBlank(username, targetId));
+            }
+            auditV2Service.record(builder.build());
+        } catch (Exception ex) {
+            LOG.warn("Failed to record V2 user approval execution [{}]: {}", actionCode, ex.getMessage());
+        }
+    }
+
+
+    private String resolveUserButtonCode(String actionCode) {
+        if (!StringUtils.isNotBlank(actionCode)) {
+            return null;
+        }
+        return switch (actionCode) {
+            case "ADMIN_USER_CREATE" -> ButtonCodes.USER_CREATE;
+            case "ADMIN_USER_UPDATE" -> ButtonCodes.USER_UPDATE;
+            case "ADMIN_USER_ASSIGN_ROLE" -> ButtonCodes.USER_ASSIGN_ROLES;
+            case "ADMIN_USER_REMOVE_ROLES", "ADMIN_USER_REMOVE_ROLE" -> ButtonCodes.USER_REMOVE_ROLES;
+            case "ADMIN_USER_ENABLE" -> ButtonCodes.USER_ENABLE;
+            case "ADMIN_USER_DISABLE" -> ButtonCodes.USER_DISABLE;
+            case "ADMIN_USER_RESET_PASSWORD" -> ButtonCodes.USER_RESET_PASSWORD;
+            case "ADMIN_USER_SET_PERSON_LEVEL" -> ButtonCodes.USER_SET_PERSON_LEVEL;
+            default -> null;
+        };
+    }
+
+    private String buildUserRequestSummary(String actionCode, String subjectLabel) {
+        String target = subjectLabel != null ? subjectLabel : "用户";
+        return switch (actionCode) {
+            case "ADMIN_USER_CREATE" -> "提交新增用户审批：" + target;
+            case "ADMIN_USER_UPDATE" -> "提交修改用户审批：" + target;
+            case "ADMIN_USER_ASSIGN_ROLE" -> "提交角色授权审批：" + target;
+            case "ADMIN_USER_DISABLE" -> "提交停用用户审批：" + target;
+            case "ADMIN_USER_ENABLE" -> "提交启用用户审批：" + target;
+            case "ADMIN_USER_RESET_PASSWORD" -> "提交重置密码审批：" + target;
+            case "ADMIN_USER_SET_PERSON_LEVEL" -> "提交调整密级审批：" + target;
+            default -> "提交用户操作审批：" + target;
+        };
+    }
+
+    private String buildUserExecutionSummary(String actionCode, String targetLabel) {
+        String target = targetLabel != null ? targetLabel : "用户";
+        return switch (actionCode) {
+            case "ADMIN_USER_CREATE" -> "执行新增用户：" + target;
+            case "ADMIN_USER_UPDATE" -> "执行修改用户：" + target;
+            case "ADMIN_USER_ASSIGN_ROLE" -> "执行角色授权：" + target;
+            case "ADMIN_USER_DISABLE" -> "执行停用用户：" + target;
+            case "ADMIN_USER_ENABLE" -> "执行启用用户：" + target;
+            case "ADMIN_USER_RESET_PASSWORD" -> "执行重置密码：" + target;
+            case "ADMIN_USER_SET_PERSON_LEVEL" -> "执行调整密级：" + target;
+            default -> "执行用户操作：" + target;
+        };
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.isNotBlank(value)) {
+                return value.trim();
             }
         }
-        if (!targetAssigned && primaryChangeRequestId != null) {
-            builder.target(AdminAuditService.AuditTarget.of("change_request", List.of(String.valueOf(primaryChangeRequestId))));
-        }
-        auditService.record(builder.build());
+        return null;
     }
+
 
     private void attachChangeRequestSnapshots(Map<String, Object> detail, Set<Long> changeRequestIds) {
         if (detail == null || changeRequestIds == null || changeRequestIds.isEmpty()) {
@@ -1535,7 +1808,7 @@ public class AdminUserService {
                     if (snapshot != null && (snapshot.hasChanges() || !snapshot.getBefore().isEmpty() || !snapshot.getAfter().isEmpty())) {
                         Map<String, Object> entry = new LinkedHashMap<>();
                         entry.put("changeRequestId", crId);
-                        entry.put("changeRequestRef", correlationIdFrom(crId));
+                        entry.put("changeRequestRef", changeRequestRefFrom(crId));
                         entry.put("resourceType", cr.getResourceType());
                         entry.put("snapshot", snapshot.toMap());
                         List<Map<String, String>> summary = changeSnapshotFormatter.format(snapshot, cr.getResourceType());
@@ -1596,7 +1869,7 @@ public class AdminUserService {
         ensurePending(approval);
         Set<Long> changeRequestIds = extractChangeRequestIds(approval);
         Long primaryChangeRequestId = changeRequestIds.stream().findFirst().orElse(null);
-        String correlationId = correlationIdFrom(primaryChangeRequestId);
+        String changeRequestRef = changeRequestRefFrom(primaryChangeRequestId);
         Instant now = Instant.now();
         approval.setStatus(ApprovalStatus.REJECTED.name());
         approval.setDecidedAt(now);
@@ -1607,7 +1880,7 @@ public class AdminUserService {
         recordApprovalDecisionEntry(
             approver,
             snapshotCollector,
-            correlationId,
+            changeRequestRef,
             id,
             primaryChangeRequestId,
             changeRequestIds,
@@ -1629,7 +1902,7 @@ public class AdminUserService {
         ensurePending(approval);
         Set<Long> changeRequestIds = extractChangeRequestIds(approval);
         Long primaryChangeRequestId = changeRequestIds.stream().findFirst().orElse(null);
-        String correlationId = correlationIdFrom(primaryChangeRequestId);
+        String changeRequestRef = changeRequestRefFrom(primaryChangeRequestId);
         Instant now = Instant.now();
         approval.setStatus(ApprovalStatus.PROCESSING.name());
         approval.setDecidedAt(now);
@@ -1640,7 +1913,7 @@ public class AdminUserService {
         recordApprovalDecisionEntry(
             approver,
             snapshotCollector,
-            correlationId,
+            changeRequestRef,
             id,
             primaryChangeRequestId,
             changeRequestIds,

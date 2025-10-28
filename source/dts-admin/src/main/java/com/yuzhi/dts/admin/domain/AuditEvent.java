@@ -187,8 +187,6 @@ public class AuditEvent implements Serializable {
     @Transient
     private String signatureKeyVer;
 
-    @Transient
-    private String correlationId;
 
     public Long getId() {
         return id;
@@ -563,14 +561,6 @@ public class AuditEvent implements Serializable {
 
     public void setSignatureKeyVer(String signatureKeyVer) {
         this.signatureKeyVer = signatureKeyVer;
-    }
-
-    public String getCorrelationId() {
-        return correlationId;
-    }
-
-    public void setCorrelationId(String correlationId) {
-        this.correlationId = correlationId;
     }
 
     public String getCreatedBy() {

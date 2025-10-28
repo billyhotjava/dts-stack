@@ -1,11 +1,10 @@
 package com.yuzhi.dts.admin.web.rest;
 
-import com.yuzhi.dts.admin.service.audit.AdminAuditOperation;
-import com.yuzhi.dts.admin.service.audit.AdminAuditService;
-import com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditRecordBuilder;
-import com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditResult;
-import com.yuzhi.dts.admin.service.audit.AdminAuditService.AuditTarget;
-import com.yuzhi.dts.admin.service.audit.AuditOperationType;
+import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
+import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
+import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
+import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
+import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Array;
@@ -14,11 +13,12 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
+import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 平台侧推送审计事件的接收端。接收到的数据会转换为统一的管理端审计事件格式。
+ * 平台侧推送审计事件的接入端，统一写入新的 audit_entry 表。
  */
 @RestController
 @RequestMapping("/api/audit-events")
@@ -38,338 +38,498 @@ public class AuditIngestResource {
 
     private static final Logger log = LoggerFactory.getLogger(AuditIngestResource.class);
 
-    private final AdminAuditService auditService;
+    private final AuditV2Service auditV2Service;
 
-    public AuditIngestResource(AdminAuditService auditService) {
-        this.auditService = Objects.requireNonNull(auditService, "auditService required");
+    public AuditIngestResource(AuditV2Service auditV2Service) {
+        this.auditV2Service = Objects.requireNonNull(auditV2Service, "auditV2Service required");
     }
 
     @PostMapping
     public ResponseEntity<Void> ingest(@RequestBody Map<String, Object> body, HttpServletRequest request) {
         try {
-            Map<String, Object> detail = new LinkedHashMap<>(body);
-            String sourceSystem = asText(body.get("sourceSystem"));
-            String actor = resolveActor(body);
-            String actorRole = resolveActorRole(body);
-            String actionCode = defaultString(asText(body.get("operationCode")), asText(body.get("action")));
-            if (StringUtils.isBlank(actionCode)) {
-                actionCode = "PLATFORM_EVENT";
-            }
-            String summary = asText(body.get("summary"));
-            String module = asText(body.get("module"));
-            String actorName = asText(body.get("actorName"));
-            Instant occurredAt = parseInstant(asText(body.get("occurredAt")));
-            String resourceId = defaultString(asText(body.get("resourceId")), asText(body.get("targetRef")));
-            List<String> targetIds = extractTargetIds(body, resourceId);
-            String targetTable = asText(body.get("targetTable"));
-            String clientIp = resolveClientIp(body, request);
-            String clientAgent = resolveClientAgent(body, request);
+            AuditPayload payload = AuditPayload.from(body, request);
+            AuditActionRequest.Builder builder = AuditActionRequest
+                .builder(payload.actor(), payload.buttonCode())
+                .occurredAt(payload.occurredAt())
+                .actorName(payload.actorName())
+                .actorRoles(payload.actorRoles())
+                .summary(payload.summary())
+                .result(payload.result())
+                .changeRequestRef(payload.changeRequestRef())
+                .client(payload.clientIp(), payload.clientAgent())
+                .request(payload.requestUri(), payload.httpMethod())
+                .metadata("sourceSystem", payload.sourceSystem())
+                .metadata("moduleKeyRaw", payload.moduleKeyRaw());
 
-            AuditRecordBuilder builder = auditService
-                .builder()
-                .actor(actor)
-                .actorName(StringUtils.isNotBlank(actorName) ? actorName : null)
-                .actorRole(actorRole)
-                .sourceSystem(StringUtils.isNotBlank(sourceSystem) ? sourceSystem : "platform")
-                .occurredAt(occurredAt)
-                .clientIp(clientIp)
-                .clientAgent(clientAgent)
-                .details(detail);
-
-            AdminAuditOperation.fromCode(actionCode).ifPresent(builder::fromOperation);
-            if (StringUtils.isNotBlank(module)) {
-                builder.module(module);
+            if (StringUtils.isNotBlank(payload.moduleKey())) {
+                builder.moduleOverride(payload.moduleKey(), payload.moduleName());
             }
 
-            AuditOperationType opType = resolveOperationType(body, actionCode);
-            builder.operationType(opType);
-            builder.operationTypeText(opType.getDisplayName());
+            builder.operationOverride(
+                payload.operationCode(),
+                payload.operationName(),
+                payload.operationKind()
+            );
 
-            if (!targetIds.isEmpty() || StringUtils.isNotBlank(targetTable)) {
-                builder.target(new AuditTarget(targetTable, targetIds, Map.of(), Map.of()));
+            if (!payload.metadata().isEmpty()) {
+                payload
+                    .metadata()
+                    .forEach((key, value) -> builder.metadata(key, value));
+            }
+            if (!payload.attributes().isEmpty()) {
+                payload
+                    .attributes()
+                    .forEach((key, value) -> builder.attribute(key, value));
             }
 
-            String resultRaw = asText(body.get("result"));
-            builder.result(parseResult(resultRaw));
-
-            if (StringUtils.isNotBlank(summary)) {
-                builder.summary(summary);
-            } else if (!targetIds.isEmpty()) {
-                builder.summary(actionCode + "：" + String.join(",", targetIds));
-            } else {
-                builder.summary(actionCode);
+            if (!payload.targets().isEmpty()) {
+                payload
+                    .targets()
+                    .forEach(target -> builder.target(target.table(), target.id(), target.label()));
+            } else if (payload.operationKind() == AuditOperationKind.QUERY) {
+                builder.allowEmptyTargets();
             }
 
-            auditService.record(builder.build());
+            if (!payload.details().isEmpty()) {
+                builder.detail("payload", payload.details());
+            }
+
+            auditV2Service.record(builder.build());
             return ResponseEntity.accepted().build();
         } catch (Exception ex) {
-            log.warn("Failed to ingest audit event from platform: {}", ex.toString());
+            log.warn("Failed to ingest audit event from platform: {}", ex.getMessage(), ex);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
     }
 
-    private AuditOperationType resolveOperationType(Map<String, Object> body, String actionCode) {
-        String explicit = firstNonBlank(
-            asText(body.get("operationType")),
-            asText(body.get("operation_type")),
-            asText(body.get("operationTypeCode"))
-        );
-        if (StringUtils.isNotBlank(explicit)) {
-            return mapOperationType(explicit);
-        }
-        if (StringUtils.isNotBlank(actionCode)) {
-            return mapOperationType(actionCode);
-        }
-        return AuditOperationType.READ;
-    }
+    private record TargetRecord(String table, Object id, String label) {}
 
-    private AuditOperationType mapOperationType(String token) {
-        if (StringUtils.isBlank(token)) {
-            return AuditOperationType.READ;
-        }
-        String normalized = token.trim().toUpperCase(Locale.ROOT);
-        if (normalized.isEmpty()) {
-            return AuditOperationType.READ;
-        }
-        String lower = token.trim().toLowerCase(Locale.ROOT);
-        if (
-            matches(normalized, "CREATE", "ADD", "NEW", "INSERT", "REGISTER", "SUBMIT") ||
-            containsAny(lower, "新增", "新建", "创建", "提交", "申请", "导入", "上传")
-        ) {
-            return AuditOperationType.CREATE;
-        }
-        if (matches(normalized, "DELETE", "REMOVE", "DESTROY", "DROP") || containsAny(lower, "删除", "移除", "下线", "注销")) {
-            return AuditOperationType.DELETE;
-        }
-        if (
-            matches(normalized, "READ", "GET", "LIST", "QUERY", "SEARCH", "FETCH", "VIEW", "PREVIEW", "DOWNLOAD", "EXPORT", "EXECUTE", "RUN", "TEST", "SYNC") ||
-            containsAny(lower, "查看", "查询", "预览", "下载", "导出", "浏览", "列表", "检索")
-        ) {
-            return AuditOperationType.READ;
-        }
-        if (
-            matches(normalized, "UPDATE", "MODIFY", "EDIT", "SAVE", "ENABLE", "DISABLE", "PUBLISH", "UNPUBLISH", "APPROVE", "REJECT", "GRANT", "REVOKE") ||
-            containsAny(lower, "修改", "更新", "调整", "批准", "审批", "拒绝", "执行", "运行", "启用", "禁用", "发布", "保存", "编辑")
-        ) {
-            return AuditOperationType.UPDATE;
-        }
-        return AuditOperationType.UPDATE;
-    }
+    private record AuditPayload(
+        String actor,
+        String actorName,
+        List<String> actorRoles,
+        String buttonCode,
+        String moduleKey,
+        String moduleKeyRaw,
+        String moduleName,
+        String operationCode,
+        String operationName,
+        AuditOperationKind operationKind,
+        AuditResultStatus result,
+        String summary,
+        String changeRequestRef,
+        String requestUri,
+        String httpMethod,
+        String clientIp,
+        String clientAgent,
+        String sourceSystem,
+        Instant occurredAt,
+        Map<String, Object> metadata,
+        Map<String, Object> attributes,
+        List<TargetRecord> targets,
+        Map<String, Object> details
+    ) {
+        static AuditPayload from(Map<String, Object> body, HttpServletRequest request) {
+            Map<String, Object> sanitizedBody = body == null ? Map.of() : new LinkedHashMap<>(body);
+            String sourceSystem = text(sanitizedBody.get("sourceSystem"), "platform");
+            String moduleKey = firstNonBlank(
+                text(sanitizedBody.get("moduleKey")),
+                text(sanitizedBody.get("module")),
+                sourceSystem
+            );
+            String moduleName = firstNonBlank(text(sanitizedBody.get("moduleName")), moduleKey);
 
-    private boolean matches(String actual, String... candidates) {
-        for (String candidate : candidates) {
-            if (actual.equals(candidate)) {
+            String actor = normalizeActor(sanitizedBody);
+            String actorName = text(sanitizedBody.get("actorName"), actor);
+            List<String> actorRoles = extractStringList(
+                sanitizedBody.get("actorRoles"),
+                sanitizedBody.get("operatorRoles"),
+                sanitizedBody.get("roles")
+            );
+
+            String buttonCode = text(sanitizedBody.get("buttonCode"), ButtonCodes.PLATFORM_GENERIC_EVENT);
+            String operationCode = firstNonBlank(
+                text(sanitizedBody.get("operationCode")),
+                text(sanitizedBody.get("action")),
+                buttonCode
+            );
+            String operationName = firstNonBlank(
+                text(sanitizedBody.get("operationName")),
+                text(sanitizedBody.get("summary")),
+                operationCode
+            );
+            AuditOperationKind operationKind = resolveKind(
+                firstNonBlank(
+                    text(sanitizedBody.get("operationType")),
+                    text(sanitizedBody.get("operationTypeCode")),
+                    text(sanitizedBody.get("operation_type")),
+                    text(sanitizedBody.get("httpMethod")),
+                    text(sanitizedBody.get("method"))
+                ),
+                operationCode
+            );
+
+            AuditResultStatus result = resolveResult(text(sanitizedBody.get("result")));
+            String summary = firstNonBlank(text(sanitizedBody.get("summary")), operationName);
+            String changeRequestRef = text(sanitizedBody.get("changeRequestRef"), text(sanitizedBody.get("requestId")));
+
+            String requestUri = firstNonBlank(
+                text(sanitizedBody.get("requestUri")),
+                text(sanitizedBody.get("uri")),
+                text(sanitizedBody.get("path"))
+            );
+            String httpMethod = firstNonBlank(
+                text(sanitizedBody.get("httpMethod")),
+                text(sanitizedBody.get("method")),
+                "POST"
+            );
+            String clientIp = resolveClientIp(sanitizedBody, request);
+            String clientAgent = resolveClientAgent(sanitizedBody, request);
+
+            Instant occurredAt = parseInstant(text(sanitizedBody.get("occurredAt")));
+
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            Map<String, Object> attributes = new LinkedHashMap<>();
+            extractMap(sanitizedBody.get("metadata")).forEach((k, v) -> metadata.put(String.valueOf(k), v));
+            extractMap(sanitizedBody.get("attributes")).forEach((k, v) -> attributes.put(String.valueOf(k), v));
+
+            List<TargetRecord> targets = resolveTargets(sanitizedBody);
+            Map<String, Object> details = sanitizeDetails(sanitizedBody);
+
+            return new AuditPayload(
+                actor,
+                actorName,
+                actorRoles,
+                buttonCode,
+                moduleKey.toLowerCase(Locale.ROOT),
+                moduleKey,
+                moduleName,
+                operationCode,
+                operationName,
+                operationKind,
+                result,
+                summary,
+                changeRequestRef,
+                requestUri,
+                httpMethod,
+                clientIp,
+                clientAgent,
+                sourceSystem,
+                occurredAt,
+                metadata,
+                attributes,
+                targets,
+                details
+            );
+        }
+
+        private static List<TargetRecord> resolveTargets(Map<String, Object> body) {
+            String targetTable = text(body.get("targetTable"), text(body.get("resourceType")));
+            List<Object> rawIds = collectValues(
+                body.get("targetIds"),
+                body.get("resourceIds"),
+                body.get("resourceId"),
+                body.get("targetId"),
+                body.get("targetRef")
+            );
+            if (rawIds.isEmpty()) {
+                Object payload = body.get("payload");
+                if (payload instanceof Map<?, ?> map) {
+                    rawIds.addAll(collectValues(
+                        map.get("targetIds"),
+                        map.get("resourceId"),
+                        map.get("targetId")
+                    ));
+                }
+            }
+            List<TargetRecord> targets = new ArrayList<>();
+            Set<String> seen = new LinkedHashSet<>();
+            for (Object raw : rawIds) {
+                if (raw == null) {
+                    continue;
+                }
+                String id = raw.toString().trim();
+                if (id.isEmpty() || !seen.add(id)) {
+                    continue;
+                }
+                targets.add(new TargetRecord(targetTable, id, null));
+            }
+            return targets;
+        }
+
+        private static Map<String, Object> sanitizeDetails(Map<String, Object> body) {
+            Map<String, Object> copy = new LinkedHashMap<>(body);
+            copy.remove("targetIds");
+            copy.remove("targetId");
+            copy.remove("resourceIds");
+            copy.remove("resourceId");
+            copy.remove("targetRef");
+            copy.remove("actorRoles");
+            copy.remove("role");
+            copy.remove("actorRole");
+            copy.remove("operatorRoles");
+            copy.remove("requestUri");
+            copy.remove("httpMethod");
+            copy.remove("method");
+            copy.remove("clientIp");
+            copy.remove("clientAgent");
+            copy.remove("occurredAt");
+            copy.remove("module");
+            copy.remove("moduleKey");
+            copy.remove("moduleName");
+            copy.remove("operationType");
+            copy.remove("operationTypeCode");
+            copy.remove("operation_type");
+            copy.remove("buttonCode");
+            copy.remove("sourceSystem");
+            copy.remove("metadata");
+            copy.remove("attributes");
+            return copy;
+        }
+
+        private static Map<String, Object> extractMap(Object value) {
+            if (value instanceof Map<?, ?> map) {
+                Map<String, Object> result = new LinkedHashMap<>();
+                map.forEach((k, v) -> result.put(String.valueOf(k), v));
+                return result;
+            }
+            return Map.of();
+        }
+
+        private static List<Object> collectValues(Object... sources) {
+            List<Object> values = new ArrayList<>();
+            if (sources == null) {
+                return values;
+            }
+            for (Object source : sources) {
+                merge(values, source);
+            }
+            return values;
+        }
+
+        private static void merge(Collection<Object> values, Object source) {
+            if (source == null) {
+                return;
+            }
+            if (source instanceof Collection<?> collection) {
+                for (Object item : collection) {
+                    merge(values, item);
+                }
+                return;
+            }
+            if (source.getClass().isArray()) {
+                int length = Array.getLength(source);
+                for (int i = 0; i < length; i++) {
+                    merge(values, Array.get(source, i));
+                }
+                return;
+            }
+            String text = source.toString();
+            if (StringUtils.isBlank(text)) {
+                return;
+            }
+            if (text.contains(",")) {
+                for (String part : text.split(",")) {
+                    merge(values, part.trim());
+                }
+                return;
+            }
+            values.add(text.trim());
+        }
+
+        private static List<String> extractStringList(Object... sources) {
+            List<Object> raw = collectValues(sources);
+            List<String> normalized = new ArrayList<>();
+            for (Object value : raw) {
+                if (value == null) {
+                    continue;
+                }
+                String text = value.toString().trim();
+                if (!text.isEmpty()) {
+                    normalized.add(text.toUpperCase(Locale.ROOT));
+                }
+            }
+            return List.copyOf(normalized);
+        }
+
+        private static String normalizeActor(Map<String, Object> body) {
+            List<Object> candidates = collectValues(
+                body.get("actor"),
+                body.get("username"),
+                body.get("user"),
+                body.get("operator"),
+                body.get("principal"),
+                body.get("account")
+            );
+            Object payload = body.get("payload");
+            if (payload instanceof Map<?, ?> map) {
+                candidates.addAll(collectValues(
+                    map.get("actor"),
+                    map.get("username"),
+                    map.get("operator"),
+                    map.get("user"),
+                    map.get("principal")
+                ));
+            }
+            for (Object candidate : candidates) {
+                if (candidate == null) continue;
+                String text = candidate.toString().trim();
+                if (!text.isEmpty() && !isAnonymous(text)) {
+                    return text;
+                }
+            }
+            return "platform";
+        }
+
+        private static boolean isAnonymous(String value) {
+            if (value == null) {
                 return true;
             }
+            String norm = value.trim().toLowerCase(Locale.ROOT);
+            return norm.isEmpty() || norm.equals("anonymous") || norm.equals("anonymoususer") || norm.equals("unknown");
         }
-        return false;
-    }
 
-    private boolean containsAny(String source, String... phrases) {
-        if (StringUtils.isBlank(source) || phrases == null) {
+        private static String resolveClientIp(Map<String, Object> body, HttpServletRequest request) {
+            String fromBody = text(body.get("clientIp"), text(body.get("ip")));
+            String forwarded = request != null ? request.getHeader("X-Forwarded-For") : null;
+            String realIp = request != null ? request.getHeader("X-Real-IP") : null;
+            String remote = request != null ? request.getRemoteAddr() : null;
+            return IpAddressUtils.resolveClientIp(fromBody, forwarded, realIp, remote);
+        }
+
+        private static String resolveClientAgent(Map<String, Object> body, HttpServletRequest request) {
+            String agent = text(body.get("clientAgent"), text(body.get("userAgent")));
+            if (StringUtils.isNotBlank(agent)) {
+                return agent.trim();
+            }
+            if (request == null) {
+                return null;
+            }
+            String header = request.getHeader("User-Agent");
+            return StringUtils.isNotBlank(header) ? header.trim() : null;
+        }
+
+        private static Instant parseInstant(String raw) {
+            if (StringUtils.isBlank(raw)) {
+                return Instant.now();
+            }
+            try {
+                return Instant.parse(raw.trim());
+            } catch (DateTimeParseException ex) {
+                return Instant.now();
+            }
+        }
+
+        private static AuditOperationKind resolveKind(String explicit, String fallback) {
+            if (StringUtils.isNotBlank(explicit)) {
+                return mapOperationKind(explicit);
+            }
+            if (StringUtils.isNotBlank(fallback)) {
+                return mapOperationKind(fallback);
+            }
+            return AuditOperationKind.OTHER;
+        }
+
+        private static AuditOperationKind mapOperationKind(String token) {
+            if (StringUtils.isBlank(token)) {
+                return AuditOperationKind.OTHER;
+            }
+            String normalized = token.trim().toUpperCase(Locale.ROOT);
+            String lower = token.trim().toLowerCase(Locale.ROOT);
+            if (
+                normalized.startsWith("CREATE") ||
+                normalized.startsWith("ADD") ||
+                normalized.startsWith("NEW") ||
+                containsAny(lower, "新增", "新建", "创建", "提交", "申请", "导入", "上传")
+            ) {
+                return AuditOperationKind.CREATE;
+            }
+            if (
+                normalized.startsWith("DELETE") ||
+                normalized.startsWith("REMOVE") ||
+                containsAny(lower, "删除", "移除", "下线", "注销")
+            ) {
+                return AuditOperationKind.DELETE;
+            }
+            if (
+                normalized.startsWith("UPDATE") ||
+                normalized.startsWith("MODIFY") ||
+                normalized.startsWith("EDIT") ||
+                normalized.startsWith("SAVE") ||
+                normalized.startsWith("ENABLE") ||
+                normalized.startsWith("DISABLE") ||
+                normalized.startsWith("APPROVE") ||
+                normalized.startsWith("REJECT") ||
+                containsAny(lower, "修改", "批准", "审批", "拒绝", "执行", "启用", "禁用", "发布")
+            ) {
+                return AuditOperationKind.UPDATE;
+            }
+            if (
+                normalized.startsWith("READ") ||
+                normalized.startsWith("GET") ||
+                normalized.startsWith("LIST") ||
+                normalized.startsWith("QUERY") ||
+                normalized.startsWith("SEARCH") ||
+                normalized.startsWith("VIEW") ||
+                normalized.startsWith("DOWNLOAD") ||
+                normalized.startsWith("EXPORT") ||
+                containsAny(lower, "查看", "查询", "预览", "下载", "导出", "浏览", "列表")
+            ) {
+                return AuditOperationKind.QUERY;
+            }
+            if (normalized.startsWith("LOGIN")) {
+                return AuditOperationKind.LOGIN;
+            }
+            if (normalized.startsWith("LOGOUT")) {
+                return AuditOperationKind.LOGOUT;
+            }
+            return AuditOperationKind.OTHER;
+        }
+
+        private static AuditResultStatus resolveResult(String raw) {
+            if (StringUtils.isBlank(raw)) {
+                return AuditResultStatus.SUCCESS;
+            }
+            String normalized = raw.trim().toUpperCase(Locale.ROOT);
+            return switch (normalized) {
+                case "SUCCESS", "SUCCEEDED", "OK", "PASS", "通过" -> AuditResultStatus.SUCCESS;
+                case "FAIL", "FAILED", "ERROR", "ERR", "拒绝", "异常" -> AuditResultStatus.FAILED;
+                case "PENDING", "PROCESSING", "IN_PROGRESS", "处理中" -> AuditResultStatus.PENDING;
+                default -> AuditResultStatus.SUCCESS;
+            };
+        }
+
+        private static boolean containsAny(String text, String... tokens) {
+            if (text == null || tokens == null) {
+                return false;
+            }
+            for (String token : tokens) {
+                if (token != null && text.contains(token)) {
+                    return true;
+                }
+            }
             return false;
         }
-        for (String phrase : phrases) {
-            if (phrase != null && source.contains(phrase)) {
-                return true;
+
+        private static String firstNonBlank(String... values) {
+            if (values == null) {
+                return null;
             }
-        }
-        return false;
-    }
-
-    private static String asText(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private static String defaultString(String value, String fallback) {
-        return StringUtils.isNotBlank(value) ? value : fallback;
-    }
-
-    private Instant parseInstant(String value) {
-        if (StringUtils.isBlank(value)) {
+            for (String value : values) {
+                if (StringUtils.isNotBlank(value)) {
+                    return value.trim();
+                }
+            }
             return null;
         }
-        try {
-            return Instant.parse(value.trim());
-        } catch (DateTimeParseException ex) {
-            return null;
-        }
-    }
 
-    private AuditResult parseResult(String value) {
-        if (StringUtils.isBlank(value)) {
-            return AuditResult.SUCCESS;
+        private static String text(Object value) {
+            return value == null ? null : value.toString();
         }
-        String normalized = value.trim().toLowerCase(Locale.ROOT);
-        return switch (normalized) {
-            case "success", "ok", "succeeded", "通过" -> AuditResult.SUCCESS;
-            case "pending", "processing", "处理中" -> AuditResult.PENDING;
-            case "fail", "failed", "error", "异常", "拒绝" -> AuditResult.FAILED;
-            default -> AuditResult.SUCCESS;
-        };
-    }
 
-    private List<String> extractTargetIds(Map<String, Object> body, String fallbackId) {
-        List<String> ids = new ArrayList<>();
-        mergeIds(ids, body.get("targetIds"));
-        mergeIds(ids, body.get("targetId"));
-        mergeIds(ids, body.get("resourceIds"));
-        mergeIds(ids, body.get("resourceId"));
-        mergeIds(ids, body.get("targetRef"));
-
-        if (ids.isEmpty() && isMeaningfulId(fallbackId)) {
-            ids.add(fallbackId.trim());
+        private static String text(Object value, String fallback) {
+            String converted = text(value);
+            return StringUtils.isNotBlank(converted) ? converted.trim() : fallback;
         }
-        if (ids.isEmpty()) {
-            mergeIds(ids, body.get("username"));
-        }
-        return ids.stream().map(String::trim).filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList());
-    }
-
-    private void mergeIds(Collection<String> ids, Object candidate) {
-        if (candidate == null) {
-            return;
-        }
-        if (candidate instanceof Collection<?> collection) {
-            for (Object item : collection) {
-                mergeIds(ids, item);
-            }
-            return;
-        }
-        if (candidate.getClass().isArray()) {
-            int length = Array.getLength(candidate);
-            for (int i = 0; i < length; i++) {
-                mergeIds(ids, Array.get(candidate, i));
-            }
-            return;
-        }
-        String text = candidate.toString();
-        if (StringUtils.isBlank(text)) {
-            return;
-        }
-        if (text.contains(",")) {
-            for (String part : text.split(",")) {
-                mergeIds(ids, part);
-            }
-            return;
-        }
-        if (isMeaningfulId(text)) {
-            ids.add(text.trim());
-        }
-    }
-
-    private boolean isMeaningfulId(String value) {
-        if (StringUtils.isBlank(value)) {
-            return false;
-        }
-        String trimmed = value.trim();
-        String lower = trimmed.toLowerCase(Locale.ROOT);
-        return !List.of("list", "search", "sync", "pending", "-", "demo").contains(lower);
-    }
-
-    private String resolveActor(Map<String, Object> body) {
-        String direct = firstNonBlank(
-            asText(body.get("actor")),
-            asText(body.get("username")),
-            asText(body.get("user")),
-            asText(body.get("operator")),
-            asText(body.get("principal")),
-            asText(body.get("operatorId")),
-            asText(body.get("operatorCode")),
-            asText(body.get("subject")),
-            asText(body.get("account"))
-        );
-        if (StringUtils.isNotBlank(direct) && !isAnonymous(direct)) {
-            return direct.trim();
-        }
-        Object payload = body.get("payload");
-        if (payload instanceof Map<?, ?> map) {
-            String fromPayload = firstNonBlank(
-                asText(map.get("actor")),
-                asText(map.get("username")),
-                asText(map.get("operator")),
-                asText(map.get("user")),
-                asText(map.get("principal")),
-                asText(map.get("resourceId")),
-                asText(map.get("targetRef"))
-            );
-            if (StringUtils.isNotBlank(fromPayload) && !isAnonymous(fromPayload)) {
-                return fromPayload.trim();
-            }
-        }
-        String fallback = firstNonBlank(
-            asText(body.get("userId")),
-            asText(body.get("resourceId")),
-            asText(body.get("targetRef")),
-            asText(body.get("operatorId"))
-        );
-        if (StringUtils.isNotBlank(fallback) && !isAnonymous(fallback)) {
-            return fallback.trim();
-        }
-        return "unknown";
-    }
-
-    private String resolveActorRole(Map<String, Object> body) {
-        String role = firstNonBlank(
-            asText(body.get("actorRole")),
-            asText(body.get("operatorRole")),
-            asText(body.get("role"))
-        );
-        if (StringUtils.isNotBlank(role)) {
-            return role.trim();
-        }
-        Object payload = body.get("payload");
-        if (payload instanceof Map<?, ?> map) {
-            String fromPayload = firstNonBlank(
-                asText(map.get("actorRole")),
-                asText(map.get("operatorRole")),
-                asText(map.get("role"))
-            );
-            if (StringUtils.isNotBlank(fromPayload)) {
-                return fromPayload.trim();
-            }
-        }
-        return null;
-    }
-
-    private String firstNonBlank(String... values) {
-        if (values == null) {
-            return null;
-        }
-        for (String value : values) {
-            if (StringUtils.isNotBlank(value) && !isAnonymous(value)) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private boolean isAnonymous(String value) {
-        if (StringUtils.isBlank(value)) {
-            return true;
-        }
-        String norm = value.trim().toLowerCase(Locale.ROOT);
-        return "anonymous".equals(norm)
-            || "anonymoususer".equals(norm)
-            || "unknown".equals(norm)
-            || "null".equals(norm)
-            || "-".equals(norm);
-    }
-
-    private String resolveClientIp(Map<String, Object> body, HttpServletRequest request) {
-        String fromBody = asText(body.get("clientIp"));
-        String forwarded = request.getHeader("X-Forwarded-For");
-        String realIp = request.getHeader("X-Real-IP");
-        String remote = request.getRemoteAddr();
-        return IpAddressUtils.resolveClientIp(fromBody, forwarded, realIp, remote);
-    }
-
-    private String resolveClientAgent(Map<String, Object> body, HttpServletRequest request) {
-        String agent = asText(body.get("clientAgent"));
-        if (StringUtils.isNotBlank(agent)) {
-            return agent.trim();
-        }
-        String header = request.getHeader("User-Agent");
-        return StringUtils.isNotBlank(header) ? header.trim() : null;
     }
 }

@@ -1,11 +1,15 @@
 package com.yuzhi.dts.admin.security;
 
-import com.yuzhi.dts.admin.service.audit.AdminAuditService;
-import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
+import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
+import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
+import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -20,6 +24,7 @@ import org.springframework.security.authentication.event.AuthenticationSuccessEv
 import org.springframework.security.authentication.event.InteractiveAuthenticationSuccessEvent;
 import org.springframework.security.authentication.event.LogoutSuccessEvent;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.web.authentication.WebAuthenticationDetails;
 import org.springframework.stereotype.Component;
 import org.apache.commons.lang3.StringUtils;
@@ -35,12 +40,12 @@ public class AuthAuditListener {
 
     private static final Duration LOGIN_DUP_WINDOW = Duration.ofSeconds(15);
 
-    private final AdminAuditService auditService;
+    private final AuditV2Service auditV2Service;
     private final ConcurrentMap<String, Boolean> auditedSessions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Instant> recentLogins = new ConcurrentHashMap<>();
 
-    public AuthAuditListener(AdminAuditService auditService) {
-        this.auditService = auditService;
+    public AuthAuditListener(AuditV2Service auditV2Service) {
+        this.auditV2Service = auditV2Service;
     }
 
     @EventListener
@@ -50,12 +55,14 @@ public class AuthAuditListener {
         if (!shouldRecordLogin(evt.getAuthentication())) {
             return;
         }
-        auditService.recordAction(
+        Map<String, Object> detail = Map.of("module", "admin.auth", "mode", resolveAuthMode(evt.getAuthentication()), "audience", "admin");
+        recordAuthEventV2(
+            evt.getAuthentication(),
             username,
-            "ADMIN_AUTH_LOGIN",
-            AuditStage.SUCCESS,
-            username,
-            Map.of("module", "admin.auth", "mode", resolveAuthMode(evt.getAuthentication()), "audience", "admin")
+            ButtonCodes.AUTH_ADMIN_LOGIN,
+            AuditResultStatus.SUCCESS,
+            "系统登录（管理端）成功",
+            detail
         );
         if (log.isDebugEnabled()) log.debug("Auth success (AuthenticationSuccessEvent) user={}", username);
     }
@@ -67,12 +74,14 @@ public class AuthAuditListener {
         if (!shouldRecordLogin(evt.getAuthentication())) {
             return;
         }
-        auditService.recordAction(
+        Map<String, Object> detail = Map.of("module", "admin.auth", "mode", resolveAuthMode(evt.getAuthentication()), "audience", "admin");
+        recordAuthEventV2(
+            evt.getAuthentication(),
             username,
-            "ADMIN_AUTH_LOGIN",
-            AuditStage.SUCCESS,
-            username,
-            Map.of("module", "admin.auth", "mode", resolveAuthMode(evt.getAuthentication()), "audience", "admin")
+            ButtonCodes.AUTH_ADMIN_LOGIN,
+            AuditResultStatus.SUCCESS,
+            "系统登录（管理端）成功",
+            detail
         );
         if (log.isDebugEnabled()) log.debug("Auth success (InteractiveAuthenticationSuccessEvent) user={}", username);
     }
@@ -82,7 +91,15 @@ public class AuthAuditListener {
         String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
         if (username == null || username.isBlank() || "anonymous".equalsIgnoreCase(username) || "anonymoususer".equalsIgnoreCase(username)) return;
         String message = evt.getException() != null && evt.getException().getMessage() != null ? evt.getException().getMessage() : "auth failed";
-        auditService.recordAction(username, "ADMIN_AUTH_LOGIN", AuditStage.FAIL, username, Map.of("error", message));
+        Map<String, Object> detail = Map.of("error", message);
+        recordAuthEventV2(
+            evt.getAuthentication(),
+            username,
+            ButtonCodes.AUTH_ADMIN_LOGIN,
+            AuditResultStatus.FAILED,
+            "系统登录（管理端）失败",
+            detail
+        );
         if (log.isDebugEnabled()) log.debug("Auth failure user={} error={}", username, message);
     }
 
@@ -90,7 +107,14 @@ public class AuthAuditListener {
     public void onLogoutSuccess(LogoutSuccessEvent evt) {
         String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
         if (username == null || username.isBlank() || "anonymous".equalsIgnoreCase(username) || "anonymoususer".equalsIgnoreCase(username)) return;
-        auditService.recordAction(username, "ADMIN_AUTH_LOGOUT", AuditStage.SUCCESS, username, Map.of());
+        recordAuthEventV2(
+            evt.getAuthentication(),
+            username,
+            ButtonCodes.AUTH_ADMIN_LOGOUT,
+            AuditResultStatus.SUCCESS,
+            "系统退出（管理端）成功",
+            Map.of()
+        );
         clearLoginMarkers(evt.getAuthentication());
         if (log.isDebugEnabled()) log.debug("Logout success user={}", username);
     }
@@ -260,6 +284,62 @@ public class AuthAuditListener {
 
     private String sessionMarkerKey(String sessionId) {
         return "session:" + sessionId;
+    }
+
+    private HttpServletRequest currentRequest() {
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (attrs instanceof ServletRequestAttributes servletAttrs) {
+            return servletAttrs.getRequest();
+        }
+        return null;
+    }
+
+    private void recordAuthEventV2(
+        Authentication authentication,
+        String username,
+        String buttonCode,
+        AuditResultStatus result,
+        String summary,
+        Map<String, Object> detail
+    ) {
+        if (StringUtils.isBlank(username)) {
+            return;
+        }
+        try {
+            HttpServletRequest request = currentRequest();
+            AuditActionRequest.Builder builder = AuditActionRequest
+                .builder(username, buttonCode)
+                .summary(summary)
+                .result(result)
+                .actorName(username)
+                .client(resolveClientIp(), request != null ? request.getHeader("User-Agent") : null)
+                .request(
+                    request != null ? request.getRequestURI() : "/internal/admin-auth",
+                    request != null ? request.getMethod() : "POST"
+                )
+                .allowEmptyTargets();
+            if (authentication != null && authentication.getAuthorities() != null) {
+                List<String> roles = authentication
+                    .getAuthorities()
+                    .stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .toList();
+                builder.actorRoles(roles);
+            }
+            if (detail != null && !detail.isEmpty()) {
+                LinkedHashMap<String, Object> copied = new LinkedHashMap<>();
+                detail.forEach((k, v) -> {
+                    if (k != null && v != null) {
+                        copied.put(k, v);
+                    }
+                });
+                copied.forEach(builder::metadata);
+                builder.detail("detail", copied);
+            }
+            auditV2Service.record(builder.build());
+        } catch (Exception ex) {
+            log.warn("Failed to record V2 auth event [{}]: {}", buttonCode, ex.getMessage());
+        }
     }
 
     private String resolveAuthMode(Authentication authentication) {

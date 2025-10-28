@@ -59,19 +59,54 @@ export interface ChangeRequest {
 export interface AuditEvent {
 	id: number;
 	occurredAt: string;
-	actor?: string;
+	sourceSystem?: string;
+	sourceSystemText?: string;
 	module?: string;
+	moduleKey?: string;
+	buttonCode?: string;
 	action?: string;
-	resourceType?: string;
-	resourceId?: string;
+	operationCode?: string;
+	operationTypeCode?: string;
+	operationType?: string;
+	operationContent?: string;
+	summary?: string;
+	result?: string;
+	resultText?: string;
+	logTypeText?: string;
+	eventClass?: string;
+	eventType?: string;
+	operationGroup?: string;
+	actor?: string;
+	actorName?: string;
+	actorRole?: string | null;
+	actorRoles?: string[];
 	clientIp?: string;
 	clientAgent?: string;
+	requestUri?: string;
 	httpMethod?: string;
-	result?: string;
-	extraTags?: string;
-	payloadPreview?: string;
-	correlationId?: string;
+	resourceType?: string;
+	resourceId?: string;
+	targetTable?: string;
+	targetTableLabel?: string;
+	targetId?: string;
+	targetIds?: string[];
+	targetLabels?: Record<string, string>;
+	changeRequestRef?: string;
+	requestId?: unknown;
+	approvalSummary?: unknown;
+	operatorId?: string;
+	operatorName?: string;
+	operatorRoles?: string;
+	orgCode?: string;
+	orgName?: string;
+	departmentName?: string;
+	metadata?: Record<string, unknown>;
+	extraAttributes?: Record<string, unknown>;
+	details?: unknown;
+	payload?: unknown;
 }
+
+export type AuditLog = AuditEvent;
 
 export interface SystemConfigItem {
 	id?: number;

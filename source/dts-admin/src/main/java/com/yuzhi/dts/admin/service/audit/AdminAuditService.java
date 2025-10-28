@@ -836,14 +836,10 @@ public class AdminAuditService {
 
     public void recordAction(String actionCode, AuditStage stage, String resourceId, Object payload) {
         com.yuzhi.dts.admin.service.audit.AuditRequestContext.markDomainAudit();
-        recordAction(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), actionCode, stage, resourceId, payload, null);
+        recordAction(SecurityUtils.getCurrentUserLogin().orElse("anonymous"), actionCode, stage, resourceId, payload);
     }
 
     public void recordAction(String actor, String actionCode, AuditStage stage, String resourceId, Object payload) {
-        recordAction(actor, actionCode, stage, resourceId, payload, null);
-    }
-
-    public void recordAction(String actor, String actionCode, AuditStage stage, String resourceId, Object payload, String correlationId) {
         if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor) || "anonymoususer".equalsIgnoreCase(actor)) {
             return;
         }
@@ -865,10 +861,6 @@ public class AdminAuditService {
         if (StringUtils.hasText(envelope.resourceKey())) {
             extraTags.put("entryKey", envelope.resourceKey());
         }
-        boolean isChangeRequestPending = stage == AuditStage.BEGIN && correlationId != null && correlationId.toUpperCase(Locale.ROOT).startsWith("CR-");
-        if (isChangeRequestPending) {
-            return;
-        }
 
         record(
             actor,
@@ -878,8 +870,7 @@ public class AdminAuditService {
             resourceId,
             outcomeFromStage(effectiveStage),
             payload,
-            extraTags,
-            correlationId
+            extraTags
         );
     }
 
@@ -963,20 +954,6 @@ public class AdminAuditService {
         Object payload,
         Map<String, Object> extraTags
     ) {
-        record(actor, action, module, resourceType, resourceId, outcome, payload, extraTags, null);
-    }
-
-    public void record(
-        String actor,
-        String action,
-        String module,
-        String resourceType,
-        String resourceId,
-        String outcome,
-        Object payload,
-        Map<String, Object> extraTags,
-        String correlationId
-    ) {
         if (!StringUtils.hasText(actor) || "anonymous".equalsIgnoreCase(actor) || "anonymoususer".equalsIgnoreCase(actor)) {
             return;
         }
@@ -994,7 +971,6 @@ public class AdminAuditService {
         event.result = defaultString(outcome, "SUCCESS");
         event.payload = payload;
         event.extraTags = serializeTags(extraTags);
-        event.correlationId = correlationId;
         AuditOperationType opType = AuditOperationType.from(action);
         event.operationType = opType.getCode();
         event.operationTypeText = opType.getDisplayName();
@@ -1027,7 +1003,7 @@ public class AdminAuditService {
 
     public void record(String actor, String action, String module, String resourceId, String outcome, Object payload) {
         com.yuzhi.dts.admin.service.audit.AuditRequestContext.markDomainAudit();
-        record(actor, action, module, module, resourceId, outcome, payload, null, null);
+        record(actor, action, module, module, resourceId, outcome, payload, null);
     }
 
     public void record(PendingAuditEvent event) {
@@ -1277,12 +1253,11 @@ public class AdminAuditService {
             return;
         }
         log.error(
-            "Dropping audit event after {} attempts (actor={}, action={}, module={}, correlationId={}, firstFailureAt={}, lastError={}, payloadPreview={})",
+            "Dropping audit event after {} attempts (actor={}, action={}, module={}, firstFailureAt={}, lastError={}, payloadPreview={})",
             event.retryCount,
             event.actor,
             event.action,
             event.module,
-            event.correlationId,
             event.firstFailureAt,
             event.lastError,
             previewPayload(event.payload)
@@ -1416,7 +1391,6 @@ public class AdminAuditService {
         if (StringUtils.hasText(pending.actorName)) {
             entity.setActorName(pending.actorName);
         }
-        entity.setCorrelationId(pending.correlationId);
         // source_system：默认admin，可由调用方覆盖（平台转发时置为platform）
         String src = pending.sourceSystem;
         if (src == null || src.isBlank()) src = "admin";
@@ -2600,9 +2574,6 @@ public class AdminAuditService {
             asText(details.get("changeRequestRef")),
             asText(details.get("change_request_ref"))
         );
-        if (!StringUtils.hasText(view.changeRequestRef) && StringUtils.hasText(event.getCorrelationId()) && event.getCorrelationId().toUpperCase(Locale.ROOT).startsWith("CR-")) {
-            view.changeRequestRef = event.getCorrelationId();
-        }
         view.approvalSummary = firstNonBlank(
             asText(details.get("审批内容")),
             asText(details.get("approvalSummary"))
@@ -2619,7 +2590,6 @@ public class AdminAuditService {
         if (view.targetRef == null && !view.targetIds.isEmpty()) {
             view.targetRef = view.targetIds.get(0);
         }
-        view.correlationId = event.getCorrelationId();
         return view;
     }
 

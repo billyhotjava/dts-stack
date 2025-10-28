@@ -1,8 +1,0 @@
-| 场景 | 用户身份                             | active_scope/dept | 资源(scope, share, owner_dept, level) | 动作   | 结果      | 说明                         |
-| -- | ------------------------------------- | ----------------- | ------------------------------------ | ------ | -------   | -------------------------- |
-| A  | DEPT_VIEWER@D001, personnel=IMPORTANT | DEPT/D001         | (DEPT, PRIVATE_DEPT, D001, INTERNAL) | READ   | ✅       | 同域、同部门、密级不超                |
-| B  | DEPT_EDITOR@D001                      | DEPT/D001         | (DEPT, PRIVATE_DEPT, D001, SECRET)   | WRITE  | ❌* 或 ✅* | 取决于 personnel_level≥SECRET |
-| C  | DEPT_OWNER@D001                       | DEPT/D001         | (DEPT, PRIVATE_DEPT, D002, INTERNAL) | MANAGE | ❌        | 非本部门资源                     |
-| D  | INST_VIEWER, personnel=CORE           | INST/-            | (INST, SHARE_INST, -, TOP_SECRET)    | READ   | ✅        | 所共享域、密级满足                  |
-| E  | INST_EDITOR, personnel=IMPORTANT      | INST/-            | (INST, SHARE_INST, -, SECRET)        | WRITE  | ❌        | 密级不足                       |
-| F  | DEPT_EDITOR@D001 + INST_VIEWER        | INST/-            | (INST, SHARE_INST, -, INTERNAL)      | READ   | ✅        | 跨域并存，切到 INST 生效            |

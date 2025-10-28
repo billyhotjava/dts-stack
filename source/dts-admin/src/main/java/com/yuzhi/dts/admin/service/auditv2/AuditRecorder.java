@@ -1,0 +1,369 @@
+package com.yuzhi.dts.admin.service.auditv2;
+
+import com.yuzhi.dts.admin.domain.audit.AuditEntry;
+import com.yuzhi.dts.admin.domain.audit.AuditEntryDetail;
+import com.yuzhi.dts.admin.domain.audit.AuditEntryTarget;
+import com.yuzhi.dts.admin.repository.audit.AuditEntryRepository;
+import org.springframework.beans.factory.ObjectProvider;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+@Service
+@Transactional
+public class AuditRecorder {
+
+    private static final Logger log = LoggerFactory.getLogger(AuditRecorder.class);
+    private static final String DEFAULT_SOURCE_SYSTEM = "admin";
+
+    private final AuditEntryRepository repository;
+    private final Clock clock;
+
+    public AuditRecorder(AuditEntryRepository repository, ObjectProvider<Clock> clockProvider) {
+        this.repository = repository;
+        this.clock = clockProvider != null ? clockProvider.getIfAvailable(Clock::systemUTC) : Clock.systemUTC();
+    }
+
+    public AuditBuilder start(String actorId) {
+        return new AuditBuilder(this, actorId);
+    }
+
+    AuditEntry persist(ResolvedAudit audit) {
+        AuditEntry entry = new AuditEntry();
+        entry.setOccurredAt(audit.occurredAt());
+        entry.setSourceSystem(audit.sourceSystem());
+        entry.setActorId(audit.actorId());
+        entry.setActorName(audit.actorName());
+        entry.setActorRoles(audit.actorRoles());
+        entry.setModuleKey(audit.moduleKey());
+        entry.setModuleName(audit.moduleName());
+        entry.setButtonCode(audit.buttonCode());
+        entry.setOperationCode(audit.operationCode());
+        entry.setOperationName(audit.operationName());
+        entry.setOperationKind(audit.operationKind().code());
+        entry.setResult(audit.result().code());
+        entry.setSummary(audit.summary());
+        entry.setChangeRequestRef(audit.changeRequestRef());
+        entry.setClientAgent(audit.clientAgent());
+        entry.setRequestUri(audit.requestUri());
+        entry.setHttpMethod(audit.httpMethod());
+        entry.setMetadata(audit.metadata());
+        entry.setExtraAttributes(audit.extraAttributes());
+        entry.setClientIp(audit.clientIp());
+
+        int targetIndex = 0;
+        for (TargetRecord target : audit.targets()) {
+            entry.addTarget(new AuditEntryTarget(targetIndex++, target.table(), target.id(), target.label()));
+        }
+        int detailIndex = 0;
+        for (DetailRecord detail : audit.details()) {
+            entry.addDetail(new AuditEntryDetail(detailIndex++, detail.key(), detail.value()));
+        }
+
+        AuditEntry saved = repository.save(entry);
+        if (log.isDebugEnabled()) {
+            log.debug(
+                "Recorded audit entry id={} actor={} module={} operation={} targets={}",
+                saved.getId(),
+                saved.getActorId(),
+                saved.getModuleKey(),
+                saved.getOperationCode(),
+                audit.targets().size()
+            );
+        }
+        return saved;
+    }
+
+    private Instant now() {
+        return Instant.now(clock);
+    }
+
+    private InetAddress safeInet(String ip) {
+        if (!StringUtils.hasText(ip)) {
+            return null;
+        }
+        try {
+            return InetAddress.getByName(ip.trim());
+        } catch (UnknownHostException ex) {
+            if (log.isDebugEnabled()) {
+                log.debug("Unable to parse client ip '{}': {}", ip, ex.getMessage());
+            }
+            return null;
+        }
+    }
+
+    public static final class AuditBuilder {
+
+        private final AuditRecorder recorder;
+        private final String actorId;
+        private Instant occurredAt;
+        private String sourceSystem = DEFAULT_SOURCE_SYSTEM;
+        private String actorName;
+        private final Set<String> actorRoles = new LinkedHashSet<>();
+        private String moduleKey;
+        private String moduleName;
+        private String buttonCode;
+        private String operationCode;
+        private String operationName;
+        private AuditOperationKind operationKind;
+        private AuditResultStatus result = AuditResultStatus.SUCCESS;
+        private String summary;
+        private String changeRequestRef;
+        private String clientIp;
+        private String clientAgent;
+        private String requestUri;
+        private String httpMethod;
+        private final Map<String, Object> metadata = new LinkedHashMap<>();
+        private final Map<String, Object> extraAttributes = new LinkedHashMap<>();
+        private final List<TargetRecord> targets = new ArrayList<>();
+        private final List<DetailRecord> details = new ArrayList<>();
+        private boolean allowEmptyTargets;
+        private boolean emitted;
+
+        private AuditBuilder(AuditRecorder recorder, String actorId) {
+            this.recorder = recorder;
+            this.actorId = actorId;
+        }
+
+        public AuditBuilder occurredAt(Instant occurredAt) {
+            this.occurredAt = occurredAt;
+            return this;
+        }
+
+        public AuditBuilder sourceSystem(String sourceSystem) {
+            if (StringUtils.hasText(sourceSystem)) {
+                this.sourceSystem = sourceSystem.trim();
+            }
+            return this;
+        }
+
+        public AuditBuilder actorName(String actorName) {
+            this.actorName = StringUtils.hasText(actorName) ? actorName.trim() : null;
+            return this;
+        }
+
+        public AuditBuilder actorRoles(Collection<String> roles) {
+            if (roles != null) {
+                roles.stream().filter(StringUtils::hasText).map(r -> r.trim().toUpperCase(Locale.ROOT)).forEach(actorRoles::add);
+            }
+            return this;
+        }
+
+        public AuditBuilder module(String moduleKey) {
+            this.moduleKey = StringUtils.hasText(moduleKey) ? moduleKey.trim() : null;
+            return this;
+        }
+
+        public AuditBuilder moduleName(String moduleName) {
+            this.moduleName = StringUtils.hasText(moduleName) ? moduleName.trim() : null;
+            return this;
+        }
+
+        public AuditBuilder buttonCode(String buttonCode) {
+            this.buttonCode = StringUtils.hasText(buttonCode) ? buttonCode.trim() : null;
+            return this;
+        }
+
+        public AuditBuilder operation(String code, String name, AuditOperationKind kind) {
+            this.operationCode = StringUtils.hasText(code) ? code.trim() : null;
+            this.operationName = StringUtils.hasText(name) ? name.trim() : null;
+            this.operationKind = kind;
+            return this;
+        }
+
+        public AuditBuilder operationKind(AuditOperationKind kind) {
+            this.operationKind = kind;
+            return this;
+        }
+
+        public AuditBuilder result(AuditResultStatus result) {
+            if (result != null) {
+                this.result = result;
+            }
+            return this;
+        }
+
+        public AuditBuilder summary(String summary) {
+            this.summary = StringUtils.hasText(summary) ? summary.trim() : null;
+            return this;
+        }
+
+        public AuditBuilder changeRequestRef(String changeRequestRef) {
+            this.changeRequestRef = StringUtils.hasText(changeRequestRef) ? changeRequestRef.trim() : null;
+            return this;
+        }
+
+        public AuditBuilder client(String ip, String agent) {
+            this.clientIp = ip;
+            this.clientAgent = agent;
+            return this;
+        }
+
+        public AuditBuilder request(String uri, String method) {
+            this.requestUri = StringUtils.hasText(uri) ? uri.trim() : null;
+            this.httpMethod = StringUtils.hasText(method) ? method.trim().toUpperCase(Locale.ROOT) : null;
+            return this;
+        }
+
+        public AuditBuilder metadata(String key, Object value) {
+            if (StringUtils.hasText(key) && value != null) {
+                metadata.put(key.trim(), value);
+            }
+            return this;
+        }
+
+        public AuditBuilder extraAttribute(String key, Object value) {
+            if (StringUtils.hasText(key) && value != null) {
+                extraAttributes.put(key.trim(), value);
+            }
+            return this;
+        }
+
+        public AuditBuilder target(String table, Object id) {
+            return target(table, id, null);
+        }
+
+        public AuditBuilder target(String table, Object id, String label) {
+            if (!StringUtils.hasText(table) || id == null) {
+                return this;
+            }
+            String normalizedTable = table.trim();
+            String normalizedId = String.valueOf(id).trim();
+            if (normalizedId.isEmpty()) {
+                return this;
+            }
+            String normalizedLabel = StringUtils.hasText(label) ? label.trim() : null;
+            targets.add(new TargetRecord(normalizedTable, normalizedId, normalizedLabel));
+            return this;
+        }
+
+        public AuditBuilder detail(String key, Object value) {
+            if (StringUtils.hasText(key) && value != null) {
+                details.add(new DetailRecord(key.trim(), value));
+            }
+            return this;
+        }
+
+        public AuditBuilder allowEmptyTargets() {
+            this.allowEmptyTargets = true;
+            return this;
+        }
+
+        public AuditEntry emit() {
+            if (emitted) {
+                throw new IllegalStateException("AuditBuilder already used");
+            }
+            emitted = true;
+            ResolvedAudit audit = resolve();
+            return recorder.persist(audit);
+        }
+
+        private ResolvedAudit resolve() {
+            if (!StringUtils.hasText(actorId)) {
+                throw new IllegalArgumentException("actorId is required");
+            }
+            if (!StringUtils.hasText(moduleKey)) {
+                throw new IllegalStateException("moduleKey is required for audit entry");
+            }
+            if (operationKind == null) {
+                throw new IllegalStateException("operationKind is required for audit entry");
+            }
+            if (!allowEmptyTargets && targets.isEmpty() && operationKind != AuditOperationKind.QUERY) {
+                throw new IllegalStateException("target id is required for " + operationKind);
+            }
+            String effectiveOperationName = StringUtils.hasText(operationName) ? operationName : operationCode;
+            if (!StringUtils.hasText(effectiveOperationName) && StringUtils.hasText(summary)) {
+                effectiveOperationName = summary;
+            }
+            if (!StringUtils.hasText(effectiveOperationName)) {
+                effectiveOperationName = operationKind.displayName();
+            }
+            String effectiveSummary = StringUtils.hasText(summary) ? summary : effectiveOperationName;
+
+            List<String> roleList = actorRoles.isEmpty() ? List.of() : List.copyOf(actorRoles);
+
+            return new ResolvedAudit(
+                recorder.now(),
+                StringUtils.hasText(sourceSystem) ? sourceSystem : DEFAULT_SOURCE_SYSTEM,
+                actorId.trim(),
+                actorName,
+                roleList,
+                moduleKey,
+                moduleName,
+                buttonCode,
+                operationCode,
+                effectiveOperationName,
+                operationKind,
+                result,
+                effectiveSummary,
+                changeRequestRef,
+                recorder.safeInet(clientIp),
+                clientAgent,
+                requestUri,
+                httpMethod,
+                Map.copyOf(metadata),
+                Map.copyOf(extraAttributes),
+                List.copyOf(targets),
+                List.copyOf(details)
+            );
+        }
+    }
+
+    record TargetRecord(String table, String id, String label) {}
+
+    record DetailRecord(String key, Object value) {}
+
+    record ResolvedAudit(
+        Instant occurredAt,
+        String sourceSystem,
+        String actorId,
+        String actorName,
+        List<String> actorRoles,
+        String moduleKey,
+        String moduleName,
+        String buttonCode,
+        String operationCode,
+        String operationName,
+        AuditOperationKind operationKind,
+        AuditResultStatus result,
+        String summary,
+        String changeRequestRef,
+        InetAddress clientIp,
+        String clientAgent,
+        String requestUri,
+        String httpMethod,
+        Map<String, Object> metadata,
+        Map<String, Object> extraAttributes,
+        List<TargetRecord> targets,
+        List<DetailRecord> details
+    ) {
+        ResolvedAudit {
+            Objects.requireNonNull(occurredAt, "occurredAt");
+            Objects.requireNonNull(sourceSystem, "sourceSystem");
+            Objects.requireNonNull(actorId, "actorId");
+            Objects.requireNonNull(moduleKey, "moduleKey");
+            Objects.requireNonNull(operationKind, "operationKind");
+            Objects.requireNonNull(result, "result");
+            Objects.requireNonNull(summary, "summary");
+            Objects.requireNonNull(metadata, "metadata");
+            Objects.requireNonNull(extraAttributes, "extraAttributes");
+            Objects.requireNonNull(targets, "targets");
+            Objects.requireNonNull(details, "details");
+        }
+    }
+}

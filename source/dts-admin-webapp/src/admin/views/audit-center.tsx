@@ -549,14 +549,6 @@ export default function AuditCenterView() {
 				},
 			},
 			{
-				title: "关联ID",
-				dataIndex: "correlationId",
-				key: "correlationId",
-				width: 170,
-				render: (value?: string) =>
-					value ? <span className="font-mono text-xs text-muted-foreground">{value}</span> : "-",
-			},
-			{
 				title: "日志类型",
 				dataIndex: "logTypeText",
 				key: "logTypeText",
