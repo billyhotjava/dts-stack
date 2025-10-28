@@ -1061,6 +1061,13 @@ public class CatalogResource {
 
     private record DatasetGrantRequest(String userId, String username, String displayName, String deptCode) {}
 
+    private String sanitize(String message) {
+        if (!StringUtils.hasText(message)) {
+            return "";
+        }
+        String cleaned = message.replaceAll("\\s+", " ").trim();
+        return cleaned.length() > 160 ? cleaned.substring(0, 160) : cleaned;
+    }
 
     private String claim(String name) {
         try {

@@ -903,6 +903,7 @@ export default function ApprovalCenterView() {
 									snapshot={snapshot}
 									action={record.action}
 									operationTypeCode={record.action}
+									status={record.effectiveStatus}
 									className="text-xs"
 								/>
 							</div>
@@ -1133,6 +1134,7 @@ export default function ApprovalCenterView() {
 									snapshot={activeSnapshot}
 									action={activeTask.action}
 									operationTypeCode={activeTask.action}
+									status={activeTask.effectiveStatus}
 									className="text-xs"
 								/>
 							</div>

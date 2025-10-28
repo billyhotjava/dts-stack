@@ -894,9 +894,9 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 													<Badge
 														key={roleKey(role)}
 														variant={resolveRoleBadgeVariant(role.name)}
-														className="flex items-center gap-1 bg-primary text-primary-foreground"
+														className="flex items-center gap-1 bg-primary text-primary-foreground font-semibold"
 													>
-														<span className="text-primary-foreground">{displayRoleName(role.name)}</span>
+														<span className="text-primary-foreground font-semibold">{displayRoleName(role.name)}</span>
 														{allowRemoval && (
 															<Button
 																variant="ghost"
@@ -929,11 +929,11 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 													<Badge
 														key={roleKey(role)}
 														variant={resolveRoleBadgeVariant(role.name)}
-														className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+														className="cursor-pointer bg-primary font-semibold text-primary-foreground hover:bg-primary/90"
 														onClick={() => handleRoleToggle(role)}
 													>
-														{displayRoleName(role.name)}
-														<Icon icon="mdi:plus" size={12} className="ml-1" />
+														<span className="font-semibold text-primary-foreground">{displayRoleName(role.name)}</span>
+														<Icon icon="mdi:plus" size={12} className="ml-1 text-primary-foreground" />
 													</Badge>
 												))}
 										</div>

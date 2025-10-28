@@ -22,6 +22,11 @@ import {
 	type ChangeSnapshotLike,
 	type ChangeSummaryEntry,
 } from "@/admin/components/change-diff-viewer";
+import {
+	MenuChangeViewer,
+	type MenuChangeDisplayEntry,
+	type VisibilityRuleDisplay,
+} from "@/admin/components/menu-change-viewer";
 
 interface FilterState {
 	from?: string;
@@ -756,6 +761,7 @@ interface ParsedAuditDetail {
 	summaryRows: Array<{ field: string; label: string; before: unknown; after: unknown }>;
 	infoEntries: Array<{ key: string; value: unknown }>;
 	rawJson?: string;
+	menuChanges: MenuChangeDisplayEntry[];
 }
 
 interface SnapshotData {
@@ -782,6 +788,8 @@ const DETAIL_KEYS_TO_SKIP = new Set([
 	"context",
 	"detail",
 	"items",
+	"menuChanges",
+	"menu_changes",
 ]);
 
 function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): ReactNode {
@@ -793,8 +801,11 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 	if (!parsed) {
 		return <div className="text-xs text-muted-foreground">无详情</div>;
 	}
-	const snapshot = convertSnapshotData(parsed.snapshot) ?? buildChangeSnapshotFromDiff(parseRecord(detail?.details));
-	const summary: ChangeSummaryEntry[] = parsed.summaryRows.map((row) => ({
+	const menuChanges = parsed.menuChanges ?? [];
+	const summaryRows = menuChanges.length > 0 ? filterMenuSummaryRows(parsed.summaryRows) : parsed.summaryRows;
+	const baseSnapshot = convertSnapshotData(parsed.snapshot) ?? buildChangeSnapshotFromDiff(parseRecord(detail?.details));
+	const snapshot = menuChanges.length > 0 ? pruneMenuSnapshot(baseSnapshot) : baseSnapshot;
+	const summary: ChangeSummaryEntry[] = summaryRows.map((row) => ({
 		field: row.field,
 		label: row.label,
 		before: row.before,
@@ -807,20 +818,32 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 		}, {})
 		: null;
 
+	const showDiffViewer = summary.length > 0 || snapshotHasContent(snapshot);
+
 	return (
 		<div className="space-y-3 text-xs leading-5">
-			<div className="space-y-2">
-				<Text variant="body3" className="text-muted-foreground">
-					变更详情
-				</Text>
-				<ChangeDiffViewer
-					snapshot={snapshot}
-					summary={summary.length > 0 ? summary : undefined}
-					action={record.action || record.operationContent || record.operationCode || record.summary || record.buttonCode}
-					operationTypeCode={record.operationTypeCode || record.operationType}
-					className="text-xs"
-				/>
-			</div>
+			{showDiffViewer ? (
+				<div className="space-y-2">
+					<Text variant="body3" className="text-muted-foreground">
+						变更详情
+					</Text>
+					<ChangeDiffViewer
+						snapshot={snapshot}
+						summary={summary.length > 0 ? summary : undefined}
+						action={record.action || record.operationContent || record.operationCode || record.summary || record.buttonCode}
+						operationTypeCode={record.operationTypeCode || record.operationType}
+						className="text-xs"
+					/>
+				</div>
+			) : null}
+			{menuChanges.length > 0 ? (
+				<div className="space-y-2">
+					<Text variant="body3" className="text-muted-foreground">
+						菜单变更
+					</Text>
+					<MenuChangeViewer entries={menuChanges} />
+				</div>
+			) : null}
 			{infoObject ? (
 				<div className="space-y-2">
 					<Text variant="body3" className="text-muted-foreground">
@@ -850,6 +873,7 @@ function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
 	const metadataLayer = parseRecord(source.metadata);
 	const extraLayer = parseRecord(source.extraAttributes);
 	const snapshotLayers = [root, detailLayer, contextLayer].filter(Boolean) as Record<string, unknown>[];
+	const menuChanges = findMenuChanges([root, detailLayer, contextLayer, metadataLayer, extraLayer]);
 
 	let snapshot = findSnapshot(snapshotLayers);
 	if (!snapshot) {
@@ -864,11 +888,15 @@ function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
 			ignoredKeys.add(row.field.toLowerCase());
 		}
 	});
+	if (menuChanges.length > 0) {
+		ignoredKeys.add("menuChanges");
+		ignoredKeys.add("menu_changes");
+	}
 
 	const infoEntries = collectInfoEntries([root, detailLayer, contextLayer, metadataLayer, extraLayer], ignoredKeys);
 	const rawJson = Object.keys(root).length > 0 ? formatJson(root) : undefined;
 
-	if (!snapshot && summaryRows.length === 0 && infoEntries.length === 0 && !rawJson) {
+	if (!snapshot && summaryRows.length === 0 && infoEntries.length === 0 && !rawJson && menuChanges.length === 0) {
 		return null;
 	}
 
@@ -877,7 +905,228 @@ function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
 		summaryRows,
 		infoEntries,
 		rawJson,
+		menuChanges,
 	};
+}
+
+const MENU_DIFF_FIELD_SET = new Set([
+	"allowedroles",
+	"allowed_permissions",
+	"allowedpermissions",
+	"visibilityrules",
+	"allowedorgcodes",
+	"deleted",
+	"enabled",
+	"securitylevel",
+	"maxdatalevel",
+]);
+
+function filterMenuSummaryRows(rows: Array<{ field: string; label: string; before: unknown; after: unknown }>) {
+	return rows.filter((row) => {
+		const field = (row.field || "").toString().toLowerCase();
+		if (field.startsWith("menu#")) {
+			return false;
+		}
+		if (field === "menuchanges") {
+			return false;
+		}
+		return true;
+	});
+}
+
+function pruneMenuSnapshot(snapshot?: ChangeSnapshotLike | null): ChangeSnapshotLike | null {
+	if (!snapshot) {
+		return null;
+	}
+	return pruneSnapshotFields(snapshot, MENU_DIFF_FIELD_SET);
+}
+
+function snapshotHasContent(snapshot?: ChangeSnapshotLike | null): boolean {
+	if (!snapshot) {
+		return false;
+	}
+	if (snapshot.changes && snapshot.changes.length > 0) {
+		return true;
+	}
+	if (snapshot.items && snapshot.items.length > 0) {
+		return snapshot.items.some((item) =>
+			snapshotHasContent({
+				before: item.before ?? undefined,
+				after: item.after ?? undefined,
+				changes: item.changes ?? undefined,
+				items: item.items ?? undefined,
+			}),
+		);
+	}
+	if (snapshot.after && Object.keys(snapshot.after).length > 0) {
+		return true;
+	}
+	if (snapshot.before && Object.keys(snapshot.before).length > 0) {
+		return true;
+	}
+	return false;
+}
+
+function pruneSnapshotFields(snapshot: ChangeSnapshotLike, fields: Set<string>): ChangeSnapshotLike | null {
+	let hasChanges = false;
+	const pruned: ChangeSnapshotLike = {};
+	if (snapshot.before) {
+		pruned.before = snapshot.before;
+	}
+	if (snapshot.after) {
+		pruned.after = snapshot.after;
+	}
+	if (snapshot.changes) {
+		const filteredChanges = snapshot.changes.filter((change) => {
+			const field = (change.field || "").toString().toLowerCase();
+			return !fields.has(field);
+		});
+		if (filteredChanges.length > 0) {
+			pruned.changes = filteredChanges;
+			hasChanges = true;
+		}
+	}
+	if (snapshot.items) {
+		const filteredItems = snapshot.items
+			.map((item) => {
+				const next = pruneSnapshotFields(
+					{
+						before: item.before,
+						after: item.after,
+						changes: item.changes ?? undefined,
+						items: item.items ?? undefined,
+					},
+					fields,
+				);
+				if (!next) {
+					return null;
+				}
+				const result = { ...item };
+				if (next.before) {
+					result.before = next.before;
+				}
+				if (next.after) {
+					result.after = next.after;
+				}
+				result.changes = next.changes ?? null;
+				result.items = next.items ?? null;
+				return result;
+			})
+			.filter(Boolean) as NonNullable<ChangeSnapshotLike["items"]>;
+		if (filteredItems.length > 0) {
+			pruned.items = filteredItems;
+			hasChanges = true;
+		}
+	}
+	return hasChanges ? pruned : null;
+}
+
+function findMenuChanges(layers: Array<Record<string, unknown> | null | undefined>): MenuChangeDisplayEntry[] {
+	for (const layer of layers) {
+		if (!layer) continue;
+		const parsed = parseMenuChangeList(layer["menuChanges"] ?? layer["menu_changes"]);
+		if (parsed.length > 0) {
+			return parsed;
+		}
+	}
+	return [];
+}
+
+function parseMenuChangeList(value: unknown): MenuChangeDisplayEntry[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+	const result: MenuChangeDisplayEntry[] = [];
+	for (const item of value) {
+		const record = parseRecord(item);
+		if (!record) continue;
+		const entry: MenuChangeDisplayEntry = {
+			id: readOptionalString(record["menuId"] ?? record["id"]),
+			name: readOptionalString(record["menuName"] ?? record["name"]),
+			title: readOptionalString(record["menuTitle"] ?? record["title"] ?? record["label"]),
+			path: readOptionalString(record["menuPath"] ?? record["path"] ?? record["route"]),
+			allowedRolesBefore: normalizeStringList(record["allowedRolesBefore"]),
+			allowedRolesAfter: normalizeStringList(record["allowedRolesAfter"]),
+			addedRoles: normalizeStringList(record["addedRoles"]),
+			removedRoles: normalizeStringList(record["removedRoles"]),
+			allowedPermissionsBefore: normalizeStringList(record["allowedPermissionsBefore"]),
+			allowedPermissionsAfter: normalizeStringList(record["allowedPermissionsAfter"]),
+			addedPermissions: normalizeStringList(record["addedPermissions"]),
+			removedPermissions: normalizeStringList(record["removedPermissions"]),
+			addedRules: parseRuleDetails(record["addedRules"]),
+			removedRules: parseRuleDetails(record["removedRules"]),
+			maxDataLevelBeforeLabel: readOptionalString(record["maxDataLevelBeforeLabel"] ?? record["maxDataLevelBefore"]),
+			maxDataLevelAfterLabel: readOptionalString(record["maxDataLevelAfterLabel"] ?? record["maxDataLevelAfter"]),
+			securityLevelBeforeLabel: readOptionalString(record["securityLevelBeforeLabel"] ?? record["securityLevelBefore"]),
+			securityLevelAfterLabel: readOptionalString(record["securityLevelAfterLabel"] ?? record["securityLevelAfter"]),
+			statusBeforeLabel: readOptionalString(record["statusBeforeLabel"] ?? record["deletedBeforeLabel"]),
+			statusAfterLabel: readOptionalString(record["statusAfterLabel"] ?? record["deletedAfterLabel"]),
+		};
+		result.push(entry);
+	}
+	return result;
+}
+
+function parseRuleDetails(value: unknown): VisibilityRuleDisplay[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+	const result: VisibilityRuleDisplay[] = [];
+	for (const item of value) {
+		const record = parseRecord(item);
+		if (!record) continue;
+		const role = readOptionalString(record["role"]);
+		const permission = readOptionalString(record["permission"]);
+		const level = readOptionalString(record["dataLevelLabel"] ?? record["dataLevel"]);
+		if (!role && !permission && !level) {
+			continue;
+		}
+		result.push({ role, permission, dataLevelLabel: level });
+	}
+	return result;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		return trimmed.length > 0 ? trimmed : undefined;
+	}
+	if (typeof value === "number" || typeof value === "boolean") {
+		return String(value);
+	}
+	return undefined;
+}
+
+function normalizeStringList(value: unknown): string[] {
+	if (!value) {
+		return [];
+	}
+	if (Array.isArray(value)) {
+		return value
+			.map((item) => (typeof item === "string" ? item.trim() : item != null ? String(item).trim() : ""))
+			.filter((item) => item.length > 0);
+	}
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed) {
+			return [];
+		}
+		try {
+			const parsed = JSON.parse(trimmed);
+			if (Array.isArray(parsed)) {
+				return parsed
+					.map((item) => (typeof item === "string" ? item.trim() : item != null ? String(item).trim() : ""))
+					.filter((item) => item.length > 0);
+			}
+		} catch {
+			// fall through
+		}
+		return trimmed
+			.split(/[,\uFF0C\u3001;\uFF1B\s]+/)
+			.map((token) => token.trim())
+			.filter((token) => token.length > 0);
+	}
+	return [];
 }
 
 function findSnapshot(layers: Record<string, unknown>[]): SnapshotData | null {

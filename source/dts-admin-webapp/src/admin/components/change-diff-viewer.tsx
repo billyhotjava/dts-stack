@@ -39,17 +39,21 @@ export interface ChangeDiffViewerProps {
 	summary?: ChangeSummaryEntry[] | null;
 	action?: string | null;
 	operationTypeCode?: string | null;
+	status?: string | null;
 	resourceType?: string | null;
 	className?: string;
 }
 
 const DEFAULT_DELETE_MESSAGE = "记录待删除";
+const FINAL_DELETE_MESSAGE = "记录已删除";
+const FINAL_DELETE_STATUSES = new Set(["APPROVED", "APPLIED", "SUCCESS", "COMPLETED"]);
 
 export function ChangeDiffViewer({
 	snapshot,
 	summary,
 	action,
 	operationTypeCode,
+	status,
 	resourceType,
 	className,
 }: ChangeDiffViewerProps) {
@@ -59,7 +63,7 @@ export function ChangeDiffViewer({
 	if (mode === "delete") {
 		return (
 			<div className={cn("rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive", className)}>
-				{DEFAULT_DELETE_MESSAGE}
+				{resolveDeleteMessage(status)}
 			</div>
 		);
 	}
@@ -308,6 +312,17 @@ function formatFieldLabel(field: string): string {
 
 function beautifyLabel(label: string): string {
 	return label.replace(/[_\-.]+/g, " ").trim();
+}
+
+function resolveDeleteMessage(status?: string | null): string {
+	if (!status) {
+		return DEFAULT_DELETE_MESSAGE;
+	}
+	const normalized = status.trim().toUpperCase();
+	if (FINAL_DELETE_STATUSES.has(normalized)) {
+		return FINAL_DELETE_MESSAGE;
+	}
+	return DEFAULT_DELETE_MESSAGE;
 }
 
 function valuesEqual(a: unknown, b: unknown): boolean {

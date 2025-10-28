@@ -4094,6 +4094,17 @@ public class AdminApiResource {
         LinkedHashSet<String> beforeRoles = extractMenuRoles(beforeMap);
         LinkedHashSet<String> afterRoles = extractMenuRoles(afterMap);
 
+        List<String> beforeRoleList = beforeRoles
+            .stream()
+            .map(this::displayRoleCode)
+            .filter(StringUtils::hasText)
+            .toList();
+        List<String> afterRoleList = afterRoles
+            .stream()
+            .map(this::displayRoleCode)
+            .filter(StringUtils::hasText)
+            .toList();
+
         List<String> addedRoles = new ArrayList<>();
         for (String role : afterRoles) {
             if (!beforeRoles.contains(role)) {
@@ -4109,6 +4120,9 @@ public class AdminApiResource {
 
         LinkedHashSet<String> beforePermissions = extractMenuPermissions(beforeMap);
         LinkedHashSet<String> afterPermissions = extractMenuPermissions(afterMap);
+        List<String> beforePermissionList = new ArrayList<>(beforePermissions);
+        List<String> afterPermissionList = new ArrayList<>(afterPermissions);
+
         List<String> addedPermissions = new ArrayList<>();
         for (String perm : afterPermissions) {
             if (!beforePermissions.contains(perm)) {
@@ -4167,13 +4181,17 @@ public class AdminApiResource {
         if (!StringUtils.hasText(menuId)) {
             menuId = stringValue(beforeMap.get("id"));
         }
-        String menuName = firstNonBlank(
+        String menuTitle = firstNonBlank(
+            resolveMenuTitle(afterMap),
+            resolveMenuTitle(beforeMap),
             stringValue(afterMap.get("name")),
             stringValue(beforeMap.get("name")),
             stringValue(afterMap.get("path")),
             stringValue(beforeMap.get("path")),
             menuId
         );
+        String menuPath = firstNonBlank(stringValue(afterMap.get("path")), stringValue(beforeMap.get("path")));
+        String menuName = firstNonBlank(stringValue(afterMap.get("name")), stringValue(beforeMap.get("name")));
 
         Map<String, Object> entry = new LinkedHashMap<>();
         if (StringUtils.hasText(menuId)) {
@@ -4182,11 +4200,29 @@ public class AdminApiResource {
         if (StringUtils.hasText(menuName)) {
             entry.put("menuName", menuName);
         }
+        if (StringUtils.hasText(menuTitle)) {
+            entry.put("menuTitle", menuTitle);
+        }
+        if (StringUtils.hasText(menuPath)) {
+            entry.put("menuPath", menuPath);
+        }
+        if (!beforeRoleList.isEmpty()) {
+            entry.put("allowedRolesBefore", beforeRoleList);
+        }
+        if (!afterRoleList.isEmpty()) {
+            entry.put("allowedRolesAfter", afterRoleList);
+        }
         if (!addedRoles.isEmpty()) {
             entry.put("addedRoles", addedRoles);
         }
         if (!removedRoles.isEmpty()) {
             entry.put("removedRoles", removedRoles);
+        }
+        if (!beforePermissionList.isEmpty()) {
+            entry.put("allowedPermissionsBefore", beforePermissionList);
+        }
+        if (!afterPermissionList.isEmpty()) {
+            entry.put("allowedPermissionsAfter", afterPermissionList);
         }
         if (!addedPermissions.isEmpty()) {
             entry.put("addedPermissions", addedPermissions);
@@ -4250,7 +4286,7 @@ public class AdminApiResource {
         }
 
         if (!summaryParts.isEmpty()) {
-            String menuLabel = StringUtils.hasText(menuName) ? menuName : (StringUtils.hasText(menuId) ? "菜单#" + menuId : "菜单");
+            String menuLabel = firstNonBlank(menuTitle, menuName, menuPath, StringUtils.hasText(menuId) ? "菜单#" + menuId : "菜单");
             String summaryText = "菜单「" + menuLabel + "」：" + String.join("；", summaryParts);
             Map<String, String> summaryLine = new LinkedHashMap<>();
             summaryLine.put("field", StringUtils.hasText(menuId) ? "menu#" + menuId : "menuChanges");
@@ -4321,6 +4357,56 @@ public class AdminApiResource {
             }
         }
         return permissions;
+    }
+
+    private String resolveMenuTitle(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return null;
+        }
+        String directTitle = stringValue(payload.get("title"));
+        if (StringUtils.hasText(directTitle)) {
+            return directTitle;
+        }
+        String displayName = stringValue(payload.get("displayName"));
+        if (StringUtils.hasText(displayName)) {
+            return displayName;
+        }
+        Map<String, Object> metadata = extractMetadataMap(payload.get("metadata"));
+        if (!metadata.isEmpty()) {
+            String title = stringValue(metadata.get("title"));
+            if (StringUtils.hasText(title)) {
+                return title;
+            }
+            String label = stringValue(metadata.get("label"));
+            if (StringUtils.hasText(label)) {
+                return label;
+            }
+            String titleKey = stringValue(metadata.get("titleKey"));
+            if (StringUtils.hasText(titleKey)) {
+                return titleKey;
+            }
+        }
+        return null;
+    }
+
+    private Map<String, Object> extractMetadataMap(Object metadata) {
+        if (metadata == null) {
+            return Map.of();
+        }
+        if (metadata instanceof Map<?, ?> map) {
+            Map<String, Object> converted = new LinkedHashMap<>();
+            map.forEach((k, v) -> converted.put(String.valueOf(k), v));
+            return converted;
+        }
+        if (metadata instanceof String text && StringUtils.hasText(text)) {
+            try {
+                Map<String, Object> parsed = JSON_MAPPER.readValue(text, Map.class);
+                Map<String, Object> converted = new LinkedHashMap<>();
+                parsed.forEach((k, v) -> converted.put(String.valueOf(k), v));
+                return converted;
+            } catch (Exception ignored) {}
+        }
+        return Map.of();
     }
 
     private LinkedHashSet<VisibilityRuleKey> extractMenuVisibilityRules(Map<String, Object> payload) {
