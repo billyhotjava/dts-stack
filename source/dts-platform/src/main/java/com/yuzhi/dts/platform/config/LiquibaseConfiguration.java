@@ -23,6 +23,12 @@ public class LiquibaseConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(LiquibaseConfiguration.class);
 
+    static {
+        if (!"WARN".equalsIgnoreCase(System.getProperty("liquibase.duplicateFileMode"))) {
+            System.setProperty("liquibase.duplicateFileMode", "WARN");
+        }
+    }
+
     private final Environment env;
 
     public LiquibaseConfiguration(Environment env) {
@@ -38,6 +44,9 @@ public class LiquibaseConfiguration {
         ApplicationProperties applicationProperties,
         DataSourceProperties dataSourceProperties
     ) {
+        if (!"WARN".equalsIgnoreCase(System.getProperty("liquibase.duplicateFileMode"))) {
+            System.setProperty("liquibase.duplicateFileMode", "WARN");
+        }
         SpringLiquibase liquibase;
         if (Boolean.TRUE.equals(applicationProperties.getLiquibase().getAsyncStart())) {
             liquibase = SpringLiquibaseUtil.createAsyncSpringLiquibase(

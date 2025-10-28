@@ -50,8 +50,16 @@ export interface ChangeDiffViewerProps {
 const DEFAULT_DELETE_MESSAGE = "记录待删除";
 const FINAL_DELETE_MESSAGE = "记录已删除";
 const FINAL_DELETE_STATUSES = new Set(["APPROVED", "APPLIED", "SUCCESS", "COMPLETED"]);
-const HIDDEN_FIELD_KEYS = new Set(["attributes", "target", "payload", "targetid", "targetlabel", "payloadjson"]);
-const HIDDEN_FIELD_LABELS = new Set(["attributes", "target", "详细信息", "目标信息"]);
+const HIDDEN_FIELD_KEYS = new Set([
+	"attributes",
+	"target",
+	"payload",
+	"targetid",
+	"targetlabel",
+	"payloadjson",
+	"actiondisplay",
+]);
+const HIDDEN_FIELD_LABELS = new Set(["attributes", "target", "详细信息", "目标信息", "actiondisplay", "操作概述"]);
 
 export function ChangeDiffViewer({
 	snapshot,

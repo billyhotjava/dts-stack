@@ -109,8 +109,9 @@ export function summarizeChangeDisplayContext(
 	{ maxEntries = 3 }: SummarizeContextOptions = {},
 ): string {
 	const { summary, menuChanges } = context;
-	if (summary.length > 0) {
-		return summary
+	const filteredSummary = summary.filter((entry) => !isSummaryHidden(entry));
+	if (filteredSummary.length > 0) {
+		return filteredSummary
 			.slice(0, maxEntries)
 			.map((entry, index) => {
 				const label = entry.label || entry.field || `字段${index + 1}`;
@@ -219,6 +220,20 @@ function buildSummary(layers: Array<PlainRecord | null | undefined>, baseSummary
 		}
 	}
 	return result;
+}
+
+const SUMMARY_HIDDEN_FIELDS = new Set(["actiondisplay", "target", "attributes"]);
+
+function isSummaryHidden(entry: ChangeSummaryEntry): boolean {
+	const field = typeof entry.field === "string" ? entry.field.trim().toLowerCase() : "";
+	if (field && SUMMARY_HIDDEN_FIELDS.has(field)) {
+		return true;
+	}
+	const label = typeof entry.label === "string" ? entry.label.trim().toLowerCase() : "";
+	if (label && SUMMARY_HIDDEN_FIELDS.has(label)) {
+		return true;
+	}
+	return false;
 }
 
 function summaryKey(entry: ChangeSummaryEntry): string {
