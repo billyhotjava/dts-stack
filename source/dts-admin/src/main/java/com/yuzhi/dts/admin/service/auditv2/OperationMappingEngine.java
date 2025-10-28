@@ -1,6 +1,5 @@
-package com.yuzhi.dts.admin.service.audit;
+package com.yuzhi.dts.admin.service.auditv2;
 
-import com.yuzhi.dts.admin.domain.AuditEvent;
 import com.yuzhi.dts.admin.domain.AuditOperationMapping;
 import com.yuzhi.dts.admin.repository.AuditOperationMappingRepository;
 import java.text.Normalizer;
@@ -9,8 +8,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -27,38 +24,12 @@ import org.springframework.web.util.pattern.PathPattern;
 import org.springframework.web.util.pattern.PathPatternParser;
 
 /**
- * 运行时按规则解析审计操作信息，生成监管友好的文案。
- * 当前阶段主要用于列表筛选项和前端展示元数据。
+ * 规则引擎：维护 audit_operation_mapping 配置，供筛选项和分组展示使用。
  */
 @Component
 public class OperationMappingEngine {
 
     private static final Logger log = LoggerFactory.getLogger(OperationMappingEngine.class);
-
-    public static final class ResolvedOperation {
-        public Long ruleId;
-        public String moduleName;
-        public String operationGroup;
-        public String groupDisplayName;
-        public AuditOperationType operationType;
-        public String operationTypeLabel;
-        public String description;
-        public String sourceTable;
-        public boolean ruleMatched;
-        public Map<String, Object> attributes;
-    }
-
-    private static final class CompiledRule {
-        final AuditOperationMapping raw;
-        final PathPattern pattern;
-        final Pattern statusPattern;
-
-        CompiledRule(AuditOperationMapping raw, PathPattern pattern, Pattern statusPattern) {
-            this.raw = raw;
-            this.pattern = pattern;
-            this.statusPattern = statusPattern;
-        }
-    }
 
     public static final class RuleSummary {
         private final Long id;
@@ -119,7 +90,19 @@ public class OperationMappingEngine {
         }
     }
 
-    private final AuditOperationMappingRepository repo;
+    private static final class CompiledRule {
+        final AuditOperationMapping raw;
+        final PathPattern pattern;
+        final Pattern statusPattern;
+
+        CompiledRule(AuditOperationMapping raw, PathPattern pattern, Pattern statusPattern) {
+            this.raw = raw;
+            this.pattern = pattern;
+            this.statusPattern = statusPattern;
+        }
+    }
+
+    private final AuditOperationMappingRepository repository;
     private final JdbcTemplate jdbcTemplate;
     private final AuditResourceDictionaryService resourceDictionary;
     private final PathPatternParser parser = new PathPatternParser();
@@ -127,11 +110,11 @@ public class OperationMappingEngine {
     private volatile List<CompiledRule> rules = List.of();
 
     public OperationMappingEngine(
-        AuditOperationMappingRepository repo,
+        AuditOperationMappingRepository repository,
         JdbcTemplate jdbcTemplate,
         AuditResourceDictionaryService resourceDictionary
     ) {
-        this.repo = Objects.requireNonNull(repo, "repo required");
+        this.repository = Objects.requireNonNull(repository, "repository required");
         this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate required");
         this.resourceDictionary = Objects.requireNonNull(resourceDictionary, "resourceDictionary required");
     }
@@ -161,7 +144,7 @@ public class OperationMappingEngine {
             return;
         }
         try {
-            List<AuditOperationMapping> enabled = repo.findAllByEnabledTrueOrderByOrderValueAscIdAsc();
+            List<AuditOperationMapping> enabled = repository.findAllByEnabledTrueOrderByOrderValueAscIdAsc();
             List<CompiledRule> compiled = new ArrayList<>(enabled.size());
             for (AuditOperationMapping mapping : enabled) {
                 String patternKey = normalizePattern(mapping.getUrlPattern());
@@ -178,61 +161,36 @@ public class OperationMappingEngine {
         }
     }
 
-    public Optional<ResolvedOperation> resolve(AuditEvent event) {
-        if (event == null || rules.isEmpty()) {
-            return Optional.empty();
-        }
-        // 当前版本仅提供兜底信息，后续如需精确匹配可扩展 requestPath 参数
-        return Optional.empty();
-    }
-
-    public Optional<ResolvedOperation> resolveWithFallback(AuditEvent event) {
-        if (event == null) {
-            return Optional.empty();
-        }
-        ResolvedOperation resolved = new ResolvedOperation();
-        resolved.ruleMatched = false;
-        resolved.ruleId = null;
-        resolved.moduleName = StringUtils.defaultIfBlank(event.getModuleLabel(), event.getModule());
-        String groupLabel = StringUtils.defaultIfBlank(resolved.moduleName, "通用");
-        resolved.operationGroup = StringUtils.defaultIfBlank(event.getOperationGroup(), slugify(groupLabel));
-        resolved.groupDisplayName = groupLabel;
-        AuditOperationType type = AuditOperationType.from(event.getOperationType());
-        resolved.operationType = type == AuditOperationType.UNKNOWN ? null : type;
-        resolved.operationTypeLabel = resolved.operationType != null ? resolved.operationType.getDisplayName() : null;
-        resolved.description = StringUtils.defaultIfBlank(event.getSummary(), event.getOperationName());
-        resolved.sourceTable = event.getTargetTable();
-        resolved.attributes = Map.of();
-        return Optional.of(resolved);
-    }
-
     public List<RuleSummary> describeRules() {
-        if (!mappingTableExists()) {
-            return List.of();
+        List<CompiledRule> snapshot = rules;
+        List<RuleSummary> summaries = new ArrayList<>(snapshot.size());
+        for (CompiledRule compiled : snapshot) {
+            summaries.add(new RuleSummary(compiled.raw));
         }
-        try {
-            return repo
-                .findAllByEnabledTrueOrderByOrderValueAscIdAsc()
-                .stream()
-                .map(RuleSummary::new)
-                .toList();
-        } catch (DataAccessException ex) {
-            log.debug("audit_operation_mapping unavailable when describing rules: {}", ex.getMessage());
-            return List.of();
-        }
+        return summaries;
     }
 
     private boolean mappingTableExists() {
         try {
-            jdbcTemplate.queryForObject("select count(*) from audit_operation_mapping", Integer.class);
-            return true;
-        } catch (DataAccessException ex) {
+            Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND LOWER(table_name) = ?",
+                Integer.class,
+                "audit_operation_mapping"
+            );
+            return count != null && count > 0;
+        } catch (Exception ex) {
             return false;
         }
     }
 
     private String normalizePattern(String pattern) {
-        String normalized = StringUtils.defaultIfBlank(pattern, "/**").trim();
+        if (StringUtils.isBlank(pattern)) {
+            return "/";
+        }
+        String normalized = Normalizer
+            .normalize(pattern, Normalizer.Form.NFKC)
+            .replaceAll("//+", "/")
+            .trim();
         if (!normalized.startsWith("/")) {
             normalized = "/" + normalized;
         }
@@ -240,58 +198,54 @@ public class OperationMappingEngine {
     }
 
     private Pattern compileStatusPattern(AuditOperationMapping mapping) {
-        String regex = safeTrim(mapping.getStatusCodeRegex());
-        if (StringUtils.isBlank(regex)) {
+        String statusRegex = mapping.getStatusCodeRegex();
+        if (StringUtils.isBlank(statusRegex)) {
             return null;
         }
         try {
-            return Pattern.compile(regex);
+            return Pattern.compile(statusRegex, Pattern.CASE_INSENSITIVE);
         } catch (PatternSyntaxException ex) {
-            log.warn("Invalid status_code_regex '{}' on audit rule {}", regex, mapping.getId());
+            log.warn("Invalid status regex for audit mapping id {}: {}", mapping.getId(), ex.getMessage());
             return null;
         }
     }
 
     private static String effectiveGroupKey(AuditOperationMapping mapping) {
-        String explicit = safeTrim(mapping.getOperationGroup());
-        if (StringUtils.isNotBlank(explicit)) {
-            return explicit;
+        if (StringUtils.isNotBlank(mapping.getOperationGroup())) {
+            return mapping.getOperationGroup();
         }
-        String label = safeTrim(mapping.getGroupDisplayName());
-        if (StringUtils.isNotBlank(label)) {
-            return slugify(label);
+        if (StringUtils.isNotBlank(mapping.getModuleName())) {
+            return slugify(mapping.getModuleName());
         }
-        String module = safeTrim(mapping.getModuleName());
-        if (StringUtils.isNotBlank(module)) {
-            return slugify(module);
-        }
-        Long id = mapping.getId();
-        return id != null ? "rule-" + id : "rule-" + UUID.randomUUID().toString().replace("-", "");
+        return "general";
     }
 
     private static String effectiveGroupLabel(AuditOperationMapping mapping) {
-        String label = safeTrim(mapping.getGroupDisplayName());
-        if (StringUtils.isNotBlank(label)) {
-            return label;
+        if (StringUtils.isNotBlank(mapping.getGroupDisplayName())) {
+            return mapping.getGroupDisplayName();
         }
-        String module = safeTrim(mapping.getModuleName());
-        if (StringUtils.isNotBlank(module)) {
-            return module;
+        if (StringUtils.isNotBlank(mapping.getModuleName())) {
+            return mapping.getModuleName();
         }
         return "通用";
-    }
-
-    private static String safeTrim(String value) {
-        return value == null ? null : value.trim();
     }
 
     private static String slugify(String value) {
         if (StringUtils.isBlank(value)) {
             return "general";
         }
-        String normalized = Normalizer.normalize(value, Normalizer.Form.NFKC);
-        String lower = normalized.toLowerCase(Locale.ROOT);
-        String slug = lower.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
-        return StringUtils.defaultIfBlank(slug, "general");
+        return value
+            .trim()
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9]+", "-")
+            .replaceAll("(^-|-$)", "");
+    }
+
+    private static String safeTrim(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

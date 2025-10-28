@@ -17,7 +17,7 @@ import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.OrganizationService;
 import com.yuzhi.dts.admin.service.OrganizationSyncService;
 import com.yuzhi.dts.admin.service.PortalMenuService;
-import com.yuzhi.dts.admin.service.audit.ChangeSnapshotFormatter;
+import com.yuzhi.dts.admin.service.auditv2.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
 import com.yuzhi.dts.admin.service.user.AdminUserService;

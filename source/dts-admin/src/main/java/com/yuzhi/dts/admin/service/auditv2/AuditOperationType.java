@@ -1,12 +1,10 @@
-package com.yuzhi.dts.admin.service.audit;
+package com.yuzhi.dts.admin.service.auditv2;
 
 import java.util.Arrays;
 import java.util.Locale;
-import java.util.Optional;
 
 /**
- * Canonical operation types persisted with audit events.
- * Each enum exposes an upper-case code and a human readable display name for UI fallback.
+ * 统一的操作类型枚举，供规则引擎和审计展示使用。
  */
 public enum AuditOperationType {
     CREATE("CREATE", "新增", true),
@@ -48,25 +46,22 @@ public enum AuditOperationType {
         return displayName;
     }
 
-    /**
-     * Indicates whether the operation mutates state and therefore requires a precise target id/table.
-     */
     public boolean requiresTarget() {
         return mutating;
     }
 
-    public static AuditOperationType from(String value) {
-        if (value == null || value.isBlank()) {
+    public static AuditOperationType from(String raw) {
+        if (raw == null || raw.isBlank()) {
             return UNKNOWN;
         }
-        String normalized = value.trim().toUpperCase(Locale.ROOT);
-        Optional<AuditOperationType> direct = Arrays.stream(values())
-            .filter(t -> t.code.equals(normalized))
-            .findFirst();
-        if (direct.isPresent()) {
-            return direct.orElseThrow();
-        }
-        // Legacy Chinese values or localized variants
+        String normalized = raw.trim().toUpperCase(Locale.ROOT);
+        return Arrays.stream(values())
+            .filter(type -> type.code.equals(normalized))
+            .findFirst()
+            .orElseGet(() -> mapLegacy(normalized));
+    }
+
+    private static AuditOperationType mapLegacy(String normalized) {
         return switch (normalized) {
             case "新增", "CREATE" -> CREATE;
             case "修改", "UPDATE" -> UPDATE;

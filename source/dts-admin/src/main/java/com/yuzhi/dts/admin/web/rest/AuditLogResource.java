@@ -2,9 +2,9 @@ package com.yuzhi.dts.admin.web.rest;
 
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
-import com.yuzhi.dts.admin.service.audit.OperationMappingEngine;
-import com.yuzhi.dts.admin.service.audit.OperationMappingEngine.RuleSummary;
-import com.yuzhi.dts.admin.service.audit.AuditResourceDictionaryService;
+import com.yuzhi.dts.admin.service.auditv2.OperationMappingEngine;
+import com.yuzhi.dts.admin.service.auditv2.OperationMappingEngine.RuleSummary;
+import com.yuzhi.dts.admin.service.auditv2.AuditResourceDictionaryService;
 import com.yuzhi.dts.admin.service.auditv2.AuditEntryQueryService;
 import com.yuzhi.dts.admin.service.auditv2.AuditEntryView;
 import com.yuzhi.dts.admin.service.auditv2.AuditSearchCriteria;

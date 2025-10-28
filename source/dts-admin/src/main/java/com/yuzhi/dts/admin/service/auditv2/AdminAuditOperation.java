@@ -1,10 +1,10 @@
-package com.yuzhi.dts.admin.service.audit;
+package com.yuzhi.dts.admin.service.auditv2;
 
 import java.util.Locale;
 import java.util.Optional;
 
 /**
- * 管理端内置审计操作元数据，用于简化落日志时的模块、中文名称和目标表映射。
+ * 管理端内置操作元数据，供审批审计等场景引用。
  */
 public enum AdminAuditOperation {
     PORTAL_MENU_FETCH("PORTAL_MENU_FETCH", "查询门户菜单", AuditOperationType.READ, "admin.portal-menus", "门户菜单", "portal_menu"),

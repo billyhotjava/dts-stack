@@ -25,8 +25,6 @@
     <include file="config/liquibase/changelog/20251115-01_change_request_enhancements.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251120-01_data_level_options.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251120-03_data_level_options_confidential.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20251120-02_audit_event_table.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20251011-01_audit_event_extend.json.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251002-01_portal_menu_visibility.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251012-01_portal_menu_bind_all_roles.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251002-02_admin_custom_role_cleanup.xml" relativeToChangelogFile="false"/>
@@ -62,14 +60,11 @@
     <include file="config/liquibase/changelog/20251024_01_admin_sessions_table.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260112-01_audit_dataset_preview_template.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260115-01_audit_resource_dictionary_user_api_alias.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20260110-01_audit_operation_type_enforce.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20260124-01_audit_event_column_repair.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260127-01_portal_menu_disable_audit.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260127-02_audit_operation_mapping_change_request_types.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260305-01_audit_operation_mapping_source_system_backfill.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260305-02_organization_root_flag.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260310-01_audit_operation_group_slug_fix.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20260318-01_audit_event_refactor.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260319-01_audit_entry_schema.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->

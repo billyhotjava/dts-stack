@@ -1,5 +1,6 @@
 package com.yuzhi.dts.admin.service.auditv2;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.domain.audit.AuditEntry;
 import com.yuzhi.dts.admin.domain.audit.AuditEntryDetail;
 import com.yuzhi.dts.admin.domain.audit.AuditEntryTarget;
@@ -33,10 +34,12 @@ public class AuditRecorder {
 
     private final AuditEntryRepository repository;
     private final Clock clock;
+    private final ObjectMapper objectMapper;
 
-    public AuditRecorder(AuditEntryRepository repository, ObjectProvider<Clock> clockProvider) {
+    public AuditRecorder(AuditEntryRepository repository, ObjectProvider<Clock> clockProvider, ObjectMapper objectMapper) {
         this.repository = repository;
         this.clock = clockProvider != null ? clockProvider.getIfAvailable(Clock::systemUTC) : Clock.systemUTC();
+        this.objectMapper = objectMapper;
     }
 
     public AuditBuilder start(String actorId) {
@@ -105,6 +108,26 @@ public class AuditRecorder {
             }
             return null;
         }
+    }
+
+    private Object sanitizeDetailValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof CharSequence || value instanceof Number || value instanceof Boolean) {
+            return value;
+        }
+        if (value instanceof Map<?, ?> || value instanceof Collection<?> || value.getClass().isArray()) {
+            try {
+                return objectMapper != null ? objectMapper.writeValueAsString(value) : String.valueOf(value);
+            } catch (Exception ex) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Failed to serialize audit detail value of type {}: {}", value.getClass().getName(), ex.getMessage());
+                }
+                return String.valueOf(value);
+            }
+        }
+        return String.valueOf(value);
     }
 
     public static final class AuditBuilder {
@@ -254,7 +277,7 @@ public class AuditRecorder {
 
         public AuditBuilder detail(String key, Object value) {
             if (StringUtils.hasText(key) && value != null) {
-                details.add(new DetailRecord(key.trim(), value));
+                details.add(new DetailRecord(key.trim(), recorder.sanitizeDetailValue(value)));
             }
             return this;
         }

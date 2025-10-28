@@ -1,4 +1,4 @@
-package com.yuzhi.dts.admin.service.audit;
+package com.yuzhi.dts.admin.service.auditv2;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -158,130 +158,87 @@ public class ChangeSnapshotFormatter {
         Map<String, Map<String, FieldMeta>> map = new LinkedHashMap<>();
         map.put("PORTAL_MENU", portalMenuDictionary());
         map.put("MENU", portalMenuDictionary());
+        map.put("ADMIN_KEYCLOAK_USER", userDictionary());
         map.put("USER", userDictionary());
         map.put("ROLE", roleDictionary());
         map.put("CUSTOM_ROLE", roleDictionary());
-        map.put("ROLE_ASSIGNMENT", Map.of(
-            "addedRoles", FieldMeta.label("新增角色"),
-            "removedRoles", FieldMeta.label("移除角色"),
-            "roles", FieldMeta.label("角色列表")
-        ));
-        map.put("DATASET", datasetDictionary());
+        map.put("CATALOG_DATASET", datasetDictionary());
         return map;
     }
 
     private Map<String, String> buildGenericValueDictionary() {
-        Map<String, String> map = new LinkedHashMap<>();
-        map.put("true", "是");
-        map.put("false", "否");
-        map.put("PENDING", "待处理");
-        map.put("APPLIED", "已应用");
-        map.put("REJECTED", "已拒绝");
-        map.put("PROCESSING", "处理中");
-        map.put("APPROVED", "已批准");
-        map.put("SUCCESS", "成功");
-        map.put("FAILED", "失败");
-        map.put("GENERAL", "一般");
-        map.put("IMPORTANT", "重要");
-        map.put("CORE", "核心");
-        map.put("INTERNAL", "内部");
-        map.put("PUBLIC", "公开");
-        map.put("NON_SECRET", "非密");
-        return map;
+        return Map.of(
+            "true", "是",
+            "false", "否",
+            "ENABLED", "启用",
+            "DISABLED", "禁用",
+            "APPROVED", "批准",
+            "REJECTED", "驳回",
+            "PENDING", "处理中"
+        );
     }
 
     private String translateValue(Object value, FieldMeta meta) {
         if (value == null) {
-            return "-";
+            return "";
         }
-        if (meta != null && meta.valueMapping != null) {
-            String mapped = lookup(meta.valueMapping, value);
+        if (meta.mapping != null) {
+            String key = String.valueOf(value);
+            String mapped = meta.mapping.get(key);
             if (mapped != null) {
                 return mapped;
             }
         }
-        if (value instanceof Boolean bool) {
-            return genericValueDictionary.getOrDefault(Boolean.toString(bool), bool ? "是" : "否");
-        }
-        if (value instanceof Number number) {
-            return number.toString();
-        }
-        if (value instanceof Iterable<?> iterable) {
-            List<String> segments = new ArrayList<>();
-            for (Object element : iterable) {
-                segments.add(translateValue(element, meta));
-            }
-            return String.join("，", segments);
-        }
-        if (value.getClass().isArray()) {
-            int length = java.lang.reflect.Array.getLength(value);
-            List<String> segments = new ArrayList<>(length);
-            for (int i = 0; i < length; i++) {
-                segments.add(translateValue(java.lang.reflect.Array.get(value, i), meta));
-            }
-            return String.join("，", segments);
+        if (value instanceof List<?> list) {
+            return list.stream().map(this::stringify).filter(StringUtils::isNotBlank).reduce((a, b) -> a + "，" + b).orElse("");
         }
         if (value instanceof Map<?, ?> map) {
             try {
-                return objectMapper.writeValueAsString(map);
-            } catch (JsonProcessingException ignored) {
-                return map.toString();
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(map);
+            } catch (JsonProcessingException ignored) {}
+        }
+        if (value instanceof Boolean bool) {
+            return bool ? "是" : "否";
+        }
+        String text = stringify(value);
+        if (!text.isEmpty()) {
+            String mapped = genericValueDictionary.get(text.toUpperCase(Locale.ROOT));
+            if (mapped != null) {
+                return mapped;
             }
         }
-        String text = value.toString();
-        if (StringUtils.isBlank(text)) {
-            return "-";
-        }
-        String normalized = text.trim();
-        String mapped = lookup(genericValueDictionary, normalized);
-        return mapped != null ? mapped : normalized;
+        return text;
     }
 
-    private String lookup(Map<String, String> dictionary, Object value) {
-        if (dictionary == null || dictionary.isEmpty() || value == null) {
-            return null;
+    private String stringify(Object value) {
+        if (value == null) {
+            return "";
         }
-        String key = value.toString().trim();
-        if (key.isEmpty()) {
-            return dictionary.get("");
-        }
-        String direct = dictionary.get(key);
-        if (direct != null) {
-            return direct;
-        }
-        return dictionary.get(key.toUpperCase(Locale.ROOT));
+        String str = value.toString().trim();
+        return str;
     }
 
     private String normalizeResource(String resourceType) {
-        if (resourceType == null) {
-            return "";
+        if (StringUtils.isBlank(resourceType)) {
+            return "UNKNOWN";
         }
         return resourceType.trim().toUpperCase(Locale.ROOT);
     }
 
-    private static final class FieldMeta {
-        private final String label;
-        private final Map<String, String> valueMapping;
-
-        private FieldMeta(String label, Map<String, String> valueMapping) {
-            this.label = label;
-            this.valueMapping = valueMapping == null ? Map.of() : Map.copyOf(valueMapping);
+    private record FieldMeta(String label, Map<String, String> mapping) {
+        static FieldMeta label(String label) {
+            return new FieldMeta(label, null);
         }
 
-        private static FieldMeta label(String label) {
-            return new FieldMeta(label, Map.of());
+        static FieldMeta mapping(String label, Map<String, String> mapping) {
+            return new FieldMeta(label, mapping);
         }
 
-        private static FieldMeta mapping(String label, Map<String, String> valueMapping) {
-            return new FieldMeta(label, valueMapping);
-        }
-
-        private static FieldMeta fallback(String field) {
-            if (StringUtils.isBlank(field)) {
-                return new FieldMeta("字段", Map.of());
-            }
-            String normalized = field.replace('_', ' ').replace('.', ' ');
-            return new FieldMeta(normalized, Map.of());
+        static FieldMeta fallback(String field) {
+            String normalized = field.contains("_")
+                ? field.replace('_', ' ')
+                : field.replaceAll("([A-Z])", " $1");
+            return new FieldMeta(normalized.trim(), null);
         }
     }
 }

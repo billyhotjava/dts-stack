@@ -1,0 +1,6 @@
+2025-10-27
+----------------
+- 批量删除 admin 侧旧版审计堆栈：`AdminAuditService`、`AuditEvent` 域与仓库、AOP Capture、HTTP Fallback 过滤器、dts-common Client 以及相关 Liquibase changelog。
+- 新增 auditv2 工具组（`AuditOperationType`、`AuditResourceDictionaryService`、`OperationMappingEngine`、`ChangeSnapshotFormatter`、`AdminAuditOperation`），替换所有旧依赖。
+- `AuditEntryQueryService`/`AuditRecorder`/`AdminApiResource`/`AdminUserService`/`AuditIngestResource` 等已对接新组件；审计详情写入统一 JSON 字符串，审批成功/失败全覆盖。
+- 前端类型与页面仍保持原状，只依赖 audit_entry 字段；需在本地执行 Maven 编译 + Web 构建确认无漏项。
