@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -193,15 +194,18 @@ public class AuditService {
 
     private final ObjectProvider<AuditTrailService> auditTrailServiceProvider;
     private final AuditActionCatalog actionCatalog;
+    private final PortalSessionRegistry portalSessionRegistry;
     private final ObjectMapper objectMapper;
 
     public AuditService(
         ObjectProvider<AuditTrailService> auditTrailServiceProvider,
         AuditActionCatalog actionCatalog,
+        PortalSessionRegistry portalSessionRegistry,
         ObjectMapper objectMapper
     ) {
         this.auditTrailServiceProvider = auditTrailServiceProvider;
         this.actionCatalog = actionCatalog;
+        this.portalSessionRegistry = portalSessionRegistry;
         this.objectMapper = objectMapper;
     }
 
@@ -459,8 +463,9 @@ public class AuditService {
         } else {
             event.payload = payload;
         }
-        String actorDisplayName = resolveActorName(payloadMap);
+        String actorDisplayName = resolveActorName(payloadMap, safeActor);
         if (StringUtils.hasText(actorDisplayName)) {
+            payloadMap.putIfAbsent("actorName", actorDisplayName);
             event.actorName = actorDisplayName;
         }
         if (effectiveExtraTags != null && !effectiveExtraTags.isEmpty()) {
@@ -682,79 +687,79 @@ public class AuditService {
         String trimmed = candidate.trim();
         String upper = trimmed.toUpperCase(Locale.ROOT);
         String lower = trimmed.toLowerCase(Locale.ROOT);
-        if (upper.startsWith("LOGIN") || containsAny(lower, "登录", "登入")) {
+        if (upper.contains("LOGIN") || containsAny(lower, "登录", "登入")) {
             return "LOGIN";
         }
-        if (upper.startsWith("LOGOUT") || containsAny(lower, "登出", "退出登录", "注销登录")) {
+        if (upper.contains("LOGOUT") || containsAny(lower, "登出", "退出登录", "注销登录")) {
             return "LOGOUT";
         }
-        if (upper.startsWith("DOWNLOAD") || containsAny(lower, "下载", "download")) {
+        if (upper.contains("DOWNLOAD") || containsAny(lower, "下载", "download")) {
             return "DOWNLOAD";
         }
-        if (upper.startsWith("UPLOAD") || containsAny(lower, "上传", "upload")) {
+        if (upper.contains("UPLOAD") || containsAny(lower, "上传", "upload")) {
             return "UPLOAD";
         }
-        if (upper.startsWith("EXPORT") || containsAny(lower, "导出", "export")) {
+        if (upper.contains("EXPORT") || containsAny(lower, "导出", "export")) {
             return "EXPORT";
         }
-        if (upper.startsWith("IMPORT") || containsAny(lower, "导入", "import")) {
+        if (upper.contains("IMPORT") || containsAny(lower, "导入", "import")) {
             return "IMPORT";
         }
-        if (upper.startsWith("GRANT") || containsAny(lower, "授权", "共享", "grant")) {
+        if (upper.contains("GRANT") || containsAny(lower, "授权", "共享", "grant")) {
             return "GRANT";
         }
-        if (upper.startsWith("REVOKE") || containsAny(lower, "撤销授权", "取消授权", "收回", "回收", "revoke")) {
+        if (upper.contains("REVOKE") || containsAny(lower, "撤销授权", "取消授权", "收回", "回收", "revoke")) {
             return "REVOKE";
         }
-        if (upper.startsWith("ENABLE") || containsAny(lower, "启用", "开启", "激活", "enable")) {
+        if (upper.contains("ENABLE") || containsAny(lower, "启用", "开启", "激活", "enable")) {
             return "ENABLE";
         }
-        if (upper.startsWith("DISABLE") || containsAny(lower, "禁用", "停用", "关闭", "失效", "disable")) {
+        if (upper.contains("DISABLE") || containsAny(lower, "禁用", "停用", "关闭", "失效", "disable")) {
             return "DISABLE";
         }
-        if (upper.startsWith("APPROVE") || containsAny(lower, "批准", "审批通过")) {
+        if (upper.contains("APPROVE") || containsAny(lower, "批准", "审批通过")) {
             return "APPROVE";
         }
-        if (upper.startsWith("REJECT") || containsAny(lower, "拒绝", "驳回")) {
+        if (upper.contains("REJECT") || containsAny(lower, "拒绝", "驳回")) {
             return "REJECT";
         }
         if (
-            upper.startsWith("EXECUTE") ||
-            upper.startsWith("RUN") ||
+            upper.contains("EXECUTE") ||
+            upper.contains("RUN") ||
             containsAny(lower, "执行", "运行", "run", "apply")
         ) {
             return "EXECUTE";
         }
-        if (upper.startsWith("REFRESH") || containsAny(lower, "刷新", "refresh")) {
+        if (upper.contains("REFRESH") || containsAny(lower, "刷新", "refresh")) {
             return "REFRESH";
         }
-        if (upper.startsWith("TEST") || containsAny(lower, "测试", "校验", "验证", "test")) {
+        if (upper.contains("TEST") || containsAny(lower, "测试", "校验", "验证", "test")) {
             return "TEST";
         }
         if (
-            upper.startsWith("CREATE") ||
-            upper.startsWith("ADD") ||
-            upper.startsWith("NEW") ||
+            upper.contains("CREATE") ||
+            upper.contains("ADD") ||
+            upper.contains("NEW") ||
             containsAny(lower, "新增", "新建", "创建", "提交", "申请")
         ) {
             return "CREATE";
         }
-        if (upper.startsWith("DELETE") || containsAny(lower, "删除", "移除", "下线", "注销")) {
+        if (upper.contains("DELETE") || containsAny(lower, "删除", "移除", "下线", "注销")) {
             return "DELETE";
         }
         if (
-            upper.startsWith("UPDATE") ||
-            upper.startsWith("MODIFY") ||
-            upper.startsWith("EDIT") ||
-            upper.startsWith("SAVE") ||
+            upper.contains("UPDATE") ||
+            upper.contains("MODIFY") ||
+            upper.contains("EDIT") ||
+            upper.contains("SAVE") ||
             containsAny(lower, "修改", "更新", "调整", "保存", "编辑", "配置")
         ) {
             return "UPDATE";
         }
         if (
-            upper.startsWith("READ") ||
-            upper.startsWith("QUERY") ||
-            upper.startsWith("GET") ||
+            upper.contains("READ") ||
+            upper.contains("QUERY") ||
+            upper.contains("GET") ||
             containsAny(lower, "查看", "查询", "预览", "浏览", "列表", "检索")
         ) {
             return "READ";
@@ -853,12 +858,19 @@ public class AuditService {
         return false;
     }
 
-    private String resolveActorName(Map<String, Object> payload) {
+    private String resolveActorName(Map<String, Object> payload, String actorId) {
         String fromPayload = extractText(payload, "actorName");
         if (StringUtils.hasText(fromPayload)) {
             return fromPayload;
         }
-        return SecurityUtils.getCurrentUserDisplayName().orElse(null);
+        String fromSecurity = SecurityUtils.getCurrentUserDisplayName().orElse(null);
+        if (StringUtils.hasText(fromSecurity)) {
+            return fromSecurity;
+        }
+        if (StringUtils.hasText(actorId)) {
+            return portalSessionRegistry.resolveDisplayName(actorId).orElse(null);
+        }
+        return null;
     }
 
     private String resolveClientIp(HttpServletRequest request) {

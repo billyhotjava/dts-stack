@@ -3338,19 +3338,34 @@ public class AdminApiResource {
             .map(Object::toString)
             .map(v -> v.equalsIgnoreCase("APPROVE") || v.equalsIgnoreCase("REJECT"))
             .orElse(false);
-        if (!approverFlow) {
-            String requesterOperation = buildRequesterOperationName(cr, context);
-            if (StringUtils.hasText(requesterOperation)) {
-                detail.put("operationName", requesterOperation);
-                detail.put("summary", requesterOperation);
-            }
-            AuditOperationType requesterType = determineRequesterOperationType(context);
-            if (requesterType != null && requesterType != AuditOperationType.UNKNOWN) {
-                detail.put("operationType", requesterType.getCode());
-                detail.put("operationTypeText", requesterType.getDisplayName());
-            }
+        String requesterOperation = buildRequesterOperationName(cr, context);
+        if (!approverFlow && StringUtils.hasText(requesterOperation)) {
+            detail.put("operationName", requesterOperation);
+            detail.put("summary", requesterOperation);
+        }
+        AuditOperationType requesterType = determineRequesterOperationType(context);
+        if (requesterType != null && requesterType != AuditOperationType.UNKNOWN) {
+            detail.put("operationType", requesterType.getCode());
+            detail.put("operationTypeText", requesterType.getDisplayName());
         }
         detail.put("approverAction", normalizeActionToken(cr != null ? cr.getStatus() : null));
+    }
+
+    private AuditOperationKind mapOperationKind(AuditOperationType type) {
+        if (type == null || type == AuditOperationType.UNKNOWN) {
+            return null;
+        }
+        return switch (type) {
+            case CREATE -> AuditOperationKind.CREATE;
+            case UPDATE -> AuditOperationKind.UPDATE;
+            case DELETE -> AuditOperationKind.DELETE;
+            case ENABLE -> AuditOperationKind.ENABLE;
+            case DISABLE -> AuditOperationKind.DISABLE;
+            case GRANT -> AuditOperationKind.GRANT;
+            case REVOKE -> AuditOperationKind.REVOKE;
+            case EXECUTE -> AuditOperationKind.EXECUTE;
+            default -> null;
+        };
     }
 
     private record ChangeContext(
@@ -4003,6 +4018,19 @@ public class AdminApiResource {
                     builder.detail("context", new LinkedHashMap<>(context.extras()));
                 }
             }
+            AuditOperationType requesterType = determineRequesterOperationType(context);
+            if (detail != null && requesterType != null && requesterType != AuditOperationType.UNKNOWN) {
+                detail.put("operationType", requesterType.getCode());
+                detail.put("operationTypeText", requesterType.getDisplayName());
+            }
+            AuditOperationKind overrideKind = mapOperationKind(requesterType);
+            if (overrideKind != null) {
+                builder.operationOverride(
+                    AdminAuditOperation.ADMIN_CHANGE_REQUEST_MANAGE.code(),
+                    summary,
+                    overrideKind
+                );
+            }
             if (detail != null && !detail.isEmpty()) {
                 builder.detail("detail", new LinkedHashMap<>(detail));
             }
@@ -4057,6 +4085,19 @@ public class AdminApiResource {
                 if (context.extras() != null && !context.extras().isEmpty()) {
                     builder.detail("context", new LinkedHashMap<>(context.extras()));
                 }
+            }
+            AuditOperationType requesterType = determineRequesterOperationType(context);
+            if (approverDetail != null && requesterType != null && requesterType != AuditOperationType.UNKNOWN) {
+                approverDetail.put("operationType", requesterType.getCode());
+                approverDetail.put("operationTypeText", requesterType.getDisplayName());
+            }
+            AuditOperationKind overrideKind = mapOperationKind(requesterType);
+            if (overrideKind != null) {
+                builder.operationOverride(
+                    AdminAuditOperation.ADMIN_CHANGE_REQUEST_MANAGE.code(),
+                    baseSummary,
+                    overrideKind
+                );
             }
             if (approverDetail != null && !approverDetail.isEmpty()) {
                 builder.detail("detail", new LinkedHashMap<>(approverDetail));

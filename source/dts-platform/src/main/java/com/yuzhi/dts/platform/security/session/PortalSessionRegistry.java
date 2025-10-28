@@ -181,6 +181,18 @@ public class PortalSessionRegistry {
             .filter(StringUtils::hasText);
     }
 
+    public Optional<String> resolveDisplayName(String username) {
+        String normalized = normalizeUsername(username);
+        if (normalized == null) {
+            return Optional.empty();
+        }
+        return sessionRepository
+            .findByNormalizedUsernameAndRevokedAtIsNull(normalized)
+            .map(PortalSessionEntity::getDisplayName)
+            .map(display -> display == null ? null : display.trim())
+            .filter(StringUtils::hasText);
+    }
+
     private PortalSession createSessionInternal(
         String username,
         List<String> roles,

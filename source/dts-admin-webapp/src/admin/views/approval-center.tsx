@@ -316,9 +316,17 @@ function formatSingleEntry(request: ChangeRequest, key: string, value: unknown, 
 
 function getActionText(request: ChangeRequest): string {
 	const actionKey = request.action?.toUpperCase?.();
-	const actionLabel = (actionKey && ACTION_LABELS[actionKey]) ?? request.action;
 	const category = resolveCategory(request);
 	const categoryLabel = category ? CATEGORY_LABELS[category] : request.resourceType;
+	const actionLabel = actionKey
+		? actionKey === "UPDATE"
+			? "修改"
+			: actionKey === "GRANT_ROLE"
+				? "授权"
+				: actionKey === "REVOKE_ROLE"
+					? "回收"
+					: ACTION_LABELS[actionKey] ?? request.action
+		: request.action;
 	return `${actionLabel || "操作"}${categoryLabel ? ` · ${categoryLabel}` : ""}`;
 }
 
