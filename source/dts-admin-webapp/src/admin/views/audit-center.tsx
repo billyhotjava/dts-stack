@@ -1203,13 +1203,16 @@ function formatOperatorName(value?: string) {
 	if (!value) {
 		return "-";
 	}
-	const normalized = value.toLowerCase();
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return "-";
+	}
+	const normalized = trimmed.toLowerCase();
 	const label = ADMIN_LABELS[normalized];
 	if (label) {
-		return `${label}（${value}）`;
+		return label;
 	}
-	// 其余用户统一归类为“业务系统”操作人
-	return `业务系统（${value}）`;
+	return trimmed;
 }
 
 interface FieldProps {

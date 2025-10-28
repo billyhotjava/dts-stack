@@ -1394,7 +1394,11 @@ public class KeycloakApiResource {
         for (KeycloakRoleDTO role : adminUserService.listRealmRoles()) {
             if (role.getName() != null) catalog.put(role.getName(), role);
         }
-        List<KeycloakRoleDTO> roles = names.stream().map(n -> catalog.getOrDefault(n, fallbackRole(n))).toList();
+        List<KeycloakRoleDTO> roles = names
+            .stream()
+            .filter(name -> !isKeycloakDefaultRealmRole(name))
+            .map(n -> catalog.getOrDefault(n, fallbackRole(n)))
+            .toList();
         String targetPrincipal = null;
         try {
             targetPrincipal = resolveUsername(id, null, adminToken);
@@ -1417,6 +1421,20 @@ public class KeycloakApiResource {
         KeycloakRoleDTO dto = new KeycloakRoleDTO();
         dto.setName(name);
         return dto;
+    }
+
+    private boolean isKeycloakDefaultRealmRole(String role) {
+        if (role == null) {
+            return false;
+        }
+        String lower = role.trim().toLowerCase(Locale.ROOT);
+        if (lower.isEmpty()) {
+            return false;
+        }
+        if ("offline_access".equals(lower) || "uma_authorization".equals(lower)) {
+            return true;
+        }
+        return lower.startsWith("default-roles-");
     }
 
     private java.util.Optional<String> findGroupPathByOrgId(com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO node, String orgId) {

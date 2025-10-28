@@ -63,7 +63,7 @@ public class UserOperationRequest {
     }
 
     public void setRealmRoles(List<String> realmRoles) {
-        this.realmRoles = realmRoles == null ? new ArrayList<>() : realmRoles;
+        this.realmRoles = filterDefaultRoles(realmRoles);
     }
 
     public List<String> getGroupPaths() {
@@ -96,5 +96,29 @@ public class UserOperationRequest {
 
     public void setAttributes(Map<String, List<String>> attributes) {
         this.attributes = attributes == null ? new HashMap<>() : attributes;
+    }
+
+    private List<String> filterDefaultRoles(List<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> filtered = new ArrayList<>();
+        for (String role : roles) {
+            if (role == null) {
+                continue;
+            }
+            String lower = role.trim().toLowerCase();
+            if (lower.isEmpty()) {
+                continue;
+            }
+            if (lower.startsWith("default-roles-")) {
+                continue;
+            }
+            if ("offline_access".equals(lower) || "uma_authorization".equals(lower)) {
+                continue;
+            }
+            filtered.add(role);
+        }
+        return filtered;
     }
 }

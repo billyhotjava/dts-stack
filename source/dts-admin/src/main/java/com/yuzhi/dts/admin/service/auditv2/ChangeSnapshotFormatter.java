@@ -4,11 +4,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +23,7 @@ public class ChangeSnapshotFormatter {
     private final ObjectMapper objectMapper;
     private final Map<String, Map<String, FieldMeta>> dictionary;
     private final Map<String, String> genericValueDictionary;
+    private static final Set<String> KEYCLOAK_DEFAULT_REALM_ROLE_NAMES = Set.of("offline_access", "uma_authorization");
 
     public ChangeSnapshotFormatter(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -32,9 +35,16 @@ public class ChangeSnapshotFormatter {
         if (snapshot == null) {
             return List.of();
         }
-        List<ChangeSnapshot.FieldChange> changes = snapshot.getChanges();
+        ChangeSnapshot sanitizedSnapshot = ChangeSnapshot.of(
+            sanitizeRealmRoles(snapshot.getBefore()),
+            sanitizeRealmRoles(snapshot.getAfter())
+        );
+        List<ChangeSnapshot.FieldChange> changes = sanitizedSnapshot.getChanges();
         if (changes == null || changes.isEmpty()) {
-            ChangeSnapshot recalculated = ChangeSnapshot.of(snapshot.getBefore(), snapshot.getAfter());
+            ChangeSnapshot recalculated = ChangeSnapshot.of(
+                sanitizeRealmRoles(snapshot.getBefore()),
+                sanitizeRealmRoles(snapshot.getAfter())
+            );
             changes = recalculated.getChanges();
         }
         if (changes == null || changes.isEmpty()) {
@@ -64,7 +74,10 @@ public class ChangeSnapshotFormatter {
     }
 
     public List<Map<String, String>> format(Map<String, Object> before, Map<String, Object> after, String resourceType) {
-        ChangeSnapshot snapshot = ChangeSnapshot.of(before, after);
+        ChangeSnapshot snapshot = ChangeSnapshot.of(
+            sanitizeRealmRoles(before),
+            sanitizeRealmRoles(after)
+        );
         return format(snapshot, resourceType);
     }
 
@@ -216,6 +229,76 @@ public class ChangeSnapshotFormatter {
         }
         String str = value.toString().trim();
         return str;
+    }
+
+    private Map<String, Object> sanitizeRealmRoles(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> sanitized = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof Map<?, ?> mapValue) {
+                Map<String, Object> nested = new LinkedHashMap<>();
+                mapValue.forEach((k, v) -> nested.put(String.valueOf(k), v));
+                sanitized.put(key, sanitizeRealmRoles(nested));
+            } else if ("realmRoles".equalsIgnoreCase(key)) {
+                if (value instanceof Collection<?> collection) {
+                    sanitized.put(key, filterRealmRoles(collection));
+                } else if (value instanceof String str) {
+                    if (!isKeycloakDefaultRealmRole(str)) {
+                        sanitized.put(key, str);
+                    }
+                }
+            } else if (value instanceof Collection<?> collection) {
+                List<Object> list = new ArrayList<>();
+                for (Object item : collection) {
+                    if (item instanceof Map<?, ?> itemMap) {
+                        Map<String, Object> nested = new LinkedHashMap<>();
+                        itemMap.forEach((k, v) -> nested.put(String.valueOf(k), v));
+                        list.add(sanitizeRealmRoles(nested));
+                    } else {
+                        list.add(item);
+                    }
+                }
+                sanitized.put(key, list);
+            } else {
+                sanitized.put(key, value);
+            }
+        }
+        return sanitized;
+    }
+
+    private List<String> filterRealmRoles(Collection<?> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return List.of();
+        }
+        List<String> filtered = new ArrayList<>();
+        for (Object item : roles) {
+            if (item == null) {
+                continue;
+            }
+            String role = item.toString();
+            if (!isKeycloakDefaultRealmRole(role)) {
+                filtered.add(role);
+            }
+        }
+        return filtered;
+    }
+
+    private boolean isKeycloakDefaultRealmRole(String role) {
+        if (role == null) {
+            return false;
+        }
+        String lower = role.trim().toLowerCase(Locale.ROOT);
+        if (lower.isEmpty()) {
+            return false;
+        }
+        if (KEYCLOAK_DEFAULT_REALM_ROLE_NAMES.contains(lower)) {
+            return true;
+        }
+        return lower.startsWith("default-roles-");
     }
 
     private String normalizeResource(String resourceType) {

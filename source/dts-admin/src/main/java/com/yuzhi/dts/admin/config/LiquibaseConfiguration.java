@@ -57,6 +57,11 @@ public class LiquibaseConfiguration {
             );
         }
         liquibase.setChangeLog("classpath:config/liquibase/master.xml");
+        // The fat jar also contains dts-common as a dependency, which bundles audit metadata.
+        // Both jars carry a master changelog under the same path, so instruct Liquibase to log a warning instead of failing on duplicates.
+        if (!"WARN".equalsIgnoreCase(System.getProperty("liquibase.duplicateFileMode"))) {
+            System.setProperty("liquibase.duplicateFileMode", "WARN");
+        }
         if (!CollectionUtils.isEmpty(liquibaseProperties.getContexts())) {
             liquibase.setContexts(StringUtils.collectionToCommaDelimitedString(liquibaseProperties.getContexts()));
         }

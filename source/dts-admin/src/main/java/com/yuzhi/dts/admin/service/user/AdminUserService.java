@@ -62,6 +62,7 @@ public class AdminUserService {
 
     private static final Set<String> SUPPORTED_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> FORBIDDEN_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET");
+    private static final Set<String> KEYCLOAK_DEFAULT_REALM_ROLE_NAMES = Set.of("offline_access", "uma_authorization");
     private static final Map<String, String> SECURITY_LEVEL_ALIASES = Map.ofEntries(
         Map.entry("NONE_SECRET", "NON_SECRET"),
         Map.entry("NON_SECRET", "NON_SECRET"),
@@ -287,26 +288,32 @@ public class AdminUserService {
         if (roles == null || roles.isEmpty()) {
             throw new IllegalArgumentException("请选择要分配的角色");
         }
+        List<String> sanitizedRoles = sanitizeRealmRoleList(roles);
+        if (sanitizedRoles.isEmpty()) {
+            throw new IllegalArgumentException("请选择要分配的角色");
+        }
         AdminKeycloakUser snapshot = ensureSnapshot(username);
+        List<String> currentRoles = sanitizeRealmRoleList(snapshot.getRealmRoles());
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, null, "GRANT_ROLE");
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("action", "grantRoles");
         payload.put("actionDisplay", actionDisplay("grantRoles"));
         payload.put("username", username);
-        payload.put("roles", new ArrayList<>(roles));
-        payload.put("currentRoles", snapshot.getRealmRoles());
-        payload.put("addedRoles", new ArrayList<>(roles));
-        payload.put("resultRoles", mergeRoles(snapshot.getRealmRoles(), roles, true));
+        payload.put("roles", sanitizedRoles);
+        payload.put("currentRoles", currentRoles);
+        payload.put("addedRoles", sanitizedRoles);
+        payload.put("resultRoles", mergeRoles(currentRoles, sanitizedRoles, true));
         // Include keycloakId to avoid KC user search that may trigger FGAP NPEs
         if (snapshot.getKeycloakId() != null) {
             payload.put("keycloakId", snapshot.getKeycloakId());
         }
+        sanitizeDefaultRealmRolesInMap(payload);
         ChangeRequest changeRequest = createChangeRequest(
             "ROLE",
             "GRANT_ROLE",
             username,
             payload,
-            Map.of("roles", copyList(snapshot.getRealmRoles())),
+            Map.of("roles", currentRoles),
             null
         );
         payload.put("changeRequestId", changeRequest.getId());
@@ -346,26 +353,32 @@ public class AdminUserService {
         if (roles == null || roles.isEmpty()) {
             throw new IllegalArgumentException("请选择要移除的角色");
         }
+        List<String> sanitizedRoles = sanitizeRealmRoleList(roles);
+        if (sanitizedRoles.isEmpty()) {
+            throw new IllegalArgumentException("请选择要移除的角色");
+        }
         AdminKeycloakUser snapshot = ensureSnapshot(username);
+        List<String> currentRoles = sanitizeRealmRoleList(snapshot.getRealmRoles());
         AdminApprovalRequest approval = buildApprovalSkeleton(requester, null, "REVOKE_ROLE");
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("action", "revokeRoles");
         payload.put("actionDisplay", actionDisplay("revokeRoles"));
         payload.put("username", username);
-        payload.put("roles", new ArrayList<>(roles));
-        payload.put("currentRoles", snapshot.getRealmRoles());
-        payload.put("removedRoles", new ArrayList<>(roles));
-        payload.put("resultRoles", mergeRoles(snapshot.getRealmRoles(), roles, false));
+        payload.put("roles", sanitizedRoles);
+        payload.put("currentRoles", currentRoles);
+        payload.put("removedRoles", sanitizedRoles);
+        payload.put("resultRoles", mergeRoles(currentRoles, sanitizedRoles, false));
         // Include keycloakId to avoid KC user search that may trigger FGAP NPEs
         if (snapshot.getKeycloakId() != null) {
             payload.put("keycloakId", snapshot.getKeycloakId());
         }
+        sanitizeDefaultRealmRolesInMap(payload);
         ChangeRequest changeRequest = createChangeRequest(
             "ROLE",
             "REVOKE_ROLE",
             username,
             payload,
-            Map.of("roles", copyList(snapshot.getRealmRoles())),
+            Map.of("roles", currentRoles),
             null
         );
         payload.put("changeRequestId", changeRequest.getId());
@@ -535,11 +548,12 @@ public class AdminUserService {
         String normalizedPersonLevel = normalizeSecurityLevel(request.getPersonSecurityLevel());
         ensureAllowedSecurityLevel(normalizedPersonLevel, "人员密级不允许为非密");
         payload.put("personSecurityLevel", normalizedPersonLevel);
-        payload.put("realmRoles", request.getRealmRoles());
+        payload.put("realmRoles", sanitizeRealmRoleList(request.getRealmRoles()));
         payload.put("groupPaths", request.getGroupPaths());
         payload.put("enabled", request.getEnabled());
         payload.put("reason", request.getReason());
         payload.put("attributes", request.getAttributes());
+        sanitizeDefaultRealmRolesInMap(payload);
         return payload;
     }
 
@@ -550,10 +564,11 @@ public class AdminUserService {
         payload.put("email", snapshot.getEmail());
         payload.put("phone", snapshot.getPhone());
         payload.put("personSecurityLevel", snapshot.getPersonSecurityLevel());
-        payload.put("realmRoles", snapshot.getRealmRoles());
+        payload.put("realmRoles", sanitizeRealmRoleList(snapshot.getRealmRoles()));
         payload.put("groupPaths", snapshot.getGroupPaths());
         payload.put("enabled", snapshot.isEnabled());
         payload.put("attributes", Map.of());
+        sanitizeDefaultRealmRolesInMap(payload);
         // Do not expose keycloakId to clients
         return payload;
     }
@@ -572,6 +587,82 @@ public class AdminUserService {
             case "resetpassword" -> "重置密码";
             default -> code;
         };
+    }
+
+    private static boolean isKeycloakDefaultRealmRole(String role) {
+        if (role == null) {
+            return false;
+        }
+        String lower = role.trim().toLowerCase(Locale.ROOT);
+        if (lower.isEmpty()) {
+            return false;
+        }
+        if (KEYCLOAK_DEFAULT_REALM_ROLE_NAMES.contains(lower)) {
+            return true;
+        }
+        return lower.startsWith("default-roles-");
+    }
+
+    private static List<String> sanitizeRealmRoleList(Collection<?> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> filtered = new ArrayList<>();
+        for (Object item : roles) {
+            if (item == null) {
+                continue;
+            }
+            String role = item.toString();
+            if (!isKeycloakDefaultRealmRole(role)) {
+                filtered.add(role);
+            }
+        }
+        return filtered;
+    }
+
+    private static void sanitizeDefaultRealmRolesInMap(Map<String, Object> map) {
+        if (map == null || map.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, Object> entry : new ArrayList<>(map.entrySet())) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof Map<?, ?> nested) {
+                Map<String, Object> nestedCopy = new LinkedHashMap<>();
+                nested.forEach((k, v) -> nestedCopy.put(String.valueOf(k), v));
+                sanitizeDefaultRealmRolesInMap(nestedCopy);
+                map.put(key, nestedCopy);
+                continue;
+            }
+            if (value instanceof Collection<?> collection) {
+                if ("realmRoles".equalsIgnoreCase(key)) {
+                    map.put(key, sanitizeRealmRoleList(collection));
+                    continue;
+                }
+                List<Object> sanitizedList = new ArrayList<>();
+                boolean modified = false;
+                for (Object item : collection) {
+                    if (item instanceof Map<?, ?> itemMap) {
+                        Map<String, Object> nested = new LinkedHashMap<>();
+                        itemMap.forEach((k, v) -> nested.put(String.valueOf(k), v));
+                        sanitizeDefaultRealmRolesInMap(nested);
+                        sanitizedList.add(nested);
+                        modified = true;
+                    } else {
+                        sanitizedList.add(item);
+                    }
+                }
+                if (modified) {
+                    map.put(key, sanitizedList);
+                }
+                continue;
+            }
+            if ("realmRoles".equalsIgnoreCase(key) && value instanceof String str) {
+                if (isKeycloakDefaultRealmRole(str)) {
+                    map.remove(key);
+                }
+            }
+        }
     }
 
     private String writeJson(Object value) {
@@ -595,7 +686,14 @@ public class AdminUserService {
         Object correlationRef
     ) {
         Map<String, Object> detail = new HashMap<>();
-        detail.put("payload", detailSource);
+        if (detailSource instanceof Map<?, ?> mapSource) {
+            Map<String, Object> payloadCopy = new LinkedHashMap<>();
+            mapSource.forEach((k, v) -> payloadCopy.put(String.valueOf(k), v));
+            sanitizeDefaultRealmRolesInMap(payloadCopy);
+            detail.put("payload", payloadCopy);
+        } else {
+            detail.put("payload", detailSource);
+        }
         detail.put("ip", ip);
         detail.put("timestamp", Instant.now().toString());
         SubjectInfo subject = resolveAuditSubject(target, detailSource);
@@ -629,6 +727,7 @@ public class AdminUserService {
         if (snapshot != null && (snapshot.hasChanges() || !snapshot.getBefore().isEmpty() || !snapshot.getAfter().isEmpty())) {
             detail.put("changeSnapshot", snapshot.toMap());
         }
+        sanitizeDefaultRealmRolesInMap(detail);
         String effectiveTarget = org.springframework.util.StringUtils.hasText(changeRequestRef) ? changeRequestRef : target;
         ChangeRequest changeRequest = correlationRef instanceof ChangeRequest cr ? cr : null;
         SubjectInfo finalSubject = subject;
@@ -666,6 +765,7 @@ public class AdminUserService {
         }
         if (candidate instanceof Map<?, ?> map) {
             Map<String, Object> normalized = toStringKeyMap(map);
+            sanitizeDefaultRealmRolesInMap(normalized);
             Object embedded = normalized.get("changeSnapshot");
             if (embedded instanceof Map<?, ?> embeddedMap) {
                 return ChangeSnapshot.fromMap(toStringKeyMap(embeddedMap));
@@ -691,6 +791,7 @@ public class AdminUserService {
                     result.put(String.valueOf(k), v);
                 }
             });
+            sanitizeDefaultRealmRolesInMap(result);
             return result;
         }
         try {
@@ -705,7 +806,9 @@ public class AdminUserService {
             return Map.of();
         }
         try {
-            return objectMapper.readValue(json, MAP_TYPE);
+            Map<String, Object> map = objectMapper.readValue(json, MAP_TYPE);
+            sanitizeDefaultRealmRolesInMap(map);
+            return map;
         } catch (Exception ex) {
             return Map.of();
         }
@@ -1028,6 +1131,7 @@ public class AdminUserService {
             copyIfPresent(payload, sanitized, "defaultPasswordApplied");
             copyIfPresent(payload, sanitized, "defaultPasswordError");
             copyIfPresent(payload, sanitized, "error");
+            sanitizeDefaultRealmRolesInMap(sanitized);
             return sanitized;
         }
 
@@ -1709,6 +1813,9 @@ public class AdminUserService {
             return;
         }
         try {
+            if (payload != null) {
+                sanitizeDefaultRealmRolesInMap(payload);
+            }
             String summary = firstNonBlank(
                 stringValue(payload != null ? payload.get("summary") : null),
                 stringValue(payload != null ? payload.get("operationName") : null),
@@ -2062,12 +2169,13 @@ public class AdminUserService {
     }
 
     private List<String> mergeRoles(List<String> current, List<String> delta, boolean adding) {
-        LinkedHashSet<String> merged = new LinkedHashSet<>(copyList(current));
-        if (delta != null) {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(sanitizeRealmRoleList(current));
+        List<String> deltaSanitized = sanitizeRealmRoleList(delta);
+        if (!deltaSanitized.isEmpty()) {
             if (adding) {
-                merged.addAll(delta);
+                merged.addAll(deltaSanitized);
             } else {
-                for (String role : delta) {
+                for (String role : deltaSanitized) {
                     if (role != null) {
                         merged.remove(role);
                     }
@@ -2232,7 +2340,11 @@ public class AdminUserService {
     public List<KeycloakRoleDTO> listRealmRoles() {
         try {
             String token = resolveManagementToken();
-            return keycloakAdminClient.listRealmRoles(token);
+            return keycloakAdminClient
+                .listRealmRoles(token)
+                .stream()
+                .filter(dto -> dto != null && !isKeycloakDefaultRealmRole(dto.getName()))
+                .toList();
         } catch (Exception ex) {
             LOG.warn("Failed to list Keycloak realm roles: {}", ex.getMessage());
             return List.of();

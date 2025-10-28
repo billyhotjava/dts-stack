@@ -333,6 +333,9 @@ public class PlatformDirectoryResource {
         if (RESERVED_ROLE_KEYWORDS.contains(lower) || RESERVED_ROLE_KEYWORDS.contains(normalized)) {
             return true;
         }
+        if ("offline_access".equals(lower) || "uma_authorization".equals(lower)) {
+            return true;
+        }
         if (lower.startsWith("default-roles-")) {
             return true;
         }
