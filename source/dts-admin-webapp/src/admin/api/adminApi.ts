@@ -41,6 +41,11 @@ export const adminApi = {
 		apiClient.get<ChangeRequest[]>({
 			url: "/admin/change-requests/mine",
 		}),
+	getChangeRequestDetail: (id: number, options?: AuditSilentOption) =>
+		apiClient.get<ChangeRequest>({
+			url: `/admin/change-requests/${id}`,
+			headers: options?.auditSilent ? { "X-Audit-Silent": "true" } : undefined,
+		}),
 
 	createChangeRequest: (payload: Partial<ChangeRequest>) =>
 		apiClient.post<ChangeRequest>({

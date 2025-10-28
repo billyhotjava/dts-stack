@@ -68,6 +68,8 @@ interface MenuOption {
     rawRoles: string[];
     canonicalRoles: string[];
     deleted: boolean;
+    disabledReason?: string;
+    path?: string;
 }
 
 export default function RoleManagementView() {
@@ -841,6 +843,7 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                                             key={option.id}
                                             className={`flex items-center gap-2 text-sm ${disabled ? "text-muted-foreground cursor-not-allowed" : ""}`}
                                             style={{ paddingLeft: option.depth * 16 }}
+                                            title={option.disabledReason || undefined}
                                         >
                                             <Checkbox
                                                 checked={selectedMenus.has(option.id)}
@@ -1113,20 +1116,21 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
                                     {menuOptions.map((option) => {
                                         const disabled = Boolean(option.deleted);
                                         return (
-                                            <label
-                                                key={option.id}
-                                                className={`flex items-center gap-2 text-sm ${disabled ? "text-muted-foreground cursor-not-allowed" : ""}`}
-                                                style={{ paddingLeft: option.depth * 16 }}
-                                            >
-                                                <Checkbox
-                                                    checked={selectedMenus.has(option.id)}
-                                                    onCheckedChange={(value) => toggleMenu(option.id, value === true)}
-                                                    disabled={disabled}
-                                                />
-                                                <span>{option.label}</span>
-                                            </label>
-                                        );
-                                    })}
+                                        <label
+                                            key={option.id}
+                                            className={`flex items-center gap-2 text-sm ${disabled ? "text-muted-foreground cursor-not-allowed" : ""}`}
+                                            style={{ paddingLeft: option.depth * 16 }}
+                                            title={option.disabledReason || undefined}
+                                        >
+                                            <Checkbox
+                                                checked={selectedMenus.has(option.id)}
+                                                onCheckedChange={(value) => toggleMenu(option.id, value === true)}
+                                                disabled={disabled}
+                                            />
+                                            <span>{option.label}</span>
+                                        </label>
+                                    );
+                                })}
                                 </div>
                             )}
                             <Text variant="body3" className="text-muted-foreground">
@@ -1426,7 +1430,42 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
         return false;
     };
 
-    const visit = (items: PortalMenuItem[] | undefined, depth: number, ancestors: string[], parentId: number | null) => {
+    const normalizePath = (value?: string | null): string => {
+        if (!value) return "";
+        return value.trim().toLowerCase().replace(/^\/+/, "");
+    };
+
+    const containsDataAssetKeyword = (text: string | undefined): boolean => {
+        if (!text) return false;
+        const normalized = text.toLowerCase();
+        return normalized.includes("数据资产") || normalized.includes("data asset");
+    };
+
+    const isDataAssetMenu = (item: PortalMenuItem, ancestorLabels: string[]): boolean => {
+        const path = normalizePath(item.path);
+        if (path === "catalog" || path.startsWith("catalog/")) {
+            return true;
+        }
+        if (containsDataAssetKeyword(item.displayName) || containsDataAssetKeyword(item.name)) {
+            return true;
+        }
+        if (ancestorLabels.some((label) => containsDataAssetKeyword(label))) {
+            return true;
+        }
+        const metadata = (item.metadata || "").toLowerCase();
+        if (metadata.includes('"sectionkey":"catalog"') || metadata.includes('"section":"catalog"')) {
+            return true;
+        }
+        return false;
+    };
+
+    const visit = (
+        items: PortalMenuItem[] | undefined,
+        depth: number,
+        ancestors: string[],
+        parentId: number | null,
+        ancestorDisabled: boolean,
+    ) => {
         if (!items) {
             return;
         }
@@ -1438,6 +1477,9 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
                 .filter((role) => role.length > 0);
             const canonicalRoles = normalizedRoles.map(canonicalRole).filter((role) => role.length > 0);
 
+            // Flag the entire “数据资产” section (and descendants) as non-assignable for custom roles
+            const disableForCatalog = ancestorDisabled || isDataAssetMenu(item, ancestors);
+
             if (item.id != null) {
                 const option: MenuOption = {
                     id: item.id,
@@ -1445,7 +1487,9 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
                     depth,
                     rawRoles: normalizedRoles,
                     canonicalRoles,
-                    deleted: Boolean(item.deleted) || isFoundation(item),
+                    deleted: Boolean(item.deleted) || isFoundation(item) || disableForCatalog,
+                    disabledReason: disableForCatalog ? "数据资产模块暂不对自定义角色开放" : undefined,
+                    path: item.path ?? undefined,
                 };
                 options.push(option);
                 menuRoleMap.set(option.id, option);
@@ -1459,12 +1503,12 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
             }
 
             if (item.children?.length) {
-                visit(item.children, depth + 1, chain, item.id ?? parentId);
+                visit(item.children, depth + 1, chain, item.id ?? parentId, disableForCatalog);
             }
         });
     };
 
-    visit(collection?.allMenus ?? collection?.menus, 0, [], null);
+    visit(collection?.allMenus ?? collection?.menus, 0, [], null, false);
 
     roleToMenuIds.forEach((ids, role) => {
         const unique = Array.from(new Set(ids));

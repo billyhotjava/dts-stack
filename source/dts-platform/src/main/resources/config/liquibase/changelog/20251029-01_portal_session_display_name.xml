@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.23.xsd">
+
+    <changeSet id="20251029-01-add-display-name-to-portal-sessions" author="codex">
+        <addColumn tableName="portal_sessions">
+            <column name="display_name" type="varchar(255)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <update tableName="portal_sessions">
+            <column name="display_name" valueComputed="username"/>
+            <where>display_name IS NULL</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

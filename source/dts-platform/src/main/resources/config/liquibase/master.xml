@@ -48,6 +48,7 @@
     <include file="config/liquibase/changelog/20251023_01_portal_sessions_table.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251024_02_infra_data_source_repair.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251024_03_portal_sessions_index_fix.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251029-01_portal_session_display_name.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251230-03_restore_catalog_dataset_data_level.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251230-04_data_level_confidential_update.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

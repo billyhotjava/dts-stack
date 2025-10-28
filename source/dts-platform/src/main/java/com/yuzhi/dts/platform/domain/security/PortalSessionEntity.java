@@ -23,6 +23,9 @@ public class PortalSessionEntity implements Serializable {
     @Column(name = "normalized_username", nullable = false, length = 255)
     private String normalizedUsername;
 
+    @Column(name = "display_name", length = 255)
+    private String displayName;
+
     @Column(name = "session_id", nullable = false, columnDefinition = "uuid")
     private UUID sessionId;
 
@@ -109,6 +112,14 @@ public class PortalSessionEntity implements Serializable {
 
     public void setSessionId(UUID sessionId) {
         this.sessionId = sessionId;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 
     public String getAccessToken() {

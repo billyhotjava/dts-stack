@@ -59,6 +59,7 @@ public final class ButtonCodes {
     // Change request management
     public static final String CHANGE_REQUEST_LIST = "ADMIN_CHANGE_REQUEST_LIST";
     public static final String CHANGE_REQUEST_LIST_MINE = "ADMIN_CHANGE_REQUEST_LIST_MINE";
+    public static final String CHANGE_REQUEST_VIEW = "ADMIN_CHANGE_REQUEST_VIEW";
     public static final String CHANGE_REQUEST_DRAFT = "ADMIN_CHANGE_REQUEST_DRAFT";
     public static final String CHANGE_REQUEST_PURGE = "ADMIN_CHANGE_REQUEST_PURGE";
 

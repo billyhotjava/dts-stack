@@ -4,6 +4,7 @@ import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
 import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
 import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
+import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -41,11 +42,13 @@ public class AuthAuditListener {
     private static final Duration LOGIN_DUP_WINDOW = Duration.ofSeconds(15);
 
     private final AuditV2Service auditV2Service;
+    private final AdminUserService adminUserService;
     private final ConcurrentMap<String, Boolean> auditedSessions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Instant> recentLogins = new ConcurrentHashMap<>();
 
-    public AuthAuditListener(AuditV2Service auditV2Service) {
+    public AuthAuditListener(AuditV2Service auditV2Service, AdminUserService adminUserService) {
         this.auditV2Service = auditV2Service;
+        this.adminUserService = adminUserService;
     }
 
     @EventListener
@@ -311,7 +314,7 @@ public class AuthAuditListener {
                 .builder(username, buttonCode)
                 .summary(summary)
                 .result(result)
-                .actorName(username)
+                .actorName(resolveDisplayName(username))
                 .client(resolveClientIp(), request != null ? request.getHeader("User-Agent") : null)
                 .request(
                     request != null ? request.getRequestURI() : "/internal/admin-auth",
@@ -341,6 +344,42 @@ public class AuthAuditListener {
             log.warn("Failed to record V2 auth event [{}]: {}", buttonCode, ex.getMessage());
         }
     }
+
+    private String resolveDisplayName(String username) {
+        if (StringUtils.isBlank(username)) {
+            return username;
+        }
+        String trimmed = username.trim();
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (lower.isEmpty()) {
+            return trimmed;
+        }
+        String builtin = BUILTIN_LABELS.get(lower);
+        try {
+            Map<String, String> resolved = adminUserService.resolveDisplayNames(List.of(trimmed));
+            String display = resolved.get(trimmed);
+            if (StringUtils.isBlank(display)) {
+                display = resolved.get(lower);
+            }
+            if (StringUtils.isNotBlank(display)) {
+                return display.trim();
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to resolve display name for {}: {}", username, ex.getMessage());
+        }
+        return builtin != null ? builtin : trimmed;
+    }
+
+    private static final Map<String, String> BUILTIN_LABELS = Map.of(
+        "sysadmin",
+        "系统管理员",
+        "authadmin",
+        "授权管理员",
+        "auditadmin",
+        "安全审计员",
+        "opadmin",
+        "运维管理员"
+    );
 
     private String resolveAuthMode(Authentication authentication) {
         if (authentication == null) {

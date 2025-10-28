@@ -112,6 +112,18 @@ public class AuditButtonRegistry {
         register(
             map,
             new AuditButtonMetadata(
+                ButtonCodes.CHANGE_REQUEST_VIEW,
+                "system-admin",
+                "系统管理",
+                "CHANGE_REQUEST_VIEW",
+                "查看变更详情",
+                AuditOperationKind.QUERY,
+                false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
                 ButtonCodes.USER_LIST,
                 "system-admin",
                 "系统管理",

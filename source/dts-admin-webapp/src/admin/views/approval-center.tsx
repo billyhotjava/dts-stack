@@ -394,7 +394,7 @@ export default function ApprovalCenterView() {
 		enabled: shouldFetchFallback,
 		queryFn: async () => {
 			try {
-				const list = await KeycloakApprovalService.getApprovalRequests();
+				const list = await KeycloakApprovalService.getApprovalRequests({ silent: true });
 				const out: ChangeRequest[] = [];
 				// 按需拉取详情，以提取 payload 中的 changeRequestId
 				for (const item of list || []) {
@@ -454,6 +454,25 @@ export default function ApprovalCenterView() {
 	const [categoryFilter, setCategoryFilter] = useState<TaskCategory>(CATEGORY_ORDER[0]);
 	const [categoryInitialized, setCategoryInitialized] = useState(false);
 	const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
+	const handleOpenTask = useCallback(
+		(changeRequestId: number) => {
+			setActiveTaskId(changeRequestId);
+			adminApi
+				.getChangeRequestDetail(changeRequestId)
+				.then((detail) => {
+					if (detail && typeof detail === "object") {
+						queryClient.setQueryData<ChangeRequest[]>(["admin", "change-requests"], (previous) => {
+							if (!Array.isArray(previous)) {
+								return previous;
+							}
+							return previous.map((item) => (item.id === detail.id ? { ...item, ...detail } : item));
+						});
+					}
+				})
+				.catch(() => {});
+		},
+		[queryClient],
+	);
 	const [decisionLoading, setDecisionLoading] = useState(false);
 	const [operatorNameMap, setOperatorNameMap] = useState<Record<string, string>>({ ...OPERATOR_LABELS });
 	const [userDisplayMap, setUserDisplayMap] = useState<Record<string, string>>({});
@@ -756,7 +775,7 @@ export default function ApprovalCenterView() {
 					<Button
 						size="sm"
 						variant="outline"
-						onClick={() => setActiveTaskId(record.id)}
+						onClick={() => handleOpenTask(record.id)}
 						disabled={decisionLoading && activeTaskId === record.id}
 					>
 						操作

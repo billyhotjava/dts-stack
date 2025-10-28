@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnsType } from "antd/es/table";
 import { Table } from "antd";
@@ -52,10 +52,36 @@ export default function MyChangesView() {
 	const { data, isLoading } = useQuery({
 		queryKey: ["admin", "change-requests", "mine", "dashboard"],
 		queryFn: adminApi.getMyChangeRequests,
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+		refetchInterval: false,
 	});
 
 	const [categoryFilter, setCategoryFilter] = useState<CategoryKey | null>(null);
-const [activeChange, setActiveChange] = useState<ChangeRequest | null>(null);
+	const [activeChange, setActiveChange] = useState<ChangeRequest | null>(null);
+	const handleOpenChange = useCallback(
+		(record: ChangeRequest) => {
+			setActiveChange(record);
+			adminApi
+				.getChangeRequestDetail(record.id)
+				.then((detail) => {
+					if (detail && typeof detail === "object") {
+						queryClient.setQueryData<ChangeRequest[]>(
+							["admin", "change-requests", "mine", "dashboard"],
+							(previous) => {
+								if (!Array.isArray(previous)) {
+									return previous;
+								}
+								return previous.map((item) => (item.id === detail.id ? { ...item, ...detail } : item));
+							},
+						);
+						setActiveChange((prev) => (prev && prev.id === record.id ? { ...prev, ...detail } : prev));
+					}
+				})
+				.catch(() => {});
+		},
+		[queryClient],
+	);
 
 	const normalized = useMemo(() => {
 		return (data ?? []).filter((item) => resolveCategory(item) !== null);
@@ -93,10 +119,10 @@ const [activeChange, setActiveChange] = useState<ChangeRequest | null>(null);
 			.sort(byRequestedAtDesc);
 	}, [normalized, categoryFilter]);
 
-const activeContext = useMemo(
-	() => (activeChange ? buildContextForChangeRequest(activeChange) : null),
-	[activeChange],
-);
+	const activeContext = useMemo(
+		() => (activeChange ? buildContextForChangeRequest(activeChange) : null),
+		[activeChange],
+	);
 	const activePayloadData = useMemo(() => (activeChange ? parseJson(activeChange.payloadJson) : null), [activeChange]);
 
 	const formatDateTime = (value?: string | null) => {
@@ -157,7 +183,7 @@ const activeContext = useMemo(
 			key: "actions",
 			width: 120,
 			render: (_: unknown, record) => (
-				<Button variant="ghost" size="sm" onClick={() => setActiveChange(record)}>
+				<Button variant="ghost" size="sm" onClick={() => handleOpenChange(record)}>
 					查看详情
 				</Button>
 			),

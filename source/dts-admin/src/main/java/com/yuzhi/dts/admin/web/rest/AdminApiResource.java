@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
+import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationType;
 import com.yuzhi.dts.admin.service.auditv2.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
 import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
 import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
+import com.yuzhi.dts.admin.service.auditv2.AdminAuditOperation;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.web.rest.api.ResultStatus;
 import jakarta.servlet.http.HttpServletRequest;
@@ -1586,6 +1588,28 @@ public class AdminApiResource {
         String actor = SecurityUtils.getCurrentAuditableLogin();
         recordChangeRequestListV2(actor, list.size(), request, true);
         return ResponseEntity.ok(ApiResponse.ok(list));
+    }
+
+    @GetMapping("/change-requests/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> changeRequestDetail(@PathVariable long id, HttpServletRequest request) {
+        ChangeRequest cr = crRepo.findById(id).orElse(null);
+        if (cr == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("变更不存在"));
+        }
+        Map<String, Object> vm = toChangeVM(cr);
+        LinkedHashMap<Long, Map<String, Object>> viewById = new LinkedHashMap<>();
+        viewById.put(cr.getId(), vm);
+        augmentChangeRequestViewsFromApprovals(viewById);
+        Map<String, Object> enriched = viewById.get(cr.getId());
+        if (!isAuditSuppressed(request)) {
+            String actor = SecurityUtils.getCurrentAuditableLogin();
+            Map<String, Object> auditDetail = buildChangeAuditDetail(cr);
+            if (enriched != null && !enriched.isEmpty()) {
+                auditDetail.put("viewSource", "detail");
+            }
+            recordChangeRequestViewV2(actor, cr, auditDetail, request);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(enriched != null ? enriched : vm));
     }
 
     /**
@@ -3238,6 +3262,23 @@ public class AdminApiResource {
         return verb + resourceLabel + "：" + targetLabel;
     }
 
+    private String buildApprovalOperationName(ChangeRequest cr, ChangeContext context, boolean approved) {
+        String base = buildRequesterOperationName(cr, context);
+        String verb = approved ? "批准" : "拒绝";
+        if (StringUtils.hasText(base)) {
+            return verb + base;
+        }
+        String resourceLabel = resolveResourceLabel(context);
+        String targetLabel = resolveTargetLabel(context);
+        if (StringUtils.hasText(targetLabel)) {
+            return verb + resourceLabel + "：" + targetLabel;
+        }
+        if (StringUtils.hasText(resourceLabel) && !"变更".equals(resourceLabel)) {
+            return verb + resourceLabel + "申请";
+        }
+        return verb + "变更申请";
+    }
+
 
     private AuditOperationType determineRequesterOperationType(ChangeContext context) {
         if (context == null) {
@@ -3292,15 +3333,22 @@ public class AdminApiResource {
             return;
         }
         populateDetailWithContext(detail, context);
-        String requesterOperation = buildRequesterOperationName(cr, context);
-        if (StringUtils.hasText(requesterOperation)) {
-            detail.put("operationName", requesterOperation);
-            detail.put("summary", requesterOperation);
-        }
-        AuditOperationType requesterType = determineRequesterOperationType(context);
-        if (requesterType != null && requesterType != AuditOperationType.UNKNOWN) {
-            detail.put("operationType", requesterType.getCode());
-            detail.put("operationTypeText", requesterType.getDisplayName());
+        boolean approverFlow = Optional
+            .ofNullable(detail.get("action"))
+            .map(Object::toString)
+            .map(v -> v.equalsIgnoreCase("APPROVE") || v.equalsIgnoreCase("REJECT"))
+            .orElse(false);
+        if (!approverFlow) {
+            String requesterOperation = buildRequesterOperationName(cr, context);
+            if (StringUtils.hasText(requesterOperation)) {
+                detail.put("operationName", requesterOperation);
+                detail.put("summary", requesterOperation);
+            }
+            AuditOperationType requesterType = determineRequesterOperationType(context);
+            if (requesterType != null && requesterType != AuditOperationType.UNKNOWN) {
+                detail.put("operationType", requesterType.getCode());
+                detail.put("operationTypeText", requesterType.getDisplayName());
+            }
         }
         detail.put("approverAction", normalizeActionToken(cr != null ? cr.getStatus() : null));
     }
@@ -3772,6 +3820,58 @@ public class AdminApiResource {
         }
     }
 
+    private void recordChangeRequestViewV2(String actor, ChangeRequest cr, Map<String, Object> detail, HttpServletRequest request) {
+        if (!StringUtils.hasText(actor) || cr == null) {
+            return;
+        }
+        try {
+            ChangeContext context = computeChangeContext(cr);
+            String changeRequestRef = changeRequestRef(cr);
+            String summary = "查看变更详情：" + (StringUtils.hasText(changeRequestRef) ? changeRequestRef : "CR-" + cr.getId());
+            AuditActionRequest.Builder builder = AuditActionRequest
+                .builder(actor, ButtonCodes.CHANGE_REQUEST_VIEW)
+                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .summary(summary)
+                .result(AuditResultStatus.SUCCESS)
+                .changeRequestRef(changeRequestRef)
+                .metadata("changeRequestId", cr.getId())
+                .client(resolveClientIp(request), request != null ? request.getHeader("User-Agent") : null)
+                .request(Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/admin/change-requests/" + cr.getId()), request != null ? request.getMethod() : "GET");
+            if (StringUtils.hasText(cr.getResourceType())) {
+                builder.metadata("resourceType", cr.getResourceType());
+            }
+            if (StringUtils.hasText(cr.getResourceId())) {
+                builder.metadata("resourceId", cr.getResourceId());
+            }
+            if (StringUtils.hasText(cr.getAction())) {
+                builder.metadata("action", cr.getAction());
+            }
+            if (StringUtils.hasText(cr.getCategory())) {
+                builder.metadata("category", cr.getCategory());
+            }
+            builder.operationOverride(
+                AdminAuditOperation.ADMIN_CHANGE_REQUEST_VIEW.code(),
+                "查看变更详情",
+                AuditOperationKind.QUERY
+            );
+            builder.target("change_request", cr.getId(), StringUtils.hasText(changeRequestRef) ? changeRequestRef : String.valueOf(cr.getId()));
+            if (context != null) {
+                if (StringUtils.hasText(context.targetTable()) && StringUtils.hasText(context.targetId())) {
+                    builder.target(context.targetTable(), context.targetId(), context.targetLabel());
+                }
+                if (context.extras() != null && !context.extras().isEmpty()) {
+                    builder.detail("context", new LinkedHashMap<>(context.extras()));
+                }
+            }
+            if (detail != null && !detail.isEmpty()) {
+                builder.detail("detail", new LinkedHashMap<>(detail));
+            }
+            auditV2Service.record(builder.build());
+        } catch (Exception ex) {
+            log.warn("Failed to record V2 audit for change request view: {}", ex.getMessage());
+        }
+    }
+
     private void recordChangeRequestPurgeV2(String actor, long approvals, long changes, HttpServletRequest request) {
         if (!StringUtils.hasText(actor)) {
             return;
@@ -3927,18 +4027,25 @@ public class AdminApiResource {
         }
         try {
             String primaryRef = changeRequestRef(cr);
-            String summary = applied
-                ? firstNonBlank(asText(approverDetail.get("summary")), asText(approverDetail.get("operationName")), "批准变更申请")
-                : firstNonBlank(asText(approverDetail.get("summary")), asText(approverDetail.get("operationName")), "批准变更失败");
+            String baseSummary = buildApprovalOperationName(cr, context, true);
+            String decision = applied ? "APPROVED" : "FAILED";
+            String displaySummary = applied ? baseSummary : baseSummary + "（失败）";
+            if (approverDetail != null) {
+                approverDetail.put("summary", baseSummary);
+                approverDetail.put("operationName", baseSummary);
+                approverDetail.put("decision", decision);
+            }
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, ButtonCodes.CHANGE_REQUEST_APPROVE)
                 .actorRoles(SecurityUtils.getCurrentUserAuthorities())
-                .summary(summary)
+                .summary(displaySummary)
                 .result(applied ? AuditResultStatus.SUCCESS : AuditResultStatus.FAILED)
                 .changeRequestRef(primaryRef)
                 .metadata("changeRequestId", cr.getId())
                 .metadata("resourceType", cr.getResourceType())
                 .metadata("action", cr.getAction())
+                .metadata("category", cr.getCategory())
+                .metadata("decision", decision)
                 .client(clientIp, clientAgent)
                 .request(Optional.ofNullable(requestUri).orElse("/api/admin/change-requests/" + cr.getId() + "/approve"), "POST");
 
@@ -3974,15 +4081,25 @@ public class AdminApiResource {
         }
         try {
             String changeRequestRef = changeRequestRef(cr);
-            String summary = firstNonBlank(asText(detail.get("summary")), asText(detail.get("operationName")), "驳回变更申请");
+            String decision = "REJECTED";
+            String baseSummary = buildApprovalOperationName(cr, context, false);
+            if (detail != null) {
+                detail.put("summary", baseSummary);
+                detail.put("operationName", baseSummary);
+                detail.put("decision", decision);
+            }
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, ButtonCodes.CHANGE_REQUEST_REJECT)
                 .actorRoles(SecurityUtils.getCurrentUserAuthorities())
-                .summary(summary)
+                .summary(baseSummary)
                 .result(AuditResultStatus.SUCCESS)
                 .changeRequestRef(changeRequestRef)
                 .metadata("changeRequestId", cr.getId())
+                .metadata("resourceType", cr.getResourceType())
+                .metadata("action", cr.getAction())
+                .metadata("category", cr.getCategory())
                 .metadata("reason", cr.getReason())
+                .metadata("decision", decision)
                 .client(clientIp, clientAgent)
                 .request(Optional.ofNullable(requestUri).orElse("/api/admin/change-requests/" + cr.getId() + "/reject"), "POST");
             builder.target("change_request", cr.getId(), changeRequestRef);

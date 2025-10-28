@@ -37,9 +37,15 @@ public class PortalOpaqueTokenIntrospector implements OpaqueTokenIntrospector {
         Map<String, Object> attributes = new HashMap<>();
         attributes.put(OAuth2TokenIntrospectionClaimNames.ACTIVE, Boolean.TRUE);
         attributes.put(OAuth2TokenIntrospectionClaimNames.USERNAME, session.username());
+        attributes.put("preferred_username", session.username());
         attributes.put("sub", session.username());
         attributes.put("roles", session.roles());
         attributes.put("permissions", session.permissions());
+        if (session.displayName() != null && !session.displayName().isBlank()) {
+            attributes.put("full_name", session.displayName());
+            attributes.put("displayName", session.displayName());
+            attributes.put("name", session.displayName());
+        }
         if (session.deptCode() != null) {
             attributes.put("dept_code", session.deptCode());
         }

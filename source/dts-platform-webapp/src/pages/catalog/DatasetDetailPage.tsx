@@ -91,6 +91,7 @@ const resolveColumnDisplayName = (column: any): string | undefined => {
 };
 
 const EMPTY_DEPT_VALUE = "__EMPTY__";
+const DEFAULT_DEPT_LABEL = "默认（不指定）";
 
 export default function DatasetDetailPage() {
 	const params = useParams();
@@ -207,10 +208,48 @@ export default function DatasetDetailPage() {
 		const others = sortedDeptOptions.filter((d) => !d.isRoot && d.parentId != null && d.parentId !== 0);
 		return root ? [root, ...others] : others;
 	}, [sortedDeptOptions]);
-const grantDeptOptions = useMemo(
-	() => sortedDeptOptions.filter((dept) => !dept.isRoot && dept.parentId != null && dept.parentId !== 0),
-	[sortedDeptOptions],
-);
+	const grantDeptOptions = useMemo(
+		() => sortedDeptOptions.filter((dept) => !dept.isRoot && dept.parentId != null && dept.parentId !== 0),
+		[sortedDeptOptions],
+	);
+	const deptLabelMap = useMemo(() => {
+		const map = new Map<string, string>();
+		sortedDeptOptions.forEach((dept) => {
+			const code = String(dept.code ?? "").trim();
+			if (!code) return;
+			const baseLabel = dept.nameZh || dept.nameEn || code;
+			const label = dept.isRoot ? `${baseLabel}（ROOT）` : baseLabel;
+			map.set(code, label);
+		});
+		return map;
+	}, [sortedDeptOptions]);
+	const resolveDeptLabel = useCallback(
+		(code?: string | null) => {
+			if (!code) {
+				return DEFAULT_DEPT_LABEL;
+			}
+			const trimmed = code.trim();
+			if (!trimmed) {
+				return DEFAULT_DEPT_LABEL;
+			}
+			return deptLabelMap.get(trimmed) ?? trimmed;
+		},
+		[deptLabelMap],
+	);
+	const renderGrantDept = useCallback(
+		(grant: DatasetGrant) => {
+			const rawName = pickFirstString(
+				(grant as any)?.deptName,
+				(grant as any)?.departmentName,
+				(grant as any)?.deptLabel,
+			);
+			if (rawName) {
+				return rawName;
+			}
+			return resolveDeptLabel(grant.deptCode);
+		},
+		[resolveDeptLabel],
+	);
 	const enforcedOwnerDept = useMemo(() => {
 		if (isOpadmin || isInstituteDataAdmin) return undefined;
 		const code = (userDeptCode || "").trim();
@@ -914,7 +953,7 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
                                             <tr key={grant.id} className="border-b last:border-b-0">
                                                 <td className="px-3 py-2 text-xs font-medium">{grant.username}</td>
                                                 <td className="px-3 py-2 text-xs">{grant.displayName || "-"}</td>
-                                                <td className="px-3 py-2 text-xs">{grant.deptCode || "-"}</td>
+												<td className="px-3 py-2 text-xs">{renderGrantDept(grant)}</td>
                                                 <td className="px-3 py-2 text-xs">{grant.createdBy || "-"}</td>
                                                 <td className="px-3 py-2 text-xs">{formatDateTime(grant.createdDate)}</td>
                                                 {canManageGrants ? (
@@ -1002,7 +1041,7 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
                                                                     <span className="truncate text-xs text-muted-foreground">
                                                                         {option.username}
                                                                         {option.deptCode
-                                                                            ? ` · ${option.deptCode}`
+                                                                            ? ` · ${resolveDeptLabel(option.deptCode)}`
                                                                             : ""}
                                                                     </span>
                                                                 </div>
@@ -1050,7 +1089,7 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
                                     <SelectValue placeholder="选择部门（可选）" />
                                 </SelectTrigger>
 				<SelectContent>
-					<SelectItem value={EMPTY_DEPT_VALUE}>默认（不指定）</SelectItem>
+					<SelectItem value={EMPTY_DEPT_VALUE}>{DEFAULT_DEPT_LABEL}</SelectItem>
 					{grantDeptOptions.map((dept) => (
 						<SelectItem key={dept.code} value={dept.code}>
 							{dept.nameZh || dept.nameEn || dept.code}

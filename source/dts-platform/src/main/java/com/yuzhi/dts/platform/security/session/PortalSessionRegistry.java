@@ -42,7 +42,17 @@ public class PortalSessionRegistry {
     }
 
     public PortalSession createSession(String username, List<String> roles, List<String> permissions, AdminTokens adminTokens) {
-        return createSessionInternal(username, roles, permissions, null, null, adminTokens);
+        return createSessionInternal(username, roles, permissions, null, null, null, adminTokens);
+    }
+
+    public PortalSession createSession(
+        String username,
+        List<String> roles,
+        List<String> permissions,
+        String displayName,
+        AdminTokens adminTokens
+    ) {
+        return createSessionInternal(username, roles, permissions, null, null, displayName, adminTokens);
     }
 
     public PortalSession createSession(
@@ -53,7 +63,19 @@ public class PortalSessionRegistry {
         String personnelLevel,
         AdminTokens adminTokens
     ) {
-        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, adminTokens);
+        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, null, adminTokens);
+    }
+
+    public PortalSession createSession(
+        String username,
+        List<String> roles,
+        List<String> permissions,
+        String deptCode,
+        String personnelLevel,
+        String displayName,
+        AdminTokens adminTokens
+    ) {
+        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, displayName, adminTokens);
     }
 
     public PortalSession refreshSession(String refreshToken, Function<PortalSession, AdminTokens> adminTokenProvider) {
@@ -165,14 +187,17 @@ public class PortalSessionRegistry {
         List<String> permissions,
         String deptCode,
         String personnelLevel,
+        String displayName,
         AdminTokens adminTokens
     ) {
         String sanitizedUsername = requireUsername(username);
         String normalizedUsername = normalizeUsername(sanitizedUsername);
         List<String> normalizedRoles = normalizeRoles(roles);
+        String sanitizedDisplayName = displayName == null ? null : displayName.trim();
 
         PortalSession session = PortalSession.create(
             sanitizedUsername,
+            sanitizedDisplayName,
             normalizedRoles,
             permissions,
             deptCode,
@@ -239,6 +264,7 @@ public class PortalSessionRegistry {
         entity.setUsername(session.username());
         entity.setNormalizedUsername(normalizedUsername);
         entity.setSessionId(UUID.fromString(session.sessionId()));
+        entity.setDisplayName(session.displayName());
         entity.setAccessToken(session.accessToken());
         entity.setRefreshToken(session.refreshToken());
         entity.setRoles(new ArrayList<>(session.roles()));
@@ -274,6 +300,7 @@ public class PortalSessionRegistry {
         return new PortalSession(
             entity.getSessionId().toString(),
             entity.getUsername(),
+            entity.getDisplayName(),
             List.copyOf(roles),
             List.copyOf(permissions),
             entity.getDeptCode(),
@@ -325,6 +352,7 @@ public class PortalSessionRegistry {
     public record PortalSession(
         String sessionId,
         String username,
+        String displayName,
         List<String> roles,
         List<String> permissions,
         String deptCode,
@@ -336,6 +364,7 @@ public class PortalSessionRegistry {
     ) {
         private static PortalSession create(
             String username,
+            String displayName,
             List<String> roles,
             List<String> permissions,
             String deptCode,
@@ -349,9 +378,14 @@ public class PortalSessionRegistry {
             Instant expiresAt = Instant.now().plus(ttl);
             List<String> perms = permissions == null ? Collections.emptyList() : List.copyOf(permissions);
             AdminTokens tokens = adminTokens == null ? null : adminTokens;
+            String normalizedDisplayName = displayName == null ? null : displayName.trim();
+            if (normalizedDisplayName != null && normalizedDisplayName.isEmpty()) {
+                normalizedDisplayName = null;
+            }
             return new PortalSession(
                 sessionId,
                 username,
+                normalizedDisplayName,
                 List.copyOf(roles),
                 perms,
                 deptCode,
@@ -364,7 +398,7 @@ public class PortalSessionRegistry {
         }
 
         private PortalSession renew(Duration ttl, AdminTokens adminTokens) {
-            return create(username, roles, permissions, deptCode, personnelLevel, adminTokens, ttl);
+            return create(username, displayName, roles, permissions, deptCode, personnelLevel, adminTokens, ttl);
         }
     }
 
