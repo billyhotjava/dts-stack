@@ -1003,8 +1003,11 @@ public class AdminUserService {
             return;
         }
         ApprovalAuditCollector collector = approvalAuditCollector.get();
-        if (collector != null && StringUtils.isNotBlank(changeRequestRef) && stage == AuditStage.SUCCESS) {
+        if (collector != null && stage == AuditStage.SUCCESS) {
             collector.collect(code, stage, normalizedTarget, new LinkedHashMap<>(payload));
+            if (StringUtils.isNotBlank(changeRequestRef)) {
+                return;
+            }
         }
         recordUserApprovalExecutionV2(actor, code, normalizedTarget, payloadUsername, changeRequestRef, stage, payload);
     }
@@ -1105,6 +1108,14 @@ public class AdminUserService {
                 return null;
             }
             return summaryLines.iterator().next();
+        }
+
+        Optional<String> primaryOperationCode() {
+            if (steps.isEmpty()) {
+                return Optional.empty();
+            }
+            Object code = steps.get(0).get("operationCode");
+            return code != null ? Optional.of(code.toString()) : Optional.empty();
         }
 
         void appendDetails(Map<String, Object> detail) {
@@ -2063,6 +2074,10 @@ public class AdminUserService {
         AuditStage stage,
         Map<String, Object> payload
     ) {
+        ApprovalAuditCollector collector = approvalAuditCollector.get();
+        if (collector != null && stage == AuditStage.SUCCESS) {
+            return;
+        }
         String buttonCode = resolveUserButtonCode(actionCode);
         if (!StringUtils.isNotBlank(actor) || buttonCode == null) {
             return;

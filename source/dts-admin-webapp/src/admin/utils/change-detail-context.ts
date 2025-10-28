@@ -10,8 +10,6 @@ import {
 } from "@/admin/utils/menu-change-parser";
 import type { MenuChangeDisplayEntry } from "@/admin/components/menu-change-viewer";
 import type { ChangeRequest } from "@/admin/types";
-import { formatDisplayValue } from "@/admin/utils/value-localization";
-
 type PlainRecord = Record<string, unknown>;
 
 const SUMMARY_KEYS = ["changeSummary", "change_summary", "summary"];
@@ -103,98 +101,29 @@ export function buildContextForChangeRequest(
 
 export interface SummarizeContextOptions {
 	maxEntries?: number;
+	actionLabel?: string | null;
+	request?: ChangeRequest;
+	subjectName?: string | null;
 }
 
 export function summarizeChangeDisplayContext(
 	context: ChangeDisplayContext,
-	{ maxEntries = 3 }: SummarizeContextOptions = {},
+	{ maxEntries = 3, actionLabel, request, subjectName }: SummarizeContextOptions = {},
 ): string {
-	const { summary, menuChanges } = context;
-	const filteredSummary = summary.filter((entry) => !isSummaryHidden(entry));
-	if (filteredSummary.length > 0) {
-		return filteredSummary
-			.slice(0, maxEntries)
-			.map((entry, index) => {
-				const label = entry.label || entry.field || `字段${index + 1}`;
-				const beforeDefined = entry.before !== undefined && entry.before !== null && entry.before !== "";
-				const beforeText = formatSummaryValue(entry.before, entry.field, entry.label);
-				const afterText = formatSummaryValue(entry.after, entry.field, entry.label);
-				return beforeDefined ? `${label}: ${beforeText} → ${afterText}` : `${label}: ${afterText}`;
-			})
-			.join("；");
+	const filteredSummary = context.summary.filter((entry) => !isSummaryHidden(entry));
+	const primaryFieldLabel = resolvePrimaryFieldLabel(filteredSummary, context.menuChanges, context.snapshot, maxEntries);
+	const resolvedSubjectName = normalizeToString(subjectName) ?? resolveSubjectName(context, request);
+	const actionText = normalizeToString(actionLabel) ?? normalizeToString(request?.action);
+
+	if (!actionText && !resolvedSubjectName && !primaryFieldLabel) {
+		return "—";
 	}
 
-	if (menuChanges.length > 0) {
-		const parts: string[] = [];
-		menuChanges.slice(0, maxEntries).forEach((entry) => {
-			const label =
-				entry.title ||
-				entry.menuTitle ||
-				entry.name ||
-				entry.menuName ||
-				entry.path ||
-				entry.menuPath ||
-				entry.id ||
-				"菜单";
-			const changeSegments: string[] = [];
-			if (entry.addedRoles?.length) {
-				changeSegments.push(`新增角色 ${entry.addedRoles.join("、")}`);
-			}
-			if (entry.removedRoles?.length) {
-				changeSegments.push(`移除角色 ${entry.removedRoles.join("、")}`);
-			}
-			if (entry.allowedRolesAfter && entry.allowedRolesBefore) {
-				const before = entry.allowedRolesBefore.join("、");
-				const after = entry.allowedRolesAfter.join("、");
-				if (before !== after && !entry.addedRoles?.length && !entry.removedRoles?.length) {
-					changeSegments.push(`角色 ${before || "无"} → ${after || "无"}`);
-				}
-			}
-			if (entry.addedPermissions?.length) {
-				changeSegments.push(`新增权限 ${entry.addedPermissions.join("、")}`);
-			}
-			if (entry.removedPermissions?.length) {
-				changeSegments.push(`移除权限 ${entry.removedPermissions.join("、")}`);
-			}
-			const statusChanged =
-				entry.statusBeforeLabel !== undefined &&
-				entry.statusAfterLabel !== undefined &&
-				entry.statusBeforeLabel !== entry.statusAfterLabel;
-			if (statusChanged) {
-				changeSegments.push(`状态 ${entry.statusBeforeLabel} → ${entry.statusAfterLabel}`);
-			}
-			if (
-				entry.maxDataLevelBeforeLabel &&
-				entry.maxDataLevelAfterLabel &&
-				entry.maxDataLevelBeforeLabel !== entry.maxDataLevelAfterLabel
-			) {
-				changeSegments.push(`最大数据密级 ${entry.maxDataLevelBeforeLabel} → ${entry.maxDataLevelAfterLabel}`);
-			}
-			if (
-				entry.securityLevelBeforeLabel &&
-				entry.securityLevelAfterLabel &&
-				entry.securityLevelBeforeLabel !== entry.securityLevelAfterLabel
-			) {
-				changeSegments.push(`访问密级 ${entry.securityLevelBeforeLabel} → ${entry.securityLevelAfterLabel}`);
-			}
-			if (entry.addedRules?.length) {
-				changeSegments.push(
-					`新增可见性规则 ${entry.addedRules.map((rule) => formatVisibilityRule(rule)).join("、")}`,
-				);
-			}
-			if (entry.removedRules?.length) {
-				changeSegments.push(
-					`移除可见性规则 ${entry.removedRules.map((rule) => formatVisibilityRule(rule)).join("、")}`,
-				);
-			}
-			if (changeSegments.length > 0) {
-				parts.push(`菜单「${label}」${changeSegments.join("；")}`);
-			}
-		});
-		return parts.join("；") || "—";
-	}
+	const finalAction = actionText ?? "未知操作";
+	const finalSubject = resolvedSubjectName ?? "未知用户";
+	const finalField = primaryFieldLabel ?? "无字段变更";
 
-	return "—";
+	return `操作类型「${finalAction}」 ${finalSubject} ${finalField}`;
 }
 
 function buildSummary(layers: Array<PlainRecord | null | undefined>, baseSummary?: ChangeSummaryEntry[]): ChangeSummaryEntry[] {
@@ -374,4 +303,113 @@ function formatVisibilityRule(rule: { role?: string; permission?: string; dataLe
 		parts.push(`密级:${rule.dataLevelLabel}`);
 	}
 	return parts.join(" ");
+}
+
+function summarizeSnapshotChanges(snapshot: ChangeSnapshotLike | null | undefined, maxEntries: number): string | null {
+	if (!snapshot) {
+		return null;
+	}
+	const collected = collectSnapshotChanges(snapshot, maxEntries);
+	if (collected.length === 0) {
+		return null;
+	}
+	return collected
+		.slice(0, maxEntries)
+		.map((entry, index) => {
+			const label = entry.label || entry.field || `字段${index + 1}`;
+			const beforeDefined = entry.before !== undefined && entry.before !== null && entry.before !== "";
+			const beforeText = formatSummaryValue(entry.before, entry.field, label);
+			const afterText = formatSummaryValue(entry.after, entry.field, label);
+			return beforeDefined ? `${label}: ${beforeText} → ${afterText}` : `${label}: ${afterText}`;
+		})
+		.join("；");
+}
+
+type SnapshotChangeEntry = {
+	field?: string;
+	label?: string;
+	before?: unknown;
+	after?: unknown;
+};
+
+function collectSnapshotChanges(snapshot: ChangeSnapshotLike, maxEntries: number): SnapshotChangeEntry[] {
+	const result: SnapshotChangeEntry[] = [];
+	const queue: Array<{ node: ChangeSnapshotLike; path: string[] }> = [{ node: snapshot, path: [] }];
+	while (queue.length > 0 && result.length < maxEntries) {
+		const { node, path } = queue.shift()!;
+		const pathLabel = path.filter(Boolean).join(" / ");
+		if (node.changes) {
+			for (const change of node.changes) {
+				if (!change) {
+					continue;
+				}
+				const label = buildSnapshotChangeLabel(change.label, change.field, pathLabel);
+				result.push({
+					field: typeof change.field === "string" ? change.field : undefined,
+					label,
+					before: change.before,
+					after: change.after,
+				});
+				if (result.length >= maxEntries) {
+					break;
+				}
+			}
+		}
+		if (result.length >= maxEntries) {
+			break;
+		}
+		if (node.items) {
+			for (const item of node.items) {
+				if (!item) {
+					continue;
+				}
+				const nextPathLabel = extractSnapshotItemLabel(item);
+				queue.push({
+					node: {
+						before: item.before ?? undefined,
+						after: item.after ?? undefined,
+						changes: item.changes ?? undefined,
+						items: item.items ?? undefined,
+					},
+					path: nextPathLabel ? [...path, nextPathLabel] : path,
+				});
+			}
+		}
+	}
+	return result;
+}
+
+function buildSnapshotChangeLabel(rawLabel: unknown, field: unknown, pathLabel: string): string | undefined {
+	let base: string | undefined;
+	if (typeof rawLabel === "string" && rawLabel.trim().length > 0) {
+		base = rawLabel.trim();
+	} else if (typeof rawLabel === "number") {
+		base = String(rawLabel);
+	} else if (typeof field === "string" && field.trim().length > 0) {
+		base = deriveFieldLabel(field);
+	}
+	if (pathLabel && base) {
+		return `${pathLabel} · ${base}`;
+	}
+	if (pathLabel) {
+		return pathLabel;
+	}
+	return base;
+}
+
+function extractSnapshotItemLabel(item: {
+	label?: string;
+	name?: string;
+	displayName?: string;
+}): string | undefined {
+	if (typeof item.label === "string" && item.label.trim().length > 0) {
+		return item.label.trim();
+	}
+	if (typeof item.displayName === "string" && item.displayName.trim().length > 0) {
+		return item.displayName.trim();
+	}
+	if (typeof item.name === "string" && item.name.trim().length > 0) {
+		return item.name.trim();
+	}
+	return undefined;
 }

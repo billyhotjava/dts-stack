@@ -482,10 +482,13 @@ public class AuditLogResource {
             return switch (kind) {
                 case CREATE -> AuditOperationKind.CREATE.code();
                 case UPDATE -> AuditOperationKind.UPDATE.code();
+                case ENABLE -> AuditOperationKind.ENABLE.code();
+                case DISABLE -> AuditOperationKind.DISABLE.code();
                 case DELETE -> AuditOperationKind.DELETE.code();
                 case QUERY -> AuditOperationKind.QUERY.code();
+                case LOGIN -> AuditOperationKind.LOGIN.code();
+                case LOGOUT -> AuditOperationKind.LOGOUT.code();
                 case APPROVE, REJECT, EXECUTE, IMPORT, EXPORT -> AuditOperationKind.UPDATE.code();
-                case LOGIN, LOGOUT -> AuditOperationKind.QUERY.code();
                 default -> AuditOperationKind.QUERY.code();
             };
         }
@@ -502,6 +505,18 @@ public class AuditLogResource {
         String operationCode = Optional.ofNullable(view.operationCode()).orElse("").toUpperCase(Locale.ROOT);
         String operationName = Optional.ofNullable(view.operationName()).orElse("").toUpperCase(Locale.ROOT);
         String summary = Optional.ofNullable(view.summary()).orElse("").toUpperCase(Locale.ROOT);
+        if (operationCode.contains("LOGOUT") || operationName.contains("LOGOUT") || summary.contains("登出")) {
+            return AuditOperationKind.LOGOUT.code();
+        }
+        if (operationCode.contains("LOGIN") || operationName.contains("LOGIN") || summary.contains("登录")) {
+            return AuditOperationKind.LOGIN.code();
+        }
+        if (operationCode.contains("DISABLE") || operationName.contains("DISABLE") || summary.contains("禁用")) {
+            return AuditOperationKind.DISABLE.code();
+        }
+        if (operationCode.contains("ENABLE") || operationName.contains("ENABLE") || summary.contains("启用")) {
+            return AuditOperationKind.ENABLE.code();
+        }
         if (operationCode.contains("DELETE") || operationName.contains("DELETE") || summary.contains("删除")) {
             return AuditOperationKind.DELETE.code();
         }
@@ -522,6 +537,10 @@ public class AuditLogResource {
             case "CREATE" -> "新增";
             case "UPDATE" -> "修改";
             case "DELETE" -> "删除";
+            case "LOGIN" -> "登录";
+            case "LOGOUT" -> "登出";
+            case "ENABLE" -> "启用";
+            case "DISABLE" -> "禁用";
             case "QUERY" -> "查询";
             default -> "查询";
         };

@@ -189,7 +189,7 @@ public class AuditButtonRegistry {
                 "系统管理",
                 "USER_ENABLE",
                 "启用用户",
-                AuditOperationKind.UPDATE,
+                AuditOperationKind.ENABLE,
                 false
             )
         );
@@ -201,7 +201,7 @@ public class AuditButtonRegistry {
                 "系统管理",
                 "USER_DISABLE",
                 "禁用用户",
-                AuditOperationKind.UPDATE,
+                AuditOperationKind.DISABLE,
                 false
             )
         );
@@ -597,7 +597,7 @@ public class AuditButtonRegistry {
                 "系统管理",
                 "PORTAL_MENU_DISABLE",
                 "禁用门户菜单",
-                AuditOperationKind.DELETE,
+                AuditOperationKind.DISABLE,
                 false
             )
         );

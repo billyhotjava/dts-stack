@@ -451,16 +451,20 @@ public class AuditIngestResource {
             ) {
                 return AuditOperationKind.DELETE;
             }
+            if (normalized.startsWith("ENABLE") || containsAny(lower, "启用", "开启", "激活")) {
+                return AuditOperationKind.ENABLE;
+            }
+            if (normalized.startsWith("DISABLE") || containsAny(lower, "禁用", "停用", "关闭", "失效")) {
+                return AuditOperationKind.DISABLE;
+            }
             if (
                 normalized.startsWith("UPDATE") ||
                 normalized.startsWith("MODIFY") ||
                 normalized.startsWith("EDIT") ||
                 normalized.startsWith("SAVE") ||
-                normalized.startsWith("ENABLE") ||
-                normalized.startsWith("DISABLE") ||
                 normalized.startsWith("APPROVE") ||
                 normalized.startsWith("REJECT") ||
-                containsAny(lower, "修改", "批准", "审批", "拒绝", "执行", "启用", "禁用", "发布")
+                containsAny(lower, "修改", "批准", "审批", "拒绝", "执行", "发布")
             ) {
                 return AuditOperationKind.UPDATE;
             }

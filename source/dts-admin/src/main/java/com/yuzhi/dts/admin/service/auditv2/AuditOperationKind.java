@@ -6,6 +6,8 @@ public enum AuditOperationKind {
     QUERY("QUERY", "查询"),
     CREATE("CREATE", "新增"),
     UPDATE("UPDATE", "修改"),
+    ENABLE("ENABLE", "启用"),
+    DISABLE("DISABLE", "禁用"),
     DELETE("DELETE", "删除"),
     APPROVE("APPROVE", "批准"),
     REJECT("REJECT", "驳回"),

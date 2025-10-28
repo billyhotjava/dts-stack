@@ -2189,62 +2189,14 @@ public class KeycloakApiResource {
             switch (normalized) {
                 case "approve": {
                     ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.approve(id, approver, note, currentAccessToken());
-                    Map<String, Object> success = new LinkedHashMap<>(auditDetail);
-                    success.put("status", detail.status);
-                    String ref = changeRequestRefFrom(id);
-                    recordApprovalActionV2(
-                        actor,
-                        ButtonCodes.APPROVAL_APPROVE,
-                        AuditResultStatus.SUCCESS,
-                        id,
-                        ref,
-                        success,
-                        request,
-                        Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/keycloak/approvals/" + id + "/approve"),
-                        request != null ? request.getMethod() : "POST",
-                        "批准审批请求：" + (ref != null ? ref : id),
-                        false
-                    );
                     return ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 case "reject": {
                     ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.reject(id, approver, note);
-                    Map<String, Object> success = new LinkedHashMap<>(auditDetail);
-                    success.put("status", detail.status);
-                    String ref = changeRequestRefFrom(id);
-                    recordApprovalActionV2(
-                        actor,
-                        ButtonCodes.APPROVAL_REJECT,
-                        AuditResultStatus.SUCCESS,
-                        id,
-                        ref,
-                        success,
-                        request,
-                        Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/keycloak/approvals/" + id + "/reject"),
-                        request != null ? request.getMethod() : "POST",
-                        "驳回审批请求：" + (ref != null ? ref : id),
-                        false
-                    );
                     return ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 case "process": {
                     ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.delay(id, approver, note);
-                    Map<String, Object> success = new LinkedHashMap<>(auditDetail);
-                    success.put("status", detail.status);
-                    String ref = changeRequestRefFrom(id);
-                    recordApprovalActionV2(
-                        actor,
-                        ButtonCodes.APPROVAL_DELAY,
-                        AuditResultStatus.SUCCESS,
-                        id,
-                        ref,
-                        success,
-                        request,
-                        Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/keycloak/approvals/" + id + "/process"),
-                        request != null ? request.getMethod() : "POST",
-                        "暂缓审批请求：" + (ref != null ? ref : id),
-                        false
-                    );
                     return ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 default: {
