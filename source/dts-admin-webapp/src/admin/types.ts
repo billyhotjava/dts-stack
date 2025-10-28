@@ -24,6 +24,11 @@ export function normalizeAdminRole(role: string | null | undefined): AdminRole |
 			return "OPADMIN";
 		case "AUTHADMIN":
 		case "AUTH_ADMIN":
+		case "IAMADMIN":
+		case "IAM_ADMIN":
+		case "IAM-ADMIN":
+		case "IAMADMINISTRATOR":
+		case "IAM_ADMINISTRATOR":
 			return "AUTHADMIN";
 		case "AUDITADMIN":
 		case "AUDIT_ADMIN":

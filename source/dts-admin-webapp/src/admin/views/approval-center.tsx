@@ -84,6 +84,10 @@ const STATUS_BADGE: Record<string, "outline" | "secondary" | "destructive"> = {
 	DRAFT: "outline",
 };
 
+const OPERATOR_LABELS: Record<string, string> = {
+	authadmin: "授权管理员",
+};
+
 type DecisionStatus = "PENDING" | "PROCESSING" | "ON_HOLD" | "APPROVED" | "APPLIED" | "REJECTED" | "FAILED";
 
 interface DecisionRecord {
@@ -202,7 +206,6 @@ function summarizeDetails(request: ChangeRequest, ctx?: DiffFormatContext): stri
 	const actionKey = request.action?.toUpperCase?.();
 	const actionLabel = (actionKey && ACTION_LABELS[actionKey]) ?? request.action;
 	const summary = summarizeChangeDisplayContext(context, {
-		maxEntries: 2,
 		actionLabel,
 		request,
 	});
@@ -369,13 +372,15 @@ export default function ApprovalCenterView() {
 	const normalizedRole = String(session.role ?? "").toUpperCase();
 	const isSysAdmin = normalizedRole === "SYSADMIN";
 	const {
-		data: changeRequests = [],
-		isLoading,
+		data: changeRequestsData,
+		isLoading: isChangeRequestsLoading,
 		isError,
 	} = useQuery<ChangeRequest[]>({
 		queryKey: ["admin", "change-requests"],
 		queryFn: () => adminApi.getChangeRequests(),
 	});
+	const changeRequests = Array.isArray(changeRequestsData) ? changeRequestsData : [];
+	const shouldFetchFallback = !isChangeRequestsLoading && Array.isArray(changeRequestsData) && changeRequestsData.length === 0;
 	const { data: adminUsers = [] } = useQuery<AdminUser[]>({
 		queryKey: ["admin", "users"],
 		queryFn: () => adminApi.getAdminUsers(),
@@ -386,6 +391,7 @@ export default function ApprovalCenterView() {
 	// 则从 /approval-requests 拉取并映射为 ChangeRequest 以便列表展示
 	const { data: mappedFromApprovals = [] } = useQuery<ChangeRequest[]>({
 		queryKey: ["admin", "kc-approvals-mapped"],
+		enabled: shouldFetchFallback,
 		queryFn: async () => {
 			try {
 				const list = await KeycloakApprovalService.getApprovalRequests();
@@ -449,7 +455,7 @@ export default function ApprovalCenterView() {
 	const [categoryInitialized, setCategoryInitialized] = useState(false);
 	const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
 	const [decisionLoading, setDecisionLoading] = useState(false);
-	const [operatorNameMap, setOperatorNameMap] = useState<Record<string, string>>({});
+	const [operatorNameMap, setOperatorNameMap] = useState<Record<string, string>>({ ...OPERATOR_LABELS });
 	const [userDisplayMap, setUserDisplayMap] = useState<Record<string, string>>({});
 
 	// 收集请求中的用户名，并解析为中文姓名（优先后端接口，其次 Keycloak 搜索）
@@ -915,7 +921,6 @@ export default function ApprovalCenterView() {
 			const actionKey = record.action?.toUpperCase?.();
 			const actionLabel = (actionKey && ACTION_LABELS[actionKey]) ?? record.action;
 			const summaryText = summarizeChangeDisplayContext(displayContext, {
-				maxEntries: 2,
 				actionLabel,
 				request: record,
 			});
@@ -1090,7 +1095,7 @@ const handleCloseDialog = () => {
 						</Text>
 					</CardHeader>
 					<CardContent className="space-y-3">
-						{isLoading ? (
+						{isChangeRequestsLoading ? (
 							<Text variant="body3" className="text-muted-foreground">
 								数据加载中…
 							</Text>
@@ -1146,7 +1151,7 @@ const handleCloseDialog = () => {
 						</Text>
 					</CardHeader>
 					<CardContent className="space-y-3">
-						{isLoading ? (
+						{isChangeRequestsLoading ? (
 							<Text variant="body3" className="text-muted-foreground">
 								数据加载中…
 							</Text>

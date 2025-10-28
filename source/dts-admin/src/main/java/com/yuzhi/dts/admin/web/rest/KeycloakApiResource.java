@@ -77,6 +77,16 @@ public class KeycloakApiResource {
 
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
     private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin",  "authadmin", "auditadmin", "opadmin");
+    private static final Map<String, String> BUILTIN_ADMIN_LABELS = Map.of(
+        "sysadmin",
+        "系统管理员",
+        "authadmin",
+        "授权管理员",
+        "auditadmin",
+        "安全审计员",
+        "opadmin",
+        "运维管理员"
+    );
 
     public KeycloakApiResource(
         InMemoryStores stores,
@@ -116,19 +126,21 @@ public class KeycloakApiResource {
         auditDetail.put("count", list.size());
         auditDetail.put("source", fromCache ? "cache" : "keycloak");
         String actor = currentUser();
-        recordUserActionV2(
-            actor,
-            ButtonCodes.USER_LIST,
-            AuditResultStatus.SUCCESS,
-            null,
-            null,
-            null,
-            new LinkedHashMap<>(auditDetail),
-            request,
-            "/api/keycloak/users",
-            "GET",
-            "查看用户列表（共 " + list.size() + " 个）"
-        );
+        if (!isAuditSuppressed()) {
+            recordUserActionV2(
+                actor,
+                ButtonCodes.USER_LIST,
+                AuditResultStatus.SUCCESS,
+                null,
+                null,
+                null,
+                new LinkedHashMap<>(auditDetail),
+                request,
+                "/api/keycloak/users",
+                "GET",
+                "查看用户列表（共 " + list.size() + " 个）"
+            );
+        }
         return ResponseEntity.ok(list);
     }
 
@@ -208,37 +220,41 @@ public class KeycloakApiResource {
         String actor = currentUser();
         if (u == null) {
             Map<String, Object> detail = Map.of("error", "NOT_FOUND");
-            recordUserActionV2(
-                actor,
-                ButtonCodes.USER_VIEW,
-                AuditResultStatus.FAILED,
-                id,
-                null,
-                null,
-                new LinkedHashMap<>(detail),
-                request,
-                "/api/keycloak/users/" + id,
-                "GET",
-                "查看用户失败：" + id
-            );
+            if (!isAuditSuppressed()) {
+                recordUserActionV2(
+                    actor,
+                    ButtonCodes.USER_VIEW,
+                    AuditResultStatus.FAILED,
+                    id,
+                    null,
+                    null,
+                    new LinkedHashMap<>(detail),
+                    request,
+                    "/api/keycloak/users/" + id,
+                    "GET",
+                    "查看用户失败：" + id
+                );
+            }
             return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         }
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("username", u.getUsername());
         auditDetail.put("status", Boolean.TRUE.equals(u.getEnabled()) ? "ENABLED" : "DISABLED");
-        recordUserActionV2(
-            actor,
-            ButtonCodes.USER_VIEW,
-            AuditResultStatus.SUCCESS,
-            u.getId(),
-            u.getUsername(),
-            null,
-            new LinkedHashMap<>(auditDetail),
-            request,
-            "/api/keycloak/users/" + id,
-            "GET",
-            "查看用户：" + Optional.ofNullable(u.getUsername()).orElse(id)
-        );
+        if (!isAuditSuppressed()) {
+            recordUserActionV2(
+                actor,
+                ButtonCodes.USER_VIEW,
+                AuditResultStatus.SUCCESS,
+                u.getId(),
+                u.getUsername(),
+                null,
+                new LinkedHashMap<>(auditDetail),
+                request,
+                "/api/keycloak/users/" + id,
+                "GET",
+                "查看用户：" + Optional.ofNullable(u.getUsername()).orElse(id)
+            );
+        }
         return ResponseEntity.ok(u);
     }
 
@@ -1215,17 +1231,24 @@ public class KeycloakApiResource {
         if (!StringUtils.hasText(actor)) {
             return null;
         }
+        String trimmed = actor.trim();
+        String builtin = BUILTIN_ADMIN_LABELS.get(trimmed.toLowerCase(Locale.ROOT));
         try {
-            Map<String, String> resolved = adminUserService.resolveDisplayNames(List.of(actor));
-            String display = resolved.get(actor);
+            Map<String, String> resolved = adminUserService.resolveDisplayNames(List.of(trimmed));
+            String display = resolved.get(trimmed);
             if (!StringUtils.hasText(display)) {
-                display = resolved.get(actor.trim());
+                display = resolved.get(trimmed.toLowerCase(Locale.ROOT));
             }
-            return StringUtils.hasText(display) ? display : actor;
+            if (StringUtils.hasText(display)) {
+                return display;
+            }
         } catch (Exception ex) {
             LOG.debug("Failed to resolve display name for {}: {}", actor, ex.getMessage());
-            return actor;
         }
+        if (StringUtils.hasText(builtin)) {
+            return builtin;
+        }
+        return trimmed;
     }
 
     private boolean registerSession(String username, KeycloakAuthService.TokenResponse tokens) {
@@ -2076,19 +2099,21 @@ public class KeycloakApiResource {
         // Placeholder: return empty
         String actor = currentUser();
         Map<String, Object> detail = Map.of("targetUserId", userId, "membership", 0);
-        recordUserActionV2(
-            actor,
-            ButtonCodes.USER_GROUP_MEMBERSHIPS_VIEW,
-            AuditResultStatus.SUCCESS,
-            userId,
-            userId,
-            null,
-            new LinkedHashMap<>(detail),
-            request,
-            "/api/keycloak/groups/user/" + userId,
-            "GET",
-            "查看用户所属用户组：" + userId
-        );
+        if (!isAuditSuppressed()) {
+            recordUserActionV2(
+                actor,
+                ButtonCodes.USER_GROUP_MEMBERSHIPS_VIEW,
+                AuditResultStatus.SUCCESS,
+                userId,
+                userId,
+                null,
+                new LinkedHashMap<>(detail),
+                request,
+                "/api/keycloak/groups/user/" + userId,
+                "GET",
+                "查看用户所属用户组：" + userId
+            );
+        }
         return ResponseEntity.ok(List.of());
     }
 
@@ -2098,19 +2123,21 @@ public class KeycloakApiResource {
         List<ApprovalDTOs.ApprovalRequest> list = adminUserService.listApprovals();
         String actor = currentUser();
         Map<String, Object> detail = Map.of("count", list.size());
-        recordApprovalActionV2(
-            actor,
-            ButtonCodes.APPROVAL_LIST,
-            AuditResultStatus.SUCCESS,
-            null,
-            null,
-            new LinkedHashMap<>(detail),
-            request,
-            "/api/approval-requests",
-            "GET",
-            "查看审批请求列表（共 " + list.size() + " 个）",
-            true
-        );
+        if (!isAuditSuppressed()) {
+            recordApprovalActionV2(
+                actor,
+                ButtonCodes.APPROVAL_LIST,
+                AuditResultStatus.SUCCESS,
+                null,
+                null,
+                new LinkedHashMap<>(detail),
+                request,
+                "/api/approval-requests",
+                "GET",
+                "查看审批请求列表（共 " + list.size() + " 个）",
+                true
+            );
+        }
         return ResponseEntity.ok(ApiResponse.ok(list));
     }
 

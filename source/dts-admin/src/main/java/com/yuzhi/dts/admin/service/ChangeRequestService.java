@@ -73,6 +73,16 @@ public class ChangeRequestService {
         return repository.save(cr);
     }
 
+    public String ensureNoDuplicate(String resourceType, String action, String resourceId, String payloadJson) {
+        String normalizedType = Optional.ofNullable(resourceType).map(String::trim).map(String::toUpperCase).orElse("UNKNOWN");
+        String normalizedAction = Optional.ofNullable(action).map(String::trim).map(String::toUpperCase).orElse("UNKNOWN");
+        String normalizedId = normalizeResourceId(resourceId);
+        Map<String, Object> afterPayload = normalize(read(payloadJson));
+        String canonicalPayload = write(afterPayload);
+        enforceNoDuplicate(normalizedType, normalizedAction, normalizedId, afterPayload, canonicalPayload);
+        return canonicalPayload != null ? canonicalPayload : payloadJson;
+    }
+
     private String resolveCategory(String resourceType) {
         if (resourceType == null) {
             return "GENERAL";

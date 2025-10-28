@@ -178,7 +178,7 @@ export default function UserDetailView() {
 	const ensureOrgIndex = useCallback(async () => {
 		if (Object.keys(orgIndexById).length > 0) return;
 		try {
-			const tree = await adminApi.getOrganizations();
+			const tree = await adminApi.getOrganizations({ auditSilent: true });
 			const index: Record<string, OrganizationNode> = {};
 			const visit = (nodes?: OrganizationNode[]) => {
 				if (!nodes) return;

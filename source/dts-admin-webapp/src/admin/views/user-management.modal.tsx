@@ -131,7 +131,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		setOrgLoading(true);
 		try {
 			const index: Record<string, OrganizationNode> = {};
-			const tree = await adminApi.getOrganizations();
+			const tree = await adminApi.getOrganizations({ auditSilent: true });
 			const options = buildOrgOptions(tree ?? [], [], index);
 			setOrgOptions(options);
 			setOrgIndex(index);

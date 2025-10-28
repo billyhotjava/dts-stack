@@ -130,7 +130,6 @@ const activeContext = useMemo(
 			render: (_: unknown, record) => {
 				const context = buildContextForChangeRequest(record);
 				const text = summarizeChangeDisplayContext(context, {
-					maxEntries: 2,
 					actionLabel: translateAction(record.action, record.action),
 					request: record,
 				});

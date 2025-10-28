@@ -18,6 +18,8 @@ import type {
 } from "@/admin/types";
 import apiClient from "@/api/apiClient";
 
+type AuditSilentOption = { auditSilent?: boolean };
+
 export interface ChangeRequestQuery {
 	status?: string;
 	type?: string;
@@ -74,9 +76,10 @@ export const adminApi = {
 			data: config,
 		}),
 
-	getPortalMenus: () =>
+	getPortalMenus: (options?: AuditSilentOption) =>
 		apiClient.get<PortalMenuCollection>({
 			url: "/admin/portal/menus",
+			headers: options?.auditSilent ? { "X-Audit-Silent": "true" } : undefined,
 		}),
 
 	createPortalMenu: (menu: PortalMenuItem) =>
@@ -107,9 +110,10 @@ export const adminApi = {
 			url: "/admin/portal/menus/reset",
 		}),
 
-	getOrganizations: () =>
+	getOrganizations: (options?: AuditSilentOption) =>
 		apiClient.get<OrganizationNode[]>({
 			url: "/admin/orgs",
+			headers: options?.auditSilent ? { "X-Audit-Silent": "true" } : undefined,
 		}),
 
 	createOrganization: (payload: OrganizationCreatePayload) =>
@@ -171,9 +175,10 @@ export const adminApi = {
 			data: payload,
 		}),
 
-	getRoleAssignments: () =>
+	getRoleAssignments: (options?: AuditSilentOption) =>
 		apiClient.get<AdminRoleAssignment[]>({
 			url: "/admin/role-assignments",
+			headers: options?.auditSilent ? { "X-Audit-Silent": "true" } : undefined,
 		}),
 
 	createRoleAssignment: (payload: CreateRoleAssignmentPayload) =>

@@ -16,7 +16,7 @@ export function ApprovalStatus({ userId }: ApprovalStatusProps) {
 	const loadApprovals = useCallback(async () => {
 		setLoading(true);
 		try {
-			const data = await KeycloakApprovalService.getApprovalRequests();
+			const data = await KeycloakApprovalService.getApprovalRequests({ silent: true });
 			const lowerId = String(userId || "").toLowerCase();
 			const userApprovals = data.filter((req: any) => {
 				const reason = typeof req?.reason === "string" ? req.reason : "";

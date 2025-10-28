@@ -10,7 +10,6 @@ import {
 } from "@/admin/utils/menu-change-parser";
 import type { MenuChangeDisplayEntry } from "@/admin/components/menu-change-viewer";
 import type { ChangeRequest } from "@/admin/types";
-import { labelForChangeField } from "@/admin/lib/change-request-format";
 type PlainRecord = Record<string, unknown>;
 
 const SUMMARY_KEYS = ["changeSummary", "change_summary", "summary"];
@@ -138,7 +137,6 @@ export function buildContextForChangeRequest(
 }
 
 export interface SummarizeContextOptions {
-	maxEntries?: number;
 	actionLabel?: string | null;
 	request?: ChangeRequest;
 	subjectName?: string | null;
@@ -146,7 +144,7 @@ export interface SummarizeContextOptions {
 
 export function summarizeChangeDisplayContext(
 	context: ChangeDisplayContext,
-	{ maxEntries = 3, actionLabel, request, subjectName }: SummarizeContextOptions = {},
+	{ actionLabel, request, subjectName }: SummarizeContextOptions = {},
 ): string {
 	const actionText = resolveActionText(actionLabel, request?.action);
 	const subjectDisplay = resolveSubjectDisplay(context, request, subjectName);
@@ -164,6 +162,9 @@ function buildSummary(layers: Array<PlainRecord | null | undefined>, baseSummary
 	const seen = new Set<string>();
 	if (Array.isArray(baseSummary)) {
 		for (const entry of baseSummary) {
+			if (!entry || isSummaryHidden(entry)) {
+				continue;
+			}
 			const key = summaryKey(entry);
 			if (seen.has(key)) continue;
 			result.push(entry);
@@ -175,6 +176,9 @@ function buildSummary(layers: Array<PlainRecord | null | undefined>, baseSummary
 		for (const key of SUMMARY_KEYS) {
 			const entries = parseSummaryList(layer[key]);
 			for (const entry of entries) {
+				if (isSummaryHidden(entry)) {
+					continue;
+				}
 				const k = summaryKey(entry);
 				if (seen.has(k)) continue;
 				result.push(entry);
@@ -335,104 +339,6 @@ function parseJsonRecord(value?: string | null): PlainRecord | null {
 	} catch {
 		return null;
 	}
-}
-
-function resolvePrimaryFieldLabel(
-	summary: ChangeSummaryEntry[],
-	menuChanges: MenuChangeDisplayEntry[],
-	snapshot: ChangeSnapshotLike | null | undefined,
-	maxEntries: number,
-): string | null {
-	const menuField = resolveMenuChangeFieldLabel(menuChanges[0]);
-	if (menuField) {
-		return menuField;
-	}
-
-	const summaryLabel = extractSummaryLabel(summary[0]);
-	if (summaryLabel) {
-		return summaryLabel;
-	}
-
-	const firstMenu = menuChanges[0];
-	if (firstMenu) {
-		return (
-			normalizeToString(firstMenu.title) ??
-			normalizeToString(firstMenu.name) ??
-			normalizeToString(firstMenu.path) ??
-			normalizeToString(firstMenu.id)
-		);
-	}
-
-	const snapshotEntry = collectSnapshotChanges(snapshot, Math.max(1, maxEntries))[0];
-	if (snapshotEntry) {
-		const labelFromEntry = normalizeToString(snapshotEntry.label);
-		const labelFromField =
-			typeof snapshotEntry.field === "string" ? labelForChangeField(snapshotEntry.field) : null;
-		return labelFromEntry ?? labelFromField ?? (typeof snapshotEntry.field === "string"
-			? deriveFieldLabel(snapshotEntry.field)
-			: null);
-	}
-
-	return null;
-}
-
-function extractSummaryLabel(entry?: ChangeSummaryEntry): string | null {
-	if (!entry) {
-		return null;
-	}
-	if (typeof entry.label === "string") {
-		const label = entry.label.trim();
-		if (label.length > 0) {
-			const mapped = labelForChangeField(label);
-			return mapped || label;
-		}
-	}
-	if (typeof entry.field === "string") {
-		const field = entry.field.trim();
-		if (field.length > 0) {
-			return labelForChangeField(field);
-		}
-	}
-	return null;
-}
-
-function resolveMenuChangeFieldLabel(entry?: MenuChangeDisplayEntry): string | null {
-	if (!entry) {
-		return null;
-	}
-	const statusChanged =
-		entry.statusBeforeLabel !== undefined &&
-		entry.statusAfterLabel !== undefined &&
-		entry.statusBeforeLabel !== entry.statusAfterLabel;
-	if (statusChanged) {
-		return "状态";
-	}
-
-	if (hasArrayDiff(entry.allowedRolesBefore, entry.allowedRolesAfter) || entry.addedRoles?.length || entry.removedRoles?.length) {
-		return "角色";
-	}
-
-	if (
-		hasArrayDiff(entry.allowedPermissionsBefore, entry.allowedPermissionsAfter) ||
-		entry.addedPermissions?.length ||
-		entry.removedPermissions?.length
-	) {
-		return "权限";
-	}
-
-	if (entry.securityLevelBeforeLabel && entry.securityLevelAfterLabel && entry.securityLevelBeforeLabel !== entry.securityLevelAfterLabel) {
-		return "访问密级";
-	}
-
-	if (entry.maxDataLevelBeforeLabel && entry.maxDataLevelAfterLabel && entry.maxDataLevelBeforeLabel !== entry.maxDataLevelAfterLabel) {
-		return "最大数据密级";
-	}
-
-	if (entry.addedRules?.length || entry.removedRules?.length) {
-		return "可见性规则";
-	}
-
-	return null;
 }
 
 const ACTION_TEXT_FALLBACKS: Record<string, string> = {
@@ -694,118 +600,4 @@ function normalizeToString(value: unknown): string | null {
 		return String(value);
 	}
 	return null;
-}
-
-type SnapshotChangeEntry = {
-	field?: string;
-	label?: string;
-	before?: unknown;
-	after?: unknown;
-};
-
-function collectSnapshotChanges(
-	snapshot: ChangeSnapshotLike | null | undefined,
-	maxEntries: number,
-): SnapshotChangeEntry[] {
-	const result: SnapshotChangeEntry[] = [];
-	if (!snapshot) {
-		return result;
-	}
-	const queue: Array<{ node: ChangeSnapshotLike; path: string[] }> = [{ node: snapshot, path: [] }];
-	while (queue.length > 0 && result.length < maxEntries) {
-		const { node, path } = queue.shift()!;
-		const pathLabel = path.filter(Boolean).join(" / ");
-		if (node.changes) {
-			for (const change of node.changes) {
-				if (!change) {
-					continue;
-				}
-				const label = buildSnapshotChangeLabel(change.label, change.field, pathLabel);
-				result.push({
-					field: typeof change.field === "string" ? change.field : undefined,
-					label,
-					before: change.before,
-					after: change.after,
-				});
-				if (result.length >= maxEntries) {
-					break;
-				}
-			}
-		}
-		if (result.length >= maxEntries) {
-			break;
-		}
-		if (node.items) {
-			for (const item of node.items) {
-				if (!item) {
-					continue;
-				}
-				const nextPathLabel = extractSnapshotItemLabel(item);
-				queue.push({
-					node: {
-						before: item.before ?? undefined,
-						after: item.after ?? undefined,
-						changes: item.changes ?? undefined,
-						items: item.items ?? undefined,
-					},
-					path: nextPathLabel ? [...path, nextPathLabel] : path,
-				});
-			}
-		}
-	}
-	return result;
-}
-
-function buildSnapshotChangeLabel(rawLabel: unknown, field: unknown, pathLabel: string): string | undefined {
-	let base: string | undefined;
-	if (typeof rawLabel === "string" && rawLabel.trim().length > 0) {
-		base = rawLabel.trim();
-	} else if (typeof rawLabel === "number") {
-		base = String(rawLabel);
-	} else if (typeof field === "string" && field.trim().length > 0) {
-		base = deriveFieldLabel(field);
-	}
-	if (pathLabel && base) {
-		return `${pathLabel} · ${base}`;
-	}
-	if (pathLabel) {
-		return pathLabel;
-	}
-	return base;
-}
-
-function hasArrayDiff(before?: string[] | null, after?: string[] | null): boolean {
-	const beforeList = before ?? [];
-	const afterList = after ?? [];
-	if (beforeList.length !== afterList.length) {
-		return true;
-	}
-	const beforeSet = new Set(beforeList);
-	const afterSet = new Set(afterList);
-	if (beforeSet.size !== afterSet.size) {
-		return true;
-	}
-	for (const item of beforeSet) {
-		if (!afterSet.has(item)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-function extractSnapshotItemLabel(item: {
-	label?: string;
-	name?: string;
-	displayName?: string;
-}): string | undefined {
-	if (typeof item.label === "string" && item.label.trim().length > 0) {
-		return item.label.trim();
-	}
-	if (typeof item.displayName === "string" && item.displayName.trim().length > 0) {
-		return item.displayName.trim();
-	}
-	if (typeof item.name === "string" && item.name.trim().length > 0) {
-		return item.name.trim();
-	}
-	return undefined;
 }

@@ -183,6 +183,7 @@ const [deptLoading, setDeptLoading] = useState(false);
 	const [dataSources, setDataSources] = useState<any[]>([]);
 	const [multiSourceUnlocked, setMultiSourceUnlocked] = useState(false);
 	    const [refreshing, setRefreshing] = useState(false);
+	const [primarySourceAlertDismissed, setPrimarySourceAlertDismissed] = useState(false);
     // Preview dialog state
 const sourceTypeUpper = (form.sourceType || "").toUpperCase();
 const isInceptorSource = sourceTypeUpper === "INCEPTOR" || sourceTypeUpper === "HIVE";
@@ -250,13 +251,14 @@ const availableSourceTypes = useMemo(() => {
 			setInstOwnerInitialized(true);
 		}
 	}, [hasInstOwnerRole, instOwnerInitialized, deptFilter, page, setDeptFilter, setInstOwnerInitialized, setPage]);
-const hasPrimarySource = useMemo(() => {
-	if (multiSourceAllowed) {
-		return availableSourceTypes.length > 0;
-	}
-	if (catalogConfig.hasPrimarySource) return true;
-	return dataSources.some((ds) => normalizeSourceType(String(ds?.type || "")) === resolvedDefaultSource);
-}, [availableSourceTypes, catalogConfig.hasPrimarySource, dataSources, multiSourceAllowed, normalizeSourceType, resolvedDefaultSource]);
+	const hasPrimarySource = useMemo(() => {
+		if (multiSourceAllowed) {
+			return availableSourceTypes.length > 0;
+		}
+		if (catalogConfig.hasPrimarySource) return true;
+		return dataSources.some((ds) => normalizeSourceType(String(ds?.type || "")) === resolvedDefaultSource);
+	}, [availableSourceTypes, catalogConfig.hasPrimarySource, dataSources, multiSourceAllowed, normalizeSourceType, resolvedDefaultSource]);
+	const showPrimarySourceAlert = !hasPrimarySource && !primarySourceAlertDismissed;
 const deptLabelMap = useMemo(() => {
   const map = new Map<string, string>();
   for (const d of deptOptions) {
@@ -392,6 +394,12 @@ useEffect(() => {
 }, [page, size, resolvedDefaultSource, deptFilter, keyword]);
 
 	useEffect(() => {
+		if (hasPrimarySource) {
+			setPrimarySourceAlertDismissed(false);
+		}
+	}, [hasPrimarySource]);
+
+	useEffect(() => {
 		if (!open) return;
 		if (isOpadmin) return;
 		const enforced = normalizedUserDept ?? "";
@@ -467,6 +475,7 @@ const filtered = useMemo(() => {
 		}
 		try {
 			await fetchList();
+			setPrimarySourceAlertDismissed(true);
 			if (registrySynced) {
 				try {
 					const [cfg, ds] = await Promise.all([
@@ -664,7 +673,7 @@ const filtered = useMemo(() => {
 			</Select>
 		</div>
 						</div>
-					{!hasPrimarySource && (
+					{showPrimarySourceAlert && (
 						<Alert variant="destructive">
 							<AlertTitle>缺少默认数据源</AlertTitle>
 							<AlertDescription>

@@ -10,9 +10,10 @@ export class KeycloakApprovalService {
 	/**
 	 * 获取审批请求列表
 	 */
-	static getApprovalRequests(): Promise<ApprovalRequest[]> {
+	static getApprovalRequests(options?: { silent?: boolean }): Promise<ApprovalRequest[]> {
 		return apiClient.get<ApprovalRequest[]>({
 			url: `/approval-requests`,
+			headers: options?.silent ? { "X-Audit-Silent": "true" } : undefined,
 		});
 	}
 
@@ -33,7 +34,7 @@ export class KeycloakApprovalService {
 	static async findApprovalIdByChangeRequestId(changeRequestId: number): Promise<number | null> {
 		// Scan list and match by embedded payload.changeRequestId
 		// 注：避免直接探测 /approval-requests/{id} 触发 404 弹窗
-		const list = await this.getApprovalRequests();
+		const list = await this.getApprovalRequests({ silent: true });
 		for (const item of list) {
 			try {
 				const detail = await this.getApprovalRequestById(item.id, { silent: true });

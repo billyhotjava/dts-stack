@@ -111,7 +111,7 @@ export default function UserManagementView() {
 
 	const loadRoleAssignments = useCallback(async () => {
 		try {
-			const assignments = await adminApi.getRoleAssignments();
+			const assignments = await adminApi.getRoleAssignments({ auditSilent: true });
 			const roleNameLookup: Record<string, string> = { ...roleDisplayNameMap };
 			const map: Record<string, { code: string; label: string }[]> = {};
 			const labelMap: Record<string, string> = {};
@@ -328,7 +328,7 @@ export default function UserManagementView() {
 		(async () => {
 			try {
 				if (Object.keys(orgIndexById).length > 0) return;
-				const tree = await adminApi.getOrganizations();
+				const tree = await adminApi.getOrganizations({ auditSilent: true });
 				const index: Record<string, OrganizationNode> = {};
 				const visit = (nodes?: OrganizationNode[]) => {
 					if (!nodes) return;
