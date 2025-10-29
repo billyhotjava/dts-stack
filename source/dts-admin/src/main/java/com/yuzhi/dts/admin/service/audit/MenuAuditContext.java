@@ -24,6 +24,7 @@ public final class MenuAuditContext {
     private final String changeRequestRef;
     private final String summary;
     private final String operationName;
+    private final AuditOperationType operationTypeOverride;
     private final Map<String, Object> detail;
     private final String clientIp;
     private final String clientAgent;
@@ -41,6 +42,7 @@ public final class MenuAuditContext {
         this.changeRequestRef = builder.changeRequestRef;
         this.summary = builder.summary;
         this.operationName = builder.operationName;
+        this.operationTypeOverride = builder.operationTypeOverride;
         this.detail = Map.copyOf(builder.detail);
         this.clientIp = builder.clientIp;
         this.clientAgent = builder.clientAgent;
@@ -83,6 +85,10 @@ public final class MenuAuditContext {
 
     public Optional<String> operationName() {
         return Optional.ofNullable(operationName);
+    }
+
+    public Optional<AuditOperationType> operationTypeOverride() {
+        return Optional.ofNullable(operationTypeOverride);
     }
 
     public Map<String, Object> detail() {
@@ -152,6 +158,7 @@ public final class MenuAuditContext {
         private String changeRequestRef;
         private String summary;
         private String operationName;
+        private AuditOperationType operationTypeOverride;
         private final Map<String, Object> detail = new LinkedHashMap<>();
         private String clientIp;
         private String clientAgent;
@@ -193,6 +200,13 @@ public final class MenuAuditContext {
 
         public Builder operationName(String operationName) {
             this.operationName = operationName;
+            return this;
+        }
+
+        public Builder operationType(AuditOperationType type) {
+            if (type != null) {
+                this.operationTypeOverride = type;
+            }
             return this;
         }
 

@@ -145,6 +145,42 @@ public class PortalMenuService {
     }
 
     @Transactional(readOnly = true)
+    public Optional<String> resolveDisplayName(PortalMenu menu) {
+        if (menu == null) {
+            return Optional.empty();
+        }
+        Optional<String> fromMetadata = resolveTitleFromMetadata(menu.getMetadata());
+        if (fromMetadata.isPresent()) {
+            return fromMetadata;
+        }
+        String titleKey = extractTitleKey(menu);
+        if (StringUtils.hasText(titleKey)) {
+            Optional<String> resolved = resolveTitleByKey(titleKey);
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+        }
+        String normalizedName = normalizeCodeSynonyms(menu.getName());
+        if (StringUtils.hasText(normalizedName)) {
+            Optional<String> resolved = resolveTitleByKey(normalizedName);
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+        }
+        if (StringUtils.hasText(menu.getName())) {
+            Optional<String> resolved = resolveTitleByKey(menu.getName());
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+        }
+        Optional<String> fromPath = resolveTitleByPath(menu.getPath());
+        if (fromPath.isPresent()) {
+            return fromPath;
+        }
+        return Optional.empty();
+    }
+
+    @Transactional(readOnly = true)
     public List<PortalMenu> findAllMenusOrdered() {
         ensureSeedMenus();
         return runSafely(
@@ -700,6 +736,105 @@ public class PortalMenuService {
             }
         }
         return null;
+    }
+
+    private Optional<String> resolveTitleByPath(String path) {
+        String normalized = normalizeMenuPath(path);
+        if (!StringUtils.hasText(normalized)) {
+            return Optional.empty();
+        }
+        MenuSeed seed = menuSeed();
+        if (seed == null || seed.portalNavSections() == null) {
+            return Optional.empty();
+        }
+        String resolved = findTitleByPath(seed.portalNavSections(), normalized, "");
+        if (StringUtils.hasText(resolved)) {
+            return Optional.of(resolved);
+        }
+        return Optional.empty();
+    }
+
+    private String findTitleByPath(List<MenuNode> nodes, String targetPath, String parentPath) {
+        if (nodes == null || nodes.isEmpty() || !StringUtils.hasText(targetPath)) {
+            return null;
+        }
+        for (MenuNode node : nodes) {
+            if (node == null) {
+                continue;
+            }
+            String currentPath = combineMenuPath(parentPath, node.path());
+            if (StringUtils.hasText(currentPath) && currentPath.equals(targetPath) && StringUtils.hasText(node.title())) {
+                return node.title();
+            }
+            String nested = findTitleByPath(node.children(), targetPath, currentPath);
+            if (StringUtils.hasText(nested)) {
+                return nested;
+            }
+        }
+        return null;
+    }
+
+    private Optional<String> resolveTitleFromMetadata(String metadataJson) {
+        if (!StringUtils.hasText(metadataJson)) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode node = objectMapper.readTree(metadataJson);
+            if (node.hasNonNull("title") && StringUtils.hasText(node.get("title").asText())) {
+                return Optional.of(node.get("title").asText().trim());
+            }
+            if (node.hasNonNull("label") && StringUtils.hasText(node.get("label").asText())) {
+                return Optional.of(node.get("label").asText().trim());
+            }
+            if (node.hasNonNull("titleKey") && StringUtils.hasText(node.get("titleKey").asText())) {
+                String key = node.get("titleKey").asText().trim();
+                Optional<String> resolved = resolveTitleByKey(key);
+                if (resolved.isPresent()) {
+                    return resolved;
+                }
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to parse menu metadata for display name: {}", ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    private String combineMenuPath(String parentPath, String segment) {
+        String normalizedSegment = segment == null ? "" : segment.trim();
+        if (normalizedSegment.startsWith("/")) {
+            normalizedSegment = normalizedSegment.substring(1);
+        }
+        if (normalizedSegment.endsWith("/")) {
+            normalizedSegment = normalizedSegment.substring(0, normalizedSegment.length() - 1);
+        }
+        String base = StringUtils.hasText(parentPath) ? parentPath : "";
+        if (!StringUtils.hasText(base)) {
+            return StringUtils.hasText(normalizedSegment) ? "/" + normalizedSegment : "/";
+        }
+        if (!base.startsWith("/")) {
+            base = "/" + base;
+        }
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        if (!StringUtils.hasText(normalizedSegment)) {
+            return base;
+        }
+        return base + "/" + normalizedSegment;
+    }
+
+    private String normalizeMenuPath(String path) {
+        if (!StringUtils.hasText(path)) {
+            return null;
+        }
+        String normalized = path.trim();
+        if (!normalized.startsWith("/")) {
+            normalized = "/" + normalized.replaceAll("^/+", "");
+        }
+        if (normalized.endsWith("/") && normalized.length() > 1) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 
     private String extractTitleKey(PortalMenu menu) {

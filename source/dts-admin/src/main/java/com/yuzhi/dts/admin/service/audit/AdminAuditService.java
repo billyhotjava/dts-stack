@@ -37,8 +37,9 @@ public class AdminAuditService {
             return;
         }
         try {
+            AuditOperationType opType = context.operationTypeOverride().orElse(context.operation().operationType());
             String summary = determineSummary(context.summary(), context.operationName(), context.operation());
-            Map<String, Object> detail = enrichDetail(context.detail(), summary, context.operation().operationType());
+            Map<String, Object> detail = enrichDetail(context.detail(), summary, opType);
 
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(context.actor(), context.operation().buttonCode())
@@ -47,7 +48,7 @@ public class AdminAuditService {
                 .result(Optional.ofNullable(context.result()).orElse(AuditResultStatus.SUCCESS));
 
             applyClient(builder, context.clientIp().orElse(null), context.clientAgent().orElse(null), context.requestUri().orElse(null), context.httpMethod().orElse(null));
-            applyOperationOverride(builder, resolveMenuOperation(context.operation()), context.operationName().orElse(summary), context.operation().operationType());
+            applyOperationOverride(builder, resolveMenuOperation(context.operation()), context.operationName().orElse(summary), opType);
             ChangeSnapshot snapshot = resolveChangeSnapshot(detail);
             if (snapshot != null) {
                 builder.changeSnapshot(snapshot, "PORTAL_MENU");

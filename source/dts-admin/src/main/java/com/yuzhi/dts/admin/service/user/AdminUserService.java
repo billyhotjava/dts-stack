@@ -239,6 +239,9 @@ public class AdminUserService {
                 display = resolveBuiltinDisplayName(lower).orElse(display);
             }
             result.put(username, display);
+            if (!result.containsKey(lower)) {
+                result.put(lower, display);
+            }
         }
         return result;
     }

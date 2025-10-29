@@ -581,7 +581,7 @@ public class AdminApiResource {
 
             PortalMenu persisted = portalMenuRepo.findById(menu.getId()).orElse(menu);
             Map<String, Object> successDetail = new LinkedHashMap<>(auditDetail);
-            Map<String, Object> createdPayload = toPortalMenuPayload(persisted);
+            Map<String, Object> createdPayload = toMenuAuditPayload(persisted);
             successDetail.put("created", createdPayload);
             appendChangeSummary(successDetail, "PORTAL_MENU", Map.of(), createdPayload);
             recordPortalMenuActionV2(
@@ -687,12 +687,12 @@ public class AdminApiResource {
             return ResponseEntity.status(404).body(ApiResponse.error("菜单不存在"));
         }
         Map<String, Object> payload = readPortalMenuPayload(body);
-        Map<String, Object> before = toPortalMenuPayload(beforeEntity);
+        Map<String, Object> before = toMenuAuditPayload(beforeEntity);
         String menuLabel = firstNonBlank(resolveMenuDisplayName(beforeEntity), beforeEntity.getName(), beforeEntity.getPath(), id);
         String actor = SecurityUtils.getCurrentAuditableLogin();
         Map<String, Object> auditBase = new LinkedHashMap<>();
         auditBase.put("before", before);
-        auditBase.put("payload", payload);
+        auditBase.put("payload", filterMenuUpdatePayload(payload));
         try {
             boolean visibilityTouchedGate = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
             boolean structureTouchedGate = payload.containsKey("name") || payload.containsKey("path") || payload.containsKey("component") || payload.containsKey("icon") || payload.containsKey("sortOrder") || payload.containsKey("parentId") || payload.containsKey("deleted");
@@ -773,7 +773,7 @@ public class AdminApiResource {
             PortalMenu persisted = portalMenuRepo.findById(menuId).orElse(beforeEntity);
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
-            Map<String, Object> after = toPortalMenuPayload(persisted);
+            Map<String, Object> after = toMenuAuditPayload(persisted);
             detail.put("after", after);
             appendChangeSummary(detail, "PORTAL_MENU", before, after);
             boolean beforeDeleted = Boolean.TRUE.equals(before.get("deleted"));
@@ -930,7 +930,7 @@ public class AdminApiResource {
         if (entity == null) {
             return ResponseEntity.status(404).body(ApiResponse.error("菜单不存在"));
         }
-        Map<String, Object> before = toPortalMenuPayload(entity);
+        Map<String, Object> before = toMenuAuditPayload(entity);
         String actor = SecurityUtils.getCurrentAuditableLogin();
         String menuLabel = firstNonBlank(resolveMenuDisplayName(entity), entity.getName(), entity.getPath(), id);
         Map<String, Object> auditDetail = new LinkedHashMap<>();
@@ -1021,7 +1021,7 @@ public class AdminApiResource {
             portalMenuRepo.save(entity);
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
-            Map<String, Object> after = toPortalMenuPayload(entity);
+            Map<String, Object> after = toMenuAuditPayload(entity);
             detail.put("after", after);
             appendChangeSummary(detail, "PORTAL_MENU", before, after);
             detail.put("summary", "禁用菜单：" + menuLabel);
@@ -2300,6 +2300,127 @@ public class AdminApiResource {
         m.put("maxDataLevel", deriveMenuMaxDataLevel(visibilityRules));
         m.put("deleted", menu.isDeleted());
         return m;
+    }
+
+    private Map<String, Object> toMenuAuditPayload(PortalMenu menu) {
+        return filterMenuAuditPayload(menu == null ? null : toPortalMenuPayload(menu));
+    }
+
+    private Map<String, Object> filterMenuAuditPayload(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> filtered = new LinkedHashMap<>();
+        if (source.containsKey("id")) {
+            filtered.put("id", source.get("id"));
+        }
+        String name = stringValue(source.get("name"));
+        if (StringUtils.hasText(name)) {
+            filtered.put("name", name);
+        }
+        String path = stringValue(source.get("path"));
+        if (StringUtils.hasText(path)) {
+            filtered.put("path", path);
+        }
+        if (source.containsKey("deleted")) {
+            filtered.put("deleted", toBoolean(source.get("deleted")));
+        }
+        List<String> allowedRoles = toTrimmedStringList(source.get("allowedRoles"));
+        if (!allowedRoles.isEmpty()) {
+            filtered.put("allowedRoles", allowedRoles);
+        }
+        List<Map<String, Object>> visibilityRules = sanitizeVisibilityRules(source.get("visibilityRules"));
+        if (!visibilityRules.isEmpty()) {
+            filtered.put("visibilityRules", visibilityRules);
+        }
+        String displayName = resolveMenuTitle(source);
+        if (StringUtils.hasText(displayName)) {
+            filtered.put("displayName", displayName);
+        }
+        Map<String, Object> metadata = extractMetadataMap(source.get("metadata"));
+        Map<String, Object> metadataLite = new LinkedHashMap<>();
+        Object title = metadata.get("title");
+        if (title instanceof String s && StringUtils.hasText(s)) {
+            metadataLite.put("title", s);
+        }
+        Object label = metadata.get("label");
+        if (label instanceof String s && StringUtils.hasText(s)) {
+            metadataLite.put("label", s);
+        }
+        Object titleKey = metadata.get("titleKey");
+        if (titleKey instanceof String s && StringUtils.hasText(s)) {
+            metadataLite.put("titleKey", s);
+        }
+        if (!metadataLite.isEmpty()) {
+            filtered.put("metadata", metadataLite);
+        }
+        return filtered;
+    }
+
+    private List<String> toTrimmedStringList(Object value) {
+        if (!(value instanceof Collection<?> collection)) {
+            return List.of();
+        }
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        for (Object element : collection) {
+            if (element == null) {
+                continue;
+            }
+            String text = element.toString().trim();
+            if (!text.isEmpty()) {
+                result.add(text);
+            }
+        }
+        return new ArrayList<>(result);
+    }
+
+    private List<Map<String, Object>> sanitizeVisibilityRules(Object value) {
+        if (!(value instanceof Collection<?> collection)) {
+            return List.of();
+        }
+        List<Map<String, Object>> sanitized = new ArrayList<>();
+        for (Object element : collection) {
+            if (!(element instanceof Map<?, ?> map)) {
+                continue;
+            }
+            String role = normalizeRoleCode(map.get("role"));
+            String permission = map.get("permission") == null ? null : map.get("permission").toString().trim();
+            String dataLevel = normalizeMenuLevel(map.get("dataLevel"), true);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            if (StringUtils.hasText(role)) {
+                entry.put("role", role);
+            }
+            if (StringUtils.hasText(permission)) {
+                entry.put("permission", permission);
+            }
+            if (StringUtils.hasText(dataLevel)) {
+                entry.put("dataLevel", dataLevel);
+                entry.put("dataLevelLabel", labelForMenuLevel(dataLevel, null));
+            }
+            if (!entry.isEmpty()) {
+                sanitized.add(entry);
+            }
+        }
+        return sanitized;
+    }
+
+    private Map<String, Object> filterMenuUpdatePayload(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> filtered = new LinkedHashMap<>();
+        if (payload.containsKey("deleted")) {
+            filtered.put("deleted", toBoolean(payload.get("deleted")));
+        }
+        List<String> allowedRoles = toTrimmedStringList(payload.get("allowedRoles"));
+        if (!allowedRoles.isEmpty()) {
+            filtered.put("allowedRoles", allowedRoles);
+        }
+        List<Map<String, Object>> visibilityRules = sanitizeVisibilityRules(payload.get("visibilityRules"));
+        if (!visibilityRules.isEmpty()) {
+            filtered.put("visibilityRules", visibilityRules);
+        }
+        return filtered;
     }
 
     private Map<String, Object> buildPortalMenuCollection() {
@@ -3724,6 +3845,7 @@ public class AdminApiResource {
                 .result(result != null ? result : AuditResultStatus.SUCCESS)
                 .summary(summary)
                 .operationName(operationName)
+                .operationType(overrideType)
                 .detail(safeDetail)
                 .client(clientIp, userAgent, uri, method);
             if (menuId != null) {
@@ -5447,38 +5569,22 @@ public class AdminApiResource {
     }
 
     private String resolveMenuDisplayName(PortalMenu menu) {
-        String metadata = menu.getMetadata();
-        if (metadata != null && !metadata.isBlank()) {
-            try {
-                Map<String, Object> meta = fromJson(metadata);
-                Object title = meta.get("title");
-                if (title instanceof String s && !s.isBlank()) {
-                    return s;
-                }
-                Object label = meta.get("label");
-                if (label instanceof String s && !s.isBlank()) {
-                    return s;
-                }
-                Object titleKey = meta.get("titleKey");
-                if (titleKey instanceof String s && !s.isBlank()) {
-                    String resolved = portalMenuService.resolveTitleByKey(s).orElse(null);
-                    if (StringUtils.hasText(resolved)) {
-                        return resolved;
-                    }
-                    return s;
-                }
-            } catch (Exception ignored) {
-                // fallback below
-            }
+        if (menu == null) {
+            return null;
         }
-        String code = menu.getName();
-        if (StringUtils.hasText(code)) {
-            String resolved = portalMenuService.resolveTitleByKey(code).orElse(null);
-            if (StringUtils.hasText(resolved)) {
-                return resolved;
-            }
-        }
-        return code;
+        return portalMenuService
+            .resolveDisplayName(menu)
+            .orElseGet(() -> {
+                String code = stringValue(menu.getName());
+                if (StringUtils.hasText(code)) {
+                    return code;
+                }
+                String path = stringValue(menu.getPath());
+                if (StringUtils.hasText(path)) {
+                    return path;
+                }
+                return menu.getId() != null ? "菜单#" + menu.getId() : null;
+            });
     }
 
     @SuppressWarnings("unchecked")
