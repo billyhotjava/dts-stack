@@ -23,8 +23,9 @@ import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -205,7 +206,20 @@ public class InfraResource {
                 t.start();
             }
         } catch (Exception ignored) {}
-        audit.audit("REFRESH", "infra.dataSource.inceptor", "manual");
+        boolean skipAudit = SecurityUtils
+            .getCurrentUserLogin()
+            .map(login -> {
+                String normalized = login.trim();
+                if (normalized.isEmpty()) {
+                    return false;
+                }
+                String lowered = normalized.toLowerCase(Locale.ROOT);
+                return "system".equals(lowered) || lowered.startsWith("service:");
+            })
+            .orElse(false);
+        if (!skipAudit) {
+            audit.audit("REFRESH", "infra.dataSource.inceptor", "manual");
+        }
         return ApiResponses.ok(buildFeaturesPayload());
     }
 

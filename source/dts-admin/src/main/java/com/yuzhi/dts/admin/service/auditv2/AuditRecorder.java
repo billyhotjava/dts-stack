@@ -69,22 +69,22 @@ public class AuditRecorder {
         }
         AuditEntry entry = new AuditEntry();
         entry.setOccurredAt(audit.occurredAt());
-        entry.setSourceSystem(audit.sourceSystem());
-        entry.setActorId(audit.actorId());
-        entry.setActorName(audit.actorName());
+        entry.setSourceSystem(clamp(audit.sourceSystem(), 32, "sourceSystem"));
+        entry.setActorId(clamp(audit.actorId(), 128, "actorId"));
+        entry.setActorName(clamp(audit.actorName(), 128, "actorName"));
         entry.setActorRoles(audit.actorRoles());
-        entry.setModuleKey(audit.moduleKey());
-        entry.setModuleName(audit.moduleName());
-        entry.setButtonCode(audit.buttonCode());
-        entry.setOperationCode(audit.operationCode());
-        entry.setOperationName(audit.operationName());
-        entry.setOperationKind(audit.operationKind().code());
-        entry.setResult(audit.result().code());
+        entry.setModuleKey(clamp(audit.moduleKey(), 64, "moduleKey"));
+        entry.setModuleName(clamp(audit.moduleName(), 128, "moduleName"));
+        entry.setButtonCode(clamp(audit.buttonCode(), 128, "buttonCode"));
+        entry.setOperationCode(clamp(audit.operationCode(), 128, "operationCode"));
+        entry.setOperationName(clamp(audit.operationName(), 256, "operationName"));
+        entry.setOperationKind(clamp(audit.operationKind().code(), 32, "operationKind"));
+        entry.setResult(clamp(audit.result().code(), 32, "result"));
         entry.setSummary(audit.summary());
-        entry.setChangeRequestRef(audit.changeRequestRef());
-        entry.setClientAgent(audit.clientAgent());
-        entry.setRequestUri(audit.requestUri());
-        entry.setHttpMethod(audit.httpMethod());
+        entry.setChangeRequestRef(clamp(audit.changeRequestRef(), 64, "changeRequestRef"));
+        entry.setClientAgent(clamp(audit.clientAgent(), 256, "clientAgent"));
+        entry.setRequestUri(clamp(audit.requestUri(), 512, "requestUri"));
+        entry.setHttpMethod(clamp(audit.httpMethod(), 16, "httpMethod"));
         entry.setMetadata(audit.metadata());
         entry.setExtraAttributes(audit.extraAttributes());
         entry.setClientIp(audit.clientIp());
@@ -178,6 +178,24 @@ public class AuditRecorder {
 
     private String safeString(String value) {
         return value == null ? "" : value;
+    }
+
+    private String clamp(String value, int maxLength, String field) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (!StringUtils.hasText(trimmed)) {
+            return trimmed;
+        }
+        if (maxLength <= 0 || trimmed.length() <= maxLength) {
+            return trimmed;
+        }
+        String truncated = maxLength > 3 ? trimmed.substring(0, maxLength - 3) + "..." : trimmed.substring(0, maxLength);
+        if (log.isDebugEnabled()) {
+            log.debug("Truncated {} to {} characters for audit entry", field, maxLength);
+        }
+        return truncated;
     }
 
     private Object sanitizeDetailValue(Object value) {
@@ -427,7 +445,12 @@ public class AuditRecorder {
             if (operationKind == null) {
                 throw new IllegalStateException("operationKind is required for audit entry");
             }
-            if (!allowEmptyTargets && targets.isEmpty() && operationKind != AuditOperationKind.QUERY) {
+            if (
+                !allowEmptyTargets &&
+                targets.isEmpty() &&
+                operationKind != AuditOperationKind.QUERY &&
+                operationKind != AuditOperationKind.CLEAN
+            ) {
                 throw new IllegalStateException("target id is required for " + operationKind);
             }
             String effectiveOperationName = StringUtils.hasText(operationName) ? operationName : operationCode;

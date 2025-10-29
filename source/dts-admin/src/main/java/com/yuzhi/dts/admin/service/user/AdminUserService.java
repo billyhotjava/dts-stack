@@ -2500,6 +2500,8 @@ public class AdminUserService {
             case REJECT -> AuditOperationKind.REJECT;
             case PUBLISH -> AuditOperationKind.EXECUTE;
             case REFRESH -> AuditOperationKind.EXECUTE;
+            case UPLOAD -> AuditOperationKind.UPLOAD;
+            case CLEAN -> AuditOperationKind.DELETE;
             case ARCHIVE -> AuditOperationKind.UPDATE;
             case REQUEST -> AuditOperationKind.OTHER;
             case UNKNOWN -> AuditOperationKind.OTHER;

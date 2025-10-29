@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.web.rest;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.explore.ExecEnums;
 import com.yuzhi.dts.platform.domain.explore.ExploreSavedQuery;
@@ -420,6 +421,15 @@ public class ExploreResource {
             }
             list.add(toResultSetMap(rs, exec, dataset));
         }
+        recordAudit(
+            "READ",
+            "explore.resultSet",
+            null,
+            "查看查询结果集列表",
+            null,
+            "SUCCESS",
+            Map.of("count", list.size())
+        );
         return ApiResponses.ok(list);
     }
 
@@ -553,15 +563,15 @@ public class ExploreResource {
             resultSetRepo.delete(rs);
             executionRepo.clearResultSetReferences(rs.getId());
         });
-        recordAudit(
-            "DELETE",
-            "explore.resultSet.cleanup",
-            null,
-            "批量清理查询结果集",
-            null,
-            "SUCCESS",
-            Map.of("deleted", expired.size())
-        );
+        String summary = expired.isEmpty()
+            ? "清理过期查询结果集：无过期记录"
+            : "清理过期查询结果集：删除 " + expired.size() + " 条结果集";
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", summary);
+        auditPayload.put("operationName", summary);
+        auditPayload.put("operationType", "CLEAN");
+        auditPayload.put("deleted", expired.size());
+        audit.auditAction("EXPLORE_RESULTSET_PURGE", AuditStage.SUCCESS, null, auditPayload);
         return ApiResponses.ok(Map.of("deleted", expired.size()));
     }
 

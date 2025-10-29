@@ -40,18 +40,6 @@ public class AuditButtonRegistry {
         register(
             map,
             new AuditButtonMetadata(
-                ButtonCodes.DATA_SOURCE_REFRESH,
-                "system-admin",
-                "基础设施",
-                "ADMIN_DATA_SOURCE_REFRESH",
-                "刷新数据源注册信息",
-                AuditOperationKind.EXECUTE,
-                true
-            )
-        );
-        register(
-            map,
-            new AuditButtonMetadata(
                 ButtonCodes.DATA_SOURCE_CREATE,
                 "system-admin",
                 "基础设施",
@@ -59,6 +47,78 @@ public class AuditButtonRegistry {
                 "新增数据源",
                 AuditOperationKind.CREATE,
                 false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.DATA_SOURCE_UPDATE,
+                "system-admin",
+                "基础设施",
+                "ADMIN_DATA_SOURCE_UPDATE",
+                "更新数据源",
+                AuditOperationKind.UPDATE,
+                false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.DATA_SOURCE_PUBLISH,
+                "system-admin",
+                "基础设施",
+                "ADMIN_DATA_SOURCE_PUBLISH",
+                "发布 Inceptor 数据源",
+                AuditOperationKind.UPDATE,
+                false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.DATA_SOURCE_TEST,
+                "system-admin",
+                "基础设施",
+                "ADMIN_DATA_SOURCE_TEST",
+                "测试数据源连接",
+                AuditOperationKind.TEST,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.DATA_SOURCE_UPLOAD_KRB5,
+                "system-admin",
+                "基础设施",
+                "ADMIN_DATA_SOURCE_UPLOAD_KRB5",
+                "上传 krb5.conf",
+                AuditOperationKind.UPLOAD,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.DATA_SOURCE_UPLOAD_KEYTAB,
+                "system-admin",
+                "基础设施",
+                "ADMIN_DATA_SOURCE_UPLOAD_KEYTAB",
+                "上传 Keytab 文件",
+                AuditOperationKind.UPLOAD,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.DATA_SOURCE_REFRESH,
+                "system-admin",
+                "基础设施",
+                "ADMIN_DATA_SOURCE_REFRESH",
+                "刷新数据源注册信息",
+                AuditOperationKind.REFRESH,
+                true
             )
         );
         register(

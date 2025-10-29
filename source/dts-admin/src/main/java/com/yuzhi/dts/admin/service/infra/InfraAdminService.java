@@ -187,17 +187,21 @@ public class InfraAdminService {
         return cache.get(entity.getId()).copy();
     }
 
-    public Optional<InfraDataSourceDto> updateDataSource(UUID id, UpsertInfraDataSourcePayload payload, String operator) {
+    public record DataSourceMutation(InfraDataSourceDto before, InfraDataSourceDto after) {}
+
+    public Optional<DataSourceMutation> updateDataSource(UUID id, UpsertInfraDataSourcePayload payload, String operator) {
         return dataSourceRepository
             .findById(id)
             .map(existing -> {
+                InfraDataSourceDto before = toDto(existing);
                 applyPayload(existing, payload);
                 applySecrets(existing, payload.getSecrets());
                 existing.setUpdatedAt(Instant.now());
                 dataSourceRepository.save(existing);
                 updateCache(existing);
                 touchLastUpdated();
-                return cache.get(existing.getId()).copy();
+                InfraDataSourceDto after = cache.get(existing.getId()).copy();
+                return new DataSourceMutation(before, after);
             });
     }
 
@@ -256,7 +260,8 @@ public class InfraAdminService {
         return result;
     }
 
-    public InfraDataSourceDto publishInceptor(HiveConnectionPersistRequest request, String operator) {
+    public DataSourceMutation publishInceptor(HiveConnectionPersistRequest request, String operator) {
+        InfraDataSourceDto before = findFirstInceptor().map(InfraDataSourceDto::copy).orElse(null);
         InfraDataSource entity = findFirstInceptorEntity().orElseGet(() -> {
             InfraDataSource created = new InfraDataSource();
             created.setId(UUID.randomUUID());
@@ -284,7 +289,8 @@ public class InfraAdminService {
         lastInceptorDefinition.set(clonePersistRequest(request));
         platformInfraClient.publishInceptor(request);
         platformInfraClient.refreshInceptor();
-        return cache.get(entity.getId()).copy();
+        InfraDataSourceDto after = cache.get(entity.getId()).copy();
+        return new DataSourceMutation(before, after);
     }
 
     public InfraFeatureFlags refreshInceptorRegistry(String operator) {

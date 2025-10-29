@@ -10,6 +10,7 @@ public enum AuditOperationType {
     CREATE("CREATE", "新增", true),
     UPDATE("UPDATE", "修改", true),
     DELETE("DELETE", "删除", true),
+    CLEAN("CLEAN", "清理", true),
     ARCHIVE("ARCHIVE", "归档", true),
     READ("READ", "查询", false),
     LIST("LIST", "列表查询", false),
@@ -24,6 +25,7 @@ public enum AuditOperationType {
     REJECT("REJECT", "拒绝", true),
     REVOKE("REVOKE", "撤销", true),
     PUBLISH("PUBLISH", "发布", false),
+    UPLOAD("UPLOAD", "上传", true),
     REFRESH("REFRESH", "刷新", false),
     REQUEST("REQUEST", "申请", false),
     TEST("TEST", "测试", false),
@@ -67,6 +69,7 @@ public enum AuditOperationType {
             case "新增", "CREATE" -> CREATE;
             case "修改", "UPDATE" -> UPDATE;
             case "删除", "DELETE" -> DELETE;
+            case "清理", "清洁", "清除", "清空", "CLEAN", "CLEANUP", "PURGE" -> CLEAN;
             case "归档", "ARCHIVE" -> ARCHIVE;
             case "查询", "READ" -> READ;
             case "列表", "LIST" -> LIST;
@@ -81,6 +84,7 @@ public enum AuditOperationType {
             case "拒绝", "REJECT" -> REJECT;
             case "撤销", "REVOKE" -> REVOKE;
             case "发布", "PUBLISH" -> PUBLISH;
+            case "上传", "UPLOAD" -> UPLOAD;
             case "刷新", "REFRESH" -> REFRESH;
             case "申请", "REQUEST" -> REQUEST;
             case "测试", "TEST" -> TEST;

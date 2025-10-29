@@ -17,6 +17,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
+import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.util.StringUtils;
 
@@ -55,7 +56,10 @@ public final class SecurityUtils {
         if ("anonymous".equals(lowered) || "anonymoususer".equals(lowered) || "unknown".equals(lowered)) {
             return "system";
         }
-        return trimmed;
+        if (looksLikeJwt(trimmed)) {
+            return maskToken(trimmed);
+        }
+        return abbreviate(trimmed, 120);
     }
 
     private static String extractPrincipal(Authentication authentication) {
@@ -63,8 +67,44 @@ public final class SecurityUtils {
             return null;
         } else if (authentication.getPrincipal() instanceof UserDetails springSecurityUser) {
             return springSecurityUser.getUsername();
-        } else if (authentication instanceof JwtAuthenticationToken) {
-            return (String) ((JwtAuthenticationToken) authentication).getToken().getClaims().get("preferred_username");
+        } else if (authentication instanceof JwtAuthenticationToken jwt) {
+            Map<String, Object> claims = jwt.getToken().getClaims();
+            String preferred = extractStringClaim(claims, "preferred_username");
+            if (StringUtils.hasText(preferred)) {
+                return preferred;
+            }
+            String username = extractStringClaim(claims, "username");
+            if (StringUtils.hasText(username)) {
+                return username;
+            }
+            String legacyUserName = extractStringClaim(claims, "user_name");
+            if (StringUtils.hasText(legacyUserName)) {
+                return legacyUserName;
+            }
+            Object sub = claims.get("sub");
+            if (sub != null && StringUtils.hasText(sub.toString())) {
+                return sub.toString();
+            }
+            return jwt.getName();
+        } else if (authentication instanceof BearerTokenAuthentication bearer) {
+            Map<String, Object> attributes = bearer.getTokenAttributes();
+            String preferred = extractStringClaim(attributes, "preferred_username");
+            if (StringUtils.hasText(preferred)) {
+                return preferred;
+            }
+            String username = extractStringClaim(attributes, "username");
+            if (StringUtils.hasText(username)) {
+                return username;
+            }
+            String legacyUserName = extractStringClaim(attributes, "user_name");
+            if (StringUtils.hasText(legacyUserName)) {
+                return legacyUserName;
+            }
+            String subject = extractStringClaim(attributes, "sub");
+            if (StringUtils.hasText(subject)) {
+                return subject;
+            }
+            return bearer.getName();
         } else if (authentication.getPrincipal() instanceof DefaultOidcUser) {
             Map<String, Object> attributes = ((DefaultOidcUser) authentication.getPrincipal()).getAttributes();
             if (attributes.containsKey("preferred_username")) {
@@ -167,6 +207,58 @@ public final class SecurityUtils {
             ? extractAuthorityFromClaims(((JwtAuthenticationToken) authentication).getToken().getClaims())
             : authentication.getAuthorities();
         return authorities.stream().map(GrantedAuthority::getAuthority);
+    }
+
+    private static String extractStringClaim(Map<String, Object> claims, String key) {
+        if (claims == null || !StringUtils.hasText(key)) {
+            return null;
+        }
+        Object value = claims.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String str) {
+            return str;
+        }
+        return value.toString();
+    }
+
+    private static boolean looksLikeJwt(String value) {
+        if (!StringUtils.hasText(value)) {
+            return false;
+        }
+        int dotCount = 0;
+        for (int i = 0; i < value.length(); i++) {
+            if (value.charAt(i) == '.') {
+                dotCount++;
+                if (dotCount >= 2) {
+                    break;
+                }
+            }
+        }
+        return dotCount >= 2 && value.startsWith("eyJ");
+    }
+
+    private static String maskToken(String token) {
+        String trimmed = token.trim();
+        int len = trimmed.length();
+        int take = Math.min(8, len);
+        String suffix = trimmed.substring(len - take);
+        return "token:" + suffix;
+    }
+
+    private static String abbreviate(String value, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        String trimmed = value.trim();
+        if (maxLength <= 0 || trimmed.length() <= maxLength) {
+            return trimmed;
+        }
+        if (maxLength <= 3) {
+            return trimmed.substring(0, maxLength);
+        }
+        return trimmed.substring(0, maxLength - 3) + "...";
     }
 
     public static List<GrantedAuthority> extractAuthorityFromClaims(Map<String, Object> claims) {

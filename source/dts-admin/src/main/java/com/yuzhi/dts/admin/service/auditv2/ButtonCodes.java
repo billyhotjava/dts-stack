@@ -7,7 +7,12 @@ public final class ButtonCodes {
     public static final String SYSTEM_CONFIG_VIEW = "ADMIN_SYSTEM_CONFIG_VIEW";
     public static final String SYSTEM_CONFIG_SUBMIT = "ADMIN_SYSTEM_CONFIG_SUBMIT";
     public static final String DATA_SOURCE_CREATE = "ADMIN_DATA_SOURCE_CREATE";
+    public static final String DATA_SOURCE_UPDATE = "ADMIN_DATA_SOURCE_UPDATE";
     public static final String DATA_SOURCE_REFRESH = "ADMIN_DATA_SOURCE_REFRESH";
+    public static final String DATA_SOURCE_PUBLISH = "ADMIN_DATA_SOURCE_PUBLISH";
+    public static final String DATA_SOURCE_TEST = "ADMIN_DATA_SOURCE_TEST";
+    public static final String DATA_SOURCE_UPLOAD_KRB5 = "ADMIN_DATA_SOURCE_UPLOAD_KRB5";
+    public static final String DATA_SOURCE_UPLOAD_KEYTAB = "ADMIN_DATA_SOURCE_UPLOAD_KEYTAB";
     public static final String DATA_SOURCE_DELETE = "ADMIN_DATA_SOURCE_DELETE";
 
     // Change request lifecycle

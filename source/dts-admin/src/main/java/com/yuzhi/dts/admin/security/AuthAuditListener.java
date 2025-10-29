@@ -53,12 +53,21 @@ public class AuthAuditListener {
 
     @EventListener
     public void onAuthSuccess(AuthenticationSuccessEvent evt) {
-        String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
-        if (username == null || username.isBlank() || "anonymous".equalsIgnoreCase(username) || "anonymoususer".equalsIgnoreCase(username)) return;
-        if (!shouldRecordLogin(evt.getAuthentication())) {
+        String username = sanitizeUsername(evt.getAuthentication());
+        if (username == null) {
             return;
         }
-        Map<String, Object> detail = Map.of("module", "admin.auth", "mode", resolveAuthMode(evt.getAuthentication()), "audience", "admin");
+        if (!shouldRecordLogin(evt.getAuthentication(), username)) {
+            return;
+        }
+        Map<String, Object> detail = Map.of(
+            "module",
+            "admin.auth",
+            "mode",
+            resolveAuthMode(evt.getAuthentication()),
+            "audience",
+            "admin"
+        );
         recordAuthEventV2(
             evt.getAuthentication(),
             username,
@@ -67,17 +76,28 @@ public class AuthAuditListener {
             "系统登录（管理端）成功",
             detail
         );
-        if (log.isDebugEnabled()) log.debug("Auth success (AuthenticationSuccessEvent) user={}", username);
+        if (log.isDebugEnabled()) {
+            log.debug("Auth success (AuthenticationSuccessEvent) user={}", username);
+        }
     }
 
     @EventListener
     public void onInteractiveAuthSuccess(InteractiveAuthenticationSuccessEvent evt) {
-        String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
-        if (username == null || username.isBlank() || "anonymous".equalsIgnoreCase(username) || "anonymoususer".equalsIgnoreCase(username)) return;
-        if (!shouldRecordLogin(evt.getAuthentication())) {
+        String username = sanitizeUsername(evt.getAuthentication());
+        if (username == null) {
             return;
         }
-        Map<String, Object> detail = Map.of("module", "admin.auth", "mode", resolveAuthMode(evt.getAuthentication()), "audience", "admin");
+        if (!shouldRecordLogin(evt.getAuthentication(), username)) {
+            return;
+        }
+        Map<String, Object> detail = Map.of(
+            "module",
+            "admin.auth",
+            "mode",
+            resolveAuthMode(evt.getAuthentication()),
+            "audience",
+            "admin"
+        );
         recordAuthEventV2(
             evt.getAuthentication(),
             username,
@@ -86,13 +106,17 @@ public class AuthAuditListener {
             "系统登录（管理端）成功",
             detail
         );
-        if (log.isDebugEnabled()) log.debug("Auth success (InteractiveAuthenticationSuccessEvent) user={}", username);
+        if (log.isDebugEnabled()) {
+            log.debug("Auth success (InteractiveAuthenticationSuccessEvent) user={}", username);
+        }
     }
 
     @EventListener
     public void onAuthFailure(AbstractAuthenticationFailureEvent evt) {
-        String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
-        if (username == null || username.isBlank() || "anonymous".equalsIgnoreCase(username) || "anonymoususer".equalsIgnoreCase(username)) return;
+        String username = sanitizeUsername(evt.getAuthentication());
+        if (username == null) {
+            return;
+        }
         String message = evt.getException() != null && evt.getException().getMessage() != null ? evt.getException().getMessage() : "auth failed";
         Map<String, Object> detail = Map.of("error", message);
         recordAuthEventV2(
@@ -103,13 +127,17 @@ public class AuthAuditListener {
             "系统登录（管理端）失败",
             detail
         );
-        if (log.isDebugEnabled()) log.debug("Auth failure user={} error={}", username, message);
+        if (log.isDebugEnabled()) {
+            log.debug("Auth failure user={} error={}", username, message);
+        }
     }
 
     @EventListener
     public void onLogoutSuccess(LogoutSuccessEvent evt) {
-        String username = evt.getAuthentication() != null ? evt.getAuthentication().getName() : "unknown";
-        if (username == null || username.isBlank() || "anonymous".equalsIgnoreCase(username) || "anonymoususer".equalsIgnoreCase(username)) return;
+        String username = sanitizeUsername(evt.getAuthentication());
+        if (username == null) {
+            return;
+        }
         recordAuthEventV2(
             evt.getAuthentication(),
             username,
@@ -118,19 +146,21 @@ public class AuthAuditListener {
             "系统退出（管理端）成功",
             Map.of()
         );
-        clearLoginMarkers(evt.getAuthentication());
-        if (log.isDebugEnabled()) log.debug("Logout success user={}", username);
+        clearLoginMarkers(evt.getAuthentication(), username);
+        if (log.isDebugEnabled()) {
+            log.debug("Logout success user={}", username);
+        }
     }
 
-    private boolean shouldRecordLogin(Authentication authentication) {
+    private boolean shouldRecordLogin(Authentication authentication, String username) {
         if (!markSessionFlag()) {
             return false;
         }
         boolean sessionRecorded = registerSessionMarker(authentication);
-        if (!sessionRecorded && !registerPrincipalMarker(authentication)) {
+        if (!sessionRecorded && !registerPrincipalMarker(username)) {
             return false;
         }
-        if (!throttleLoginDuplicates(authentication)) {
+        if (!throttleLoginDuplicates(username)) {
             return false;
         }
         return true;
@@ -163,8 +193,10 @@ public class AuthAuditListener {
         return true;
     }
 
-    private boolean throttleLoginDuplicates(Authentication authentication) {
-        String username = authentication != null ? authentication.getName() : null;
+    private boolean throttleLoginDuplicates(String username) {
+        if (StringUtils.isBlank(username)) {
+            return true;
+        }
         String clientIp = resolveClientIp();
         String key = buildLoginKey(username, clientIp);
         Instant now = Instant.now();
@@ -179,12 +211,12 @@ public class AuthAuditListener {
         return allowed.get();
     }
 
-    private void clearLoginMarkers(Authentication authentication) {
+    private void clearLoginMarkers(Authentication authentication, String username) {
         String sessionId = extractSessionId(authentication);
         if (sessionId != null) {
             auditedSessions.remove(sessionMarkerKey(sessionId));
         }
-        String principalMarker = principalMarkerKey(authentication);
+        String principalMarker = principalMarkerKey(username);
         if (principalMarker != null) {
             auditedSessions.remove(principalMarker);
         }
@@ -205,7 +237,6 @@ public class AuthAuditListener {
                 log.debug("Unable to clear login audit flag: {}", ex.getMessage());
             }
         }
-        String username = authentication != null ? authentication.getName() : null;
         String clientIp = resolveClientIp();
         String key = buildLoginKey(username, clientIp);
         recentLogins.remove(key);
@@ -244,7 +275,7 @@ public class AuthAuditListener {
     }
 
     private String buildLoginKey(String username, String clientIp) {
-        String userPart = StringUtils.isBlank(username) ? "unknown" : username.trim().toLowerCase();
+        String userPart = StringUtils.isBlank(username) ? "unknown" : username.trim().toLowerCase(Locale.ROOT);
         String ipPart = StringUtils.isBlank(clientIp) ? "-" : clientIp.trim();
         return userPart + "@" + ipPart;
     }
@@ -258,24 +289,20 @@ public class AuthAuditListener {
         return auditedSessions.putIfAbsent(key, Boolean.TRUE) == null;
     }
 
-    private boolean registerPrincipalMarker(Authentication authentication) {
-        String marker = principalMarkerKey(authentication);
+    private boolean registerPrincipalMarker(String username) {
+        String marker = principalMarkerKey(username);
         if (marker == null) {
             return true;
         }
         return auditedSessions.putIfAbsent(marker, Boolean.TRUE) == null;
     }
 
-    private String principalMarkerKey(Authentication authentication) {
-        if (authentication == null) {
-            return null;
-        }
-        String username = authentication.getName();
+    private String principalMarkerKey(String username) {
         if (StringUtils.isBlank(username)) {
             return null;
         }
         String normalized = username.trim().toLowerCase(Locale.ROOT);
-        if (normalized.isEmpty() || "anonymous".equals(normalized) || "anonymoususer".equals(normalized)) {
+        if (normalized.isEmpty()) {
             return null;
         }
         String clientIp = resolveClientIp();
@@ -343,6 +370,27 @@ public class AuthAuditListener {
         } catch (Exception ex) {
             log.warn("Failed to record V2 auth event [{}]: {}", buttonCode, ex.getMessage());
         }
+    }
+
+    private String sanitizeUsername(Authentication authentication) {
+        if (authentication == null) {
+            return null;
+        }
+        return sanitizeUsername(authentication.getName());
+    }
+
+    private String sanitizeUsername(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return null;
+        }
+        String sanitized = SecurityUtils.sanitizeLogin(raw);
+        if (!org.springframework.util.StringUtils.hasText(sanitized)) {
+            return null;
+        }
+        if ("system".equalsIgnoreCase(sanitized)) {
+            return null;
+        }
+        return sanitized;
     }
 
     private String resolveDisplayName(String username) {

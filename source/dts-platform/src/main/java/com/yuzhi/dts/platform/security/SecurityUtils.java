@@ -130,8 +130,30 @@ public final class SecurityUtils {
             return null;
         } else if (authentication.getPrincipal() instanceof UserDetails springSecurityUser) {
             return springSecurityUser.getUsername();
-        } else if (authentication instanceof JwtAuthenticationToken) {
-            return (String) ((JwtAuthenticationToken) authentication).getToken().getClaims().get("preferred_username");
+        } else if (authentication instanceof JwtAuthenticationToken jwt) {
+            Map<String, Object> claims = jwt.getToken().getClaims();
+            String preferred = stringClaim(claims, "preferred_username");
+            if (hasText(preferred)) {
+                return preferred;
+            }
+            String username = firstNonBlank(
+                claims.get(org.springframework.security.oauth2.core.OAuth2TokenIntrospectionClaimNames.USERNAME),
+                claims.get("user_name"),
+                claims.get("username"),
+                claims.get("upn")
+            );
+            if (hasText(username)) {
+                return String.valueOf(username).trim();
+            }
+            String sub = stringClaim(claims, "sub");
+            if (hasText(sub)) {
+                return sub;
+            }
+            String tokenName = jwt.getName();
+            if (hasText(tokenName)) {
+                return tokenName.trim();
+            }
+            return null;
         } else if (authentication.getPrincipal() instanceof DefaultOidcUser) {
             Map<String, Object> attributes = ((DefaultOidcUser) authentication.getPrincipal()).getAttributes();
             if (attributes.containsKey("preferred_username")) {
@@ -149,6 +171,18 @@ public final class SecurityUtils {
             return s;
         }
         return null;
+    }
+
+    private static String stringClaim(Map<String, Object> claims, String key) {
+        if (claims == null || key == null) {
+            return null;
+        }
+        Object value = claims.get(key);
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
     }
 
     /**
@@ -288,6 +322,10 @@ public final class SecurityUtils {
             }
         }
         return null;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private static String firstNonBlank(Object... values) {

@@ -994,15 +994,10 @@ export default function AdminDataSourcesView() {
 
 			<div className="grid gap-4 lg:grid-cols-2">
 				<Card>
-					<CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+					<CardHeader>
 						<div>
 							<CardTitle className="text-base">已登记数据源</CardTitle>
 							<CardDescription>展示后端注册的数据源摘要（不包含敏感信息）。</CardDescription>
-						</div>
-						<div className="flex items-center gap-2">
-							<Button type="button" variant="ghost" size="sm" onClick={loadSources} disabled={loadingSources}>
-								<Icon icon="solar:refresh-bold" className="mr-1 h-4 w-4" /> 刷新
-							</Button>
 						</div>
 					</CardHeader>
 					<CardContent className="space-y-3">
@@ -1080,14 +1075,11 @@ export default function AdminDataSourcesView() {
 				</Card>
 
 				<Card>
-					<CardHeader className="flex flex-row items-center justify-between">
+					<CardHeader>
 						<div>
 							<CardTitle className="text-base">最近连接测试</CardTitle>
 							<CardDescription>展示最近 20 次后端记录的 Hive 连接自测结果。</CardDescription>
 						</div>
-						<Button type="button" variant="ghost" size="sm" onClick={loadLogs} disabled={loadingLogs}>
-							<Icon icon="solar:refresh-bold" className="mr-1 h-4 w-4" /> 刷新
-						</Button>
 					</CardHeader>
 					<CardContent className="max-h-[280px] overflow-y-auto">
 						<table className="w-full table-fixed border-collapse text-sm">

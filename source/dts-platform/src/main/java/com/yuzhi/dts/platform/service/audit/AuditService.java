@@ -750,6 +750,13 @@ public class AuditService {
         if (upper.contains("DISABLE") || containsAny(lower, "禁用", "停用", "关闭", "失效", "disable")) {
             return "DISABLE";
         }
+        if (
+            upper.contains("CLEAN") ||
+            upper.contains("PURGE") ||
+            containsAny(lower, "清理", "清除", "清空", "清扫", "purge", "cleanup")
+        ) {
+            return "CLEAN";
+        }
         if (upper.contains("ARCHIVE") || containsAny(lower, "归档", "封存", "archive")) {
             return "ARCHIVE";
         }

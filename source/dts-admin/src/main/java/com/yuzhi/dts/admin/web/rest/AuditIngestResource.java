@@ -489,6 +489,13 @@ public class AuditIngestResource {
                 return AuditOperationKind.CREATE;
             }
             if (
+                normalized.startsWith("CLEAN") ||
+                normalized.startsWith("PURGE") ||
+                containsAny(lower, "清理", "清除", "清空", "清扫", "purge", "cleanup")
+            ) {
+                return AuditOperationKind.CLEAN;
+            }
+            if (
                 normalized.startsWith("DELETE") ||
                 normalized.startsWith("REMOVE") ||
                 containsAny(lower, "删除", "移除", "下线", "注销")

@@ -19,6 +19,7 @@ import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -95,10 +96,46 @@ public class InfraResource {
         HttpServletRequest servletRequest
     ) {
         ActorResolution actor = resolveActor(servletRequest);
-        InfraDataSourceDto updated = infraAdminService
+        Map<String, Object> secretsSnapshot = new HashMap<>(payload.getSecrets());
+        boolean hasKrb5Secret = hasSecretValue(secretsSnapshot, "krb5Conf");
+        boolean hasKeytabSecret = hasSecretValue(secretsSnapshot, "keytabBase64");
+        String keytabFileNameSecret = extractString(secretsSnapshot, "keytabFileName");
+        InfraAdminService.DataSourceMutation mutation = infraAdminService
             .updateDataSource(id, payload, actor.resolved())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
-        return ResponseEntity.ok(ApiResponse.ok(updated));
+        InfraDataSourceDto after = mutation.after();
+        InfraDataSourceDto before = mutation.before();
+        UUID targetId = after != null ? after.getId() : before != null ? before.getId() : id;
+        recordDataSourceFileUploadAudit(
+            actor,
+            ButtonCodes.DATA_SOURCE_UPLOAD_KRB5,
+            "上传 krb5.conf（更新配置）",
+            "UPDATE",
+            hasKrb5Secret,
+            null,
+            targetId,
+            servletRequest
+        );
+        recordDataSourceFileUploadAudit(
+            actor,
+            ButtonCodes.DATA_SOURCE_UPLOAD_KEYTAB,
+            "上传 Keytab 文件（更新配置）",
+            "UPDATE",
+            hasKeytabSecret,
+            keytabFileNameSecret,
+            targetId,
+            servletRequest
+        );
+        String summaryName = safeName(after != null ? after : mutation.before());
+        recordDataSourceMutationAudit(
+            actor,
+            before,
+            after,
+            "更新数据源：" + summaryName,
+            ButtonCodes.DATA_SOURCE_UPDATE,
+            servletRequest
+        );
+        return ResponseEntity.ok(ApiResponse.ok(after));
     }
 
     @DeleteMapping("/data-sources/{id}")
@@ -126,8 +163,34 @@ public class InfraResource {
 
     @PostMapping("/data-sources/test-connection")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
-    public ResponseEntity<ApiResponse<HiveConnectionTestResult>> testConnection(@Valid @RequestBody HiveConnectionTestRequest request) {
-        HiveConnectionTestResult result = infraAdminService.testDataSourceConnection(request, null);
+    public ResponseEntity<ApiResponse<HiveConnectionTestResult>> testConnection(
+        @Valid @RequestBody HiveConnectionTestRequest request,
+        @RequestParam(value = "dataSourceId", required = false) UUID dataSourceId,
+        HttpServletRequest servletRequest
+    ) {
+        ActorResolution actor = resolveActor(servletRequest);
+        recordDataSourceFileUploadAudit(
+            actor,
+            ButtonCodes.DATA_SOURCE_UPLOAD_KRB5,
+            "上传 krb5.conf（测试连接）",
+            "TEST",
+            StringUtils.hasText(request.getKrb5Conf()),
+            null,
+            dataSourceId,
+            servletRequest
+        );
+        recordDataSourceFileUploadAudit(
+            actor,
+            ButtonCodes.DATA_SOURCE_UPLOAD_KEYTAB,
+            "上传 Keytab 文件（测试连接）",
+            "TEST",
+            StringUtils.hasText(request.getKeytabBase64()),
+            request.getKeytabFileName(),
+            dataSourceId,
+            servletRequest
+        );
+        HiveConnectionTestResult result = infraAdminService.testDataSourceConnection(request, dataSourceId);
+        recordDataSourceTestAudit(actor, dataSourceId, request, result, servletRequest);
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
@@ -138,8 +201,41 @@ public class InfraResource {
         HttpServletRequest servletRequest
     ) {
         ActorResolution actor = resolveActor(servletRequest);
-        InfraDataSourceDto saved = infraAdminService.publishInceptor(request, actor.resolved());
-        return ResponseEntity.ok(ApiResponse.ok(saved));
+        InfraAdminService.DataSourceMutation mutation = infraAdminService.publishInceptor(request, actor.resolved());
+        InfraDataSourceDto after = mutation.after();
+        InfraDataSourceDto before = mutation.before();
+        UUID targetId = after != null ? after.getId() : before != null ? before.getId() : null;
+        recordDataSourceFileUploadAudit(
+            actor,
+            ButtonCodes.DATA_SOURCE_UPLOAD_KRB5,
+            before == null ? "上传 krb5.conf（首次发布）" : "上传 krb5.conf（更新配置）",
+            before == null ? "PUBLISH" : "UPDATE",
+            StringUtils.hasText(request.getKrb5Conf()),
+            null,
+            targetId,
+            servletRequest
+        );
+        recordDataSourceFileUploadAudit(
+            actor,
+            ButtonCodes.DATA_SOURCE_UPLOAD_KEYTAB,
+            before == null ? "上传 Keytab 文件（首次发布）" : "上传 Keytab 文件（更新配置）",
+            before == null ? "PUBLISH" : "UPDATE",
+            StringUtils.hasText(request.getKeytabBase64()),
+            request.getKeytabFileName(),
+            targetId,
+            servletRequest
+        );
+        String label = safeName(after != null ? after : before);
+        String summaryPrefix = before == null ? "发布 Inceptor 数据源：" : "更新 Inceptor 数据源：";
+        recordDataSourceMutationAudit(
+            actor,
+            before,
+            after,
+            summaryPrefix + label,
+            ButtonCodes.DATA_SOURCE_PUBLISH,
+            servletRequest
+        );
+        return ResponseEntity.ok(ApiResponse.ok(after));
     }
 
     @PostMapping("/data-sources/inceptor/refresh")
@@ -261,6 +357,144 @@ public class InfraResource {
         }
     }
 
+    private void recordDataSourceTestAudit(
+        ActorResolution actor,
+        UUID dataSourceId,
+        HiveConnectionTestRequest payload,
+        HiveConnectionTestResult result,
+        HttpServletRequest request
+    ) {
+        String normalizedActor = actor.resolved();
+        try {
+            AuditActionRequest.Builder builder = AuditActionRequest
+                .builder(normalizedActor, ButtonCodes.DATA_SOURCE_TEST)
+                .actorName(normalizedActor)
+                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .summary("测试数据源连接")
+                .result(result != null && Boolean.TRUE.equals(result.isSuccess()) ? AuditResultStatus.SUCCESS : AuditResultStatus.FAILED)
+                .allowEmptyTargets();
+
+            if (actor.overridden()) {
+                builder.metadata("actorOriginal", actor.original());
+                builder.metadata("actorSource", actor.source());
+            }
+
+            if (request != null) {
+                String clientIp = IpAddressUtils.resolveClientIp(
+                    request.getHeader("X-Forwarded-For"),
+                    request.getHeader("X-Real-IP"),
+                    request.getRemoteAddr()
+                );
+                builder.client(clientIp, request.getHeader("User-Agent"));
+                builder.request(request.getRequestURI(), request.getMethod());
+            }
+
+            Map<String, Object> requestDetail = new LinkedHashMap<>();
+            if (payload != null) {
+                putIfHasText(requestDetail, "jdbcUrl", payload.getJdbcUrl());
+                putIfHasText(requestDetail, "loginPrincipal", payload.getLoginPrincipal());
+                putIfHasText(requestDetail, "authMethod", payload.getAuthMethod() != null ? payload.getAuthMethod().name() : null);
+                putIfHasText(requestDetail, "proxyUser", payload.getProxyUser());
+                requestDetail.put("hasKrb5Conf", payload.getKrb5Conf() != null && !payload.getKrb5Conf().isBlank());
+                requestDetail.put("hasKeytab", payload.getKeytabBase64() != null && !payload.getKeytabBase64().isBlank());
+                putIfHasText(requestDetail, "keytabFileName", payload.getKeytabFileName());
+                putIfHasText(requestDetail, "testQuery", payload.getTestQuery());
+                if (payload.getJdbcProperties() != null && !payload.getJdbcProperties().isEmpty()) {
+                    requestDetail.put("jdbcProperties", new LinkedHashMap<>(payload.getJdbcProperties()));
+                }
+            }
+
+            Map<String, Object> resultDetail = new LinkedHashMap<>();
+            if (result != null) {
+                resultDetail.put("success", result.isSuccess());
+                putIfHasText(resultDetail, "message", result.getMessage());
+                resultDetail.put("elapsedMillis", result.getElapsedMillis());
+                putIfHasText(resultDetail, "engineVersion", result.getEngineVersion());
+                putIfHasText(resultDetail, "driverVersion", result.getDriverVersion());
+                if (result.getWarnings() != null && !result.getWarnings().isEmpty()) {
+                    resultDetail.put("warnings", List.copyOf(result.getWarnings()));
+                }
+            }
+
+            builder.detail("request", requestDetail);
+            builder.detail("result", resultDetail);
+
+            builder.metadata("success", result != null && Boolean.TRUE.equals(result.isSuccess()));
+            if (result != null) {
+                builder.metadata("elapsedMillis", result.getElapsedMillis());
+                if (result.getMessage() != null) {
+                    builder.metadata("resultMessage", result.getMessage());
+                }
+            }
+
+            if (dataSourceId != null) {
+                String targetId = dataSourceId.toString();
+                builder.target("infra_data_source", targetId, targetId);
+                builder.metadata("dataSourceId", targetId);
+            }
+
+            auditV2Service.record(builder.build());
+        } catch (Exception ex) {
+            log.warn("Failed to record audit for data source test: {}", ex.getMessage());
+        }
+    }
+
+    private void recordDataSourceFileUploadAudit(
+        ActorResolution actor,
+        String buttonCode,
+        String summary,
+        String stage,
+        boolean present,
+        String fileName,
+        UUID targetId,
+        HttpServletRequest request
+    ) {
+        if (!present) {
+            return;
+        }
+        String normalizedActor = actor.resolved();
+        try {
+            AuditActionRequest.Builder builder = AuditActionRequest
+                .builder(normalizedActor, buttonCode)
+                .actorName(normalizedActor)
+                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .summary(summary)
+                .result(AuditResultStatus.SUCCESS)
+                .allowEmptyTargets()
+                .metadata("resourceType", "INFRA_DATA_SOURCE")
+                .metadata("stage", stage);
+
+            if (actor.overridden()) {
+                builder.metadata("actorOriginal", actor.original());
+                builder.metadata("actorSource", actor.source());
+            }
+
+            if (request != null) {
+                String clientIp = IpAddressUtils.resolveClientIp(
+                    request.getHeader("X-Forwarded-For"),
+                    request.getHeader("X-Real-IP"),
+                    request.getRemoteAddr()
+                );
+                builder.client(clientIp, request.getHeader("User-Agent"));
+                builder.request(request.getRequestURI(), request.getMethod());
+            }
+
+            if (StringUtils.hasText(fileName)) {
+                builder.metadata("fileName", fileName);
+            }
+
+            if (targetId != null) {
+                String target = targetId.toString();
+                builder.target("infra_data_source", target, target);
+                builder.metadata("dataSourceId", target);
+            }
+
+            auditV2Service.record(builder.build());
+        } catch (Exception ex) {
+            log.warn("Failed to record audit for data source file upload [{}]: {}", buttonCode, ex.getMessage());
+        }
+    }
+
     private Map<String, Object> dataSourceSnapshot(InfraDataSourceDto dto) {
         if (dto == null) {
             return Map.of();
@@ -343,6 +577,46 @@ public class InfraResource {
     private record ActorResolution(String resolved, String original, String source) {
         boolean overridden() {
             return original != null && !Objects.equals(resolved, original);
+        }
+    }
+
+    private boolean hasSecretValue(Map<String, Object> secrets, String key) {
+        if (secrets == null) {
+            return false;
+        }
+        Object value = secrets.get(key);
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof String str) {
+            return StringUtils.hasText(str);
+        }
+        if (value instanceof byte[] bytes) {
+            return bytes.length > 0;
+        }
+        if (value instanceof java.util.Collection<?> collection) {
+            return !collection.isEmpty();
+        }
+        return true;
+    }
+
+    private String extractString(Map<String, Object> map, String key) {
+        if (map == null) {
+            return null;
+        }
+        Object value = map.get(key);
+        if (value == null) {
+            return null;
+        }
+        return value.toString();
+    }
+
+    private void putIfHasText(Map<String, Object> target, String key, String value) {
+        if (value != null) {
+            String trimmed = value.trim();
+            if (!trimmed.isEmpty()) {
+                target.put(key, trimmed);
+            }
         }
     }
 
