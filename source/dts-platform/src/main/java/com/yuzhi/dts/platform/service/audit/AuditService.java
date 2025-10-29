@@ -570,7 +570,12 @@ public class AuditService {
         if (fromPayload != null) {
             return fromPayload;
         }
-        return sanitizeActorString(SecurityUtils.getCurrentUserLogin().orElse(null));
+        String login = SecurityUtils.getCurrentUserLogin().orElse(null);
+        String sanitizedLogin = sanitizeActorString(login);
+        if (sanitizedLogin != null) {
+            return sanitizedLogin;
+        }
+        return sanitizeActorString(SecurityUtils.getCurrentUserId().orElse(null));
     }
 
     private String extractActorFromPayload(Map<String, Object> payloadMap) {

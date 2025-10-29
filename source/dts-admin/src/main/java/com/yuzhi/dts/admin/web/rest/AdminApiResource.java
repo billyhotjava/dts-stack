@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
+import com.yuzhi.dts.admin.service.audit.AdminAuditService;
+import com.yuzhi.dts.admin.service.audit.MenuAuditContext;
+import com.yuzhi.dts.admin.service.audit.RoleAuditContext;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationType;
 import com.yuzhi.dts.admin.service.auditv2.ChangeSnapshotFormatter;
@@ -238,6 +241,7 @@ public class AdminApiResource {
     private final AdminUserService adminUserService;
     private final TransactionTemplate changeApplyTx;
     private final ChangeSnapshotFormatter changeSnapshotFormatter;
+    private final AdminAuditService adminAuditService;
 
     private static final Set<String> MENU_SECURITY_LEVELS = Set.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> VISIBILITY_DATA_LEVELS = Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
@@ -351,7 +355,8 @@ public class AdminApiResource {
         OrganizationRepository organizationRepository,
         AdminUserService adminUserService,
         ChangeSnapshotFormatter changeSnapshotFormatter,
-        PlatformTransactionManager transactionManager
+        PlatformTransactionManager transactionManager,
+        AdminAuditService adminAuditService
     ) {
         this.auditV2Service = auditV2Service;
         this.orgService = orgService;
@@ -374,6 +379,7 @@ public class AdminApiResource {
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         template.setReadOnly(false);
         this.changeApplyTx = template;
+        this.adminAuditService = Objects.requireNonNull(adminAuditService, "adminAuditService");
     }
 
     @org.springframework.beans.factory.annotation.Value("${dts.admin.require-approval.portal-menu.visibility:true}")
@@ -527,7 +533,7 @@ public class AdminApiResource {
                 // 记录变更单本身：target_table=change_request, target_id=cr.id
                 recordPortalMenuActionV2(
                     actor,
-                    ButtonCodes.PORTAL_MENU_CREATE,
+                    MenuAuditContext.Operation.SUBMIT_APPROVAL,
                     AuditResultStatus.PENDING,
                     null,
                     pendingRef,
@@ -581,7 +587,7 @@ public class AdminApiResource {
             appendChangeSummary(successDetail, "PORTAL_MENU", Map.of(), createdPayload);
             recordPortalMenuActionV2(
                 actor,
-                ButtonCodes.PORTAL_MENU_CREATE,
+                MenuAuditContext.Operation.CREATE,
                 AuditResultStatus.SUCCESS,
                 persisted.getId(),
                 persisted.getName(),
@@ -601,7 +607,7 @@ public class AdminApiResource {
             failureDetail.put("error", ex.getMessage());
             recordPortalMenuActionV2(
                 actor,
-                ButtonCodes.PORTAL_MENU_CREATE,
+                MenuAuditContext.Operation.CREATE,
                 AuditResultStatus.FAILED,
                 null,
                 pendingRef,
@@ -618,7 +624,7 @@ public class AdminApiResource {
             failureDetail.put("error", ex.getMessage());
             recordPortalMenuActionV2(
                 actor,
-                ButtonCodes.PORTAL_MENU_CREATE,
+                MenuAuditContext.Operation.CREATE,
                 AuditResultStatus.FAILED,
                 null,
                 pendingRef,
@@ -636,7 +642,7 @@ public class AdminApiResource {
             log.error("Failed to create portal menu", ex);
             recordPortalMenuActionV2(
                 actor,
-                ButtonCodes.PORTAL_MENU_CREATE,
+                MenuAuditContext.Operation.CREATE,
                 AuditResultStatus.FAILED,
                 null,
                 pendingRef,
@@ -736,10 +742,16 @@ public class AdminApiResource {
                     approvalDetail.put("operationType", AuditOperationType.DISABLE.getCode());
                     approvalDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
                 }
+                if (menuId != null) {
+                    approvalDetail.put("menuId", menuId);
+                }
+                approvalDetail.put("menuCode", beforeEntity.getName());
+                approvalDetail.put("menuTitle", menuLabel);
+                approvalDetail.put("menuPath", beforeEntity.getPath());
                 attachChangeRequestMetadata(approvalDetail, cr);
                 recordPortalMenuActionV2(
                     actor,
-                    ButtonCodes.PORTAL_MENU_UPDATE,
+                    MenuAuditContext.Operation.SUBMIT_APPROVAL,
                     AuditResultStatus.PENDING,
                     menuId,
                     menuLabel,
@@ -771,17 +783,27 @@ public class AdminApiResource {
             boolean beforeDeleted = Boolean.TRUE.equals(before.get("deleted"));
             boolean afterDeleted = Boolean.TRUE.equals(after.get("deleted"));
             boolean enabling = beforeDeleted && !afterDeleted;
+            boolean disabling = !beforeDeleted && afterDeleted;
             String persistedLabel = firstNonBlank(resolveMenuDisplayName(persisted), persisted.getName(), persisted.getPath(), id);
             String successSummary = enabling ? "启用菜单：" + persistedLabel : "修改菜单：" + persistedLabel;
             detail.put("summary", successSummary);
             detail.put("operationName", successSummary);
+            if (persisted.getId() != null) {
+                detail.put("menuId", persisted.getId());
+            }
+            detail.put("menuCode", persisted.getName());
+            detail.put("menuTitle", persistedLabel);
+            detail.put("menuPath", persisted.getPath());
             if (enabling) {
                 detail.put("operationType", AuditOperationType.ENABLE.getCode());
                 detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
             }
+            MenuAuditContext.Operation auditOp = enabling
+                ? MenuAuditContext.Operation.ENABLE
+                : (disabling ? MenuAuditContext.Operation.DISABLE : MenuAuditContext.Operation.UPDATE);
             recordPortalMenuActionV2(
                 actor,
-                ButtonCodes.PORTAL_MENU_UPDATE,
+                auditOp,
                 AuditResultStatus.SUCCESS,
                 persisted.getId(),
                 persistedLabel,
@@ -804,16 +826,26 @@ public class AdminApiResource {
             boolean togglingDeleted = payload.containsKey("deleted");
             boolean afterDeleted = togglingDeleted ? toBoolean(payload.get("deleted")) : beforeDeleted;
             boolean enabling = togglingDeleted && beforeDeleted && !afterDeleted;
+            boolean disabling = togglingDeleted && !beforeDeleted && afterDeleted;
             String failureSummary = enabling ? "启用菜单失败：" + menuLabel : "修改菜单失败：" + menuLabel;
             detail.put("summary", failureSummary);
             detail.put("operationName", failureSummary);
+            if (menuId != null) {
+                detail.put("menuId", menuId);
+            }
+            detail.put("menuCode", beforeEntity != null ? beforeEntity.getName() : null);
+            detail.put("menuTitle", menuLabel);
+            detail.put("menuPath", beforeEntity != null ? beforeEntity.getPath() : null);
             if (enabling) {
                 detail.put("operationType", AuditOperationType.ENABLE.getCode());
                 detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
             }
+            MenuAuditContext.Operation auditOp = enabling
+                ? MenuAuditContext.Operation.ENABLE
+                : (disabling ? MenuAuditContext.Operation.DISABLE : MenuAuditContext.Operation.UPDATE);
             recordPortalMenuActionV2(
                 actor,
-                ButtonCodes.PORTAL_MENU_UPDATE,
+                auditOp,
                 AuditResultStatus.FAILED,
                 menuId,
                 menuLabel,
@@ -833,6 +865,7 @@ public class AdminApiResource {
             boolean togglingDeleted = payload.containsKey("deleted");
             boolean afterDeleted = togglingDeleted ? toBoolean(payload.get("deleted")) : beforeDeleted;
             boolean enabling = togglingDeleted && beforeDeleted && !afterDeleted;
+            boolean disabling = togglingDeleted && !beforeDeleted && afterDeleted;
             String failureSummary = enabling ? "启用菜单失败：" + menuLabel : "修改菜单失败：" + menuLabel;
             detail.put("summary", failureSummary);
             detail.put("operationName", failureSummary);
@@ -840,9 +873,12 @@ public class AdminApiResource {
                 detail.put("operationType", AuditOperationType.ENABLE.getCode());
                 detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
             }
+            MenuAuditContext.Operation auditOp = enabling
+                ? MenuAuditContext.Operation.ENABLE
+                : (disabling ? MenuAuditContext.Operation.DISABLE : MenuAuditContext.Operation.UPDATE);
             recordPortalMenuActionV2(
                 actor,
-                ButtonCodes.PORTAL_MENU_UPDATE,
+                auditOp,
                 AuditResultStatus.FAILED,
                 menuId,
                 menuLabel,
@@ -863,6 +899,7 @@ public class AdminApiResource {
             boolean togglingDeleted = payload.containsKey("deleted");
             boolean afterDeleted = togglingDeleted ? toBoolean(payload.get("deleted")) : beforeDeleted;
             boolean enabling = togglingDeleted && beforeDeleted && !afterDeleted;
+            boolean disabling = togglingDeleted && !beforeDeleted && afterDeleted;
             String failureSummary = enabling ? "启用菜单失败：" + menuLabel : "修改菜单失败：" + menuLabel;
             detail.put("summary", failureSummary);
             detail.put("operationName", failureSummary);
@@ -870,9 +907,12 @@ public class AdminApiResource {
                 detail.put("operationType", AuditOperationType.ENABLE.getCode());
                 detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
             }
+            MenuAuditContext.Operation auditOp = enabling
+                ? MenuAuditContext.Operation.ENABLE
+                : (disabling ? MenuAuditContext.Operation.DISABLE : MenuAuditContext.Operation.UPDATE);
             recordPortalMenuActionV2(
                 actor,
-                ButtonCodes.PORTAL_MENU_UPDATE,
+                auditOp,
                 AuditResultStatus.FAILED,
                 menuId,
                 menuLabel,
@@ -932,10 +972,14 @@ public class AdminApiResource {
                 approvalDetail.put("operationName", pendingSummary);
                 approvalDetail.put("operationType", AuditOperationType.DISABLE.getCode());
                 approvalDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+                approvalDetail.put("menuId", menuId);
+                approvalDetail.put("menuCode", entity.getName());
+                approvalDetail.put("menuTitle", menuLabel);
+                approvalDetail.put("menuPath", entity.getPath());
                 attachChangeRequestMetadata(approvalDetail, cr);
                 recordPortalMenuActionV2(
                     actor,
-                    ButtonCodes.PORTAL_MENU_DELETE,
+                    MenuAuditContext.Operation.SUBMIT_APPROVAL,
                     AuditResultStatus.PENDING,
                     menuId,
                     menuLabel,
@@ -956,9 +1000,13 @@ public class AdminApiResource {
                 failureDetail.put("operationName", "禁用菜单失败：" + menuLabel);
                 failureDetail.put("operationType", AuditOperationType.DISABLE.getCode());
                 failureDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+                failureDetail.put("menuId", menuId);
+                failureDetail.put("menuCode", entity.getName());
+                failureDetail.put("menuTitle", menuLabel);
+                failureDetail.put("menuPath", entity.getPath());
                 recordPortalMenuActionV2(
                     actor,
-                    ButtonCodes.PORTAL_MENU_DELETE,
+                    MenuAuditContext.Operation.DISABLE,
                     AuditResultStatus.FAILED,
                     menuId,
                     menuLabel,
@@ -984,9 +1032,13 @@ public class AdminApiResource {
             detail.put("operationName", "禁用菜单：" + menuLabel);
             detail.put("operationType", AuditOperationType.DISABLE.getCode());
             detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+            detail.put("menuId", entity.getId());
+            detail.put("menuCode", entity.getName());
+            detail.put("menuTitle", menuLabel);
+            detail.put("menuPath", entity.getPath());
             recordPortalMenuActionV2(
                 actor,
-                ButtonCodes.PORTAL_MENU_DELETE,
+                MenuAuditContext.Operation.DISABLE,
                 AuditResultStatus.SUCCESS,
                 entity.getId(),
                 menuLabel,
@@ -1009,10 +1061,14 @@ public class AdminApiResource {
             detail.put("operationName", "禁用菜单失败：" + menuLabel);
             detail.put("operationType", AuditOperationType.DISABLE.getCode());
             detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+            detail.put("menuId", menuId);
+            detail.put("menuCode", entity.getName());
+            detail.put("menuTitle", menuLabel);
+            detail.put("menuPath", entity.getPath());
             log.error("Failed to disable portal menu {}", id, ex);
             recordPortalMenuActionV2(
                 actor,
-                ButtonCodes.PORTAL_MENU_DELETE,
+                MenuAuditContext.Operation.DISABLE,
                 AuditResultStatus.FAILED,
                 menuId,
                 menuLabel,
@@ -3631,7 +3687,7 @@ public class AdminApiResource {
 
     private void recordPortalMenuActionV2(
         String actor,
-        String buttonCode,
+        MenuAuditContext.Operation operation,
         AuditResultStatus result,
         Long menuId,
         String menuName,
@@ -3646,62 +3702,44 @@ public class AdminApiResource {
             return;
         }
         try {
+            Map<String, Object> safeDetail = detail == null ? Map.of() : new LinkedHashMap<>(detail);
             String summary = firstNonBlank(
-                detail != null ? asText(detail.get("summary")) : null,
-                detail != null ? asText(detail.get("operationName")) : null,
+                asText(safeDetail.get("summary")),
+                asText(safeDetail.get("operationName")),
                 summaryFallback
             );
+            String operationName = firstNonBlank(asText(safeDetail.get("operationName")), summary);
+            String operationTypeCode = asText(safeDetail.get("operationType"));
+            AuditOperationType overrideType = StringUtils.hasText(operationTypeCode) ? AuditOperationType.from(operationTypeCode) : operation.operationType();
+            if (overrideType == AuditOperationType.UNKNOWN) {
+                overrideType = operation.operationType();
+            }
+            String clientIp = resolveClientIp(request);
+            String userAgent = request != null ? request.getHeader("User-Agent") : null;
             String uri = Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse(fallbackUri);
             String method = request != null ? request.getMethod() : fallbackMethod;
-            AuditActionRequest.Builder builder = AuditActionRequest
-                .builder(actor, buttonCode)
-                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+            MenuAuditContext.Builder builder = MenuAuditContext
+                .builder(actor, operation)
+                .result(result != null ? result : AuditResultStatus.SUCCESS)
                 .summary(summary)
-                .result(result)
-                .client(resolveClientIp(request), request != null ? request.getHeader("User-Agent") : null)
-                .request(uri, method);
-            AuditOperationType overrideType = null;
-            String operationTypeCode = detail != null ? asText(detail.get("operationType")) : null;
-            if (StringUtils.hasText(operationTypeCode)) {
-                overrideType = AuditOperationType.from(operationTypeCode);
-                if (overrideType == AuditOperationType.UNKNOWN) {
-                    overrideType = null;
-                }
-            }
-            String overrideName = detail != null ? asText(detail.get("operationName")) : null;
-            if (overrideType != null) {
-                AuditOperationKind overrideKind = mapOperationKind(overrideType);
-                if (overrideKind != null) {
-                    String operationCode = switch (overrideType) {
-                        case CREATE -> AdminAuditOperation.ADMIN_MENU_CREATE.code();
-                        case DELETE, DISABLE -> AdminAuditOperation.ADMIN_MENU_DISABLE.code();
-                        case ENABLE -> AdminAuditOperation.ADMIN_MENU_ENABLE.code();
-                        default -> AdminAuditOperation.ADMIN_MENU_UPDATE.code();
-                    };
-                    String effectiveName = StringUtils.hasText(overrideName) ? overrideName : summary;
-                    builder.operationOverride(operationCode, effectiveName, overrideKind);
-                }
-            }
-            if (detail != null && !detail.isEmpty()) {
-                builder.detail("detail", new LinkedHashMap<>(detail));
-            }
-            boolean hasMenuTarget = menuId != null;
-            boolean hasChangeRequestTarget = false;
+                .operationName(operationName)
+                .detail(safeDetail)
+                .client(clientIp, userAgent, uri, method);
             if (menuId != null) {
-                builder.target("portal_menu", menuId, menuName);
+                builder.menu(menuId, menuName);
             }
             if (cr != null && cr.getId() != null) {
-                String changeRequestRef = changeRequestRef(cr);
-                if (StringUtils.hasText(changeRequestRef)) {
-                    builder.changeRequestRef(changeRequestRef);
-                }
-                builder.target("change_request", cr.getId(), changeRequestRef);
-                hasChangeRequestTarget = true;
+                String changeRequestRef = changeRequestRef(cr.getId());
+                builder.changeRequest(cr.getId(), changeRequestRef);
             }
-            if (!hasMenuTarget && !hasChangeRequestTarget) {
-                builder.allowEmptyTargets();
+            if (menuId == null && (cr == null || cr.getId() == null)) {
+                builder.allowEmptyTargets(true);
             }
-            auditV2Service.record(builder.build());
+            if (overrideType != null && overrideType != AuditOperationType.UNKNOWN && !safeDetail.containsKey("operationType")) {
+                builder.detail("operationType", overrideType.getCode());
+                builder.detail("operationTypeText", overrideType.getDisplayName());
+            }
+            adminAuditService.logMenuAction(builder.build());
         } catch (Exception ex) {
             log.warn("Failed to record V2 audit for portal menu action: {}", ex.getMessage());
         }
@@ -3902,38 +3940,70 @@ public class AdminApiResource {
                 "角色指派申请失败"
             );
             String summary = result == AuditResultStatus.SUCCESS ? successSummary : failureSummary;
-            AuditActionRequest.Builder builder = AuditActionRequest
-                .builder(actor, ButtonCodes.ROLE_ASSIGNMENT_CREATE)
-                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
-                .summary(summary)
-                .result(result != null ? result : AuditResultStatus.SUCCESS)
-                .client(resolveClientIp(request), request != null ? request.getHeader("User-Agent") : null)
-                .request(Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/admin/role-assignments"), request != null ? request.getMethod() : "POST");
-            if (changeRequest != null) {
-                String ref = changeRequestRef(changeRequest);
-                if (StringUtils.hasText(ref)) {
-                    builder.changeRequestRef(ref);
-                }
-                builder.target("change_request", changeRequest.getId(), StringUtils.hasText(ref) ? ref : String.valueOf(changeRequest.getId()));
-            } else {
-                builder.allowEmptyTargets();
+            Map<String, Object> detailPayload = new LinkedHashMap<>();
+            if (detail != null) {
+                detailPayload.putAll(detail);
             }
             if (payload != null) {
-                builder.metadata("role", role);
-                builder.metadata("username", username);
-                builder.metadata("displayName", displayName);
-                builder.metadata("userSecurityLevel", payload.get("userSecurityLevel"));
-                builder.metadata("scopeOrgId", payload.get("scopeOrgId"));
-                builder.metadata("operations", payload.get("operations"));
-                builder.metadata("datasetIds", payload.get("datasetIds"));
+                if (StringUtils.hasText(role)) {
+                    detailPayload.put("role", role);
+                }
+                if (StringUtils.hasText(username)) {
+                    detailPayload.put("username", username);
+                }
+                if (StringUtils.hasText(displayName)) {
+                    detailPayload.put("displayName", displayName);
+                }
+                Object securityLevel = payload.get("userSecurityLevel");
+                if (securityLevel != null) {
+                    detailPayload.put("userSecurityLevel", securityLevel);
+                }
+                Object scopeOrgId = payload.get("scopeOrgId");
+                if (scopeOrgId != null) {
+                    detailPayload.put("scopeOrgId", scopeOrgId);
+                }
             }
             if (failureMessage != null) {
-                builder.metadata("error", failureMessage);
+                detailPayload.put("error", failureMessage);
             }
-            if (detail != null && !detail.isEmpty()) {
-                builder.detail("detail", new LinkedHashMap<>(detail));
+            Map<String, Object> afterSnapshot = new LinkedHashMap<>();
+            if (StringUtils.hasText(role)) {
+                afterSnapshot.put("role", role);
             }
-            auditV2Service.record(builder.build());
+            if (StringUtils.hasText(username)) {
+                afterSnapshot.put("username", username);
+            }
+            if (StringUtils.hasText(displayName)) {
+                afterSnapshot.put("displayName", displayName);
+            }
+            Object userSecurityLevel = payload != null ? payload.get("userSecurityLevel") : null;
+            if (userSecurityLevel != null) {
+                afterSnapshot.put("userSecurityLevel", userSecurityLevel);
+            }
+            Object scopeOrgId = payload != null ? payload.get("scopeOrgId") : null;
+            if (scopeOrgId != null) {
+                afterSnapshot.put("scopeOrgId", scopeOrgId);
+            }
+            if (!afterSnapshot.isEmpty()) {
+                detailPayload.put("after", afterSnapshot);
+            }
+            String clientIp = resolveClientIp(request);
+            String userAgent = request != null ? request.getHeader("User-Agent") : null;
+            String uri = Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/admin/role-assignments");
+            String method = request != null ? request.getMethod() : "POST";
+            RoleAuditContext.Builder builder = RoleAuditContext
+                .builder(actor, RoleAuditContext.Operation.ASSIGN_ROLE)
+                .result(result)
+                .summary(summary)
+                .operationName(summary)
+                .detail(detailPayload)
+                .client(clientIp, userAgent, uri, method)
+                .allowEmptyTargets(true);
+            if (changeRequest != null && changeRequest.getId() != null) {
+                String ref = changeRequestRef(changeRequest);
+                builder.changeRequest(changeRequest.getId(), ref);
+            }
+            adminAuditService.logRoleAction(builder.build());
         } catch (Exception ex) {
             log.warn("Failed to record V2 audit for role assignment create: {}", ex.getMessage());
         }
@@ -3963,40 +4033,79 @@ public class AdminApiResource {
                 ? (StringUtils.hasText(name) ? "自定义角色申请失败：" + name + "（" + failureMessage + "）" : "自定义角色申请失败：" + failureMessage)
                 : (StringUtils.hasText(name) ? "自定义角色申请失败：" + name : "自定义角色申请失败");
             String summary = result == AuditResultStatus.SUCCESS ? successSummary : failureSummary;
-            AuditActionRequest.Builder builder = AuditActionRequest
-                .builder(actor, ButtonCodes.CUSTOM_ROLE_CREATE)
-                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
-                .summary(summary)
-                .result(result != null ? result : AuditResultStatus.SUCCESS)
-                .client(resolveClientIp(request), request != null ? request.getHeader("User-Agent") : null)
-                .request(Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/admin/custom-roles"), request != null ? request.getMethod() : "POST");
-            if (changeRequest != null) {
-                String ref = changeRequestRef(changeRequest);
-                if (StringUtils.hasText(ref)) {
-                    builder.changeRequestRef(ref);
-                }
-                builder.target("change_request", changeRequest.getId(), StringUtils.hasText(ref) ? ref : String.valueOf(changeRequest.getId()));
-            } else {
-                builder.allowEmptyTargets();
+            Map<String, Object> detailPayload = new LinkedHashMap<>();
+            if (detail != null) {
+                detailPayload.putAll(detail);
             }
             if (payload != null) {
-                builder.metadata("name", name);
-                builder.metadata("scope", scope);
-                builder.metadata("operations", ops);
-                builder.metadata("description", payload.get("description"));
-                builder.metadata("displayName", payload.get("displayName"));
-                builder.metadata("titleCn", payload.get("titleCn"));
-                builder.metadata("titleEn", payload.get("titleEn"));
-                builder.metadata("allowDesensitizeJson", payload.get("allowDesensitizeJson"));
-                builder.metadata("maxRows", payload.get("maxRows"));
+                if (StringUtils.hasText(name)) {
+                    detailPayload.put("name", name);
+                }
+                if (StringUtils.hasText(scope)) {
+                    detailPayload.put("scope", scope);
+                }
+                if (payload.containsKey("operations")) {
+                    detailPayload.put("operations", payload.get("operations"));
+                }
+                if (payload.containsKey("description")) {
+                    detailPayload.put("description", payload.get("description"));
+                }
             }
             if (failureMessage != null) {
-                builder.metadata("error", failureMessage);
+                detailPayload.put("error", failureMessage);
             }
-            if (detail != null && !detail.isEmpty()) {
-                builder.detail("detail", new LinkedHashMap<>(detail));
+            Map<String, Object> afterSnapshot = new LinkedHashMap<>();
+            if (payload != null) {
+                if (StringUtils.hasText(name)) {
+                    afterSnapshot.put("name", name);
+                }
+                if (StringUtils.hasText(scope)) {
+                    afterSnapshot.put("scope", scope);
+                }
+                if (payload.containsKey("operations")) {
+                    Object operations = payload.get("operations");
+                    if (operations instanceof java.util.Collection<?> collection) {
+                        afterSnapshot.put("operations", new java.util.ArrayList<>(collection));
+                    } else {
+                        afterSnapshot.put("operations", operations);
+                    }
+                }
+                if (payload.containsKey("maxRows")) {
+                    afterSnapshot.put("maxRows", payload.get("maxRows"));
+                }
+                if (payload.containsKey("allowDesensitizeJson")) {
+                    afterSnapshot.put("allowDesensitizeJson", payload.get("allowDesensitizeJson"));
+                }
+                if (payload.containsKey("titleCn")) {
+                    afterSnapshot.put("titleCn", payload.get("titleCn"));
+                }
+                if (payload.containsKey("titleEn")) {
+                    afterSnapshot.put("titleEn", payload.get("titleEn"));
+                }
+                if (payload.containsKey("displayName")) {
+                    afterSnapshot.put("displayName", payload.get("displayName"));
+                }
             }
-            auditV2Service.record(builder.build());
+            if (!afterSnapshot.isEmpty()) {
+                detailPayload.put("after", afterSnapshot);
+            }
+            String clientIp = resolveClientIp(request);
+            String userAgent = request != null ? request.getHeader("User-Agent") : null;
+            String uri = Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/admin/custom-roles");
+            String method = request != null ? request.getMethod() : "POST";
+            RoleAuditContext.Builder builder = RoleAuditContext
+                .builder(actor, RoleAuditContext.Operation.ROLE_CREATE)
+                .result(result)
+                .summary(summary)
+                .operationName(summary)
+                .detail(detailPayload)
+                .client(clientIp, userAgent, uri, method)
+                .allowEmptyTargets(true);
+            if (changeRequest != null && changeRequest.getId() != null) {
+                String ref = changeRequestRef(changeRequest);
+                builder.changeRequest(changeRequest.getId(), ref);
+            }
+            adminAuditService.logRoleAction(builder.build());
         } catch (Exception ex) {
             log.warn("Failed to record V2 audit for custom role create: {}", ex.getMessage());
         }
@@ -4828,7 +4937,18 @@ public class AdminApiResource {
             }
             String titleKey = stringValue(metadata.get("titleKey"));
             if (StringUtils.hasText(titleKey)) {
+                String resolved = portalMenuService.resolveTitleByKey(titleKey).orElse(null);
+                if (StringUtils.hasText(resolved)) {
+                    return resolved;
+                }
                 return titleKey;
+            }
+        }
+        String nameCode = stringValue(payload.get("name"));
+        if (StringUtils.hasText(nameCode)) {
+            String resolved = portalMenuService.resolveTitleByKey(nameCode).orElse(null);
+            if (StringUtils.hasText(resolved)) {
+                return resolved;
             }
         }
         return null;
@@ -5470,11 +5590,26 @@ public class AdminApiResource {
                 if (label instanceof String s && !s.isBlank()) {
                     return s;
                 }
+                Object titleKey = meta.get("titleKey");
+                if (titleKey instanceof String s && !s.isBlank()) {
+                    String resolved = portalMenuService.resolveTitleByKey(s).orElse(null);
+                    if (StringUtils.hasText(resolved)) {
+                        return resolved;
+                    }
+                    return s;
+                }
             } catch (Exception ignored) {
-                // fallback to raw name when metadata is not valid JSON
+                // fallback below
             }
         }
-        return menu.getName();
+        String code = menu.getName();
+        if (StringUtils.hasText(code)) {
+            String resolved = portalMenuService.resolveTitleByKey(code).orElse(null);
+            if (StringUtils.hasText(resolved)) {
+                return resolved;
+            }
+        }
+        return code;
     }
 
     @SuppressWarnings("unchecked")

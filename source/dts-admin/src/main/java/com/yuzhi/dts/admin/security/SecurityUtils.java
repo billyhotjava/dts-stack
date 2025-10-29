@@ -1,5 +1,6 @@
 package com.yuzhi.dts.admin.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -8,8 +9,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Base64;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -27,6 +31,8 @@ import org.springframework.util.StringUtils;
 public final class SecurityUtils {
 
     public static final String CLAIMS_NAMESPACE = "https://www.jhipster.tech/";
+    private static final Logger log = LoggerFactory.getLogger(SecurityUtils.class);
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private SecurityUtils() {}
 
@@ -88,6 +94,13 @@ public final class SecurityUtils {
             return jwt.getName();
         } else if (authentication instanceof BearerTokenAuthentication bearer) {
             Map<String, Object> attributes = bearer.getTokenAttributes();
+            if (log.isDebugEnabled()) {
+                log.debug(
+                    "BearerTokenAuthentication attributes keys={} name={}",
+                    attributes != null ? attributes.keySet() : "null",
+                    bearer.getName()
+                );
+            }
             String preferred = extractStringClaim(attributes, "preferred_username");
             if (StringUtils.hasText(preferred)) {
                 return preferred;
@@ -103,6 +116,25 @@ public final class SecurityUtils {
             String subject = extractStringClaim(attributes, "sub");
             if (StringUtils.hasText(subject)) {
                 return subject;
+            }
+            Map<String, Object> decodedClaims = decodeJwtClaims(bearer.getToken().getTokenValue());
+            if (!decodedClaims.isEmpty()) {
+                String claimPreferred = extractStringClaim(decodedClaims, "preferred_username");
+                if (StringUtils.hasText(claimPreferred)) {
+                    return claimPreferred;
+                }
+                String claimUsername = extractStringClaim(decodedClaims, "username");
+                if (StringUtils.hasText(claimUsername)) {
+                    return claimUsername;
+                }
+                String claimLegacy = extractStringClaim(decodedClaims, "user_name");
+                if (StringUtils.hasText(claimLegacy)) {
+                    return claimLegacy;
+                }
+                String claimSub = extractStringClaim(decodedClaims, "sub");
+                if (StringUtils.hasText(claimSub)) {
+                    return claimSub;
+                }
             }
             return bearer.getName();
         } else if (authentication.getPrincipal() instanceof DefaultOidcUser) {
@@ -259,6 +291,33 @@ public final class SecurityUtils {
             return trimmed.substring(0, maxLength);
         }
         return trimmed.substring(0, maxLength - 3) + "...";
+    }
+
+    private static Map<String, Object> decodeJwtClaims(String tokenValue) {
+        if (!StringUtils.hasText(tokenValue)) {
+            return Map.of();
+        }
+        int firstDot = tokenValue.indexOf('.');
+        int secondDot = tokenValue.indexOf('.', firstDot + 1);
+        if (firstDot < 0 || secondDot < 0) {
+            return Map.of();
+        }
+        String payload = tokenValue.substring(firstDot + 1, secondDot);
+        int padding = payload.length() % 4;
+        if (padding > 0) {
+            payload = payload + "====".substring(padding);
+        }
+        try {
+            byte[] decoded = Base64.getUrlDecoder().decode(payload);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> claims = JSON.readValue(decoded, Map.class);
+            return claims != null ? claims : Map.of();
+        } catch (Exception ex) {
+            if (log.isDebugEnabled()) {
+                log.debug("Failed to decode JWT claims: {}", ex.getMessage());
+            }
+            return Map.of();
+        }
     }
 
     public static List<GrantedAuthority> extractAuthorityFromClaims(Map<String, Object> claims) {

@@ -287,7 +287,7 @@ const MODULE_TOKEN_TRANSLATIONS: Record<string, string> = {
 	workbench: "工作台",
 };
 
-const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 10;
 const MODULE_FILTER_ENABLED = false;
 const GROUP_FILTER_ENABLED = false;
 

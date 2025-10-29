@@ -86,7 +86,10 @@ public class AuditIngestResource {
                 payload
                     .targets()
                     .forEach(target -> builder.target(target.table(), target.id(), target.label()));
-            } else if (payload.operationKind() == AuditOperationKind.QUERY) {
+            } else if (
+                payload.operationKind() == AuditOperationKind.QUERY ||
+                payload.operationKind() == AuditOperationKind.CLEAN
+            ) {
                 builder.allowEmptyTargets();
             }
 

@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,6 +71,7 @@ public class PortalMenuService {
     private final TransactionTemplate menuMutationTx;
 
     private volatile MenuSeed cachedSeed;
+    private final Map<String, String> titleKeyCache = new ConcurrentHashMap<>();
 
     public PortalMenuService(
         PortalMenuRepository menuRepo,
@@ -127,6 +129,19 @@ public class PortalMenuService {
             java.util.Collections.<PortalMenu>emptyList(),
             "deleted menu list"
         );
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<String> resolveTitleByKey(String titleKey) {
+        if (!StringUtils.hasText(titleKey)) {
+            return Optional.empty();
+        }
+        String normalized = titleKey.trim();
+        String resolved = titleKeyCache.computeIfAbsent(normalized, this::lookupTitleByKey);
+        if (StringUtils.hasText(resolved)) {
+            return Optional.of(resolved);
+        }
+        return Optional.empty();
     }
 
     @Transactional(readOnly = true)
@@ -630,6 +645,61 @@ public class PortalMenuService {
                 collectSubtree(ids, c);
             }
         }
+    }
+
+    private String lookupTitleByKey(String titleKey) {
+        if (!StringUtils.hasText(titleKey)) {
+            return null;
+        }
+        MenuSeed seed = menuSeed();
+        if (seed != null && seed.portalNavSections() != null) {
+            String fromSeed = findTitleInNodes(seed.portalNavSections(), titleKey);
+            if (StringUtils.hasText(fromSeed)) {
+                return fromSeed;
+            }
+        }
+        try {
+            List<PortalMenu> menus = menuRepo.findAllByOrderBySortOrderAscIdAsc();
+            for (PortalMenu menu : menus) {
+                String metadata = menu.getMetadata();
+                if (!StringUtils.hasText(metadata)) {
+                    continue;
+                }
+                try {
+                    JsonNode node = objectMapper.readTree(metadata);
+                    if (node.hasNonNull("titleKey") && titleKey.equals(node.get("titleKey").asText())) {
+                        if (node.hasNonNull("title") && StringUtils.hasText(node.get("title").asText())) {
+                            return node.get("title").asText();
+                        }
+                        if (node.hasNonNull("label") && StringUtils.hasText(node.get("label").asText())) {
+                            return node.get("label").asText();
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        } catch (DataAccessException ex) {
+            log.debug("Skip title lookup in repository: {}", ex.getMessage());
+        }
+        return null;
+    }
+
+    private String findTitleInNodes(List<MenuNode> nodes, String titleKey) {
+        if (nodes == null || nodes.isEmpty() || !StringUtils.hasText(titleKey)) {
+            return null;
+        }
+        for (MenuNode node : nodes) {
+            if (node == null) {
+                continue;
+            }
+            if (titleKey.equals(node.titleKey()) && StringUtils.hasText(node.title())) {
+                return node.title();
+            }
+            String nested = findTitleInNodes(node.children(), titleKey);
+            if (StringUtils.hasText(nested)) {
+                return nested;
+            }
+        }
+        return null;
     }
 
     private String extractTitleKey(PortalMenu menu) {

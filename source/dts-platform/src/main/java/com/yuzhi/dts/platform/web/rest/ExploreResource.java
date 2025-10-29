@@ -570,6 +570,17 @@ public class ExploreResource {
         auditPayload.put("summary", summary);
         auditPayload.put("operationName", summary);
         auditPayload.put("operationType", "CLEAN");
+        auditPayload.put("operationTypeCode", "CLEAN");
+        auditPayload.put("operationCode", "EXPLORE_RESULTSET_PURGE");
+        SecurityUtils
+            .getCurrentUserLogin()
+            .ifPresent(login -> {
+                auditPayload.putIfAbsent("actor", login);
+                auditPayload.putIfAbsent("username", login);
+            });
+        SecurityUtils
+            .getCurrentUserDisplayName()
+            .ifPresent(name -> auditPayload.putIfAbsent("actorName", name));
         auditPayload.put("deleted", expired.size());
         audit.auditAction("EXPLORE_RESULTSET_PURGE", AuditStage.SUCCESS, null, auditPayload);
         return ApiResponses.ok(Map.of("deleted", expired.size()));

@@ -14,6 +14,7 @@ import com.yuzhi.dts.admin.service.infra.dto.HiveConnectionTestRequest;
 import com.yuzhi.dts.admin.service.infra.dto.HiveConnectionTestResult;
 import com.yuzhi.dts.admin.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.admin.service.infra.dto.InfraFeatureFlags;
+import com.yuzhi.dts.admin.service.infra.dto.IntegrationStatus;
 import com.yuzhi.dts.admin.service.infra.dto.UpsertInfraDataSourcePayload;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.common.net.IpAddressUtils;
@@ -37,6 +38,8 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -291,12 +294,12 @@ public class InfraResource {
                 if (flags.getSyncInProgress() != null) {
                     builder.metadata("syncInProgress", flags.getSyncInProgress());
                 }
-                if (flags.getIntegrationStatus() != null) {
-                    builder.detail("integrationStatus", flags.getIntegrationStatus());
-                }
-                if (flags.getLastUpdatedAt() != null) {
-                    builder.metadata("lastUpdatedAt", flags.getLastUpdatedAt());
-                }
+            if (flags.getIntegrationStatus() != null) {
+                builder.detail("integrationStatus", integrationStatusDetail(flags.getIntegrationStatus()));
+            }
+            if (flags.getLastUpdatedAt() != null) {
+                builder.metadata("lastUpdatedAt", flags.getLastUpdatedAt());
+            }
             }
 
             auditV2Service.record(builder.build());
@@ -524,10 +527,23 @@ public class InfraResource {
 
 
     private ActorResolution resolveActor(HttpServletRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (log.isDebugEnabled()) {
+            log.debug(
+                "resolveActor authentication class={}, name={}, principal={}",
+                authentication != null ? authentication.getClass().getName() : "null",
+                authentication != null ? authentication.getName() : "null",
+                authentication != null ? authentication.getPrincipal() : "null"
+            );
+        }
         String raw = SecurityUtils.getCurrentUserLogin().orElse(null);
         String sanitized = SecurityUtils.sanitizeLogin(raw);
         String resolved = sanitized;
         String source = "direct";
+
+        if (log.isDebugEnabled()) {
+            log.debug("resolveActor raw={}, sanitized={}", raw, sanitized);
+        }
 
         if (needsOverride(resolved) && request != null) {
             String headerActor = request.getHeader("X-Admin-Actor");
@@ -624,6 +640,22 @@ public class InfraResource {
         if (value != null) {
             target.put(key, value);
         }
+    }
+
+    private Map<String, Object> integrationStatusDetail(IntegrationStatus status) {
+        if (status == null) {
+            return Map.of();
+        }
+        Map<String, Object> detail = new LinkedHashMap<>();
+        putIfHasText(detail, "lastSyncAt", status.getLastSyncAt());
+        putIfHasText(detail, "reason", status.getReason());
+        if (status.getActions() != null && !status.getActions().isEmpty()) {
+            detail.put("actions", List.copyOf(status.getActions()));
+        }
+        if (status.getCatalogDatasetCount() != null) {
+            detail.put("catalogDatasetCount", status.getCatalogDatasetCount());
+        }
+        return detail.isEmpty() ? Map.of() : detail;
     }
 
     private String safeName(InfraDataSourceDto dto) {
