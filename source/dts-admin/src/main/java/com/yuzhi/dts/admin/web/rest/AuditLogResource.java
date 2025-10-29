@@ -133,7 +133,7 @@ public class AuditLogResource {
         );
         Page<AuditEntryView> resultPage = auditQueryService.search(criteria, pageable);
         List<AuditEntryView> views = resultPage.getContent();
-        Map<String, String> displayOverrides = resolvePlatformDisplayNames(views);
+        Map<String, String> displayOverrides = resolveActorDisplayNames(views);
         List<Map<String, Object>> content = new ArrayList<>(views.size());
         for (AuditEntryView view : views) {
             Map<String, Object> row = toResponse(view, false);
@@ -171,7 +171,7 @@ public class AuditLogResource {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "审计日志不存在"));
         ensureReadable(scope, view);
         Map<String, Object> body = toResponse(view, true);
-        applyDisplayNameOverride(body, resolvePlatformDisplayNames(List.of(view)));
+        applyDisplayNameOverride(body, resolveActorDisplayNames(List.of(view)));
         return ResponseEntity.ok(ApiResponse.ok(body));
     }
 
@@ -222,7 +222,7 @@ public class AuditLogResource {
         );
         Page<AuditEntryView> exportPage = auditQueryService.search(criteria, Pageable.unpaged());
         List<AuditEntryView> views = exportPage.getContent();
-        Map<String, String> displayOverrides = resolvePlatformDisplayNames(views);
+        Map<String, String> displayOverrides = resolveActorDisplayNames(views);
         List<Map<String, Object>> records = new ArrayList<>(views.size());
         for (AuditEntryView view : views) {
             Map<String, Object> row = toResponse(view, true);
@@ -832,7 +832,7 @@ public class AuditLogResource {
         return value == null ? null : value.trim();
     }
 
-    private Map<String, String> resolvePlatformDisplayNames(List<AuditEntryView> views) {
+    private Map<String, String> resolveActorDisplayNames(List<AuditEntryView> views) {
         if (views == null || views.isEmpty()) {
             return Map.of();
         }
@@ -840,10 +840,6 @@ public class AuditLogResource {
         LinkedHashSet<String> unresolved = new LinkedHashSet<>();
         for (AuditEntryView view : views) {
             if (view == null) {
-                continue;
-            }
-            String source = safeTrim(view.sourceSystem());
-            if (source == null || !"platform".equalsIgnoreCase(source)) {
                 continue;
             }
             String actorId = safeTrim(view.actorId());

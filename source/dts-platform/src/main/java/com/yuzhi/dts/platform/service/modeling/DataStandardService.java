@@ -126,9 +126,20 @@ public class DataStandardService {
         auditPayload.put("after", toStandardAuditView(entity));
         auditPayload.put("targetId", entity.getId().toString());
         auditPayload.put("targetName", entity.getName());
-        auditPayload.put("operationType", "UPDATE");
-        auditPayload.put("summary", "修改数据标准：" + entity.getName());
-        auditService.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, entity.getId().toString(), auditPayload);
+        Object previousStatusValue = before.get("status");
+        DataStandardStatus previousStatus = previousStatusValue instanceof DataStandardStatus ? (DataStandardStatus) previousStatusValue : null;
+        boolean publishOperation = request.getVersionStatus() == DataStandardVersionStatus.PUBLISHED;
+        if (!publishOperation && request.getStatus() == DataStandardStatus.ACTIVE && previousStatus != DataStandardStatus.ACTIVE) {
+            publishOperation = true;
+        }
+        if (!publishOperation && previousStatus != DataStandardStatus.ACTIVE && entity.getStatus() == DataStandardStatus.ACTIVE) {
+            publishOperation = true;
+        }
+        String operationType = publishOperation ? "PUBLISH" : "UPDATE";
+        auditPayload.put("operationType", operationType);
+        auditPayload.put("summary", (publishOperation ? "发布数据标准：" : "修改数据标准：") + entity.getName());
+        String actionCode = publishOperation ? "MODELING_STANDARD_VERSION_PUBLISH" : "MODELING_STANDARD_EDIT";
+        auditService.auditAction(actionCode, AuditStage.SUCCESS, entity.getId().toString(), auditPayload);
         return DataStandardMapper.toDto(entity);
     }
 
