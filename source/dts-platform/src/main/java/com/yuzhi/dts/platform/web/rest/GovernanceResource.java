@@ -73,7 +73,27 @@ public class GovernanceResource {
     public ApiResponse<List<QualityRuleDto>> listQualityRules(
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        return ApiResponses.ok(qualityRuleService.listAll(activeDept));
+        List<QualityRuleDto> rules = qualityRuleService.listAll(activeDept);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "查看质量规则列表");
+        payload.put("count", rules.size());
+        if (!rules.isEmpty()) {
+            payload.put(
+                "ruleNames",
+                rules.stream().map(QualityRuleDto::getName).filter(StringUtils::hasText).limit(20).toList()
+            );
+        }
+        auditService.recordAs(
+            currentUser(),
+            "READ",
+            "governance.rule",
+            "governance.rule",
+            "LIST",
+            "SUCCESS",
+            payload,
+            null
+        );
+        return ApiResponses.ok(rules);
     }
 
     @GetMapping("/rules")
@@ -146,13 +166,15 @@ public class GovernanceResource {
         } else {
             detail.put("summary", "查看质量规则详情");
         }
-        auditService.record(
+        auditService.recordAs(
+            currentUser(),
             "READ",
             "governance.rule",
             "governance.rule",
             id.toString(),
             "SUCCESS",
-            detail
+            detail,
+            null
         );
         return ApiResponses.ok(dto);
     }
@@ -182,13 +204,15 @@ public class GovernanceResource {
                 detail.put("triggerType", dto.getTriggerType());
             }
         }
-        auditService.record(
+        auditService.recordAs(
+            currentUser(),
             "READ",
             "governance.compliance.qualityRun",
             "governance.compliance.qualityRun",
             id.toString(),
             "SUCCESS",
-            detail
+            detail,
+            null
         );
         return ApiResponses.ok(dto);
     }
@@ -200,7 +224,31 @@ public class GovernanceResource {
         @RequestParam(value = "limit", defaultValue = "10") int limit
     ) {
         if (ruleId != null) {
-            return ApiResponses.ok(qualityRunService.recentByRule(ruleId, limit));
+            List<QualityRunDto> runs = qualityRunService.recentByRule(ruleId, limit);
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("targetId", ruleId.toString());
+            try {
+                QualityRuleDto rule = qualityRuleService.getRule(ruleId);
+                if (rule != null && StringUtils.hasText(rule.getName())) {
+                    detail.put("targetName", rule.getName());
+                    detail.put("summary", "查看质量规则：" + rule.getName());
+                } else {
+                    detail.put("summary", "查看质量规则详情");
+                }
+            } catch (Exception ex) {
+                detail.put("summary", "查看质量规则详情");
+            }
+            auditService.recordAs(
+                currentUser(),
+                "READ",
+                "governance.rule",
+                "governance.rule",
+                ruleId.toString(),
+                "SUCCESS",
+                detail,
+                null
+            );
+            return ApiResponses.ok(runs);
         }
         if (datasetId != null) {
             return ApiResponses.ok(qualityRunService.recentByDataset(datasetId, limit));
