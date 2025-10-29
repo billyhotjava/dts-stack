@@ -68,6 +68,7 @@ public class AdminUserService {
     private static final Logger LOG = LoggerFactory.getLogger(AdminUserService.class);
     private static final Set<String> SUPPRESS_PENDING_APPROVAL_ACTIONS = Set.of(
         "ADMIN_USER_CREATE",
+        "ADMIN_USER_UPDATE",
         "ADMIN_CUSTOM_ROLE_CREATE",
         "ADMIN_ROLE_CREATE"
     );
@@ -1042,6 +1043,8 @@ public class AdminUserService {
     private void auditUserChange(String actor, String action, String target, String result, Object detail) {
         String changeRequestRef = extractChangeRequestRef(detail);
         String payloadUsername = extractPayloadUsername(detail);
+        String payloadFullName = extractPayloadFullName(detail);
+        String subjectLabel = buildDisplayLabel(payloadUsername, payloadFullName);
         String normalizedTarget = target == null ? "UNKNOWN" : target;
         // Prefer recording the local DB primary key for admin_keycloak_user
         // If target looks like a username (non-numeric), try resolve to PK id
@@ -1080,6 +1083,19 @@ public class AdminUserService {
         } else {
             payload = Map.of("detail", detail);
         }
+        if (detail instanceof Map<?, ?>) {
+            enrichExecutionPayloadWithLabel(payload, payloadUsername, payloadFullName, subjectLabel);
+            if (StringUtils.isNotBlank(subjectLabel)) {
+                Object summaryValue = payload.get("summary");
+                if (summaryValue instanceof String summaryText) {
+                    payload.put("summary", normalizeSummaryTarget(summaryText, subjectLabel));
+                }
+                Object operationNameValue = payload.get("operationName");
+                if (operationNameValue instanceof String operationNameText) {
+                    payload.put("operationName", normalizeSummaryTarget(operationNameText, subjectLabel));
+                }
+            }
+        }
         String code = switch (action) {
             case "USER_CREATE_EXECUTE" -> "ADMIN_USER_CREATE";
             case "USER_UPDATE_EXECUTE", "USER_SET_PERSON_LEVEL_EXECUTE" -> "ADMIN_USER_UPDATE";
@@ -1104,7 +1120,7 @@ public class AdminUserService {
                 return;
             }
         }
-        recordUserApprovalExecutionV2(actor, code, normalizedTarget, payloadUsername, changeRequestRef, stage, payload);
+        recordUserApprovalExecutionV2(actor, code, normalizedTarget, payloadUsername, subjectLabel, changeRequestRef, stage, payload);
     }
 
     private String extractChangeRequestRef(Object detail) {
@@ -1410,6 +1426,95 @@ public class AdminUserService {
             }
         }
         return stringValue(username);
+    }
+
+    private String extractPayloadFullName(Object detail) {
+        if (!(detail instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Object payloadObj = map.get("payload");
+        if (!(payloadObj instanceof Map<?, ?> payloadMap)) {
+            return null;
+        }
+        String directFullName = stringValue(payloadMap.get("fullName"));
+        if (StringUtils.isNotBlank(directFullName)) {
+            return directFullName;
+        }
+        String requestFullName = nestedFullName(payloadMap.get("request"));
+        if (StringUtils.isNotBlank(requestFullName)) {
+            return requestFullName;
+        }
+        String targetFullName = nestedFullName(payloadMap.get("target"));
+        if (StringUtils.isNotBlank(targetFullName)) {
+            return targetFullName;
+        }
+        Object changeSnapshot = payloadMap.get("changeSnapshot");
+        if (changeSnapshot instanceof Map<?, ?> changeMap) {
+            String afterFullName = nestedFullName(changeMap.get("after"));
+            if (StringUtils.isNotBlank(afterFullName)) {
+                return afterFullName;
+            }
+            String beforeFullName = nestedFullName(changeMap.get("before"));
+            if (StringUtils.isNotBlank(beforeFullName)) {
+                return beforeFullName;
+            }
+        }
+        return null;
+    }
+
+    private String nestedFullName(Object candidate) {
+        if (candidate instanceof Map<?, ?> map) {
+            Object value = map.get("fullName");
+            return stringValue(value);
+        }
+        return null;
+    }
+
+    private void enrichExecutionPayloadWithLabel(
+        Map<String, Object> detail,
+        String username,
+        String fullName,
+        String label
+    ) {
+        if (detail == null) {
+            return;
+        }
+        Object payloadObj = detail.get("payload");
+        if (payloadObj instanceof Map<?, ?> rawPayload) {
+            Map<String, Object> payloadMap = toStringKeyMap(rawPayload);
+            detail.put("payload", payloadMap);
+            if (StringUtils.isNotBlank(username) && StringUtils.isBlank(stringValue(payloadMap.get("username")))) {
+                payloadMap.put("username", username);
+            }
+            if (StringUtils.isNotBlank(fullName) && StringUtils.isBlank(stringValue(payloadMap.get("fullName")))) {
+                payloadMap.put("fullName", fullName);
+            }
+            Object requestObj = payloadMap.get("request");
+            if (requestObj instanceof Map<?, ?> requestRaw) {
+                Map<String, Object> requestMap = toStringKeyMap(requestRaw);
+                if (StringUtils.isNotBlank(username) && StringUtils.isBlank(stringValue(requestMap.get("username")))) {
+                    requestMap.put("username", username);
+                }
+                if (StringUtils.isNotBlank(fullName) && StringUtils.isBlank(stringValue(requestMap.get("fullName")))) {
+                    requestMap.put("fullName", fullName);
+                }
+                payloadMap.put("request", requestMap);
+            }
+            Object targetObj = payloadMap.get("target");
+            if (targetObj instanceof Map<?, ?> targetRaw) {
+                Map<String, Object> targetMap = toStringKeyMap(targetRaw);
+                if (StringUtils.isNotBlank(username) && StringUtils.isBlank(stringValue(targetMap.get("username")))) {
+                    targetMap.put("username", username);
+                }
+                if (StringUtils.isNotBlank(fullName) && StringUtils.isBlank(stringValue(targetMap.get("fullName")))) {
+                    targetMap.put("fullName", fullName);
+                }
+                payloadMap.put("target", targetMap);
+            }
+        }
+        if (StringUtils.isNotBlank(label)) {
+            detail.put("targetLabel", label);
+        }
     }
 
     private String changeRequestRefFrom(Object reference) {
@@ -2176,6 +2281,7 @@ public class AdminUserService {
         String actionCode,
         String normalizedTarget,
         String username,
+        String subjectLabel,
         String changeRequestRef,
         AuditStage stage,
         Map<String, Object> payload
@@ -2192,11 +2298,13 @@ public class AdminUserService {
             if (payload != null) {
                 sanitizeDefaultRealmRolesInMap(payload);
             }
+            String label = firstNonBlank(subjectLabel, username, normalizedTarget);
             String summary = firstNonBlank(
                 stringValue(payload != null ? payload.get("summary") : null),
                 stringValue(payload != null ? payload.get("operationName") : null),
-                buildUserExecutionSummary(actionCode, firstNonBlank(username, normalizedTarget))
+                buildUserExecutionSummary(actionCode, label)
             );
+            summary = normalizeSummaryTarget(summary, label);
             AuditResultStatus resultStatus = stage == AuditStage.SUCCESS ? AuditResultStatus.SUCCESS : AuditResultStatus.FAILED;
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, buttonCode)
@@ -2211,6 +2319,12 @@ public class AdminUserService {
             if (StringUtils.isNotBlank(username)) {
                 builder.metadata("username", username);
             }
+            if (StringUtils.isNotBlank(subjectLabel)) {
+                builder.metadata("displayName", subjectLabel);
+            }
+            if (StringUtils.isNotBlank(label)) {
+                builder.metadata("targetLabel", label);
+            }
             if (StringUtils.isNotBlank(normalizedTarget)) {
                 builder.metadata("targetId", normalizedTarget);
             }
@@ -2222,7 +2336,8 @@ public class AdminUserService {
             }
             String targetId = firstNonBlank(normalizedTarget, username);
             if (StringUtils.isNotBlank(targetId)) {
-                builder.target("admin_keycloak_user", targetId, firstNonBlank(username, targetId));
+                String targetDisplay = firstNonBlank(subjectLabel, label, username, targetId);
+                builder.target("admin_keycloak_user", targetId, targetDisplay);
             }
             auditV2Service.record(builder.build());
         } catch (Exception ex) {
@@ -2281,6 +2396,31 @@ public class AdminUserService {
             case "ADMIN_USER_SET_PERSON_LEVEL" -> "执行调整密级：" + target;
             default -> "执行用户操作：" + target;
         };
+    }
+
+    private String normalizeSummaryTarget(String summary, String label) {
+        if (StringUtils.isBlank(summary) || StringUtils.isBlank(label)) {
+            return summary;
+        }
+        String trimmedSummary = summary.trim();
+        if (trimmedSummary.endsWith(label)) {
+            return trimmedSummary;
+        }
+        int idx = trimmedSummary.lastIndexOf('：');
+        if (idx >= 0) {
+            if (idx == trimmedSummary.length() - 1) {
+                return trimmedSummary + label;
+            }
+            return trimmedSummary.substring(0, idx + 1) + label;
+        }
+        idx = trimmedSummary.lastIndexOf(':');
+        if (idx >= 0) {
+            if (idx == trimmedSummary.length() - 1) {
+                return trimmedSummary + label;
+            }
+            return trimmedSummary.substring(0, idx + 1) + label;
+        }
+        return trimmedSummary + "：" + label;
     }
 
     private static String firstNonBlank(String... values) {

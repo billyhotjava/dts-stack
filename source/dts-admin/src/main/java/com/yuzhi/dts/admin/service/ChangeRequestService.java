@@ -2,10 +2,11 @@ package com.yuzhi.dts.admin.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import com.yuzhi.dts.admin.domain.ChangeRequest;
+import com.yuzhi.dts.admin.repository.AdminApprovalItemRepository;
 import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
 import com.yuzhi.dts.admin.security.SecurityUtils;
+import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -18,6 +19,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -28,13 +31,20 @@ public class ChangeRequestService {
 
     private static final Set<String> DEDUP_TYPES = Set.of("USER", "ROLE", "PORTAL_MENU");
     private static final Set<String> ACTIVE_STATUSES = Set.of("PENDING");
+    private static final Logger LOG = LoggerFactory.getLogger(ChangeRequestService.class);
 
     private final ChangeRequestRepository repository;
     private final ObjectMapper objectMapper;
+    private final AdminApprovalItemRepository approvalItemRepository;
 
-    public ChangeRequestService(ChangeRequestRepository repository, ObjectMapper objectMapper) {
+    public ChangeRequestService(
+        ChangeRequestRepository repository,
+        ObjectMapper objectMapper,
+        AdminApprovalItemRepository approvalItemRepository
+    ) {
         this.repository = repository;
         this.objectMapper = objectMapper;
+        this.approvalItemRepository = approvalItemRepository;
     }
 
     @Transactional(noRollbackFor = IllegalStateException.class)
@@ -180,9 +190,32 @@ public class ChangeRequestService {
                 matchesByFingerprint(fingerprint, resourceType, existingId, existing) ||
                 matchesByPayload(normalizedId, existingId, payloadJson, existing);
             if (conflict) {
+                if (handleOrphaned(existing)) {
+                    continue;
+                }
                 throw new IllegalStateException(buildDuplicateMessage(resourceType, normalizedId, afterPayload, existing));
             }
         }
+    }
+
+    private boolean handleOrphaned(ChangeRequest existing) {
+        if (existing == null || existing.getId() == null) {
+            return false;
+        }
+        if (approvalItemRepository == null) {
+            return false;
+        }
+        boolean referenced = approvalItemRepository.existsByChangeRequestId(String.valueOf(existing.getId()));
+        if (referenced) {
+            return false;
+        }
+        existing.setStatus("FAILED");
+        existing.setDecidedBy(SecurityUtils.getCurrentUserLogin().orElse("system"));
+        existing.setDecidedAt(Instant.now());
+        existing.setLastError("缺少对应审批请求，已自动作废");
+        repository.save(existing);
+        LOG.warn("Change request {} marked as FAILED due to missing approval reference", existing.getId());
+        return true;
     }
 
     private boolean matchesById(String requestedId, String existingId) {

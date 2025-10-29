@@ -66,6 +66,16 @@ public class AuditLogResource {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogResource.class);
     private static final Set<String> DETAIL_KEYS_TO_HIDE = Set.of("attributes", "actionDisplay", "target");
+    private static final Map<String, String> BUILTIN_DISPLAY_NAMES = Map.of(
+        "sysadmin",
+        "系统管理员",
+        "authadmin",
+        "授权管理员",
+        "auditadmin",
+        "安全审计员",
+        "opadmin",
+        "运维管理员"
+    );
 
     private final AuditEntryQueryService auditQueryService;
     private final OperationMappingEngine opMappingEngine;
@@ -838,6 +848,7 @@ public class AuditLogResource {
         }
         LinkedHashMap<String, String> overrides = new LinkedHashMap<>();
         LinkedHashSet<String> unresolved = new LinkedHashSet<>();
+        LinkedHashSet<String> encountered = new LinkedHashSet<>();
         for (AuditEntryView view : views) {
             if (view == null) {
                 continue;
@@ -846,6 +857,7 @@ public class AuditLogResource {
             if (!org.springframework.util.StringUtils.hasText(actorId)) {
                 continue;
             }
+            encountered.add(actorId);
             String actorName = safeTrim(view.actorName());
             String normalizedId = actorId.toLowerCase(Locale.ROOT);
             if (org.springframework.util.StringUtils.hasText(actorName) && !actorName.equals(actorId)) {
@@ -872,6 +884,18 @@ public class AuditLogResource {
             } catch (Exception ex) {
                 if (log.isDebugEnabled()) {
                     log.debug("Failed to resolve platform actor display names: {}", ex.getMessage());
+                }
+            }
+        }
+        if (!encountered.isEmpty()) {
+            for (String actor : encountered) {
+                if (!org.springframework.util.StringUtils.hasText(actor)) {
+                    continue;
+                }
+                String normalized = actor.trim().toLowerCase(Locale.ROOT);
+                String builtin = BUILTIN_DISPLAY_NAMES.get(normalized);
+                if (org.springframework.util.StringUtils.hasText(builtin)) {
+                    overrides.put(normalized, builtin);
                 }
             }
         }
