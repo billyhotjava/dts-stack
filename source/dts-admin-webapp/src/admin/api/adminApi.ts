@@ -93,7 +93,7 @@ export const adminApi = {
 			data: menu,
 		}),
 
-	updatePortalMenu: (id: number, menu: PortalMenuItem) =>
+	updatePortalMenu: (id: number, menu: Partial<PortalMenuItem>) =>
 		apiClient.put<PortalMenuCollection>({
 			url: `/admin/portal/menus/${id}`,
 			data: menu,

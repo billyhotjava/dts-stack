@@ -22,6 +22,7 @@ import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -68,6 +69,8 @@ class AdminApiResourceChangeAuditTest {
     private ChangeSnapshotFormatter changeSnapshotFormatter;
     @Mock
     private PlatformTransactionManager transactionManager;
+    @Mock
+    private AdminAuditService adminAuditService;
 
     private AdminApiResource resource;
 
@@ -93,7 +96,8 @@ class AdminApiResourceChangeAuditTest {
             organizationRepository,
             adminUserService,
             changeSnapshotFormatter,
-            transactionManager
+            transactionManager,
+            adminAuditService
         );
     }
 

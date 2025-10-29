@@ -114,6 +114,11 @@ public class AdminUserService {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
     private static final String DEFAULT_INITIAL_PASSWORD = "sa";
+    private static final Map<String, String> BUILTIN_DISPLAY_NAMES = Map.ofEntries(
+        Map.entry("sysadmin", "系统管理员"),
+        Map.entry("authadmin", "授权管理员"),
+        Map.entry("auditadmin", "审计管理员")
+    );
 
     public AdminUserService(
         AdminKeycloakUserRepository userRepository,
@@ -229,11 +234,25 @@ public class AdminUserService {
                 }
             }
             if (StringUtils.isBlank(display)) {
-                display = username;
+                display = resolveBuiltinDisplayName(lower).orElse(username);
+            } else if (display.equalsIgnoreCase(username)) {
+                display = resolveBuiltinDisplayName(lower).orElse(display);
             }
             result.put(username, display);
         }
         return result;
+    }
+
+    private Optional<String> resolveBuiltinDisplayName(String normalizedUsername) {
+        if (StringUtils.isBlank(normalizedUsername)) {
+            return Optional.empty();
+        }
+        String key = normalizedUsername.toLowerCase(Locale.ROOT);
+        String display = BUILTIN_DISPLAY_NAMES.get(key);
+        if (StringUtils.isBlank(display)) {
+            return Optional.empty();
+        }
+        return Optional.of(display);
     }
 
     public ApprovalDTOs.ApprovalRequestDetail submitCreate(UserOperationRequest request, String requester, String ip) {

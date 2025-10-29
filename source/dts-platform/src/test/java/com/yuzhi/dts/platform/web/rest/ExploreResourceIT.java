@@ -3,6 +3,9 @@ package com.yuzhi.dts.platform.web.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,6 +25,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
 import com.yuzhi.dts.platform.repository.explore.ExploreSavedQueryRepository;
+import com.yuzhi.dts.platform.service.audit.AuditTrailService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -31,11 +35,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+import org.mockito.ArgumentCaptor;
 
 @AutoConfigureMockMvc
 @IntegrationTest
@@ -59,6 +65,9 @@ class ExploreResourceIT {
 
     @Autowired
     private ExploreSavedQueryRepository savedQueryRepository;
+
+    @MockBean
+    private AuditTrailService auditTrailService;
 
     @AfterEach
     void cleanUp() {
@@ -173,6 +182,50 @@ class ExploreResourceIT {
 
         assertThat(resultSetRepository.findAll()).isEmpty();
         assertThat(executionRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    @WithMockUser(username = "optest1", authorities = "ROLE_TOP_SECRET")
+    void saveResultShouldEmitAuditEvent() throws Exception {
+        ResultSet resultSet = new ResultSet();
+        resultSet.setStorageUri("memory://result/audit");
+        resultSet.setStorageFormat(ResultSet.StorageFormat.PARQUET);
+        resultSet.setColumns("col_a,col_b");
+        resultSet.setRowCount(2L);
+        resultSet.setChunkCount(1);
+        ResultSet saved = resultSetRepository.saveAndFlush(resultSet);
+
+        reset(auditTrailService);
+
+        mockMvc
+            .perform(
+                post("/api/explore/save-result/" + saved.getId())
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(Map.of("ttlDays", 5, "name", "审计结果集")))
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.name").value("审计结果集"));
+
+        ArgumentCaptor<AuditTrailService.PendingAuditEvent> captor = ArgumentCaptor.forClass(
+            AuditTrailService.PendingAuditEvent.class
+        );
+        verify(auditTrailService, atLeastOnce()).record(captor.capture());
+
+        AuditTrailService.PendingAuditEvent auditEvent = captor
+            .getAllValues()
+            .stream()
+            .filter(event -> "explore.saveResult".equals(event.module))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("未捕获保存结果集的审计事件"));
+
+        assertThat(auditEvent.actor).isEqualTo("optest1");
+        assertThat(auditEvent.action).isEqualTo("UPDATE");
+        assertThat(auditEvent.operationType).isEqualTo("UPDATE");
+        assertThat(auditEvent.result).isEqualTo("SUCCESS");
+        assertThat(auditEvent.summary).contains("保存查询结果集");
+        assertThat(auditEvent.resourceId).isEqualTo(saved.getId().toString());
     }
 
     @Test

@@ -54,6 +54,8 @@ export interface ChangeRequest {
 	requestedAt?: string;
 	decidedBy?: string;
 	decidedAt?: string;
+	requestedByDisplayName?: string;
+	decidedByDisplayName?: string;
 	reason?: string;
 	category?: string;
 	originalValue?: unknown;

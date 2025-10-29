@@ -243,6 +243,13 @@ public class AdminApiResource {
     private final ChangeSnapshotFormatter changeSnapshotFormatter;
     private final AdminAuditService adminAuditService;
 
+    private static final Map<String, String> SYSTEM_ACCOUNT_DISPLAY_NAMES = Map.of(
+        "sysadmin",
+        "系统管理员",
+        "authadmin",
+        "授权管理员"
+    );
+
     private static final Set<String> MENU_SECURITY_LEVELS = Set.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> VISIBILITY_DATA_LEVELS = Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
     private static final Map<String, String> MENU_DATA_LEVEL_ALIAS = Map.of(
@@ -259,14 +266,6 @@ public class AdminApiResource {
         "IMPORTANT", "重要",
         "SECRET", "秘密",
         "CONFIDENTIAL", "机密",
-        "CORE", "核心"
-    );
-    private static final Map<String, String> MENU_SECURITY_LEVEL_LABELS = Map.of(
-        "NON_SECRET", "非密",
-        "PUBLIC", "公开",
-        "GENERAL", "一般",
-        "INTERNAL", "内部",
-        "IMPORTANT", "重要",
         "CORE", "核心"
     );
     // Tighten default visibility: ROLE_USER is non-binding and should not be added by default
@@ -446,7 +445,7 @@ public class AdminApiResource {
                 request != null ? request.getHeader("User-Agent") : null,
                 request != null ? request.getRequestURI() : "/api/admin/system/config"
             );
-            return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
         } catch (IllegalStateException ex) {
             recordSystemConfigSubmitFailureV2(
                 SecurityUtils.getCurrentAuditableLogin(),
@@ -534,7 +533,7 @@ public class AdminApiResource {
                 recordPortalMenuActionV2(
                     actor,
                     MenuAuditContext.Operation.SUBMIT_APPROVAL,
-                    AuditResultStatus.PENDING,
+                    AuditResultStatus.SUCCESS,
                     null,
                     pendingRef,
                     cr,
@@ -544,7 +543,7 @@ public class AdminApiResource {
                     "POST",
                     "提交新增菜单审批：" + pendingRef
                 );
-                return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
+                return ResponseEntity.status(202).body(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
             }
             String name = trimToNull(payload.get("name"));
             String path = trimToNull(payload.get("path"));
@@ -735,12 +734,9 @@ public class AdminApiResource {
                 approvalDetail.put("changeRequestId", cr.getId());
                 approvalDetail.put("summary", pendingSummary);
                 approvalDetail.put("operationName", pendingSummary);
-                if (enabling) {
-                    approvalDetail.put("operationType", AuditOperationType.ENABLE.getCode());
-                    approvalDetail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
-                } else if (disabling) {
-                    approvalDetail.put("operationType", AuditOperationType.DISABLE.getCode());
-                    approvalDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+                if (enabling || disabling) {
+                    approvalDetail.put("operationType", AuditOperationType.UPDATE.getCode());
+                    approvalDetail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
                 }
                 if (menuId != null) {
                     approvalDetail.put("menuId", menuId);
@@ -752,7 +748,7 @@ public class AdminApiResource {
                 recordPortalMenuActionV2(
                     actor,
                     MenuAuditContext.Operation.SUBMIT_APPROVAL,
-                    AuditResultStatus.PENDING,
+                    AuditResultStatus.SUCCESS,
                     menuId,
                     menuLabel,
                     cr,
@@ -764,7 +760,7 @@ public class AdminApiResource {
                 );
                 cr.setSummary(pendingSummary);
                 crRepo.save(cr);
-                return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
+                return ResponseEntity.status(202).body(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
             }
             applyMenuUpdates(beforeEntity, payload);
             boolean visibilityTouched = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
@@ -794,9 +790,9 @@ public class AdminApiResource {
             detail.put("menuCode", persisted.getName());
             detail.put("menuTitle", persistedLabel);
             detail.put("menuPath", persisted.getPath());
-            if (enabling) {
-                detail.put("operationType", AuditOperationType.ENABLE.getCode());
-                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            if (enabling || disabling) {
+                detail.put("operationType", AuditOperationType.UPDATE.getCode());
+                detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
             }
             MenuAuditContext.Operation auditOp = enabling
                 ? MenuAuditContext.Operation.ENABLE
@@ -836,9 +832,9 @@ public class AdminApiResource {
             detail.put("menuCode", beforeEntity != null ? beforeEntity.getName() : null);
             detail.put("menuTitle", menuLabel);
             detail.put("menuPath", beforeEntity != null ? beforeEntity.getPath() : null);
-            if (enabling) {
-                detail.put("operationType", AuditOperationType.ENABLE.getCode());
-                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            if (enabling || disabling) {
+                detail.put("operationType", AuditOperationType.UPDATE.getCode());
+                detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
             }
             MenuAuditContext.Operation auditOp = enabling
                 ? MenuAuditContext.Operation.ENABLE
@@ -869,9 +865,9 @@ public class AdminApiResource {
             String failureSummary = enabling ? "启用菜单失败：" + menuLabel : "修改菜单失败：" + menuLabel;
             detail.put("summary", failureSummary);
             detail.put("operationName", failureSummary);
-            if (enabling) {
-                detail.put("operationType", AuditOperationType.ENABLE.getCode());
-                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            if (enabling || disabling) {
+                detail.put("operationType", AuditOperationType.UPDATE.getCode());
+                detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
             }
             MenuAuditContext.Operation auditOp = enabling
                 ? MenuAuditContext.Operation.ENABLE
@@ -903,9 +899,9 @@ public class AdminApiResource {
             String failureSummary = enabling ? "启用菜单失败：" + menuLabel : "修改菜单失败：" + menuLabel;
             detail.put("summary", failureSummary);
             detail.put("operationName", failureSummary);
-            if (enabling) {
-                detail.put("operationType", AuditOperationType.ENABLE.getCode());
-                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            if (enabling || disabling) {
+                detail.put("operationType", AuditOperationType.UPDATE.getCode());
+                detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
             }
             MenuAuditContext.Operation auditOp = enabling
                 ? MenuAuditContext.Operation.ENABLE
@@ -970,8 +966,8 @@ public class AdminApiResource {
                 String pendingSummary = "提交菜单禁用审批：" + menuLabel;
                 approvalDetail.put("summary", pendingSummary);
                 approvalDetail.put("operationName", pendingSummary);
-                approvalDetail.put("operationType", AuditOperationType.DISABLE.getCode());
-                approvalDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+                approvalDetail.put("operationType", AuditOperationType.UPDATE.getCode());
+                approvalDetail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
                 approvalDetail.put("menuId", menuId);
                 approvalDetail.put("menuCode", entity.getName());
                 approvalDetail.put("menuTitle", menuLabel);
@@ -980,7 +976,7 @@ public class AdminApiResource {
                 recordPortalMenuActionV2(
                     actor,
                     MenuAuditContext.Operation.SUBMIT_APPROVAL,
-                    AuditResultStatus.PENDING,
+                    AuditResultStatus.SUCCESS,
                     menuId,
                     menuLabel,
                     cr,
@@ -992,14 +988,14 @@ public class AdminApiResource {
                 );
                 cr.setSummary(pendingSummary);
                 crRepo.save(cr);
-                return ResponseEntity.status(202).body(ApiResponse.ok(toChangeVM(cr)));
+                return ResponseEntity.status(202).body(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
             } catch (IllegalStateException ex) {
                 Map<String, Object> failureDetail = new LinkedHashMap<>(auditDetail);
                 failureDetail.put("error", ex.getMessage());
                 failureDetail.put("summary", "禁用菜单失败：" + menuLabel);
                 failureDetail.put("operationName", "禁用菜单失败：" + menuLabel);
-                failureDetail.put("operationType", AuditOperationType.DISABLE.getCode());
-                failureDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+                failureDetail.put("operationType", AuditOperationType.UPDATE.getCode());
+                failureDetail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
                 failureDetail.put("menuId", menuId);
                 failureDetail.put("menuCode", entity.getName());
                 failureDetail.put("menuTitle", menuLabel);
@@ -1030,8 +1026,8 @@ public class AdminApiResource {
             appendChangeSummary(detail, "PORTAL_MENU", before, after);
             detail.put("summary", "禁用菜单：" + menuLabel);
             detail.put("operationName", "禁用菜单：" + menuLabel);
-            detail.put("operationType", AuditOperationType.DISABLE.getCode());
-            detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+            detail.put("operationType", AuditOperationType.UPDATE.getCode());
+            detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
             detail.put("menuId", entity.getId());
             detail.put("menuCode", entity.getName());
             detail.put("menuTitle", menuLabel);
@@ -1059,8 +1055,8 @@ public class AdminApiResource {
             detail.put("error", ex.getMessage());
             detail.put("summary", "禁用菜单失败：" + menuLabel);
             detail.put("operationName", "禁用菜单失败：" + menuLabel);
-            detail.put("operationType", AuditOperationType.DISABLE.getCode());
-            detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+            detail.put("operationType", AuditOperationType.UPDATE.getCode());
+            detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
             detail.put("menuId", menuId);
             detail.put("menuCode", entity.getName());
             detail.put("menuTitle", menuLabel);
@@ -1602,7 +1598,7 @@ public class AdminApiResource {
                 null,
                 request
             );
-            return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
         } catch (IllegalStateException ex) {
             recordCustomRoleCreateV2(
                 SecurityUtils.getCurrentAuditableLogin(),
@@ -1680,7 +1676,7 @@ public class AdminApiResource {
                 null,
                 request
             );
-            return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
         } catch (IllegalStateException ex) {
             recordRoleAssignmentCreateV2(
                 SecurityUtils.getCurrentAuditableLogin(),
@@ -1711,6 +1707,7 @@ public class AdminApiResource {
         augmentChangeRequestViewsFromApprovals(viewById);
         List<Map<String, Object>> responseList = new ArrayList<>(viewById.values());
         responseList.sort((a, b) -> compareByRequestedAtDesc(a, b));
+        applyChangeRequestDisplayNames(responseList);
         String actor = SecurityUtils.getCurrentAuditableLogin();
         recordChangeRequestListV2(actor, responseList.size(), request, false);
         return ResponseEntity.ok(ApiResponse.ok(responseList));
@@ -1726,6 +1723,7 @@ public class AdminApiResource {
         augmentChangeRequestViewsFromApprovalsForActor(viewById, me);
         List<Map<String, Object>> list = new ArrayList<>(viewById.values());
         list.sort((a, b) -> compareByRequestedAtDesc(a, b));
+        applyChangeRequestDisplayNames(list);
         String actor = SecurityUtils.getCurrentAuditableLogin();
         recordChangeRequestListV2(actor, list.size(), request, true);
         return ResponseEntity.ok(ApiResponse.ok(list));
@@ -1738,10 +1736,14 @@ public class AdminApiResource {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("变更不存在"));
         }
         Map<String, Object> vm = toChangeVM(cr);
+        applyChangeRequestDisplayNames(Collections.singleton(vm));
         LinkedHashMap<Long, Map<String, Object>> viewById = new LinkedHashMap<>();
         viewById.put(cr.getId(), vm);
         augmentChangeRequestViewsFromApprovals(viewById);
         Map<String, Object> enriched = viewById.get(cr.getId());
+        if (enriched != null) {
+            applyChangeRequestDisplayNames(Collections.singleton(enriched));
+        }
         if (!isAuditSuppressed(request)) {
             String actor = SecurityUtils.getCurrentAuditableLogin();
             Map<String, Object> auditDetail = buildChangeAuditDetail(cr);
@@ -1810,7 +1812,7 @@ public class AdminApiResource {
         auditDetail.put("action", "CREATE");
         attachChangeRequestMetadata(auditDetail, cr);
         recordChangeRequestDraftV2(SecurityUtils.getCurrentAuditableLogin(), cr, request, auditDetail);
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
     }
 
     @PostMapping("/change-requests/{id}/submit")
@@ -1874,7 +1876,7 @@ public class AdminApiResource {
                 )
             );
         } catch (Exception ignored) {}
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
     }
 
     @PostMapping("/change-requests/{id}/approve")
@@ -1934,7 +1936,7 @@ public class AdminApiResource {
             try {
                 notifyClient.trySend("approval_approved", Map.of("id", id, "type", cr.getResourceType(), "status", cr.getStatus()));
             } catch (Exception ignored) {}
-            return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
         }
         try {
             notifyClient.trySend(
@@ -1972,7 +1974,7 @@ public class AdminApiResource {
             request != null ? request.getHeader("User-Agent") : null,
             request != null ? request.getRequestURI() : "/api/admin/change-requests/" + id + "/reject"
         );
-        return ResponseEntity.ok(ApiResponse.ok(toChangeVM(cr)));
+        return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
     }
 
     @GetMapping("/roles")
@@ -3471,8 +3473,7 @@ public class AdminApiResource {
             case "BATCH_UPDATE", "BULK_UPDATE" -> AuditOperationType.UPDATE;
             case "ASSIGN", "GRANT_ROLE" -> AuditOperationType.GRANT;
             case "REVOKE_ROLE" -> AuditOperationType.REVOKE;
-            case "ENABLE" -> AuditOperationType.ENABLE;
-            case "DISABLE" -> AuditOperationType.DISABLE;
+            case "ENABLE", "DISABLE" -> AuditOperationType.UPDATE;
             case "SET_PERSON_LEVEL" -> AuditOperationType.UPDATE;
             case "RESET_PASSWORD" -> AuditOperationType.UPDATE;
             default -> AuditOperationType.UNKNOWN;
@@ -4672,62 +4673,11 @@ public class AdminApiResource {
             }
         }
 
-        LinkedHashSet<String> beforePermissions = extractMenuPermissions(beforeMap);
-        LinkedHashSet<String> afterPermissions = extractMenuPermissions(afterMap);
-        List<String> beforePermissionList = new ArrayList<>(beforePermissions);
-        List<String> afterPermissionList = new ArrayList<>(afterPermissions);
-
-        List<String> addedPermissions = new ArrayList<>();
-        for (String perm : afterPermissions) {
-            if (!beforePermissions.contains(perm)) {
-                addedPermissions.add(perm);
-            }
-        }
-        List<String> removedPermissions = new ArrayList<>();
-        for (String perm : beforePermissions) {
-            if (!afterPermissions.contains(perm)) {
-                removedPermissions.add(perm);
-            }
-        }
-
-        LinkedHashSet<VisibilityRuleKey> beforeRules = extractMenuVisibilityRules(beforeMap);
-        LinkedHashSet<VisibilityRuleKey> afterRules = extractMenuVisibilityRules(afterMap);
-        List<VisibilityRuleKey> addedRuleKeys = new ArrayList<>();
-        for (VisibilityRuleKey key : afterRules) {
-            if (!beforeRules.contains(key)) {
-                addedRuleKeys.add(key);
-            }
-        }
-        List<VisibilityRuleKey> removedRuleKeys = new ArrayList<>();
-        for (VisibilityRuleKey key : beforeRules) {
-            if (!afterRules.contains(key)) {
-                removedRuleKeys.add(key);
-            }
-        }
-
-        String beforeMaxLevel = normalizeMenuLevel(beforeMap.get("maxDataLevel"), true);
-        String afterMaxLevel = normalizeMenuLevel(afterMap.get("maxDataLevel"), true);
-        boolean maxLevelChanged = !Objects.equals(beforeMaxLevel, afterMaxLevel);
-
-        String beforeSecurity = normalizeMenuLevel(beforeMap.get("securityLevel"), false);
-        String afterSecurity = normalizeMenuLevel(afterMap.get("securityLevel"), false);
-        boolean securityChanged = !Objects.equals(beforeSecurity, afterSecurity);
-
         boolean beforeDeleted = toBoolean(beforeMap.get("deleted"));
         boolean afterDeleted = toBoolean(afterMap.get("deleted"));
         boolean statusChanged = (beforeMap.containsKey("deleted") || afterMap.containsKey("deleted")) && beforeDeleted != afterDeleted;
 
-        if (
-            addedRoles.isEmpty() &&
-            removedRoles.isEmpty() &&
-            addedPermissions.isEmpty() &&
-            removedPermissions.isEmpty() &&
-            addedRuleKeys.isEmpty() &&
-            removedRuleKeys.isEmpty() &&
-            !maxLevelChanged &&
-            !securityChanged &&
-            !statusChanged
-        ) {
+        if (addedRoles.isEmpty() && removedRoles.isEmpty() && !statusChanged) {
             return result;
         }
 
@@ -4744,6 +4694,18 @@ public class AdminApiResource {
             stringValue(beforeMap.get("path")),
             menuId
         );
+        if (!StringUtils.hasText(menuTitle) && StringUtils.hasText(menuId)) {
+            try {
+                Long parsedId = Long.valueOf(menuId);
+                PortalMenu menu = portalMenuRepo.findById(parsedId).orElse(null);
+                if (menu != null) {
+                    String resolved = resolveMenuDisplayName(menu);
+                    if (StringUtils.hasText(resolved)) {
+                        menuTitle = resolved;
+                    }
+                }
+            } catch (NumberFormatException ignored) {}
+        }
         String menuPath = firstNonBlank(stringValue(afterMap.get("path")), stringValue(beforeMap.get("path")));
         String menuName = firstNonBlank(stringValue(afterMap.get("name")), stringValue(beforeMap.get("name")));
 
@@ -4772,71 +4734,36 @@ public class AdminApiResource {
         if (!removedRoles.isEmpty()) {
             entry.put("removedRoles", removedRoles);
         }
-        if (!beforePermissionList.isEmpty()) {
-            entry.put("allowedPermissionsBefore", beforePermissionList);
-        }
-        if (!afterPermissionList.isEmpty()) {
-            entry.put("allowedPermissionsAfter", afterPermissionList);
-        }
-        if (!addedPermissions.isEmpty()) {
-            entry.put("addedPermissions", addedPermissions);
-        }
-        if (!removedPermissions.isEmpty()) {
-            entry.put("removedPermissions", removedPermissions);
-        }
-        if (!addedRuleKeys.isEmpty()) {
-            entry.put("addedRules", addedRuleKeys.stream().map(this::toRuleDetail).toList());
-        }
-        if (!removedRuleKeys.isEmpty()) {
-            entry.put("removedRules", removedRuleKeys.stream().map(this::toRuleDetail).toList());
-        }
-        if (maxLevelChanged) {
-            entry.put("maxDataLevelBefore", beforeMaxLevel);
-            entry.put("maxDataLevelAfter", afterMaxLevel);
-            entry.put("maxDataLevelBeforeLabel", labelForMenuLevel(beforeMaxLevel, null));
-            entry.put("maxDataLevelAfterLabel", labelForMenuLevel(afterMaxLevel, null));
-        }
-        if (securityChanged) {
-            entry.put("securityLevelBefore", beforeSecurity);
-            entry.put("securityLevelAfter", afterSecurity);
-            entry.put("securityLevelBeforeLabel", labelForSecurityLevel(beforeSecurity, null));
-            entry.put("securityLevelAfterLabel", labelForSecurityLevel(afterSecurity, null));
-        }
         if (statusChanged) {
             entry.put("deletedBefore", beforeDeleted);
             entry.put("deletedAfter", afterDeleted);
             entry.put("statusBeforeLabel", beforeDeleted ? "禁用" : "启用");
             entry.put("statusAfterLabel", afterDeleted ? "禁用" : "启用");
         }
+        Set<String> allowedKeys = Set.of(
+            "menuId",
+            "menuTitle",
+            "allowedRolesBefore",
+            "allowedRolesAfter",
+            "addedRoles",
+            "removedRoles",
+            "deletedBefore",
+            "deletedAfter",
+            "statusBeforeLabel",
+            "statusAfterLabel"
+        );
+        entry.entrySet().removeIf(e -> !allowedKeys.contains(e.getKey()));
         result.menuChanges().add(entry);
 
         List<String> summaryParts = new ArrayList<>();
+        if (statusChanged) {
+            summaryParts.add("状态：" + (beforeDeleted ? "禁用" : "启用") + " → " + (afterDeleted ? "禁用" : "启用"));
+        }
         if (!addedRoles.isEmpty()) {
             summaryParts.add("新增角色：" + formatRoleList(addedRoles));
         }
         if (!removedRoles.isEmpty()) {
             summaryParts.add("移除角色：" + formatRoleList(removedRoles));
-        }
-        if (!addedPermissions.isEmpty()) {
-            summaryParts.add("新增权限：" + String.join("、", addedPermissions));
-        }
-        if (!removedPermissions.isEmpty()) {
-            summaryParts.add("移除权限：" + String.join("、", removedPermissions));
-        }
-        if (!addedRuleKeys.isEmpty()) {
-            summaryParts.add("新增规则：" + formatRoleList(addedRuleKeys.stream().map(this::formatRuleLabel).toList()));
-        }
-        if (!removedRuleKeys.isEmpty()) {
-            summaryParts.add("移除规则：" + formatRoleList(removedRuleKeys.stream().map(this::formatRuleLabel).toList()));
-        }
-        if (maxLevelChanged) {
-            summaryParts.add("最大数据密级：" + labelForMenuLevel(beforeMaxLevel, "未设置") + " → " + labelForMenuLevel(afterMaxLevel, "未设置"));
-        }
-        if (securityChanged) {
-            summaryParts.add("访问密级：" + labelForSecurityLevel(beforeSecurity, "未设置") + " → " + labelForSecurityLevel(afterSecurity, "未设置"));
-        }
-        if (statusChanged) {
-            summaryParts.add("状态：" + (beforeDeleted ? "禁用" : "启用") + " → " + (afterDeleted ? "禁用" : "启用"));
         }
 
         if (!summaryParts.isEmpty()) {
@@ -4880,37 +4807,6 @@ public class AdminApiResource {
             }
         }
         return roles;
-    }
-
-    private LinkedHashSet<String> extractMenuPermissions(Map<String, Object> payload) {
-        LinkedHashSet<String> permissions = new LinkedHashSet<>();
-        if (payload == null) {
-            return permissions;
-        }
-        Object raw = payload.get("allowedPermissions");
-        if (raw instanceof Collection<?> collection) {
-            for (Object item : collection) {
-                if (item != null) {
-                    String text = item.toString().trim();
-                    if (!text.isEmpty()) {
-                        permissions.add(text);
-                    }
-                }
-            }
-        } else if (raw != null) {
-            String text = raw.toString().trim();
-            if (!text.isEmpty()) {
-                permissions.add(text);
-            }
-        }
-        if (permissions.isEmpty()) {
-            for (VisibilityRuleKey key : extractMenuVisibilityRules(payload)) {
-                if (StringUtils.hasText(key.permission())) {
-                    permissions.add(key.permission());
-                }
-            }
-        }
-        return permissions;
     }
 
     private String resolveMenuTitle(Map<String, Object> payload) {
@@ -5003,34 +4899,6 @@ public class AdminApiResource {
         return rules;
     }
 
-    private Map<String, Object> toRuleDetail(VisibilityRuleKey key) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("role", displayRoleCode(key.role()));
-        if (StringUtils.hasText(key.permission())) {
-            map.put("permission", key.permission());
-        }
-        if (StringUtils.hasText(key.dataLevel())) {
-            map.put("dataLevel", key.dataLevel());
-            map.put("dataLevelLabel", labelForMenuLevel(key.dataLevel(), key.dataLevel()));
-        }
-        return map;
-    }
-
-    private String formatRuleLabel(VisibilityRuleKey key) {
-        StringBuilder sb = new StringBuilder(displayRoleCode(key.role()));
-        List<String> attrs = new ArrayList<>();
-        if (StringUtils.hasText(key.permission())) {
-            attrs.add("权限: " + key.permission());
-        }
-        if (StringUtils.hasText(key.dataLevel())) {
-            attrs.add("密级: " + labelForMenuLevel(key.dataLevel(), key.dataLevel()));
-        }
-        if (!attrs.isEmpty()) {
-            sb.append("【").append(String.join("，", attrs)).append("】");
-        }
-        return sb.toString();
-    }
-
     private String formatRoleList(List<String> roles) {
         return roles.stream().filter(StringUtils::hasText).collect(Collectors.joining("、"));
     }
@@ -5066,13 +4934,6 @@ public class AdminApiResource {
             return fallback;
         }
         return MENU_DATA_LEVEL_LABELS.getOrDefault(level, fallback != null ? fallback : level);
-    }
-
-    private String labelForSecurityLevel(String level, String fallback) {
-        if (!StringUtils.hasText(level)) {
-            return fallback;
-        }
-        return MENU_SECURITY_LEVEL_LABELS.getOrDefault(level, fallback != null ? fallback : level);
     }
 
     private static final class MenuChangeSummaryResult {
@@ -5223,6 +5084,14 @@ public class AdminApiResource {
                     );
                 } catch (Exception ignored) {}
             }
+        } else if ("ENABLE".equalsIgnoreCase(action)) {
+            Long id = Long.valueOf(cr.getResourceId());
+            portalMenuRepo
+                .findById(id)
+                .ifPresent(target -> {
+                    restoreMenu(target);
+                    portalMenuRepo.save(target);
+                });
         } else if ("DISABLE".equalsIgnoreCase(action) || "DELETE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());
             portalMenuRepo
@@ -5662,6 +5531,76 @@ public class AdminApiResource {
             return out;
         }
         return value;
+    }
+
+    private Map<String, Object> withDisplayNames(Map<String, Object> view) {
+        if (view == null || view.isEmpty()) {
+            return view;
+        }
+        applyChangeRequestDisplayNames(Collections.singleton(view));
+        return view;
+    }
+
+    private void applyChangeRequestDisplayNames(Collection<Map<String, Object>> views) {
+        if (views == null || views.isEmpty()) {
+            return;
+        }
+        LinkedHashSet<String> usernames = new LinkedHashSet<>();
+        for (Map<String, Object> view : views) {
+            collectUsernameForDisplay(usernames, view.get("requestedBy"));
+            collectUsernameForDisplay(usernames, view.get("decidedBy"));
+        }
+        if (usernames.isEmpty()) {
+            return;
+        }
+        Map<String, String> resolved;
+        try {
+            resolved = adminUserService.resolveDisplayNames(usernames);
+        } catch (Exception ex) {
+            log.warn("Failed to resolve display names for change requests: {}", ex.getMessage());
+            resolved = Collections.emptyMap();
+        }
+        for (Map<String, Object> view : views) {
+            applyDisplayName(view, "requestedBy", "requestedByDisplayName", resolved);
+            applyDisplayName(view, "decidedBy", "decidedByDisplayName", resolved);
+        }
+    }
+
+    private void collectUsernameForDisplay(Set<String> usernames, Object value) {
+        String username = stringValue(value);
+        if (StringUtils.hasText(username)) {
+            usernames.add(username.trim());
+        }
+    }
+
+    private void applyDisplayName(Map<String, Object> view, String sourceKey, String targetKey, Map<String, String> resolved) {
+        String username = stringValue(view.get(sourceKey));
+        if (!StringUtils.hasText(username)) {
+            return;
+        }
+        String displayName = displayNameFor(username, resolved);
+        if (StringUtils.hasText(displayName)) {
+            view.put(targetKey, displayName);
+        }
+    }
+
+    private String displayNameFor(String username, Map<String, String> resolved) {
+        if (!StringUtils.hasText(username)) {
+            return null;
+        }
+        String trimmed = username.trim();
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        String display = null;
+        if (resolved != null) {
+            display = resolved.get(trimmed);
+            if (!StringUtils.hasText(display)) {
+                display = resolved.get(lower);
+            }
+        }
+        if (!StringUtils.hasText(display)) {
+            display = SYSTEM_ACCOUNT_DISPLAY_NAMES.get(lower);
+        }
+        return trimToNull(display);
     }
 
     private static Map<String, Object> toChangeVM(ChangeRequest cr) {

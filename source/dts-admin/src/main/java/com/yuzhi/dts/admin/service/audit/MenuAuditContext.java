@@ -116,8 +116,8 @@ public final class MenuAuditContext {
     public enum Operation {
         CREATE(ButtonCodes.PORTAL_MENU_CREATE, AuditOperationType.CREATE),
         UPDATE(ButtonCodes.PORTAL_MENU_UPDATE, AuditOperationType.UPDATE),
-        ENABLE(ButtonCodes.PORTAL_MENU_UPDATE, AuditOperationType.ENABLE),
-        DISABLE(ButtonCodes.PORTAL_MENU_UPDATE, AuditOperationType.DISABLE),
+        ENABLE(ButtonCodes.PORTAL_MENU_UPDATE, AuditOperationType.UPDATE),
+        DISABLE(ButtonCodes.PORTAL_MENU_UPDATE, AuditOperationType.UPDATE),
         DELETE(ButtonCodes.PORTAL_MENU_DELETE, AuditOperationType.DELETE),
         RESTORE(ButtonCodes.PORTAL_MENU_UPDATE, AuditOperationType.UPDATE),
         SUBMIT_APPROVAL(ButtonCodes.PORTAL_MENU_UPDATE, AuditOperationType.CREATE),

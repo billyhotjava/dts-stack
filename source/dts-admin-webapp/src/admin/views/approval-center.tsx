@@ -582,6 +582,47 @@ export default function ApprovalCenterView() {
 		});
 	}, [combinedChangeRequests, decisions]);
 
+	useEffect(() => {
+		if (!combinedChangeRequests || combinedChangeRequests.length === 0) {
+			return;
+		}
+		const updates: Record<string, string> = {};
+		for (const item of combinedChangeRequests) {
+			const requestedBy = item.requestedBy?.trim();
+			const requestedName = item.requestedByDisplayName?.toString().trim();
+			if (requestedBy && requestedName) {
+				updates[requestedBy] = requestedName;
+			}
+			const decidedBy = item.decidedBy?.trim();
+			const decidedName = item.decidedByDisplayName?.toString().trim();
+			if (decidedBy && decidedName) {
+				updates[decidedBy] = decidedName;
+			}
+		}
+		const keys = Object.keys(updates);
+		if (keys.length === 0) {
+			return;
+		}
+		setOperatorNameMap((prev) => {
+			let changed = false;
+			const next = { ...prev };
+			for (const username of keys) {
+				const display = updates[username];
+				if (!display) continue;
+				if (next[username] !== display) {
+					next[username] = display;
+					changed = true;
+				}
+				const lower = username.toLowerCase();
+				if (next[lower] !== display) {
+					next[lower] = display;
+					changed = true;
+				}
+			}
+			return changed ? next : prev;
+		});
+	}, [combinedChangeRequests]);
+
 	function inferResourceTypeFromAction(action: string | undefined): string {
 		const a = (action || "").toUpperCase();
 		if (a.includes("ROLE")) return "ROLE";

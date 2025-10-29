@@ -14,7 +14,6 @@ import type {
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
-import { Checkbox } from "@/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
@@ -117,10 +116,7 @@ export default function RoleManagementView() {
 
     const menuCatalog = useMemo(() => buildMenuCatalog(portalMenus), [portalMenus]);
     const menuOptions = menuCatalog.options;
-    const menuRoleMap = menuCatalog.menuRoleMap;
     const roleMenuIndex = menuCatalog.roleToMenuIds;
-    const menuParentMap = menuCatalog.parentMap;
-    const menuChildrenMap = menuCatalog.childrenMap;
     const menuLabelMap = useMemo(() => {
         const map = new Map<number, string>();
         menuOptions.forEach((option) => {
@@ -572,25 +568,16 @@ export default function RoleManagementView() {
                 open={createOpen}
                 onOpenChange={setCreateOpen}
                 onSubmitted={handleCreateSubmitted}
-                menuOptions={menuOptions}
-                menuRoleMap={menuRoleMap}
-                menuParentMap={menuParentMap}
-                menuChildrenMap={menuChildrenMap}
             />
             <UpdateRoleDialog
                 target={editTarget}
                 onClose={() => setEditTarget(null)}
                 onSubmitted={handleUpdateSubmitted}
-                menuOptions={menuOptions}
-                menuRoleMap={menuRoleMap}
-                menuParentMap={menuParentMap}
-                menuChildrenMap={menuChildrenMap}
             />
             <DeleteRoleDialog
                 target={deleteTarget}
                 onClose={() => setDeleteTarget(null)}
                 onSubmitted={handleDeleteSubmitted}
-                menuRoleMap={menuRoleMap}
             />
             <MembersDialog target={memberTarget} onClose={() => setMemberTarget(null)} />
             </div>
@@ -602,13 +589,9 @@ interface CreateRoleDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSubmitted: () => void;
-    menuOptions: MenuOption[];
-    menuRoleMap: Map<number, MenuOption>;
-    menuParentMap: Map<number, number | null>;
-    menuChildrenMap: Map<number, number[]>;
 }
 
-function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRoleMap, menuParentMap, menuChildrenMap }: CreateRoleDialogProps) {
+function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogProps) {
     const [name, setName] = useState("");
     const [displayName, setDisplayName] = useState("");
     const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE" | undefined>(undefined);
@@ -616,7 +599,6 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
     const [description, setDescription] = useState("");
     const [reason, setReason] = useState("");
     const [submitting, setSubmitting] = useState(false);
-    const [selectedMenus, setSelectedMenus] = useState<Set<number>>(new Set());
 
     const resetState = useCallback(() => {
         setName("");
@@ -625,64 +607,8 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
         setAllowDesensitize(true);
         setDescription("");
         setReason("");
-        setSelectedMenus(new Set());
         setSubmitting(false);
     }, []);
-
-    const getDescendants = (startId: number): number[] => {
-        const acc: number[] = [];
-        const stack: number[] = [startId];
-        const visited = new Set<number>();
-        while (stack.length) {
-            const cur = stack.pop()!;
-            if (visited.has(cur)) continue;
-            visited.add(cur);
-            const children = menuChildrenMap.get(cur) || [];
-            for (const c of children) {
-                acc.push(c);
-                stack.push(c);
-            }
-        }
-        return acc;
-    };
-
-    const getAncestors = (startId: number): number[] => {
-        const list: number[] = [];
-        let cur: number | null | undefined = menuParentMap.get(startId) ?? null;
-        while (cur != null) {
-            list.push(cur);
-            cur = menuParentMap.get(cur) ?? null;
-        }
-        return list;
-    };
-
-    const toggleMenu = (id: number, checked: boolean) => {
-        setSelectedMenus((prev) => {
-            const next = new Set(prev);
-            const descendants = getDescendants(id);
-            if (checked) {
-                const selfOpt = menuRoleMap.get(id);
-                if (!selfOpt?.deleted) {
-                    next.add(id);
-                }
-                descendants.forEach((d) => {
-                    const opt = menuRoleMap.get(d);
-                    if (!opt?.deleted) next.add(d);
-                });
-            } else {
-                next.delete(id);
-                descendants.forEach((d) => next.delete(d));
-                // if no child selected for any ancestor, uncheck that ancestor
-                const ancestors = getAncestors(id);
-                for (const p of ancestors) {
-                    const desc = getDescendants(p);
-                    const anySelected = desc.some((d) => next.has(d));
-                    if (!anySelected) next.delete(p);
-                }
-            }
-            return next;
-        });
-    };
 
     const handleSubmit = async () => {
         const trimmedName = name.trim();
@@ -721,19 +647,6 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
             const change = await adminApi.createCustomRole(payload);
             if (change?.id != null) {
                 await adminApi.submitChangeRequest(change.id);
-            }
-            if (selectedMenus.size > 0) {
-                try {
-                    await submitMenuChangeRequests({
-                        authority: toRoleAuthority(trimmedName),
-                        desiredMenuIds: new Set(selectedMenus),
-                        originalMenuIds: new Set(),
-                        menuRoleMap,
-                        reason: trimmedReason,
-                    });
-                } catch (error: any) {
-                    toast.error(error?.message ?? "菜单绑定申请提交失败，请在审批中心确认状态");
-                }
             }
             toast.success("角色创建申请已提交审批");
             onSubmitted();
@@ -829,38 +742,11 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted, menuOptions, menuRo
                         </Text>
                     </div>
                     <div className="space-y-2">
-                        <span className="font-medium">访问菜单</span>
-                        {menuOptions.length === 0 ? (
-                            <Text variant="body3" className="text-muted-foreground">
-                                暂无可绑定的菜单，请稍后再试。
-                            </Text>
-                        ) : (
-                            <div className="max-h-60 space-y-1 overflow-y-auto rounded-md border p-3">
-                                {menuOptions.map((option) => {
-                                    const disabled = Boolean(option.deleted);
-                                    return (
-                                        <label
-                                            key={option.id}
-                                            className={`flex items-center gap-2 text-sm ${disabled ? "text-muted-foreground cursor-not-allowed" : ""}`}
-                                            style={{ paddingLeft: option.depth * 16 }}
-                                            title={option.disabledReason || undefined}
-                                        >
-                                            <Checkbox
-                                                checked={selectedMenus.has(option.id)}
-                                                onCheckedChange={(value) => toggleMenu(option.id, value === true)}
-                                                disabled={disabled}
-                                            />
-                                            <span>{option.label}</span>
-                                        </label>
-                                    );
-                                })}
-                            </div>
-                        )}
+                        <span className="font-medium">菜单可见性</span>
                         <Text variant="body3" className="text-muted-foreground">
-                            审批通过后，所选菜单将自动纳入该角色的可访问范围。
+                            角色与菜单的绑定请在“菜单管理”模块中维护；角色审批通过后，可由菜单管理统一分配可见菜单。
                         </Text>
                     </div>
-                    
                     <div className="space-y-2">
                         <label htmlFor="role-reason" className="font-medium">
                             审批备注（可选）
@@ -891,18 +777,13 @@ interface UpdateRoleDialogProps {
     target: RoleRow | null;
     onClose: () => void;
     onSubmitted: () => void;
-    menuOptions: MenuOption[];
-    menuRoleMap: Map<number, MenuOption>;
-    menuParentMap: Map<number, number | null>;
-    menuChildrenMap: Map<number, number[]>;
 }
 
-function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleMap, menuParentMap, menuChildrenMap }: UpdateRoleDialogProps) {
+function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProps) {
     const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
     const [description, setDescription] = useState("");
     const [reason, setReason] = useState("");
     const [submitting, setSubmitting] = useState(false);
-    const [selectedMenus, setSelectedMenus] = useState<Set<number>>(new Set());
 
     useEffect(() => {
         if (!target) {
@@ -911,126 +792,58 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
         setScope(target.scope ?? "DEPARTMENT");
         setDescription(target.description ?? "");
         setReason("");
-        setSelectedMenus(new Set(target.menuIds));
         setSubmitting(false);
     }, [target]);
-
-    const getDescendants = (startId: number): number[] => {
-        const acc: number[] = [];
-        const stack: number[] = [startId];
-        const visited = new Set<number>();
-        while (stack.length) {
-            const cur = stack.pop()!;
-            if (visited.has(cur)) continue;
-            visited.add(cur);
-            const children = menuChildrenMap.get(cur) || [];
-            for (const c of children) {
-                acc.push(c);
-                stack.push(c);
-            }
-        }
-        return acc;
-    };
-
-    const getAncestors = (startId: number): number[] => {
-        const list: number[] = [];
-        let cur: number | null | undefined = menuParentMap.get(startId) ?? null;
-        while (cur != null) {
-            list.push(cur);
-            cur = menuParentMap.get(cur) ?? null;
-        }
-        return list;
-    };
-
-    const toggleMenu = (id: number, checked: boolean) => {
-        setSelectedMenus((prev) => {
-            const next = new Set(prev);
-            const descendants = getDescendants(id);
-            if (checked) {
-                const selfOpt = menuRoleMap.get(id);
-                if (!selfOpt?.deleted) {
-                    next.add(id);
-                }
-                descendants.forEach((d) => {
-                    const opt = menuRoleMap.get(d);
-                    if (!opt?.deleted) next.add(d);
-                });
-            } else {
-                next.delete(id);
-                descendants.forEach((d) => next.delete(d));
-                const ancestors = getAncestors(id);
-                for (const p of ancestors) {
-                    const desc = getDescendants(p);
-                    const anySelected = desc.some((d) => next.has(d));
-                    if (!anySelected) next.delete(p);
-                }
-            }
-            return next;
-        });
-    };
 
     const handleSubmit = async () => {
         if (!target) {
             return;
         }
         const trimmedReason = reason.trim() || undefined;
-        const desiredMenus = new Set(selectedMenus);
-        const originalMenus = new Set(target.menuIds);
-        const menuChanged = !setsEqual(desiredMenus, originalMenus);
         const scopeChanged = (target.scope ?? "DEPARTMENT") !== scope;
         const descriptionChanged = (target.description ?? "") !== description.trim();
         const nextOperations = target.operations && target.operations.length ? target.operations : ["read"];
 
-        if (!menuChanged && !scopeChanged && !descriptionChanged) {
+        if (!scopeChanged && !descriptionChanged) {
             toast.info("未检测到变更，无需提交审批");
             return;
         }
+
         setSubmitting(true);
         try {
-            if (scopeChanged || descriptionChanged) {
-                const roleName = toRoleName(target.authority);
-                const resourceIdentifier = roleName || target.authority;
-                const payload = {
-                    resourceType: "ROLE",
-                    action: "UPDATE",
-                    resourceId: resourceIdentifier,
-                    payloadJson: JSON.stringify({
-                        id: target.id,
+            const roleName = toRoleName(target.authority);
+            const resourceIdentifier = roleName || target.authority;
+            const change = await adminApi.createChangeRequest({
+                resourceType: "ROLE",
+                action: "UPDATE",
+                resourceId: resourceIdentifier,
+                payloadJson: JSON.stringify({
+                    id: target.id,
+                    name: roleName,
+                    scope,
+                    operations: nextOperations,
+                    description: description.trim() || undefined,
+                }),
+                diffJson: JSON.stringify({
+                    before: {
+                        id: target.id ?? null,
+                        name: roleName,
+                        scope: target.scope ?? null,
+                        operations: target.operations ?? [],
+                        description: target.description ?? null,
+                    },
+                    after: {
+                        id: target.id ?? null,
                         name: roleName,
                         scope,
                         operations: nextOperations,
-                        description: description.trim() || undefined,
-                    }),
-                    diffJson: JSON.stringify({
-                        before: {
-                            id: target.id ?? null,
-                            name: roleName,
-                            scope: target.scope ?? null,
-                            operations: target.operations ?? [],
-                            description: target.description ?? null,
-                        },
-                        after: {
-                            id: target.id ?? null,
-                            name: roleName,
-                            scope,
-                            operations: nextOperations,
-                            description: description.trim() || null,
-                        },
-                    }),
-                    reason: trimmedReason,
-                };
-                const change = await adminApi.createChangeRequest(payload);
-                await adminApi.submitChangeRequest(change.id);
-            }
-            if (menuChanged) {
-                await submitMenuChangeRequests({
-                    authority: toRoleAuthority(target.authority),
-                    desiredMenuIds: desiredMenus,
-                    originalMenuIds: originalMenus,
-                    menuRoleMap,
-                    reason: trimmedReason,
-                });
-            }
+                        description: description.trim() || null,
+                    },
+                }),
+                reason: trimmedReason,
+            });
+            await adminApi.submitChangeRequest(change.id);
+
             toast.success("更新申请已提交审批");
             onSubmitted();
             onClose();
@@ -1106,36 +919,23 @@ function UpdateRoleDialog({ target, onClose, onSubmitted, menuOptions, menuRoleM
                             />
                         </div>
                         <div className="space-y-2">
-                            <span className="font-medium">绑定菜单</span>
-                            {menuOptions.length === 0 ? (
-                                <Text variant="body3" className="text-muted-foreground">
-                                    暂无可配置的菜单。
-                                </Text>
-                            ) : (
-                                <div className="max-h-60 space-y-1 overflow-y-auto rounded-md border p-3">
-                                    {menuOptions.map((option) => {
-                                        const disabled = Boolean(option.deleted);
-                                        return (
-                                        <label
-                                            key={option.id}
-                                            className={`flex items-center gap-2 text-sm ${disabled ? "text-muted-foreground cursor-not-allowed" : ""}`}
-                                            style={{ paddingLeft: option.depth * 16 }}
-                                            title={option.disabledReason || undefined}
-                                        >
-                                            <Checkbox
-                                                checked={selectedMenus.has(option.id)}
-                                                onCheckedChange={(value) => toggleMenu(option.id, value === true)}
-                                                disabled={disabled}
-                                            />
-                                            <span>{option.label}</span>
-                                        </label>
-                                    );
-                                })}
-                                </div>
-                            )}
+                            <span className="font-medium">菜单可见性</span>
                             <Text variant="body3" className="text-muted-foreground">
-                                提交审批后，菜单可见性会按最新配置下发。
+                                菜单绑定请在“菜单管理”模块中维护，当前列表仅供查看。
                             </Text>
+                            {target.menuLabels?.length ? (
+                                <div className="flex flex-wrap gap-1">
+                                    {target.menuLabels.map((menu) => (
+                                        <Badge key={menu} variant="outline" className="max-w-[160px] truncate">
+                                            {menu}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            ) : (
+                                <Text variant="body3" className="text-muted-foreground">
+                                    当前未绑定菜单。
+                                </Text>
+                            )}
                         </div>
                     </div>
                 ) : null}
@@ -1156,10 +956,9 @@ interface DeleteRoleDialogProps {
     target: RoleRow | null;
     onClose: () => void;
     onSubmitted: () => void;
-    menuRoleMap: Map<number, MenuOption>;
 }
 
-function DeleteRoleDialog({ target, onClose, onSubmitted, menuRoleMap }: DeleteRoleDialogProps) {
+function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProps) {
     const [reason, setReason] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [checking, setChecking] = useState(false);
@@ -1210,15 +1009,6 @@ function DeleteRoleDialog({ target, onClose, onSubmitted, menuRoleMap }: DeleteR
             };
             const change = await adminApi.createChangeRequest(payload);
             await adminApi.submitChangeRequest(change.id);
-            if (target.menuIds.length) {
-                await submitMenuChangeRequests({
-                    authority: toRoleAuthority(target.authority),
-                    desiredMenuIds: new Set(),
-                    originalMenuIds: new Set(target.menuIds),
-                    menuRoleMap,
-                    reason: trimmedReason,
-                });
-            }
             toast.success("删除申请已提交审批");
             onSubmitted();
             onClose();
@@ -1525,74 +1315,6 @@ function buildMenuCatalog(collection: PortalMenuCollection | undefined): {
     });
 
     return { options, roleToMenuIds, menuRoleMap, parentMap, childrenMap };
-}
-
-async function submitMenuChangeRequests(params: {
-    authority: string;
-    desiredMenuIds: Set<number>;
-    originalMenuIds: Set<number>;
-    menuRoleMap: Map<number, MenuOption>;
-    reason?: string;
-}) {
-    const { authority, desiredMenuIds, originalMenuIds, menuRoleMap, reason } = params;
-    const affectedIds = new Set<number>();
-    desiredMenuIds.forEach((id) => affectedIds.add(id));
-    originalMenuIds.forEach((id) => affectedIds.add(id));
-
-    // Build batched updates: only include items where the role binding actually changes
-    const updates: { id: number; allowedRoles: string[]; _beforeAllowedRoles: string[] }[] = [];
-    affectedIds.forEach((menuId) => {
-        const option = menuRoleMap.get(menuId);
-        if (!option) return;
-        // Skip disabled menus: cannot be assigned/unassigned while disabled
-        if (option.deleted) return;
-        const beforeAllowedRoles = option.rawRoles;
-        const existingRoles = new Set(beforeAllowedRoles);
-        const shouldHave = desiredMenuIds.has(menuId);
-        const currentlyHas = existingRoles.has(authority);
-        if (shouldHave === currentlyHas) return;
-        if (shouldHave) existingRoles.add(authority);
-        else existingRoles.delete(authority);
-        const allowedRoles = Array.from(existingRoles).sort();
-        updates.push({ id: menuId, allowedRoles, _beforeAllowedRoles: beforeAllowedRoles });
-    });
-
-    if (updates.length === 0) return;
-
-    const payload = {
-        resourceType: "PORTAL_MENU",
-        action: "BATCH_UPDATE",
-        resourceId: undefined,
-        payloadJson: JSON.stringify({ updates: updates.map(({ id, allowedRoles }) => ({ id, allowedRoles })) }),
-        diffJson: JSON.stringify({
-            items: updates.map((u) => ({ id: u.id, before: { allowedRoles: u._beforeAllowedRoles }, after: { allowedRoles: u.allowedRoles } })),
-        }),
-        category: "PORTAL_MENU",
-        reason,
-    } as const;
-
-    const change = await adminApi.createChangeRequest(payload as any);
-    await adminApi.submitChangeRequest(change.id);
-
-    // Optimistically update local cache for immediate feedback
-    updates.forEach(({ id, allowedRoles }) => {
-        const option = menuRoleMap.get(id);
-        if (!option) return;
-        option.rawRoles = allowedRoles;
-        option.canonicalRoles = allowedRoles.map(canonicalRole).filter((role) => role.length > 0);
-    });
-}
-
-function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
-    if (a.size !== b.size) {
-        return false;
-    }
-    for (const item of a) {
-        if (!b.has(item)) {
-            return false;
-        }
-    }
-    return true;
 }
 
 function toRoleAuthority(value: string | null | undefined): string {
