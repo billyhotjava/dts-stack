@@ -8,6 +8,8 @@ import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.List;
@@ -26,7 +28,11 @@ import org.springframework.security.authentication.event.InteractiveAuthenticati
 import org.springframework.security.authentication.event.LogoutSuccessEvent;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.web.authentication.WebAuthenticationDetails;
+import org.springframework.security.web.WebAttributes;
 import org.springframework.stereotype.Component;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.context.request.RequestAttributes;
@@ -114,21 +120,9 @@ public class AuthAuditListener {
     @EventListener
     public void onAuthFailure(AbstractAuthenticationFailureEvent evt) {
         String username = sanitizeUsername(evt.getAuthentication());
-        if (username == null) {
-            return;
-        }
         String message = evt.getException() != null && evt.getException().getMessage() != null ? evt.getException().getMessage() : "auth failed";
-        Map<String, Object> detail = Map.of("error", message);
-        recordAuthEventV2(
-            evt.getAuthentication(),
-            username,
-            ButtonCodes.AUTH_ADMIN_LOGIN,
-            AuditResultStatus.FAILED,
-            "系统登录（管理端）失败",
-            detail
-        );
-        if (log.isDebugEnabled()) {
-            log.debug("Auth failure user={} error={}", username, message);
+        if (log.isDebugEnabled() && username != null) {
+            log.debug("Auth failure ignored for audit user={} error={}", username, message);
         }
     }
 
@@ -376,7 +370,19 @@ public class AuthAuditListener {
         if (authentication == null) {
             return null;
         }
-        return sanitizeUsername(authentication.getName());
+        String candidate = sanitizeUsername(authentication.getName());
+        if (candidate != null) {
+            return candidate;
+        }
+        candidate = sanitizeUsername(extractUsernameFromPrincipal(authentication.getPrincipal()));
+        if (candidate != null) {
+            return candidate;
+        }
+        candidate = sanitizeUsername(resolveUsernameFromRequest());
+        if (candidate != null) {
+            return candidate;
+        }
+        return "unknown";
     }
 
     private String sanitizeUsername(String raw) {
@@ -390,7 +396,137 @@ public class AuthAuditListener {
         if ("system".equalsIgnoreCase(sanitized)) {
             return null;
         }
+        if (isMaskedToken(sanitized)) {
+            return null;
+        }
         return sanitized;
+    }
+
+    private String extractUsernameFromPrincipal(Object principal) {
+        if (principal == null) {
+            return null;
+        }
+        if (principal instanceof UserDetails userDetails) {
+            return userDetails.getUsername();
+        }
+        if (principal instanceof OAuth2AuthenticatedPrincipal oauth) {
+            String preferred = oauth.getAttribute("preferred_username");
+            if (StringUtils.isNotBlank(preferred)) {
+                return preferred;
+            }
+            String username = oauth.getAttribute("username");
+            if (StringUtils.isNotBlank(username)) {
+                return username;
+            }
+            String legacy = oauth.getAttribute("user_name");
+            if (StringUtils.isNotBlank(legacy)) {
+                return legacy;
+            }
+            String sub = oauth.getAttribute("sub");
+            if (StringUtils.isNotBlank(sub)) {
+                return sub;
+            }
+        }
+        if (principal instanceof Jwt jwt) {
+            return extractUsernameFromMap(jwt.getClaims());
+        }
+        if (principal instanceof Map<?, ?> map) {
+            return extractUsernameFromMap(map);
+        }
+        if (principal instanceof String str) {
+            return str;
+        }
+        return null;
+    }
+
+    private String extractUsernameFromMap(Map<?, ?> map) {
+        if (map == null || map.isEmpty()) {
+            return null;
+        }
+        return firstNonBlank(
+            toString(map.get("preferred_username")),
+            toString(map.get("username")),
+            toString(map.get("user_name")),
+            toString(map.get("sub")),
+            toString(map.get("name"))
+        );
+    }
+
+    private String toString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString();
+        return text == null ? null : text.trim();
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.isNotBlank(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private boolean isMaskedToken(String value) {
+        return value != null && value.startsWith("token:");
+    }
+
+    private String resolveUsernameFromRequest() {
+        HttpServletRequest request = currentRequest();
+        if (request == null) {
+            return null;
+        }
+        for (String param : List.of("username", "user", "login", "account", "email")) {
+            String value = request.getParameter(param);
+            if (StringUtils.isNotBlank(value)) {
+                return value.trim();
+            }
+        }
+        Object attr = request.getAttribute(WebAttributes.LAST_USERNAME);
+        if (attr instanceof String attrValue && StringUtils.isNotBlank(attrValue)) {
+            return attrValue.trim();
+        }
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            Object sessionAttr = session.getAttribute(WebAttributes.LAST_USERNAME);
+            if (sessionAttr instanceof String sessionValue && StringUtils.isNotBlank(sessionValue)) {
+                return sessionValue.trim();
+            }
+        }
+        String authHeaderUser = resolveUsernameFromAuthorizationHeader(request.getHeader("Authorization"));
+        if (StringUtils.isNotBlank(authHeaderUser)) {
+            return authHeaderUser;
+        }
+        return null;
+    }
+
+    private String resolveUsernameFromAuthorizationHeader(String authorization) {
+        if (!org.springframework.util.StringUtils.hasText(authorization)) {
+            return null;
+        }
+        String trimmed = authorization.trim();
+        if (trimmed.regionMatches(true, 0, "Basic ", 0, 6)) {
+            String token = trimmed.substring(6).trim();
+            try {
+                byte[] decoded = Base64.getDecoder().decode(token);
+                String pair = new String(decoded, StandardCharsets.UTF_8);
+                int colon = pair.indexOf(':');
+                if (colon >= 0) {
+                    return pair.substring(0, colon);
+                }
+                return pair;
+            } catch (IllegalArgumentException ex) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Failed to decode basic auth header: {}", ex.getMessage());
+                }
+            }
+        }
+        return null;
     }
 
     private String resolveDisplayName(String username) {
