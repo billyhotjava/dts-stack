@@ -14,6 +14,7 @@ import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.service.approval.ApprovalStatus;
 import com.yuzhi.dts.admin.service.auditv2.AdminAuditOperation;
+import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationType;
 import com.yuzhi.dts.admin.service.auditv2.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
@@ -1959,6 +1960,9 @@ public class AdminUserService {
                 requeueDetail.put("changeRequestRef", changeRequestRef);
             }
             Map<String, Object> v2Detail = new LinkedHashMap<>(retryDetail);
+            OperationContext failureContext = resolveApprovalOperationContext(collector, AuditOperationType.APPROVE);
+            v2Detail.put("operationType", failureContext.operationType().getCode());
+            v2Detail.put("operationTypeText", failureContext.operationTypeText());
             recordApprovalDecisionV2(
                 approver,
                 "FAILED",
@@ -1971,7 +1975,8 @@ public class AdminUserService {
                 note,
                 v2Detail,
                 collector,
-                buildFallbackApprovalSummary("FAILED", primaryChangeRequestId, id)
+                buildFallbackApprovalSummary("FAILED", primaryChangeRequestId, id),
+                failureContext
             );
             LOG.warn("Approval id={} failed to apply: {}", id, ex.getMessage());
             throw new IllegalStateException("审批执行失败: " + ex.getMessage(), ex);
@@ -2013,8 +2018,17 @@ public class AdminUserService {
             collector.appendDetails(detail);
         }
 
-        detail.put("operationType", operationType.getCode());
-        detail.put("operationTypeText", StringUtils.defaultIfBlank(operationTypeText, operationType.getDisplayName()));
+        OperationContext operationContext = resolveApprovalOperationContext(collector, operationType);
+        String resolvedOperationText;
+        if (operationContext.descriptor() != null) {
+            resolvedOperationText = operationContext.operationTypeText();
+        } else if (StringUtils.isNotBlank(operationTypeText)) {
+            resolvedOperationText = operationTypeText;
+        } else {
+            resolvedOperationText = operationContext.operationTypeText();
+        }
+        detail.put("operationType", operationContext.operationType().getCode());
+        detail.put("operationTypeText", resolvedOperationText);
         Map<String, Object> detailForV2 = new LinkedHashMap<>(detail);
         String summaryText = collector != null ? collector.summaryText() : null;
         summaryText = buildApprovalDecisionSummary(collector, summaryText, statusCode, primaryChangeRequestId, approvalId);
@@ -2030,7 +2044,8 @@ public class AdminUserService {
             note,
             detailForV2,
             collector,
-            summaryText
+            summaryText,
+            operationContext
         );
     }
 
@@ -2046,7 +2061,8 @@ public class AdminUserService {
         String note,
         Map<String, Object> detail,
         ApprovalAuditCollector collector,
-        String summaryText
+        String summaryText,
+        OperationContext operationContext
     ) {
         if (StringUtils.isBlank(approver)) {
             return;
@@ -2080,6 +2096,23 @@ public class AdminUserService {
             }
             builder.metadata("status", statusCode);
             builder.metadata("resultCode", resultCode);
+            OperationContext ctx = operationContext != null
+                ? operationContext
+                : resolveApprovalOperationContext(collector, AuditOperationType.APPROVE);
+            if (ctx != null) {
+                builder.metadata("operationType", ctx.operationType().getCode());
+                builder.metadata("operationTypeText", ctx.operationTypeText());
+                AdminAuditOperation descriptor = ctx.descriptor();
+                if (descriptor != null) {
+                    builder.moduleOverride(descriptor.moduleKey(), descriptor.moduleLabel());
+                }
+                AuditOperationKind overrideKind = mapOperationKind(ctx.operationType());
+                builder.operationOverride(
+                    descriptor != null ? descriptor.code() : null,
+                    descriptor != null ? descriptor.defaultName() : ctx.operationTypeText(),
+                    overrideKind != null ? overrideKind : AuditOperationKind.OTHER
+                );
+            }
             if (StringUtils.isNotBlank(note)) {
                 builder.metadata("note", note);
             }
@@ -2422,6 +2455,62 @@ public class AdminUserService {
         }
         return trimmedSummary + "：" + label;
     }
+
+    private OperationContext resolveApprovalOperationContext(ApprovalAuditCollector collector, AuditOperationType fallbackType) {
+        AuditOperationType effectiveType = fallbackType != null ? fallbackType : AuditOperationType.UNKNOWN;
+        String effectiveText = effectiveType.getDisplayName();
+        AdminAuditOperation descriptor = null;
+        if (collector != null) {
+            descriptor = collector
+                .primaryOperationCode()
+                .flatMap(AdminAuditOperation::fromCode)
+                .orElse(null);
+            if (descriptor != null) {
+                effectiveType = descriptor.type();
+                effectiveText = descriptor.type().getDisplayName();
+            }
+        }
+        if (effectiveType == null) {
+            effectiveType = AuditOperationType.UNKNOWN;
+        }
+        if (StringUtils.isBlank(effectiveText)) {
+            effectiveText = effectiveType.getDisplayName();
+        }
+        return new OperationContext(effectiveType, effectiveText, descriptor);
+    }
+
+    private AuditOperationKind mapOperationKind(AuditOperationType type) {
+        if (type == null) {
+            return AuditOperationKind.OTHER;
+        }
+        return switch (type) {
+            case CREATE -> AuditOperationKind.CREATE;
+            case UPDATE -> AuditOperationKind.UPDATE;
+            case DELETE -> AuditOperationKind.DELETE;
+            case READ, LIST -> AuditOperationKind.QUERY;
+            case LOGIN -> AuditOperationKind.LOGIN;
+            case LOGOUT -> AuditOperationKind.LOGOUT;
+            case EXPORT -> AuditOperationKind.EXPORT;
+            case EXECUTE, TEST -> AuditOperationKind.EXECUTE;
+            case GRANT -> AuditOperationKind.GRANT;
+            case REVOKE -> AuditOperationKind.REVOKE;
+            case ENABLE -> AuditOperationKind.ENABLE;
+            case DISABLE -> AuditOperationKind.DISABLE;
+            case APPROVE -> AuditOperationKind.APPROVE;
+            case REJECT -> AuditOperationKind.REJECT;
+            case PUBLISH -> AuditOperationKind.EXECUTE;
+            case REFRESH -> AuditOperationKind.EXECUTE;
+            case ARCHIVE -> AuditOperationKind.UPDATE;
+            case REQUEST -> AuditOperationKind.OTHER;
+            case UNKNOWN -> AuditOperationKind.OTHER;
+        };
+    }
+
+    private record OperationContext(
+        AuditOperationType operationType,
+        String operationTypeText,
+        AdminAuditOperation descriptor
+    ) {}
 
     private static String firstNonBlank(String... values) {
         if (values == null) {

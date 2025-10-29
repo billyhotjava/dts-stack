@@ -144,28 +144,6 @@ public class QualityRunService {
                 );
             }
         }
-        String runIdSummary = runs
-            .stream()
-            .map(dto -> dto.getId().toString())
-            .collect(Collectors.joining(","));
-        String targetRef = rule.getId() + ":" + runIdSummary;
-        auditService.record(
-            "EXECUTE",
-            "governance.quality.run",
-            "governance.quality.run",
-            targetRef,
-            "SUCCESS",
-            Map.of(
-                "summary",
-                "运行质量规则：" + rule.getName(),
-                "ruleId",
-                rule.getId().toString(),
-                "ruleName",
-                rule.getName(),
-                "runIds",
-                runIdSummary
-            )
-        );
         return runs;
     }
 
@@ -225,13 +203,15 @@ public class QualityRunService {
                 Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
                 payload.put("status", run.getStatus());
                 payload.put("message", run.getMessage());
-                auditService.record(
+                auditService.recordAs(
+                    resolveRunActor(run),
                     "SKIP",
                     "governance.quality.run",
                     "governance.quality.run",
                     runId.toString(),
                     "SUCCESS",
-                    payload
+                    payload,
+                    buildRunAuditTags(run)
                 );
                 return;
             }
@@ -251,25 +231,29 @@ public class QualityRunService {
                 payload.put("status", run.getStatus());
                 payload.put("message", run.getMessage());
                 payload.put("results", results);
-                auditService.record(
+                auditService.recordAs(
+                    resolveRunActor(run),
                     "EXECUTE",
                     "governance.quality.run",
                     "governance.quality.run",
                     runId.toString(),
                     "FAILED",
-                    payload
+                    payload,
+                    buildRunAuditTags(run)
                 );
             } else {
                 Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
                 payload.put("status", run.getStatus());
                 payload.put("message", run.getMessage());
-                auditService.record(
+                auditService.recordAs(
+                    resolveRunActor(run),
                     "EXECUTE",
                     "governance.quality.run",
                     "governance.quality.run",
                     runId.toString(),
                     "SUCCESS",
-                    payload
+                    payload,
+                    buildRunAuditTags(run)
                 );
             }
         } catch (Exception ex) {
@@ -283,13 +267,15 @@ public class QualityRunService {
             payload.put("status", run.getStatus());
             payload.put("message", run.getMessage());
             payload.put("error", ex.getMessage());
-            auditService.record(
+            auditService.recordAs(
+                resolveRunActor(run),
                 "EXECUTE",
                 "governance.quality.run",
                 "governance.quality.run",
                 runId.toString(),
                 "FAILED",
-                payload
+                payload,
+                buildRunAuditTags(run)
             );
         }
     }
@@ -322,6 +308,19 @@ public class QualityRunService {
         return run.getId() != null ? run.getId().toString() : "未知规则";
     }
 
+    private String resolveRunActor(GovQualityRun run) {
+        if (run == null) {
+            return null;
+        }
+        if (StringUtils.isNotBlank(run.getCreatedBy())) {
+            return run.getCreatedBy();
+        }
+        if (StringUtils.isNotBlank(run.getLastModifiedBy())) {
+            return run.getLastModifiedBy();
+        }
+        return null;
+    }
+
     private Map<String, Object> buildRunAuditPayload(GovQualityRun run, String summary) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", summary);
@@ -343,6 +342,37 @@ public class QualityRunService {
             payload.putIfAbsent("ruleName", resolveRunRuleName(run));
         }
         return payload;
+    }
+
+    private Map<String, Object> buildRunAuditTags(GovQualityRun run) {
+        if (run == null) {
+            return Collections.emptyMap();
+        }
+        Map<String, Object> tags = new LinkedHashMap<>();
+        if (run.getId() != null) {
+            tags.put("qualityRunId", run.getId().toString());
+        }
+        GovRule rule = run.getRule();
+        if (rule != null && rule.getId() != null) {
+            tags.put("qualityRuleId", rule.getId().toString());
+        }
+        GovRuleVersion version = run.getRuleVersion();
+        if (version != null && version.getId() != null) {
+            tags.put("qualityRuleVersionId", version.getId().toString());
+        }
+        if (run.getDatasetId() != null) {
+            tags.put("datasetId", run.getDatasetId().toString());
+        }
+        if (StringUtils.isNotBlank(run.getSeverity())) {
+            tags.put("severity", run.getSeverity());
+        }
+        if (StringUtils.isNotBlank(run.getTriggerType())) {
+            tags.put("triggerType", run.getTriggerType());
+        }
+        if (StringUtils.isNotBlank(run.getStatus())) {
+            tags.put("status", run.getStatus());
+        }
+        return tags.isEmpty() ? Collections.emptyMap() : tags;
     }
 
     private GovRule resolveRule(UUID ruleId) {
