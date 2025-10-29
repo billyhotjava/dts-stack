@@ -836,7 +836,8 @@ public class AuditLogResource {
         if (views == null || views.isEmpty()) {
             return Map.of();
         }
-        LinkedHashSet<String> usernames = new LinkedHashSet<>();
+        LinkedHashMap<String, String> overrides = new LinkedHashMap<>();
+        LinkedHashSet<String> unresolved = new LinkedHashSet<>();
         for (AuditEntryView view : views) {
             if (view == null) {
                 continue;
@@ -850,32 +851,35 @@ public class AuditLogResource {
                 continue;
             }
             String actorName = safeTrim(view.actorName());
+            String normalizedId = actorId.toLowerCase(Locale.ROOT);
             if (org.springframework.util.StringUtils.hasText(actorName) && !actorName.equals(actorId)) {
+                overrides.putIfAbsent(normalizedId, actorName);
                 continue;
             }
-            usernames.add(actorId);
-        }
-        if (usernames.isEmpty()) {
-            return Map.of();
-        }
-        try {
-            Map<String, String> resolved = adminUserService.resolveDisplayNames(usernames);
-            if (resolved == null || resolved.isEmpty()) {
-                return Map.of();
+            String embeddedName = extractActorNameFromPayload(view);
+            if (org.springframework.util.StringUtils.hasText(embeddedName) && !embeddedName.equals(actorId)) {
+                overrides.put(normalizedId, embeddedName);
+                continue;
             }
-            Map<String, String> normalized = new LinkedHashMap<>();
-            resolved.forEach((key, value) -> {
-                if (org.springframework.util.StringUtils.hasText(key) && org.springframework.util.StringUtils.hasText(value)) {
-                    normalized.put(key.trim().toLowerCase(Locale.ROOT), value.trim());
+            unresolved.add(actorId);
+        }
+        if (!unresolved.isEmpty()) {
+            try {
+                Map<String, String> resolved = adminUserService.resolveDisplayNames(unresolved);
+                if (resolved != null && !resolved.isEmpty()) {
+                    resolved.forEach((key, value) -> {
+                        if (org.springframework.util.StringUtils.hasText(key) && org.springframework.util.StringUtils.hasText(value)) {
+                            overrides.putIfAbsent(key.trim().toLowerCase(Locale.ROOT), value.trim());
+                        }
+                    });
                 }
-            });
-            return normalized;
-        } catch (Exception ex) {
-            if (log.isDebugEnabled()) {
-                log.debug("Failed to resolve platform actor display names: {}", ex.getMessage());
+            } catch (Exception ex) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Failed to resolve platform actor display names: {}", ex.getMessage());
+                }
             }
-            return Map.of();
         }
+        return overrides.isEmpty() ? Map.of() : overrides;
     }
 
     private void applyDisplayNameOverride(Map<String, Object> record, Map<String, String> overrides) {
@@ -896,6 +900,48 @@ public class AuditLogResource {
         }
         record.put("actorName", override);
         record.put("operatorName", override);
+    }
+
+    private String extractActorNameFromPayload(AuditEntryView view) {
+        if (view == null) {
+            return null;
+        }
+        String candidate = StringUtils.firstNonBlank(
+            valueAsString(view.metadata(), "actorName"),
+            valueAsString(view.extraAttributes(), "actorName"),
+            valueAsString(view.metadata(), "targetName"),
+            valueAsString(view.extraAttributes(), "targetName"),
+            valueAsString(view.metadata(), "resourceName"),
+            valueAsString(view.extraAttributes(), "resourceName")
+        );
+        return candidate;
+    }
+
+    private String valueAsString(Map<String, Object> map, String key) {
+        if (map == null || key == null) {
+            return null;
+        }
+        Object value = map.get(key);
+        if (value == null && map.containsKey("payload")) {
+            Object payload = map.get("payload");
+            if (payload instanceof Map<?, ?> payloadMap) {
+                Object nested = payloadMap.get(key);
+                if (nested != null) {
+                    value = nested;
+                }
+            }
+        }
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        if (!org.springframework.util.StringUtils.hasText(text)) {
+            return null;
+        }
+        if ("anonymous".equalsIgnoreCase(text) || "anonymoususer".equalsIgnoreCase(text)) {
+            return null;
+        }
+        return text;
     }
 
     private String escapeCsv(Object value) {

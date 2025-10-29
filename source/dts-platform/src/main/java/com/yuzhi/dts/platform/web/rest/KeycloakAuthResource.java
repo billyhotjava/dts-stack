@@ -31,19 +31,22 @@ public class KeycloakAuthResource {
     private final com.yuzhi.dts.platform.service.audit.AuditService audit;
     private final com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry;
     private final boolean portalAuditEnabled;
+    private final boolean portalRefreshAuditEnabled;
 
     public KeycloakAuthResource(
         PortalSessionRegistry sessionRegistry,
         AdminAuthClient adminAuthClient,
         com.yuzhi.dts.platform.service.audit.AuditService audit,
         com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry,
-        @Value("${auditing.portal-auth.enabled:true}") boolean portalAuditEnabled
+        @Value("${auditing.portal-auth.enabled:true}") boolean portalAuditEnabled,
+        @Value("${auditing.portal-auth.refresh-enabled:false}") boolean portalRefreshAuditEnabled
     ) {
         this.sessionRegistry = sessionRegistry;
         this.adminAuthClient = adminAuthClient;
         this.audit = audit;
         this.inceptorRegistry = inceptorRegistry;
         this.portalAuditEnabled = portalAuditEnabled;
+        this.portalRefreshAuditEnabled = portalRefreshAuditEnabled;
     }
 
     public record LoginPayload(String username, String password) {}
@@ -537,7 +540,7 @@ public class KeycloakAuthResource {
             if (refreshedActor != null) {
                 actor = refreshedActor;
             }
-            if (StringUtils.hasText(actor)) {
+            if (portalRefreshAuditEnabled && StringUtils.hasText(actor)) {
                 Map<String, Object> successPayload = authAuditPayload(actor);
                 String actorDisplayName = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDisplayName().orElse(null);
                 applyIdentityMetadata(successPayload, actorDisplayName, actor);
@@ -558,7 +561,7 @@ public class KeycloakAuthResource {
             return ResponseEntity.ok(ApiResponses.ok(data));
         } catch (IllegalArgumentException ex) {
             String failureActor = actor != null ? actor : resolveRefreshActor(payload.refreshToken());
-            if (StringUtils.hasText(failureActor)) {
+            if (portalRefreshAuditEnabled && StringUtils.hasText(failureActor)) {
                 Map<String, Object> failurePayload = authAuditPayload(failureActor);
                 String actorDisplayName = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDisplayName().orElse(null);
                 applyIdentityMetadata(failurePayload, actorDisplayName, failureActor);
@@ -580,7 +583,7 @@ public class KeycloakAuthResource {
             return ResponseEntity.status(401).body(ApiResponses.error("刷新令牌无效，请重新登录"));
         } catch (IllegalStateException ex) {
             String failureActor = actor != null ? actor : resolveRefreshActor(payload.refreshToken());
-            if (StringUtils.hasText(failureActor)) {
+            if (portalRefreshAuditEnabled && StringUtils.hasText(failureActor)) {
                 Map<String, Object> failurePayload = authAuditPayload(failureActor);
                 String actorDisplayName = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDisplayName().orElse(null);
                 applyIdentityMetadata(failurePayload, actorDisplayName, failureActor);
@@ -699,7 +702,11 @@ public class KeycloakAuthResource {
         }
         for (String value : values) {
             if (StringUtils.hasText(value)) {
-                return value.trim();
+                String trimmed = value.trim();
+                if ("anonymous".equalsIgnoreCase(trimmed) || "anonymoususer".equalsIgnoreCase(trimmed)) {
+                    continue;
+                }
+                return trimmed;
             }
         }
         return null;
