@@ -119,14 +119,16 @@ public class AdminAuditService {
     private boolean applyTargetsForMenu(AuditActionRequest.Builder builder, MenuAuditContext context) {
         boolean hasTarget = false;
         if (context.menuId().isPresent()) {
-            builder.target("portal_menu", context.menuId().get(), context.menuName().orElseGet(() -> String.valueOf(context.menuId().get())));
+            var menuId = context.menuId().orElseThrow();
+            builder.target("portal_menu", menuId, context.menuName().orElseGet(() -> String.valueOf(menuId)));
             hasTarget = true;
         }
         if (context.changeRequestId().isPresent()) {
-            String ref = context.changeRequestRef().orElseGet(() -> "CR-" + context.changeRequestId().get());
+            var changeRequestId = context.changeRequestId().orElseThrow();
+            String ref = context.changeRequestRef().orElseGet(() -> "CR-" + changeRequestId);
             builder.changeRequestRef(ref);
             if (!hasTarget) {
-                builder.target("change_request", context.changeRequestId().get(), ref);
+                builder.target("change_request", changeRequestId, ref);
                 hasTarget = true;
             }
         }
@@ -136,17 +138,20 @@ public class AdminAuditService {
     private boolean applyTargetsForRole(AuditActionRequest.Builder builder, RoleAuditContext context) {
         boolean hasTarget = false;
         if (context.roleId().isPresent()) {
-            builder.target("admin_custom_role", context.roleId().get(), context.roleName().orElse(String.valueOf(context.roleId().get())));
+            var roleId = context.roleId().orElseThrow();
+            builder.target("admin_custom_role", roleId, context.roleName().orElse(String.valueOf(roleId)));
             hasTarget = true;
         } else if (context.assignmentId().isPresent()) {
-            builder.target("admin_role_assignment", context.assignmentId().get(), String.valueOf(context.assignmentId().get()));
+            var assignmentId = context.assignmentId().orElseThrow();
+            builder.target("admin_role_assignment", assignmentId, String.valueOf(assignmentId));
             hasTarget = true;
         }
         if (context.changeRequestId().isPresent()) {
-            String ref = context.changeRequestRef().orElseGet(() -> "CR-" + context.changeRequestId().get());
+            var changeRequestId = context.changeRequestId().orElseThrow();
+            String ref = context.changeRequestRef().orElseGet(() -> "CR-" + changeRequestId);
             builder.changeRequestRef(ref);
             if (!hasTarget) {
-                builder.target("change_request", context.changeRequestId().get(), ref);
+                builder.target("change_request", changeRequestId, ref);
                 hasTarget = true;
             }
         }
@@ -155,7 +160,7 @@ public class AdminAuditService {
 
     private void applyOperationOverride(AuditActionRequest.Builder builder, Optional<AdminAuditOperation> operation, String operationName, AuditOperationType type) {
         if (operation.isPresent()) {
-            AdminAuditOperation op = operation.get();
+            AdminAuditOperation op = operation.orElseThrow();
             AuditOperationKind kind = mapOperationKind(Optional.ofNullable(type).orElse(op.type()));
             builder.operationOverride(op.code(), StringUtils.hasText(operationName) ? operationName : op.defaultName(), kind);
             builder.moduleOverride(op.moduleKey(), op.moduleLabel());
@@ -199,13 +204,10 @@ public class AdminAuditService {
     }
 
     private String determineSummary(Optional<String> explicitSummary, Optional<String> operationName, Enum<?> operation) {
-        if (explicitSummary.isPresent() && StringUtils.hasText(explicitSummary.get())) {
-            return explicitSummary.get();
-        }
-        if (operationName.isPresent() && StringUtils.hasText(operationName.get())) {
-            return operationName.get();
-        }
-        return operation != null ? operation.name() : "操作";
+        return explicitSummary
+            .filter(StringUtils::hasText)
+            .or(() -> operationName.filter(StringUtils::hasText))
+            .orElseGet(() -> operation != null ? operation.name() : "操作");
     }
 
     private AuditOperationKind mapOperationKind(AuditOperationType type) {
