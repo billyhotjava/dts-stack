@@ -1104,7 +1104,13 @@ public class AdminUserService {
                 payload.put("username", payloadUsername);
             }
         } else {
-            payload = Map.of("detail", detail);
+            payload = new HashMap<>();
+            payload.put("detail", detail);
+        }
+        Long primaryKey = resolveLocalUserId(normalizedTarget, payloadUsername);
+        if (primaryKey != null) {
+            payload.put("sourcePrimaryKey", primaryKey);
+            payload.put("sourceTable", "admin_keycloak_user");
         }
         if (detail instanceof Map<?, ?>) {
             enrichExecutionPayloadWithLabel(payload, payloadUsername, payloadFullName, subjectLabel);
@@ -2389,6 +2395,14 @@ public class AdminUserService {
             if (payload != null && !payload.isEmpty()) {
                 builder.detail("detail", new LinkedHashMap<>(payload));
             }
+            Object sourcePrimaryKey = payload != null ? payload.get("sourcePrimaryKey") : null;
+            Object sourceTable = payload != null ? payload.get("sourceTable") : null;
+            if (sourceTable != null) {
+                builder.metadata("sourceTable", sourceTable);
+            }
+            if (sourcePrimaryKey != null) {
+                builder.metadata("sourcePrimaryKey", sourcePrimaryKey);
+            }
             String targetId = firstNonBlank(normalizedTarget, username);
             if (StringUtils.isNotBlank(targetId)) {
                 String targetDisplay = firstNonBlank(subjectLabel, label, username, targetId);
@@ -2398,6 +2412,36 @@ public class AdminUserService {
         } catch (Exception ex) {
             LOG.warn("Failed to record V2 user approval execution [{}]: {}", actionCode, ex.getMessage());
         }
+    }
+    private Long resolveLocalUserId(String normalizedTarget, String username) {
+        Long primaryKey = null;
+        String candidate = StringUtils.trimToNull(normalizedTarget);
+        if (candidate != null) {
+            try {
+                primaryKey = Long.valueOf(candidate);
+            } catch (NumberFormatException ignored) {
+                primaryKey =
+                    userRepository
+                        .findByKeycloakId(candidate)
+                        .map(AdminKeycloakUser::getId)
+                        .orElse(null);
+                if (primaryKey == null) {
+                    primaryKey =
+                        userRepository
+                            .findByUsernameIgnoreCase(candidate)
+                            .map(AdminKeycloakUser::getId)
+                            .orElse(null);
+                }
+            }
+        }
+        if (primaryKey == null && org.springframework.util.StringUtils.hasText(username)) {
+            primaryKey =
+                userRepository
+                    .findByUsernameIgnoreCase(username.trim())
+                    .map(AdminKeycloakUser::getId)
+                    .orElse(null);
+        }
+        return primaryKey;
     }
 
 

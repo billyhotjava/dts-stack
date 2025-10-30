@@ -391,6 +391,23 @@ public class AuditLogResource {
 
         map.put("changeRequestRef", view.changeRequestRef());
 
+        String sourceTable = StringUtils.firstNonBlank(
+            extractFromMapLike(view.metadata(), "sourceTable"),
+            extractFromMapLike(view.details(), "sourceTable"),
+            extractFromMapLike(view.extraAttributes(), "sourceTable")
+        );
+        String sourcePrimaryKey = StringUtils.firstNonBlank(
+            extractFromMapLike(view.metadata(), "sourcePrimaryKey"),
+            extractFromMapLike(view.details(), "sourcePrimaryKey"),
+            extractFromMapLike(view.extraAttributes(), "sourcePrimaryKey")
+        );
+        if (StringUtils.isNotBlank(sourceTable)) {
+            map.put("sourceTable", sourceTable);
+        }
+        if (StringUtils.isNotBlank(sourcePrimaryKey)) {
+            map.put("sourcePrimaryKey", sourcePrimaryKey);
+        }
+
         List<String> targetIds = new ArrayList<>();
         Map<String, String> targetLabels = new LinkedHashMap<>();
         String targetTable = null;

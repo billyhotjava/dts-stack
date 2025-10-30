@@ -816,8 +816,16 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 		before: row.before,
 		after: row.after,
 	}));
+	const resolvedResourceType = resolveAuditResourceType(record, detail);
+	const contextLayer = compactLayer({
+		sourcePrimaryKey: record.sourcePrimaryKey,
+		sourceTable: record.sourceTable,
+		resourceType: resolvedResourceType,
+		resourceId: record.resourceId,
+		targetTable: record.targetTable,
+	});
 	const displayContext = buildChangeDisplayContext({
-		layers: parsed.layers,
+		layers: [contextLayer, ...parsed.layers].filter(Boolean) as Record<string, unknown>[],
 		baseSnapshot,
 		baseSummary,
 		fallbackDiff: parseRecord(detail?.details) ?? null,
@@ -825,14 +833,25 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 	const snapshot = displayContext.snapshot;
 	const summary = displayContext.summary;
 	const menuChanges = displayContext.menuChanges.length > 0 ? displayContext.menuChanges : parsed.menuChanges ?? [];
-	const infoObject = parsed.infoEntries.length
-		? parsed.infoEntries.reduce<Record<string, unknown>>((acc, entry) => {
-			acc[entry.key] = entry.value;
-			return acc;
-		}, {})
-		: null;
-	const resolvedResourceType = resolveAuditResourceType(record, detail);
-
+	const baseInfo: Record<string, unknown> = {};
+	if (record.sourcePrimaryKey !== undefined && record.sourcePrimaryKey !== null && record.sourcePrimaryKey !== "") {
+		baseInfo.sourcePrimaryKey = record.sourceTable
+			? `${record.sourcePrimaryKey}（${record.sourceTable}）`
+			: record.sourcePrimaryKey;
+	}
+	if (record.sourceTable) {
+		baseInfo.sourceTable = record.sourceTable;
+	}
+	const infoObject = (() => {
+		const entries = parsed.infoEntries.length
+			? parsed.infoEntries.reduce<Record<string, unknown>>((acc, entry) => {
+				acc[entry.key] = entry.value;
+				return acc;
+			}, {})
+			: {};
+		const merged = { ...baseInfo, ...entries };
+		return Object.keys(merged).length > 0 ? merged : null;
+	})();
 	const showDiffViewer = summary.length > 0 || snapshotHasContent(snapshot);
 
 	return (
@@ -1209,6 +1228,25 @@ function formatJson(value: unknown, resourceType?: string | null): string {
 	} catch {
 		return String(value ?? "");
 	}
+}
+
+function compactLayer(source: Record<string, unknown>): Record<string, unknown> | null {
+	const result: Record<string, unknown> = {};
+	Object.entries(source).forEach(([key, value]) => {
+		if (value === null || value === undefined) {
+			return;
+		}
+		if (typeof value === "string") {
+			const trimmed = value.trim();
+			if (!trimmed) {
+				return;
+			}
+			result[key] = trimmed;
+			return;
+		}
+		result[key] = value;
+	});
+	return Object.keys(result).length > 0 ? result : null;
 }
 
 function deriveFieldLabel(field: string | undefined): string {

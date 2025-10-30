@@ -359,6 +359,25 @@ function formatJson(value: Record<string, unknown> | null, resourceType?: string
 	}
 }
 
+function compactLayer(source: Record<string, unknown>): Record<string, unknown> | null {
+	const result: Record<string, unknown> = {};
+	Object.entries(source).forEach(([key, value]) => {
+		if (value === null || value === undefined) {
+			return;
+		}
+		if (typeof value === "string") {
+			const trimmed = value.trim();
+			if (!trimmed) {
+				return;
+			}
+			result[key] = trimmed;
+			return;
+		}
+		result[key] = value;
+	});
+	return Object.keys(result).length > 0 ? result : null;
+}
+
 function normalizeStatus(status?: string | null): DecisionStatus {
 	const normalized = status?.toUpperCase();
 	if (normalized === "APPROVED" || normalized === "REJECTED" || normalized === "APPLIED") {
@@ -968,17 +987,24 @@ export default function ApprovalCenterView() {
 
 	const renderExpandedRow = useCallback(
 		(record: AugmentedChangeRequest) => {
-			const payload = asRecord(parseJson(record.payloadJson));
-			const diff = asRecord(parseJson(record.diffJson));
-			const diffLayer = diff ?? null;
-			const baseSnapshot = diffLayer ? buildChangeSnapshotFromDiff(diffLayer) : null;
-			const displayContext = buildChangeDisplayContext({
-				layers: [
-					diffLayer,
-					diffLayer ? asRecord(diffLayer["detail"]) : null,
-					diffLayer ? asRecord(diffLayer["context"]) : null,
-					diffLayer ? asRecord(diffLayer["metadata"]) : null,
-					diffLayer ? asRecord(diffLayer["extraAttributes"]) : null,
+	const payload = asRecord(parseJson(record.payloadJson));
+	const diff = asRecord(parseJson(record.diffJson));
+	const diffLayer = diff ?? null;
+	const baseSnapshot = diffLayer ? buildChangeSnapshotFromDiff(diffLayer) : null;
+	const contextLayer = compactLayer({
+		sourcePrimaryKey: record.sourcePrimaryKey,
+		sourceTable: record.sourceTable,
+		resourceType: record.resourceType,
+		resourceId: record.resourceId,
+	});
+	const displayContext = buildChangeDisplayContext({
+		layers: [
+			contextLayer,
+			diffLayer,
+			diffLayer ? asRecord(diffLayer["detail"]) : null,
+			diffLayer ? asRecord(diffLayer["context"]) : null,
+			diffLayer ? asRecord(diffLayer["metadata"]) : null,
+			diffLayer ? asRecord(diffLayer["extraAttributes"]) : null,
 					payload,
 				],
 				baseSnapshot,
@@ -1077,6 +1103,13 @@ function renderChangeRequestBasics(
 				<span className="text-muted-foreground">影响对象：</span>
 				{resolveTarget(record, { userDisplay: userDisplayMap })}
 			</div>
+			{record.sourcePrimaryKey ? (
+				<div>
+					<span className="text-muted-foreground">源表主键：</span>
+					{record.sourcePrimaryKey}
+					{record.sourceTable ? `（${record.sourceTable}）` : ""}
+				</div>
+			) : null}
 			<div>
 				<span className="text-muted-foreground">提交人：</span>
 				{resolveOperatorDisplayName(record.requestedBy, operatorNameMap)}
@@ -1122,8 +1155,15 @@ const handleCloseDialog = () => {
 	const activeContext = useMemo(() => {
 		const diffLayer = activeDiff ?? null;
 		const baseSnapshot = diffLayer ? buildChangeSnapshotFromDiff(diffLayer) : null;
+		const contextLayer = compactLayer({
+			sourcePrimaryKey: activeTask?.sourcePrimaryKey,
+			sourceTable: activeTask?.sourceTable,
+			resourceType: activeTask?.resourceType,
+			resourceId: activeTask?.resourceId,
+		});
 		return buildChangeDisplayContext({
 			layers: [
+				contextLayer,
 				diffLayer,
 				diffLayer ? asRecord(diffLayer["detail"]) : null,
 				diffLayer ? asRecord(diffLayer["context"]) : null,
@@ -1134,7 +1174,7 @@ const handleCloseDialog = () => {
 			baseSnapshot,
 			fallbackDiff: diffLayer ?? undefined,
 		});
-	}, [activeDiff, activePayload]);
+	}, [activeDiff, activePayload, activeTask?.resourceId, activeTask?.resourceType, activeTask?.sourcePrimaryKey, activeTask?.sourceTable]);
 	const activeSnapshot = activeContext.snapshot;
 	const activeSummary = activeContext.summary;
 	const activeMenuChanges = activeContext.menuChanges;

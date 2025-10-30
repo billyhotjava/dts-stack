@@ -454,7 +454,7 @@ public class AdminApiResource {
                 request != null ? request.getHeader("User-Agent") : null,
                 request != null ? request.getRequestURI() : "/api/admin/system/config"
             );
-            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
+            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeView(cr))));
         } catch (IllegalStateException ex) {
             recordSystemConfigSubmitFailureV2(
                 SecurityUtils.getCurrentAuditableLogin(),
@@ -552,7 +552,7 @@ public class AdminApiResource {
                     "POST",
                     "提交新增菜单审批：" + pendingRef
                 );
-                return ResponseEntity.status(202).body(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
+                return ResponseEntity.status(202).body(ApiResponse.ok(withDisplayNames(toChangeView(cr))));
             }
             String name = trimToNull(payload.get("name"));
             String path = trimToNull(payload.get("path"));
@@ -772,7 +772,7 @@ public class AdminApiResource {
                 );
                 cr.setSummary(pendingSummary);
                 crRepo.save(cr);
-                return ResponseEntity.status(202).body(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
+                return ResponseEntity.status(202).body(ApiResponse.ok(withDisplayNames(toChangeView(cr))));
             }
             applyMenuUpdates(beforeEntity, payload);
             boolean visibilityTouched = payload.containsKey("visibilityRules") || payload.containsKey("allowedRoles") || payload.containsKey("allowedPermissions") || payload.containsKey("maxDataLevel");
@@ -1012,7 +1012,7 @@ public class AdminApiResource {
                 );
                 cr.setSummary(pendingSummary);
                 crRepo.save(cr);
-                return ResponseEntity.status(202).body(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
+                return ResponseEntity.status(202).body(ApiResponse.ok(withDisplayNames(toChangeView(cr))));
             } catch (IllegalStateException ex) {
                 Map<String, Object> failureDetail = new LinkedHashMap<>(auditDetail);
                 failureDetail.put("error", ex.getMessage());
@@ -1607,7 +1607,7 @@ public class AdminApiResource {
                 null,
                 request
             );
-            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
+            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeView(cr))));
         } catch (IllegalStateException ex) {
             recordCustomRoleCreateV2(
                 SecurityUtils.getCurrentAuditableLogin(),
@@ -1710,7 +1710,7 @@ public class AdminApiResource {
         if (status != null && resourceType != null) list = crRepo.findByStatusAndResourceType(status, resourceType); else if (status != null) list = crRepo.findByStatus(status); else list = crRepo.findAll();
         LinkedHashMap<Long, Map<String, Object>> viewById = new LinkedHashMap<>();
         for (ChangeRequest cr : list) {
-            Map<String, Object> vm = toChangeVM(cr);
+            Map<String, Object> vm = toChangeView(cr);
             viewById.put(cr.getId(), vm);
         }
         augmentChangeRequestViewsFromApprovals(viewById);
@@ -1728,7 +1728,7 @@ public class AdminApiResource {
         LinkedHashMap<Long, Map<String, Object>> viewById = new LinkedHashMap<>();
         crRepo
             .findByRequestedBy(me)
-            .forEach(cr -> viewById.put(cr.getId(), toChangeVM(cr)));
+            .forEach(cr -> viewById.put(cr.getId(), toChangeView(cr)));
         augmentChangeRequestViewsFromApprovalsForActor(viewById, me);
         List<Map<String, Object>> list = new ArrayList<>(viewById.values());
         list.sort((a, b) -> compareByRequestedAtDesc(a, b));
@@ -1744,7 +1744,7 @@ public class AdminApiResource {
         if (cr == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("变更不存在"));
         }
-        Map<String, Object> vm = toChangeVM(cr);
+        Map<String, Object> vm = toChangeView(cr);
         applyChangeRequestDisplayNames(Collections.singleton(vm));
         LinkedHashMap<Long, Map<String, Object>> viewById = new LinkedHashMap<>();
         viewById.put(cr.getId(), vm);
@@ -1821,7 +1821,7 @@ public class AdminApiResource {
         auditDetail.put("action", "CREATE");
         attachChangeRequestMetadata(auditDetail, cr);
         recordChangeRequestDraftV2(SecurityUtils.getCurrentAuditableLogin(), cr, request, auditDetail);
-        return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
+        return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeView(cr))));
     }
 
     @PostMapping("/change-requests/{id}/submit")
@@ -1885,7 +1885,7 @@ public class AdminApiResource {
                 )
             );
         } catch (Exception ignored) {}
-        return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
+        return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeView(cr))));
     }
 
     @PostMapping("/change-requests/{id}/approve")
@@ -1945,7 +1945,7 @@ public class AdminApiResource {
             try {
                 notifyClient.trySend("approval_approved", Map.of("id", id, "type", cr.getResourceType(), "status", cr.getStatus()));
             } catch (Exception ignored) {}
-            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
+            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeView(cr))));
         }
         try {
             notifyClient.trySend(
@@ -1983,7 +1983,7 @@ public class AdminApiResource {
             request != null ? request.getHeader("User-Agent") : null,
             request != null ? request.getRequestURI() : "/api/admin/change-requests/" + id + "/reject"
         );
-        return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
+        return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeView(cr))));
     }
 
     @GetMapping("/roles")
@@ -5958,6 +5958,34 @@ public class AdminApiResource {
         m.put("updatedValue", redactSensitiveObject(extractValue(cr, "after")));
         m.put("lastError", cr.getLastError());
         return m;
+    }
+
+    private Map<String, Object> toChangeView(ChangeRequest cr) {
+        Map<String, Object> view = toChangeVM(cr);
+        ChangeContext context = computeChangeContext(cr);
+        if (context != null) {
+            Map<String, Object> extras = context.extras();
+            if (extras != null && !extras.isEmpty()) {
+                Object table = extras.get("sourceTable");
+                Object primaryKey = extras.get("primaryKey");
+                if (table != null) {
+                    view.putIfAbsent("sourceTable", table);
+                }
+                if (primaryKey != null) {
+                    view.putIfAbsent("sourcePrimaryKey", primaryKey);
+                }
+            }
+            if (StringUtils.hasText(context.targetTable())) {
+                view.putIfAbsent("targetTable", context.targetTable());
+            }
+            if (StringUtils.hasText(context.targetId())) {
+                view.putIfAbsent("targetId", context.targetId());
+            }
+            if (context.extras().containsKey("targetIds")) {
+                view.putIfAbsent("targetIds", context.extras().get("targetIds"));
+            }
+        }
+        return view;
     }
 
     private void augmentChangeRequestViewsFromApprovals(LinkedHashMap<Long, Map<String, Object>> viewById) {

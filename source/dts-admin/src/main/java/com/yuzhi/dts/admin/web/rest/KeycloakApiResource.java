@@ -17,6 +17,8 @@ import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
+import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
+import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.security.session.AdminSessionCloseReason;
 import com.yuzhi.dts.admin.security.session.AdminSessionRegistry;
 import com.yuzhi.dts.admin.web.rest.dto.PkiChallengeView;
@@ -71,6 +73,7 @@ public class KeycloakApiResource {
     private final AdminUserService adminUserService;
     private final AdminRoleAssignmentRepository roleAssignRepo;
     private final AdminSessionRegistry adminSessionRegistry;
+    private final AdminKeycloakUserRepository userRepository;
     private final ConcurrentMap<String, Instant> recentRoleAudits = new ConcurrentHashMap<>();
     private static final Duration ROLE_AUDIT_DUP_WINDOW = Duration.ofSeconds(2);
 
@@ -103,7 +106,8 @@ public class KeycloakApiResource {
         KeycloakAdminClient keycloakAdminClient,
         AdminUserService adminUserService,
         AdminRoleAssignmentRepository roleAssignRepo,
-        AdminSessionRegistry adminSessionRegistry
+        AdminSessionRegistry adminSessionRegistry,
+        AdminKeycloakUserRepository userRepository
     ) {
         this.stores = stores;
         this.auditV2Service = auditV2Service;
@@ -112,6 +116,7 @@ public class KeycloakApiResource {
         this.adminUserService = adminUserService;
         this.roleAssignRepo = roleAssignRepo;
         this.adminSessionRegistry = adminSessionRegistry;
+        this.userRepository = userRepository;
     }
 
     // ---- Users ----
@@ -954,6 +959,7 @@ public class KeycloakApiResource {
             return;
         }
         try {
+            Map<String, Object> detailMap = detail != null ? new LinkedHashMap<>(detail) : new LinkedHashMap<>();
             String roleName = resolveRoleNameFromDetail(detail);
             String uri = Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse(fallbackUri);
             String method = request != null ? request.getMethod() : fallbackMethod;
@@ -972,14 +978,24 @@ public class KeycloakApiResource {
                 .result(result)
                 .client(clientIp(request), request != null ? request.getHeader("User-Agent") : null)
                 .request(uri, method);
-            if (detail != null && !detail.isEmpty()) {
-                builder.detail("detail", new LinkedHashMap<>(detail));
+            Long adminUserId = resolveAdminUserId(userId, username);
+            if (adminUserId != null) {
+                detailMap.putIfAbsent("sourcePrimaryKey", adminUserId);
+                detailMap.putIfAbsent("sourceTable", "admin_keycloak_user");
+                builder.metadata("sourcePrimaryKey", adminUserId);
+                builder.metadata("sourceTable", "admin_keycloak_user");
+            }
+            if (!detailMap.isEmpty()) {
+                builder.detail("detail", detailMap);
             }
             if (StringUtils.hasText(username)) {
                 builder.metadata("username", username);
             }
+            String label = StringUtils.hasText(username) ? username : userId;
+            if (adminUserId != null) {
+                builder.target("admin_keycloak_user", String.valueOf(adminUserId), label);
+            }
             if (StringUtils.hasText(userId)) {
-                String label = StringUtils.hasText(username) ? username : userId;
                 builder.target("keycloak_user", userId, label);
             }
             if (approval != null) {
@@ -1003,6 +1019,25 @@ public class KeycloakApiResource {
         } catch (Exception ex) {
             LOG.warn("Failed to record V2 audit for user action [{}]: {}", buttonCode, ex.getMessage());
         }
+    }
+
+    private Long resolveAdminUserId(String keycloakId, String username) {
+        Long primaryKey = null;
+        if (StringUtils.hasText(keycloakId)) {
+            primaryKey =
+                userRepository
+                    .findByKeycloakId(keycloakId.trim())
+                    .map(AdminKeycloakUser::getId)
+                    .orElse(null);
+        }
+        if (primaryKey == null && StringUtils.hasText(username)) {
+            primaryKey =
+                userRepository
+                    .findByUsernameIgnoreCase(username.trim())
+                    .map(AdminKeycloakUser::getId)
+                    .orElse(null);
+        }
+        return primaryKey;
     }
 
     private String resolveRoleNameFromDetail(Map<String, Object> detail) {

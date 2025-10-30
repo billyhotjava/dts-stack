@@ -61,6 +61,8 @@ export interface ChangeRequest {
 	originalValue?: unknown;
 	updatedValue?: unknown;
 	lastError?: string;
+	sourcePrimaryKey?: string | number | null;
+	sourceTable?: string | null;
 }
 
 export interface AuditEvent {
@@ -111,6 +113,8 @@ export interface AuditEvent {
 	extraAttributes?: Record<string, unknown>;
 	details?: unknown;
 	payload?: unknown;
+	sourcePrimaryKey?: string | number | null;
+	sourceTable?: string | null;
 }
 
 export type AuditLog = AuditEvent;
