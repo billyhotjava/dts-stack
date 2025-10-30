@@ -7,6 +7,7 @@ import type {
     AdminCustomRole,
     AdminRoleAssignment,
     AdminRoleDetail,
+    CreateCustomRolePayload,
     DataOperation,
     PortalMenuCollection,
     PortalMenuItem,
@@ -669,16 +670,18 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
         }
         setSubmitting(true);
         try {
-            const trimmedReason = reason.trim() || undefined;
-            const payload: Record<string, unknown> = {
+            const trimmedReason = reason.trim();
+            const payload: CreateCustomRolePayload = {
                 name: trimmedName.toUpperCase(),
                 scope,
                 description: trimmedDescription,
                 titleCn: trimmedDisplayName,
                 nameZh: trimmedDisplayName,
                 displayName: trimmedDisplayName,
-                reason: trimmedReason,
             };
+            if (trimmedReason) {
+                payload.reason = trimmedReason;
+            }
             const change = await adminApi.createCustomRole(payload);
             if (change?.id != null) {
                 await adminApi.submitChangeRequest(change.id);

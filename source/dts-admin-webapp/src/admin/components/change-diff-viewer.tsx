@@ -528,24 +528,23 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 	const after = sanitizeRecord(snapshot.after);
 	const fields = new Set<string>([...Object.keys(before), ...Object.keys(after)]);
 	const normalizedType = normalizeResourceType(resourceType);
-	return Array.from(fields)
-		.map((field) => {
-			const beforeHas = Object.prototype.hasOwnProperty.call(before, field);
-			const afterHas = Object.prototype.hasOwnProperty.call(after, field);
-			if (normalizedType && MENU_RESOURCE_TYPES.has(normalizedType)) {
-				if (beforeHas && !afterHas) {
-					return null;
-				}
-			}
-			return {
-				key: field,
-				label: formatFieldLabel(field, resourceType),
-				before: before[field],
-				after: after[field],
-				field,
-			};
-		})
-		.filter((entry): entry is SectionEntry => entry !== null)
+	const entries: SectionEntry[] = [];
+	fields.forEach((field) => {
+		const beforeHas = Object.prototype.hasOwnProperty.call(before, field);
+		const afterHas = Object.prototype.hasOwnProperty.call(after, field);
+		if (normalizedType && MENU_RESOURCE_TYPES.has(normalizedType) && beforeHas && !afterHas) {
+			return;
+		}
+		const entry: SectionEntry = {
+			key: field,
+			label: formatFieldLabel(field, resourceType),
+			before: before[field],
+			after: after[field],
+			field,
+		};
+		entries.push(entry);
+	});
+	return entries
 		.filter((entry) => !valuesEqual(entry.before, entry.after))
 		.filter((entry) => !shouldHideField(entry.field, entry.label, resourceType));
 }
