@@ -5111,6 +5111,20 @@ public class AdminApiResource {
         return roles.stream().filter(StringUtils::hasText).collect(Collectors.joining("、"));
     }
 
+    private List<String> formatRoleAuditList(Collection<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> formatted = new LinkedHashSet<>();
+        for (String role : roles) {
+            if (!StringUtils.hasText(role)) {
+                continue;
+            }
+            formatted.add(displayRoleCode(role));
+        }
+        return new ArrayList<>(formatted);
+    }
+
     private String displayRoleCode(String role) {
         if (!StringUtils.hasText(role)) {
             return role;
