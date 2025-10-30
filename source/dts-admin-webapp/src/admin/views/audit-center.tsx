@@ -817,9 +817,10 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 		after: row.after,
 	}));
 	const resolvedResourceType = resolveAuditResourceType(record, detail);
+	const typedRecord = record as AuditLog & { sourcePrimaryKey?: string | number | null; sourceTable?: string | null };
 	const contextLayer = compactLayer({
-		sourcePrimaryKey: record.sourcePrimaryKey,
-		sourceTable: record.sourceTable,
+		sourcePrimaryKey: typedRecord.sourcePrimaryKey,
+		sourceTable: typedRecord.sourceTable,
 		resourceType: resolvedResourceType,
 		resourceId: record.resourceId,
 		targetTable: record.targetTable,
@@ -834,13 +835,17 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 	const summary = displayContext.summary;
 	const menuChanges = displayContext.menuChanges.length > 0 ? displayContext.menuChanges : parsed.menuChanges ?? [];
 	const baseInfo: Record<string, unknown> = {};
-	if (record.sourcePrimaryKey !== undefined && record.sourcePrimaryKey !== null && record.sourcePrimaryKey !== "") {
-		baseInfo.sourcePrimaryKey = record.sourceTable
-			? `${record.sourcePrimaryKey}（${record.sourceTable}）`
-			: record.sourcePrimaryKey;
+	if (
+		typedRecord.sourcePrimaryKey !== undefined &&
+		typedRecord.sourcePrimaryKey !== null &&
+		typedRecord.sourcePrimaryKey !== ""
+	) {
+		baseInfo.sourcePrimaryKey = typedRecord.sourceTable
+			? `${typedRecord.sourcePrimaryKey}（${typedRecord.sourceTable}）`
+			: typedRecord.sourcePrimaryKey;
 	}
-	if (record.sourceTable) {
-		baseInfo.sourceTable = record.sourceTable;
+	if (typedRecord.sourceTable) {
+		baseInfo.sourceTable = typedRecord.sourceTable;
 	}
 	const infoObject = (() => {
 		const entries = parsed.infoEntries.length
