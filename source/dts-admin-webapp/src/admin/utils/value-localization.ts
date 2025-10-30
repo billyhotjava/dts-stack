@@ -25,6 +25,22 @@ const FIELD_ENUM_MAP: Record<string, Record<string, string>> = {
 		PUBLIC: "公开",
 		INTERNAL: "内部",
 	},
+	scope: {
+		INSTITUTE: "全所",
+		DEPARTMENT: "部门",
+	},
+	operations: {
+		read: "读取",
+		write: "写入",
+		export: "导出",
+		READ: "读取",
+		WRITE: "写入",
+		EXPORT: "导出",
+	},
+	allowdesensitizejson: {
+		TRUE: "是",
+		FALSE: "否",
+	},
 };
 
 const LABEL_ENUM_MAP: Record<string, Record<string, string>> = {
@@ -32,6 +48,9 @@ const LABEL_ENUM_MAP: Record<string, Record<string, string>> = {
 	"启用状态": FIELD_ENUM_MAP.enabled,
 	"访问密级": FIELD_ENUM_MAP.securitylevel,
 	"最大数据密级": FIELD_ENUM_MAP.maxdatalevel,
+	"作用域": FIELD_ENUM_MAP.scope,
+	"操作权限": FIELD_ENUM_MAP.operations,
+	"允许脱敏 JSON": FIELD_ENUM_MAP.allowdesensitizejson,
 };
 
 function resolveEnumMapping(field?: string, label?: string): Record<string, string> | undefined {
@@ -122,4 +141,3 @@ export function formatDisplayValue(value: unknown, field?: string, label?: strin
 	}
 	return String(value);
 }
-

@@ -32,7 +32,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.web.authentication.WebAuthenticationDetails;
-import org.springframework.security.web.WebAttributes;
 import org.springframework.stereotype.Component;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.context.request.RequestAttributes;
@@ -476,6 +475,8 @@ public class AuthAuditListener {
         return value != null && value.startsWith("token:");
     }
 
+    private static final String LAST_USERNAME_ATTRIBUTE = "SPRING_SECURITY_LAST_USERNAME";
+
     private String resolveUsernameFromRequest() {
         HttpServletRequest request = currentRequest();
         if (request == null) {
@@ -487,13 +488,13 @@ public class AuthAuditListener {
                 return value.trim();
             }
         }
-        Object attr = request.getAttribute(WebAttributes.LAST_USERNAME);
+        Object attr = request.getAttribute(LAST_USERNAME_ATTRIBUTE);
         if (attr instanceof String attrValue && StringUtils.isNotBlank(attrValue)) {
             return attrValue.trim();
         }
         HttpSession session = request.getSession(false);
         if (session != null) {
-            Object sessionAttr = session.getAttribute(WebAttributes.LAST_USERNAME);
+            Object sessionAttr = session.getAttribute(LAST_USERNAME_ATTRIBUTE);
             if (sessionAttr instanceof String sessionValue && StringUtils.isNotBlank(sessionValue)) {
                 return sessionValue.trim();
             }

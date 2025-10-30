@@ -84,8 +84,13 @@ public class AdminAuditService {
             applyClient(builder, context.clientIp().orElse(null), context.clientAgent().orElse(null), context.requestUri().orElse(null), context.httpMethod().orElse(null));
             applyOperationOverride(builder, resolveRoleOperation(context.operation()), context.operationName().orElse(summary), context.operation().operationType());
             ChangeSnapshot snapshot = resolveChangeSnapshot(detail);
+            String resourceType = resolveRoleResourceType(context);
             if (snapshot != null) {
-                builder.changeSnapshot(snapshot, resolveRoleResourceType(context));
+                builder.changeSnapshot(snapshot, resourceType);
+            }
+            if (StringUtils.hasText(resourceType)) {
+                builder.metadata("resourceType", resourceType);
+                detail.putIfAbsent("resourceType", resourceType);
             }
             boolean hasTarget = applyTargetsForRole(builder, context);
             if (!hasTarget && context.allowEmptyTargets()) {
@@ -93,6 +98,9 @@ public class AdminAuditService {
             }
             if (!detail.isEmpty()) {
                 builder.detail("detail", detail);
+            }
+            if (StringUtils.hasText(resourceType)) {
+                builder.resourceType(resourceType);
             }
             auditV2Service.record(builder.build());
         } catch (Exception ex) {
@@ -162,7 +170,10 @@ public class AdminAuditService {
         if (operation.isPresent()) {
             AdminAuditOperation op = operation.orElseThrow();
             AuditOperationKind kind = mapOperationKind(Optional.ofNullable(type).orElse(op.type()));
-            builder.operationOverride(op.code(), StringUtils.hasText(operationName) ? operationName : op.defaultName(), kind);
+            String effectiveName = StringUtils.hasText(operationName) ? operationName : op.defaultName();
+            builder
+                .operationOverride(op.code(), effectiveName, kind)
+                .metadata("operationType", op.type().getCode());
             builder.moduleOverride(op.moduleKey(), op.moduleLabel());
         } else if (type != null) {
             AuditOperationKind kind = mapOperationKind(type);

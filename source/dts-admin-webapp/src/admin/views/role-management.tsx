@@ -39,6 +39,48 @@ const RESERVED_ROLE_CODES = new Set([
     "SECURITYAUDITOR",
 ]);
 
+const OPERATION_LABEL_MAP: Record<DataOperation, string> = {
+    read: "读取",
+    write: "写入",
+    export: "导出",
+};
+
+const DEFAULT_OPERATIONS: DataOperation[] = ["read", "write", "export"];
+
+
+function dedupeOperations(ops?: any): DataOperation[] {
+    if (!ops) {
+        return [...DEFAULT_OPERATIONS];
+    }
+    const values: string[] = [];
+    if (Array.isArray(ops)) {
+        for (const item of ops) {
+            if (item !== null && item !== undefined) {
+                values.push(String(item));
+            }
+        }
+    } else if (typeof ops?.[Symbol.iterator] === "function") {
+        for (const item of ops as Iterable<unknown>) {
+            if (item !== null && item !== undefined) {
+                values.push(String(item));
+            }
+        }
+    } else if (typeof ops === "string") {
+        values.push(ops);
+    }
+    const pool = new Set<DataOperation>();
+    values.forEach((item) => {
+        const candidate = item.toLowerCase() as DataOperation;
+        if (Object.prototype.hasOwnProperty.call(OPERATION_LABEL_MAP, candidate)) {
+            pool.add(candidate);
+        }
+    });
+    if (!pool.size) {
+        return [...DEFAULT_OPERATIONS];
+    }
+    return DEFAULT_OPERATIONS.filter((value) => pool.has(value));
+}
+
 interface RoleRow {
     id?: number;
     key: string;
@@ -171,7 +213,7 @@ export default function RoleManagementView() {
                 zone: (role as any).zone,
                 description: role.description,
                 scope: resolvedScope ?? undefined,
-                operations: role.operations ?? [],
+                operations: dedupeOperations(role.operations),
                 canManage: (role as any).canManage ?? canonical.endsWith("_OWNER"),
                 menuIds,
                 menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
@@ -205,7 +247,7 @@ export default function RoleManagementView() {
                 existing.description = existing.description ?? role.description;
                 existing.scope = existing.scope ?? normalizedScope;
                 if (!existing.operations.length && role.operations?.length) {
-                    existing.operations = role.operations;
+                    existing.operations = dedupeOperations(role.operations);
                 }
                 existing.source = existing.source ?? "custom";
                 if (!existing.menuIds.length) {
@@ -225,7 +267,7 @@ export default function RoleManagementView() {
                     canonical,
                     description: role.description,
                     scope: normalizedScope ?? undefined,
-                    operations: role.operations ?? [],
+                    operations: dedupeOperations(role.operations),
                     canManage: canonical.endsWith("_OWNER"),
                     menuIds,
                     menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
@@ -241,9 +283,7 @@ export default function RoleManagementView() {
             if (!entry.source) {
                 entry.source = "服务端";
             }
-            if (!entry.operations.length) {
-                entry.operations = ["read"];
-            }
+            entry.operations = dedupeOperations(entry.operations);
             if (!entry.scope && entry.zone) {
                 entry.scope = entry.zone === "INST" ? "INSTITUTE" : entry.zone === "DEPT" ? "DEPARTMENT" : undefined;
             }
@@ -476,7 +516,6 @@ export default function RoleManagementView() {
                         <div className="space-y-1">
                             <div>编码：{record.code || record.canonical}</div>
                             <div>描述：{record.description || "未填写"}</div>
-                            <div>操作权限：系统默认（读取 / 写入 / 导出）</div>
                         </div>
                     </div>
                     <div className="space-y-2">
@@ -595,7 +634,6 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
     const [name, setName] = useState("");
     const [displayName, setDisplayName] = useState("");
     const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE" | undefined>(undefined);
-    const [allowDesensitize, setAllowDesensitize] = useState(true);
     const [description, setDescription] = useState("");
     const [reason, setReason] = useState("");
     const [submitting, setSubmitting] = useState(false);
@@ -604,7 +642,6 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
         setName("");
         setDisplayName("");
         setScope(undefined);
-        setAllowDesensitize(true);
         setDescription("");
         setReason("");
         setSubmitting(false);
@@ -633,11 +670,9 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
         setSubmitting(true);
         try {
             const trimmedReason = reason.trim() || undefined;
-            const payload = {
+            const payload: Record<string, unknown> = {
                 name: trimmedName.toUpperCase(),
                 scope,
-                operations: ["read"] as DataOperation[],
-                allowDesensitizeJson: allowDesensitize,
                 description: trimmedDescription,
                 titleCn: trimmedDisplayName,
                 nameZh: trimmedDisplayName,
@@ -736,12 +771,6 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
                         />
                     </div>
                     <div className="space-y-2">
-                        <span className="font-medium">操作权限</span>
-                        <Text variant="body3" className="text-muted-foreground">
-                            系统默认启用读取 / 写入 / 导出，无需额外勾选
-                        </Text>
-                    </div>
-                    <div className="space-y-2">
                         <span className="font-medium">菜单可见性</span>
                         <Text variant="body3" className="text-muted-foreground">
                             角色与菜单的绑定请在“菜单管理”模块中维护；角色审批通过后，可由菜单管理统一分配可见菜单。
@@ -802,8 +831,6 @@ function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProp
         const trimmedReason = reason.trim() || undefined;
         const scopeChanged = (target.scope ?? "DEPARTMENT") !== scope;
         const descriptionChanged = (target.description ?? "") !== description.trim();
-        const nextOperations = target.operations && target.operations.length ? target.operations : ["read"];
-
         if (!scopeChanged && !descriptionChanged) {
             toast.info("未检测到变更，无需提交审批");
             return;
@@ -821,7 +848,6 @@ function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProp
                     id: target.id,
                     name: roleName,
                     scope,
-                    operations: nextOperations,
                     description: description.trim() || undefined,
                 }),
                 diffJson: JSON.stringify({
@@ -829,14 +855,12 @@ function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProp
                         id: target.id ?? null,
                         name: roleName,
                         scope: target.scope ?? null,
-                        operations: target.operations ?? [],
                         description: target.description ?? null,
                     },
                     after: {
                         id: target.id ?? null,
                         name: roleName,
                         scope,
-                        operations: nextOperations,
                         description: description.trim() || null,
                     },
                 }),

@@ -64,7 +64,7 @@ public class ChangeRequestService {
         String normalizedResourceId = normalizeResourceId(resourceId);
 
         String payloadJson = write(after);
-        String diffJson = write(buildDiff(before, after));
+        String diffJson = write(buildDiff(normalizedType, before, after));
 
         enforceNoDuplicate(normalizedType, normalizedAction, normalizedResourceId, after, payloadJson);
 
@@ -109,9 +109,88 @@ public class ChangeRequestService {
         };
     }
 
-    private Map<String, Object> buildDiff(Map<String, Object> before, Map<String, Object> after) {
-        ChangeSnapshot snapshot = ChangeSnapshot.of(before, after);
+    private Map<String, Object> buildDiff(String resourceType, Map<String, Object> before, Map<String, Object> after) {
+        Map<String, Object> effectiveBefore = snapshotClone(before);
+        Map<String, Object> effectiveAfter = snapshotClone(after);
+        if (isPortalMenuResource(resourceType)) {
+            effectiveBefore = ensureMenuContext(effectiveBefore, Map.of());
+            effectiveAfter = ensureMenuContext(effectiveAfter, effectiveBefore);
+            if (hasMenuRolePayload(effectiveBefore) && !hasMenuRolePayload(effectiveAfter)) {
+                copyMenuRoles(effectiveAfter, effectiveBefore);
+            }
+        }
+        ChangeSnapshot snapshot = ChangeSnapshot.of(effectiveBefore, effectiveAfter);
         return snapshot.toMap();
+    }
+
+    private Map<String, Object> snapshotClone(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        return new LinkedHashMap<>(source);
+    }
+
+    private Map<String, Object> ensureMenuContext(Map<String, Object> candidate, Map<String, Object> fallback) {
+        Map<String, Object> normalized = snapshotClone(candidate);
+        copyMenuContext(normalized, fallback);
+        return normalized;
+    }
+
+    private void copyMenuRoles(Map<String, Object> target, Map<String, Object> fallback) {
+        if (fallback == null || fallback.isEmpty()) {
+            return;
+        }
+        if (!target.containsKey("allowedRoles") && fallback.containsKey("allowedRoles")) {
+            target.put("allowedRoles", fallback.get("allowedRoles"));
+        }
+        if (!target.containsKey("visibilityRules") && fallback.containsKey("visibilityRules")) {
+            target.put("visibilityRules", fallback.get("visibilityRules"));
+        }
+    }
+
+    private boolean hasMenuRolePayload(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return false;
+        }
+        return payload.containsKey("allowedRoles") || payload.containsKey("visibilityRules");
+    }
+
+    private boolean isPortalMenuResource(String resourceType) {
+        if (resourceType == null) {
+            return false;
+        }
+        String normalized = resourceType.trim().toUpperCase(Locale.ROOT);
+        return "PORTAL_MENU".equals(normalized) || "MENU".equals(normalized) || "MENU_MANAGEMENT".equals(normalized);
+    }
+
+    private void copyMenuContext(Map<String, Object> target, Map<String, Object> fallback) {
+        if (fallback == null) {
+            fallback = Map.of();
+        }
+        copyIfAbsent(target, fallback, "id");
+        copyIfAbsent(target, fallback, "name");
+        copyIfAbsent(target, fallback, "path");
+        copyIfAbsent(target, fallback, "displayName");
+        copyIfAbsent(target, fallback, "title");
+        copyIfAbsent(target, fallback, "menuTitle");
+        copyIfAbsent(target, fallback, "menuName");
+        copyIfAbsent(target, fallback, "menuLabel");
+        copyIfAbsent(target, fallback, "metadata");
+    }
+
+    private void copyIfAbsent(Map<String, Object> target, Map<String, Object> fallback, String key) {
+        if (target.containsKey(key)) {
+            Object current = target.get(key);
+            if (current instanceof String s && StringUtils.hasText(s)) {
+                return;
+            }
+            if (current != null) {
+                return;
+            }
+        }
+        if (fallback.containsKey(key)) {
+            target.put(key, fallback.get(key));
+        }
     }
 
     private Object normalizeValue(Object value) {

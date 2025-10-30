@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public record AuditEntryView(
@@ -37,8 +38,48 @@ public record AuditEntryView(
     Map<String, Object> metadata,
     Map<String, Object> extraAttributes,
     List<AuditEntryTargetView> targets,
-    Map<String, Object> details
+    Map<String, Object> details,
+    String resourceType
 ) {
+    private static final Set<String> CANONICAL_RESOURCE_TYPES = Set.of(
+        "USER",
+        "ROLE",
+        "CUSTOM_ROLE",
+        "ROLE_ASSIGNMENT",
+        "PORTAL_MENU",
+        "MENU",
+        "GROUP",
+        "ORG",
+        "INFRA_DATA_SOURCE",
+        "SYSTEM_CONFIG",
+        "CATALOG_DATASET",
+        "CHANGE_REQUEST",
+        "APPROVAL",
+        "PERMISSION"
+    );
+
+    private static final Map<String, String> RESOURCE_TYPE_ALIASES = Map.ofEntries(
+        Map.entry("ADMIN_USER", "USER"),
+        Map.entry("ADMIN_USER_MANAGEMENT", "USER"),
+        Map.entry("AUTH_USER", "USER"),
+        Map.entry("ADMIN_ROLE", "ROLE"),
+        Map.entry("ADMIN_ROLE_MANAGEMENT", "ROLE"),
+        Map.entry("PLATFORM_ROLE", "ROLE"),
+        Map.entry("ADMIN_CUSTOM_ROLE", "CUSTOM_ROLE"),
+        Map.entry("ADMIN_ROLE_ASSIGNMENT", "ROLE_ASSIGNMENT"),
+        Map.entry("ADMIN_PORTAL_MENU", "PORTAL_MENU"),
+        Map.entry("ADMIN_MENU", "PORTAL_MENU"),
+        Map.entry("MENU_MANAGEMENT", "PORTAL_MENU"),
+        Map.entry("ADMIN_GROUP", "GROUP"),
+        Map.entry("ADMIN_ORG", "ORG"),
+        Map.entry("ADMIN_ORGANIZATION", "ORG"),
+        Map.entry("ADMIN_DATA_SOURCE", "INFRA_DATA_SOURCE"),
+        Map.entry("ADMIN_DATASET", "CATALOG_DATASET"),
+        Map.entry("ADMIN_SYSTEM_CONFIG", "SYSTEM_CONFIG"),
+        Map.entry("ADMIN_CHANGE_REQUEST", "CHANGE_REQUEST"),
+        Map.entry("ADMIN_APPROVAL", "APPROVAL")
+    );
+
     public static AuditEntryView from(AuditEntry entry, boolean includeDetails) {
         if (entry == null) {
             return null;
@@ -61,6 +102,14 @@ public record AuditEntryView(
             )
             .toList();
         Map<String, Object> details = includeDetails ? collectDetails(entry) : Map.of();
+        String primaryTargetTable = targets.isEmpty() ? null : targets.get(0).table();
+        String resourceType = canonicalizeResourceType(
+            firstNonBlank(
+                extractResourceType(metadata),
+                extractResourceType(extraAttributes),
+                primaryTargetTable
+            )
+        );
         return new AuditEntryView(
             entry.getId(),
             entry.getOccurredAt(),
@@ -84,7 +133,8 @@ public record AuditEntryView(
             metadata,
             extraAttributes,
             targets,
-            details
+            details,
+            resourceType
         );
     }
 
@@ -164,5 +214,90 @@ public record AuditEntryView(
             return moduleName.trim();
         }
         return "general";
+    }
+
+    private static String extractResourceType(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return null;
+        }
+        for (String key : List.of("resourceType", "resource_type", "resource-type", "resource")) {
+            Object value = source.get(key);
+            if (value instanceof CharSequence text) {
+                String trimmed = safeTrim(text.toString());
+                if (trimmed != null) {
+                    return trimmed;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String canonicalizeResourceType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String normalized = raw.trim().toUpperCase(Locale.ROOT);
+        if (CANONICAL_RESOURCE_TYPES.contains(normalized)) {
+            return normalized;
+        }
+        String alias = RESOURCE_TYPE_ALIASES.get(normalized);
+        if (alias != null) {
+            return alias;
+        }
+        if (normalized.contains("ROLE_ASSIGN")) {
+            return "ROLE_ASSIGNMENT";
+        }
+        if (normalized.contains("CUSTOM_ROLE")) {
+            return "CUSTOM_ROLE";
+        }
+        if (normalized.contains("PORTAL_MENU") || normalized.endsWith("_MENU") || normalized.contains("MENU_")) {
+            return "PORTAL_MENU";
+        }
+        if (normalized.contains("MENU") && !normalized.contains("PERMISSION")) {
+            return "PORTAL_MENU";
+        }
+        if (normalized.contains("ROLE")) {
+            return "ROLE";
+        }
+        if (normalized.contains("USER")) {
+            return "USER";
+        }
+        if (normalized.contains("GROUP")) {
+            return "GROUP";
+        }
+        if (normalized.contains("ORGANIZATION") || normalized.contains("ORG")) {
+            return "ORG";
+        }
+        if (normalized.contains("DATA_SOURCE") || normalized.contains("DATASOURCE")) {
+            return "INFRA_DATA_SOURCE";
+        }
+        if (normalized.contains("SYSTEM_CONFIG") || normalized.contains("SYS_CONFIG")) {
+            return "SYSTEM_CONFIG";
+        }
+        if (normalized.contains("DATASET")) {
+            return "CATALOG_DATASET";
+        }
+        if (normalized.contains("CHANGE_REQUEST")) {
+            return "CHANGE_REQUEST";
+        }
+        if (normalized.contains("APPROVAL")) {
+            return "APPROVAL";
+        }
+        if (normalized.contains("PERMISSION")) {
+            return "PERMISSION";
+        }
+        return normalized;
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 }

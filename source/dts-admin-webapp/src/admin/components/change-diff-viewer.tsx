@@ -2,6 +2,7 @@ import { Fragment, useMemo } from "react";
 import { Text } from "@/ui/typography";
 import { cn } from "@/utils";
 import { formatDisplayValue } from "@/admin/utils/value-localization";
+import { isFieldHiddenForResource } from "@/admin/utils/change-sanitizer";
 
 type SnapshotRecord = Record<string, unknown>;
 
@@ -61,6 +62,116 @@ const HIDDEN_FIELD_KEYS = new Set([
 	"actiondisplay",
 ]);
 const HIDDEN_FIELD_LABELS = new Set(["attributes", "target", "详细信息", "目标信息", "actiondisplay", "操作概述"]);
+const RESOURCE_FIELD_WHITELIST: Record<
+	string,
+	{
+		fields: Set<string>;
+		labels: Set<string>;
+	}
+> = {
+	PORTAL_MENU: {
+		fields: new Set([
+			"allowedroles",
+			"allowedrolesbefore",
+			"allowedrolesafter",
+			"addedroles",
+			"removedroles",
+			"deletedbefore",
+			"deletedafter",
+			"statusbeforelabel",
+			"statusafterlabel",
+			"menutitle",
+			"menuname",
+			"menupath",
+			"menuid",
+		]),
+		labels: new Set(["绑定角色", "新增角色", "移除角色", "禁用状态", "菜单名称", "菜单路径", "菜单标识"]),
+	},
+	MENU: {
+		fields: new Set([
+			"allowedroles",
+			"allowedrolesbefore",
+			"allowedrolesafter",
+			"addedroles",
+			"removedroles",
+			"deletedbefore",
+			"deletedafter",
+			"statusbeforelabel",
+			"statusafterlabel",
+			"menutitle",
+			"menuname",
+			"menupath",
+			"menuid",
+		]),
+		labels: new Set(["绑定角色", "新增角色", "移除角色", "禁用状态", "菜单名称", "菜单路径", "菜单标识"]),
+	},
+	MENU_MANAGEMENT: {
+		fields: new Set([
+			"allowedroles",
+			"allowedrolesbefore",
+			"allowedrolesafter",
+			"addedroles",
+			"removedroles",
+			"deletedbefore",
+			"deletedafter",
+			"statusbeforelabel",
+			"statusafterlabel",
+			"menutitle",
+			"menuname",
+			"menupath",
+			"menuid",
+		]),
+		labels: new Set(["绑定角色", "新增角色", "移除角色", "禁用状态", "菜单名称", "菜单路径", "菜单标识"]),
+	},
+};
+const RESOURCE_FIELD_LABELS: Record<string, Record<string, string>> = {
+	PORTAL_MENU: {
+		menuid: "菜单标识",
+		menuname: "菜单名称",
+		menutitle: "菜单标题",
+		menupath: "菜单路径",
+		allowedroles: "绑定角色",
+		allowedrolesbefore: "变更前角色",
+		allowedrolesafter: "变更后角色",
+		addedroles: "新增角色",
+		removedroles: "移除角色",
+		deletedbefore: "变更前禁用状态",
+		deletedafter: "变更后禁用状态",
+		statusbeforelabel: "变更前状态",
+		statusafterlabel: "变更后状态",
+	},
+	MENU: {
+		menuid: "菜单标识",
+		menuname: "菜单名称",
+		menutitle: "菜单标题",
+		menupath: "菜单路径",
+		allowedroles: "绑定角色",
+		allowedrolesbefore: "变更前角色",
+		allowedrolesafter: "变更后角色",
+		addedroles: "新增角色",
+		removedroles: "移除角色",
+		deletedbefore: "变更前禁用状态",
+		deletedafter: "变更后禁用状态",
+		statusbeforelabel: "变更前状态",
+		statusafterlabel: "变更后状态",
+	},
+	MENU_MANAGEMENT: {
+		menuid: "菜单标识",
+		menuname: "菜单名称",
+		menutitle: "菜单标题",
+		menupath: "菜单路径",
+		allowedroles: "绑定角色",
+		allowedrolesbefore: "变更前角色",
+		allowedrolesafter: "变更后角色",
+		addedroles: "新增角色",
+		removedroles: "移除角色",
+		deletedbefore: "变更前禁用状态",
+		deletedafter: "变更后禁用状态",
+		statusbeforelabel: "变更前状态",
+		statusafterlabel: "变更后状态",
+	},
+};
+const MENU_RESOURCE_TYPES = new Set(["PORTAL_MENU", "MENU", "MENU_MANAGEMENT"]);
 
 export function ChangeDiffViewer({
 	snapshot,
@@ -72,7 +183,10 @@ export function ChangeDiffViewer({
 	className,
 }: ChangeDiffViewerProps) {
 	const mode = normalizeMode(action, operationTypeCode);
-	const sections = useMemo(() => buildSections({ snapshot, summary, mode, resourceType }), [snapshot, summary, mode, resourceType]);
+	const sections = useMemo(
+		() => buildSections({ snapshot, summary, mode, resourceType }),
+		[snapshot, summary, mode, resourceType],
+	);
 
 	if (mode === "delete") {
 		return (
@@ -151,7 +265,7 @@ type Section = {
 	entries: SectionEntry[];
 };
 
-function buildSections({ snapshot, summary, mode }: SectionInput): Section[] {
+function buildSections({ snapshot, summary, mode, resourceType }: SectionInput): Section[] {
 	if (!snapshot && (!summary || summary.length === 0)) {
 		return [];
 	}
@@ -169,6 +283,7 @@ function buildSections({ snapshot, summary, mode }: SectionInput): Section[] {
 				},
 				summary,
 				mode,
+				resourceType,
 			});
 			nested.forEach((section) => {
 				sections.push({
@@ -183,7 +298,7 @@ function buildSections({ snapshot, summary, mode }: SectionInput): Section[] {
 	}
 
 	if (mode === "create") {
-		const summaryEntries = buildCreateEntriesFromSummary(summary);
+		const summaryEntries = buildCreateEntriesFromSummary(summary, resourceType);
 		if (summaryEntries.length > 0) {
 			sections.push({
 				key: "create",
@@ -198,11 +313,11 @@ function buildSections({ snapshot, summary, mode }: SectionInput): Section[] {
 			.filter(([field]) => !shouldSkipInitialField(field))
 			.map(([field, value], idx) => ({
 				key: field || String(idx),
-				label: formatFieldLabel(field),
+				label: formatFieldLabel(field, resourceType),
 				field,
 				after: value,
 			}))
-			.filter((entry) => !shouldHideField(entry.field, entry.label));
+			.filter((entry) => !shouldHideField(entry.field, entry.label, resourceType));
 		if (entries.length > 0) {
 			sections.push({
 				key: "create",
@@ -213,7 +328,7 @@ function buildSections({ snapshot, summary, mode }: SectionInput): Section[] {
 		return sections;
 	}
 
-	const sourceEntries = pickChangeEntries(effectiveSnapshot, summary);
+	const sourceEntries = pickChangeEntries(effectiveSnapshot, summary, resourceType);
 	if (sourceEntries.length > 0) {
 		sections.push({
 			key: "update",
@@ -225,46 +340,60 @@ function buildSections({ snapshot, summary, mode }: SectionInput): Section[] {
 	return sections;
 }
 
-function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummaryEntry[] | null): SectionEntry[] {
+function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummaryEntry[] | null, resourceType?: string | null): SectionEntry[] {
 	if (summary && summary.length > 0) {
 		return summary
 			.map((row, idx) => ({
 				key: `${row.field ?? row.label ?? idx}`,
-				label: formatSummaryLabel(row, idx),
+				label: formatSummaryLabel(row, idx, resourceType),
 				before: row.before,
 				after: row.after,
 				field: typeof row.field === "string" ? row.field : undefined,
 			}))
 			.filter((entry) => !valuesEqual(entry.before, entry.after))
-			.filter((entry) => !shouldHideField(entry.field, entry.label));
+			.filter((entry) => !shouldHideField(entry.field, entry.label, resourceType));
 	}
 
 	if (snapshot && Array.isArray(snapshot.changes)) {
 		return snapshot.changes
 			.map((change, idx) => ({
 				key: `${change.field ?? idx}`,
-				label: formatFieldLabel(change.label ?? change.field ?? `字段${idx + 1}`),
+				label: formatDisplayLabel(change.field, change.label, resourceType) ?? formatFieldLabel(
+					change.label ?? change.field ?? `字段${idx + 1}`,
+					resourceType,
+				),
 				before: change.before,
 				after: change.after,
 				field: typeof change.field === "string" ? change.field : undefined,
 			}))
 			.filter((entry) => !valuesEqual(entry.before, entry.after))
-			.filter((entry) => !shouldHideField(entry.field, entry.label));
+			.filter((entry) => !shouldHideField(entry.field, entry.label, resourceType));
 	}
 
 	const before = sanitizeRecord(snapshot.before);
 	const after = sanitizeRecord(snapshot.after);
 	const fields = new Set<string>([...Object.keys(before), ...Object.keys(after)]);
+	const normalizedType = normalizeResourceType(resourceType);
 	return Array.from(fields)
-		.map((field) => ({
-			key: field,
-			label: formatFieldLabel(field),
-			before: before[field],
-			after: after[field],
-			field,
-		}))
+		.map((field) => {
+			const beforeHas = Object.prototype.hasOwnProperty.call(before, field);
+			const afterHas = Object.prototype.hasOwnProperty.call(after, field);
+			if (normalizedType && MENU_RESOURCE_TYPES.has(normalizedType)) {
+				if (beforeHas && !afterHas) {
+					return null;
+				}
+			}
+			return {
+				key: field,
+				label: formatFieldLabel(field, resourceType),
+				before: before[field],
+				after: after[field],
+				field,
+			};
+		})
+		.filter((entry): entry is SectionEntry => entry !== null)
 		.filter((entry) => !valuesEqual(entry.before, entry.after))
-		.filter((entry) => !shouldHideField(entry.field, entry.label));
+		.filter((entry) => !shouldHideField(entry.field, entry.label, resourceType));
 }
 
 function sanitizeRecord(record?: SnapshotRecord | null): SnapshotRecord {
@@ -307,21 +436,6 @@ function normalizeMode(action?: string | null, operationTypeCode?: string | null
 
 function formatValue(value: unknown, field?: string, label?: string): string {
 	return formatDisplayValue(value, field, label);
-}
-
-function formatFieldLabel(field: string): string {
-	if (!field) {
-		return "字段";
-	}
-	const replaced = field.replace(/[_\-.]+/g, " ").trim();
-	if (!replaced) {
-		return field;
-	}
-	return replaced
-		.split(" ")
-		.filter(Boolean)
-		.map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-		.join(" ");
 }
 
 function beautifyLabel(label: string): string {
@@ -410,13 +524,13 @@ export function normalizeSnapshotChanges(source: unknown): ChangeSnapshotLike["c
 	return mapped.length > 0 ? mapped : undefined;
 }
 
-function buildCreateEntriesFromSummary(summary?: ChangeSummaryEntry[] | null): SectionEntry[] {
+function buildCreateEntriesFromSummary(summary?: ChangeSummaryEntry[] | null, resourceType?: string | null): SectionEntry[] {
 	if (!summary || summary.length === 0) {
 		return [];
 	}
 	return summary
 		.map((row, idx) => {
-			const label = formatSummaryLabel(row, idx);
+			const label = formatSummaryLabel(row, idx, resourceType);
 			const field = typeof row.field === "string" ? row.field : undefined;
 			return {
 				key: `${row.field ?? row.label ?? idx}`,
@@ -425,7 +539,7 @@ function buildCreateEntriesFromSummary(summary?: ChangeSummaryEntry[] | null): S
 				after: row.after ?? row.before,
 			};
 		})
-		.filter((entry) => !shouldHideField(entry.field, entry.label));
+		.filter((entry) => !shouldHideField(entry.field, entry.label, resourceType));
 }
 
 function shouldSkipInitialField(field?: string): boolean {
@@ -436,19 +550,125 @@ function shouldSkipInitialField(field?: string): boolean {
 	return normalized === "target";
 }
 
-function formatSummaryLabel(row: ChangeSummaryEntry, index: number): string {
+function normalizeResourceType(resourceType?: string | null): string | null {
+	if (!resourceType) {
+		return null;
+	}
+	const normalized = resourceType.trim().toUpperCase();
+	return normalized.length > 0 ? normalized : null;
+}
+
+function isAllowedFieldForResource(resourceType?: string | null, field?: string, label?: string): boolean {
+	const normalizedType = normalizeResourceType(resourceType);
+	if (!normalizedType) {
+		return true;
+	}
+	const config = RESOURCE_FIELD_WHITELIST[normalizedType];
+	if (!config) {
+		return true;
+	}
+	const normalizedField = field ? field.trim().toLowerCase() : "";
+	if (normalizedField && config.fields.has(normalizedField)) {
+		return true;
+	}
+	const normalizedLabel = label ? label.trim().toLowerCase() : "";
+	if (normalizedLabel && config.labels.has(normalizedLabel)) {
+		return true;
+	}
+	return false;
+}
+
+function resolveResourceFieldLabel(field?: string, resourceType?: string | null): string | undefined {
+	const normalizedType = normalizeResourceType(resourceType);
+	if (!normalizedType) {
+		return undefined;
+	}
+	if (!field) {
+		return undefined;
+	}
+	const normalizedField = field.trim().toLowerCase();
+	if (!normalizedField) {
+		return undefined;
+	}
+	const dictionary = RESOURCE_FIELD_LABELS[normalizedType];
+	return dictionary?.[normalizedField];
+}
+
+function formatDisplayLabel(field?: string, label?: string, resourceType?: string | null): string | undefined {
+	const labelFromDictionary = field ? resolveResourceFieldLabel(field, resourceType) : undefined;
+	if (labelFromDictionary) {
+		return labelFromDictionary;
+	}
+	const normalizedLabel = label?.trim();
+	if (normalizedLabel) {
+		// 如果前端已经得到中文或非纯英文，直接使用
+		if (!/^[A-Za-z0-9_\-]+$/.test(normalizedLabel)) {
+			return normalizedLabel;
+		}
+		const dictionaryMatch = resolveResourceFieldLabel(normalizedLabel, resourceType);
+		if (dictionaryMatch) {
+			return dictionaryMatch;
+		}
+	}
+	if (field) {
+		const fallback = resolveResourceFieldLabel(field, resourceType);
+		if (fallback) {
+			return fallback;
+		}
+		return beautifyLabel(field);
+	}
+	if (normalizedLabel) {
+		return beautifyLabel(normalizedLabel);
+	}
+	return undefined;
+}
+
+function formatFieldLabel(field: string, resourceType?: string | null): string {
+	const display = formatDisplayLabel(field, undefined, resourceType);
+	if (display) {
+		return display;
+	}
+	if (!field) {
+		return "字段";
+	}
+	const replaced = field.replace(/[_\-.]+/g, " ").trim();
+	if (!replaced) {
+		return field;
+	}
+	return replaced
+		.split(" ")
+		.filter(Boolean)
+		.map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+		.join(" ");
+}
+
+function formatSummaryLabel(row: ChangeSummaryEntry, index: number, resourceType?: string | null): string {
+	const display = formatDisplayLabel(
+		typeof row.field === "string" ? row.field : undefined,
+		typeof row.label === "string" ? row.label : undefined,
+		resourceType,
+	);
+	if (display) {
+		return display;
+	}
 	const rawLabel = typeof row.label === "string" ? row.label.trim() : "";
 	if (rawLabel.length > 0) {
-		return rawLabel;
+		return beautifyLabel(rawLabel);
 	}
 	const rawField = typeof row.field === "string" ? row.field.trim() : "";
 	if (rawField.length > 0) {
-		return formatFieldLabel(rawField);
+		return formatFieldLabel(rawField, resourceType);
 	}
 	return `字段${index + 1}`;
 }
 
-function shouldHideField(field?: string, label?: string): boolean {
+function shouldHideField(field?: string, label?: string, resourceType?: string | null): boolean {
+	if (isFieldHiddenForResource(field, resourceType)) {
+		return true;
+	}
+	if (!isAllowedFieldForResource(resourceType, field, label)) {
+		return true;
+	}
 	const normalizedField = field ? field.trim().toLowerCase() : "";
 	if (normalizedField && HIDDEN_FIELD_KEYS.has(normalizedField)) {
 		return true;

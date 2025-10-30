@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
+import { sanitizeChangePayload } from "@/admin/utils/change-sanitizer";
 import type { AdminUser, ChangeRequest } from "@/admin/types";
 import { AdminSessionContext } from "@/admin/lib/session-context";
 import { Badge } from "@/ui/badge";
@@ -347,10 +348,10 @@ function formatDateTime(value?: string | null): string {
 	return date.toLocaleString("zh-CN", { hour12: false });
 }
 
-function formatJson(value: Record<string, unknown> | null) {
+function formatJson(value: Record<string, unknown> | null, resourceType?: string | null) {
 	if (!value) return "—";
 	try {
-		const text = JSON.stringify(value, null, 2);
+		const text = JSON.stringify(sanitizeChangePayload(value, resourceType), null, 2);
 		return text.replaceAll("7f3868a1-9c8c-4122-b7e4-7f921a40c019", "***");
 	} catch (error) {
 		console.warn("Failed to stringify JSON content", error, value);
@@ -1022,6 +1023,7 @@ export default function ApprovalCenterView() {
 						action={record.action}
 						operationTypeCode={record.action}
 						status={record.effectiveStatus}
+						resourceType={record.resourceType}
 						className="text-xs"
 					/>
 				) : (
@@ -1045,9 +1047,9 @@ export default function ApprovalCenterView() {
 							<Text variant="body3" className="text-muted-foreground">
 								提交内容
 							</Text>
-							<pre className="max-h-56 overflow-auto rounded-md bg-muted/30 px-3 py-2 text-xs whitespace-pre-wrap">
-								{formatJson(payload)}
-							</pre>
+                            <pre className="max-h-56 overflow-auto rounded-md bg-muted/30 px-3 py-2 text-xs whitespace-pre-wrap">
+                                {formatJson(payload, record.resourceType)}
+                            </pre>
 						</div>
 					) : null}
 				</div>
@@ -1323,9 +1325,9 @@ const handleCloseDialog = () => {
 									<Text variant="body3" className="text-muted-foreground">
 										提交内容
 									</Text>
-									<pre className="max-h-64 overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre-wrap break-words">
-										{formatJson(activePayload)}
-									</pre>
+                                    <pre className="max-h-64 overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre-wrap break-words">
+                                        {formatJson(activePayload, activeTask?.resourceType)}
+                                    </pre>
 								</div>
 							) : null}
 
@@ -1340,6 +1342,7 @@ const handleCloseDialog = () => {
 										action={activeTask.action}
 										operationTypeCode={activeTask.action}
 										status={activeTask.effectiveStatus}
+										resourceType={activeTask.resourceType}
 										className="text-xs"
 									/>
 								</div>

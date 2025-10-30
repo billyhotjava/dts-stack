@@ -242,9 +242,7 @@ export interface AdminCustomRole {
 	id: number;
 	name: string;
 	scope: "DEPARTMENT" | "INSTITUTE";
-	operations: DataOperation[];
-	maxRows?: number | null;
-	allowDesensitizeJson?: boolean;
+	operations?: DataOperation[];
 	description?: string;
 	createdBy: string;
 	createdAt: string;
@@ -267,9 +265,6 @@ export interface AdminRoleAssignment {
 export interface CreateCustomRolePayload {
 	name: string;
 	scope: "DEPARTMENT" | "INSTITUTE";
-	operations: DataOperation[];
-	maxRows?: number | null;
-	allowDesensitizeJson?: boolean;
 	description?: string;
 	titleCn?: string;
 	nameZh?: string;

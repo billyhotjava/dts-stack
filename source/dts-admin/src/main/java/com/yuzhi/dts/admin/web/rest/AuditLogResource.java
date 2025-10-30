@@ -409,7 +409,8 @@ public class AuditLogResource {
                 targetLabels.put(id, StringUtils.defaultIfBlank(label, id));
             }
         }
-        map.put("resourceType", targetTable);
+        String canonicalResourceType = StringUtils.defaultIfBlank(view.resourceType(), null);
+        map.put("resourceType", StringUtils.defaultIfBlank(canonicalResourceType, targetTable));
         map.put("resourceId", targetIds.isEmpty() ? null : targetIds.get(0));
         map.put("targetTable", targetTable);
         map.put("targetId", targetIds.isEmpty() ? null : targetIds.get(0));
@@ -446,6 +447,9 @@ public class AuditLogResource {
             }
             if (!targetIds.isEmpty()) {
                 detailPayload.putIfAbsent("targetIds", targetIds);
+            }
+            if (StringUtils.isNotBlank(canonicalResourceType)) {
+                detailPayload.putIfAbsent("resourceType", canonicalResourceType);
             }
         } else {
             detailPayload = Map.of();

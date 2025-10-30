@@ -270,9 +270,12 @@ public class AdminApiResource {
     );
     // Tighten default visibility: ROLE_USER is non-binding and should not be added by default
     private static final List<String> DEFAULT_PORTAL_ROLES = List.of(AuthoritiesConstants.OP_ADMIN);
-    private static final Set<String> RESERVED_REALM_ROLES = Set.of("SYSADMIN", "OPADMIN", "AUTHADMIN", "AUDITADMIN");
+    private static final Set<String> RESERVED_REALM_ROLES = Set.of("SYSADMIN", "OPADMIN", "AUTHADMIN", "AUDITADMIN", "SECURITYAUDITOR");
 
     private static final List<String> OPERATION_ORDER = List.of("read", "write", "export");
+    private static final Set<String> ALLOWED_ROLE_OPERATIONS = Set.of("read", "write", "export");
+    private static final List<String> DEFAULT_ROLE_OPERATIONS = List.copyOf(ALLOWED_ROLE_OPERATIONS);
+    private static final Set<String> ROLE_SENSITIVE_FIELDS = Set.of("operations", "maxrows", "allowdesensitizejson");
 
     private static final Map<String, String> ROLE_ALIASES = Map.ofEntries(
         Map.entry("DEPT_OWNER", "DEPT_DATA_OWNER"),
@@ -301,7 +304,7 @@ public class AdminApiResource {
                 List.of("read", "write", "export"),
                 "部门数据管理员",
                 "department data administrator",
-                "负责本部门数据；可读取本部门且密级不超的资源，具备部门范围写入和授权能力；导出高敏数据需审批。"
+                "负责本部门数据；可读取本部门且密级不超的资源，具备部门范围写入和授权能力。"
             )
         ),
         Map.entry(
@@ -311,7 +314,7 @@ public class AdminApiResource {
                 List.of("read", "write", "export"),
                 "部门数据开发员",
                 "department data developer",
-                "覆盖本部门数据开发；可读取密级不超的部门数据并在部门范围内写入；不具备密级或共享策略调整、授权管理能力；导出受策略限制。"
+                "覆盖本部门数据开发；可读取密级不超的部门数据并在部门范围内写入；不具备密级或共享策略调整、授权管理能力。"
             )
         ),
         Map.entry(
@@ -321,7 +324,7 @@ public class AdminApiResource {
                 List.of("read", "write", "export"),
                 "研究所数据管理员",
                 "institute data administrator",
-                "面向全所共享区；可读取全所共享区内密级不超的数据，并写入和管理共享策略；负责编辑/查看授权；导出高敏数据需审批。"
+                "面向全所共享区；可读取全所共享区内密级不超的数据，并写入和管理共享策略；负责编辑/查看授权。"
             )
         ),
         Map.entry(
@@ -331,7 +334,7 @@ public class AdminApiResource {
                 List.of("read", "write", "export"),
                 "研究所数据开发员",
                 "institute data developer",
-                "在全所共享区开展数据开发；可读取共享区密级不超的数据并写入共享区；无密级或共享策略调整、授权能力；导出受策略限制。"
+                "在全所共享区开展数据开发；可读取共享区密级不超的数据并写入共享区；无密级或共享策略调整、授权能力。"
             )
         )
     );
@@ -734,9 +737,12 @@ public class AdminApiResource {
                 approvalDetail.put("changeRequestId", cr.getId());
                 approvalDetail.put("summary", pendingSummary);
                 approvalDetail.put("operationName", pendingSummary);
-                if (enabling || disabling) {
-                    approvalDetail.put("operationType", AuditOperationType.UPDATE.getCode());
-                    approvalDetail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
+                if (enabling) {
+                    approvalDetail.put("operationType", AuditOperationType.ENABLE.getCode());
+                    approvalDetail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+                } else if (disabling) {
+                    approvalDetail.put("operationType", AuditOperationType.DISABLE.getCode());
+                    approvalDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
                 }
                 if (menuId != null) {
                     approvalDetail.put("menuId", menuId);
@@ -790,9 +796,12 @@ public class AdminApiResource {
             detail.put("menuCode", persisted.getName());
             detail.put("menuTitle", persistedLabel);
             detail.put("menuPath", persisted.getPath());
-            if (enabling || disabling) {
-                detail.put("operationType", AuditOperationType.UPDATE.getCode());
-                detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
+            if (enabling) {
+                detail.put("operationType", AuditOperationType.ENABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            } else if (disabling) {
+                detail.put("operationType", AuditOperationType.DISABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
             }
             MenuAuditContext.Operation auditOp = enabling
                 ? MenuAuditContext.Operation.ENABLE
@@ -832,9 +841,12 @@ public class AdminApiResource {
             detail.put("menuCode", beforeEntity != null ? beforeEntity.getName() : null);
             detail.put("menuTitle", menuLabel);
             detail.put("menuPath", beforeEntity != null ? beforeEntity.getPath() : null);
-            if (enabling || disabling) {
-                detail.put("operationType", AuditOperationType.UPDATE.getCode());
-                detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
+            if (enabling) {
+                detail.put("operationType", AuditOperationType.ENABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            } else if (disabling) {
+                detail.put("operationType", AuditOperationType.DISABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
             }
             MenuAuditContext.Operation auditOp = enabling
                 ? MenuAuditContext.Operation.ENABLE
@@ -865,9 +877,12 @@ public class AdminApiResource {
             String failureSummary = enabling ? "启用菜单失败：" + menuLabel : "修改菜单失败：" + menuLabel;
             detail.put("summary", failureSummary);
             detail.put("operationName", failureSummary);
-            if (enabling || disabling) {
-                detail.put("operationType", AuditOperationType.UPDATE.getCode());
-                detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
+            if (enabling) {
+                detail.put("operationType", AuditOperationType.ENABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            } else if (disabling) {
+                detail.put("operationType", AuditOperationType.DISABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
             }
             MenuAuditContext.Operation auditOp = enabling
                 ? MenuAuditContext.Operation.ENABLE
@@ -899,9 +914,12 @@ public class AdminApiResource {
             String failureSummary = enabling ? "启用菜单失败：" + menuLabel : "修改菜单失败：" + menuLabel;
             detail.put("summary", failureSummary);
             detail.put("operationName", failureSummary);
-            if (enabling || disabling) {
-                detail.put("operationType", AuditOperationType.UPDATE.getCode());
-                detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
+            if (enabling) {
+                detail.put("operationType", AuditOperationType.ENABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.ENABLE.getDisplayName());
+            } else if (disabling) {
+                detail.put("operationType", AuditOperationType.DISABLE.getCode());
+                detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
             }
             MenuAuditContext.Operation auditOp = enabling
                 ? MenuAuditContext.Operation.ENABLE
@@ -966,8 +984,8 @@ public class AdminApiResource {
                 String pendingSummary = "提交菜单禁用审批：" + menuLabel;
                 approvalDetail.put("summary", pendingSummary);
                 approvalDetail.put("operationName", pendingSummary);
-                approvalDetail.put("operationType", AuditOperationType.UPDATE.getCode());
-                approvalDetail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
+                approvalDetail.put("operationType", AuditOperationType.DISABLE.getCode());
+                approvalDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
                 approvalDetail.put("menuId", menuId);
                 approvalDetail.put("menuCode", entity.getName());
                 approvalDetail.put("menuTitle", menuLabel);
@@ -994,8 +1012,8 @@ public class AdminApiResource {
                 failureDetail.put("error", ex.getMessage());
                 failureDetail.put("summary", "禁用菜单失败：" + menuLabel);
                 failureDetail.put("operationName", "禁用菜单失败：" + menuLabel);
-                failureDetail.put("operationType", AuditOperationType.UPDATE.getCode());
-                failureDetail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
+                failureDetail.put("operationType", AuditOperationType.DISABLE.getCode());
+                failureDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
                 failureDetail.put("menuId", menuId);
                 failureDetail.put("menuCode", entity.getName());
                 failureDetail.put("menuTitle", menuLabel);
@@ -1026,8 +1044,8 @@ public class AdminApiResource {
             appendChangeSummary(detail, "PORTAL_MENU", before, after);
             detail.put("summary", "禁用菜单：" + menuLabel);
             detail.put("operationName", "禁用菜单：" + menuLabel);
-            detail.put("operationType", AuditOperationType.UPDATE.getCode());
-            detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
+            detail.put("operationType", AuditOperationType.DISABLE.getCode());
+            detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
             detail.put("menuId", entity.getId());
             detail.put("menuCode", entity.getName());
             detail.put("menuTitle", menuLabel);
@@ -1055,8 +1073,8 @@ public class AdminApiResource {
             detail.put("error", ex.getMessage());
             detail.put("summary", "禁用菜单失败：" + menuLabel);
             detail.put("operationName", "禁用菜单失败：" + menuLabel);
-            detail.put("operationType", AuditOperationType.UPDATE.getCode());
-            detail.put("operationTypeText", AuditOperationType.UPDATE.getDisplayName());
+            detail.put("operationType", AuditOperationType.DISABLE.getCode());
+            detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
             detail.put("menuId", menuId);
             detail.put("menuCode", entity.getName());
             detail.put("menuTitle", menuLabel);
@@ -1547,18 +1565,6 @@ public class AdminApiResource {
         }
         String displayName = Objects.toString(payload.getOrDefault("displayName", titleCn), titleCn).trim();
         String titleEn = Objects.toString(payload.get("titleEn"), null);
-        LinkedHashSet<String> operations = readStringList(payload.get("operations"))
-            .stream()
-            .map(String::trim)
-            .filter(StringUtils::hasText)
-            .map(op -> op.toLowerCase(Locale.ROOT))
-            .collect(Collectors.toCollection(LinkedHashSet::new));
-        if (operations.isEmpty()) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("请选择角色权限"));
-        }
-        if (!operations.stream().allMatch(op -> Set.of("read", "write", "export").contains(op))) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("不支持的操作"));
-        }
         String scope = Objects.toString(payload.get("scope"), "").trim().toUpperCase(Locale.ROOT);
         if (!Set.of("DEPARTMENT", "INSTITUTE").contains(scope)) {
             return ResponseEntity.badRequest().body(ApiResponse.error("作用域无效"));
@@ -1566,9 +1572,6 @@ public class AdminApiResource {
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("name", normalizedName);
         after.put("scope", scope);
-        after.put("operations", new LinkedHashSet<>(operations));
-        after.put("maxRows", payload.get("maxRows"));
-        after.put("allowDesensitizeJson", Boolean.TRUE.equals(payload.get("allowDesensitizeJson")));
         after.put("description", Objects.toString(payload.get("description"), null));
         after.put("titleCn", titleCn);
         after.put("nameZh", titleCn);
@@ -2278,6 +2281,10 @@ public class AdminApiResource {
         m.put("id", menu.getId());
         m.put("name", menu.getName());
         m.put("path", menu.getPath());
+        String displayName = resolveMenuDisplayName(menu);
+        if (StringUtils.hasText(displayName)) {
+            m.put("displayName", displayName);
+        }
         m.put("component", menu.getComponent());
         m.put("icon", menu.getIcon());
         m.put("sortOrder", menu.getSortOrder());
@@ -2288,9 +2295,13 @@ public class AdminApiResource {
             .getVisibilities()
             .stream()
             .map(this::toVisibilityRule)
+            .filter(Objects::nonNull)
             .toList();
         m.put("visibilityRules", visibilityRules);
-        m.put("allowedRoles", visibilityRules.stream().map(rule -> Objects.toString(rule.get("role"), null)).filter(Objects::nonNull).distinct().toList());
+        List<String> allowedRoles = filterReservedRoles(
+            visibilityRules.stream().map(rule -> Objects.toString(rule.get("role"), null)).filter(Objects::nonNull).toList()
+        );
+        m.put("allowedRoles", allowedRoles);
         m.put("allowedPermissions", visibilityRules
             .stream()
             .map(rule -> Objects.toString(rule.get("permission"), null))
@@ -2325,7 +2336,7 @@ public class AdminApiResource {
         if (source.containsKey("deleted")) {
             filtered.put("deleted", toBoolean(source.get("deleted")));
         }
-        List<String> allowedRoles = toTrimmedStringList(source.get("allowedRoles"));
+        List<String> allowedRoles = filterReservedRoles(toTrimmedStringList(source.get("allowedRoles")));
         if (!allowedRoles.isEmpty()) {
             filtered.put("allowedRoles", allowedRoles);
         }
@@ -2374,6 +2385,27 @@ public class AdminApiResource {
         return new ArrayList<>(result);
     }
 
+    private List<String> filterReservedRoles(Collection<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> filtered = new LinkedHashSet<>();
+        for (String role : roles) {
+            if (!StringUtils.hasText(role)) {
+                continue;
+            }
+            String normalized = normalizeRoleCode(role);
+            if (!StringUtils.hasText(normalized)) {
+                continue;
+            }
+            if (isReservedRealmRoleName(normalized)) {
+                continue;
+            }
+            filtered.add(normalized);
+        }
+        return new ArrayList<>(filtered);
+    }
+
     private List<Map<String, Object>> sanitizeVisibilityRules(Object value) {
         if (!(value instanceof Collection<?> collection)) {
             return List.of();
@@ -2384,12 +2416,13 @@ public class AdminApiResource {
                 continue;
             }
             String role = normalizeRoleCode(map.get("role"));
+            if (!StringUtils.hasText(role) || isReservedRealmRoleName(role)) {
+                continue;
+            }
             String permission = map.get("permission") == null ? null : map.get("permission").toString().trim();
             String dataLevel = normalizeMenuLevel(map.get("dataLevel"), true);
             Map<String, Object> entry = new LinkedHashMap<>();
-            if (StringUtils.hasText(role)) {
-                entry.put("role", role);
-            }
+            entry.put("role", role);
             if (StringUtils.hasText(permission)) {
                 entry.put("permission", permission);
             }
@@ -2412,7 +2445,7 @@ public class AdminApiResource {
         if (payload.containsKey("deleted")) {
             filtered.put("deleted", toBoolean(payload.get("deleted")));
         }
-        List<String> allowedRoles = toTrimmedStringList(payload.get("allowedRoles"));
+        List<String> allowedRoles = filterReservedRoles(toTrimmedStringList(payload.get("allowedRoles")));
         if (!allowedRoles.isEmpty()) {
             filtered.put("allowedRoles", allowedRoles);
         }
@@ -2667,7 +2700,7 @@ public class AdminApiResource {
                 m.put("deleted", Boolean.valueOf(v.toString()));
             }
         }
-        List<String> allowedRoles = readStringList(body.get("allowedRoles"));
+        List<String> allowedRoles = filterReservedRoles(readStringList(body.get("allowedRoles")));
         if (!allowedRoles.isEmpty()) {
             m.put("allowedRoles", allowedRoles);
         }
@@ -2687,9 +2720,13 @@ public class AdminApiResource {
 
 
     private Map<String, Object> toVisibilityRule(PortalMenuVisibility visibility) {
-        Map<String, Object> rule = new LinkedHashMap<>();
         String normalizedCode = normalizeRoleAuthority(visibility.getRoleCode());
-        rule.put("role", normalizedCode != null ? normalizedCode : visibility.getRoleCode());
+        String role = normalizedCode != null ? normalizedCode : visibility.getRoleCode();
+        if (!StringUtils.hasText(role) || isReservedRealmRoleName(role)) {
+            return null;
+        }
+        Map<String, Object> rule = new LinkedHashMap<>();
+        rule.put("role", role);
         if (visibility.getPermissionCode() != null && !visibility.getPermissionCode().isBlank()) {
             rule.put("permission", visibility.getPermissionCode());
         }
@@ -2732,7 +2769,7 @@ public class AdminApiResource {
                 continue;
             }
             String role = normalizeRoleCode(map.get("role"));
-            if (!StringUtils.hasText(role)) {
+            if (!StringUtils.hasText(role) || isReservedRealmRoleName(role)) {
                 continue;
             }
             String permission = map.get("permission") == null ? null : map.get("permission").toString().trim();
@@ -2876,7 +2913,7 @@ public class AdminApiResource {
                 return;
             }
             String normalized = normalizeRoleCode(value);
-            if (StringUtils.hasText(normalized)) {
+            if (StringUtils.hasText(normalized) && !isReservedRealmRoleName(normalized)) {
                 allowedRoles.add(normalized);
             }
         }
@@ -3101,10 +3138,6 @@ public class AdminApiResource {
             label = firstNonBlank(stringValue(cr.getResourceId()), canonical, primaryId);
         }
         if (payload != null) {
-            Object operations = payload.get("operations");
-            if (operations != null) {
-                extras.put("roleOperations", operations);
-            }
             String scope = stringValue(payload.get("scope"));
             if (scope != null) {
                 extras.put("roleScope", scope);
@@ -3112,14 +3145,6 @@ public class AdminApiResource {
             String description = stringValue(payload.get("description"));
             if (description != null) {
                 extras.put("roleDescription", description);
-            }
-            Object maxRows = payload.get("maxRows");
-            if (maxRows != null) {
-                extras.put("maxRows", maxRows);
-            }
-            Object allowDesensitize = payload.get("allowDesensitizeJson");
-            if (allowDesensitize != null) {
-                extras.put("allowDesensitize", allowDesensitize);
             }
         }
         if (StringUtils.hasText(label)) {
@@ -4167,9 +4192,6 @@ public class AdminApiResource {
                 if (StringUtils.hasText(scope)) {
                     detailPayload.put("scope", scope);
                 }
-                if (payload.containsKey("operations")) {
-                    detailPayload.put("operations", payload.get("operations"));
-                }
                 if (payload.containsKey("description")) {
                     detailPayload.put("description", payload.get("description"));
                 }
@@ -4184,20 +4206,6 @@ public class AdminApiResource {
                 }
                 if (StringUtils.hasText(scope)) {
                     afterSnapshot.put("scope", scope);
-                }
-                if (payload.containsKey("operations")) {
-                    Object operations = payload.get("operations");
-                    if (operations instanceof java.util.Collection<?> collection) {
-                        afterSnapshot.put("operations", new java.util.ArrayList<>(collection));
-                    } else {
-                        afterSnapshot.put("operations", operations);
-                    }
-                }
-                if (payload.containsKey("maxRows")) {
-                    afterSnapshot.put("maxRows", payload.get("maxRows"));
-                }
-                if (payload.containsKey("allowDesensitizeJson")) {
-                    afterSnapshot.put("allowDesensitizeJson", payload.get("allowDesensitizeJson"));
                 }
                 if (payload.containsKey("titleCn")) {
                     afterSnapshot.put("titleCn", payload.get("titleCn"));
@@ -4701,13 +4709,24 @@ public class AdminApiResource {
             return;
         }
 
-        List<Map<String, String>> summaryEntries = new ArrayList<>();
-        if (changeSnapshotFormatter != null) {
-            summaryEntries.addAll(changeSnapshotFormatter.format(before, after, resourceType));
+        Map<String, Object> effectiveBefore = snapshotClone(before);
+        Map<String, Object> effectiveAfter = snapshotClone(after);
+        boolean portalMenuResource = isPortalMenuResource(resourceType);
+        if (portalMenuResource) {
+            effectiveBefore = ensureMenuContext(effectiveBefore, Map.of());
+            effectiveAfter = ensureMenuContext(effectiveAfter, effectiveBefore);
+            if (hasMenuRolePayload(effectiveBefore) && !hasMenuRolePayload(effectiveAfter)) {
+                copyMenuRoles(effectiveAfter, effectiveBefore);
+            }
         }
 
-        if ("PORTAL_MENU".equalsIgnoreCase(resourceType)) {
-            MenuChangeSummaryResult menuSummary = buildPortalMenuSummary(before, after);
+        List<Map<String, String>> summaryEntries = new ArrayList<>();
+        if (changeSnapshotFormatter != null) {
+            summaryEntries.addAll(changeSnapshotFormatter.format(effectiveBefore, effectiveAfter, resourceType));
+        }
+
+        if (portalMenuResource) {
+            MenuChangeSummaryResult menuSummary = buildPortalMenuSummary(effectiveBefore, effectiveAfter);
             if (!menuSummary.menuChanges().isEmpty()) {
                 mergeMenuChanges(detail, menuSummary.menuChanges());
             }
@@ -4722,7 +4741,7 @@ public class AdminApiResource {
         mergeChangeSummary(detail, summaryEntries);
 
         if (!detail.containsKey("changeSnapshot")) {
-            ChangeSnapshot snapshot = ChangeSnapshot.of(before, after);
+            ChangeSnapshot snapshot = ChangeSnapshot.of(effectiveBefore, effectiveAfter);
             if (snapshot.hasChanges() || !snapshot.getBefore().isEmpty() || !snapshot.getAfter().isEmpty()) {
                 detail.put("changeSnapshot", snapshot.toMap());
             }
@@ -4771,16 +4790,14 @@ public class AdminApiResource {
         LinkedHashSet<String> beforeRoles = extractMenuRoles(beforeMap);
         LinkedHashSet<String> afterRoles = extractMenuRoles(afterMap);
 
-        List<String> beforeRoleList = beforeRoles
-            .stream()
-            .map(this::displayRoleCode)
-            .filter(StringUtils::hasText)
-            .toList();
-        List<String> afterRoleList = afterRoles
-            .stream()
-            .map(this::displayRoleCode)
-            .filter(StringUtils::hasText)
-            .toList();
+        boolean beforeRolesDefined = hasMenuRolePayload(beforeMap);
+        boolean afterRolesDefined = hasMenuRolePayload(afterMap);
+        if (!afterRolesDefined && beforeRolesDefined) {
+            afterRoles = new LinkedHashSet<>(beforeRoles);
+        }
+
+        List<String> beforeRoleList = formatRoleAuditList(beforeRoles);
+        List<String> afterRoleList = formatRoleAuditList(afterRoles);
 
         List<String> addedRoles = new ArrayList<>();
         for (String role : afterRoles) {
@@ -4850,12 +4867,8 @@ public class AdminApiResource {
         if (!afterRoleList.isEmpty()) {
             entry.put("allowedRolesAfter", afterRoleList);
         }
-        if (!addedRoles.isEmpty()) {
-            entry.put("addedRoles", addedRoles);
-        }
-        if (!removedRoles.isEmpty()) {
-            entry.put("removedRoles", removedRoles);
-        }
+        entry.put("addedRoles", formatRoleAuditList(addedRoles));
+        entry.put("removedRoles", formatRoleAuditList(removedRoles));
         if (statusChanged) {
             entry.put("deletedBefore", beforeDeleted);
             entry.put("deletedAfter", afterDeleted);
@@ -4865,6 +4878,8 @@ public class AdminApiResource {
         Set<String> allowedKeys = Set.of(
             "menuId",
             "menuTitle",
+            "menuName",
+            "menuPath",
             "allowedRolesBefore",
             "allowedRolesAfter",
             "addedRoles",
@@ -4882,10 +4897,10 @@ public class AdminApiResource {
             summaryParts.add("状态：" + (beforeDeleted ? "禁用" : "启用") + " → " + (afterDeleted ? "禁用" : "启用"));
         }
         if (!addedRoles.isEmpty()) {
-            summaryParts.add("新增角色：" + formatRoleList(addedRoles));
+            summaryParts.add("新增角色：" + String.join(", ", formatRoleAuditList(addedRoles)));
         }
         if (!removedRoles.isEmpty()) {
-            summaryParts.add("移除角色：" + formatRoleList(removedRoles));
+            summaryParts.add("移除角色：" + String.join(", ", formatRoleAuditList(removedRoles)));
         }
 
         if (!summaryParts.isEmpty()) {
@@ -4900,6 +4915,76 @@ public class AdminApiResource {
         }
 
         return result;
+    }
+
+    private boolean hasMenuRolePayload(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return false;
+        }
+        return payload.containsKey("allowedRoles") || payload.containsKey("visibilityRules");
+    }
+
+    private Map<String, Object> snapshotClone(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        return new LinkedHashMap<>(source);
+    }
+
+    private Map<String, Object> ensureMenuContext(Map<String, Object> candidate, Map<String, Object> fallback) {
+        Map<String, Object> normalized = snapshotClone(candidate);
+        copyMenuContext(normalized, fallback);
+        return normalized;
+    }
+
+    private void copyMenuRoles(Map<String, Object> target, Map<String, Object> fallback) {
+        if (fallback == null || fallback.isEmpty()) {
+            return;
+        }
+        if (!target.containsKey("allowedRoles") && fallback.containsKey("allowedRoles")) {
+            target.put("allowedRoles", fallback.get("allowedRoles"));
+        }
+        if (!target.containsKey("visibilityRules") && fallback.containsKey("visibilityRules")) {
+            target.put("visibilityRules", fallback.get("visibilityRules"));
+        }
+    }
+
+    private boolean isPortalMenuResource(String resourceType) {
+        if (!StringUtils.hasText(resourceType)) {
+            return false;
+        }
+        String normalized = resourceType.trim().toUpperCase(Locale.ROOT);
+        return "PORTAL_MENU".equals(normalized) || "MENU".equals(normalized) || "MENU_MANAGEMENT".equals(normalized);
+    }
+
+    private void copyMenuContext(Map<String, Object> target, Map<String, Object> fallback) {
+        if (fallback == null) {
+            fallback = Map.of();
+        }
+        copyIfAbsent(target, fallback, "id");
+        copyIfAbsent(target, fallback, "name");
+        copyIfAbsent(target, fallback, "path");
+        copyIfAbsent(target, fallback, "displayName");
+        copyIfAbsent(target, fallback, "title");
+        copyIfAbsent(target, fallback, "menuTitle");
+        copyIfAbsent(target, fallback, "menuName");
+        copyIfAbsent(target, fallback, "menuLabel");
+        copyIfAbsent(target, fallback, "metadata");
+    }
+
+    private void copyIfAbsent(Map<String, Object> target, Map<String, Object> fallback, String key) {
+        if (target.containsKey(key)) {
+            Object current = target.get(key);
+            if (current instanceof String s && StringUtils.hasText(s)) {
+                return;
+            }
+            if (current != null) {
+                return;
+            }
+        }
+        if (fallback.containsKey(key)) {
+            target.put(key, fallback.get(key));
+        }
     }
 
     private LinkedHashSet<String> extractMenuRoles(Map<String, Object> payload) {
@@ -5301,7 +5386,24 @@ public class AdminApiResource {
                     .map(op -> op.toLowerCase(Locale.ROOT))
                     .collect(Collectors.toCollection(LinkedHashSet::new));
                 if (operations.isEmpty()) {
-                    throw new IllegalArgumentException("请至少保留一个操作权限");
+                    locateCustomRole(normalizedName)
+                        .map(role -> {
+                            String csv = role.getOperationsCsv();
+                            if (!StringUtils.hasText(csv)) {
+                                return List.<String>of();
+                            }
+                            return Arrays
+                                .stream(csv.split(","))
+                                .map(String::trim)
+                                .filter(StringUtils::hasText)
+                                .map(op -> op.toLowerCase(Locale.ROOT))
+                                .filter(ALLOWED_ROLE_OPERATIONS::contains)
+                                .toList();
+                        })
+                        .ifPresent(operations::addAll);
+                }
+                if (operations.isEmpty()) {
+                    operations.addAll(DEFAULT_ROLE_OPERATIONS);
                 }
                 String description = Objects.toString(payload.get("description"), null);
                 String explicitDesc = Objects.toString(payload.getOrDefault("roleDesc", description), description);
@@ -5310,17 +5412,10 @@ public class AdminApiResource {
                 Integer maxRows = payload.get("maxRows") == null ? null : Integer.valueOf(payload.get("maxRows").toString());
                 Boolean allowDesensitize = payload.containsKey("allowDesensitizeJson")
                     ? Boolean.TRUE.equals(payload.get("allowDesensitizeJson"))
-                    : null;
+                    : locateCustomRole(normalizedName).map(AdminCustomRole::getAllowDesensitizeJson).orElse(Boolean.TRUE);
 
                 detail.put("scope", normalizedScope);
-                detail.put("operations", new ArrayList<>(operations));
                 detail.put("description", explicitDesc);
-                if (maxRows != null) {
-                    detail.put("maxRows", maxRows);
-                }
-                if (allowDesensitize != null) {
-                    detail.put("allowDesensitizeJson", allowDesensitize);
-                }
                 if (StringUtils.hasText(titleCn)) {
                     detail.put("titleCn", titleCn);
                 }
@@ -5429,11 +5524,18 @@ public class AdminApiResource {
                     .map(String::trim)
                     .filter(StringUtils::hasText)
                     .map(op -> op.toLowerCase(Locale.ROOT))
+                    .filter(ALLOWED_ROLE_OPERATIONS::contains)
                     .collect(Collectors.toCollection(LinkedHashSet::new));
+                if (ops.isEmpty()) {
+                    ops.addAll(DEFAULT_ROLE_OPERATIONS);
+                }
                 role.setOperationsCsv(String.join(",", ops));
                 Object maxRows = payload.get("maxRows");
                 role.setMaxRows(maxRows == null ? null : Integer.valueOf(maxRows.toString()));
-                role.setAllowDesensitizeJson(Boolean.TRUE.equals(payload.get("allowDesensitizeJson")));
+                boolean allowDesensitize = payload.containsKey("allowDesensitizeJson")
+                    ? Boolean.TRUE.equals(payload.get("allowDesensitizeJson"))
+                    : Boolean.TRUE;
+                role.setAllowDesensitizeJson(allowDesensitize);
                 role.setDescription(Objects.toString(payload.get("description"), null));
                 role = customRoleRepo.save(role);
                 cr.setResourceId(String.valueOf(role.getId()));
@@ -5466,7 +5568,6 @@ public class AdminApiResource {
                 }
                 detail.put("roleId", role.getId());
                 detail.put("scope", role.getScope());
-                detail.put("operations", ops);
             } else {
                 throw new IllegalStateException("未支持的自定义角色操作: " + action);
             }
@@ -5622,8 +5723,11 @@ public class AdminApiResource {
             for (Map.Entry<?, ?> e : map.entrySet()) {
                 String k = String.valueOf(e.getKey());
                 Object v = e.getValue();
+                String lower = k.toLowerCase(Locale.ROOT);
                 if ("keycloakId".equalsIgnoreCase(k)) {
                     // drop entirely: do not expose keycloakId
+                    continue;
+                } else if (ROLE_SENSITIVE_FIELDS.contains(lower)) {
                     continue;
                 } else {
                     out.put(k, redactSensitiveObject(v));
@@ -6003,10 +6107,15 @@ public class AdminApiResource {
         node.put("deleted", menu.isDeleted());
         node.put("parentId", menu.getParent() != null ? menu.getParent().getId() : null);
         List<PortalMenuVisibility> visibilities = menu.getVisibilities();
-        List<Map<String, Object>> visibilityRules = (visibilities == null ? java.util.List.<PortalMenuVisibility>of() : visibilities)
-            .stream()
-            .map(this::toVisibilityRule)
-            .toList();
+        List<Map<String, Object>> visibilityRules = new ArrayList<>();
+        if (visibilities != null) {
+            for (PortalMenuVisibility visibility : visibilities) {
+                Map<String, Object> rule = toVisibilityRule(visibility);
+                if (rule != null && !rule.isEmpty()) {
+                    visibilityRules.add(rule);
+                }
+            }
+        }
         node.put("visibilityRules", visibilityRules);
         node.put(
             "allowedRoles",
@@ -6060,9 +6169,6 @@ public class AdminApiResource {
         m.put("id", r.getId());
         m.put("name", r.getName());
         m.put("scope", r.getScope());
-        m.put("operations", Arrays.asList(r.getOperationsCsv().split(",")));
-        m.put("maxRows", r.getMaxRows());
-        m.put("allowDesensitizeJson", Boolean.TRUE.equals(r.getAllowDesensitizeJson()));
         m.put("description", r.getDescription());
         m.put("createdBy", r.getCreatedBy());
         m.put("createdAt", r.getCreatedDate() != null ? r.getCreatedDate().toString() : null);

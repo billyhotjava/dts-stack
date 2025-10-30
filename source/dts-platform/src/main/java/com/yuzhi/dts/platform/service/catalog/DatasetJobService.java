@@ -117,7 +117,7 @@ public class DatasetJobService {
             return null;
         }
         try {
-            return objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            return objectMapper.readValue(payload, Map.class);
         } catch (Exception e) {
             return payload;
         }

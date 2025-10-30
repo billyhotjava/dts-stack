@@ -128,17 +128,36 @@ public class DataStandardService {
         auditPayload.put("targetName", entity.getName());
         Object previousStatusValue = before.get("status");
         DataStandardStatus previousStatus = previousStatusValue instanceof DataStandardStatus ? (DataStandardStatus) previousStatusValue : null;
-        boolean publishOperation = request.getVersionStatus() == DataStandardVersionStatus.PUBLISHED;
-        if (!publishOperation && request.getStatus() == DataStandardStatus.ACTIVE && previousStatus != DataStandardStatus.ACTIVE) {
-            publishOperation = true;
+        DataStandardStatus currentStatus = entity.getStatus();
+        boolean archiveOperation = currentStatus == DataStandardStatus.ARCHIVED && previousStatus != DataStandardStatus.ARCHIVED;
+        boolean publishOperation = false;
+        if (!archiveOperation) {
+            publishOperation = request.getVersionStatus() == DataStandardVersionStatus.PUBLISHED;
+            if (!publishOperation && request.getStatus() == DataStandardStatus.ACTIVE && previousStatus != DataStandardStatus.ACTIVE) {
+                publishOperation = true;
+            }
+            if (!publishOperation && previousStatus != DataStandardStatus.ACTIVE && currentStatus == DataStandardStatus.ACTIVE) {
+                publishOperation = true;
+            }
         }
-        if (!publishOperation && previousStatus != DataStandardStatus.ACTIVE && entity.getStatus() == DataStandardStatus.ACTIVE) {
-            publishOperation = true;
+        String operationType;
+        String summary;
+        String actionCode;
+        if (archiveOperation) {
+            operationType = "ARCHIVE";
+            summary = "归档数据标准：" + entity.getName();
+            actionCode = "MODELING_STANDARD_EDIT";
+        } else if (publishOperation) {
+            operationType = "PUBLISH";
+            summary = "发布数据标准：" + entity.getName();
+            actionCode = "MODELING_STANDARD_VERSION_PUBLISH";
+        } else {
+            operationType = "UPDATE";
+            summary = "修改数据标准：" + entity.getName();
+            actionCode = "MODELING_STANDARD_EDIT";
         }
-        String operationType = publishOperation ? "PUBLISH" : "UPDATE";
         auditPayload.put("operationType", operationType);
-        auditPayload.put("summary", (publishOperation ? "发布数据标准：" : "修改数据标准：") + entity.getName());
-        String actionCode = publishOperation ? "MODELING_STANDARD_VERSION_PUBLISH" : "MODELING_STANDARD_EDIT";
+        auditPayload.put("summary", summary);
         auditService.auditAction(actionCode, AuditStage.SUCCESS, entity.getId().toString(), auditPayload);
         return DataStandardMapper.toDto(entity);
     }

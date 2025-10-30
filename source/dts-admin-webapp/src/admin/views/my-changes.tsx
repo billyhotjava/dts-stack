@@ -9,6 +9,7 @@ import {
 	buildContextForChangeRequest,
 	summarizeChangeDisplayContext,
 } from "@/admin/utils/change-detail-context";
+import { sanitizeChangePayload } from "@/admin/utils/change-sanitizer";
 import { ChangeDiffViewer } from "@/admin/components/change-diff-viewer";
 import { MenuChangeViewer } from "@/admin/components/menu-change-viewer";
 import { Badge } from "@/ui/badge";
@@ -356,6 +357,7 @@ export default function MyChangesView() {
 								action={activeChange.action}
 								operationTypeCode={activeChange.action}
 								status={activeChange.status}
+								resourceType={activeChange.resourceType}
 								className="text-xs"
 							/>
 						</section>
@@ -374,9 +376,9 @@ export default function MyChangesView() {
 								<Text variant="body3" className="text-muted-foreground">
 									提交内容
 								</Text>
-								<pre className="max-h-56 overflow-auto rounded border border-border/60 bg-muted/20 px-3 py-2 text-xs whitespace-pre-wrap leading-5">
-									{formatJson(activePayloadData)}
-								</pre>
+                                <pre className="max-h-56 overflow-auto rounded border border-border/60 bg-muted/20 px-3 py-2 text-xs whitespace-pre-wrap leading-5">
+                                    {formatJson(activePayloadData, activeChange.resourceType)}
+                                </pre>
 							</section>
 						) : null}
 					</div>
@@ -403,12 +405,12 @@ function parseJson(value?: string | null): unknown {
 	}
 }
 
-function formatJson(value: unknown): string {
+function formatJson(value: unknown, resourceType?: string | null): string {
 	if (!value) {
 		return "—";
 	}
 	try {
-		return JSON.stringify(value, null, 2);
+		return JSON.stringify(sanitizeChangePayload(value, resourceType), null, 2);
 	} catch {
 		return String(value);
 	}

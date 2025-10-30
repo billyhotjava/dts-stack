@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/admin/api/adminApi";
 import type { AdminRoleDetail, PortalMenuCollection, PortalMenuItem } from "@/admin/types";
+import { isReservedBusinessRoleName } from "@/constants/keycloak-roles";
 import { setPortalMenus } from "@/store/portalMenuStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
@@ -633,6 +634,9 @@ function buildRoleOptions(roles: AdminRoleDetail[]): RoleOption[] {
 		if (!authority) {
 			return;
 		}
+		if (isReservedBusinessRoleName(authority)) {
+			return;
+		}
 		const label =
 			role.nameZh ||
 			role.description ||
@@ -657,7 +661,7 @@ function normalizeAllowedRoles(raw?: string[]): string[] {
 	const set = new Set<string>();
 	raw.forEach((value) => {
 		const authority = toRoleAuthority(value);
-		if (authority) {
+		if (authority && !isReservedBusinessRoleName(authority)) {
 			set.add(authority);
 		}
 	});

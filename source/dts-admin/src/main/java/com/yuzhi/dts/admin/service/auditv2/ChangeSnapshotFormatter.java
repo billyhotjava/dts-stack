@@ -24,6 +24,15 @@ public class ChangeSnapshotFormatter {
     private final Map<String, Map<String, FieldMeta>> dictionary;
     private final Map<String, String> genericValueDictionary;
     private static final Set<String> KEYCLOAK_DEFAULT_REALM_ROLE_NAMES = Set.of("offline_access", "uma_authorization");
+    private static final Set<String> PORTAL_MENU_AUDIT_FIELDS = Set.of("deleted", "allowedRoles");
+    private static final Set<String> ROLE_CHANGE_EXCLUDED_FIELDS = Set.of(
+        "operations",
+        "permissions",
+        "maxrows",
+        "allowdesensitizejson",
+        "allowdesensitize",
+        "allowdesensitizeflag"
+    );
 
     public ChangeSnapshotFormatter(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -50,13 +59,17 @@ public class ChangeSnapshotFormatter {
         if (changes == null || changes.isEmpty()) {
             return List.of();
         }
-        Map<String, FieldMeta> resourceDictionary = dictionary.getOrDefault(normalizeResource(resourceType), Map.of());
+        String normalizedResource = normalizeResource(resourceType);
+        Map<String, FieldMeta> resourceDictionary = dictionary.getOrDefault(normalizedResource, Map.of());
         List<Map<String, String>> result = new ArrayList<>();
         for (ChangeSnapshot.FieldChange change : changes) {
             if (change == null || StringUtils.isBlank(change.field())) {
                 continue;
             }
             String field = change.field();
+            if (!shouldIncludeField(normalizedResource, field)) {
+                continue;
+            }
             FieldMeta meta = resourceDictionary.getOrDefault(field, FieldMeta.fallback(field));
             String beforeText = translateValue(change.before(), meta);
             String afterText = translateValue(change.after(), meta);
@@ -105,15 +118,15 @@ public class ChangeSnapshotFormatter {
             "PUBLIC", "公开",
             "NON_SECRET", "非密"
         )));
-        map.put("deleted", FieldMeta.mapping("禁用状态", Map.of(
-            "true", "禁用",
-            "false", "启用"
+        map.put("deleted", FieldMeta.mapping("是否禁用", Map.of(
+            "true", "是",
+            "false", "否"
         )));
         map.put("enabled", FieldMeta.mapping("启用状态", Map.of(
             "true", "启用",
             "false", "停用"
         )));
-        map.put("allowedRoles", FieldMeta.label("允许角色"));
+        map.put("allowedRoles", FieldMeta.label("绑定角色"));
         map.put("allowedPermissions", FieldMeta.label("允许权限"));
         map.put("visibilityRules", FieldMeta.label("可见性规则"));
         map.put("allowedOrgCodes", FieldMeta.label("可见组织"));
@@ -122,6 +135,7 @@ public class ChangeSnapshotFormatter {
 
     private Map<String, FieldMeta> userDictionary() {
         Map<String, FieldMeta> map = new LinkedHashMap<>();
+        map.put("username", FieldMeta.label("用户名"));
         map.put("fullName", FieldMeta.label("姓名"));
         map.put("email", FieldMeta.label("邮箱"));
         map.put("phone", FieldMeta.label("手机号"));
@@ -137,12 +151,34 @@ public class ChangeSnapshotFormatter {
         )));
         map.put("groupPaths", FieldMeta.label("所属组织"));
         map.put("realmRoles", FieldMeta.label("角色"));
+        map.put("attributes", FieldMeta.label("扩展属性"));
+        map.put("reason", FieldMeta.label("审批备注"));
+        map.put("action", FieldMeta.label("操作类型"));
+        map.put("actionDisplay", FieldMeta.label("操作类型"));
+        map.put("emailVerified", FieldMeta.mapping("邮箱已验证", Map.of(
+            "true", "是",
+            "false", "否"
+        )));
         return map;
     }
 
     private Map<String, FieldMeta> roleDictionary() {
         Map<String, FieldMeta> map = new LinkedHashMap<>();
-        map.put("name", FieldMeta.label("角色名称"));
+        map.put("name", FieldMeta.label("角色标识"));
+        map.put("displayName", FieldMeta.label("显示名称"));
+        map.put("titleCn", FieldMeta.label("中文名称"));
+        map.put("nameZh", FieldMeta.label("中文名称"));
+        map.put("titleEn", FieldMeta.label("英文名称"));
+        map.put("scope", FieldMeta.mapping("作用域", Map.of(
+            "INSTITUTE", "全所",
+            "DEPARTMENT", "部门"
+        )));
+        map.put("operations", FieldMeta.label("操作权限"));
+        map.put("maxRows", FieldMeta.label("最大行数"));
+        map.put("allowDesensitizeJson", FieldMeta.mapping("允许脱敏 JSON", Map.of(
+            "true", "是",
+            "false", "否"
+        )));
         map.put("description", FieldMeta.label("角色描述"));
         map.put("permissions", FieldMeta.label("权限列表"));
         map.put("enabled", FieldMeta.mapping("启用状态", Map.of(
@@ -370,6 +406,17 @@ public class ChangeSnapshotFormatter {
             return "UNKNOWN";
         }
         return resourceType.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean shouldIncludeField(String resourceType, String field) {
+        if ("PORTAL_MENU".equals(resourceType) || "MENU".equals(resourceType)) {
+            return PORTAL_MENU_AUDIT_FIELDS.contains(field);
+        }
+        if ("ROLE".equals(resourceType) || "CUSTOM_ROLE".equals(resourceType)) {
+            String normalizedField = field == null ? null : field.toLowerCase(Locale.ROOT);
+            return normalizedField == null || !ROLE_CHANGE_EXCLUDED_FIELDS.contains(normalizedField);
+        }
+        return true;
     }
 
     private record FieldMeta(String label, Map<String, String> mapping) {

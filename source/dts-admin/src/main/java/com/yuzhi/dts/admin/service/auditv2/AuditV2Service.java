@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -299,10 +300,8 @@ public class AuditV2Service {
         if (!StringUtils.hasText(candidate)) {
             candidate = deriveResourceTypeFromButtonCode(request.buttonCode());
         }
-        if (!StringUtils.hasText(candidate)) {
-            return null;
-        }
-        return candidate.trim().toUpperCase(Locale.ROOT);
+        candidate = canonicalizeResourceType(candidate);
+        return candidate;
     }
 
     private String asString(Object value) {
@@ -350,4 +349,100 @@ public class AuditV2Service {
         }
         return sb.length() == 0 ? null : sb.toString();
     }
+
+    private String canonicalizeResourceType(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        if (KNOWN_RESOURCE_TYPES.contains(normalized)) {
+            return normalized;
+        }
+        String direct = RESOURCE_TYPE_ALIASES.get(normalized);
+        if (direct != null) {
+            return direct;
+        }
+        if (normalized.contains("ROLE_ASSIGN")) {
+            return "ROLE_ASSIGNMENT";
+        }
+        if (normalized.contains("CUSTOM_ROLE")) {
+            return "CUSTOM_ROLE";
+        }
+        if (normalized.contains("PORTAL_MENU") || normalized.endsWith("_MENU") || normalized.contains("MENU_")) {
+            return "PORTAL_MENU";
+        }
+        if (normalized.contains("MENU") && !normalized.contains("PERMISSION")) {
+            return "PORTAL_MENU";
+        }
+        if (normalized.contains("ROLE")) {
+            return "ROLE";
+        }
+        if (normalized.contains("USER")) {
+            return "USER";
+        }
+        if (normalized.contains("GROUP")) {
+            return "GROUP";
+        }
+        if (normalized.contains("ORGANIZATION") || normalized.contains("ORG")) {
+            return "ORG";
+        }
+        if (normalized.contains("DATA_SOURCE") || normalized.contains("DATASOURCE")) {
+            return "INFRA_DATA_SOURCE";
+        }
+        if (normalized.contains("SYSTEM_CONFIG") || normalized.contains("SYS_CONFIG")) {
+            return "SYSTEM_CONFIG";
+        }
+        if (normalized.contains("DATASET")) {
+            return "CATALOG_DATASET";
+        }
+        if (normalized.contains("CHANGE_REQUEST")) {
+            return "CHANGE_REQUEST";
+        }
+        if (normalized.contains("APPROVAL")) {
+            return "APPROVAL";
+        }
+        if (normalized.contains("PERMISSION")) {
+            return "PERMISSION";
+        }
+        return normalized;
+    }
+
+    private static final Map<String, String> RESOURCE_TYPE_ALIASES = Map.ofEntries(
+        Map.entry("ADMIN_USER", "USER"),
+        Map.entry("ADMIN_USER_MANAGEMENT", "USER"),
+        Map.entry("AUTH_USER", "USER"),
+        Map.entry("ADMIN_ROLE", "ROLE"),
+        Map.entry("ADMIN_ROLE_MANAGEMENT", "ROLE"),
+        Map.entry("PLATFORM_ROLE", "ROLE"),
+        Map.entry("ADMIN_CUSTOM_ROLE", "CUSTOM_ROLE"),
+        Map.entry("ADMIN_ROLE_ASSIGNMENT", "ROLE_ASSIGNMENT"),
+        Map.entry("ADMIN_PORTAL_MENU", "PORTAL_MENU"),
+        Map.entry("ADMIN_MENU", "PORTAL_MENU"),
+        Map.entry("MENU_MANAGEMENT", "PORTAL_MENU"),
+        Map.entry("ADMIN_GROUP", "GROUP"),
+        Map.entry("ADMIN_ORG", "ORG"),
+        Map.entry("ADMIN_ORGANIZATION", "ORG"),
+        Map.entry("ADMIN_DATA_SOURCE", "INFRA_DATA_SOURCE"),
+        Map.entry("ADMIN_DATASET", "CATALOG_DATASET"),
+        Map.entry("ADMIN_SYSTEM_CONFIG", "SYSTEM_CONFIG"),
+        Map.entry("ADMIN_CHANGE_REQUEST", "CHANGE_REQUEST"),
+        Map.entry("ADMIN_APPROVAL", "APPROVAL")
+    );
+
+    private static final Set<String> KNOWN_RESOURCE_TYPES = Set.of(
+        "USER",
+        "ROLE",
+        "CUSTOM_ROLE",
+        "ROLE_ASSIGNMENT",
+        "PORTAL_MENU",
+        "MENU",
+        "GROUP",
+        "ORG",
+        "INFRA_DATA_SOURCE",
+        "SYSTEM_CONFIG",
+        "CATALOG_DATASET",
+        "CHANGE_REQUEST",
+        "APPROVAL",
+        "PERMISSION"
+    );
 }

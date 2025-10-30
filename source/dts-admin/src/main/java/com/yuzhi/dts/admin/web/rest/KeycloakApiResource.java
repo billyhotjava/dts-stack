@@ -17,13 +17,13 @@ import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
-import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.security.session.AdminSessionCloseReason;
 import com.yuzhi.dts.admin.security.session.AdminSessionRegistry;
 import com.yuzhi.dts.admin.web.rest.dto.PkiChallengeView;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,14 +38,20 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.Base64;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
@@ -65,6 +71,8 @@ public class KeycloakApiResource {
     private final AdminUserService adminUserService;
     private final AdminRoleAssignmentRepository roleAssignRepo;
     private final AdminSessionRegistry adminSessionRegistry;
+    private final ConcurrentMap<String, Instant> recentRoleAudits = new ConcurrentHashMap<>();
+    private static final Duration ROLE_AUDIT_DUP_WINDOW = Duration.ofSeconds(2);
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(KeycloakApiResource.class);
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -883,7 +891,7 @@ public class KeycloakApiResource {
     }
 
     private String currentUser() {
-        String actor = sanitizeActor(SecurityUtils.getCurrentUserLogin().orElse(null));
+        String actor = sanitizeActor(currentUserLogin().orElse(null));
         if (!StringUtils.hasText(actor)) {
             actor = sanitizeActor(extractUsernameFromToken(currentAccessToken()));
         }
@@ -946,12 +954,20 @@ public class KeycloakApiResource {
             return;
         }
         try {
+            String roleName = resolveRoleNameFromDetail(detail);
             String uri = Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse(fallbackUri);
             String method = request != null ? request.getMethod() : fallbackMethod;
+            String normalizedMethod = method != null ? method.trim().toUpperCase(Locale.ROOT) : fallbackMethod;
+            if (ButtonCodes.ROLE_CREATE.equals(buttonCode) && "PUT".equalsIgnoreCase(normalizedMethod)) {
+                buttonCode = ButtonCodes.ROLE_UPDATE;
+            }
+            if (isDuplicateRoleAudit(actor, buttonCode, summary, roleName)) {
+                return;
+            }
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, buttonCode)
                 .actorName(resolveActorDisplayName(actor))
-                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .actorRoles(currentUserAuthorities())
                 .summary(summary)
                 .result(result)
                 .client(clientIp(request), request != null ? request.getHeader("User-Agent") : null)
@@ -989,6 +1005,47 @@ public class KeycloakApiResource {
         }
     }
 
+    private String resolveRoleNameFromDetail(Map<String, Object> detail) {
+        if (detail == null || detail.isEmpty()) {
+            return null;
+        }
+        for (String key : List.of("roleName", "role", "roleCode")) {
+            Object candidate = detail.get(key);
+            String text = normalizeRoleName(candidate);
+            if (StringUtils.hasText(text)) {
+                return text;
+            }
+        }
+        Object roles = detail.get("roles");
+        String text = normalizeRoleName(roles);
+        return StringUtils.hasText(text) ? text : null;
+    }
+
+    private String normalizeRoleName(Object source) {
+        if (source == null) {
+            return null;
+        }
+        if (source instanceof String s) {
+            return StringUtils.hasText(s) ? s.trim() : null;
+        }
+        if (source instanceof Collection<?> collection) {
+            for (Object element : collection) {
+                if (element == null) {
+                    continue;
+                }
+                if (element instanceof String s && StringUtils.hasText(s)) {
+                    return s.trim();
+                }
+                String text = element.toString();
+                if (StringUtils.hasText(text)) {
+                    return text.trim();
+                }
+            }
+        }
+        String fallback = source.toString();
+        return StringUtils.hasText(fallback) ? fallback.trim() : null;
+    }
+
     private void recordGroupActionV2(
         String actor,
         String buttonCode,
@@ -1012,7 +1069,7 @@ public class KeycloakApiResource {
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, buttonCode)
                 .actorName(resolveActorDisplayName(actor))
-                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .actorRoles(currentUserAuthorities())
                 .summary(summary)
                 .result(result)
                 .client(clientIp(request), request != null ? request.getHeader("User-Agent") : null)
@@ -1071,7 +1128,7 @@ public class KeycloakApiResource {
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, buttonCode)
                 .actorName(resolveActorDisplayName(actor))
-                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .actorRoles(currentUserAuthorities())
                 .summary(summary)
                 .result(result)
                 .client(clientIp(request), request != null ? request.getHeader("User-Agent") : null)
@@ -1093,6 +1150,26 @@ public class KeycloakApiResource {
         } catch (Exception ex) {
             LOG.warn("Failed to record V2 audit for role action [{}]: {}", buttonCode, ex.getMessage());
         }
+    }
+
+    private boolean isDuplicateRoleAudit(String actor, String buttonCode, String summary, String roleName) {
+        String key = String.join(
+            "|",
+            buttonCode != null ? buttonCode.trim().toUpperCase(Locale.ROOT) : "UNKNOWN",
+            actor != null ? actor.trim().toLowerCase(Locale.ROOT) : "anonymous",
+            summary != null ? summary.trim() : "",
+            roleName != null ? roleName.trim().toLowerCase(Locale.ROOT) : "-"
+        );
+        Instant now = Instant.now();
+        AtomicBoolean duplicate = new AtomicBoolean(false);
+        recentRoleAudits.compute(key, (k, last) -> {
+            if (last != null && Duration.between(last, now).abs().compareTo(ROLE_AUDIT_DUP_WINDOW) <= 0) {
+                duplicate.set(true);
+                return last;
+            }
+            return now;
+        });
+        return duplicate.get();
     }
 
     private void applyRoleOperationOverride(AuditActionRequest.Builder builder, String buttonCode) {
@@ -1144,7 +1221,7 @@ public class KeycloakApiResource {
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(actor, buttonCode)
                 .actorName(resolveActorDisplayName(actor))
-                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .actorRoles(currentUserAuthorities())
                 .summary(summary)
                 .result(result)
                 .client(clientIp(request), request != null ? request.getHeader("User-Agent") : null)
@@ -1207,7 +1284,7 @@ public class KeycloakApiResource {
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(normalizedActor, buttonCode)
                 .actorName(resolveActorDisplayName(normalizedActor))
-                .actorRoles(SecurityUtils.getCurrentUserAuthorities())
+                .actorRoles(currentUserAuthorities())
                 .summary(summary)
                 .result(result)
                 .client(clientIp(request), request != null ? request.getHeader("User-Agent") : null)
@@ -1288,7 +1365,7 @@ public class KeycloakApiResource {
     }
 
     private String resolveActorForLogout(Map<String, String> body, String refreshToken) {
-        String actor = sanitizeActor(SecurityUtils.getCurrentUserLogin().orElse(null));
+        String actor = sanitizeActor(currentUserLogin().orElse(null));
         if (!StringUtils.hasText(actor) && body != null) {
             actor = firstNonBlank(
                 body.get("username"),
@@ -1321,7 +1398,7 @@ public class KeycloakApiResource {
     }
 
     private String resolveActorForRefresh(String refreshToken) {
-        String actor = sanitizeActor(SecurityUtils.getCurrentUserLogin().orElse(null));
+        String actor = sanitizeActor(currentUserLogin().orElse(null));
         if (!StringUtils.hasText(actor)) {
             actor = sanitizeActor(extractUsernameFromToken(refreshToken));
         }
@@ -1332,6 +1409,85 @@ public class KeycloakApiResource {
             actor = "system";
         }
         return actor;
+    }
+
+    private Optional<String> currentUserLogin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return Optional.empty();
+        }
+        String direct = extractUsernameFromAuthentication(authentication);
+        if (StringUtils.hasText(direct)) {
+            return Optional.of(direct.trim());
+        }
+        return Optional.empty();
+    }
+
+    private List<String> currentUserAuthorities() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return List.of();
+        }
+        return authentication
+            .getAuthorities()
+            .stream()
+            .map(GrantedAuthority::getAuthority)
+            .filter(StringUtils::hasText)
+            .map(String::trim)
+            .collect(Collectors.toList());
+    }
+
+    private String currentAuditableLogin() {
+        String candidate = sanitizeActor(currentUserLogin().orElse(null));
+        return StringUtils.hasText(candidate) ? candidate : "system";
+    }
+
+    private String extractUsernameFromAuthentication(Authentication authentication) {
+        if (authentication == null) {
+            return null;
+        }
+        String name = authentication.getName();
+        if (StringUtils.hasText(name)) {
+            return name;
+        }
+        return extractUsernameFromPrincipal(authentication.getPrincipal());
+    }
+
+    private String extractUsernameFromPrincipal(Object principal) {
+        if (principal == null) {
+            return null;
+        }
+        if (principal instanceof UserDetails userDetails) {
+            return userDetails.getUsername();
+        }
+        if (principal instanceof JwtAuthenticationToken jwtAuthentication) {
+            return jwtAuthentication.getName();
+        }
+        if (principal instanceof BearerTokenAuthentication bearer) {
+            return bearer.getName();
+        }
+        if (principal instanceof Map<?, ?> map) {
+            Object preferred = map.get("preferred_username");
+            if (preferred instanceof String s && StringUtils.hasText(s)) {
+                return s;
+            }
+            Object username = map.get("username");
+            if (username instanceof String s && StringUtils.hasText(s)) {
+                return s;
+            }
+            Object legacy = map.get("user_name");
+            if (legacy instanceof String s && StringUtils.hasText(s)) {
+                return s;
+            }
+            Object sub = map.get("sub");
+            if (sub instanceof String s && StringUtils.hasText(s)) {
+                return s;
+            }
+        }
+        if (principal instanceof String str) {
+            return str;
+        }
+        return null;
     }
 
     private String firstNonBlank(String... values) {
@@ -1929,7 +2085,7 @@ public class KeycloakApiResource {
 
     @PostMapping("/keycloak/groups")
     public ResponseEntity<ApiResponse<KeycloakGroupDTO>> createGroup(@RequestBody KeycloakGroupDTO payload, HttpServletRequest request) {
-        String actor = SecurityUtils.getCurrentAuditableLogin();
+        String actor = currentAuditableLogin();
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("name", payload.getName());
         if (!StringUtils.hasText(payload.getName())) {
@@ -2024,7 +2180,7 @@ public class KeycloakApiResource {
 
     @DeleteMapping("/keycloak/groups/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteGroup(@PathVariable String id, HttpServletRequest request) {
-        String actor = SecurityUtils.getCurrentAuditableLogin();
+        String actor = currentAuditableLogin();
         KeycloakGroupDTO removed = stores.groups.remove(id);
         if (removed == null) {
             recordGroupActionV2(
@@ -2213,7 +2369,7 @@ public class KeycloakApiResource {
             .filter(val -> val != null && !val.isBlank())
             .orElse(currentUser());
         String note = Optional.ofNullable(body).map(b -> b.note).orElse(null);
-        String actor = SecurityUtils.getCurrentAuditableLogin();
+        String actor = currentAuditableLogin();
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("action", normalized);
         auditDetail.put("approver", approver);

@@ -21,6 +21,7 @@ import {
 	type ChangeSnapshotLike,
 	type ChangeSummaryEntry,
 } from "@/admin/components/change-diff-viewer";
+import { sanitizeChangePayload } from "@/admin/utils/change-sanitizer";
 import { MenuChangeViewer, type MenuChangeDisplayEntry } from "@/admin/components/menu-change-viewer";
 import { buildChangeDisplayContext } from "@/admin/utils/change-detail-context";
 import {
@@ -830,6 +831,7 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 			return acc;
 		}, {})
 		: null;
+	const resolvedResourceType = resolveAuditResourceType(record, detail);
 
 	const showDiffViewer = summary.length > 0 || snapshotHasContent(snapshot);
 
@@ -845,6 +847,7 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 						summary={summary.length > 0 ? summary : undefined}
 						action={record.action || record.operationContent || record.operationCode || record.summary || record.buttonCode}
 						operationTypeCode={record.operationTypeCode || record.operationType}
+						resourceType={resolvedResourceType}
 						className="text-xs"
 					/>
 				</div>
@@ -863,7 +866,7 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 						其他信息
 					</Text>
 					<pre className="rounded border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] leading-5">
-						{formatJson(infoObject)}
+						{formatJson(infoObject, resolvedResourceType)}
 					</pre>
 				</div>
 			) : null}
@@ -877,6 +880,57 @@ function renderAuditDetail(record: AuditLog, detail?: AuditLogDetail | null): Re
 			) : null}
 		</div>
 	);
+}
+
+function resolveAuditResourceType(record: AuditLog, detail: AuditLogDetail | null | undefined): string | undefined {
+	const candidates: Array<string | undefined> = [];
+	candidates.push(extractResourceTypeCandidate(record.metadata));
+	candidates.push(extractResourceTypeCandidate(record.extraAttributes));
+	if (detail) {
+		candidates.push(extractResourceTypeCandidate(detail.metadata));
+		candidates.push(extractResourceTypeCandidate(detail.extraAttributes));
+	}
+	if (typeof record.resourceType === "string") {
+		candidates.push(record.resourceType);
+	}
+	if (typeof record.targetTable === "string") {
+		candidates.push(record.targetTable);
+	}
+	const candidate = firstNonEmpty(candidates);
+	return canonicalizeResourceType(candidate);
+}
+
+function extractResourceTypeCandidate(value: unknown): string | undefined {
+	const record = asRecord(value);
+	if (!record) return undefined;
+	for (const key of ["resourceType", "resource_type", "resource-type", "resource"]) {
+		const raw = record[key];
+		if (typeof raw === "string" && raw.trim()) {
+			return raw.trim();
+		}
+	}
+	return undefined;
+}
+
+function canonicalizeResourceType(value?: string | null): string | undefined {
+	if (!value) return undefined;
+	const normalized = value.trim();
+	if (!normalized) return undefined;
+	const upper = normalized.toUpperCase();
+	if (upper.includes("PORTAL_MENU")) return "PORTAL_MENU";
+	if (upper.includes("ROLE_ASSIGNMENT")) return "ROLE_ASSIGNMENT";
+	if (upper.includes("CUSTOM_ROLE")) return "CUSTOM_ROLE";
+	if (upper.includes("ROLE")) return "ROLE";
+	return upper;
+}
+
+function firstNonEmpty(values: Array<string | undefined>): string | undefined {
+	for (const value of values) {
+		if (value && value.trim().length > 0) {
+			return value;
+		}
+	}
+	return undefined;
 }
 
 function parseAuditDetail(source: AuditDetailSource): ParsedAuditDetail | null {
@@ -1131,7 +1185,7 @@ function formatDisplayValue(value: unknown): string {
 	return String(value);
 }
 
-function formatJson(value: unknown): string {
+function formatJson(value: unknown, resourceType?: string | null): string {
 	if (typeof value === "string") {
 		const trimmed = value.trim();
 		if (!trimmed) {
@@ -1142,7 +1196,8 @@ function formatJson(value: unknown): string {
 			(trimmed.startsWith("[") && trimmed.endsWith("]"))
 		) {
 			try {
-				return JSON.stringify(JSON.parse(trimmed), null, 2);
+				const parsed = JSON.parse(trimmed);
+				return JSON.stringify(sanitizeChangePayload(parsed, resourceType), null, 2);
 			} catch {
 				return value;
 			}
@@ -1150,7 +1205,7 @@ function formatJson(value: unknown): string {
 		return value;
 	}
 	try {
-		return JSON.stringify(value, null, 2);
+		return JSON.stringify(sanitizeChangePayload(value, resourceType), null, 2);
 	} catch {
 		return String(value ?? "");
 	}

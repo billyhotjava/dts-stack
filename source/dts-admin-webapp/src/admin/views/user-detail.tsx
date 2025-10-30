@@ -250,7 +250,7 @@ export default function UserDetailView() {
 			key: "clientRole",
 			align: "center",
 			render: (clientRole: boolean) => (
-				<Badge variant={clientRole ? "secondary" : "default"}>{clientRole ? "客户端角色" : "Realm角色"}</Badge>
+				<Badge variant={clientRole ? "secondary" : "default"}>{clientRole ? "客户端角色" : "系统角色"}</Badge>
 			),
 		},
 	];
