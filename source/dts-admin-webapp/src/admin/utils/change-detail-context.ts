@@ -87,6 +87,7 @@ const FIELD_LABEL_FALLBACK_ENTRIES: Array<[string, string]> = [
 	["PARENT_ID", "父节点 ID"],
 	["MENULABEL", "菜单名称"],
 	["MENU_LABEL", "菜单名称"],
+	["SOURCEPRIMARYKEY", "源表主键"],
 ];
 
 const FIELD_LABEL_FALLBACKS: Record<string, string> = FIELD_LABEL_FALLBACK_ENTRIES.reduce((acc, [key, label]) => {

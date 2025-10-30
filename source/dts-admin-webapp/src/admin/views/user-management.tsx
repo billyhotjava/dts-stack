@@ -542,6 +542,10 @@ export default function UserManagementView() {
 	return (
 		<TooltipProvider>
 			<div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
+				<div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+					<Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+					<span className="text-center">非密模块禁止处理涉密数据</span>
+				</div>
 				{/* 页面标题与操作区：老布局形态 */}
 				<div className="flex flex-wrap items-center gap-3">
 					<Text variant="body1" className="text-lg font-semibold">

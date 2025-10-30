@@ -17,26 +17,58 @@ public final class IpAddressUtils {
         if (candidates == null || candidates.length == 0) {
             return null;
         }
-        // The `resolveClientIpCandidates` method in the filter already puts the IPs
-        // in the correct order of preference (X-Forwarded-For, X-Real-IP, remoteAddr).
-        // We simply take the first valid, non-local one.
+        List<String> chain = new ArrayList<>();
         for (String candidate : candidates) {
             if (candidate == null) {
                 continue;
             }
-            String trimmed = candidate.trim();
-            if (trimmed.isEmpty() || "unknown".equalsIgnoreCase(trimmed)) {
+            String raw = candidate.trim();
+            if (raw.isEmpty() || "unknown".equalsIgnoreCase(raw)) {
                 continue;
             }
-
-            // Additional check to avoid loopback/link-local if they are first in the chain
-            InetAddress address = parseInetAddress(trimmed);
-            if (address != null && !address.isLoopbackAddress() && !address.isLinkLocalAddress() && !address.isAnyLocalAddress()) {
-                 return trimmed;
+            String[] segments = raw.split(",");
+            if (segments.length == 0) {
+                appendCandidate(chain, raw);
+            } else {
+                for (String segment : segments) {
+                    appendCandidate(chain, segment);
+                }
             }
         }
-        // Fallback to the last candidate if no better one was found
-        return candidates[candidates.length - 1];
+        if (chain.isEmpty()) {
+            return null;
+        }
+        String fallback = chain.get(chain.size() - 1);
+        for (int idx = chain.size() - 1; idx >= 0; idx--) {
+            String candidate = chain.get(idx);
+            InetAddress address = parseInetAddress(candidate);
+            if (address == null) {
+                continue;
+            }
+            if (isLikelyProxy(address, candidate)) {
+                continue;
+            }
+            return normalize(address, candidate);
+        }
+        InetAddress fallbackAddress = parseInetAddress(fallback);
+        if (fallbackAddress != null) {
+            return normalize(fallbackAddress, fallback);
+        }
+        return fallback;
+    }
+
+    private static void appendCandidate(List<String> chain, String raw) {
+        String sanitized = sanitize(raw);
+        if (sanitized != null) {
+            chain.add(sanitized);
+        }
+    }
+
+    private static boolean isLikelyProxy(InetAddress address, String literal) {
+        if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()) {
+            return true;
+        }
+        return isPrivateAddress(address, literal);
     }
 
     private static String sanitize(String raw) {

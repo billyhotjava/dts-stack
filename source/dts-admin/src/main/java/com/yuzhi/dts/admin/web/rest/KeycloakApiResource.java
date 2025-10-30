@@ -1532,11 +1532,11 @@ public class KeycloakApiResource {
         if (request == null) {
             return "unknown";
         }
-        String header = request.getHeader("X-Forwarded-For");
-        String xfip = StringUtils.hasText(header) ? header.split(",")[0].trim() : null;
-        String realIp = request.getHeader("X-Real-IP");
-        String remote = request.getRemoteAddr();
-        String resolved = IpAddressUtils.resolveClientIp(xfip, realIp, remote);
+        String resolved = IpAddressUtils.resolveClientIp(
+            request.getHeader("X-Forwarded-For"),
+            request.getHeader("X-Real-IP"),
+            request.getRemoteAddr()
+        );
         return resolved != null ? resolved : "unknown";
     }
 
@@ -2878,11 +2878,14 @@ public class KeycloakApiResource {
                 return ResponseEntity.badRequest().body(ApiResponse.error("请求体不能为空"));
             }
 
-            String clientIp = Optional
-                .ofNullable(request.getHeader("X-Forwarded-For"))
-                .map(String::trim)
-                .filter(org.springframework.util.StringUtils::hasText)
-                .orElse(request.getRemoteAddr());
+            String clientIp = IpAddressUtils.resolveClientIp(
+                request.getHeader("X-Forwarded-For"),
+                request.getHeader("X-Real-IP"),
+                request.getRemoteAddr()
+            );
+            if (!org.springframework.util.StringUtils.hasText(clientIp)) {
+                clientIp = request.getRemoteAddr();
+            }
             String userAgent = Optional.ofNullable(request.getHeader("User-Agent")).orElse("");
 
             com.yuzhi.dts.admin.service.pki.PkiChallengeService challengeService = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiChallengeService.class);
@@ -3131,7 +3134,14 @@ public class KeycloakApiResource {
             return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).body(ApiResponse.error("PKI 登录未启用"));
         }
         com.yuzhi.dts.admin.service.pki.PkiChallengeService svc = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiChallengeService.class);
-        String ip = Optional.ofNullable(request.getHeader("X-Forwarded-For")).orElse(request.getRemoteAddr());
+        String ip = IpAddressUtils.resolveClientIp(
+            request.getHeader("X-Forwarded-For"),
+            request.getHeader("X-Real-IP"),
+            request.getRemoteAddr()
+        );
+        if (!org.springframework.util.StringUtils.hasText(ip)) {
+            ip = request.getRemoteAddr();
+        }
         String ua = Optional.ofNullable(request.getHeader("User-Agent")).orElse("");
         var c = svc.issue("dts-admin", ip, ua, java.time.Duration.ofMinutes(10));
         var view = new PkiChallengeView(c.id, c.nonce, c.aud, c.ts.toEpochMilli(), c.exp.toEpochMilli());

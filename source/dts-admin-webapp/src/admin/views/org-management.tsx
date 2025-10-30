@@ -8,6 +8,7 @@ import { adminApi } from "@/admin/api/adminApi";
 import { KeycloakGroupService, KeycloakUserService } from "@/api/services/keycloakService";
 import type { KeycloakUser } from "#/keycloak";
 import type { OrganizationNode, OrganizationCreatePayload, OrganizationUpdatePayload } from "@/admin/types";
+import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -369,149 +370,156 @@ export default function OrgManagementView() {
 	}, [disabledParentIds, flattened]);
 
 	return (
-		<div className="grid gap-6 xl:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
-			<Card>
-				<CardHeader className="space-y-3">
-					<div className="flex items-center justify-between gap-3">
-						<CardTitle>组织结构</CardTitle>
-						<div className="flex items-center gap-2">
-							<Button
-								size="sm"
-								onClick={openCreateRoot}
-								disabled={rootExists}
-								title={rootExists ? "仅允许存在一个根部门" : undefined}
-							>
-								创建部门
-							</Button>
-						</div>
-					</div>
-					<Input placeholder="搜索部门" value={search} onChange={(event) => setSearch(event.target.value)} />
-					<div className="text-sm text-muted-foreground">组织数：{totalOrg}</div>
-				</CardHeader>
-				<CardContent className="h-[560px] p-0">
-					{isLoading ? (
-						<Text variant="body3" className="p-4">
-							加载中...
-						</Text>
-					) : (
-						<ScrollArea className="h-full">
-							<div className="p-4">
-								{filteredTree.length === 0 ? (
-									<Text variant="body3">未找到匹配的组织。</Text>
-								) : (
-									<OrganizationTree tree={filteredTree} onSelect={setSelectedId} selectedId={selectedId} />
-								)}
+		<div className="space-y-6">
+			<div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+				<Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+				<span className="text-center">非密模块禁止处理涉密数据</span>
+			</div>
+
+			<div className="grid gap-6 xl:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
+				<Card>
+					<CardHeader className="space-y-3">
+						<div className="flex items-center justify-between gap-3">
+							<CardTitle>组织结构</CardTitle>
+							<div className="flex items-center gap-2">
+								<Button
+									size="sm"
+									onClick={openCreateRoot}
+									disabled={rootExists}
+									title={rootExists ? "仅允许存在一个根部门" : undefined}
+								>
+									创建部门
+								</Button>
 							</div>
-						</ScrollArea>
-					)}
-				</CardContent>
-			</Card>
-
-			<div className="space-y-6">
-				<Card>
-					<CardHeader className="flex flex-wrap items-center justify-between gap-3">
-						<CardTitle>组织详情</CardTitle>
-						<div className="flex flex-wrap gap-2">
-							<Button variant="outline" size="sm" onClick={openCreateChild} disabled={!selected}>
-								创建下级
-							</Button>
-							<Button variant="outline" size="sm" onClick={openEdit} disabled={!selected}>
-								编辑
-							</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								className="text-destructive hover:text-destructive"
-								onClick={openDelete}
-								disabled={!selected || deleteMutation.isPending}
-							>
-								删除
-							</Button>
 						</div>
+						<Input placeholder="搜索部门" value={search} onChange={(event) => setSearch(event.target.value)} />
+						<div className="text-sm text-muted-foreground">组织数：{totalOrg}</div>
 					</CardHeader>
-					<CardContent className="space-y-4 text-sm">
-						{selected ? (
-							<>
-								<Text variant="body2" className="font-semibold">
-									{selected.name}
-								</Text>
-								<p className="text-muted-foreground">部门编号：{selected.id}</p>
-								<p className="text-muted-foreground">
-									上级部门：{selected.path.slice(0, -1).join(" / ") || "无（一级部门）"}
-								</p>
-								<p className="text-muted-foreground">
-									节点类型：{selected.isRoot ? "ROOT（全局公开）" : "普通部门"}
-								</p>
-								{selected.description ? (
-									<div className="rounded-md border border-dashed border-muted/60 bg-muted/30 p-3 text-sm text-muted-foreground">
-										{selected.description}
-									</div>
-								) : null}
-								<div className="grid gap-3 sm:grid-cols-2">
-									<div>
-										<p className="text-xs text-muted-foreground">服务端 组 ID</p>
-										<p className="text-sm font-medium text-foreground">{selected.keycloakGroupId ?? "--"}</p>
-									</div>
-									<div>
-										<p className="text-xs text-muted-foreground">组路径</p>
-										<p className="text-sm font-medium text-foreground">{selected.groupPath ?? "--"}</p>
-									</div>
+					<CardContent className="h-[560px] p-0">
+						{isLoading ? (
+							<Text variant="body3" className="p-4">
+								加载中...
+							</Text>
+						) : (
+							<ScrollArea className="h-full">
+								<div className="p-4">
+									{filteredTree.length === 0 ? (
+										<Text variant="body3">未找到匹配的组织。</Text>
+									) : (
+										<OrganizationTree tree={filteredTree} onSelect={setSelectedId} selectedId={selectedId} />
+									)}
 								</div>
-							</>
-						) : (
-							<Text variant="body3" className="text-muted-foreground">
-								请选择左侧组织查看详情。
-							</Text>
-						)}
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardHeader className="flex items-center justify-between gap-3">
-						<CardTitle>员工列表</CardTitle>
-						{selected && <Badge variant="outline">{members.length}</Badge>}
-					</CardHeader>
-					<CardContent className="min-h-[120px]">
-						{!selected ? (
-							<Text variant="body3" className="text-muted-foreground">
-								请选择左侧组织查看成员。
-							</Text>
-						) : membersLoading ? (
-							<Text variant="body3" className="text-muted-foreground">
-								加载成员中…
-							</Text>
-						) : members.length === 0 ? (
-							<Text variant="body3" className="text-muted-foreground">
-								暂无成员
-							</Text>
-						) : (
-							<ScrollArea className="max-h-64">
-								<table className="w-full min-w-[560px] table-fixed text-sm">
-									<thead className="sticky top-0 bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-										<tr>
-											<th className="px-3 py-2 w-[48px]">#</th>
-											<th className="px-3 py-2">用户名</th>
-											<th className="px-3 py-2">姓名</th>
-										</tr>
-									</thead>
-									<tbody>
-										{members.map((m, idx) => (
-											<tr key={m.username} className="border-b last:border-b-0">
-												<td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
-												<td className="px-3 py-2 truncate" title={m.username}>
-													{m.username}
-												</td>
-												<td className="px-3 py-2 truncate" title={m.fullName || "-"}>
-													{m.fullName || "-"}
-												</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
 							</ScrollArea>
 						)}
 					</CardContent>
 				</Card>
+
+				<div className="space-y-6">
+					<Card>
+						<CardHeader className="flex flex-wrap items-center justify-between gap-3">
+							<CardTitle>组织详情</CardTitle>
+							<div className="flex flex-wrap gap-2">
+								<Button variant="outline" size="sm" onClick={openCreateChild} disabled={!selected}>
+									创建下级
+								</Button>
+								<Button variant="outline" size="sm" onClick={openEdit} disabled={!selected}>
+									编辑
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="text-destructive hover:text-destructive"
+									onClick={openDelete}
+									disabled={!selected || deleteMutation.isPending}
+								>
+									删除
+								</Button>
+							</div>
+						</CardHeader>
+						<CardContent className="space-y-4 text-sm">
+							{selected ? (
+								<>
+									<Text variant="body2" className="font-semibold">
+										{selected.name}
+									</Text>
+									<p className="text-muted-foreground">部门编号：{selected.id}</p>
+									<p className="text-muted-foreground">
+										上级部门：{selected.path.slice(0, -1).join(" / ") || "无（一级部门）"}
+									</p>
+									<p className="text-muted-foreground">
+										节点类型：{selected.isRoot ? "ROOT（全局公开）" : "普通部门"}
+									</p>
+									{selected.description ? (
+										<div className="rounded-md border border-dashed border-muted/60 bg-muted/30 p-3 text-sm text-muted-foreground">
+											{selected.description}
+										</div>
+									) : null}
+									<div className="grid gap-3 sm:grid-cols-2">
+										<div>
+											<p className="text-xs text-muted-foreground">服务端 组 ID</p>
+											<p className="text-sm font-medium text-foreground">{selected.keycloakGroupId ?? "--"}</p>
+										</div>
+										<div>
+											<p className="text-xs text-muted-foreground">组路径</p>
+											<p className="text-sm font-medium text-foreground">{selected.groupPath ?? "--"}</p>
+										</div>
+									</div>
+								</>
+							) : (
+								<Text variant="body3" className="text-muted-foreground">
+									请选择左侧组织查看详情。
+								</Text>
+							)}
+						</CardContent>
+					</Card>
+
+					<Card>
+						<CardHeader className="flex items-center justify-between gap-3">
+							<CardTitle>员工列表</CardTitle>
+							{selected && <Badge variant="outline">{members.length}</Badge>}
+						</CardHeader>
+						<CardContent className="min-h-[120px]">
+							{!selected ? (
+								<Text variant="body3" className="text-muted-foreground">
+									请选择左侧组织查看成员。
+								</Text>
+							) : membersLoading ? (
+								<Text variant="body3" className="text-muted-foreground">
+									加载成员中…
+								</Text>
+							) : members.length === 0 ? (
+								<Text variant="body3" className="text-muted-foreground">
+									暂无成员
+								</Text>
+							) : (
+								<ScrollArea className="max-h-64">
+									<table className="w-full min-w-[560px] table-fixed text-sm">
+										<thead className="sticky top-0 bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+											<tr>
+												<th className="px-3 py-2 w-[48px]">#</th>
+												<th className="px-3 py-2">用户名</th>
+												<th className="px-3 py-2">姓名</th>
+											</tr>
+										</thead>
+										<tbody>
+											{members.map((m, idx) => (
+												<tr key={m.username} className="border-b last:border-b-0">
+													<td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
+													<td className="px-3 py-2 truncate" title={m.username}>
+														{m.username}
+													</td>
+													<td className="px-3 py-2 truncate" title={m.fullName || "-"}>
+														{m.fullName || "-"}
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</ScrollArea>
+							)}
+						</CardContent>
+					</Card>
+				</div>
 			</div>
 
 			<OrganizationFormDialog
@@ -541,11 +549,12 @@ function flattenTree(
 	tree: OrganizationNode[],
 	level = 1,
 	parentPath: string[] = [],
-): (OrganizationNode & { level: number; path: string[] })[] {
-	const result: (OrganizationNode & { level: number; path: string[] })[] = [];
+): FlattenedOrganization[] {
+	const result: FlattenedOrganization[] = [];
 	for (const node of tree) {
 		const path = [...parentPath, node.name];
-		result.push({ ...node, level, path });
+		const enriched: FlattenedOrganization = { ...node, level, path };
+		result.push(enriched);
 		if (node.children?.length) {
 			result.push(...flattenTree(node.children, level + 1, path));
 		}
@@ -689,6 +698,10 @@ function OrganizationFormDialog({
 					<DialogTitle>{title}</DialogTitle>
 					<DialogDescription>提交后会立即保存并同步至 Keycloak。</DialogDescription>
 				</DialogHeader>
+				<div className="mt-4 flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+					<Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+					<span className="text-center">非密模块禁止处理涉密数据</span>
+				</div>
 				<Form {...form}>
 					<form onSubmit={handleSubmit} className="space-y-4">
 						<FormField

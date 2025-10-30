@@ -10,14 +10,15 @@ import com.yuzhi.dts.admin.service.audit.MenuAuditContext;
 import com.yuzhi.dts.admin.service.audit.RoleAuditContext;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationType;
-import com.yuzhi.dts.admin.service.auditv2.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
 import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
 import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
+import com.yuzhi.dts.admin.service.auditv2.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.admin.service.auditv2.AdminAuditOperation;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.web.rest.api.ResultStatus;
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.Principal;
 import java.util.*;
@@ -47,11 +48,13 @@ import com.yuzhi.dts.admin.domain.PortalMenu;
 import com.yuzhi.dts.admin.domain.PortalMenuVisibility;
 import com.yuzhi.dts.admin.domain.AdminDataset;
 import com.yuzhi.dts.admin.domain.AdminCustomRole;
+import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import com.yuzhi.dts.admin.domain.AdminApprovalItem;
 import com.yuzhi.dts.admin.domain.AdminApprovalRequest;
 import com.yuzhi.dts.admin.repository.AdminDatasetRepository;
 import com.yuzhi.dts.admin.repository.AdminCustomRoleRepository;
+import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import com.yuzhi.dts.admin.domain.SystemConfig;
@@ -232,6 +235,7 @@ public class AdminApiResource {
     private final PortalMenuService portalMenuService;
     private final AdminDatasetRepository datasetRepo;
     private final AdminCustomRoleRepository customRoleRepo;
+    private final AdminKeycloakUserRepository userRepository;
     private final AdminRoleAssignmentRepository roleAssignRepo;
     private final SystemConfigRepository sysCfgRepo;
     private final PortalMenuRepository portalMenuRepo;
@@ -349,6 +353,7 @@ public class AdminApiResource {
         PortalMenuService portalMenuService,
         AdminDatasetRepository datasetRepo,
         AdminCustomRoleRepository customRoleRepo,
+        AdminKeycloakUserRepository userRepository,
         AdminRoleAssignmentRepository roleAssignRepo,
         SystemConfigRepository sysCfgRepo,
         PortalMenuRepository portalMenuRepo,
@@ -369,6 +374,7 @@ public class AdminApiResource {
         this.portalMenuService = portalMenuService;
         this.datasetRepo = datasetRepo;
         this.customRoleRepo = customRoleRepo;
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
         this.roleAssignRepo = roleAssignRepo;
         this.sysCfgRepo = sysCfgRepo;
         this.portalMenuRepo = portalMenuRepo;
@@ -3150,6 +3156,20 @@ public class AdminApiResource {
         if (StringUtils.hasText(label)) {
             extras.put("roleLabel", label);
         }
+        extras.put("sourceTable", "admin_custom_role");
+        Long primaryKey = null;
+        if (StringUtils.hasText(canonical)) {
+            primaryKey = customRoleRepo
+                .findByName(canonical)
+                .map(AdminCustomRole::getId)
+                .orElse(null);
+        }
+        if (primaryKey == null) {
+            primaryKey = parseLongSafe(cr != null ? cr.getResourceId() : null);
+        }
+        if (primaryKey != null) {
+            extras.put("primaryKey", primaryKey);
+        }
         return new ChangeContext(resourceType, action, "admin_custom_role", primaryId, label, canonical, extras);
     }
 
@@ -3289,6 +3309,11 @@ public class AdminApiResource {
         if (StringUtils.hasText(label)) {
             extras.put("menuLabel", label);
         }
+        extras.put("sourceTable", "portal_menu");
+        Long primaryKey = existing != null && existing.getId() != null ? existing.getId() : menuId;
+        if (primaryKey != null) {
+            extras.put("primaryKey", primaryKey);
+        }
         String canonical = StringUtils.hasText(name) ? name : path;
         if (!StringUtils.hasText(canonical)) {
             canonical = resourceId;
@@ -3341,6 +3366,26 @@ public class AdminApiResource {
         Object personSecurityLevel = source.get("personSecurityLevel");
         if (personSecurityLevel != null) {
             extras.put("personSecurityLevel", personSecurityLevel);
+        }
+        extras.put("sourceTable", "admin_keycloak_user");
+        Long primaryKey = null;
+        if (StringUtils.hasText(username)) {
+            primaryKey = userRepository
+                .findByUsernameIgnoreCase(username.trim())
+                .map(AdminKeycloakUser::getId)
+                .orElse(null);
+        }
+        if (primaryKey == null) {
+            Long resourceKey = parseLongSafe(cr != null ? cr.getResourceId() : null);
+            if (resourceKey == null) {
+                resourceKey = parseLongSafe(source.get("id"));
+            }
+            if (resourceKey != null) {
+                primaryKey = resourceKey;
+            }
+        }
+        if (primaryKey != null) {
+            extras.put("primaryKey", primaryKey);
         }
         return new ChangeContext("USER", action, "admin_user", trimToNull(username), displayName, username, extras);
     }
@@ -3541,12 +3586,80 @@ public class AdminApiResource {
                 detail.putIfAbsent(k, v);
             });
         }
+        Object sourceTable = extras != null ? extras.get("sourceTable") : null;
+        Object primaryKey = extras != null ? extras.get("primaryKey") : null;
+        includeSourcePrimaryKey(detail, sourceTable, primaryKey);
         if (StringUtils.hasText(context.canonical())) {
             detail.putIfAbsent("canonicalTarget", context.canonical());
         }
         if (StringUtils.hasText(context.targetTable())) {
             detail.put("targetTable", context.targetTable());
         }
+    }
+
+    private void includeSourcePrimaryKey(Map<String, Object> detail, Object tableObj, Object primaryKeyObj) {
+        String table = stringValue(tableObj);
+        String primaryKey = stringValue(primaryKeyObj);
+        if (!StringUtils.hasText(table) || !StringUtils.hasText(primaryKey)) {
+            return;
+        }
+        detail.putIfAbsent("sourceTable", table);
+        detail.putIfAbsent("sourcePrimaryKey", primaryKey);
+        detail.putIfAbsent("sourceRecord", Map.of("table", table, "primaryKey", primaryKey));
+        List<Map<String, Object>> summary = coerceSummaryList(detail.get("changeSummary"));
+        boolean exists = summary
+            .stream()
+            .anyMatch(entry -> "sourcePrimaryKey".equalsIgnoreCase(stringValue(entry.get("field"))));
+        if (!exists) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("field", "sourcePrimaryKey");
+            entry.put("label", "源表主键(" + table + ")");
+            entry.put("before", primaryKey);
+            entry.put("after", primaryKey);
+            summary.add(0, entry);
+        }
+        if (!summary.isEmpty()) {
+            detail.put("changeSummary", summary);
+        }
+    }
+
+    private List<Map<String, Object>> coerceSummaryList(Object source) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (source == null) {
+            return list;
+        }
+        if (source instanceof Collection<?> collection) {
+            for (Object item : collection) {
+                Map<String, Object> entry = toSummaryMap(item);
+                if (!entry.isEmpty()) {
+                    list.add(entry);
+                }
+            }
+            return list;
+        }
+        if (source instanceof Map<?, ?> map) {
+            Map<String, Object> entry = toSummaryMap(map);
+            if (!entry.isEmpty()) {
+                list.add(entry);
+            }
+            return list;
+        }
+        if (source instanceof String s && !s.isBlank()) {
+            try {
+                Object parsed = JSON_MAPPER.readValue(s, Object.class);
+                return coerceSummaryList(parsed);
+            } catch (Exception ignored) {
+                // ignore unparsable summaries
+            }
+        }
+        return list;
+    }
+
+    private Map<String, Object> toSummaryMap(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return new LinkedHashMap<>(toStringKeyMap(map));
+        }
+        return new LinkedHashMap<>();
     }
 
     private String buildRequesterOperationName(ChangeRequest cr, ChangeContext context) {
@@ -4616,18 +4729,11 @@ public class AdminApiResource {
         if (request == null) {
             return null;
         }
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (StringUtils.hasText(forwarded)) {
-            String[] segments = forwarded.split(",");
-            if (segments.length > 0) {
-                return segments[0].trim();
-            }
-        }
-        String realIp = request.getHeader("X-Real-IP");
-        if (StringUtils.hasText(realIp)) {
-            return realIp.trim();
-        }
-        return request.getRemoteAddr();
+        return IpAddressUtils.resolveClientIp(
+            request.getHeader("X-Forwarded-For"),
+            request.getHeader("X-Real-IP"),
+            request.getRemoteAddr()
+        );
     }
 
     AuditStage resolveStageForChangeOutcome(ChangeRequest cr, boolean applied) {

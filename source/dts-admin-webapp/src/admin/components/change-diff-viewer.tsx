@@ -84,6 +84,7 @@ const RESOURCE_FIELD_WHITELIST: Record<
 			"menuname",
 			"menupath",
 			"menuid",
+			"sourceprimarykey",
 		]),
 		labels: new Set(["绑定角色", "新增角色", "移除角色", "禁用状态", "菜单名称", "菜单路径", "菜单标识"]),
 	},
@@ -102,6 +103,7 @@ const RESOURCE_FIELD_WHITELIST: Record<
 			"menuname",
 			"menupath",
 			"menuid",
+			"sourceprimarykey",
 		]),
 		labels: new Set(["绑定角色", "新增角色", "移除角色", "禁用状态", "菜单名称", "菜单路径", "菜单标识"]),
 	},
@@ -120,12 +122,14 @@ const RESOURCE_FIELD_WHITELIST: Record<
 			"menuname",
 			"menupath",
 			"menuid",
+			"sourceprimarykey",
 		]),
 		labels: new Set(["绑定角色", "新增角色", "移除角色", "禁用状态", "菜单名称", "菜单路径", "菜单标识"]),
 	},
 };
 const RESOURCE_FIELD_LABELS: Record<string, Record<string, string>> = {
 	ADMIN_KEYCLOAK_USER: {
+		sourceprimarykey: "源表主键",
 		username: "用户名",
 		user_name: "用户名",
 		fullname: "姓名",
@@ -164,6 +168,7 @@ const RESOURCE_FIELD_LABELS: Record<string, Record<string, string>> = {
 		password_reset: "重置密码",
 	},
 	USER: {
+		sourceprimarykey: "源表主键",
 		username: "用户名",
 		user_name: "用户名",
 		fullname: "姓名",
@@ -202,6 +207,7 @@ const RESOURCE_FIELD_LABELS: Record<string, Record<string, string>> = {
 		password_reset: "重置密码",
 	},
 	ROLE: {
+		sourceprimarykey: "源表主键",
 		name: "角色标识",
 		role: "角色标识",
 		roleid: "角色标识",
@@ -231,6 +237,7 @@ const RESOURCE_FIELD_LABELS: Record<string, Record<string, string>> = {
 		action_display: "操作类型",
 	},
 	CUSTOM_ROLE: {
+		sourceprimarykey: "源表主键",
 		name: "角色标识",
 		displayname: "显示名称",
 		display_name: "显示名称",
@@ -257,6 +264,7 @@ const RESOURCE_FIELD_LABELS: Record<string, Record<string, string>> = {
 		action_display: "操作类型",
 	},
 	ADMIN_CUSTOM_ROLE: {
+		sourceprimarykey: "源表主键",
 		name: "角色标识",
 		displayname: "显示名称",
 		display_name: "显示名称",
@@ -280,6 +288,7 @@ const RESOURCE_FIELD_LABELS: Record<string, Record<string, string>> = {
 		action_display: "操作类型",
 	},
 	PORTAL_MENU: {
+		sourceprimarykey: "源表主键",
 		menuid: "菜单标识",
 		menuname: "菜单名称",
 		menutitle: "菜单标题",
@@ -295,6 +304,7 @@ const RESOURCE_FIELD_LABELS: Record<string, Record<string, string>> = {
 		statusafterlabel: "变更后状态",
 	},
 	MENU: {
+		sourceprimarykey: "源表主键",
 		menuid: "菜单标识",
 		menuname: "菜单名称",
 		menutitle: "菜单标题",
@@ -310,6 +320,7 @@ const RESOURCE_FIELD_LABELS: Record<string, Record<string, string>> = {
 		statusafterlabel: "变更后状态",
 	},
 	MENU_MANAGEMENT: {
+		sourceprimarykey: "源表主键",
 		menuid: "菜单标识",
 		menuname: "菜单名称",
 		menutitle: "菜单标题",
@@ -326,6 +337,7 @@ const RESOURCE_FIELD_LABELS: Record<string, Record<string, string>> = {
 	},
 };
 const MENU_RESOURCE_TYPES = new Set(["PORTAL_MENU", "MENU", "MENU_MANAGEMENT"]);
+const ALWAYS_VISIBLE_FIELDS = new Set(["sourcePrimaryKey"]);
 
 export function ChangeDiffViewer({
 	snapshot,
@@ -504,7 +516,7 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 				after: row.after,
 				field: typeof row.field === "string" ? row.field : undefined,
 			}))
-			.filter((entry) => !valuesEqual(entry.before, entry.after))
+			.filter((entry) => shouldDisplayEntry(entry))
 			.filter((entry) => !shouldHideField(entry.field, entry.label, resourceType));
 	}
 
@@ -520,7 +532,7 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 				after: change.after,
 				field: typeof change.field === "string" ? change.field : undefined,
 			}))
-			.filter((entry) => !valuesEqual(entry.before, entry.after))
+			.filter((entry) => shouldDisplayEntry(entry))
 			.filter((entry) => !shouldHideField(entry.field, entry.label, resourceType));
 	}
 
@@ -545,7 +557,7 @@ function pickChangeEntries(snapshot: ChangeSnapshotLike, summary?: ChangeSummary
 		entries.push(entry);
 	});
 	return entries
-		.filter((entry) => !valuesEqual(entry.before, entry.after))
+		.filter((entry) => shouldDisplayEntry(entry))
 		.filter((entry) => !shouldHideField(entry.field, entry.label, resourceType));
 }
 
@@ -604,6 +616,17 @@ function resolveDeleteMessage(status?: string | null): string {
 		return FINAL_DELETE_MESSAGE;
 	}
 	return DEFAULT_DELETE_MESSAGE;
+}
+
+function isAlwaysVisibleField(field?: string): boolean {
+	if (!field) {
+		return false;
+	}
+	return ALWAYS_VISIBLE_FIELDS.has(field.trim());
+}
+
+function shouldDisplayEntry(entry: SectionEntry): boolean {
+	return isAlwaysVisibleField(entry.field) || !valuesEqual(entry.before, entry.after);
 }
 
 function valuesEqual(a: unknown, b: unknown): boolean {

@@ -3,6 +3,7 @@ package com.yuzhi.dts.admin.service.audit;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationType;
 import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -230,7 +231,11 @@ public final class MenuAuditContext {
 
         public Builder client(HttpServletRequest request, String fallbackUri, String fallbackMethod) {
             if (request != null) {
-                this.clientIp = request.getHeader("X-Forwarded-For");
+                this.clientIp = IpAddressUtils.resolveClientIp(
+                    request.getHeader("X-Forwarded-For"),
+                    request.getHeader("X-Real-IP"),
+                    request.getRemoteAddr()
+                );
                 this.clientAgent = request.getHeader("User-Agent");
                 this.requestUri = request.getRequestURI();
                 this.httpMethod = request.getMethod();

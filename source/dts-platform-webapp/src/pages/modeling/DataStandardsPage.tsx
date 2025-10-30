@@ -605,6 +605,10 @@ const DataStandardsPage = () => {
                     <DialogHeader>
                         <DialogTitle>新建数据标准</DialogTitle>
                     </DialogHeader>
+                    <div className="mx-6 mb-4 flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                        <Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+                        <span className="text-center">非密模块禁止处理涉密数据</span>
+                    </div>
                     <ScrollArea className="max-h-[70vh]">
                         <div className="space-y-4 pr-4">
                             <div className="grid gap-4 md:grid-cols-2">

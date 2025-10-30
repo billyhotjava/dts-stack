@@ -12,6 +12,7 @@ import type {
     PortalMenuCollection,
     PortalMenuItem,
 } from "@/admin/types";
+import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -560,49 +561,53 @@ export default function RoleManagementView() {
     return (
         <TooltipProvider>
             <div className="mx-auto w-full max-w-[1200px] space-y-6">
-            <Card>
-                <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div className="space-y-1">
-                        <CardTitle>角色列表</CardTitle>
-                        <Text variant="body3" className="text-muted-foreground">
-                            展示可管理的角色、默认菜单绑定与当前成员，所有调整将通过审批流生效。
-                        </Text>
-                    </div>
-                    <Button onClick={() => setCreateOpen(true)}>新增角色</Button>
-                </CardHeader>
-                <CardContent>
-                    {isLoading ? (
-                        <Text variant="body3" className="text-muted-foreground">数据加载中…</Text>
-                    ) : hasError ? (
-                        <Text variant="body3" className="text-destructive">加载角色数据失败，请稍后重试。</Text>
-                    ) : roleRows.length === 0 ? (
-                        <Text variant="body3" className="text-muted-foreground">暂无可显示的角色。</Text>
-                    ) : (
-                        <Table<RoleRow>
-                            rowKey="key"
-                            columns={columns}
-                            dataSource={roleRows}
-                            pagination={{
-                                pageSize: 10,
-                                showSizeChanger: true,
-                                pageSizeOptions: [10, 20, 50, 100],
-                                showQuickJumper: true,
-                                showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
-                            }}
-                            size="small"
-                            className="text-sm"
-                            rowClassName={() => "text-sm"}
-                            tableLayout="fixed"
-                            scroll={{ x: 1500 }}
-                            expandable={{
-                                expandedRowRender,
-                                expandRowByClick: true,
-                                columnWidth: 48,
-                            }}
-                        />
-                    )}
-                </CardContent>
-            </Card>
+                <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                    <Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+                    <span className="text-center">非密模块禁止处理涉密数据</span>
+                </div>
+                <Card>
+                    <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="space-y-1">
+                            <CardTitle>角色列表</CardTitle>
+                            <Text variant="body3" className="text-muted-foreground">
+                                展示可管理的角色、默认菜单绑定与当前成员，所有调整将通过审批流生效。
+                            </Text>
+                        </div>
+                        <Button onClick={() => setCreateOpen(true)}>新增角色</Button>
+                    </CardHeader>
+                    <CardContent>
+                        {isLoading ? (
+                            <Text variant="body3" className="text-muted-foreground">数据加载中…</Text>
+                        ) : hasError ? (
+                            <Text variant="body3" className="text-destructive">加载角色数据失败，请稍后重试。</Text>
+                        ) : roleRows.length === 0 ? (
+                            <Text variant="body3" className="text-muted-foreground">暂无可显示的角色。</Text>
+                        ) : (
+                            <Table<RoleRow>
+                                rowKey="key"
+                                columns={columns}
+                                dataSource={roleRows}
+                                pagination={{
+                                    pageSize: 10,
+                                    showSizeChanger: true,
+                                    pageSizeOptions: [10, 20, 50, 100],
+                                    showQuickJumper: true,
+                                    showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+                                }}
+                                size="small"
+                                className="text-sm"
+                                rowClassName={() => "text-sm"}
+                                tableLayout="fixed"
+                                scroll={{ x: 1500 }}
+                                expandable={{
+                                    expandedRowRender,
+                                    expandRowByClick: true,
+                                    columnWidth: 48,
+                                }}
+                            />
+                        )}
+                    </CardContent>
+                </Card>
 
             <CreateRoleDialog
                 open={createOpen}
@@ -714,6 +719,10 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
                     <DialogTitle>新增角色</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 text-sm">
+                    <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                        <Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+                        <span className="text-center">非密模块禁止处理涉密数据</span>
+                    </div>
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                             <label htmlFor="role-code" className="font-medium">
@@ -889,6 +898,10 @@ function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProp
                 </DialogHeader>
                 {target ? (
                     <div className="space-y-4 text-sm">
+                        <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                            <Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+                            <span className="text-center">非密模块禁止处理涉密数据</span>
+                        </div>
                         <div className="space-y-1">
                             <Text variant="body3" className="font-medium">
                                 角色标识

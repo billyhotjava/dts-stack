@@ -595,11 +595,11 @@ public class AuditLogResource {
         if (request == null) {
             return null;
         }
-        String header = request.getHeader("X-Forwarded-For");
-        String xfip = StringUtils.isNotBlank(header) ? header.split(",")[0].trim() : null;
-        String realIp = request.getHeader("X-Real-IP");
-        String remote = request.getRemoteAddr();
-        return IpAddressUtils.resolveClientIp(xfip, realIp, remote);
+        return IpAddressUtils.resolveClientIp(
+            request.getHeader("X-Forwarded-For"),
+            request.getHeader("X-Real-IP"),
+            request.getRemoteAddr()
+        );
     }
 
     private void ensureReadable(VisibilityScope scope, AuditEntryView view) {

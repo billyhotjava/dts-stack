@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminCustomRoleRepository;
+import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.AdminDatasetRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
@@ -52,6 +53,8 @@ class AdminApiResourceChangeAuditTest {
     @Mock
     private AdminCustomRoleRepository customRoleRepository;
     @Mock
+    private AdminKeycloakUserRepository userRepository;
+    @Mock
     private AdminRoleAssignmentRepository roleAssignmentRepository;
     @Mock
     private SystemConfigRepository systemConfigRepository;
@@ -88,6 +91,7 @@ class AdminApiResourceChangeAuditTest {
             portalMenuService,
             datasetRepository,
             customRoleRepository,
+            userRepository,
             roleAssignmentRepository,
             systemConfigRepository,
             portalMenuRepository,

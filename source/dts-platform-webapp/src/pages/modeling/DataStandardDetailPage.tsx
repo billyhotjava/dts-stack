@@ -12,6 +12,7 @@ import {
     updateStandard,
 } from "@/api/platformApi";
 import deptService, { type DeptDto } from "@/api/services/deptService";
+import { Icon } from "@/components/icon";
 import { GLOBAL_CONFIG } from "@/global-config";
 import userStore from "@/store/userStore";
 import { Badge } from "@/ui/badge";
@@ -516,6 +517,10 @@ const DataStandardDetailPage = () => {
                         返回列表
                     </Button>
                 </div>
+                <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                    <Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+                    <span className="text-center">非密模块禁止处理涉密数据</span>
+                </div>
                 <Card>
                     <CardHeader>
                         <CardTitle>数据标准详情</CardTitle>
@@ -535,6 +540,10 @@ const DataStandardDetailPage = () => {
                     <Button variant="outline" onClick={() => navigate("/modeling/standards")}>
                         返回列表
                     </Button>
+                </div>
+                <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                    <Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+                    <span className="text-center">非密模块禁止处理涉密数据</span>
                 </div>
                 <Card>
                     <CardHeader>
@@ -593,6 +602,10 @@ const DataStandardDetailPage = () => {
                         删除
                     </Button>
                 </div>
+            </div>
+            <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                <Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
+                <span className="text-center">非密模块禁止处理涉密数据</span>
             </div>
 
             <div ref={basicInfoRef}>
