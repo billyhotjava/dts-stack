@@ -3619,7 +3619,8 @@ public class AdminApiResource {
             case "BATCH_UPDATE", "BULK_UPDATE" -> AuditOperationType.UPDATE;
             case "ASSIGN", "GRANT_ROLE" -> AuditOperationType.GRANT;
             case "REVOKE_ROLE" -> AuditOperationType.REVOKE;
-            case "ENABLE", "DISABLE" -> AuditOperationType.UPDATE;
+            case "ENABLE", "BATCH_ENABLE" -> AuditOperationType.ENABLE;
+            case "DISABLE", "BATCH_DISABLE" -> AuditOperationType.DISABLE;
             case "SET_PERSON_LEVEL" -> AuditOperationType.UPDATE;
             case "RESET_PASSWORD" -> AuditOperationType.UPDATE;
             default -> AuditOperationType.UNKNOWN;
