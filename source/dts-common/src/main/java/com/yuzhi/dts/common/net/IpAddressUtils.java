@@ -18,6 +18,7 @@ public final class IpAddressUtils {
             return null;
         }
         List<String> chain = new ArrayList<>();
+        boolean sawPublic = false;
         for (String candidate : candidates) {
             if (candidate == null) {
                 continue;
@@ -28,14 +29,28 @@ public final class IpAddressUtils {
             }
             String[] segments = raw.split(",");
             if (segments.length == 0) {
-                appendCandidate(chain, raw);
+                sawPublic |= appendCandidate(chain, raw);
             } else {
                 for (String segment : segments) {
-                    appendCandidate(chain, segment);
+                    sawPublic |= appendCandidate(chain, segment);
                 }
             }
         }
         if (chain.isEmpty()) {
+            return null;
+        }
+        if (!sawPublic) {
+            for (int idx = 0; idx < chain.size(); idx++) {
+                String candidate = chain.get(idx);
+                InetAddress address = parseInetAddress(candidate);
+                if (address == null) {
+                    continue;
+                }
+                if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()) {
+                    continue;
+                }
+                return normalize(address, candidate);
+            }
             return null;
         }
         String fallback = chain.get(chain.size() - 1);
@@ -57,11 +72,15 @@ public final class IpAddressUtils {
         return fallback;
     }
 
-    private static void appendCandidate(List<String> chain, String raw) {
+    private static boolean appendCandidate(List<String> chain, String raw) {
         String sanitized = sanitize(raw);
         if (sanitized != null) {
             chain.add(sanitized);
+            InetAddress address = parseInetAddress(sanitized);
+            return address != null && !isPrivateAddress(address, sanitized) && !address.isAnyLocalAddress()
+                && !address.isLinkLocalAddress() && !address.isLoopbackAddress();
         }
+        return false;
     }
 
     private static boolean isLikelyProxy(InetAddress address, String literal) {
