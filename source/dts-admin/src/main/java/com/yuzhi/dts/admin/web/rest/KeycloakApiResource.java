@@ -3180,13 +3180,26 @@ public class KeycloakApiResource {
             @SuppressWarnings("unchecked")
             List<String> kcRoles = (List<String>) userOut.getOrDefault("roles", java.util.Collections.emptyList());
             java.util.LinkedHashSet<String> roles = new java.util.LinkedHashSet<>();
-            for (String r : kcRoles) if (r != null && !r.isBlank()) roles.add(r);
+            for (String r : kcRoles) {
+                String normalizedRole = normalizeAuthority(r);
+                if (normalizedRole != null) {
+                    roles.add(normalizedRole);
+                }
+            }
             String principal = java.util.Objects.toString(userOut.getOrDefault("preferred_username", userOut.get("username")), mappedUsername);
             try {
                 if (principal != null && !principal.isBlank()) {
-                    for (AdminRoleAssignment a : roleAssignRepo.findByUsernameIgnoreCase(principal)) {
-                        String role = a.getRole();
-                        if (role != null && !role.isBlank()) roles.add(role.trim());
+                    for (AdminRoleAssignment assignment : roleAssignRepo.findByUsernameIgnoreCase(principal)) {
+                        String authority = normalizeAuthority(assignment.getRole());
+                        if (authority != null) {
+                            roles.add(authority);
+                        }
+                    }
+                    for (AdminRoleMember member : roleMemberRepo.findByUsernameIgnoreCase(principal)) {
+                        String authority = normalizeAuthority(member.getRole());
+                        if (authority != null) {
+                            roles.add(authority);
+                        }
                     }
                 }
             } catch (Exception ex) {

@@ -2091,7 +2091,7 @@ public class AdminApiResource {
             summary.put("source", "builtin");
             summary.put("customRole", false);
             summary.put("customRoleId", null);
-            summary.put("memberCount", roleMemberRepo.countByRoleIgnoreCase(canonical));
+            summary.put("memberCount", countRoleMembers(canonical));
             summary.put("menuBindings", safeCountMenuBindings(canonical));
             summary.put("updatedAt", now.toString());
             summary.put("canManage", canonical.endsWith("_OWNER"));
@@ -2124,7 +2124,7 @@ public class AdminApiResource {
             if (StringUtils.hasText(role.getScope())) {
                 summary.put("scope", role.getScope().trim().toUpperCase(Locale.ROOT));
             }
-            summary.put("memberCount", roleMemberRepo.countByRoleIgnoreCase(canonical));
+            summary.put("memberCount", countRoleMembers(canonical));
             summary.put("menuBindings", safeCountMenuBindings(canonical));
             summary.put("updatedAt", role.getLastModifiedDate() != null ? role.getLastModifiedDate().toString() : now.toString());
             summary.put("canManage", canonical.endsWith("_OWNER"));
@@ -2180,7 +2180,7 @@ public class AdminApiResource {
         boolean reserved = isReservedRealmRoleName(raw);
         out.put("reserved", reserved);
         out.put("deletable", !reserved);
-        out.put("memberCount", roleMemberRepo.countByRoleIgnoreCase(normalized));
+        out.put("memberCount", countRoleMembers(normalized));
         try {
             Optional<AdminCustomRole> customRole = locateCustomRole(normalized);
             boolean custom = customRole.isPresent();
@@ -3436,7 +3436,7 @@ public class AdminApiResource {
         if (!StringUtils.hasText(canonical)) {
             return members;
         }
-        List<AdminRoleMember> stored = roleMemberRepo.findByRoleIgnoreCase(canonical);
+        List<AdminRoleMember> stored = loadRoleMembers(canonical);
         if (stored == null || stored.isEmpty()) {
             return members;
         }
@@ -3465,6 +3465,47 @@ public class AdminApiResource {
             }
         }
         return members;
+    }
+
+    private List<AdminRoleMember> loadRoleMembers(String canonical) {
+        if (!StringUtils.hasText(canonical)) {
+            return List.of();
+        }
+        LinkedHashMap<String, AdminRoleMember> aggregate = new LinkedHashMap<>();
+        mergeRoleMembers(aggregate, roleMemberRepo.findByRoleIgnoreCase(canonical));
+        String normalized = normalizeRoleCode(canonical);
+        if (StringUtils.hasText(normalized) && !normalized.equalsIgnoreCase(canonical)) {
+            mergeRoleMembers(aggregate, roleMemberRepo.findByRoleIgnoreCase(normalized));
+        }
+        return new ArrayList<>(aggregate.values());
+    }
+
+    private void mergeRoleMembers(Map<String, AdminRoleMember> target, List<AdminRoleMember> source) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        for (AdminRoleMember member : source) {
+            if (member == null || !StringUtils.hasText(member.getUsername())) {
+                continue;
+            }
+            String key = member.getUsername().trim().toLowerCase(Locale.ROOT);
+            target.putIfAbsent(key, member);
+        }
+    }
+
+    private long countRoleMembers(String canonical) {
+        return loadRoleMembers(canonical).size();
+    }
+
+    private void deleteRoleMembers(String canonical) {
+        if (!StringUtils.hasText(canonical)) {
+            return;
+        }
+        roleMemberRepo.deleteByRoleIgnoreCase(canonical);
+        String normalized = normalizeRoleCode(canonical);
+        if (StringUtils.hasText(normalized) && !normalized.equalsIgnoreCase(canonical)) {
+            roleMemberRepo.deleteByRoleIgnoreCase(normalized);
+        }
     }
 
     private List<MemberInfo> parseMemberEntries(Object raw) {
@@ -6251,7 +6292,7 @@ public class AdminApiResource {
         if (!visibilityErrors.isEmpty()) {
             detail.put("menuVisibilityCleanupError", String.join("; ", visibilityErrors));
         }
-        roleMemberRepo.deleteByRoleIgnoreCase(canonical);
+        deleteRoleMembers(canonical);
         deleteCustomRoleIfExists(canonical);
     }
 
@@ -6278,6 +6319,7 @@ public class AdminApiResource {
             : adminUserService.resolveDisplayNames(new ArrayList<>(additionUsernames));
         List<String> added = new ArrayList<>();
         List<String> removed = new ArrayList<>();
+        String normalizedRole = normalizeRoleCode(canonical);
         for (MemberInfo addition : additions) {
             if (!StringUtils.hasText(addition.username())) {
                 continue;
@@ -6290,8 +6332,18 @@ public class AdminApiResource {
             AdminRoleMember entity = roleMemberRepo
                 .findByRoleIgnoreCaseAndUsernameIgnoreCase(canonical, username)
                 .orElseGet(() -> {
+                    if (StringUtils.hasText(normalizedRole) && !normalizedRole.equalsIgnoreCase(canonical)) {
+                        return roleMemberRepo
+                            .findByRoleIgnoreCaseAndUsernameIgnoreCase(normalizedRole, username)
+                            .orElseGet(() -> {
+                                AdminRoleMember m = new AdminRoleMember();
+                                m.setRole(normalizedRole);
+                                m.setUsername(username);
+                                return m;
+                            });
+                    }
                     AdminRoleMember m = new AdminRoleMember();
-                    m.setRole(canonical);
+                    m.setRole(StringUtils.hasText(normalizedRole) ? normalizedRole : canonical);
                     m.setUsername(username);
                     return m;
                 });
@@ -6305,6 +6357,9 @@ public class AdminApiResource {
             }
             String username = removal.username().trim();
             long deleted = roleMemberRepo.deleteByRoleIgnoreCaseAndUsernameIgnoreCase(canonical, username);
+            if (StringUtils.hasText(normalizedRole) && !normalizedRole.equalsIgnoreCase(canonical)) {
+                deleted += roleMemberRepo.deleteByRoleIgnoreCaseAndUsernameIgnoreCase(normalizedRole, username);
+            }
             if (deleted > 0) {
                 removed.add(username);
             }
