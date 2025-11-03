@@ -14,6 +14,7 @@ services/certs/truststore.p12
 services/certs/*.srl
 services/certs/*.jks
 services/dts-minio/data/
+services/dts-platform/upload/data-standard
 builds/offline/
 # Local Maven cache used by dts-admin dev container
 source/dts-admin/.m2/
