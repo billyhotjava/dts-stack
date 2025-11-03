@@ -8,7 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/ui/checkbox";
 import { Badge } from "@/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
-import { cleanupExpiredResultSets, deleteResultSet, listDatasets, listResultSets, previewResultSet } from "@/api/platformApi";
+import {
+	cleanupExpiredResultSets,
+	deleteResultSet,
+	listDatasets,
+	listResultSets,
+	previewResultSet,
+	recordResultSetCopy,
+} from "@/api/platformApi";
 import { useActiveDept } from "@/store/contextStore";
 import { cn } from "@/utils";
 type Dataset = {
@@ -89,7 +96,9 @@ export default function SavedQueriesPage() {
 	const [onlySoonExpire, setOnlySoonExpire] = useState(false);
 	const [previewOpen, setPreviewOpen] = useState(false);
 	const [previewSql, setPreviewSql] = useState<string>("");
+	const [previewTargetId, setPreviewTargetId] = useState<string | null>(null);
 	const [previewMeta, setPreviewMeta] = useState<{
+		datasetId?: string;
 		datasetName?: string;
 		rowCount?: number;
 		engine?: string;
@@ -194,7 +203,9 @@ export default function SavedQueriesPage() {
 					: typeof resp?.rowCount === "string" && !Number.isNaN(Number(resp.rowCount))
 					? Number(resp.rowCount)
 					: undefined;
+			setPreviewTargetId(id);
 			setPreviewMeta({
+				datasetId: typeof resp?.datasetId === "string" ? resp.datasetId : target?.datasetId,
 				datasetName: resp?.datasetName || target?.datasetName,
 				rowCount: resolvedRowCount ?? target?.rowCount,
 				engine: typeof resp?.engine === "string" ? resp.engine : undefined,
@@ -230,6 +241,19 @@ export default function SavedQueriesPage() {
 		} catch (error) {
 			console.error(error);
 			toast.error("复制失败，请手动复制");
+			return;
+		}
+		if (previewTargetId) {
+			void recordResultSetCopy(previewTargetId, {
+				sql: previewSql,
+				datasetId: previewMeta.datasetId,
+				datasetName: previewMeta.datasetName,
+				engine: previewMeta.engine,
+				rowCount: previewMeta.rowCount,
+				finishedAt: previewMeta.finishedAt,
+			}).catch((error) => {
+				console.warn("Failed to record copy audit", error);
+			});
 		}
 	};
 
@@ -452,7 +476,17 @@ export default function SavedQueriesPage() {
 				</Card>
 			</div>
 
-			<Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+	<Dialog
+		open={previewOpen}
+		onOpenChange={(next) => {
+			setPreviewOpen(next);
+			if (!next) {
+				setPreviewTargetId(null);
+				setPreviewSql("");
+				setPreviewMeta({});
+			}
+		}}
+	>
 				<DialogContent className="max-w-3xl">
 					<DialogHeader>
 						<DialogTitle>查看 SQL</DialogTitle>

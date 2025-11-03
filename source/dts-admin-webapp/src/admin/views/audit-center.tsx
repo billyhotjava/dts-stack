@@ -523,7 +523,17 @@ export default function AuditCenterView() {
 				render: (_: string, r) => r.operatorName || formatOperatorName(r.actor),
 			},
 			{ title: "操作人编码", dataIndex: "actor", key: "actor", width: 140 },
-			{ title: "IP地址", dataIndex: "clientIp", key: "clientIp", width: 130, render: (v?: string) => v || "127.0.0.1" },
+		{
+			title: "IP地址",
+			dataIndex: "clientIp",
+			key: "clientIp",
+			width: 130,
+			render: (v?: string) => {
+				if (!v) return "-";
+				const trimmed = v.trim();
+				return trimmed ? trimmed : "-";
+			},
+		},
 			{
 				title: "操作时间",
 				dataIndex: "occurredAt",

@@ -4,7 +4,7 @@ import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
 import { sanitizeChangePayload } from "@/admin/utils/change-sanitizer";
-import type { AdminUser, ChangeRequest } from "@/admin/types";
+import type { AdminUser, ChangeRequest, PagedResult } from "@/admin/types";
 import { AdminSessionContext } from "@/admin/lib/session-context";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -409,11 +409,20 @@ export default function ApprovalCenterView() {
 	});
 	const changeRequests = Array.isArray(changeRequestsData) ? changeRequestsData : [];
 	const shouldFetchFallback = !isChangeRequestsLoading && Array.isArray(changeRequestsData) && changeRequestsData.length === 0;
-	const { data: adminUsers = [] } = useQuery<AdminUser[]>({
+	const { data: adminUsersPage } = useQuery<PagedResult<AdminUser>>({
 		queryKey: ["admin", "users"],
-		queryFn: () => adminApi.getAdminUsers(),
+		queryFn: () => adminApi.getAdminUsers({ size: 500 }),
 		enabled: isSysAdmin,
 	});
+	const adminUsers = useMemo<AdminUser[]>(() => {
+		if (!adminUsersPage) return [];
+		if (Array.isArray((adminUsersPage as unknown) as AdminUser[])) {
+			return (adminUsersPage as unknown as AdminUser[]) ?? [];
+		}
+		const content = (adminUsersPage as any)?.content;
+		if (Array.isArray(content)) return content as AdminUser[];
+		return [];
+	}, [adminUsersPage]);
 
 	// 兼容性兜底：若后端仅返回“审批请求”而未返回“变更请求”，
 	// 则从 /approval-requests 拉取并映射为 ChangeRequest 以便列表展示
@@ -974,7 +983,6 @@ export default function ApprovalCenterView() {
 			// 若为菜单/角色相关的本地可见性更新，联动刷新菜单与角色面板缓存
 			try {
 				await queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
-				await queryClient.invalidateQueries({ queryKey: ["admin", "role-assignments"] });
 				await queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
 			} catch {}
 		} catch (e: any) {

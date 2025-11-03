@@ -50,12 +50,14 @@ import com.yuzhi.dts.admin.domain.AdminDataset;
 import com.yuzhi.dts.admin.domain.AdminCustomRole;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
+import com.yuzhi.dts.admin.domain.AdminRoleMember;
 import com.yuzhi.dts.admin.domain.AdminApprovalItem;
 import com.yuzhi.dts.admin.domain.AdminApprovalRequest;
 import com.yuzhi.dts.admin.repository.AdminDatasetRepository;
 import com.yuzhi.dts.admin.repository.AdminCustomRoleRepository;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
+import com.yuzhi.dts.admin.repository.AdminRoleMemberRepository;
 import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import com.yuzhi.dts.admin.domain.SystemConfig;
 import com.yuzhi.dts.admin.repository.PortalMenuRepository;
@@ -65,7 +67,7 @@ import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
-import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.common.audit.ChangeSnapshot;
 
@@ -237,6 +239,7 @@ public class AdminApiResource {
     private final AdminCustomRoleRepository customRoleRepo;
     private final AdminKeycloakUserRepository userRepository;
     private final AdminRoleAssignmentRepository roleAssignRepo;
+    private final AdminRoleMemberRepository roleMemberRepo;
     private final SystemConfigRepository sysCfgRepo;
     private final PortalMenuRepository portalMenuRepo;
     private final PortalMenuVisibilityRepository visibilityRepo;
@@ -276,10 +279,8 @@ public class AdminApiResource {
     private static final List<String> DEFAULT_PORTAL_ROLES = List.of(AuthoritiesConstants.OP_ADMIN);
     private static final Set<String> RESERVED_REALM_ROLES = Set.of("SYSADMIN", "OPADMIN", "AUTHADMIN", "AUDITADMIN", "SECURITYAUDITOR");
 
-    private static final List<String> OPERATION_ORDER = List.of("read", "write", "export");
-    private static final Set<String> ALLOWED_ROLE_OPERATIONS = Set.of("read", "write", "export");
-    private static final List<String> DEFAULT_ROLE_OPERATIONS = List.copyOf(ALLOWED_ROLE_OPERATIONS);
-    private static final Set<String> ROLE_SENSITIVE_FIELDS = Set.of("operations", "maxrows", "allowdesensitizejson");
+    private static final Set<String> ROLE_SENSITIVE_FIELDS = Set.of();
+    private static final String BUILTIN_ROLE_IMMUTABLE_MESSAGE = "系统内置角色仅支持调整成员，不可修改基本信息";
 
     private static final Map<String, String> ROLE_ALIASES = Map.ofEntries(
         Map.entry("DEPT_OWNER", "DEPT_DATA_OWNER"),
@@ -298,46 +299,38 @@ public class AdminApiResource {
         ROLE_REVERSE_ALIASES = Collections.unmodifiableMap(reverse);
     }
 
-    private record BuiltinRoleSpec(String scope, List<String> operations, String titleCn, String titleEn, String description) {}
+    private record BuiltinRoleSpec(String displayName, String scope, String description) {}
 
     private static final Map<String, BuiltinRoleSpec> BUILTIN_DATA_ROLES = Map.ofEntries(
         Map.entry(
             "DEPT_DATA_OWNER",
             new BuiltinRoleSpec(
-                "DEPARTMENT",
-                List.of("read", "write", "export"),
                 "部门数据管理员",
-                "department data administrator",
+                "DEPARTMENT",
                 "负责本部门数据；可读取本部门且密级不超的资源，具备部门范围写入和授权能力。"
             )
         ),
         Map.entry(
             "DEPT_DATA_DEV",
             new BuiltinRoleSpec(
-                "DEPARTMENT",
-                List.of("read", "write", "export"),
                 "部门数据开发员",
-                "department data developer",
+                "DEPARTMENT",
                 "覆盖本部门数据开发；可读取密级不超的部门数据并在部门范围内写入；不具备密级或共享策略调整、授权管理能力。"
             )
         ),
         Map.entry(
             "INST_DATA_OWNER",
             new BuiltinRoleSpec(
-                "INSTITUTE",
-                List.of("read", "write", "export"),
                 "研究所数据管理员",
-                "institute data administrator",
+                "INSTITUTE",
                 "面向全所共享区；可读取全所共享区内密级不超的数据，并写入和管理共享策略；负责编辑/查看授权。"
             )
         ),
         Map.entry(
             "INST_DATA_DEV",
             new BuiltinRoleSpec(
-                "INSTITUTE",
-                List.of("read", "write", "export"),
                 "研究所数据开发员",
-                "institute data developer",
+                "INSTITUTE",
                 "在全所共享区开展数据开发；可读取共享区密级不超的数据并写入共享区；无密级或共享策略调整、授权能力。"
             )
         )
@@ -355,6 +348,7 @@ public class AdminApiResource {
         AdminCustomRoleRepository customRoleRepo,
         AdminKeycloakUserRepository userRepository,
         AdminRoleAssignmentRepository roleAssignRepo,
+        AdminRoleMemberRepository roleMemberRepo,
         SystemConfigRepository sysCfgRepo,
         PortalMenuRepository portalMenuRepo,
         PortalMenuVisibilityRepository visibilityRepo,
@@ -376,6 +370,7 @@ public class AdminApiResource {
         this.customRoleRepo = customRoleRepo;
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
         this.roleAssignRepo = roleAssignRepo;
+        this.roleMemberRepo = roleMemberRepo;
         this.sysCfgRepo = sysCfgRepo;
         this.portalMenuRepo = portalMenuRepo;
         this.visibilityRepo = visibilityRepo;
@@ -1047,6 +1042,10 @@ public class AdminApiResource {
             detail.put("before", before);
             Map<String, Object> after = toMenuAuditPayload(entity);
             detail.put("after", after);
+            List<String> removedRoles = formatRoleAuditList(extractMenuRoles(before));
+            if (!removedRoles.isEmpty()) {
+                detail.put("removedRoleBindings", removedRoles);
+            }
             appendChangeSummary(detail, "PORTAL_MENU", before, after);
             detail.put("summary", "禁用菜单：" + menuLabel);
             detail.put("operationName", "禁用菜单：" + menuLabel);
@@ -1556,8 +1555,8 @@ public class AdminApiResource {
             );
             return ResponseEntity.status(409).body(ApiResponse.error("角色名称已存在"));
         }
-        String titleCn = Objects.toString(payload.getOrDefault("titleCn", payload.get("nameZh")), "").trim();
-        if (titleCn.isEmpty()) {
+        String displayNameInput = Objects.toString(payload.get("displayName"), "").trim();
+        if (displayNameInput.isEmpty()) {
             recordCustomRoleCreateV2(
                 SecurityUtils.getCurrentAuditableLogin(),
                 null,
@@ -1569,8 +1568,7 @@ public class AdminApiResource {
             );
             return ResponseEntity.badRequest().body(ApiResponse.error("角色名称不能为空"));
         }
-        String displayName = Objects.toString(payload.getOrDefault("displayName", titleCn), titleCn).trim();
-        String titleEn = Objects.toString(payload.get("titleEn"), null);
+        String displayName = displayNameInput;
         String scope = Objects.toString(payload.get("scope"), "").trim().toUpperCase(Locale.ROOT);
         if (!Set.of("DEPARTMENT", "INSTITUTE").contains(scope)) {
             return ResponseEntity.badRequest().body(ApiResponse.error("作用域无效"));
@@ -1579,12 +1577,7 @@ public class AdminApiResource {
         after.put("name", normalizedName);
         after.put("scope", scope);
         after.put("description", Objects.toString(payload.get("description"), null));
-        after.put("titleCn", titleCn);
-        after.put("nameZh", titleCn);
         after.put("displayName", displayName);
-        if (StringUtils.hasText(titleEn)) {
-            after.put("titleEn", titleEn.trim());
-        }
         try {
             ChangeRequest cr = changeRequestService.draft(
                 "CUSTOM_ROLE",
@@ -1688,6 +1681,63 @@ public class AdminApiResource {
             return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
         } catch (IllegalStateException ex) {
             recordRoleAssignmentCreateV2(
+                SecurityUtils.getCurrentAuditableLogin(),
+                null,
+                after,
+                Map.of("error", ex.getMessage()),
+                AuditResultStatus.FAILED,
+                ex.getMessage(),
+                request
+            );
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/role-assignments/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteRoleAssignment(
+        @PathVariable Long id,
+        @RequestBody(required = false) Map<String, Object> payload,
+        HttpServletRequest request
+    ) {
+        Optional<AdminRoleAssignment> existingOpt = roleAssignRepo.findById(id);
+        if (existingOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("角色指派不存在或已被撤销"));
+        }
+        AdminRoleAssignment assignment = existingOpt.get();
+        Map<String, Object> before = toRoleAssignmentVM(assignment, buildRoleDisplayNameMap());
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("assignmentId", assignment.getId());
+        after.put("role", assignment.getRole());
+        after.put("username", assignment.getUsername());
+        after.put("deleted", true);
+        String reason = payload == null ? null : Objects.toString(payload.get("reason"), null);
+        try {
+            ChangeRequest cr = changeRequestService.draft(
+                "ROLE_ASSIGNMENT",
+                "DELETE",
+                String.valueOf(assignment.getId()),
+                after,
+                before,
+                reason
+            );
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("changeRequestId", cr.getId());
+            detail.put("assignmentId", assignment.getId());
+            detail.put("role", assignment.getRole());
+            detail.put("username", assignment.getUsername());
+            attachChangeRequestMetadata(detail, cr);
+            recordRoleAssignmentDeleteV2(
+                SecurityUtils.getCurrentAuditableLogin(),
+                cr,
+                after,
+                detail,
+                AuditResultStatus.SUCCESS,
+                null,
+                request
+            );
+            return ResponseEntity.ok(ApiResponse.ok(withDisplayNames(toChangeVM(cr))));
+        } catch (IllegalStateException ex) {
+            recordRoleAssignmentDeleteV2(
                 SecurityUtils.getCurrentAuditableLogin(),
                 null,
                 after,
@@ -1810,12 +1860,48 @@ public class AdminApiResource {
         cr.setResourceId(resourceId);
         cr.setAction(action);
         cr.setPayloadJson(payloadJson);
-        cr.setDiffJson(Objects.toString(payload.get("diffJson"), null));
         cr.setStatus("DRAFT");
         cr.setRequestedBy(SecurityUtils.getCurrentUserLogin().orElse("sysadmin"));
         cr.setRequestedAt(Instant.now());
         cr.setCategory(Objects.toString(payload.get("category"), "GENERAL"));
         cr.setLastError(null);
+
+        Map<String, Object> parsedPayload = safeReadPayload(payloadJson);
+        if ("ROLE".equalsIgnoreCase(resourceType)) {
+            String canonical = stripRolePrefix(
+                firstNonBlank(
+                    stringValue(parsedPayload != null ? parsedPayload.get("name") : null),
+                    stringValue(parsedPayload != null ? parsedPayload.get("role") : null),
+                    resourceId
+                )
+            );
+            try {
+                BuiltinRoleSpec spec = enforceBuiltinRoleMutationPolicy(canonical, parsedPayload);
+                if (spec != null && "DELETE".equalsIgnoreCase(action)) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(BUILTIN_ROLE_IMMUTABLE_MESSAGE));
+                }
+            } catch (IllegalArgumentException ex) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
+            }
+        }
+        Map<String, Object> computedDiff = computeDraftDiff(resourceType, action, resourceId, parsedPayload);
+        if (computedDiff == null || computedDiff.isEmpty()) {
+            Map<String, Object> providedDiff = safeReadDiff(Objects.toString(payload.get("diffJson"), null));
+            if (providedDiff != null && !providedDiff.isEmpty()) {
+                computedDiff = providedDiff;
+            }
+        }
+        if (computedDiff != null && !computedDiff.isEmpty()) {
+            try {
+                cr.setDiffJson(JSON_MAPPER.writeValueAsString(computedDiff));
+            } catch (JsonProcessingException e) {
+                log.warn("Failed to serialize draft diff for {} {}: {}", resourceType, action, e.getMessage());
+                cr.setDiffJson(Objects.toString(payload.get("diffJson"), null));
+            }
+        } else {
+            cr.setDiffJson(Objects.toString(payload.get("diffJson"), null));
+        }
+
         crRepo.save(cr);
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("action", "CREATE");
@@ -1988,104 +2074,98 @@ public class AdminApiResource {
 
     @GetMapping("/roles")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> adminRoles() {
-        List<KeycloakRoleDTO> realmRoles = adminUserService.listRealmRoles();
-        List<Map<String, Object>> list = new ArrayList<>();
         Instant now = Instant.now();
-        Set<String> emitted = new HashSet<>();
-        for (KeycloakRoleDTO role : realmRoles) {
-            String name = role.getName();
-            if (!StringUtils.hasText(name)) {
-                continue;
-            }
-            if (isReservedRealmRoleName(name)) {
-                continue;
-            }
-            String canonical = stripRolePrefix(name);
-            BuiltinRoleSpec builtin = BUILTIN_DATA_ROLES.get(canonical);
-            Map<String, Object> summary = toRoleSummary(role, canonical, builtin, now);
-            // Include legacy role name if Keycloak尚未迁移
-            String rawUpper = name.trim().toUpperCase(Locale.ROOT);
-            if (!rawUpper.equals(canonical)) {
-                summary.put("legacyName", name);
-            }
-            // Enrich with Keycloak member count (realm role membership)
-            try {
-                int kcMembers = adminUserService.countUsersByRealmRole(canonical);
-                if (kcMembers == 0) {
-                    String legacy = resolveLegacyRole(canonical);
-                    if (legacy != null) {
-                        kcMembers = adminUserService.countUsersByRealmRole(legacy);
-                    }
-                }
-                summary.put("memberCount", kcMembers);
-                summary.put("kcMemberCount", kcMembers);
-            } catch (Exception ignored) {}
-            try {
-                int menuBindings = 0;
-                for (String authority : authorityCandidates(canonical)) {
-                    menuBindings += visibilityRepo.findByRoleCode(authority).size();
-                }
-                summary.put("menuBindings", menuBindings);
-            } catch (Exception ignored) {
-                summary.put("menuBindings", 0);
-            }
-            try {
-                Optional<AdminCustomRole> customRole = locateCustomRole(canonical);
-                boolean custom = customRole.isPresent();
-                summary.put("customRole", custom);
-                summary.put("customRoleId", custom ? customRole.map(AdminCustomRole::getId).orElse(null) : null);
-            } catch (Exception ignored) {
-                summary.put("customRole", false);
-            }
-            try {
-                long assignmentCount = roleAssignRepo
-                    .findAll()
-                    .stream()
-                    .map(AdminRoleAssignment::getRole)
-                    .map(AdminApiResource::stripRolePrefix)
-                    .filter(roleName -> canonical.equalsIgnoreCase(roleName))
-                    .count();
-                summary.put("assignments", (int) assignmentCount);
-            } catch (Exception ignored) {
-                summary.put("assignments", 0);
-            }
-            list.add(summary);
-            emitted.add(canonical);
-        }
+        LinkedHashMap<String, Map<String, Object>> summaries = new LinkedHashMap<>();
 
         for (Map.Entry<String, BuiltinRoleSpec> entry : BUILTIN_DATA_ROLES.entrySet()) {
-            if (emitted.contains(entry.getKey())) {
-                continue;
-            }
-            Map<String, Object> summary = toRoleSummary(null, entry.getKey(), entry.getValue(), now);
-            // Builtin roles may not exist in Keycloak; memberCount stays 0
-            list.add(summary);
+            String canonical = entry.getKey();
+            BuiltinRoleSpec spec = entry.getValue();
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("id", "role-" + canonical);
+            summary.put("roleId", canonical);
+            summary.put("code", canonical);
+            summary.put("name", spec.displayName());
+            summary.put("displayName", spec.displayName());
+            summary.put("description", spec.description());
+            summary.put("scope", spec.scope());
+            summary.put("source", "builtin");
+            summary.put("customRole", false);
+            summary.put("customRoleId", null);
+            summary.put("memberCount", roleMemberRepo.countByRoleIgnoreCase(canonical));
+            summary.put("menuBindings", safeCountMenuBindings(canonical));
+            summary.put("updatedAt", now.toString());
+            summary.put("canManage", canonical.endsWith("_OWNER"));
+            summaries.put(canonical, summary);
         }
 
-        // Include custom roles that may exist only in admin DB even if Keycloak sync failed
-        try {
-            for (AdminCustomRole cr : customRoleRepo.findAll()) {
-                String name = Objects.toString(cr.getName(), "").trim();
-                if (name.isEmpty()) continue;
-                String canonical = stripRolePrefix(name);
-                if (emitted.contains(canonical)) continue;
-                Map<String, Object> summary = toRoleSummary(null, canonical, null, now);
-                summary.put("customRole", true);
-                summary.put("customRoleId", cr.getId());
-                summary.put("source", "custom");
-                // Derive scope/ops from DB record
-                if (StringUtils.hasText(cr.getScope())) summary.put("scope", cr.getScope());
-                if (StringUtils.hasText(cr.getOperationsCsv())) {
-                    summary.put("operations", Arrays.stream(cr.getOperationsCsv().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList());
-                }
-                list.add(summary);
-                emitted.add(canonical);
+        for (AdminCustomRole role : customRoleRepo.findAll()) {
+            if (role == null || !StringUtils.hasText(role.getName())) {
+                continue;
             }
-        } catch (Exception ignored) {}
+            String canonical = stripRolePrefix(role.getName());
+            if (!StringUtils.hasText(canonical)) {
+                continue;
+            }
+            Map<String, Object> summary = summaries.computeIfAbsent(canonical, key -> new LinkedHashMap<>());
+            summary.put("roleId", canonical);
+            summary.put("code", canonical);
+            summary.put("id", role.getId() != null ? role.getId() : summary.getOrDefault("id", "role-" + canonical));
+            summary.put("customRoleId", role.getId());
+            summary.put("customRole", true);
+            summary.put("source", summary.getOrDefault("source", "custom"));
+            String displayName = firstNonBlank(role.getDisplayName(), role.getDescription(), canonical);
+            summary.put("name", displayName);
+            summary.put("displayName", displayName);
+            if (StringUtils.hasText(role.getDescription())) {
+                summary.put("description", role.getDescription());
+            } else {
+                summary.remove("description");
+            }
+            if (StringUtils.hasText(role.getScope())) {
+                summary.put("scope", role.getScope().trim().toUpperCase(Locale.ROOT));
+            }
+            summary.put("memberCount", roleMemberRepo.countByRoleIgnoreCase(canonical));
+            summary.put("menuBindings", safeCountMenuBindings(canonical));
+            summary.put("updatedAt", role.getLastModifiedDate() != null ? role.getLastModifiedDate().toString() : now.toString());
+            summary.put("canManage", canonical.endsWith("_OWNER"));
+        }
 
-        list.sort(Comparator.comparing(o -> Objects.toString(o.get("name"), "")));
-
+        List<Map<String, Object>> list = new ArrayList<>(summaries.values());
+        list.sort(
+            Comparator.comparing(
+                o -> Objects.toString(o.getOrDefault("displayName", o.getOrDefault("name", o.get("code"))), "")
+            )
+        );
         return ResponseEntity.ok(ApiResponse.ok(list));
+    }
+
+    @GetMapping("/roles/{name}/members")
+    public ResponseEntity<ApiResponse<List<Map<String, String>>>> roleMembers(@PathVariable String name) {
+        String canonical = stripRolePrefix(Objects.toString(name, ""));
+        LinkedHashMap<String, MemberInfo> members = buildRoleMemberMap(canonical);
+        List<Map<String, String>> payload = members
+            .values()
+            .stream()
+            .map(info -> {
+                Map<String, String> map = new LinkedHashMap<>();
+                map.put("username", info.username());
+                map.put("displayName", info.displayName());
+                return map;
+            })
+            .toList();
+        return ResponseEntity.ok(ApiResponse.ok(payload));
+    }
+
+    private int safeCountMenuBindings(String canonical) {
+        try {
+            int menuBindings = 0;
+            for (String authority : authorityCandidates(canonical)) {
+                menuBindings += visibilityRepo.findByRoleCode(authority).size();
+            }
+            return menuBindings;
+        } catch (Exception ex) {
+            return 0;
+        }
     }
 
     /**
@@ -2100,40 +2180,7 @@ public class AdminApiResource {
         boolean reserved = isReservedRealmRoleName(raw);
         out.put("reserved", reserved);
         out.put("deletable", !reserved);
-        try {
-            boolean existsInKeycloak = adminUserService.realmRoleExists(normalized);
-            if (!existsInKeycloak) {
-                String legacy = resolveLegacyRole(normalized);
-                if (legacy != null) {
-                    existsInKeycloak = adminUserService.realmRoleExists(legacy);
-                }
-            }
-            out.put("existsInKeycloak", existsInKeycloak);
-        } catch (Exception ex) {
-            out.put("existsInKeycloak", false);
-            out.put("kcCheckError", ex.getMessage());
-        }
-        try {
-            int kcMembers = adminUserService.countUsersByRealmRole(normalized);
-            if (kcMembers == 0) {
-                String legacy = resolveLegacyRole(normalized);
-                if (legacy != null) {
-                    kcMembers = adminUserService.countUsersByRealmRole(legacy);
-                }
-            }
-            out.put("kcMemberCount", kcMembers);
-        } catch (Exception ex) {
-            out.put("kcMemberCount", 0);
-        }
-        try {
-            int menuBindings = 0;
-            for (String authority : authorityCandidates(normalized)) {
-                menuBindings += visibilityRepo.findByRoleCode(authority).size();
-            }
-            out.put("menuBindings", menuBindings);
-        } catch (Exception ex) {
-            out.put("menuBindings", 0);
-        }
+        out.put("memberCount", roleMemberRepo.countByRoleIgnoreCase(normalized));
         try {
             Optional<AdminCustomRole> customRole = locateCustomRole(normalized);
             boolean custom = customRole.isPresent();
@@ -2154,6 +2201,7 @@ public class AdminApiResource {
         } catch (Exception ex) {
             out.put("assignments", 0);
         }
+        out.put("menuBindings", safeCountMenuBindings(normalized));
         return ResponseEntity.ok(ApiResponse.ok(out));
     }
 
@@ -3123,16 +3171,488 @@ public class AdminApiResource {
         }
     }
 
+    private Map<String, Object> safeReadPayload(String payloadJson) {
+        if (!StringUtils.hasText(payloadJson)) {
+            return Map.of();
+        }
+        try {
+            return JSON_MAPPER.readValue(payloadJson, LinkedHashMap.class);
+        } catch (Exception ex) {
+            log.debug("Failed to parse payloadJson for change request draft: {}", ex.getMessage());
+            return Map.of();
+        }
+    }
+
+    private Map<String, Object> safeReadDiff(String diffJson) {
+        if (!StringUtils.hasText(diffJson)) {
+            return Map.of();
+        }
+        try {
+            Map<String, Object> raw = JSON_MAPPER.readValue(diffJson, LinkedHashMap.class);
+            if (raw == null || raw.isEmpty()) {
+                return Map.of();
+            }
+            ChangeSnapshot snapshot = ChangeSnapshot.fromMap(raw);
+            if (!snapshot.hasChanges() && snapshot.getBefore().isEmpty() && snapshot.getAfter().isEmpty()) {
+                return Map.of();
+            }
+            return snapshot.toMap();
+        } catch (Exception ex) {
+            log.debug("Failed to parse diffJson for change request draft: {}", ex.getMessage());
+            return Map.of();
+        }
+    }
+
+    private Map<String, Object> computeDraftDiff(
+        String resourceType,
+        String action,
+        String resourceId,
+        Map<String, Object> payload
+    ) {
+        String normalizedType = resourceType == null ? "UNKNOWN" : resourceType.trim().toUpperCase(Locale.ROOT);
+        return switch (normalizedType) {
+            case "ROLE" -> buildRoleDraftDiff(action, resourceId, payload);
+            default -> buildGenericDraftDiff(action, payload);
+        };
+    }
+
+    private Map<String, Object> buildGenericDraftDiff(String action, Map<String, Object> payload) {
+        Map<String, Object> sanitizedPayload = sanitizeSnapshotPayload(payload);
+        String normalizedAction = action == null ? "UNKNOWN" : action.trim().toUpperCase(Locale.ROOT);
+        Map<String, Object> before;
+        Map<String, Object> after;
+        if ("DELETE".equals(normalizedAction)) {
+            before = sanitizedPayload;
+            after = Map.of();
+        } else if ("CREATE".equals(normalizedAction)) {
+            before = Map.of();
+            after = sanitizedPayload;
+        } else {
+            before = Map.of();
+            after = sanitizedPayload;
+        }
+        ChangeSnapshot snapshot = ChangeSnapshot.of(before, after);
+        return snapshot.toMap();
+    }
+
+    private Map<String, Object> sanitizeSnapshotPayload(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (entry == null || entry.getKey() == null) {
+                continue;
+            }
+            String key = entry.getKey();
+            if ("changeRequestId".equals(key) || key.startsWith("__")) {
+                continue;
+            }
+            result.put(key, entry.getValue());
+        }
+        return result;
+    }
+
+    private Map<String, Object> buildRoleDraftDiff(String action, String resourceId, Map<String, Object> payload) {
+        String normalizedAction = action == null ? "UNKNOWN" : action.trim().toUpperCase(Locale.ROOT);
+        RoleSnapshotState baseline = resolveRoleSnapshotState(resourceId, payload);
+        Map<String, Object> before;
+        Map<String, Object> after;
+        switch (normalizedAction) {
+            case "CREATE" -> {
+                before = Map.of();
+                after = buildRoleAfterStateForCreate(payload);
+            }
+            case "DELETE" -> {
+                before = baseline.toMap();
+                after = buildRoleAfterStateForDelete(baseline);
+            }
+            default -> {
+                if (!StringUtils.hasText(baseline.canonicalName())) {
+                    before = Map.of();
+                } else {
+                    before = baseline.toMap();
+                }
+                after = buildRoleAfterStateForUpdate(baseline, payload);
+            }
+        }
+        ChangeSnapshot snapshot = ChangeSnapshot.of(before, after);
+        return snapshot.toMap();
+    }
+
+    private Map<String, Object> buildRoleAfterStateForCreate(Map<String, Object> payload) {
+        LinkedHashMap<String, Object> after = new LinkedHashMap<>();
+        String canonical = stripRolePrefix(firstNonBlank(stringValue(payload.get("name")), stringValue(payload.get("role"))));
+        if (StringUtils.hasText(canonical)) {
+            after.put("name", canonical);
+        }
+        String displayName = firstNonBlank(stringValue(payload.get("displayName")), canonical);
+        after.put("displayName", displayName);
+        String scopeValue = stringValue(payload.get("scope"));
+        if (StringUtils.hasText(scopeValue)) {
+            after.put("scope", scopeValue.trim().toUpperCase(Locale.ROOT));
+        }
+        String descriptionValue = stringValue(payload.get("description"));
+        if (StringUtils.hasText(descriptionValue)) {
+            after.put("description", descriptionValue.trim());
+        }
+        List<String> memberLabels = parseMemberEntries(payload.get("memberAdds")).stream().map(MemberInfo::label).toList();
+        after.put("members", memberLabels);
+        after.put("memberCount", memberLabels.size());
+        if (!memberLabels.isEmpty()) {
+            after.put("memberAdds", new ArrayList<>(memberLabels));
+        }
+        return after;
+    }
+
+    private Map<String, Object> buildRoleAfterStateForDelete(RoleSnapshotState baseline) {
+        Map<String, Object> after = new LinkedHashMap<>();
+        if (StringUtils.hasText(baseline.canonicalName())) {
+            after.put("name", baseline.canonicalName());
+        }
+        after.put("displayName", baseline.displayName());
+        if (baseline.scope() != null) {
+            after.put("scope", baseline.scope());
+        }
+        if (baseline.description() != null) {
+            after.put("description", baseline.description());
+        }
+        after.put("deleted", true);
+        List<String> removed = formatMemberLabels(baseline.copyMembers());
+        after.put("members", List.of());
+        after.put("memberCount", 0);
+        if (!removed.isEmpty()) {
+            after.put("memberRemoves", removed);
+        }
+        return after;
+    }
+
+    private Map<String, Object> buildRoleAfterStateForUpdate(RoleSnapshotState baseline, Map<String, Object> payload) {
+        if (!StringUtils.hasText(baseline.canonicalName())) {
+            return buildRoleAfterStateForCreate(payload);
+        }
+        LinkedHashMap<String, Object> after = new LinkedHashMap<>(baseline.toMap());
+        LinkedHashMap<String, MemberInfo> members = baseline.copyMembers();
+        LinkedHashSet<String> added = new LinkedHashSet<>();
+        LinkedHashSet<String> removed = new LinkedHashSet<>();
+
+        for (MemberInfo removal : parseMemberEntries(payload.get("memberRemoves"))) {
+            String key = removal.normalizedKey();
+            if (key == null) {
+                continue;
+            }
+            MemberInfo existing = members.remove(key);
+            if (existing != null) {
+                removed.add(existing.label());
+            }
+        }
+
+        for (MemberInfo addition : parseMemberEntries(payload.get("memberAdds"))) {
+            String key = addition.normalizedKey();
+            if (key == null) {
+                continue;
+            }
+            MemberInfo previous = members.put(key, addition);
+            String label = addition.label();
+            if (previous == null || !Objects.equals(previous.label(), label)) {
+                added.add(label);
+            }
+        }
+
+        String scopeValue = stringValue(payload.get("scope"));
+        if (StringUtils.hasText(scopeValue)) {
+            after.put("scope", scopeValue.trim().toUpperCase(Locale.ROOT));
+        }
+        if (payload.containsKey("description")) {
+            String desc = stringValue(payload.get("description"));
+            if (StringUtils.hasText(desc)) {
+                after.put("description", desc.trim());
+            } else {
+                after.remove("description");
+            }
+        }
+        if (payload.containsKey("displayName")) {
+            String nameValue = stringValue(payload.get("displayName"));
+            after.put("displayName", StringUtils.hasText(nameValue) ? nameValue.trim() : baseline.displayName());
+        }
+
+        List<String> memberLabels = formatMemberLabels(members);
+        after.put("members", memberLabels);
+        after.put("memberCount", members.size());
+        if (!added.isEmpty()) {
+            after.put("memberAdds", new ArrayList<>(added));
+        } else {
+            after.remove("memberAdds");
+        }
+        if (!removed.isEmpty()) {
+            after.put("memberRemoves", new ArrayList<>(removed));
+        } else {
+            after.remove("memberRemoves");
+        }
+        return after;
+    }
+
+    private RoleSnapshotState resolveRoleSnapshotState(String resourceId, Map<String, Object> payload) {
+        String candidate = firstNonBlank(stringValue(payload.get("name")), stringValue(payload.get("role")), resourceId);
+        String canonical = stripRolePrefix(candidate);
+        if (!StringUtils.hasText(canonical)) {
+            return RoleSnapshotState.empty();
+        }
+        AdminCustomRole customRole = locateCustomRole(canonical).orElse(null);
+        String scope = null;
+        String description = null;
+        String displayName = null;
+        if (customRole != null) {
+            scope = trimToNull(customRole.getScope());
+            description = trimToNull(customRole.getDescription());
+            displayName = trimToNull(customRole.getDisplayName());
+        } else {
+            BuiltinRoleSpec builtin = BUILTIN_DATA_ROLES.get(canonical);
+            if (builtin != null) {
+                scope = trimToNull(builtin.scope());
+                description = trimToNull(builtin.description());
+                displayName = trimToNull(builtin.displayName());
+            }
+        }
+        if (StringUtils.hasText(scope)) {
+            scope = scope.trim().toUpperCase(Locale.ROOT);
+        } else {
+            scope = null;
+        }
+        if (StringUtils.hasText(description)) {
+            description = description.trim();
+        } else {
+            description = null;
+        }
+        if (!StringUtils.hasText(displayName)) {
+            displayName = canonical;
+        }
+        LinkedHashMap<String, MemberInfo> members = buildRoleMemberMap(canonical);
+        return new RoleSnapshotState(canonical, displayName, scope, description, members);
+    }
+
+    private LinkedHashMap<String, MemberInfo> buildRoleMemberMap(String canonical) {
+        LinkedHashMap<String, MemberInfo> members = new LinkedHashMap<>();
+        if (!StringUtils.hasText(canonical)) {
+            return members;
+        }
+        List<AdminRoleMember> stored = roleMemberRepo.findByRoleIgnoreCase(canonical);
+        if (stored == null || stored.isEmpty()) {
+            return members;
+        }
+        stored.sort(
+            Comparator.comparing(
+                member -> {
+                    String label = trimToNull(member.getDisplayName());
+                    return label != null ? label : member.getUsername();
+                },
+                String.CASE_INSENSITIVE_ORDER
+            )
+        );
+        for (AdminRoleMember entity : stored) {
+            if (entity == null || !StringUtils.hasText(entity.getUsername())) {
+                continue;
+            }
+            String username = entity.getUsername().trim();
+            String display = trimToNull(entity.getDisplayName());
+            if (display == null) {
+                display = username;
+            }
+            MemberInfo info = new MemberInfo(username, display);
+            String key = info.normalizedKey();
+            if (key != null && !members.containsKey(key)) {
+                members.put(key, info);
+            }
+        }
+        return members;
+    }
+
+    private List<MemberInfo> parseMemberEntries(Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        List<MemberInfo> result = new ArrayList<>();
+        if (raw instanceof Collection<?> collection) {
+            for (Object item : collection) {
+                MemberInfo info = toMemberInfo(item);
+                if (info != null) {
+                    result.add(info);
+                }
+            }
+        } else {
+            MemberInfo info = toMemberInfo(raw);
+            if (info != null) {
+                result.add(info);
+            }
+        }
+        return result;
+    }
+
+    private MemberInfo toMemberInfo(Object item) {
+        if (item == null) {
+            return null;
+        }
+        if (item instanceof MemberInfo info) {
+            return info;
+        }
+        if (item instanceof Map<?, ?> map) {
+            String username = stringValue(map.get("username"));
+            if (!StringUtils.hasText(username)) {
+                username = stringValue(map.get("userName"));
+            }
+            if (!StringUtils.hasText(username)) {
+                username = stringValue(map.get("login"));
+            }
+            if (!StringUtils.hasText(username)) {
+                return null;
+            }
+            String display = firstNonBlank(
+                stringValue(map.get("displayName")),
+                stringValue(map.get("fullName")),
+                stringValue(map.get("name")),
+                username
+            );
+            return new MemberInfo(username.trim(), display);
+        }
+        if (item instanceof String text && StringUtils.hasText(text)) {
+            String trimmed = text.trim();
+            return new MemberInfo(trimmed, trimmed);
+        }
+        return null;
+    }
+
+    private List<String> formatMemberLabels(Map<String, MemberInfo> members) {
+        if (members == null || members.isEmpty()) {
+            return List.of();
+        }
+        List<MemberInfo> sorted = new ArrayList<>(members.values());
+        sorted.sort(Comparator.comparing(MemberInfo::label, String.CASE_INSENSITIVE_ORDER));
+        List<String> labels = new ArrayList<>(sorted.size());
+        for (MemberInfo info : sorted) {
+            labels.add(info.label());
+        }
+        return labels;
+    }
+
+    private static final class RoleSnapshotState {
+        private final String canonicalName;
+        private final String displayName;
+        private final String scope;
+        private final String description;
+        private final LinkedHashMap<String, MemberInfo> members;
+
+        private RoleSnapshotState(
+            String canonicalName,
+            String displayName,
+            String scope,
+            String description,
+            LinkedHashMap<String, MemberInfo> members
+        ) {
+            this.canonicalName = canonicalName;
+            this.displayName = displayName;
+            this.scope = scope;
+            this.description = description;
+            this.members = members == null ? new LinkedHashMap<>() : members;
+        }
+
+        static RoleSnapshotState empty() {
+            return new RoleSnapshotState(null, null, null, null, new LinkedHashMap<>());
+        }
+
+        String canonicalName() {
+            return canonicalName;
+        }
+
+        String displayName() {
+            return displayName;
+        }
+
+        String scope() {
+            return scope;
+        }
+
+        String description() {
+            return description;
+        }
+
+        LinkedHashMap<String, MemberInfo> copyMembers() {
+            return new LinkedHashMap<>(members);
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            if (canonicalName != null) {
+                map.put("name", canonicalName);
+            }
+            if (displayName != null) {
+                map.put("displayName", displayName);
+            }
+            if (scope != null) {
+                map.put("scope", scope);
+            }
+            if (description != null) {
+                map.put("description", description);
+            }
+            map.put("members", memberLabels());
+            map.put("memberCount", members.size());
+            return map;
+        }
+
+        private List<String> memberLabels() {
+            if (members.isEmpty()) {
+                return List.of();
+            }
+            List<MemberInfo> sorted = new ArrayList<>(members.values());
+            sorted.sort(Comparator.comparing(MemberInfo::label, String.CASE_INSENSITIVE_ORDER));
+            List<String> labels = new ArrayList<>(sorted.size());
+            for (MemberInfo info : sorted) {
+                labels.add(info.label());
+            }
+            return labels;
+        }
+    }
+
+    private static final class MemberInfo {
+        private final String username;
+        private final String display;
+
+        private MemberInfo(String username, String display) {
+            this.username = username == null ? null : username.trim();
+            String fallback = this.username == null ? "" : this.username;
+            String candidate = display == null ? fallback : display.trim();
+            this.display = candidate.isEmpty() ? fallback : candidate;
+        }
+
+        String normalizedKey() {
+            return username == null ? null : username.toLowerCase(Locale.ROOT);
+        }
+
+        String label() {
+            String normalizedUsername = username == null ? "" : username;
+            String normalizedDisplay = display == null ? "" : display;
+            if (!normalizedDisplay.isEmpty() && !normalizedDisplay.equalsIgnoreCase(normalizedUsername)) {
+                return normalizedDisplay + " (" + normalizedUsername + ")";
+            }
+            return normalizedUsername;
+        }
+
+        String displayName() {
+            return display;
+        }
+
+        String username() {
+            return username;
+        }
+    }
+
     private ChangeContext buildRoleLikeContext(String resourceType, ChangeRequest cr, String action, Map<String, Object> payload) {
         String canonical = stripRolePrefix(stringValue(payload != null ? payload.get("name") : null));
         if (!StringUtils.hasText(canonical)) {
             canonical = stripRolePrefix(stringValue(cr.getResourceId()));
         }
         String label = firstNonBlank(
-            stringValue(payload != null ? payload.get("titleCn") : null),
-            stringValue(payload != null ? payload.get("nameZh") : null),
             stringValue(payload != null ? payload.get("displayName") : null),
-            stringValue(payload != null ? payload.get("title") : null),
+            stringValue(payload != null ? payload.get("name") : null),
             canonical
         );
         Map<String, Object> extras = new LinkedHashMap<>();
@@ -3151,6 +3671,14 @@ public class AdminApiResource {
             String description = stringValue(payload.get("description"));
             if (description != null) {
                 extras.put("roleDescription", description);
+            }
+            Object memberAdds = payload.get("memberAdds");
+            if (memberAdds instanceof Collection<?> collection && !collection.isEmpty()) {
+                extras.put("memberAdds", collection);
+            }
+            Object memberRemoves = payload.get("memberRemoves");
+            if (memberRemoves instanceof Collection<?> collection && !collection.isEmpty()) {
+                extras.put("memberRemoves", collection);
             }
         }
         if (StringUtils.hasText(label)) {
@@ -4271,6 +4799,72 @@ public class AdminApiResource {
         }
     }
 
+    private void recordRoleAssignmentDeleteV2(
+        String actor,
+        ChangeRequest changeRequest,
+        Map<String, Object> payload,
+        Map<String, Object> detail,
+        AuditResultStatus result,
+        String failureMessage,
+        HttpServletRequest request
+    ) {
+        if (!StringUtils.hasText(actor)) {
+            return;
+        }
+        try {
+            String username = asText(payload != null ? payload.get("username") : null);
+            String role = asText(payload != null ? payload.get("role") : null);
+            String successSummary = firstNonBlank(
+                StringUtils.hasText(username) ? "提交角色撤销申请：" + username : null,
+                "提交角色撤销申请"
+            );
+            String failureSummary = firstNonBlank(
+                StringUtils.hasText(username) ? "角色撤销申请失败：" + username : null,
+                failureMessage != null ? "角色撤销申请失败：" + failureMessage : null,
+                "角色撤销申请失败"
+            );
+            String summary = result == AuditResultStatus.SUCCESS ? successSummary : failureSummary;
+            Map<String, Object> detailPayload = new LinkedHashMap<>();
+            if (detail != null) {
+                detailPayload.putAll(detail);
+            }
+            if (payload != null) {
+                if (StringUtils.hasText(role)) {
+                    detailPayload.put("role", role);
+                }
+                if (StringUtils.hasText(username)) {
+                    detailPayload.put("username", username);
+                }
+                Object assignmentId = payload.get("assignmentId");
+                if (assignmentId != null) {
+                    detailPayload.put("assignmentId", assignmentId);
+                }
+            }
+            if (failureMessage != null) {
+                detailPayload.put("error", failureMessage);
+            }
+            String clientIp = resolveClientIp(request);
+            String userAgent = request != null ? request.getHeader("User-Agent") : null;
+            String uri = Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/admin/role-assignments");
+            String method = request != null ? request.getMethod() : "DELETE";
+            RoleAuditContext.Builder builder = RoleAuditContext
+                .builder(actor, RoleAuditContext.Operation.REVOKE_ROLE)
+                .result(result)
+                .summary(summary)
+                .operationName(summary)
+                .detail(detailPayload)
+                .client(clientIp, userAgent, uri, method)
+                .allowEmptyTargets(true);
+            if (changeRequest != null && changeRequest.getId() != null) {
+                String ref = changeRequestRef(changeRequest);
+                builder.changeRequest(changeRequest.getId(), ref);
+            }
+            adminAuditService.logRoleAction(builder.build());
+        } catch (Exception ex) {
+            log.warn("Failed to record V2 audit for role assignment delete: {}", ex.getMessage());
+        }
+    }
+
     private void recordCustomRoleCreateV2(
         String actor,
         ChangeRequest changeRequest,
@@ -4320,12 +4914,6 @@ public class AdminApiResource {
                 }
                 if (StringUtils.hasText(scope)) {
                     afterSnapshot.put("scope", scope);
-                }
-                if (payload.containsKey("titleCn")) {
-                    afterSnapshot.put("titleCn", payload.get("titleCn"));
-                }
-                if (payload.containsKey("titleEn")) {
-                    afterSnapshot.put("titleEn", payload.get("titleEn"));
                 }
                 if (payload.containsKey("displayName")) {
                     afterSnapshot.put("displayName", payload.get("displayName"));
@@ -4822,7 +5410,8 @@ public class AdminApiResource {
         if (portalMenuResource) {
             effectiveBefore = ensureMenuContext(effectiveBefore, Map.of());
             effectiveAfter = ensureMenuContext(effectiveAfter, effectiveBefore);
-            if (hasMenuRolePayload(effectiveBefore) && !hasMenuRolePayload(effectiveAfter)) {
+            boolean afterMarkedDeleted = toBoolean(effectiveAfter.get("deleted"));
+            if (hasMenuRolePayload(effectiveBefore) && !hasMenuRolePayload(effectiveAfter) && !afterMarkedDeleted) {
                 copyMenuRoles(effectiveAfter, effectiveBefore);
             }
         }
@@ -4899,7 +5488,12 @@ public class AdminApiResource {
 
         boolean beforeRolesDefined = hasMenuRolePayload(beforeMap);
         boolean afterRolesDefined = hasMenuRolePayload(afterMap);
-        if (!afterRolesDefined && beforeRolesDefined) {
+        boolean beforeDeleted = toBoolean(beforeMap.get("deleted"));
+        boolean afterDeleted = toBoolean(afterMap.get("deleted"));
+        if (afterDeleted) {
+            afterRoles = new LinkedHashSet<>();
+            afterRolesDefined = true;
+        } else if (!afterRolesDefined && beforeRolesDefined) {
             afterRoles = new LinkedHashSet<>(beforeRoles);
         }
 
@@ -4919,8 +5513,6 @@ public class AdminApiResource {
             }
         }
 
-        boolean beforeDeleted = toBoolean(beforeMap.get("deleted"));
-        boolean afterDeleted = toBoolean(afterMap.get("deleted"));
         boolean statusChanged = (beforeMap.containsKey("deleted") || afterMap.containsKey("deleted")) && beforeDeleted != afterDeleted;
 
         if (addedRoles.isEmpty() && removedRoles.isEmpty() && !statusChanged) {
@@ -5483,216 +6075,206 @@ public class AdminApiResource {
         String action = cr.getAction();
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("payload", payload);
-        String rawName = Objects.toString(payload.get("name"), cr.getResourceId());
-        String normalizedName = stripRolePrefix(rawName);
-        org.slf4j.LoggerFactory.getLogger(AdminApiResource.class)
-            .info("FE payload(role-change): action={}, rawName={}, normalizedName={}, scope={}, hasOps={}",
-                action,
-                rawName,
-                normalizedName,
-                Objects.toString(payload.get("scope"), null),
-                payload.get("operations") != null);
-        String auditAction = action == null ? "UNKNOWN" : action.toUpperCase(Locale.ROOT);
+        String canonical = stripRolePrefix(
+            firstNonBlank(
+                stringValue(payload.get("name")),
+                stringValue(payload.get("role")),
+                cr.getResourceId()
+            )
+        );
+        if (!StringUtils.hasText(canonical)) {
+            throw new IllegalArgumentException("角色名称不能为空");
+        }
+
         try {
-            if ("UPDATE".equalsIgnoreCase(action)) {
-                if (!StringUtils.hasText(normalizedName)) {
-                    throw new IllegalArgumentException("角色名称不能为空");
-                }
-                String scopeValue = Objects.toString(payload.get("scope"), null);
-                String normalizedScope = scopeValue == null ? null : scopeValue.trim().toUpperCase(Locale.ROOT);
-                LinkedHashSet<String> operations = readStringList(payload.get("operations"))
-                    .stream()
-                    .map(String::trim)
-                    .filter(StringUtils::hasText)
-                    .map(op -> op.toLowerCase(Locale.ROOT))
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
-                if (operations.isEmpty()) {
-                    locateCustomRole(normalizedName)
-                        .map(role -> {
-                            String csv = role.getOperationsCsv();
-                            if (!StringUtils.hasText(csv)) {
-                                return List.<String>of();
-                            }
-                            return Arrays
-                                .stream(csv.split(","))
-                                .map(String::trim)
-                                .filter(StringUtils::hasText)
-                                .map(op -> op.toLowerCase(Locale.ROOT))
-                                .filter(ALLOWED_ROLE_OPERATIONS::contains)
-                                .toList();
-                        })
-                        .ifPresent(operations::addAll);
-                }
-                if (operations.isEmpty()) {
-                    operations.addAll(DEFAULT_ROLE_OPERATIONS);
-                }
-                String description = Objects.toString(payload.get("description"), null);
-                String explicitDesc = Objects.toString(payload.getOrDefault("roleDesc", description), description);
-                String titleCn = Objects.toString(payload.getOrDefault("titleCn", payload.get("nameZh")), null);
-                String titleEn = Objects.toString(payload.getOrDefault("titleEn", payload.get("nameEn")), null);
-                Integer maxRows = payload.get("maxRows") == null ? null : Integer.valueOf(payload.get("maxRows").toString());
-                Boolean allowDesensitize = payload.containsKey("allowDesensitizeJson")
-                    ? Boolean.TRUE.equals(payload.get("allowDesensitizeJson"))
-                    : locateCustomRole(normalizedName).map(AdminCustomRole::getAllowDesensitizeJson).orElse(Boolean.TRUE);
-
-                detail.put("scope", normalizedScope);
-                detail.put("description", explicitDesc);
-                if (StringUtils.hasText(titleCn)) {
-                    detail.put("titleCn", titleCn);
-                }
-                if (StringUtils.hasText(titleEn)) {
-                    detail.put("titleEn", titleEn);
-                }
-
-                if (!StringUtils.hasText(cr.getResourceId())) {
-                    cr.setResourceId(normalizedName);
-                }
-
-                Map<String, String> roleAttributes = new LinkedHashMap<>();
-                if (StringUtils.hasText(titleCn)) {
-                    roleAttributes.put("titleCn", titleCn.trim());
-                }
-                if (StringUtils.hasText(titleEn)) {
-                    roleAttributes.put("titleEn", titleEn.trim());
-                }
-                if (StringUtils.hasText(explicitDesc)) {
-                    roleAttributes.put("roleDesc", explicitDesc.trim());
-                }
-
-                adminUserService.syncRealmRole(normalizedName, normalizedScope, operations, explicitDesc, roleAttributes);
-
-                locateCustomRole(normalizedName)
-                    .ifPresent(role -> {
-                        role.setScope(normalizedScope);
-                        role.setOperationsCsv(String.join(",", operations));
-                        role.setDescription(explicitDesc);
-                        if (maxRows != null) {
-                            role.setMaxRows(maxRows);
-                        }
-                        if (allowDesensitize != null) {
-                            role.setAllowDesensitizeJson(allowDesensitize);
-                        }
-                        customRoleRepo.save(role);
-                    });
-
+            if ("DELETE".equalsIgnoreCase(action)) {
+                handleRoleDelete(canonical, detail);
                 cr.setStatus("APPLIED");
-                String roleIdForAudit = locateCustomRole(normalizedName).map(AdminCustomRole::getId).map(String::valueOf).orElse(normalizedName);
-            } else if ("DELETE".equalsIgnoreCase(action)) {
-                if (!StringUtils.hasText(normalizedName)) {
-                    throw new IllegalArgumentException("角色名称不能为空");
-                }
-                if (isReservedRealmRoleName(normalizedName)) {
-                    throw new IllegalArgumentException("内置角色不可删除");
-                }
-                // 1) 清理菜单可见性
-                List<String> visibilityErrors = new ArrayList<>();
-                for (String authority : authorityCandidates(normalizedName)) {
-                    try {
-                        visibilityRepo.deleteByRoleCode(authority);
-                    } catch (Exception ex) {
-                        visibilityErrors.add(authority + ":" + ex.getMessage());
-                    }
-                }
-                if (!visibilityErrors.isEmpty()) {
-                    detail.put("menuVisibilityCleanupError", String.join("; ", visibilityErrors));
-                }
-                // 2) 从所有用户移除该 Keycloak 角色并删除角色
-                List<String> kcErrors = new ArrayList<>();
-                for (String candidate : roleNameCandidates(normalizedName)) {
-                    try {
-                        adminUserService.deleteRealmRoleAndRemoveFromUsers(candidate);
-                    } catch (Exception ex) {
-                        kcErrors.add(candidate + ":" + ex.getMessage());
-                    }
-                }
-                if (!kcErrors.isEmpty()) {
-                    detail.put("keycloakCleanupError", String.join("; ", kcErrors));
-                }
-                // 3) 删除自定义角色记录（如果存在）
-                try {
-                    deleteCustomRoleIfExists(normalizedName);
-                } catch (Exception ex) {
-                    detail.put("customRoleCleanupError", ex.getMessage());
-                }
-                cr.setStatus("APPLIED");
-                String roleIdForDelete = locateCustomRole(normalizedName).map(AdminCustomRole::getId).map(String::valueOf).orElse(normalizedName);
+            } else if ("UPDATE".equalsIgnoreCase(action) || "CREATE".equalsIgnoreCase(action)) {
+                handleRoleUpsert(cr, canonical, payload, detail);
             } else {
                 throw new IllegalStateException("未支持的角色操作: " + action);
             }
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
-            String failureCode = "DELETE".equalsIgnoreCase(auditAction) ? "ADMIN_ROLE_DELETE" : "ADMIN_ROLE_UPDATE";
             throw ex;
         }
+    }
+
+    private void handleRoleUpsert(ChangeRequest cr, String canonical, Map<String, Object> payload, Map<String, Object> detail) {
+        String scopeValue = Objects.toString(payload.get("scope"), null);
+        String normalizedScope = scopeValue == null ? null : scopeValue.trim().toUpperCase(Locale.ROOT);
+        String description = Objects.toString(payload.get("description"), null);
+        String displayName = Objects.toString(payload.get("displayName"), canonical);
+        BuiltinRoleSpec builtinSpec = enforceBuiltinRoleMutationPolicy(canonical, payload);
+        if (builtinSpec != null) {
+            normalizedScope = builtinSpec.scope() == null ? null : builtinSpec.scope().trim().toUpperCase(Locale.ROOT);
+            description = builtinSpec.description();
+            displayName = builtinSpec.displayName();
+        }
+
+        AdminCustomRole role = locateCustomRole(canonical).orElseGet(() -> {
+            AdminCustomRole r = new AdminCustomRole();
+            r.setName(canonical);
+            return r;
+        });
+        role.setScope(normalizedScope != null ? normalizedScope : firstNonBlank(role.getScope(), "DEPARTMENT"));
+        role.setDescription(description);
+        role.setDisplayName(StringUtils.hasText(displayName) ? displayName.trim() : canonical);
+        role = customRoleRepo.save(role);
+        cr.setResourceId(String.valueOf(role.getId()));
+        cr.setStatus("APPLIED");
+
+        detail.put("scope", role.getScope());
+        detail.put("description", role.getDescription());
+        detail.put("displayName", role.getDisplayName());
+
+        applyRoleMemberMutations(canonical, payload, detail);
+    }
+
+    private void handleRoleDelete(String canonical, Map<String, Object> detail) {
+        if (isReservedRealmRoleName(canonical)) {
+            throw new IllegalArgumentException("内置角色不可删除");
+        }
+        List<String> visibilityErrors = new ArrayList<>();
+        for (String authority : authorityCandidates(canonical)) {
+            try {
+                visibilityRepo.deleteByRoleCode(authority);
+            } catch (Exception ex) {
+                visibilityErrors.add(authority + ":" + ex.getMessage());
+            }
+        }
+        if (!visibilityErrors.isEmpty()) {
+            detail.put("menuVisibilityCleanupError", String.join("; ", visibilityErrors));
+        }
+        roleMemberRepo.deleteByRoleIgnoreCase(canonical);
+        deleteCustomRoleIfExists(canonical);
+    }
+
+    private void applyRoleMemberMutations(String canonical, Map<String, Object> payload, Map<String, Object> detail) {
+        List<MemberInfo> additions = parseMemberEntries(payload.get("memberAdds"));
+        List<MemberInfo> removals = parseMemberEntries(payload.get("memberRemoves"));
+        if (additions.isEmpty() && removals.isEmpty()) {
+            return;
+        }
+        if (!additions.isEmpty()) {
+            detail.put("memberAddsRequested", additions.stream().map(MemberInfo::username).toList());
+        }
+        if (!removals.isEmpty()) {
+            detail.put("memberRemovesRequested", removals.stream().map(MemberInfo::username).toList());
+        }
+        Set<String> additionUsernames = additions
+            .stream()
+            .map(MemberInfo::username)
+            .filter(StringUtils::hasText)
+            .map(String::trim)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, String> resolvedNames = additionUsernames.isEmpty()
+            ? Map.of()
+            : adminUserService.resolveDisplayNames(new ArrayList<>(additionUsernames));
+        List<String> added = new ArrayList<>();
+        List<String> removed = new ArrayList<>();
+        for (MemberInfo addition : additions) {
+            if (!StringUtils.hasText(addition.username())) {
+                continue;
+            }
+            String username = addition.username().trim();
+            String display = trimToNull(addition.label());
+            if (display == null) {
+                display = resolvedNames.getOrDefault(username, username);
+            }
+            AdminRoleMember entity = roleMemberRepo
+                .findByRoleIgnoreCaseAndUsernameIgnoreCase(canonical, username)
+                .orElseGet(() -> {
+                    AdminRoleMember m = new AdminRoleMember();
+                    m.setRole(canonical);
+                    m.setUsername(username);
+                    return m;
+                });
+            entity.setDisplayName(display);
+            roleMemberRepo.save(entity);
+            added.add(username);
+        }
+        for (MemberInfo removal : removals) {
+            if (!StringUtils.hasText(removal.username())) {
+                continue;
+            }
+            String username = removal.username().trim();
+            long deleted = roleMemberRepo.deleteByRoleIgnoreCaseAndUsernameIgnoreCase(canonical, username);
+            if (deleted > 0) {
+                removed.add(username);
+            }
+        }
+        if (!added.isEmpty()) {
+            detail.put("memberAddsApplied", added);
+        }
+        if (!removed.isEmpty()) {
+            detail.put("memberRemovesApplied", removed);
+        }
+    }
+
+    private BuiltinRoleSpec enforceBuiltinRoleMutationPolicy(String canonical, Map<String, Object> payload) {
+        if (!StringUtils.hasText(canonical)) {
+            return null;
+        }
+        BuiltinRoleSpec spec = BUILTIN_DATA_ROLES.get(canonical);
+        if (spec == null) {
+            return null;
+        }
+        if (payload != null) {
+            String requestedName = stringValue(payload.get("name"));
+            String requestedRole = stringValue(payload.get("role"));
+            String requestedCanonical = stripRolePrefix(firstNonBlank(requestedName, requestedRole));
+            if (StringUtils.hasText(requestedCanonical) && !canonical.equals(requestedCanonical)) {
+                throw new IllegalArgumentException(BUILTIN_ROLE_IMMUTABLE_MESSAGE);
+            }
+            if (payload.containsKey("scope")) {
+                String requestedScope = stringValue(payload.get("scope"));
+                String normalizedRequested = requestedScope == null ? null : requestedScope.trim().toUpperCase(Locale.ROOT);
+                String expectedScope = spec.scope() == null ? null : spec.scope().trim().toUpperCase(Locale.ROOT);
+                if (normalizedRequested != null && expectedScope != null && !expectedScope.equals(normalizedRequested)) {
+                    throw new IllegalArgumentException(BUILTIN_ROLE_IMMUTABLE_MESSAGE);
+                }
+                if (normalizedRequested == null && expectedScope != null) {
+                    throw new IllegalArgumentException(BUILTIN_ROLE_IMMUTABLE_MESSAGE);
+                }
+            }
+            if (payload.containsKey("displayName")) {
+                String requestedDisplay = trimToNull(payload.get("displayName"));
+                String expectedDisplay = trimToNull(spec.displayName());
+                if (!Objects.equals(requestedDisplay, expectedDisplay)) {
+                    throw new IllegalArgumentException(BUILTIN_ROLE_IMMUTABLE_MESSAGE);
+                }
+            }
+            if (payload.containsKey("description")) {
+                String requestedDescription = trimToNull(payload.get("description"));
+                String expectedDescription = trimToNull(spec.description());
+                if (!Objects.equals(requestedDescription, expectedDescription)) {
+                    throw new IllegalArgumentException(BUILTIN_ROLE_IMMUTABLE_MESSAGE);
+                }
+            }
+        }
+        return spec;
     }
 
     private void applyCustomRoleChange(ChangeRequest cr, String actor) throws Exception {
         Map<String, Object> payload = fromJson(cr.getPayloadJson());
         String action = cr.getAction();
-        String rawName = Objects.toString(payload.get("name"), cr.getResourceId());
-        String normalizedName = stripRolePrefix(rawName);
-        String auditAction = action == null ? "UNKNOWN" : action.toUpperCase(Locale.ROOT);
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("payload", payload);
+        String canonical = stripRolePrefix(firstNonBlank(stringValue(payload.get("name")), cr.getResourceId()));
+        if (!StringUtils.hasText(canonical)) {
+            throw new IllegalArgumentException("角色名称不能为空");
+        }
         try {
-            if ("CREATE".equalsIgnoreCase(action)) {
-                AdminCustomRole role = new AdminCustomRole();
-                role.setName(normalizedName);
-                String scopeValue = Objects.toString(payload.get("scope"), null);
-                role.setScope(scopeValue == null ? null : scopeValue.toUpperCase(Locale.ROOT));
-                LinkedHashSet<String> ops = readStringList(payload.get("operations"))
-                    .stream()
-                    .map(String::trim)
-                    .filter(StringUtils::hasText)
-                    .map(op -> op.toLowerCase(Locale.ROOT))
-                    .filter(ALLOWED_ROLE_OPERATIONS::contains)
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
-                if (ops.isEmpty()) {
-                    ops.addAll(DEFAULT_ROLE_OPERATIONS);
-                }
-                role.setOperationsCsv(String.join(",", ops));
-                Object maxRows = payload.get("maxRows");
-                role.setMaxRows(maxRows == null ? null : Integer.valueOf(maxRows.toString()));
-                boolean allowDesensitize = payload.containsKey("allowDesensitizeJson")
-                    ? Boolean.TRUE.equals(payload.get("allowDesensitizeJson"))
-                    : Boolean.TRUE;
-                role.setAllowDesensitizeJson(allowDesensitize);
-                role.setDescription(Objects.toString(payload.get("description"), null));
-                role = customRoleRepo.save(role);
-                cr.setResourceId(String.valueOf(role.getId()));
-
-                String titleCn = Objects.toString(payload.getOrDefault("titleCn", payload.get("nameZh")), "").trim();
-                String titleEn = Objects.toString(payload.get("titleEn"), "").trim();
-                String displayName = Objects.toString(payload.getOrDefault("displayName", titleCn), titleCn).trim();
-                LinkedHashMap<String, String> roleAttributes = new LinkedHashMap<>();
-                if (StringUtils.hasText(titleCn)) {
-                    roleAttributes.put("titleCn", titleCn);
-                    roleAttributes.put("nameZh", titleCn);
-                    detail.put("titleCn", titleCn);
-                }
-                if (StringUtils.hasText(titleEn)) {
-                    roleAttributes.put("titleEn", titleEn);
-                    roleAttributes.put("nameEn", titleEn);
-                    detail.put("titleEn", titleEn);
-                }
-                if (StringUtils.hasText(displayName)) {
-                    roleAttributes.put("displayName", displayName);
-                }
-
-                // 注意：不再在创建自定义角色时批量同步“默认菜单可见性”，
-                // 以免覆盖前端在同一流程中提交的“自定义菜单绑定(BATCH_UPDATE)”。
-                // 若需要默认可见性，应通过单独的变更单或在无自定义绑定时由运维手工触发。
-                try {
-                    adminUserService.syncRealmRole(role.getName(), role.getScope(), ops, role.getDescription(), roleAttributes);
-                } catch (Exception ex) {
-                    // 同步失败不阻塞审批，通过审计日志追踪
-                }
-                detail.put("roleId", role.getId());
-                detail.put("scope", role.getScope());
+            if ("DELETE".equalsIgnoreCase(action)) {
+                handleRoleDelete(canonical, detail);
+                cr.setStatus("APPLIED");
+            } else if ("CREATE".equalsIgnoreCase(action) || "UPDATE".equalsIgnoreCase(action)) {
+                handleRoleUpsert(cr, canonical, payload, detail);
             } else {
                 throw new IllegalStateException("未支持的自定义角色操作: " + action);
             }
-            cr.setStatus("APPLIED");
         } catch (Exception ex) {
             detail.put("error", ex.getMessage());
             throw ex;
@@ -5732,7 +6314,46 @@ public class AdminApiResource {
                     );
                 } catch (Exception ignored) {}
             } else {
-                throw new IllegalStateException("未支持的角色指派操作: " + action);
+                if ("DELETE".equalsIgnoreCase(action)) {
+                    Long assignmentId = payload.get("assignmentId") == null ? null : Long.valueOf(payload.get("assignmentId").toString());
+                    AdminRoleAssignment assignment = null;
+                    if (assignmentId != null) {
+                        assignment = roleAssignRepo.findById(assignmentId).orElse(null);
+                    }
+                    if (assignment == null) {
+                        String username = Objects.toString(payload.get("username"), null);
+                        String role = Objects.toString(payload.get("role"), null);
+                        if (StringUtils.hasText(username) && StringUtils.hasText(role)) {
+                            List<AdminRoleAssignment> candidates = roleAssignRepo.findByUsernameIgnoreCaseAndRoleIgnoreCase(username, role);
+                            if (!candidates.isEmpty()) {
+                                assignment = candidates.get(0);
+                            }
+                        }
+                    }
+                    if (assignment != null) {
+                        detail.put("assignmentId", assignment.getId());
+                        detail.put("role", assignment.getRole());
+                        detail.put("username", assignment.getUsername());
+                        roleAssignRepo.delete(assignment);
+                        try {
+                            notifyClient.trySend(
+                                "role_assignment_deleted",
+                                Map.of(
+                                    "id",
+                                    assignment.getId(),
+                                    "username",
+                                    assignment.getUsername(),
+                                    "role",
+                                    assignment.getRole()
+                                )
+                            );
+                        } catch (Exception ignored) {}
+                    } else {
+                        detail.put("assignmentMissing", true);
+                    }
+                } else {
+                    throw new IllegalStateException("未支持的角色指派操作: " + action);
+                }
             }
             cr.setStatus("APPLIED");
         } catch (Exception ex) {
@@ -5766,6 +6387,7 @@ public class AdminApiResource {
 
     private void markMenuDeleted(PortalMenu menu) {
         menu.setDeleted(true);
+        menu.clearVisibilities();
         if (menu.getChildren() != null) {
             for (PortalMenu child : menu.getChildren()) {
                 markMenuDeleted(child);
@@ -6326,70 +6948,6 @@ public class AdminApiResource {
 
 
 
-    private Map<String, Object> toRoleSummary(KeycloakRoleDTO role, String normalizedName, BuiltinRoleSpec builtin, Instant fallbackInstant) {
-        Map<String, String> attributes = role != null && role.getAttributes() != null ? role.getAttributes() : Collections.emptyMap();
-        LinkedHashSet<String> operations = parseOperations(attributes);
-        if (operations.isEmpty() && builtin != null) {
-            operations.addAll(builtin.operations());
-        }
-        String scope = firstNonBlank(attributes.get("scope"), builtin != null ? builtin.scope() : null);
-        String description = firstNonBlank(
-            role != null ? role.getDescription() : null,
-            attributes.get("description"),
-            attributes.get("roleDesc"),
-            builtin != null ? builtin.description() : null
-        );
-        String securityLevel = firstNonBlank(attributes.get("securityLevel"), "GENERAL");
-        int memberCount = parseInteger(attributes.get("memberCount"), attributes.get("members"));
-        String approvalFlow = firstNonBlank(attributes.get("approvalFlow"), "SYSADMIN/AUTHADMIN");
-        String updatedAt = firstNonBlank(attributes.get("updatedAt"), fallbackInstant.toString());
-
-        // New fields aligned with worklog spec (minimal, derived when possible)
-        String nameZh = firstNonBlank(attributes.get("nameZh"), attributes.get("titleCn"), builtin != null ? builtin.titleCn() : null);
-        String nameEn = firstNonBlank(attributes.get("nameEn"), attributes.get("titleEn"), builtin != null ? builtin.titleEn() : null);
-        String code = normalizedName;
-        String zone = null;
-        if ("DEPARTMENT".equalsIgnoreCase(scope)) {
-            zone = "DEPT";
-        } else if ("INSTITUTE".equalsIgnoreCase(scope)) {
-            zone = "INST";
-        }
-        boolean canRead = operations.contains("read");
-        boolean canWrite = operations.contains("write");
-        boolean canExport = operations.contains("export");
-        boolean canManage =
-            // Prefer explicit attribute, otherwise infer for *_OWNER
-            Boolean.parseBoolean(firstNonBlank(attributes.get("canManage"), "false")) || normalizedName.endsWith("_OWNER");
-
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("id", firstNonBlank(role != null ? role.getId() : null, "role-" + normalizedName));
-        String displayName = firstNonBlank(attributes.get("displayName"), nameZh, role != null ? role.getName() : null, normalizedName);
-        summary.put("name", displayName);
-        summary.put("description", description);
-        summary.put("securityLevel", securityLevel);
-        summary.put("permissions", new ArrayList<>(operations));
-        summary.put("memberCount", memberCount);
-        summary.put("approvalFlow", approvalFlow);
-        summary.put("updatedAt", updatedAt);
-        if (scope != null) {
-            summary.put("scope", scope);
-        }
-        summary.put("operations", new ArrayList<>(operations));
-        summary.put("source", role != null ? "keycloak" : "builtin");
-
-        // Additional presentation fields
-        summary.put("code", code);
-        summary.put("roleId", code);
-        if (nameZh != null) summary.put("nameZh", nameZh);
-        if (nameEn != null) summary.put("nameEn", nameEn);
-        if (zone != null) summary.put("zone", zone);
-        summary.put("canRead", canRead);
-        summary.put("canWrite", canWrite);
-        summary.put("canExport", canExport);
-        summary.put("canManage", canManage);
-        return summary;
-    }
-
     private Optional<AdminCustomRole> locateCustomRole(String canonicalName) {
         if (!StringUtils.hasText(canonicalName)) {
             return Optional.empty();
@@ -6406,29 +6964,6 @@ public class AdminApiResource {
 
     private void deleteCustomRoleIfExists(String canonicalName) {
         locateCustomRole(canonicalName).ifPresent(customRoleRepo::delete);
-    }
-
-    private static LinkedHashSet<String> parseOperations(Map<String, String> attributes) {
-        LinkedHashSet<String> ops = new LinkedHashSet<>();
-        if (attributes == null) {
-            return ops;
-        }
-        String raw = attributes.get("operations");
-        if (StringUtils.hasText(raw)) {
-            LinkedHashSet<String> parsed = Arrays
-                .stream(raw.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(s -> s.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-            for (String op : OPERATION_ORDER) {
-                if (parsed.remove(op)) {
-                    ops.add(op);
-                }
-            }
-            ops.addAll(parsed);
-        }
-        return ops;
     }
 
     private static String firstNonBlank(String... values) {
@@ -6520,7 +7055,7 @@ public class AdminApiResource {
         // Built-in data roles
         for (Map.Entry<String, BuiltinRoleSpec> entry : BUILTIN_DATA_ROLES.entrySet()) {
             String canonical = entry.getKey();
-            String label = entry.getValue().titleCn();
+            String label = entry.getValue().displayName();
             labels.putIfAbsent(canonical, label);
             labels.putIfAbsent("ROLE_" + canonical, label);
         }
@@ -6529,32 +7064,10 @@ public class AdminApiResource {
         for (AdminCustomRole role : customRoleRepo.findAll()) {
             String canonical = stripRolePrefix(role.getName());
             if (StringUtils.hasText(canonical)) {
-                String label = firstNonBlank(role.getDescription(), role.getName(), canonical);
+                String label = firstNonBlank(role.getDisplayName(), role.getDescription(), canonical);
                 labels.putIfAbsent(canonical, label);
                 labels.putIfAbsent("ROLE_" + canonical, label);
             }
-        }
-
-        // Realm roles from Keycloak (attributes may contain localized names)
-        try {
-            for (KeycloakRoleDTO dto : adminUserService.listRealmRoles()) {
-                String canonical = stripRolePrefix(dto.getName());
-                if (!StringUtils.hasText(canonical)) {
-                    continue;
-                }
-                Map<String, String> attributes = dto.getAttributes();
-                String label = firstNonBlank(
-                    attributes != null ? attributes.get("displayName") : null,
-                    attributes != null ? attributes.get("titleCn") : null,
-                    attributes != null ? attributes.get("nameZh") : null,
-                    dto.getDescription(),
-                    canonical
-                );
-                labels.putIfAbsent(canonical, label);
-                labels.putIfAbsent("ROLE_" + canonical, label);
-            }
-        } catch (Exception ignored) {
-            // Fallback to existing labels when Keycloak lookup fails
         }
 
         return labels;
@@ -6580,6 +7093,42 @@ public class AdminApiResource {
         return List.of();
     }
 
+    private static List<String> readMemberUsernames(Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        if (raw instanceof Collection<?> collection) {
+            for (Object item : collection) {
+                if (item == null) {
+                    continue;
+                }
+                if (item instanceof Map<?, ?> map) {
+                    Object username = map.get("username");
+                    if (username instanceof String text) {
+                        String trimmed = text.trim();
+                        if (!trimmed.isEmpty()) {
+                            result.add(trimmed);
+                        }
+                    }
+                } else {
+                    String text = item.toString().trim();
+                    if (!text.isEmpty()) {
+                        result.add(text);
+                    }
+                }
+            }
+        } else if (raw instanceof String text) {
+            for (String token : text.split(",")) {
+                String trimmed = token.trim();
+                if (!trimmed.isEmpty()) {
+                    result.add(trimmed);
+                }
+            }
+        }
+        return result;
+    }
+
     private static List<Long> readLongList(Object v) {
         if (v instanceof List<?> list) return list.stream().map(String::valueOf).map(Long::valueOf).toList();
         return List.of();
@@ -6590,14 +7139,14 @@ public class AdminApiResource {
     private String validateAssignment(String role, String username, String displayName, String userSecLevel, Long scopeOrgId, List<String> ops, List<Long> datasetIds) {
         if (role.isEmpty()) return "请选择角色";
         if (username.isEmpty() || displayName.isEmpty()) return "请填写用户信息";
-        if (datasetIds.isEmpty()) return "请至少选择一个数据集";
-        if (ops.isEmpty()) return "请选择需要授权的操作";
         if (isReservedRealmRoleName(role)) return "系统内置角色不支持在线授权";
         Set<String> allowed = allowedOpsForRole(role);
-        if (!ops.stream().allMatch(allowed::contains)) return "角色不支持所选操作";
+        if (!ops.isEmpty() && !ops.stream().allMatch(allowed::contains)) return "角色不支持所选操作";
         Integer userRank = securityRank(userSecLevel);
         if (userRank == null) return "无效的用户密级";
-        // verify datasets exist + rank + scope
+        if (datasetIds.isEmpty()) {
+            return null;
+        }
         List<AdminDataset> datasets = datasetRepo.findAllById(datasetIds);
         if (datasets.size() != datasetIds.size()) return "存在无效的数据集ID";
         for (AdminDataset d : datasets) {
@@ -6628,19 +7177,10 @@ public class AdminApiResource {
                 default -> Set.of("read");
             };
         }
-        BuiltinRoleSpec builtin = BUILTIN_DATA_ROLES.get(normalized);
-        if (builtin != null) {
-            return new LinkedHashSet<>(builtin.operations());
+        if (BUILTIN_DATA_ROLES.containsKey(normalized)) {
+            return Set.of("read", "write", "export");
         }
-        return customRoleRepo
-            .findByName(normalized)
-            .map(cr -> Arrays
-                .stream(cr.getOperationsCsv().split(","))
-                .map(String::trim)
-                .filter(StringUtils::hasText)
-                .collect(Collectors.toCollection(LinkedHashSet::new))
-            )
-            .orElseGet(() -> new LinkedHashSet<>(List.of("read")));
+        return Set.of("read");
     }
 
     private static Integer dataRank(String level) {

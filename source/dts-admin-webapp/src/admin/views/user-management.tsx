@@ -100,7 +100,6 @@ export default function UserManagementView() {
 		OPADMIN: "运维管理员",
 		AUDITADMIN: "安全审计员",
 	});
-	const [assignmentRoleMap, setAssignmentRoleMap] = useState<Record<string, { code: string; label: string }[]>>({});
 	const [orgIndexById, setOrgIndexById] = useState<Record<string, OrganizationNode>>({});
 	const [modalState, setModalState] = useState<{
 		open: boolean;
@@ -108,51 +107,6 @@ export default function UserManagementView() {
 		target?: KeycloakUser;
 	}>({ open: false, mode: "create" });
 	// no external toggling action here; enable/停用统一放入编辑弹窗
-
-	const loadRoleAssignments = useCallback(async () => {
-		try {
-			const assignments = await adminApi.getRoleAssignments({ auditSilent: true });
-			const roleNameLookup: Record<string, string> = { ...roleDisplayNameMap };
-			const map: Record<string, { code: string; label: string }[]> = {};
-			const labelMap: Record<string, string> = {};
-			(assignments || []).forEach((item: any) => {
-				const username = (item?.username || "").toString().trim().toLowerCase();
-				const roleRaw = (item?.role || "").toString();
-				const displayNameRaw = (item?.displayName || "").toString();
-				const code = normalizeRoleCode(roleRaw);
-				if (!username || !code) return;
-				const normalizedKey = code;
-				const canonicalKey = `ROLE_${code}`;
-				const resolvedDisplay =
-					roleNameLookup[normalizedKey] ||
-					roleNameLookup[canonicalKey] ||
-					displayNameRaw.trim() ||
-					roleRaw.trim() ||
-					code;
-				if (!map[username]) map[username] = [];
-				if (!map[username].some((entry) => entry.code === code)) {
-					map[username].push({ code, label: resolvedDisplay });
-				}
-				labelMap[code] = resolvedDisplay;
-				labelMap[`ROLE_${code}`] = resolvedDisplay;
-			});
-			setAssignmentRoleMap(map);
-			if (Object.keys(labelMap).length) {
-				setRoleDisplayNameMap((prev) => {
-					const next = { ...prev };
-					Object.entries(labelMap).forEach(([key, value]) => {
-						if (!next[key]) {
-							next[key] = value;
-						}
-					});
-					return next;
-				});
-			}
-		} catch (error) {
-			console.error("Failed to load role assignments", error);
-			setAssignmentRoleMap({});
-		}
-	}, []);
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -162,13 +116,12 @@ export default function UserManagementView() {
 				: await KeycloakUserService.getAllUsers({ first: 0, max: 100 });
 			setList(data || []);
 			setRolesMap({});
-			await loadRoleAssignments();
 		} catch (e: any) {
 			toast.error(e?.message || "加载用户失败");
 		} finally {
 			setLoading(false);
 		}
-	}, [searchValue, loadRoleAssignments]);
+	}, [searchValue]);
 
 	useEffect(() => {
 		load();
@@ -180,8 +133,6 @@ export default function UserManagementView() {
 		(record: KeycloakUser) => {
 			const key = String(record.id || record.username);
 			const loaded = hasOwn.call(rolesMap, key);
-			const usernameKey = (record.username || "").trim().toLowerCase();
-			const assigned = assignmentRoleMap[usernameKey] ?? [];
 			const fetched = loaded ? (rolesMap[key] ?? []) : [];
 			const fallback = collectRoleCodes(record);
 			const seen = new Set<string>();
@@ -194,12 +145,11 @@ export default function UserManagementView() {
 					roleDisplayNameMap[normalized] || roleDisplayNameMap[`ROLE_${normalized}`] || label || normalized;
 				roles.push({ code: normalized, label: resolvedLabel });
 			};
-			assigned.forEach((entry) => push(entry.code, entry.label));
 			fetched.forEach((code) => push(code));
 			fallback.forEach((code) => push(code));
 			return { key, loaded, roles };
 		},
-		[rolesMap, assignmentRoleMap, roleDisplayNameMap],
+		[rolesMap, roleDisplayNameMap],
 	);
 
 	const renderRolePreview = useCallback((roles: RoleChip[]) => {
@@ -365,7 +315,7 @@ export default function UserManagementView() {
 					}
 				};
 				for (const r of roles || []) {
-					const display = (r as any).nameZh || (r as any).displayName || (r as any).name || "";
+					const display = (r as any).displayName || (r as any).name || "";
 					const keys = [(r as any).name, (r as any).code, (r as any).roleId, (r as any).legacyName];
 					keys.forEach((k) => register(k, display));
 				}

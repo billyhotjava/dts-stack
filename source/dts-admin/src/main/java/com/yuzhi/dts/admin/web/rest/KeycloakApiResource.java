@@ -689,7 +689,11 @@ public class KeycloakApiResource {
             enabled = Boolean.TRUE;
         }
         command.setEnabled(enabled);
-        command.setRealmRoles(normalizeList(payload.getRealmRoles()));
+        if (payload.isRealmRolesSpecified()) {
+            command.setRealmRoles(normalizeList(payload.getRealmRoles()));
+        } else {
+            command.markRealmRolesUnspecified();
+        }
         command.setGroupPaths(normalizeList(payload.getGroups()));
         command.setAttributes(attributes);
 
@@ -1911,20 +1915,43 @@ public class KeycloakApiResource {
             );
             return ResponseEntity.badRequest().body(ApiResponse.error("角色名称不能为空"));
         }
+        String trimmedName = payload.getName().trim();
+        payload.setName(trimmedName);
+        KeycloakRoleDTO existing = stores.roles.get(trimmedName);
         KeycloakRoleDTO saved = stores.upsertRole(payload);
-        Map<String, Object> detail = Map.of("name", saved.getName());
-        recordRoleActionV2(
-            actor,
-            ButtonCodes.ROLE_CREATE,
-            AuditResultStatus.SUCCESS,
-            saved.getName(),
-            new LinkedHashMap<>(detail),
-            request,
-            "/api/keycloak/roles",
-            "POST",
-            "新增角色：" + saved.getName(),
-            false
-        );
+        if (existing != null) {
+            Map<String, Object> before = new LinkedHashMap<>();
+            before.put("name", existing.getName());
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("before", before);
+            detail.put("after", saved.getName());
+            recordRoleActionV2(
+                actor,
+                ButtonCodes.ROLE_UPDATE,
+                AuditResultStatus.SUCCESS,
+                saved.getName(),
+                detail,
+                request,
+                "/api/keycloak/roles",
+                "POST",
+                "修改角色：" + saved.getName(),
+                false
+            );
+        } else {
+            Map<String, Object> detail = Map.of("name", saved.getName());
+            recordRoleActionV2(
+                actor,
+                ButtonCodes.ROLE_CREATE,
+                AuditResultStatus.SUCCESS,
+                saved.getName(),
+                new LinkedHashMap<>(detail),
+                request,
+                "/api/keycloak/roles",
+                "POST",
+                "新增角色：" + saved.getName(),
+                false
+            );
+        }
         return ResponseEntity.ok(ApiResponse.ok(saved));
     }
 
@@ -2409,18 +2436,31 @@ public class KeycloakApiResource {
         auditDetail.put("action", normalized);
         auditDetail.put("approver", approver);
         auditDetail.put("note", note);
+        String clientIp = request != null
+            ? IpAddressUtils.resolveClientIp(
+                request.getHeader("X-Forwarded-For"),
+                request.getHeader("X-Real-IP"),
+                request.getRemoteAddr()
+            )
+            : null;
         try {
             switch (normalized) {
                 case "approve": {
-                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.approve(id, approver, note, currentAccessToken());
+                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.approve(
+                        id,
+                        approver,
+                        note,
+                        currentAccessToken(),
+                        clientIp
+                    );
                     return ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 case "reject": {
-                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.reject(id, approver, note);
+                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.reject(id, approver, note, clientIp);
                     return ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 case "process": {
-                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.delay(id, approver, note);
+                    ApprovalDTOs.ApprovalRequestDetail detail = adminUserService.delay(id, approver, note, clientIp);
                     return ResponseEntity.ok(ApiResponse.ok(detail));
                 }
                 default: {
@@ -2496,7 +2536,7 @@ public class KeycloakApiResource {
         if (token == null || token.isBlank()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("缺少授权令牌，无法执行审批操作"));
         }
-        adminUserService.approve(id, currentUser(), "同步触发", token);
+        adminUserService.approve(id, currentUser(), "同步触发", token, null);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 

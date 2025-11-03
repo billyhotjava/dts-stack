@@ -12,7 +12,6 @@ import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.repository.AdminCustomRoleRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -261,7 +260,7 @@ public class PlatformDirectoryResource {
                 String description = StringUtils.hasText(custom.getDescription())
                     ? custom.getDescription().trim()
                     : ("自定义角色 - " + normalized);
-                List<String> operations = parseOperations(custom.getOperationsCsv());
+                List<String> operations = List.of("read", "write", "export");
                 RoleSummary summary = new RoleSummary(
                     normalized,
                     normalized,
@@ -309,19 +308,6 @@ public class PlatformDirectoryResource {
         List<RoleSummary> ordered = new ArrayList<>(results.values());
         ordered.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
         return ordered;
-    }
-
-    private List<String> parseOperations(String csv) {
-        if (!StringUtils.hasText(csv)) {
-            return List.of("read");
-        }
-        return Arrays
-            .stream(csv.split(","))
-            .map(String::trim)
-            .filter(StringUtils::hasText)
-            .map(op -> op.toLowerCase(Locale.ROOT))
-            .distinct()
-            .toList();
     }
 
     private boolean isForbiddenRoleCode(String rawName) {

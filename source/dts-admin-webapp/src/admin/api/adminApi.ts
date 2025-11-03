@@ -1,16 +1,15 @@
 import type {
 	AdminCustomRole,
 	AdminDataset,
-	AdminRoleAssignment,
 	AdminRoleDetail,
 	AdminUser,
 	AdminWhoami,
 	ChangeRequest,
 	CreateCustomRolePayload,
-	CreateRoleAssignmentPayload,
 	OrganizationNode,
 	OrganizationCreatePayload,
 	OrganizationUpdatePayload,
+	PagedResult,
 	PermissionCatalogSection,
 	PortalMenuCollection,
 	PortalMenuItem,
@@ -143,9 +142,14 @@ export const adminApi = {
 			url: "/admin/orgs/sync",
 		}),
 
-	getAdminUsers: () =>
-		apiClient.get<AdminUser[]>({
+	getAdminUsers: (options?: { page?: number; size?: number; keyword?: string }) =>
+		apiClient.get<PagedResult<AdminUser>>({
 			url: "/admin/users",
+			params: {
+				page: options?.page ?? 0,
+				size: options?.size ?? 200,
+				keyword: options?.keyword,
+			},
 		}),
 
 	resolveUserDisplayNames: (usernames: string[]) =>
@@ -157,6 +161,11 @@ export const adminApi = {
 	getAdminRoles: () =>
 		apiClient.get<AdminRoleDetail[]>({
 			url: "/admin/roles",
+		}),
+
+	getRoleMembers: (role: string) =>
+		apiClient.get<Array<{ username: string; displayName: string }>>({
+			url: `/admin/roles/${encodeURIComponent(role)}/members`,
 		}),
 
 	getPermissionCatalog: () =>
@@ -180,15 +189,4 @@ export const adminApi = {
 			data: payload,
 		}),
 
-	getRoleAssignments: (options?: AuditSilentOption) =>
-		apiClient.get<AdminRoleAssignment[]>({
-			url: "/admin/role-assignments",
-			headers: options?.auditSilent ? { "X-Audit-Silent": "true" } : undefined,
-		}),
-
-	createRoleAssignment: (payload: CreateRoleAssignmentPayload) =>
-		apiClient.post<ChangeRequest>({
-			url: "/admin/role-assignments",
-			data: payload,
-		}),
 };

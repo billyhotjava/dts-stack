@@ -18,17 +18,11 @@ public class AdminCustomRole extends AbstractAuditingEntity<Long> implements Ser
     @Column(name = "scope", nullable = false, length = 32)
     private String scope; // DEPARTMENT or INSTITUTE
 
-    @Column(name = "operations", nullable = false, length = 64)
-    private String operationsCsv; // comma separated
-
-    @Column(name = "max_rows")
-    private Integer maxRows;
-
-    @Column(name = "allow_desensitize_json")
-    private Boolean allowDesensitizeJson;
-
     @Column(name = "description", length = 1000)
     private String description;
+
+    @Column(name = "display_name", length = 255)
+    private String displayName;
 
     @Override
     public Long getId() { return id; }
@@ -37,13 +31,8 @@ public class AdminCustomRole extends AbstractAuditingEntity<Long> implements Ser
     public void setName(String name) { this.name = name; }
     public String getScope() { return scope; }
     public void setScope(String scope) { this.scope = scope; }
-    public String getOperationsCsv() { return operationsCsv; }
-    public void setOperationsCsv(String operationsCsv) { this.operationsCsv = operationsCsv; }
-    public Integer getMaxRows() { return maxRows; }
-    public void setMaxRows(Integer maxRows) { this.maxRows = maxRows; }
-    public Boolean getAllowDesensitizeJson() { return allowDesensitizeJson; }
-    public void setAllowDesensitizeJson(Boolean allowDesensitizeJson) { this.allowDesensitizeJson = allowDesensitizeJson; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getDisplayName() { return displayName; }
+    public void setDisplayName(String displayName) { this.displayName = displayName; }
 }
-

@@ -130,6 +130,8 @@ export const listQueryWorkspaces = () => api.get({ url: "/query-workspaces" });
 export const listQueryExecutions = () => api.get({ url: "/explore/query-executions" });
 export const listResultSets = () => api.get({ url: "/explore/result-sets" });
 export const cleanupExpiredResultSets = () => api.post({ url: "/explore/result-sets/cleanup" });
+export const recordResultSetCopy = (id: string, data?: Record<string, unknown>) =>
+	api.post({ url: `/explore/result-sets/${id}/copy-sql`, data });
 
 // Catalog tables & columns
 export const listTablesByDataset = (datasetId: string, keyword?: string) =>

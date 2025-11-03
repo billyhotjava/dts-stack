@@ -331,12 +331,19 @@ export default function AdminDataSourcesView() {
 		return;
 	}, [features, featurePolls]);
 
+	const SENSITIVE_FILE_KEYWORDS = useMemo(() => ["机密", "秘密"], []);
+
+	const containsSensitiveMarker = (fileName: string): boolean => {
+		const lower = fileName.toLowerCase();
+		return SENSITIVE_FILE_KEYWORDS.some((keyword) => lower.includes(keyword.toLowerCase()));
+	};
+
 	const handleKeytabUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
 		if (!file) return;
-		if (file.name.includes("机密")) {
-			toast.error("本模块是非密模块，请勿处理机密数据！");
-			form.setError("keytabBase64", { message: "文件名包含“机密”，已拒绝上传" });
+		if (containsSensitiveMarker(file.name)) {
+			toast.error("本模块是非密模块，请勿处理秘密/机密数据！");
+			form.setError("keytabBase64", { message: "文件名包含“秘密/机密”标识，已拒绝上传" });
 			try {
 				event.target.value = "";
 			} catch {
@@ -365,9 +372,9 @@ export default function AdminDataSourcesView() {
 	const handleKrb5Upload = async (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
 		if (!file) return;
-		if (file.name.includes("机密")) {
-			toast.error("本模块是非密模块，请勿处理机密数据！");
-			form.setError("krb5Conf", { message: "文件名包含“机密”，已拒绝上传" });
+		if (containsSensitiveMarker(file.name)) {
+			toast.error("本模块是非密模块，请勿处理秘密/机密数据！");
+			form.setError("krb5Conf", { message: "文件名包含“秘密/机密”标识，已拒绝上传" });
 			try {
 				event.target.value = "";
 			} catch {

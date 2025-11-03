@@ -2,14 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { TreeSelect } from "antd";
-import type { CreateUserRequest, KeycloakRole, KeycloakUser, UpdateUserRequest } from "#/keycloak";
-import { KeycloakRoleService, KeycloakUserService } from "@/api/services/keycloakService";
+import type { CreateUserRequest, KeycloakUser, UpdateUserRequest } from "#/keycloak";
+import { KeycloakUserService } from "@/api/services/keycloakService";
 import { adminApi } from "@/admin/api/adminApi";
 // 职位字段已废弃，改为联系方式（phone）
 import type { OrganizationNode } from "@/admin/types";
 import { Icon } from "@/components/icon";
 import { Alert, AlertDescription } from "@/ui/alert";
-import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
@@ -17,9 +16,7 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
-import { PERSON_SECURITY_LEVELS, isApplicationAdminRole, isDataRole, isGovernanceRole } from "@/constants/governance";
-import { isKeycloakBuiltInRole, isReservedBusinessRoleName, shouldHideRole } from "@/constants/keycloak-roles";
-import { GLOBAL_CONFIG } from "@/global-config";
+import { PERSON_SECURITY_LEVELS } from "@/constants/governance";
 
 type OrgTreeOption = {
 	value: string;
@@ -78,15 +75,8 @@ interface FormData {
 	attributes: Record<string, string[]>;
 }
 
-interface RoleChange {
-	role: KeycloakRole;
-	action: "add" | "remove";
-}
-
 interface FormState {
 	originalData: FormData;
-	originalRoles: KeycloakRole[];
-	roleChanges: RoleChange[];
 	groupPaths: string[];
 }
 
@@ -101,8 +91,6 @@ const createEmptyFormData = (): FormData => ({
 
 const createEmptyFormState = (): FormState => ({
 	originalData: createEmptyFormData(),
-	originalRoles: [],
-	roleChanges: [],
 	groupPaths: [],
 });
 
@@ -112,20 +100,11 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [formState, setFormState] = useState<FormState>(() => createEmptyFormState());
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string>("");
-	const [roles, setRoles] = useState<KeycloakRole[]>([]);
-	const [roleNameMap, setRoleNameMap] = useState<Record<string, string>>({});
-	const [userRoles, setUserRoles] = useState<KeycloakRole[]>([]);
-	const [roleError, setRoleError] = useState<string>("");
 	const [personLevel, setPersonLevel] = useState<string>("GENERAL");
 	const [orgOptions, setOrgOptions] = useState<OrgTreeOption[]>([]);
 	const [orgIndex, setOrgIndex] = useState<Record<string, OrganizationNode>>({});
 	const [orgLoading, setOrgLoading] = useState(false);
 	const [selectedGroupPaths, setSelectedGroupPaths] = useState<string[]>([]);
-
-	const roleKey = (r: KeycloakRole | undefined | null): string => {
-		if (!r) return "";
-		return (r.id ?? r.name ?? "").toString();
-	};
 
 	const loadOrganizations = useCallback(async () => {
 		setOrgLoading(true);
@@ -215,111 +194,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			};
 		});
 	};
-
-	const loadRoles = useCallback(async () => {
-		try {
-			// Fetch from both sources: Keycloak realm roles + Admin catalog
-			const [kc, admin] = await Promise.allSettled([KeycloakRoleService.getAllRealmRoles(), adminApi.getAdminRoles()]);
-			const list: KeycloakRole[] = [];
-			const byName = new Map<string, KeycloakRole>();
-			const nameMap: Record<string, string> = {};
-			const add = (r?: KeycloakRole) => {
-				if (!r || !r.name) return;
-				const key = r.name.trim().toUpperCase();
-				if (!byName.has(key)) {
-					byName.set(key, r);
-					list.push(r);
-				}
-			};
-			if (kc.status === "fulfilled" && Array.isArray(kc.value)) {
-				kc.value.forEach((r) => add(r));
-			}
-			if (admin.status === "fulfilled" && Array.isArray(admin.value)) {
-				// Map AdminRoleDetail -> KeycloakRole: use canonical code for .name; keep displayName in map
-				(admin.value as any[]).forEach((ar: any) => {
-					const code = normalizeRoleCode(ar?.roleId || ar?.code || ar?.name);
-					const display = (ar?.nameZh || ar?.displayName || ar?.name || code) as string;
-					if (!code) return;
-					nameMap[code] = display;
-					add({ name: code, description: ar?.description } as KeycloakRole);
-				});
-			}
-			setRoles(list);
-			setRoleNameMap(nameMap);
-		} catch (err) {
-			setRoleError("加载角色列表失败");
-			console.error("Error loading roles:", err);
-		}
-	}, []);
-
-	function normalizeRoleCode(value?: string): string {
-		if (!value) return "";
-		let upper = String(value).trim().toUpperCase();
-		if (upper.startsWith("ROLE_")) {
-			upper = upper.substring(5);
-		} else if (upper.startsWith("ROLE-")) {
-			upper = upper.substring(5);
-		}
-		upper = upper.replace(/[^A-Z0-9_]/g, "_").replace(/_+/g, "_");
-		return upper;
-	}
-
-	const displayRoleName = (name?: string): string => {
-		if (!name) return "";
-		const key = name.trim().toUpperCase();
-		// 优先使用从 admin 目录得到的中文名
-		return roleNameMap[key] || name;
-	};
-
-	const loadUserRoles = useCallback(
-		async (userId: string) => {
-			try {
-				const userRolesData = await KeycloakUserService.getUserRoles(userId);
-				// 合并 DB-authority 模式下的角色分配（data roles）
-				const username = user?.username || "";
-				let assignmentRoles: KeycloakRole[] = [];
-				if (username) {
-					try {
-						const all = await adminApi.getRoleAssignments();
-						const mine = (all || []).filter(
-							(it: any) => (it?.username || "").toString().toLowerCase() === username.toLowerCase(),
-						);
-						assignmentRoles = mine.map((it: any) => ({
-							name: (it?.role || "").toString().trim().toUpperCase(),
-						})) as KeycloakRole[];
-					} catch (e) {
-						// ignore
-					}
-				}
-				let merged: KeycloakRole[] = [];
-				const seen = new Set<string>();
-				const push = (r?: KeycloakRole) => {
-					if (!r || !r.name) return;
-					const key = r.name.trim().toUpperCase();
-					if (seen.has(key)) return;
-					seen.add(key);
-					merged.push(r);
-				};
-				(userRolesData || []).forEach(push);
-				(assignmentRoles || []).forEach(push);
-				// Hide Keycloak 内置/默认角色
-				merged = merged.filter((r) => {
-					const name = (r?.name || "").toString();
-					if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-")) return false;
-					if (GLOBAL_CONFIG.hideBuiltinRoles && shouldHideRole(r)) return false;
-					return true;
-				});
-				setUserRoles(merged);
-				return merged;
-			} catch (err) {
-				setRoleError("加载用户角色失败");
-				console.error("Error loading user roles:", err);
-				return [];
-			}
-		},
-		[user?.username],
-	);
-
 	const handlePersonLevelChange = useCallback(
 		(level: string) => {
 			setPersonLevel(level);
@@ -400,7 +274,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			};
 
 			setPersonLevel(resolvedLevel);
-			setUserRoles([]);
 			setFormData(initialFormData);
 			setSelectedGroupPaths(existingGroups);
 			setFormState({
@@ -408,19 +281,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 					...initialFormData,
 					attributes: { ...initialFormData.attributes },
 				},
-				originalRoles: [],
-				roleChanges: [],
 				groupPaths: existingGroups,
 			});
-
-			if (user.id) {
-				loadUserRoles(user.id).then((fetchedRoles) => {
-					setFormState((prev) => ({
-						...prev,
-						originalRoles: fetchedRoles,
-					}));
-				});
-			}
 		} else {
 			// 创建用户时默认不允许选择“非密”，默认值调整为“一般”
 			const defaultLevel = "GENERAL";
@@ -435,7 +297,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			};
 
 			setPersonLevel(defaultLevel);
-			setUserRoles([]);
 			setFormData(emptyData);
 			setSelectedGroupPaths([]);
 			setFormState({
@@ -443,15 +304,12 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 					...emptyData,
 					attributes: { ...emptyData.attributes },
 				},
-				originalRoles: [],
-				roleChanges: [],
 				groupPaths: [],
 			});
 		}
 
 		setError("");
-		setRoleError("");
-	}, [open, mode, user, loadUserRoles, normalizeAttributesForState]);
+	}, [open, mode, user, normalizeAttributesForState]);
 
 	// Ensure organization selection is pre-filled after org tree loads
 	useEffect(() => {
@@ -493,9 +351,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			return;
 		}
 
-		loadRoles();
 		loadOrganizations();
-	}, [open, loadRoles, loadOrganizations]);
+	}, [open, loadOrganizations]);
 
 	const hasUserInfoChanged = (normalizedAttributes?: Record<string, string[]>, groupPaths?: string[]): boolean => {
 		const { originalData, groupPaths: originalGroupPaths } = formState;
@@ -543,9 +400,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 
 		const hasUserInfoChanges = hasUserInfoChanged(attributesPayload, groupPathsPayload);
-		const hasRoleChanges = formState.roleChanges.length > 0;
 
-		if (mode === "edit" && !hasUserInfoChanges && !hasRoleChanges) {
+		if (mode === "edit" && !hasUserInfoChanges) {
 			toast.info("没有检测到任何变更");
 			return;
 		}
@@ -565,8 +421,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 					emailVerified: formData.emailVerified,
 					attributes: attributesPayload,
 					groups: groupPathsPayload.length > 0 ? groupPathsPayload : undefined,
-					// 在创建时一并提交选择的角色，由后端生成包含角色分配的审批请求
-					realmRoles: userRoles.map((r) => r.name).filter(Boolean),
 					// Persist deptCode as organization id (dts_org_id) to align with Keycloak group attribute
 					deptCode: (() => {
 						const p = groupPathsPayload[0];
@@ -609,30 +463,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 						toast.success("用户信息更新请求提交成功");
 					}
 				}
-
-				if (hasRoleChanges) {
-					const rolesToAdd = formState.roleChanges.filter((rc) => rc.action === "add").map((rc) => rc.role);
-
-					if (rolesToAdd.length > 0) {
-						const response = await KeycloakUserService.assignRolesToUser(user.id, rolesToAdd);
-						if (response?.message) {
-							toast.success(`角色分配请求提交成功: ${response.message}`);
-						} else {
-							toast.success("角色分配请求提交成功");
-						}
-					}
-
-					const rolesToRemove = formState.roleChanges.filter((rc) => rc.action === "remove").map((rc) => rc.role);
-
-					if (rolesToRemove.length > 0) {
-						const response = await KeycloakUserService.removeRolesFromUser(user.id, rolesToRemove);
-						if (response?.message) {
-							toast.success(`角色移除请求提交成功: ${response.message}`);
-						} else {
-							toast.success("角色移除请求提交成功");
-						}
-					}
-				}
 			}
 
 			// 刷新“我的申请”和“审批中心”列表，并联动刷新角色/菜单缓存
@@ -654,56 +484,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			console.error("Error saving user:", err);
 		} finally {
 			setLoading(false);
-		}
-	};
-
-	const resolveRoleBadgeVariant = (
-		roleName: string,
-	): "default" | "secondary" | "destructive" | "info" | "warning" | "success" | "error" | "outline" => {
-		if (isDataRole(roleName)) return "secondary";
-		if (isGovernanceRole(roleName)) return "warning";
-		if (isApplicationAdminRole(roleName)) return "info";
-		return "default";
-	};
-
-	const handleRoleToggle = (role: KeycloakRole) => {
-		const hasRole = userRoles.some((r) => roleKey(r) === roleKey(role));
-		const roleName = role.name;
-
-		if (isDataRole(roleName)) {
-			toast.warning("数据密级角色由人员密级自动分配，请在上方调整人员密级。");
-			return;
-		}
-
-		if (!hasRole) {
-			if (isApplicationAdminRole(roleName) && userRoles.some((existing) => isGovernanceRole(existing.name))) {
-				toast.error("请先移除治理类角色后再分配应用管理员角色。");
-				return;
-			}
-			if (isGovernanceRole(roleName) && userRoles.some((existing) => isApplicationAdminRole(existing.name))) {
-				toast.error("应用管理员角色与治理类角色互斥，请先移除应用管理员角色。");
-				return;
-			}
-		}
-
-		if (hasRole) {
-			setUserRoles((prev) => prev.filter((r) => roleKey(r) !== roleKey(role)));
-			setFormState((prev) => ({
-				...prev,
-				roleChanges: [
-					...prev.roleChanges.filter((rc) => roleKey(rc.role) !== roleKey(role) || rc.action !== "add"),
-					{ role, action: "remove" },
-				],
-			}));
-		} else {
-			setUserRoles((prev) => [...prev, role]);
-			setFormState((prev) => ({
-				...prev,
-				roleChanges: [
-					...prev.roleChanges.filter((rc) => roleKey(rc.role) !== roleKey(role) || rc.action !== "remove"),
-					{ role, action: "add" },
-				],
-			}));
 		}
 	};
 
@@ -871,82 +651,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 							</div>
 						</CardContent>
 					</Card>
-
-					{
-						// 创建和编辑均展示角色分配区块；
-						// 编辑模式会预加载现有角色，创建模式从空开始供选择
-						(mode === "edit" ? true : mode === "create") && (
-							<Card>
-								<CardHeader>
-									<CardTitle className="text-lg">角色分配</CardTitle>
-								</CardHeader>
-								<CardContent>
-									{roleError && (
-										<Alert variant="destructive" className="mb-4">
-											<AlertDescription>{roleError}</AlertDescription>
-										</Alert>
-									)}
-
-									<div className="space-y-2">
-										<Label>用户角色</Label>
-										<div className="flex flex-wrap gap-2 mb-4">
-											{userRoles.map((role) => {
-												const allowRemoval =
-													!isDataRole(role.name) &&
-													!isReservedBusinessRoleName(role.name) &&
-													!isKeycloakBuiltInRole(role);
-												return (
-													<Badge
-														key={roleKey(role)}
-														variant={resolveRoleBadgeVariant(role.name)}
-														className="flex items-center gap-1 bg-primary text-primary-foreground font-semibold"
-													>
-														<span className="text-primary-foreground font-semibold">{displayRoleName(role.name)}</span>
-														{allowRemoval && (
-															<Button
-																variant="ghost"
-																size="sm"
-																className="h-4 w-4 p-0 text-primary-foreground hover:bg-primary/40"
-																onClick={() => handleRoleToggle(role)}
-															>
-																<Icon icon="mdi:close" size={12} />
-															</Button>
-														)}
-													</Badge>
-												);
-											})}
-											{userRoles.length === 0 && <span className="text-muted-foreground">暂无分配角色</span>}
-										</div>
-
-										<Label>可用角色</Label>
-										<div className="flex flex-wrap gap-2">
-											{roles
-												.filter((role) => !userRoles.some((ur) => roleKey(ur) === roleKey(role)))
-												.filter((role) => !isDataRole(role.name))
-												.filter((role) => {
-													const name = (role?.name || "").toString();
-													if (GLOBAL_CONFIG.hideDefaultRoles && name.toLowerCase().startsWith("default-roles-"))
-														return false;
-													if (GLOBAL_CONFIG.hideBuiltinRoles && shouldHideRole(role)) return false;
-													return true;
-												})
-												.map((role) => (
-													<Badge
-														key={roleKey(role)}
-														variant={resolveRoleBadgeVariant(role.name)}
-														className="cursor-pointer bg-primary font-semibold text-primary-foreground hover:bg-primary/90"
-														onClick={() => handleRoleToggle(role)}
-													>
-														<span className="font-semibold text-primary-foreground">{displayRoleName(role.name)}</span>
-														<Icon icon="mdi:plus" size={12} className="ml-1 text-primary-foreground" />
-													</Badge>
-												))}
-										</div>
-									</div>
-								</CardContent>
-							</Card>
-						)
-					}
 				</div>
 
 				<DialogFooter>

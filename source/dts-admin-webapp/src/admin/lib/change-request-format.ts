@@ -41,11 +41,7 @@ const FIELD_LABELS: Record<string, string> = {
 	dept_code: "部门编码",
 	department: "所属部门",
 	fullNameZh: "中文姓名",
-	nameZh: "中文名称",
 	title: "标题",
-	titleCn: "中文标题",
-	titleCN: "中文标题",
-	titleZh: "中文标题",
 	allowDesensitize: "允许脱敏",
 	allowDesensitizeJson: "允许脱敏",
 	allowDesensitizeFlag: "允许脱敏",
@@ -65,6 +61,12 @@ const FIELD_LABELS: Record<string, string> = {
 	resultRoles: "角色",
 	realmRoles: "角色",
 	clientRoles: "客户端角色",
+	members: "角色成员",
+	memberCount: "成员数量",
+	memberAdds: "新增成员",
+	memberRemoves: "移除成员",
+	memberAddsRequested: "申请新增成员",
+	memberRemovesRequested: "申请移除成员",
 	menuIds: "菜单绑定",
 	menuBindings: "菜单绑定",
 	deleted: "禁用状态",
@@ -335,4 +337,3 @@ export function beautifyBatchItemLabel(label: string): string {
 	const translatedHead = OPERATION_TYPE_LABELS[head.toUpperCase?.() || head] || head.replace(/^BATCH_/i, "批量");
 	return [translatedHead, ...rest].filter(Boolean).join(" · ");
 }
-

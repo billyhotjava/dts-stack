@@ -2,16 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { Link } from "react-router";
 import { adminApi } from "@/admin/api/adminApi";
-import type {
-    AdminCustomRole,
-    AdminRoleAssignment,
-    AdminRoleDetail,
-    CreateCustomRolePayload,
-    DataOperation,
-    PortalMenuCollection,
-    PortalMenuItem,
-} from "@/admin/types";
+import type { AdminCustomRole, AdminRoleDetail, ChangeRequest, CreateCustomRolePayload, PortalMenuCollection, PortalMenuItem } from "@/admin/types";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -22,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Text } from "@/ui/typography";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/ui/tooltip";
 import { Textarea } from "@/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { toast } from "sonner";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { isKeycloakBuiltInRole } from "@/constants/keycloak-roles";
@@ -41,48 +35,6 @@ const RESERVED_ROLE_CODES = new Set([
     "SECURITYAUDITOR",
 ]);
 
-const OPERATION_LABEL_MAP: Record<DataOperation, string> = {
-    read: "读取",
-    write: "写入",
-    export: "导出",
-};
-
-const DEFAULT_OPERATIONS: DataOperation[] = ["read", "write", "export"];
-
-
-function dedupeOperations(ops?: any): DataOperation[] {
-    if (!ops) {
-        return [...DEFAULT_OPERATIONS];
-    }
-    const values: string[] = [];
-    if (Array.isArray(ops)) {
-        for (const item of ops) {
-            if (item !== null && item !== undefined) {
-                values.push(String(item));
-            }
-        }
-    } else if (typeof ops?.[Symbol.iterator] === "function") {
-        for (const item of ops as Iterable<unknown>) {
-            if (item !== null && item !== undefined) {
-                values.push(String(item));
-            }
-        }
-    } else if (typeof ops === "string") {
-        values.push(ops);
-    }
-    const pool = new Set<DataOperation>();
-    values.forEach((item) => {
-        const candidate = item.toLowerCase() as DataOperation;
-        if (Object.prototype.hasOwnProperty.call(OPERATION_LABEL_MAP, candidate)) {
-            pool.add(candidate);
-        }
-    });
-    if (!pool.size) {
-        return [...DEFAULT_OPERATIONS];
-    }
-    return DEFAULT_OPERATIONS.filter((value) => pool.has(value));
-}
-
 interface RoleRow {
     id?: number;
     key: string;
@@ -90,18 +42,14 @@ interface RoleRow {
     displayName: string;
     canonical: string;
     code?: string;
-    nameZh?: string;
-    nameEn?: string;
     zone?: "DEPT" | "INST";
     description?: string | null;
     scope?: "DEPARTMENT" | "INSTITUTE";
-    operations: DataOperation[];
     canManage?: boolean;
     menuIds: number[];
     menuLabels: string[];
-    assignments: AdminRoleAssignment[];
     source?: string;
-    kcMemberCount?: number;
+    memberCount?: number;
 }
 
 interface MenuOption {
@@ -134,14 +82,6 @@ export default function RoleManagementView() {
         queryFn: () => adminApi.getCustomRoles(),
     });
     const {
-        data: assignments,
-        isLoading: assignmentLoading,
-        isError: assignmentError,
-    } = useQuery<AdminRoleAssignment[]>({
-        queryKey: ["admin", "role-assignments"],
-        queryFn: () => adminApi.getRoleAssignments(),
-    });
-    const {
         data: portalMenus,
         isLoading: menuLoading,
         isError: menuError,
@@ -151,12 +91,10 @@ export default function RoleManagementView() {
     });
 
     const [createOpen, setCreateOpen] = useState(false);
-    const [editTarget, setEditTarget] = useState<RoleRow | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<RoleRow | null>(null);
-    const [memberTarget, setMemberTarget] = useState<RoleRow | null>(null);
 
-    const isLoading = rolesLoading || customLoading || assignmentLoading || menuLoading;
-    const hasError = rolesError || customError || assignmentError || menuError;
+    const isLoading = rolesLoading || customLoading || menuLoading;
+    const hasError = rolesError || customError || menuError;
 
     const menuCatalog = useMemo(() => buildMenuCatalog(portalMenus), [portalMenus]);
     const menuOptions = menuCatalog.options;
@@ -173,7 +111,6 @@ export default function RoleManagementView() {
         const map = new Map<string, RoleRow>();
         const roles = rolesData ?? [];
         const extra = customRoles ?? [];
-        const assignmentMap = groupAssignments(assignments);
 
         const hideDefaultRoles = GLOBAL_CONFIG.hideDefaultRoles;
         const hideBuiltinRoles = GLOBAL_CONFIG.hideBuiltinRoles;
@@ -207,21 +144,17 @@ export default function RoleManagementView() {
                 id: role.id,
                 key: role.id?.toString() ?? authorityCode,
                 authority: authorityCode,
-                displayName: (role as any).nameZh || role.name,
+                displayName: role.displayName || role.name,
                 canonical,
                 code: role.roleId || (role as any).code || canonical,
-                nameZh: (role as any).nameZh,
-                nameEn: (role as any).nameEn,
                 zone: (role as any).zone,
                 description: role.description,
                 scope: resolvedScope ?? undefined,
-                operations: dedupeOperations(role.operations),
                 canManage: (role as any).canManage ?? canonical.endsWith("_OWNER"),
                 menuIds,
                 menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
-                assignments: assignmentMap.get(canonical) ?? [],
                 source: role.source ?? undefined,
-                kcMemberCount: role.kcMemberCount ?? role.memberCount ?? 0,
+                memberCount: role.memberCount ?? 0,
             };
             map.set(canonical, entry);
         });
@@ -248,9 +181,6 @@ export default function RoleManagementView() {
             if (existing) {
                 existing.description = existing.description ?? role.description;
                 existing.scope = existing.scope ?? normalizedScope;
-                if (!existing.operations.length && role.operations?.length) {
-                    existing.operations = dedupeOperations(role.operations);
-                }
                 existing.source = existing.source ?? "custom";
                 if (!existing.menuIds.length) {
                     const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
@@ -269,26 +199,22 @@ export default function RoleManagementView() {
                     canonical,
                     description: role.description,
                     scope: normalizedScope ?? undefined,
-                    operations: dedupeOperations(role.operations),
                     canManage: canonical.endsWith("_OWNER"),
                     menuIds,
-                    menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
-                    assignments: assignmentMap.get(canonical) ?? [],
-                    source: "custom",
-                    kcMemberCount: matchedRole?.kcMemberCount ?? matchedRole?.memberCount ?? 0,
-                });
-            }
-        });
+                menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
+                source: "custom",
+                memberCount: matchedRole?.memberCount ?? 0,
+            });
+        }
+    });
 
-        map.forEach((entry, canonical) => {
-            entry.assignments = assignmentMap.get(canonical) ?? [];
-            if (!entry.source) {
-                entry.source = "服务端";
-            }
-            entry.operations = dedupeOperations(entry.operations);
-            if (!entry.scope && entry.zone) {
-                entry.scope = entry.zone === "INST" ? "INSTITUTE" : entry.zone === "DEPT" ? "DEPARTMENT" : undefined;
-            }
+    map.forEach((entry, canonical) => {
+        if (!entry.source) {
+            entry.source = "服务端";
+        }
+        if (!entry.scope && entry.zone) {
+            entry.scope = entry.zone === "INST" ? "INSTITUTE" : entry.zone === "DEPT" ? "DEPARTMENT" : undefined;
+        }
             if (!entry.menuIds.length) {
                 const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
                 entry.menuIds = menuIds;
@@ -297,7 +223,7 @@ export default function RoleManagementView() {
         });
 
         return Array.from(map.values()).sort((a, b) => a.displayName.localeCompare(b.displayName, "zh-CN"));
-    }, [rolesData, customRoles, assignments, roleMenuIndex, menuLabelMap]);
+    }, [rolesData, customRoles, roleMenuIndex, menuLabelMap]);
 
     const handleCreateSubmitted = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
@@ -305,14 +231,10 @@ export default function RoleManagementView() {
         queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
     }, [queryClient]);
 
-    const handleUpdateSubmitted = useCallback(() => {
-        queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
-        queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
-    }, [queryClient]);
-
     const handleDeleteSubmitted = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "role-change-pending"] });
     }, [queryClient]);
 
     const columns = useMemo<ColumnsType<RoleRow>>(() => {
@@ -325,11 +247,10 @@ export default function RoleManagementView() {
                 onCell: () => ({ style: { verticalAlign: "middle" } }),
                 render: (_value, record) => {
                     const code = record.code || record.canonical;
-                    const en = record.nameEn || "";
+                    const tooltip = record.displayName || record.description || code;
                     return (
-                        <div title={en || undefined} className="flex min-w-0 flex-col">
+                        <div title={tooltip || undefined} className="flex min-w-0 flex-col">
                             <span className="truncate font-medium">{code}</span>
-                            {/* <span className="truncate text-xs text-muted-foreground">{code}</span> */}
                         </div>
                     );
                 },
@@ -341,9 +262,7 @@ export default function RoleManagementView() {
                 width: 200,
                 onCell: () => ({ style: { verticalAlign: "middle" } }),
                 render: (_value, record) => {
-                    const zh = (record.nameZh || record.displayName || "").trim();
-                    const fallback = record.description ?? "";
-                    const label = zh || fallback;
+                    const label = (record.displayName || record.description || "").trim();
                     return label ? (
                         <span className="truncate block max-w-full" title={label}>
                             {label}
@@ -433,43 +352,23 @@ export default function RoleManagementView() {
 					);
 				},
 			},
-			{
-				title: "成员",
-				key: "members",
-				width: 220,
-				onCell: () => ({ style: { verticalAlign: "middle" } }),
-				render: (_value, record) => {
-					const total = Math.max(record.kcMemberCount ?? 0, record.assignments.length);
-					const preview = record.assignments.slice(0, 2);
-					const remaining = record.assignments.slice(2);
-					return (
-						<div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
-							<Badge variant="secondary">{total} 人</Badge>
-							{preview.map((assignment) => (
-								<Badge key={assignment.id} variant="outline" className="max-w-[140px] truncate">
-									{assignment.displayName || assignment.username}
-								</Badge>
-							))}
-							{remaining.length > 0 ? (
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Badge variant="outline">+{remaining.length}</Badge>
-									</TooltipTrigger>
-									<TooltipContent className="max-w-sm">
-										<div className="max-h-48 space-y-1 overflow-auto pr-1 text-xs">
-											{remaining.map((assignment) => (
-												<div key={assignment.id} className="truncate">
-													{assignment.displayName || assignment.username}
-												</div>
-											))}
-										</div>
-									</TooltipContent>
-								</Tooltip>
-							) : null}
-						</div>
-					);
-				},
-			},
+            {
+                title: "成员",
+                key: "members",
+                width: 220,
+                onCell: () => ({ style: { verticalAlign: "middle" } }),
+                render: (_value, record) => {
+                    const total = record.memberCount ?? 0;
+                    return (
+                        <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
+                            <Badge variant="secondary">{total} 人</Badge>
+                            <Text variant="body3" className="text-muted-foreground">
+                                详情页可管理成员
+                            </Text>
+                        </div>
+                    );
+                },
+            },
             {
                 title: "操作",
                 key: "actions",
@@ -479,17 +378,14 @@ export default function RoleManagementView() {
                 onCell: () => ({ style: { verticalAlign: "middle" } }),
                 render: (_value, record) => {
                     const immutable = record.source === "builtin";
+                    const roleSlug = encodeURIComponent(toRoleName(record.authority));
                     return (
                         <div className="flex flex-wrap gap-2 justify-end">
-                            <Button size="sm" variant="outline" onClick={() => setMemberTarget(record)}>
-                                成员
+                            <Button size="sm" variant="outline" asChild>
+                                <Link to={`/admin/roles/${roleSlug}`}>详情</Link>
                             </Button>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setEditTarget(record)}
-                            >
-                                编辑
+                            <Button size="sm" variant="outline" asChild>
+                                <Link to={`/admin/roles/${roleSlug}/edit`}>编辑</Link>
                             </Button>
                             <Button
                                 size="sm"
@@ -508,7 +404,6 @@ export default function RoleManagementView() {
 
     const expandedRowRender = useCallback(
         (record: RoleRow) => {
-            const members = record.assignments || [];
             return (
                 <div className="grid gap-4 border-t border-muted pt-4 text-sm md:grid-cols-3">
                     <div className="space-y-2">
@@ -538,18 +433,10 @@ export default function RoleManagementView() {
                     </div>
                     <div className="space-y-2">
                         <Text variant="body3" className="text-muted-foreground">
-                            成员列表
+                            成员管理
                         </Text>
-                        <div className="flex flex-wrap gap-1">
-                            {members.length ? (
-                                members.map((member) => (
-                                    <Badge key={member.id} variant="outline" className="max-w-[160px] truncate">
-                                        {member.displayName || member.username}
-                                    </Badge>
-                                ))
-                            ) : (
-                                <span className="text-muted-foreground">暂无成员</span>
-                            )}
+                        <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                            成员请在“详情/编辑”页面通过审批流程管理，可按部门筛选人员。
                         </div>
                     </div>
                 </div>
@@ -614,17 +501,11 @@ export default function RoleManagementView() {
                 onOpenChange={setCreateOpen}
                 onSubmitted={handleCreateSubmitted}
             />
-            <UpdateRoleDialog
-                target={editTarget}
-                onClose={() => setEditTarget(null)}
-                onSubmitted={handleUpdateSubmitted}
-            />
             <DeleteRoleDialog
                 target={deleteTarget}
                 onClose={() => setDeleteTarget(null)}
                 onSubmitted={handleDeleteSubmitted}
             />
-            <MembersDialog target={memberTarget} onClose={() => setMemberTarget(null)} />
             </div>
         </TooltipProvider>
     );
@@ -680,8 +561,6 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
                 name: trimmedName.toUpperCase(),
                 scope,
                 description: trimmedDescription,
-                titleCn: trimmedDisplayName,
-                nameZh: trimmedDisplayName,
                 displayName: trimmedDisplayName,
             };
             if (trimmedReason) {
@@ -814,184 +693,6 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
     );
 }
 
-interface UpdateRoleDialogProps {
-    target: RoleRow | null;
-    onClose: () => void;
-    onSubmitted: () => void;
-}
-
-function UpdateRoleDialog({ target, onClose, onSubmitted }: UpdateRoleDialogProps) {
-    const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
-    const [description, setDescription] = useState("");
-    const [reason, setReason] = useState("");
-    const [submitting, setSubmitting] = useState(false);
-
-    useEffect(() => {
-        if (!target) {
-            return;
-        }
-        setScope(target.scope ?? "DEPARTMENT");
-        setDescription(target.description ?? "");
-        setReason("");
-        setSubmitting(false);
-    }, [target]);
-
-    const handleSubmit = async () => {
-        if (!target) {
-            return;
-        }
-        const trimmedReason = reason.trim() || undefined;
-        const scopeChanged = (target.scope ?? "DEPARTMENT") !== scope;
-        const descriptionChanged = (target.description ?? "") !== description.trim();
-        if (!scopeChanged && !descriptionChanged) {
-            toast.info("未检测到变更，无需提交审批");
-            return;
-        }
-
-        setSubmitting(true);
-        try {
-            const roleName = toRoleName(target.authority);
-            const resourceIdentifier = roleName || target.authority;
-            const change = await adminApi.createChangeRequest({
-                resourceType: "ROLE",
-                action: "UPDATE",
-                resourceId: resourceIdentifier,
-                payloadJson: JSON.stringify({
-                    id: target.id,
-                    name: roleName,
-                    scope,
-                    description: description.trim() || undefined,
-                }),
-                diffJson: JSON.stringify({
-                    before: {
-                        id: target.id ?? null,
-                        name: roleName,
-                        scope: target.scope ?? null,
-                        description: target.description ?? null,
-                    },
-                    after: {
-                        id: target.id ?? null,
-                        name: roleName,
-                        scope,
-                        description: description.trim() || null,
-                    },
-                }),
-                reason: trimmedReason,
-            });
-            await adminApi.submitChangeRequest(change.id);
-
-            toast.success("更新申请已提交审批");
-            onSubmitted();
-            onClose();
-        } catch (error: any) {
-            toast.error(error?.message ?? "提交失败，请稍后重试");
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    return (
-        <Dialog open={Boolean(target)} onOpenChange={(open) => (!open ? onClose() : null)}>
-            <DialogContent className="max-w-xl">
-                <DialogHeader>
-                    <DialogTitle>编辑角色</DialogTitle>
-                </DialogHeader>
-                {target ? (
-                    <div className="space-y-4 text-sm">
-                        <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-                            <Icon icon="mdi:star" className="h-5 w-5 text-red-500" />
-                            <span className="text-center">非密模块禁止处理涉密数据</span>
-                        </div>
-                        <div className="space-y-1">
-                            <Text variant="body3" className="font-medium">
-                                角色标识
-                            </Text>
-                            <Text variant="body3" className="text-muted-foreground">
-                                {target.authority}
-                            </Text>
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                                <label className="font-medium" htmlFor="edit-scope">
-                                    所属域
-                                </label>
-                                <Select value={scope} onValueChange={(value) => setScope(value as "DEPARTMENT" | "INSTITUTE")}> 
-                                    <SelectTrigger id="edit-scope">
-                                        <SelectValue placeholder="请选择所属域" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="DEPARTMENT">部门域</SelectItem>
-                                        <SelectItem value="INSTITUTE">全所共享域</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            {/* <div className="space-y-2">
-                                <span className="font-medium">操作权限</span>
-                                <div className="text-sm text-muted-foreground">
-                                    {target.operations?.length
-                                        ? target.operations.map((op) => OPERATION_LABELS[op]).join("、")
-                                        : OPERATION_LABELS.read}
-                                </div>
-                            </div> */}
-                        </div>
-                        <div className="space-y-2">
-                            <label htmlFor="edit-description" className="font-medium">
-                                描述
-                            </label>
-                            <Textarea
-                                id="edit-description"
-                                rows={3}
-                                placeholder="更新角色说明"
-                                value={description}
-                                onChange={(event) => setDescription(event.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label htmlFor="edit-reason" className="font-medium">
-                                审批备注（可选）
-                            </label>
-                            <Textarea
-                                id="edit-reason"
-                                rows={2}
-                                placeholder="补充审批说明"
-                                value={reason}
-                                onChange={(event) => setReason(event.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <span className="font-medium">菜单可见性</span>
-                            <Text variant="body3" className="text-muted-foreground">
-                                菜单绑定请在“菜单管理”模块中维护，当前列表仅供查看。
-                            </Text>
-                            {target.menuLabels?.length ? (
-                                <div className="flex flex-wrap gap-1">
-                                    {target.menuLabels.map((menu) => (
-                                        <Badge key={menu} variant="outline" className="max-w-[160px] truncate">
-                                            {menu}
-                                        </Badge>
-                                    ))}
-                                </div>
-                            ) : (
-                                <Text variant="body3" className="text-muted-foreground">
-                                    当前未绑定菜单。
-                                </Text>
-                            )}
-                        </div>
-                    </div>
-                ) : null}
-                <DialogFooter className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={onClose} disabled={submitting}>
-                        取消
-                    </Button>
-                    <Button onClick={handleSubmit} disabled={submitting || !target}>
-                        提交审批
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
 interface DeleteRoleDialogProps {
     target: RoleRow | null;
     onClose: () => void;
@@ -1003,6 +704,32 @@ function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProp
     const [submitting, setSubmitting] = useState(false);
     const [checking, setChecking] = useState(false);
     const [precheck, setPrecheck] = useState<Record<string, any> | null>(null);
+    const queryClient = useQueryClient();
+    const canonical = useMemo(() => canonicalRole(target?.authority ?? ""), [target?.authority]);
+
+    const { data: pendingChangeList } = useQuery({
+        queryKey: ["admin", "role-change-pending", canonical],
+        enabled: canonical.length > 0,
+        queryFn: async () => {
+            const list = await adminApi.getChangeRequests({ status: "PENDING", type: "ROLE" });
+            return Array.isArray(list) ? list : [];
+        },
+        staleTime: 15_000,
+        refetchOnWindowFocus: false,
+    });
+
+    const pendingChange = useMemo<ChangeRequest | null>(() => {
+        if (!pendingChangeList?.length || !canonical) {
+            return null;
+        }
+        for (const change of pendingChangeList) {
+            if (resolveChangeRoleId(change) === canonical) {
+                return change;
+            }
+        }
+        return null;
+    }, [pendingChangeList, canonical]);
+    const hasPendingChange = Boolean(pendingChange);
 
     useEffect(() => {
         setReason("");
@@ -1036,6 +763,15 @@ function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProp
         if (!target) {
             return;
         }
+        if (pendingChange) {
+            const applicant = pendingChange.requestedByDisplayName || pendingChange.requestedBy || "当前用户";
+            const submittedAt = formatDateTime(pendingChange.requestedAt);
+            const tip = submittedAt
+                ? `角色已有待审批的变更（#${pendingChange.id}，${applicant} 于 ${submittedAt} 提交），请等待审批完成后再试。`
+                : `角色已有待审批的变更（#${pendingChange.id}，申请人：${applicant}），请等待审批完成后再试。`;
+            toast.error(tip);
+            return;
+        }
         setSubmitting(true);
         try {
             const trimmedReason = reason.trim() || undefined;
@@ -1050,6 +786,7 @@ function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProp
             const change = await adminApi.createChangeRequest(payload);
             await adminApi.submitChangeRequest(change.id);
             toast.success("删除申请已提交审批");
+            await queryClient.invalidateQueries({ queryKey: ["admin", "role-change-pending"] });
             onSubmitted();
             onClose();
         } catch (error: any) {
@@ -1067,6 +804,18 @@ function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProp
                 </DialogHeader>
                 {target ? (
                     <div className="space-y-4 text-sm">
+                        {hasPendingChange ? (
+                            <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+                                <AlertTitle>已有待审批的角色变更</AlertTitle>
+                                <AlertDescription className="space-y-2">
+                                    <p>
+                                        角色 <strong>{target.authority}</strong> 已提交审批（单号 #{pendingChange!.id}，申请人{" "}
+                                        {pendingChange!.requestedByDisplayName || pendingChange!.requestedBy || "未知"}
+                                        {pendingChange!.requestedAt ? `，提交时间 ${formatDateTime(pendingChange!.requestedAt)}` : ""}）。审批完成前无法再次发起删除。
+                                    </p>
+                                </AlertDescription>
+                            </Alert>
+                        ) : null}
                         <div className="space-y-1">
                             <Text variant="body3">
                                 即将提交删除角色 <span className="font-semibold">{target.authority}</span> 的审批请求。该操作将在审批通过后由授权管理员执行。
@@ -1078,11 +827,8 @@ function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProp
                                     <Badge variant={precheck?.reserved ? "destructive" : "secondary"}>
                                         {precheck?.reserved ? "内置角色（不可删除）" : "可删除"}
                                     </Badge>
-                                    <Badge variant="secondary">Keycloak成员 {precheck?.kcMemberCount ?? 0}</Badge>
+                                    <Badge variant="secondary">角色成员 {precheck?.memberCount ?? 0}</Badge>
                                     <Badge variant="secondary">菜单绑定 {precheck?.menuBindings ?? 0}</Badge>
-                                    {typeof precheck?.assignments === 'number' ? (
-                                        <Badge variant="secondary">业务授权 {precheck?.assignments}</Badge>
-                                    ) : null}
                                 </div>
                             )}
                         </div>
@@ -1104,103 +850,12 @@ function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProp
                     <Button variant="outline" onClick={onClose} disabled={submitting}>
                         取消
                     </Button>
-                    <Button variant="destructive" onClick={handleSubmit} disabled={submitting || !target || precheck?.reserved === true}>
+                    <Button
+                        variant="destructive"
+                        onClick={handleSubmit}
+                        disabled={submitting || !target || precheck?.reserved === true || hasPendingChange}
+                    >
                         提交审批
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-interface MembersDialogProps {
-    target: RoleRow | null;
-    onClose: () => void;
-}
-
-function MembersDialog({ target, onClose }: MembersDialogProps) {
-    const [kcMembers, setKcMembers] = useState<Array<{ id: string; username: string; fullName?: string }>>([]);
-    const [loading, setLoading] = useState(false);
-    useEffect(() => {
-        let cancelled = false;
-        async function load() {
-            if (!target) return;
-            setLoading(true);
-            try {
-                // Fetch Keycloak realm role members on demand
-                const authority = target.authority || target.displayName;
-                if (authority) {
-                    const users = await (await import("@/api/services/keycloakService")).default.role.getRoleUsers(authority);
-                    if (!cancelled) setKcMembers(users);
-                }
-            } catch (e) {
-                console.warn("Failed to load role users from Keycloak", e);
-                if (!cancelled) setKcMembers([]);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        }
-        load();
-        return () => {
-            cancelled = true;
-        };
-    }, [target?.authority, target?.displayName]);
-
-    // Merge AdminRoleAssignments (data assignments) and Keycloak realm role members
-    const merged: Array<{ id?: number; username: string; displayName?: string; source: string }> = useMemo(() => {
-        const list: Array<{ id?: number; username: string; displayName?: string; source: string }> = [];
-        const seen = new Set<string>();
-        (target?.assignments ?? []).forEach((a) => {
-            list.push({ id: a.id, username: a.username, displayName: a.displayName, source: "assignment" });
-            seen.add(a.username);
-        });
-        kcMembers.forEach((u) => {
-            const uname = u.username || u.id;
-            if (!seen.has(uname)) {
-                list.push({ username: uname, displayName: u.fullName || u.username, source: "keycloak" });
-            }
-        });
-        return list;
-    }, [target?.assignments, kcMembers]);
-
-    const total = merged.length;
-    return (
-        <Dialog open={Boolean(target)} onOpenChange={(open) => (!open ? onClose() : null)}>
-            <DialogContent className="max-w-lg">
-                <DialogHeader>
-                    <DialogTitle>角色成员</DialogTitle>
-                    {target ? (
-                        <Text variant="body3" className="text-muted-foreground">
-                            角色 {target.displayName} 当前共 {total}{loading ? "…" : ""} 名成员。
-                        </Text>
-                    ) : null}
-                </DialogHeader>
-                <div className="max-h-[360px] space-y-3 overflow-y-auto">
-                    {target && !loading && total === 0 ? (
-                        <Text variant="body3" className="text-muted-foreground">
-                            尚未绑定用户。可通过“新增角色授权”或为用户分配该系统角色维护成员。
-                        </Text>
-                    ) : null}
-                    {loading ? (
-                        <Text variant="body3" className="text-muted-foreground">加载中…</Text>
-                    ) : null}
-                    {merged.map((m, idx) => (
-                        <div key={`${m.source}-${m.id ?? m.username}-${idx}`} className="rounded-lg border px-4 py-3 text-sm">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex flex-col">
-                                    <span className="font-medium">{m.displayName || m.username}</span>
-                                    <Text variant="body3" className="text-muted-foreground">{m.username}</Text>
-                                </div>
-                                <Badge variant={m.source === "assignment" ? "outline" : "secondary"}>
-                                    {m.source === "assignment" ? "授权记录" : (GLOBAL_CONFIG.hideKeycloakBranding ? "系统角色" : "Keycloak 角色")}
-                                </Badge>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>
-                        关闭
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -1212,7 +867,68 @@ function canonicalRole(value: string | null | undefined): string {
     if (!value) {
         return "";
     }
-    return value.trim().toUpperCase().replace(/^ROLE[_-]?/, "").replace(/_/g, "");
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.toLowerCase() === "null" || trimmed.toLowerCase() === "undefined") {
+        return "";
+    }
+    return trimmed.toUpperCase().replace(/^ROLE[_-]?/, "").replace(/_/g, "");
+}
+
+function resolveChangeRoleId(change: ChangeRequest | undefined | null): string {
+    if (!change) return "";
+    const directSource =
+        typeof change.resourceId === "string"
+            ? change.resourceId
+            : typeof change.resourceId === "number"
+                ? String(change.resourceId)
+                : "";
+    const direct = canonicalRole(directSource);
+    if (direct && /[A-Z]/.test(direct)) {
+        return direct;
+    }
+    const payload = safeParseJson(change.payloadJson);
+    const payloadName =
+        payload && typeof payload === "object" ? canonicalRole((payload as any).name || (payload as any).role) : "";
+    if (payloadName) return payloadName;
+    const updated = change.updatedValue;
+    if (updated && typeof updated === "object") {
+        const candidate = canonicalRole((updated as any).name || (updated as any).role);
+        if (candidate) return candidate;
+    }
+    const original = change.originalValue;
+    if (original && typeof original === "object") {
+        const candidate = canonicalRole((original as any).name || (original as any).role);
+        if (candidate) return candidate;
+    }
+    return "";
+}
+
+function safeParseJson<T = any>(value: unknown): T | null {
+    if (!value) return null;
+    if (typeof value === "object") {
+        return value as T;
+    }
+    if (typeof value !== "string") {
+        return null;
+    }
+    try {
+        return JSON.parse(value) as T;
+    } catch {
+        return null;
+    }
+}
+
+function formatDateTime(value: string | undefined | null): string {
+    if (!value) return "";
+    try {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return value;
+        }
+        return date.toLocaleString();
+    } catch {
+        return value ?? "";
+    }
 }
 
 function toRoleName(value: string | null | undefined): string {
@@ -1372,29 +1088,4 @@ function toRoleAuthority(value: string | null | undefined): string {
         return "";
     }
     return `ROLE_${normalized}`;
-}
-
-function groupAssignments(assignments: AdminRoleAssignment[] | undefined): Map<string, AdminRoleAssignment[]> {
-    const map = new Map<string, AdminRoleAssignment[]>();
-    if (!assignments) {
-        return map;
-    }
-    assignments.forEach((assignment) => {
-        const canonical = canonicalRole(assignment.role);
-        if (!canonical) {
-            return;
-        }
-        if (!map.has(canonical)) {
-            map.set(canonical, []);
-        }
-        map.get(canonical)!.push(assignment);
-    });
-    map.forEach((list) => {
-        list.sort((a, b) => {
-            const left = a.displayName || a.username;
-            const right = b.displayName || b.username;
-            return left.localeCompare(right, "zh-CN");
-        });
-    });
-    return map;
 }

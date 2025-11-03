@@ -1,5 +1,7 @@
 package com.yuzhi.dts.admin.service.dto.keycloak;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonSetter;
 import java.util.*;
 
 public class KeycloakUserDTO {
@@ -14,6 +16,7 @@ public class KeycloakUserDTO {
     private Map<String, List<String>> attributes = new HashMap<>();
     private List<String> groups = new ArrayList<>();
     private List<String> realmRoles = new ArrayList<>();
+    private boolean realmRolesSpecified;
     private Map<String, List<String>> clientRoles = new HashMap<>();
     private Long createdTimestamp;
 
@@ -101,8 +104,15 @@ public class KeycloakUserDTO {
         return realmRoles;
     }
 
+    @JsonSetter("realmRoles")
     public void setRealmRoles(List<String> realmRoles) {
+        this.realmRolesSpecified = true;
         this.realmRoles = realmRoles;
+    }
+
+    @JsonIgnore
+    public boolean isRealmRolesSpecified() {
+        return realmRolesSpecified;
     }
 
     public Map<String, List<String>> getClientRoles() {

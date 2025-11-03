@@ -152,6 +152,13 @@ export type OrgDataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DA
 
 export type DataOperation = "read" | "write" | "export";
 
+export interface PagedResult<T> {
+	content: T[];
+	total: number;
+	page: number;
+	size: number;
+}
+
 export interface OrganizationNode {
 	id: number;
 	name: string;
@@ -188,25 +195,28 @@ export interface OrganizationUpdatePayload {
 
 export interface AdminUser {
 	id: number;
+	keycloakId?: string;
 	username: string;
 	fullName?: string;
 	displayName?: string;
 	email?: string;
 	orgPath?: string[];
+	groupPaths?: string[];
 	roles: string[];
 	securityLevel: string;
 	status: string;
 	lastLoginAt?: string;
+	realmRoles?: string[];
+	enabled?: boolean;
 }
 
 export interface AdminRoleDetail {
 	id: number;
 	name: string;
 	description?: string;
-	securityLevel: string;
-	permissions: string[];
+	securityLevel?: string;
 	memberCount: number;
-	approvalFlow: string;
+	approvalFlow?: string;
 	updatedAt: string;
 	scope?: "DEPARTMENT" | "INSTITUTE";
 	operations?: DataOperation[];
@@ -214,19 +224,16 @@ export interface AdminRoleDetail {
 	// Extended fields for richer role presentation (optional, backend-provided)
 	code?: string;
 	roleId?: string;
-	nameZh?: string;
-	nameEn?: string;
+	displayName?: string;
 	zone?: "DEPT" | "INST";
 	canRead?: boolean;
 	canWrite?: boolean;
 	canExport?: boolean;
 	canManage?: boolean;
 	legacyName?: string;
-	kcMemberCount?: number;
 	menuBindings?: number;
 	customRole?: boolean;
 	customRoleId?: number | null;
-	assignments?: AdminRoleAssignment[];
 }
 
 export interface AdminDataset {
@@ -252,39 +259,12 @@ export interface AdminCustomRole {
 	createdAt: string;
 }
 
-export interface AdminRoleAssignment {
-	id: number;
-	role: string;
-	username: string;
-	displayName: string;
-	userSecurityLevel: SecurityLevel;
-	scopeOrgId: number | null;
-	scopeOrgName: string;
-	datasetIds: number[];
-	operations: DataOperation[];
-	grantedBy: string;
-	grantedAt: string;
-}
-
 export interface CreateCustomRolePayload {
 	name: string;
 	scope: "DEPARTMENT" | "INSTITUTE";
 	description?: string;
-	titleCn?: string;
-	nameZh?: string;
 	displayName?: string;
-	titleEn?: string;
 	reason?: string;
-}
-
-export interface CreateRoleAssignmentPayload {
-	role: string;
-	username: string;
-	displayName: string;
-	userSecurityLevel: SecurityLevel;
-	scopeOrgId: number | null;
-	datasetIds: number[];
-	operations: DataOperation[];
 }
 
 export interface PermissionCatalogSection {

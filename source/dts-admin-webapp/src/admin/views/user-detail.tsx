@@ -99,24 +99,8 @@ export default function UserDetailView() {
 				KeycloakGroupService.getUserGroups(id),
 			]);
 			setUser(userData);
-			// 合并 DB-authority 下的数据类角色分配
-			let mergedRoles = rolesData || [];
-			try {
-				const allAssign = await adminApi.getRoleAssignments();
-				const mine = (allAssign || []).filter(
-					(it: any) => (it?.username || "").toString().toLowerCase() === (userData?.username || "").toLowerCase(),
-				);
-				const add: KeycloakRole[] = mine.map((it: any) => ({ name: (it?.role || "").toString().trim().toUpperCase() }));
-				const seen = new Set<string>((mergedRoles || []).map((r) => (r?.name || "").toString().trim().toUpperCase()));
-				add.forEach((r) => {
-					const k = (r?.name || "").toString().trim().toUpperCase();
-					if (k && !seen.has(k)) mergedRoles.push(r);
-				});
-			} catch (e) {
-				/* ignore */
-			}
 			// Hide Keycloak 内置/默认角色（如 default-roles-*、offline_access、uma_authorization、realm-management 等）
-			const filtered = (mergedRoles || []).filter((r) => {
+			const filtered = (rolesData || []).filter((r) => {
 				const name = (r?.name || "").toString().trim();
 				if (!name) return false;
 				const lower = name.toLowerCase();
@@ -161,7 +145,7 @@ export default function UserDetailView() {
 					const name = (r?.name || "").toString().trim().toUpperCase();
 					const code = (r?.code || r?.roleId || r?.legacyName || "").toString().trim().toUpperCase();
 					const desc = (r?.description || "").toString();
-					const display = (r?.nameZh || r?.displayName || "").toString();
+					const display = (r?.displayName || r?.name || "").toString();
 					if (name) descMap[name] = desc;
 					if (name) put(name, display);
 					if (code) put(code, display);

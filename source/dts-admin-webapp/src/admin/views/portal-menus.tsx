@@ -637,11 +637,7 @@ function buildRoleOptions(roles: AdminRoleDetail[]): RoleOption[] {
 		if (isReservedBusinessRoleName(authority)) {
 			return;
 		}
-		const label =
-			role.nameZh ||
-			role.description ||
-			role.name ||
-			humanizeRoleAuthority(authority);
+		const label = role.displayName || role.description || role.name || humanizeRoleAuthority(authority);
 		if (!map.has(authority)) {
 			map.set(authority, {
 				authority,

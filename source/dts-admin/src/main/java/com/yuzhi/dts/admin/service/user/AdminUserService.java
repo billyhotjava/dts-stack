@@ -29,6 +29,7 @@ import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.common.audit.ChangeSnapshot;
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import com.yuzhi.dts.admin.domain.OrganizationNode;
 import com.yuzhi.dts.admin.security.SecurityUtils;
@@ -244,6 +245,94 @@ public class AdminUserService {
             }
         }
         return result;
+    }
+
+    public RoleMemberDeltaResult applyRoleMemberDelta(List<String> roleNameCandidates, Collection<String> addUsernames, Collection<String> removeUsernames) {
+        LinkedHashSet<String> additions = sanitizeUsernameSet(addUsernames);
+        LinkedHashSet<String> removals = sanitizeUsernameSet(removeUsernames);
+        removals.removeAll(additions);
+        if (additions.isEmpty() && removals.isEmpty()) {
+            return RoleMemberDeltaResult.empty();
+        }
+        if (roleNameCandidates == null || roleNameCandidates.isEmpty()) {
+            throw new IllegalArgumentException("缺少角色名称信息");
+        }
+        String token = resolveManagementToken();
+        List<String> added = new ArrayList<>();
+        List<String> removed = new ArrayList<>();
+        Map<String, String> errors = new LinkedHashMap<>();
+        List<String> normalizedCandidates = roleNameCandidates
+            .stream()
+            .filter(name -> name != null && !name.trim().isEmpty())
+            .map(String::trim)
+            .toList();
+        if (normalizedCandidates.isEmpty()) {
+            throw new IllegalArgumentException("缺少有效的角色名称信息");
+        }
+        String canonicalRole = normalizeRole(normalizedCandidates.get(0));
+
+        for (String username : additions) {
+            try {
+                AdminKeycloakUser snapshot = ensureFreshSnapshot(username);
+                String kcId = snapshot.getKeycloakId();
+                if (StringUtils.isBlank(kcId)) {
+                    throw new IllegalStateException("未找到用户的 Keycloak 标识");
+                }
+                Exception lastFailure = null;
+                boolean success = false;
+                for (String candidate : normalizedCandidates) {
+                    try {
+                        keycloakAdminClient.addRealmRolesToUser(kcId, List.of(candidate), token);
+                        success = true;
+                        break;
+                    } catch (Exception ex) {
+                        lastFailure = ex;
+                    }
+                }
+                if (!success && lastFailure != null) {
+                    throw lastFailure;
+                }
+                refreshSnapshotFromKeycloak(username);
+                added.add(username);
+            } catch (Exception ex) {
+                errors.put(username, ex.getMessage());
+            }
+        }
+
+        for (String username : removals) {
+            try {
+                AdminKeycloakUser snapshot = ensureFreshSnapshot(username);
+                String kcId = snapshot.getKeycloakId();
+                if (StringUtils.isBlank(kcId)) {
+                    throw new IllegalStateException("未找到用户的 Keycloak 标识");
+                }
+                Exception lastFailure = null;
+                boolean success = false;
+                for (String candidate : normalizedCandidates) {
+                    try {
+                        keycloakAdminClient.removeRealmRolesFromUser(kcId, List.of(candidate), token);
+                        success = true;
+                        break;
+                    } catch (Exception ex) {
+                        lastFailure = ex;
+                    }
+                }
+                if (!success && lastFailure != null) {
+                    throw lastFailure;
+                }
+                refreshSnapshotFromKeycloak(username);
+                removed.add(username);
+                if (StringUtils.isNotBlank(canonicalRole)) {
+                    roleAssignRepo
+                        .findByUsernameIgnoreCaseAndRoleIgnoreCase(username, canonicalRole)
+                        .forEach(roleAssignRepo::delete);
+                }
+            } catch (Exception ex) {
+                errors.put(username, ex.getMessage());
+            }
+        }
+
+        return new RoleMemberDeltaResult(added, removed, errors);
     }
 
     private Optional<String> resolveBuiltinDisplayName(String normalizedUsername) {
@@ -565,7 +654,10 @@ public class AdminUserService {
 
     private Map<String, Object> buildUpdatePayload(UserOperationRequest request, AdminKeycloakUser snapshot) {
         Map<String, Object> payload = basePayload("update", snapshot.getUsername(), request);
-        payload.put("target", snapshotPayload(snapshot));
+        Map<String, Object> target = snapshotPayload(snapshot);
+        target.remove("realmRoles");
+        payload.remove("realmRoles");
+        payload.put("target", target);
         return payload;
     }
 
@@ -590,7 +682,7 @@ public class AdminUserService {
         String normalizedPersonLevel = normalizeSecurityLevel(request.getPersonSecurityLevel());
         ensureAllowedSecurityLevel(normalizedPersonLevel, "人员密级不允许为非密");
         payload.put("personSecurityLevel", normalizedPersonLevel);
-        if (request.isRealmRolesSpecified()) {
+        if (request.isRealmRolesSpecified() && "create".equals(action)) {
             payload.put("realmRoles", sanitizeRealmRoleList(request.getRealmRoles()));
         }
         if (request.isGroupPathsSpecified()) {
@@ -664,6 +756,23 @@ public class AdminUserService {
             }
         }
         return filtered;
+    }
+
+    private LinkedHashSet<String> sanitizeUsernameSet(Collection<String> usernames) {
+        LinkedHashSet<String> set = new LinkedHashSet<>();
+        if (usernames == null) {
+            return set;
+        }
+        for (String username : usernames) {
+            if (username == null) {
+                continue;
+            }
+            String trimmed = username.trim();
+            if (!trimmed.isEmpty()) {
+                set.add(trimmed);
+            }
+        }
+        return set;
     }
 
     private boolean hasUserModifications(UserOperationRequest request, AdminKeycloakUser snapshot) {
@@ -1901,7 +2010,13 @@ public class AdminUserService {
         return "USER_MANAGEMENT";
     }
 
-    public ApprovalDTOs.ApprovalRequestDetail approve(long id, String approver, String note, String accessToken) {
+    public ApprovalDTOs.ApprovalRequestDetail approve(
+        long id,
+        String approver,
+        String note,
+        String accessToken,
+        String clientIp
+    ) {
         AdminApprovalRequest approval = approvalRepository
             .findWithItemsById(id)
             .orElseThrow(() -> new IllegalArgumentException("审批请求不存在: " + id));
@@ -1965,7 +2080,8 @@ public class AdminUserService {
                 "APPROVED",
                 "APPROVED",
                 AuditOperationType.APPROVE,
-                AuditOperationType.APPROVE.getDisplayName()
+                AuditOperationType.APPROVE.getDisplayName(),
+                clientIp
             );
             updateChangeRequestStatus(changeRequestIds, ApprovalStatus.APPLIED.name(), approver, now, null);
             return toDetailDto(approval);
@@ -2004,7 +2120,8 @@ public class AdminUserService {
                 v2Detail,
                 collector,
                 buildFallbackApprovalSummary("FAILED", primaryChangeRequestId, id),
-                failureContext
+                failureContext,
+                clientIp
             );
             LOG.warn("Approval id={} failed to apply: {}", id, ex.getMessage());
             throw new IllegalStateException("审批执行失败: " + ex.getMessage(), ex);
@@ -2025,7 +2142,8 @@ public class AdminUserService {
         String statusCode,
         String resultCode,
         AuditOperationType operationType,
-        String operationTypeText
+        String operationTypeText,
+        String clientIp
     ) {
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("result", resultCode);
@@ -2073,7 +2191,8 @@ public class AdminUserService {
             detailForV2,
             collector,
             summaryText,
-            operationContext
+            operationContext,
+            clientIp
         );
     }
 
@@ -2090,7 +2209,8 @@ public class AdminUserService {
         Map<String, Object> detail,
         ApprovalAuditCollector collector,
         String summaryText,
-        OperationContext operationContext
+        OperationContext operationContext,
+        String clientIp
     ) {
         if (StringUtils.isBlank(approver)) {
             return;
@@ -2117,6 +2237,10 @@ public class AdminUserService {
                 .summary(resolvedSummary)
                 .result(resultStatus)
                 .request("/api/admin/approvals/" + approvalId + "/decision", "POST");
+            String resolvedIp = IpAddressUtils.resolveClientIp(clientIp);
+            if (StringUtils.isNotBlank(resolvedIp)) {
+                builder.client(resolvedIp, null);
+            }
             builder.metadata("approvalId", approvalId);
             if (approval != null) {
                 builder.metadata("approvalType", approval.getType());
@@ -2663,7 +2787,7 @@ public class AdminUserService {
         }
     }
 
-    public ApprovalDTOs.ApprovalRequestDetail reject(long id, String approver, String note) {
+    public ApprovalDTOs.ApprovalRequestDetail reject(long id, String approver, String note, String clientIp) {
         AdminApprovalRequest approval = approvalRepository
             .findWithItemsById(id)
             .orElseThrow(() -> new IllegalArgumentException("审批请求不存在: " + id));
@@ -2690,13 +2814,14 @@ public class AdminUserService {
             "REJECTED",
             "REJECTED",
             AuditOperationType.REJECT,
-            AuditOperationType.REJECT.getDisplayName()
+            AuditOperationType.REJECT.getDisplayName(),
+            clientIp
         );
         updateChangeRequestStatus(changeRequestIds, ApprovalStatus.REJECTED.name(), approver, now, null);
         return toDetailDto(approval);
     }
 
-    public ApprovalDTOs.ApprovalRequestDetail delay(long id, String approver, String note) {
+    public ApprovalDTOs.ApprovalRequestDetail delay(long id, String approver, String note, String clientIp) {
         AdminApprovalRequest approval = approvalRepository
             .findWithItemsById(id)
             .orElseThrow(() -> new IllegalArgumentException("审批请求不存在: " + id));
@@ -2723,7 +2848,8 @@ public class AdminUserService {
             "PROCESSING",
             "PROCESSING",
             AuditOperationType.REQUEST,
-            "待定"
+            "待定",
+            clientIp
         );
         updateChangeRequestStatus(changeRequestIds, ApprovalStatus.PROCESSING.name(), approver, now, null);
         return toDetailDto(approval);
@@ -2990,7 +3116,7 @@ public class AdminUserService {
         if (additionalAttributes != null && !additionalAttributes.isEmpty()) {
             additionalAttributes.forEach((key, value) -> {
                 if (StringUtils.isNotBlank(key) && StringUtils.isNotBlank(value)) {
-                    attributes.putIfAbsent(key.trim(), value.trim());
+                    attributes.put(key.trim(), value.trim());
                 }
             });
         }
@@ -3096,6 +3222,87 @@ public class AdminUserService {
         } catch (Exception ex) {
             LOG.warn("deleteRealmRoleAndRemoveFromUsers failed for {}: {}", name, ex.getMessage());
         }
+    }
+
+    public Optional<KeycloakRoleDTO> findRealmRoleDetail(String roleName) {
+        if (StringUtils.isBlank(roleName)) {
+            return Optional.empty();
+        }
+        List<String> candidates = roleNameCandidates(roleName);
+        if (candidates.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            String token = resolveManagementToken();
+            for (String candidate : candidates) {
+                try {
+                    Optional<KeycloakRoleDTO> found = keycloakAdminClient.findRealmRole(candidate, token);
+                    if (found.isPresent()) {
+                        KeycloakRoleDTO dto = found.get();
+                        if (dto.getAttributes() == null) {
+                            dto.setAttributes(new java.util.LinkedHashMap<>());
+                        }
+                        return Optional.of(dto);
+                    }
+                } catch (Exception ex) {
+                    LOG.debug("Failed to resolve Keycloak role {} via candidate {}: {}", roleName, candidate, ex.getMessage());
+                }
+            }
+        } catch (Exception ex) {
+            LOG.warn("Failed to resolve Keycloak role {}: {}", roleName, ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    public List<KeycloakUserDTO> listRealmRoleMembersDetail(String roleName) {
+        if (StringUtils.isBlank(roleName)) {
+            return List.of();
+        }
+        Optional<KeycloakRoleDTO> resolved = findRealmRoleDetail(roleName);
+        if (resolved.isEmpty()) {
+            return List.of();
+        }
+        String actualName = firstNonBlank(resolved.get().getName(), roleName.trim());
+        if (StringUtils.isBlank(actualName)) {
+            return List.of();
+        }
+        try {
+            String token = resolveManagementToken();
+            List<KeycloakUserDTO> users = keycloakAdminClient.listUsersByRealmRole(actualName, token);
+            return users == null ? List.of() : users;
+        } catch (Exception ex) {
+            LOG.warn("Failed to list Keycloak users for role {}: {}", actualName, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private List<String> roleNameCandidates(String raw) {
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        if (StringUtils.isBlank(raw)) {
+            return List.of();
+        }
+        String trimmed = raw.trim();
+        if (!trimmed.isEmpty()) {
+            candidates.add(trimmed);
+        }
+        String canonical = canonicalRoleName(trimmed);
+        if (StringUtils.isNotBlank(canonical)) {
+            candidates.add(canonical);
+            candidates.add("ROLE_" + canonical);
+        }
+        return new ArrayList<>(candidates);
+    }
+
+    private String canonicalRoleName(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return raw;
+        }
+        String upper = raw.trim().replace('-', '_');
+        upper = upper.toUpperCase(Locale.ROOT);
+        if (upper.startsWith("ROLE_")) {
+            return upper.substring(5);
+        }
+        return upper;
     }
 
     private String buildRoleDescription(String scope, Set<String> operations) {
@@ -3242,7 +3449,6 @@ public class AdminUserService {
             refreshUserGroups(target, accessToken);
             AdminKeycloakUser savedEntity = syncSnapshot(target);
             detail.put("keycloakId", target.getId());
-            detail.put("realmRoles", target.getRealmRoles());
             String resolvedTarget = (savedEntity != null && savedEntity.getId() != null)
                 ? String.valueOf(savedEntity.getId())
                 : (target.getUsername() != null ? target.getUsername() : username);
@@ -3354,7 +3560,6 @@ public class AdminUserService {
             refreshUserGroups(updated, accessToken);
             AdminKeycloakUser updatedEntity = syncSnapshot(updated);
             detail.put("keycloakId", existing.getId());
-            detail.put("realmRoles", updated.getRealmRoles());
             String targetId = (updatedEntity != null && updatedEntity.getId() != null)
                 ? String.valueOf(updatedEntity.getId())
                 : existing.getUsername();
@@ -3770,5 +3975,34 @@ public class AdminUserService {
         if (r.endsWith("_OWNER")) return "read,write,export";
         if (r.endsWith("_DEV") || r.endsWith("_DATA_DEV")) return "read,write";
         return "read"; // VIEWER and others default to read
+    }
+
+    public static class RoleMemberDeltaResult {
+
+        private final List<String> added;
+        private final List<String> removed;
+        private final Map<String, String> errors;
+
+        public RoleMemberDeltaResult(List<String> added, List<String> removed, Map<String, String> errors) {
+            this.added = added == null ? List.of() : List.copyOf(added);
+            this.removed = removed == null ? List.of() : List.copyOf(removed);
+            this.errors = errors == null ? Map.of() : Map.copyOf(errors);
+        }
+
+        public static RoleMemberDeltaResult empty() {
+            return new RoleMemberDeltaResult(List.of(), List.of(), Map.of());
+        }
+
+        public List<String> getAdded() {
+            return added;
+        }
+
+        public List<String> getRemoved() {
+            return removed;
+        }
+
+        public Map<String, String> getErrors() {
+            return errors;
+        }
     }
 }

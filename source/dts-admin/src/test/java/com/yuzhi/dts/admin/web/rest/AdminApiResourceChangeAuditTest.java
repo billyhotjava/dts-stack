@@ -9,6 +9,7 @@ import com.yuzhi.dts.admin.repository.AdminCustomRoleRepository;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.AdminDatasetRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
+import com.yuzhi.dts.admin.repository.AdminRoleMemberRepository;
 import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.repository.PortalMenuRepository;
@@ -57,6 +58,8 @@ class AdminApiResourceChangeAuditTest {
     @Mock
     private AdminRoleAssignmentRepository roleAssignmentRepository;
     @Mock
+    private AdminRoleMemberRepository roleMemberRepository;
+    @Mock
     private SystemConfigRepository systemConfigRepository;
     @Mock
     private PortalMenuRepository portalMenuRepository;
@@ -93,6 +96,7 @@ class AdminApiResourceChangeAuditTest {
             customRoleRepository,
             userRepository,
             roleAssignmentRepository,
+            roleMemberRepository,
             systemConfigRepository,
             portalMenuRepository,
             portalMenuVisibilityRepository,

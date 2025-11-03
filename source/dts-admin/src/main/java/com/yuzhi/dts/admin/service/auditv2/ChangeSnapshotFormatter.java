@@ -173,18 +173,18 @@ public class ChangeSnapshotFormatter {
             "INSTITUTE", "全所",
             "DEPARTMENT", "部门"
         )));
-        map.put("operations", FieldMeta.label("操作权限"));
-        map.put("maxRows", FieldMeta.label("最大行数"));
-        map.put("allowDesensitizeJson", FieldMeta.mapping("允许脱敏 JSON", Map.of(
-            "true", "是",
-            "false", "否"
-        )));
         map.put("description", FieldMeta.label("角色描述"));
         map.put("permissions", FieldMeta.label("权限列表"));
         map.put("enabled", FieldMeta.mapping("启用状态", Map.of(
             "true", "启用",
             "false", "停用"
         )));
+        map.put("members", FieldMeta.label("角色成员"));
+        map.put("memberCount", FieldMeta.label("成员数量"));
+        map.put("memberAdds", FieldMeta.label("新增成员"));
+        map.put("memberRemoves", FieldMeta.label("移除成员"));
+        map.put("memberAddsRequested", FieldMeta.label("申请新增成员"));
+        map.put("memberRemovesRequested", FieldMeta.label("申请移除成员"));
         return map;
     }
 
@@ -415,6 +415,12 @@ public class ChangeSnapshotFormatter {
         if ("ROLE".equals(resourceType) || "CUSTOM_ROLE".equals(resourceType)) {
             String normalizedField = field == null ? null : field.toLowerCase(Locale.ROOT);
             return normalizedField == null || !ROLE_CHANGE_EXCLUDED_FIELDS.contains(normalizedField);
+        }
+        if (
+            ("USER".equals(resourceType) || "ADMIN_KEYCLOAK_USER".equals(resourceType)) &&
+            "realmRoles".equalsIgnoreCase(field)
+        ) {
+            return false;
         }
         return true;
     }

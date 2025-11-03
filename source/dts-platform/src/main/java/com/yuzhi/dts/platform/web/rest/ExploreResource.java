@@ -51,6 +51,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.apache.commons.codec.digest.DigestUtils;
 
 @RestController
 @RequestMapping("/api/explore")
@@ -431,6 +432,84 @@ public class ExploreResource {
             Map.of("count", list.size())
         );
         return ApiResponses.ok(list);
+    }
+
+    @PostMapping("/result-sets/{id}/copy-sql")
+    public ApiResponse<Map<String, Object>> recordResultSetCopy(
+        @PathVariable UUID id,
+        @RequestBody(required = false) Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ResultSet resultSet = resultSetRepo
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "结果集不存在"));
+        assertResultSetAccess(resultSet);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        String resultSetLabel = StringUtils.hasText(resultSet.getName()) ? resultSet.getName() : id.toString();
+        payload.put("summary", "复制结果集 SQL：" + resultSetLabel);
+        payload.put("resultSetId", id.toString());
+        if (StringUtils.hasText(resultSet.getName())) {
+            payload.put("resultSetName", resultSet.getName());
+        }
+        if (resultSet.getRowCount() != null) {
+            payload.put("rowCount", resultSet.getRowCount());
+        }
+        if (resultSet.getStorageFormat() != null) {
+            payload.put("storageFormat", resultSet.getStorageFormat().name());
+        }
+
+        QueryExecution execution = executionRepo.findByResultSetId(id).stream().findFirst().orElse(null);
+        CatalogDataset dataset = null;
+        if (execution != null) {
+            payload.put("executionId", execution.getId().toString());
+            if (execution.getEngine() != null) {
+                payload.put("engine", execution.getEngine().name());
+            }
+            if (execution.getFinishedAt() != null) {
+                payload.put("finishedAt", execution.getFinishedAt().toString());
+            }
+            if (execution.getDatasetId() != null) {
+                payload.put("datasetId", execution.getDatasetId().toString());
+                dataset = datasetRepo.findById(execution.getDatasetId()).orElse(null);
+                if (dataset != null && StringUtils.hasText(dataset.getName())) {
+                    payload.put("datasetName", dataset.getName());
+                }
+            }
+            if (execution.getRowCount() != null) {
+                payload.putIfAbsent("rowCount", execution.getRowCount());
+            }
+        }
+
+        if (body != null && !body.isEmpty()) {
+            Object sql = body.get("sql");
+            if (sql instanceof String sqlText && StringUtils.hasText(sqlText)) {
+                String trimmed = sqlText.trim();
+                payload.put("sqlLength", trimmed.length());
+                payload.put("sqlSnippet", trimmed.length() > 500 ? trimmed.substring(0, 500) + "…" : trimmed);
+                payload.put("sqlHash", DigestUtils.sha256Hex(trimmed));
+            }
+            Object datasetName = body.get("datasetName");
+            if (datasetName instanceof String name && StringUtils.hasText(name)) {
+                payload.putIfAbsent("datasetName", name.trim());
+            }
+            Object datasetId = body.get("datasetId");
+            if (datasetId instanceof String dsId && StringUtils.hasText(dsId)) {
+                payload.putIfAbsent("datasetId", dsId.trim());
+            }
+        }
+
+        String datasetLabel = datasetName(dataset, execution != null ? execution.getDatasetId() : null);
+        recordAudit(
+            "COPY",
+            "explore.result.sql",
+            id.toString(),
+            "复制结果集 SQL：" + resultSetLabel,
+            datasetLabel,
+            "SUCCESS",
+            payload
+        );
+        return ApiResponses.ok(Map.of("recorded", Boolean.TRUE));
     }
 
     @GetMapping("/result-preview/{id}")
