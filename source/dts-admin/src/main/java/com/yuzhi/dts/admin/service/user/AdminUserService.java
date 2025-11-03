@@ -3238,7 +3238,7 @@ public class AdminUserService {
                 try {
                     Optional<KeycloakRoleDTO> found = keycloakAdminClient.findRealmRole(candidate, token);
                     if (found.isPresent()) {
-                        KeycloakRoleDTO dto = found.get();
+                        KeycloakRoleDTO dto = found.orElseThrow();
                         if (dto.getAttributes() == null) {
                             dto.setAttributes(new java.util.LinkedHashMap<>());
                         }
@@ -3262,7 +3262,8 @@ public class AdminUserService {
         if (resolved.isEmpty()) {
             return List.of();
         }
-        String actualName = firstNonBlank(resolved.get().getName(), roleName.trim());
+        KeycloakRoleDTO resolvedRole = resolved.orElseThrow();
+        String actualName = firstNonBlank(resolvedRole.getName(), roleName.trim());
         if (StringUtils.isBlank(actualName)) {
             return List.of();
         }

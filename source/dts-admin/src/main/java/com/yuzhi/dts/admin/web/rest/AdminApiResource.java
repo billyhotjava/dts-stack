@@ -1703,7 +1703,7 @@ public class AdminApiResource {
         if (existingOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("角色指派不存在或已被撤销"));
         }
-        AdminRoleAssignment assignment = existingOpt.get();
+        AdminRoleAssignment assignment = existingOpt.orElseThrow();
         Map<String, Object> before = toRoleAssignmentVM(assignment, buildRoleDisplayNameMap());
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("assignmentId", assignment.getId());
