@@ -244,7 +244,8 @@ public class AdminAuditService {
             case EXPORT -> AuditOperationKind.EXPORT;
             case LOGIN -> AuditOperationKind.LOGIN;
             case LOGOUT -> AuditOperationKind.LOGOUT;
-            case PUBLISH -> AuditOperationKind.UPDATE;
+            case PUBLISH -> AuditOperationKind.PUBLISH;
+            case ARCHIVE -> AuditOperationKind.ARCHIVE;
             case REQUEST -> AuditOperationKind.OTHER;
             default -> null;
         };

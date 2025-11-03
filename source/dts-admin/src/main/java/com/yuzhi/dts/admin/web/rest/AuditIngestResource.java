@@ -483,6 +483,12 @@ public class AuditIngestResource {
             ) {
                 return AuditOperationKind.EXECUTE;
             }
+            if (normalized.startsWith("ARCHIVE") || containsAny(lower, "归档", "archive")) {
+                return AuditOperationKind.ARCHIVE;
+            }
+            if (normalized.startsWith("PUBLISH") || containsAny(lower, "发布", "publish")) {
+                return AuditOperationKind.PUBLISH;
+            }
             if (
                 normalized.startsWith("CREATE") ||
                 normalized.startsWith("ADD") ||

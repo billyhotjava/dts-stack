@@ -4363,8 +4363,68 @@ public class AdminApiResource {
             case GRANT -> AuditOperationKind.GRANT;
             case REVOKE -> AuditOperationKind.REVOKE;
             case EXECUTE -> AuditOperationKind.EXECUTE;
+            case ARCHIVE -> AuditOperationKind.ARCHIVE;
+            case PUBLISH -> AuditOperationKind.PUBLISH;
             default -> null;
         };
+    }
+
+    private Optional<AdminAuditOperation> resolveOperationOverrideForChangeRequest(ChangeContext context, AuditOperationType type) {
+        if (context == null || type == null || type == AuditOperationType.UNKNOWN) {
+            return Optional.empty();
+        }
+        String resource = normalizeActionToken(context.resourceType());
+        if ("ROLE".equals(resource)) {
+            return switch (type) {
+                case CREATE -> Optional.of(AdminAuditOperation.ADMIN_ROLE_CREATE);
+                case UPDATE -> Optional.of(AdminAuditOperation.ADMIN_ROLE_UPDATE);
+                case DELETE -> Optional.of(AdminAuditOperation.ADMIN_ROLE_DELETE);
+                default -> Optional.empty();
+            };
+        }
+        if ("CUSTOM_ROLE".equals(resource)) {
+            return switch (type) {
+                case CREATE -> Optional.of(AdminAuditOperation.ADMIN_CUSTOM_ROLE_CREATE);
+                case UPDATE -> Optional.of(AdminAuditOperation.ADMIN_CUSTOM_ROLE_UPDATE);
+                case DELETE -> Optional.of(AdminAuditOperation.ADMIN_CUSTOM_ROLE_DELETE);
+                case EXECUTE -> Optional.of(AdminAuditOperation.ADMIN_CUSTOM_ROLE_EXECUTE);
+                default -> Optional.empty();
+            };
+        }
+        if ("ROLE_ASSIGNMENT".equals(resource)) {
+            return switch (type) {
+                case GRANT, REVOKE -> Optional.of(AdminAuditOperation.ADMIN_ROLE_ASSIGNMENT_CREATE);
+                default -> Optional.empty();
+            };
+        }
+        if ("PORTAL_MENU".equals(resource)) {
+            return switch (type) {
+                case CREATE -> Optional.of(AdminAuditOperation.ADMIN_MENU_CREATE);
+                case UPDATE -> Optional.of(AdminAuditOperation.ADMIN_MENU_UPDATE);
+                case DISABLE -> Optional.of(AdminAuditOperation.ADMIN_MENU_DISABLE);
+                case ENABLE -> Optional.of(AdminAuditOperation.ADMIN_MENU_ENABLE);
+                default -> Optional.empty();
+            };
+        }
+        if ("ORG".equals(resource) || "ORGANIZATION".equals(resource)) {
+            return switch (type) {
+                case CREATE -> Optional.of(AdminAuditOperation.ADMIN_ORG_CREATE);
+                case UPDATE -> Optional.of(AdminAuditOperation.ADMIN_ORG_UPDATE);
+                case DELETE -> Optional.of(AdminAuditOperation.ADMIN_ORG_DELETE);
+                default -> Optional.empty();
+            };
+        }
+        if ("USER".equals(resource)) {
+            return switch (type) {
+                case CREATE -> Optional.of(AdminAuditOperation.ADMIN_USER_CREATE);
+                case UPDATE -> Optional.of(AdminAuditOperation.ADMIN_USER_UPDATE);
+                case DELETE -> Optional.of(AdminAuditOperation.ADMIN_USER_DELETE);
+                case ENABLE -> Optional.of(AdminAuditOperation.ADMIN_USER_ENABLE);
+                case DISABLE -> Optional.of(AdminAuditOperation.ADMIN_USER_DISABLE);
+                default -> Optional.empty();
+            };
+        }
+        return Optional.empty();
     }
 
     private String truncateOperationName(String value) {
@@ -5101,6 +5161,29 @@ public class AdminApiResource {
             if (context != null && context.extras() != null && !context.extras().isEmpty()) {
                 builder.detail("context", new LinkedHashMap<>(context.extras()));
             }
+            String overrideName = truncateOperationName(summary);
+            AuditOperationType requesterType = determineRequesterOperationType(context);
+            if (detail != null && requesterType != null && requesterType != AuditOperationType.UNKNOWN) {
+                detail.put("operationType", requesterType.getCode());
+                detail.put("operationTypeText", requesterType.getDisplayName());
+            }
+            AuditOperationKind overrideKind = mapOperationKind(requesterType);
+            Optional<AdminAuditOperation> overrideOperation = resolveOperationOverrideForChangeRequest(context, requesterType);
+            if (overrideOperation.isPresent()) {
+                AdminAuditOperation op = overrideOperation.orElseThrow();
+                AuditOperationKind effectiveKind = overrideKind != null ? overrideKind : mapOperationKind(op.type());
+                String effectiveName = StringUtils.hasText(overrideName) ? overrideName : summary;
+                builder
+                    .operationOverride(op.code(), effectiveName, effectiveKind != null ? effectiveKind : AuditOperationKind.CREATE)
+                    .moduleOverride(op.moduleKey(), op.moduleLabel());
+            } else if (overrideKind != null) {
+                String effectiveName = StringUtils.hasText(overrideName) ? overrideName : summary;
+                builder.operationOverride(
+                    AdminAuditOperation.ADMIN_CHANGE_REQUEST_MANAGE.code(),
+                    effectiveName,
+                    overrideKind
+                );
+            }
             if (detail != null && !detail.isEmpty()) {
                 builder.detail("detail", new LinkedHashMap<>(detail));
             }
@@ -5159,7 +5242,14 @@ public class AdminApiResource {
                 detail.put("operationTypeText", requesterType.getDisplayName());
             }
             AuditOperationKind overrideKind = mapOperationKind(requesterType);
-            if (overrideKind != null) {
+            Optional<AdminAuditOperation> overrideOperation = resolveOperationOverrideForChangeRequest(context, requesterType);
+            if (overrideOperation.isPresent()) {
+                AdminAuditOperation op = overrideOperation.orElseThrow();
+                AuditOperationKind effectiveKind = overrideKind != null ? overrideKind : mapOperationKind(op.type());
+                builder
+                    .operationOverride(op.code(), overrideName, effectiveKind != null ? effectiveKind : AuditOperationKind.CREATE)
+                    .moduleOverride(op.moduleKey(), op.moduleLabel());
+            } else if (overrideKind != null) {
                 builder.operationOverride(
                     AdminAuditOperation.ADMIN_CHANGE_REQUEST_MANAGE.code(),
                     overrideName,
@@ -5227,7 +5317,14 @@ public class AdminApiResource {
                 approverDetail.put("operationTypeText", requesterType.getDisplayName());
             }
             AuditOperationKind overrideKind = mapOperationKind(requesterType);
-            if (overrideKind != null) {
+            Optional<AdminAuditOperation> overrideOperation = resolveOperationOverrideForChangeRequest(context, requesterType);
+            if (overrideOperation.isPresent()) {
+                AdminAuditOperation op = overrideOperation.orElseThrow();
+                AuditOperationKind effectiveKind = overrideKind != null ? overrideKind : mapOperationKind(op.type());
+                builder
+                    .operationOverride(op.code(), baseSummary, effectiveKind != null ? effectiveKind : AuditOperationKind.CREATE)
+                    .moduleOverride(op.moduleKey(), op.moduleLabel());
+            } else if (overrideKind != null) {
                 builder.operationOverride(
                     AdminAuditOperation.ADMIN_CHANGE_REQUEST_MANAGE.code(),
                     baseSummary,
@@ -5293,7 +5390,14 @@ public class AdminApiResource {
                 detail.put("operationTypeText", requesterType.getDisplayName());
             }
             AuditOperationKind overrideKind = mapOperationKind(requesterType);
-            if (overrideKind != null) {
+            Optional<AdminAuditOperation> overrideOperation = resolveOperationOverrideForChangeRequest(context, requesterType);
+            if (overrideOperation.isPresent()) {
+                AdminAuditOperation op = overrideOperation.orElseThrow();
+                AuditOperationKind effectiveKind = overrideKind != null ? overrideKind : mapOperationKind(op.type());
+                builder
+                    .operationOverride(op.code(), baseSummary, effectiveKind != null ? effectiveKind : AuditOperationKind.CREATE)
+                    .moduleOverride(op.moduleKey(), op.moduleLabel());
+            } else if (overrideKind != null) {
                 builder.operationOverride(
                     AdminAuditOperation.ADMIN_CHANGE_REQUEST_MANAGE.code(),
                     baseSummary,

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 public interface AdminRoleMemberRepository extends JpaRepository<AdminRoleMember, Long> {
     List<AdminRoleMember> findByRoleIgnoreCase(String role);
     Optional<AdminRoleMember> findByRoleIgnoreCaseAndUsernameIgnoreCase(String role, String username);
+    List<AdminRoleMember> findByUsernameIgnoreCase(String username);
     long deleteByRoleIgnoreCaseAndUsernameIgnoreCase(String role, String username);
     long countByRoleIgnoreCase(String role);
     long deleteByRoleIgnoreCase(String role);

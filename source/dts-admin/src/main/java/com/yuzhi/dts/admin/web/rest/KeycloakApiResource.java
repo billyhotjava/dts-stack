@@ -16,7 +16,9 @@ import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
 import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
+import com.yuzhi.dts.admin.repository.AdminRoleMemberRepository;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
+import com.yuzhi.dts.admin.domain.AdminRoleMember;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.security.session.AdminSessionCloseReason;
@@ -72,6 +74,7 @@ public class KeycloakApiResource {
     private final KeycloakAdminClient keycloakAdminClient;
     private final AdminUserService adminUserService;
     private final AdminRoleAssignmentRepository roleAssignRepo;
+    private final AdminRoleMemberRepository roleMemberRepo;
     private final AdminSessionRegistry adminSessionRegistry;
     private final AdminKeycloakUserRepository userRepository;
     private final ConcurrentMap<String, Instant> recentRoleAudits = new ConcurrentHashMap<>();
@@ -106,6 +109,7 @@ public class KeycloakApiResource {
         KeycloakAdminClient keycloakAdminClient,
         AdminUserService adminUserService,
         AdminRoleAssignmentRepository roleAssignRepo,
+        AdminRoleMemberRepository roleMemberRepo,
         AdminSessionRegistry adminSessionRegistry,
         AdminKeycloakUserRepository userRepository
     ) {
@@ -115,6 +119,7 @@ public class KeycloakApiResource {
         this.keycloakAdminClient = keycloakAdminClient;
         this.adminUserService = adminUserService;
         this.roleAssignRepo = roleAssignRepo;
+        this.roleMemberRepo = roleMemberRepo;
         this.adminSessionRegistry = adminSessionRegistry;
         this.userRepository = userRepository;
     }
@@ -2590,13 +2595,27 @@ public class KeycloakApiResource {
             @SuppressWarnings("unchecked")
             List<String> kcRoles = (List<String>) userOut.getOrDefault("roles", java.util.Collections.emptyList());
             java.util.LinkedHashSet<String> roles = new java.util.LinkedHashSet<>();
-            for (String r : kcRoles) if (r != null && !r.isBlank()) roles.add(r);
+            for (String r : kcRoles) {
+                String normalized = normalizeAuthority(r);
+                if (normalized != null) {
+                    roles.add(normalized);
+                }
+            }
             String principal = java.util.Objects.toString(userOut.getOrDefault("preferred_username", userOut.get("username")), username);
             try {
                 if (principal != null && !principal.isBlank()) {
-                    for (AdminRoleAssignment a : roleAssignRepo.findByUsernameIgnoreCase(principal)) {
-                        String role = a.getRole();
-                        if (role != null && !role.isBlank()) roles.add(role.trim());
+                    String lookup = principal.trim();
+                    for (AdminRoleAssignment assignment : roleAssignRepo.findByUsernameIgnoreCase(lookup)) {
+                        String authority = normalizeAuthority(assignment.getRole());
+                        if (authority != null) {
+                            roles.add(authority);
+                        }
+                    }
+                    for (AdminRoleMember member : roleMemberRepo.findByUsernameIgnoreCase(lookup)) {
+                        String authority = normalizeAuthority(member.getRole());
+                        if (authority != null) {
+                            roles.add(authority);
+                        }
                     }
                 }
             } catch (Exception ex) {
@@ -3221,6 +3240,17 @@ public class KeycloakApiResource {
         var c = svc.issue("dts-admin", ip, ua, java.time.Duration.ofMinutes(10));
         var view = new PkiChallengeView(c.id, c.nonce, c.aud, c.ts.toEpochMilli(), c.exp.toEpochMilli());
         return ResponseEntity.ok(ApiResponse.ok(view));
+    }
+
+    private String normalizeAuthority(String role) {
+        if (!StringUtils.hasText(role)) {
+            return null;
+        }
+        String upper = role.trim().toUpperCase(Locale.ROOT);
+        if (!upper.startsWith("ROLE_")) {
+            upper = "ROLE_" + upper;
+        }
+        return upper;
     }
 
     private static String extractFromDn(String dn, String... keys) {

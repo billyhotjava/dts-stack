@@ -23,6 +23,8 @@ public enum AuditOperationKind {
     EXECUTE("EXECUTE", "执行"),
     LOGIN("LOGIN", "登录"),
     LOGOUT("LOGOUT", "登出"),
+    ARCHIVE("ARCHIVE", "归档"),
+    PUBLISH("PUBLISH", "发布"),
     OTHER("OTHER", "其他");
 
     private final String code;

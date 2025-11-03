@@ -2688,11 +2688,11 @@ public class AdminUserService {
             case DISABLE -> AuditOperationKind.DISABLE;
             case APPROVE -> AuditOperationKind.APPROVE;
             case REJECT -> AuditOperationKind.REJECT;
-            case PUBLISH -> AuditOperationKind.EXECUTE;
+            case PUBLISH -> AuditOperationKind.PUBLISH;
             case REFRESH -> AuditOperationKind.EXECUTE;
             case UPLOAD -> AuditOperationKind.UPLOAD;
             case CLEAN -> AuditOperationKind.DELETE;
-            case ARCHIVE -> AuditOperationKind.UPDATE;
+            case ARCHIVE -> AuditOperationKind.ARCHIVE;
             case REQUEST -> AuditOperationKind.OTHER;
             case UNKNOWN -> AuditOperationKind.OTHER;
         };

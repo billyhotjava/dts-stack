@@ -419,8 +419,9 @@ const DataStandardDetailPage = () => {
         }
         const name = file.name || "";
         const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
-        if (name.includes("机密")) {
-            toast.error("本模块是非密模块，请勿处理机密数据！");
+        const lowerName = name.toLowerCase();
+        if (lowerName.includes("机密") || lowerName.includes("秘密")) {
+            toast.error("本模块是非密模块，请勿上传秘密/机密文档！");
             try {
                 (event.target as HTMLInputElement).value = "";
             } catch {

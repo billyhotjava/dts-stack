@@ -50,6 +50,7 @@ export default function PortalMenusView() {
 	const [expanded, setExpanded] = useState<Set<number>>(new Set());
 	const [keyword, setKeyword] = useState("");
 	const [editTarget, setEditTarget] = useState<PortalMenuItem | null>(null);
+	const [disableTarget, setDisableTarget] = useState<{ menu: PortalMenuItem; roleCodes: string[] } | null>(null);
 
 	const filteredTreeMenus = useMemo(() => {
 		const trimmed = keyword.trim();
@@ -144,7 +145,9 @@ export default function PortalMenusView() {
 		}
 	};
 
-	const handleToggle = async (id: number, currentlyDeleted: boolean) => {
+	const processToggle = async (menu: PortalMenuItem, currentlyDeleted: boolean) => {
+		const id = menu.id;
+		if (id == null) return;
 		markPending(id, true);
 		try {
 			if (currentlyDeleted) {
@@ -174,6 +177,30 @@ export default function PortalMenusView() {
 			markPending(id, false);
 		}
 	};
+
+	const handleToggle = (menu: PortalMenuItem) => {
+		const id = menu.id;
+		if (id == null) return;
+		if (!menu.deleted) {
+			const roleCodes = normalizeAllowedRoles(menu.allowedRoles);
+			setDisableTarget({ menu, roleCodes });
+			return;
+		}
+		void processToggle(menu, true);
+	};
+
+	const handleCancelDisable = () => setDisableTarget(null);
+
+	const handleConfirmDisable = async () => {
+		if (!disableTarget) return;
+		try {
+			await processToggle(disableTarget.menu, false);
+		} finally {
+			setDisableTarget(null);
+		}
+	};
+
+	const disableBusy = disableTarget?.menu.id != null ? Boolean(pending[disableTarget.menu.id]) : false;
 
 	const handleReset = async () => {
 		setResetting(true);
@@ -307,6 +334,13 @@ export default function PortalMenusView() {
 				rolesLoading={rolesLoading}
 				busy={editBusy}
 			/>
+			<DisableMenuDialog
+				target={disableTarget}
+				onCancel={handleCancelDisable}
+				onConfirm={handleConfirmDisable}
+				resolveRoleLabel={resolveRoleLabel}
+				busy={disableBusy}
+			/>
 		</div>
 	);
 }
@@ -318,7 +352,7 @@ type MenuRowProps = {
 	expanded: Set<number>;
 	setExpanded: (next: Set<number>) => void;
 	pending: Record<number, boolean>;
-	onToggle: (id: number, currentlyDeleted: boolean) => void;
+	onToggle: (menu: PortalMenuItem) => void;
 	keyword: string;
 	onEditRoles: (menu: PortalMenuItem) => void;
 	resolveRoleLabel: (authority: string) => string;
@@ -420,7 +454,7 @@ function MenuRow({
 						<span className="text-xs text-muted-foreground">--</span>
 					) : (
 						<div className="flex flex-wrap justify-end gap-2">
-							<Button size="sm" variant="outline" onClick={() => onToggle(id, isDeleted)} disabled={busy}>
+							<Button size="sm" variant="outline" onClick={() => onToggle(item)} disabled={busy}>
 								{isDeleted ? "启用菜单" : "禁用菜单"}
 							</Button>
 							<Button size="sm" variant="outline" onClick={() => onEditRoles(item)} disabled={rolesLoading || busy}>
@@ -613,6 +647,86 @@ function MenuRoleDialog({
 					</Button>
 					<Button onClick={handleSave} disabled={disabled}>
 						{saving ? "提交中…" : "保存"}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+type DisableMenuDialogProps = {
+	target: { menu: PortalMenuItem; roleCodes: string[] } | null;
+	onCancel: () => void;
+	onConfirm: () => void | Promise<void>;
+	resolveRoleLabel: (authority: string) => string;
+	busy: boolean;
+};
+
+function DisableMenuDialog({ target, onCancel, onConfirm, resolveRoleLabel, busy }: DisableMenuDialogProps) {
+	const open = Boolean(target);
+	const menu = target?.menu ?? null;
+	const menuLabel = menu?.displayName || menu?.name || menu?.path || (menu?.id ? `菜单 #${menu.id}` : "菜单");
+	const menuPath = menu?.path;
+
+	const roleBadges = useMemo(() => {
+		if (!target) {
+			return [];
+		}
+		const codes = Array.from(
+			new Set(
+				target.roleCodes
+					.map((code) => toRoleAuthority(code))
+					.filter((authority) => Boolean(authority))
+			)
+		);
+		return codes.map((authority) => ({
+			code: authority,
+			label: resolveRoleLabel(authority),
+		}));
+	}, [target, resolveRoleLabel]);
+
+	return (
+		<Dialog open={open} onOpenChange={(next) => (!next ? onCancel() : null)}>
+			<DialogContent className="max-w-md">
+				<DialogHeader>
+					<DialogTitle>确认禁用菜单</DialogTitle>
+					{menu ? (
+						<Text variant="body3" className="text-muted-foreground">
+							{menuLabel}
+							{menuPath ? <span className="ml-2 text-xs text-muted-foreground">({menuPath})</span> : null}
+						</Text>
+					) : null}
+				</DialogHeader>
+				<div className="space-y-3 text-sm">
+					<Text variant="body3" className="text-muted-foreground">
+						禁用后，该菜单将无法访问，并会清除所有已绑定的角色可见权限。确认要提交禁用申请吗？
+					</Text>
+					<div className="space-y-2">
+						<Text variant="body3" className="font-medium">
+							将被移除的角色
+						</Text>
+						{roleBadges.length > 0 ? (
+							<div className="flex flex-wrap gap-2">
+								{roleBadges.map((item) => (
+									<Badge key={item.code} variant="secondary" className="border">
+										<span className="mr-1">{item.label}</span>
+										<span className="text-xs text-muted-foreground">({item.code})</span>
+									</Badge>
+								))}
+							</div>
+						) : (
+							<Text variant="body3" className="text-xs text-muted-foreground">
+								当前菜单未绑定角色，但禁用后仍会清空角色关联。
+							</Text>
+						)}
+					</div>
+				</div>
+				<DialogFooter className="flex justify-end gap-2">
+					<Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+						取消
+					</Button>
+					<Button type="button" variant="destructive" onClick={() => onConfirm()} disabled={busy}>
+						{busy ? "提交中..." : "确认禁用"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

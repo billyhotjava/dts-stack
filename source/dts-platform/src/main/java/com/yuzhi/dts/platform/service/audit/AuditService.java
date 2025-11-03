@@ -763,6 +763,9 @@ public class AuditService {
         if (upper.contains("ARCHIVE") || containsAny(lower, "归档", "封存", "archive")) {
             return "ARCHIVE";
         }
+        if (upper.contains("PUBLISH") || containsAny(lower, "发布", "publish")) {
+            return "PUBLISH";
+        }
         if (upper.contains("APPROVE") || containsAny(lower, "批准", "审批通过")) {
             return "APPROVE";
         }

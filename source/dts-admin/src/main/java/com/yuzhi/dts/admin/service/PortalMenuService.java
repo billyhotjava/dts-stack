@@ -289,19 +289,53 @@ public class PortalMenuService {
         if (!CollectionUtils.isEmpty(roleCodes) && roleCodes.contains(AuthoritiesConstants.OP_ADMIN)) {
             return true;
         }
-        if (!StringUtils.hasText(visibility.getRoleCode())) {
+        String rawRequiredRole = visibility.getRoleCode();
+        if (!StringUtils.hasText(rawRequiredRole)) {
             return true;
         }
         if (CollectionUtils.isEmpty(roleCodes)) {
             return false;
         }
-        if (roleCodes.contains(visibility.getRoleCode())) {
-            // New rule: ROLE_USER is non-binding (does not grant any menu)
-            if (AuthoritiesConstants.USER.equals(visibility.getRoleCode())) {
-                return false;
+
+        String normalizedRequiredRole = normalizeRoleCode(rawRequiredRole);
+        if (!StringUtils.hasText(normalizedRequiredRole)) {
+            return false;
+        }
+        if (AuthoritiesConstants.USER.equalsIgnoreCase(normalizedRequiredRole)) {
+            return false;
+        }
+
+        // Build a normalized audience set (ROLE_* upper case) for comparison
+        LinkedHashSet<String> normalizedAudience = new LinkedHashSet<>();
+        for (String role : roleCodes) {
+            if (!StringUtils.hasText(role)) {
+                continue;
             }
+            String normalized = normalizeRoleCode(role);
+            if (StringUtils.hasText(normalized)) {
+                normalizedAudience.add(normalized);
+            }
+        }
+
+        if (normalizedAudience.contains(normalizedRequiredRole)) {
             return true;
         }
+        if (normalizedAudience.contains(rawRequiredRole.trim().toUpperCase(Locale.ROOT))) {
+            return true;
+        }
+
+        String canonicalRequired = stripRolePrefix(normalizedRequiredRole);
+        if (StringUtils.hasText(canonicalRequired)) {
+            if (roleCodes.contains(canonicalRequired)) {
+                return true;
+            }
+            for (String audience : normalizedAudience) {
+                if (canonicalRequired.equalsIgnoreCase(stripRolePrefix(audience))) {
+                    return true;
+                }
+            }
+        }
+
         // Governance triad are also allowed to bypass explicit constraints
         if (
             roleCodes.contains(AuthoritiesConstants.SYS_ADMIN) ||
@@ -1091,6 +1125,17 @@ public class PortalMenuService {
         String trimmed = role.trim();
         String upper = trimmed.toUpperCase(Locale.ROOT);
         return upper.startsWith("ROLE_") ? upper : "ROLE_" + upper;
+    }
+
+    private String stripRolePrefix(String role) {
+        if (!StringUtils.hasText(role)) {
+            return null;
+        }
+        String upper = role.trim().toUpperCase(Locale.ROOT);
+        if (upper.startsWith("ROLE_")) {
+            return upper.substring(5);
+        }
+        return upper;
     }
 
     private record MenuSeed(List<MenuNode> portalNavSections) {}
