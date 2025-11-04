@@ -44,10 +44,9 @@ const formSchema = z
 		database: z.string().min(1, "请输入默认数据库"),
 		servicePrincipal: z.string().min(1, "请输入服务主体 principal"),
 		loginPrincipal: z.string().min(1, "请输入登录主体"),
-		authMethod: z.enum(["KEYTAB", "PASSWORD"]),
+		authMethod: z.literal("KEYTAB"),
 		keytabBase64: z.string().optional(),
 		keytabFileName: z.string().optional(),
-		password: z.string().optional(),
 		krb5Conf: z.string().optional(),
 		proxyUser: z.string().optional(),
 		testQuery: z.string().optional(),
@@ -59,18 +58,11 @@ const formSchema = z
 		customJdbcUrl: z.string().optional(),
 	})
 	.superRefine((values, ctx) => {
-		if (values.authMethod === "KEYTAB" && !values.keytabBase64) {
+		if (!values.keytabBase64) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ["keytabBase64"],
 				message: "请上传 Keytab 文件",
-			});
-		}
-		if (values.authMethod === "PASSWORD" && !values.password) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				path: ["password"],
-				message: "请输入 Kerberos 密码",
 			});
 		}
 		if (!values.krb5Conf?.trim()) {
@@ -109,7 +101,6 @@ const defaultValues: FormValues = {
 	authMethod: "KEYTAB",
 	keytabBase64: "",
 	keytabFileName: undefined,
-	password: "",
 	krb5Conf: "",
 	proxyUser: "",
 	testQuery: "SELECT 1",
@@ -127,7 +118,6 @@ export default function AdminDataSourcesView() {
 		defaultValues,
 	});
 
-	const authMethod = useWatch({ control: form.control, name: "authMethod" });
 	const useHttpTransport = useWatch({ control: form.control, name: "useHttpTransport" });
 	const useCustomJdbc = useWatch({ control: form.control, name: "useCustomJdbc" });
 	const watched = useWatch({ control: form.control });

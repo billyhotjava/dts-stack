@@ -5254,6 +5254,14 @@ public class AdminApiResource {
                 buildRequesterOperationName(cr, context),
                 "提交变更申请"
             );
+            if (StringUtils.hasText(summary)) {
+                String normalized = summary.trim();
+                if (!normalized.startsWith("提交")) {
+                    summary = "提交" + normalized;
+                } else {
+                    summary = normalized;
+                }
+            }
             summary = truncateSummary(summary);
             String overrideName = truncateOperationName(summary);
             AuditActionRequest.Builder builder = AuditActionRequest
