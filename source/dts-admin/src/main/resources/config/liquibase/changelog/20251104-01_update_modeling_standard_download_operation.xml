@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+  <changeSet id="20251104-01-update-modeling-standard-download-operation" author="codex">
+    <comment>Mark data standard attachment downloads as DOWNLOAD operations</comment>
+
+    <update tableName="audit_operation_mapping">
+      <column name="operation_type" value="DOWNLOAD"/>
+      <where>
+        url_pattern = '/api/modeling/standards/{id}/attachments/{attachmentId}/download'
+        AND (source_system = 'platform' OR source_system IS NULL)
+      </where>
+    </update>
+  </changeSet>
+
+</databaseChangeLog>

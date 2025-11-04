@@ -775,8 +775,12 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                 event.resourceType = "modeling.standard.attachment";
                 String attachmentBase = standardId == null ? "/api/modeling/standards" : basePrefix + standardId + "/attachments";
                 String attachmentId = standardId == null ? null : extractTrailingId(uri, attachmentBase);
+                boolean isDownload = uri.contains("/download");
                 if ("GET".equals(method) && !StringUtils.hasText(attachmentId)) {
                     setAction(event, "查看数据标准附件列表", standardId, true, true);
+                } else if ("GET".equals(method) && isDownload) {
+                    setAction(event, "下载数据标准附件", attachmentId, false, false);
+                    event.operationType = "DOWNLOAD";
                 } else if ("GET".equals(method)) {
                     setAction(event, "查看数据标准附件", attachmentId, false, false);
                 } else if ("POST".equals(method)) {

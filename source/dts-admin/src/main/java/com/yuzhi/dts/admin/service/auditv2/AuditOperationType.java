@@ -17,6 +17,7 @@ public enum AuditOperationType {
     LOGIN("LOGIN", "登录", false),
     LOGOUT("LOGOUT", "登出", false),
     EXPORT("EXPORT", "导出", false),
+    IMPORT("IMPORT", "导入", true),
     EXECUTE("EXECUTE", "执行", false),
     GRANT("GRANT", "授权", true),
     ENABLE("ENABLE", "启用", true),
@@ -26,6 +27,7 @@ public enum AuditOperationType {
     REVOKE("REVOKE", "撤销", true),
     PUBLISH("PUBLISH", "发布", false),
     UPLOAD("UPLOAD", "上传", true),
+    DOWNLOAD("DOWNLOAD", "下载", false),
     REFRESH("REFRESH", "刷新", false),
     REQUEST("REQUEST", "申请", false),
     TEST("TEST", "测试", false),
@@ -76,6 +78,7 @@ public enum AuditOperationType {
             case "登录", "LOGIN" -> LOGIN;
             case "登出", "LOGOUT" -> LOGOUT;
             case "导出", "EXPORT" -> EXPORT;
+            case "导入", "IMPORT" -> IMPORT;
             case "执行", "运行", "EXECUTE" -> EXECUTE;
             case "授权", "GRANT" -> GRANT;
             case "启用", "ENABLE" -> ENABLE;
@@ -85,6 +88,7 @@ public enum AuditOperationType {
             case "撤销", "REVOKE" -> REVOKE;
             case "发布", "PUBLISH" -> PUBLISH;
             case "上传", "UPLOAD" -> UPLOAD;
+            case "下载", "DOWNLOAD" -> DOWNLOAD;
             case "刷新", "REFRESH" -> REFRESH;
             case "申请", "REQUEST" -> REQUEST;
             case "测试", "TEST" -> TEST;

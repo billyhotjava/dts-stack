@@ -698,6 +698,9 @@ public class AuditLogResource {
         );
         AuditOperationType type = AuditOperationType.from(candidate);
         if (type == AuditOperationType.UNKNOWN) {
+            type = inferOperationType(view, candidate);
+        }
+        if (type == AuditOperationType.UNKNOWN) {
             type = AuditOperationType.READ;
         }
         return type.getCode();
@@ -850,6 +853,69 @@ public class AuditLogResource {
             }
         }
         return null;
+    }
+
+    private AuditOperationType inferOperationType(AuditEntryView view, String candidate) {
+        List<String> probes = new ArrayList<>();
+        if (StringUtils.isNotBlank(candidate)) {
+            probes.add(candidate);
+        }
+        if (StringUtils.isNotBlank(view.operationName())) {
+            probes.add(view.operationName());
+        }
+        if (StringUtils.isNotBlank(view.summary())) {
+            probes.add(view.summary());
+        }
+        if (StringUtils.isNotBlank(view.operationCode())) {
+            probes.add(view.operationCode());
+        }
+        Map<String, Object> details = view.details();
+        if (details != null) {
+            Object direct = details.get("operationType");
+            if (direct instanceof String s && StringUtils.isNotBlank(s)) {
+                probes.add(s);
+            }
+            Object payload = details.get("payload");
+            if (payload instanceof Map<?, ?> payloadMap) {
+                Object payloadOp = payloadMap.get("operationType");
+                if (payloadOp instanceof String s && StringUtils.isNotBlank(s)) {
+                    probes.add(s);
+                }
+                Object payloadSummary = payloadMap.get("summary");
+                if (payloadSummary instanceof String s && StringUtils.isNotBlank(s)) {
+                    probes.add(s);
+                }
+            }
+        }
+        for (String probe : probes) {
+            String normalized = probe.toLowerCase(Locale.ROOT);
+            if (containsAny(normalized, "下载", "download")) {
+                return AuditOperationType.DOWNLOAD;
+            }
+            if (containsAny(normalized, "上传", "upload")) {
+                return AuditOperationType.UPLOAD;
+            }
+            if (containsAny(normalized, "导出", "export")) {
+                return AuditOperationType.EXPORT;
+            }
+            if (containsAny(normalized, "导入", "import")) {
+                return AuditOperationType.IMPORT;
+            }
+        }
+        return AuditOperationType.UNKNOWN;
+    }
+
+    private boolean containsAny(String text, String... tokens) {
+        if (StringUtils.isBlank(text) || tokens == null || tokens.length == 0) {
+            return false;
+        }
+        String normalized = text.toLowerCase(Locale.ROOT);
+        for (String token : tokens) {
+            if (token != null && normalized.contains(token.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String slugify(String value, String fallback) {

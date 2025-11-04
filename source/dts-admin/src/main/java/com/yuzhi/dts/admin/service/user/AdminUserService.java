@@ -2686,6 +2686,7 @@ public class AdminUserService {
             case LOGIN -> AuditOperationKind.LOGIN;
             case LOGOUT -> AuditOperationKind.LOGOUT;
             case EXPORT -> AuditOperationKind.EXPORT;
+            case IMPORT -> AuditOperationKind.IMPORT;
             case EXECUTE, TEST -> AuditOperationKind.EXECUTE;
             case GRANT -> AuditOperationKind.GRANT;
             case REVOKE -> AuditOperationKind.REVOKE;
@@ -2696,6 +2697,7 @@ public class AdminUserService {
             case PUBLISH -> AuditOperationKind.PUBLISH;
             case REFRESH -> AuditOperationKind.EXECUTE;
             case UPLOAD -> AuditOperationKind.UPLOAD;
+            case DOWNLOAD -> AuditOperationKind.DOWNLOAD;
             case CLEAN -> AuditOperationKind.DELETE;
             case ARCHIVE -> AuditOperationKind.ARCHIVE;
             case REQUEST -> AuditOperationKind.OTHER;
