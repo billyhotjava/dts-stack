@@ -36,6 +36,7 @@
     <include file="config/liquibase/changelog/20251015-03_refactor_admin_roles_rules.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-04_refactor_login_audit_rules.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-05_add_platform_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251103-01_audit_operation_mapping_source_system_fix.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251104-01_update_modeling_standard_download_operation.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251220-04_audit_operation_mapping_patch.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251220-05_audit_operation_mapping_patch2.xml" relativeToChangelogFile="false"/>
