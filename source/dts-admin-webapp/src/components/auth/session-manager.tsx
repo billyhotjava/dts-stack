@@ -149,9 +149,12 @@ export function SessionManager() {
 				router.replace("/auth/login");
 				return;
 			}
-			if (document.visibilityState === "hidden" && idleFor > SESSION_TIMEOUT_MS / 2) {
-				// Tab hidden and user idle: back off refresh to avoid keeping session alive indefinitely
-				schedule(Math.min(SESSION_TIMEOUT_MS, nextRefreshDelayMs(token.accessToken)));
+			const nearingTimeout = idleFor >= SESSION_TIMEOUT_MS - SESSION_IDLE_GRACE_MS;
+			const shouldBackoff =
+				document.visibilityState === "hidden" && idleFor > SESSION_TIMEOUT_MS / 2 ? true : nearingTimeout;
+			if (shouldBackoff) {
+				// Avoid extending server-side会话：进入宽限区间后仅保持短轮询，等待后续检查触发自动登出
+				schedule(SESSION_IDLE_GRACE_MS);
 				return;
 			}
 			try {

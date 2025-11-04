@@ -150,8 +150,11 @@ export default function SessionManager() {
 				cancelled = true;
 				return;
 			}
-			if (document.visibilityState === "hidden" && idleFor > SESSION_TIMEOUT_MS / 2) {
-				schedule(Math.min(SESSION_TIMEOUT_MS, nextRefreshDelayMs(token.accessToken)));
+			const nearingTimeout = idleFor >= SESSION_TIMEOUT_MS - SESSION_IDLE_GRACE_MS;
+			const shouldBackoff =
+				document.visibilityState === "hidden" && idleFor > SESSION_TIMEOUT_MS / 2 ? true : nearingTimeout;
+			if (shouldBackoff) {
+				schedule(SESSION_IDLE_GRACE_MS);
 				return;
 			}
 			try {
