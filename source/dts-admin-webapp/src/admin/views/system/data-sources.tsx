@@ -595,17 +595,17 @@ export default function AdminDataSourcesView() {
 								/>
 								<div className="space-y-2">
 									<FormLabel>认证方式</FormLabel>
-									<div className="flex flex-wrap items-center gap-2">
-					<Select value="KEYTAB" disabled onValueChange={() => undefined}>
-						<SelectTrigger className="w-48" disabled>
-							<SelectValue placeholder="Keytab" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="KEYTAB">Keytab</SelectItem>
-						</SelectContent>
-					</Select>
-					<Badge variant="outline">已锁定：Keytab</Badge>
-				</div>
+					<div className="flex flex-wrap items-center gap-2">
+						<Select value="KEYTAB" disabled onValueChange={() => {}}>
+							<SelectTrigger className="w-48" disabled>
+								<SelectValue placeholder="Keytab" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="KEYTAB">Keytab</SelectItem>
+							</SelectContent>
+						</Select>
+						<Badge variant="outline">已锁定：Keytab</Badge>
+					</div>
 			</div>
 		</div>
 
