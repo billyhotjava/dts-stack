@@ -41,6 +41,7 @@
   应用由 `docker-compose-app.yml` 管理；开发联调由 `docker-compose.dev.yml` 管理。
 - 如需变更域名，修改 `.env` 的 `BASE_DOMAIN` 后可重跑 `./init.sh`。
 - 认证预留：Admin 侧已加入可配置的 PKI 登录占位入口（默认关闭，不影响现有用户名/密码登录）。详见 `docs/pki-auth.md`。
+- 审计记录真实客户端 IP：在 `.env` 中设置 `TRUSTED_PROXY_CIDRS`（例如 `192.168.8.200/32`），让 Traefik 仅信任指定反向代理来源并重写 `X-Forwarded-For`，后端会读取该值并过滤伪造请求头。
 
 【安全与权限矩阵】
 - 角色登录准入、菜单可见性、RBAC×ABAC 判定与错误码说明，见 `worklog/permissions-matrix.md`。

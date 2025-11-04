@@ -98,6 +98,7 @@ const RESULT_ERROR_MESSAGES: Record<number, string> = {
 	0x0d00000a: "应用名编码非 UTF-8，请使用 UTF-8 编码",
 	0x0d00000b: "容器名编码非 UTF-8，请使用 UTF-8 编码",
 	0x0d00000c: "秘钥为空",
+	0x8010006c: "智能钥匙服务未就绪，请确认客户端驱动已启动后重试",
 };
 
 let koalSdkPromise: Promise<void> | null = null;
@@ -664,8 +665,16 @@ function parseJson(value: Nullable<string>): any {
 	}
 }
 
+function normalizeErrCode(raw: number): number {
+	if (!Number.isFinite(raw)) return 0;
+	// Ensure we treat vendor返回的 32 位有符号整数为无符号
+	const unsigned = raw >>> 0;
+	return unsigned;
+}
+
 function mapKoalError(code: number, fallback?: Nullable<string>): string {
-	const known = RESULT_ERROR_MESSAGES[code];
+	const normalized = normalizeErrCode(code);
+	const known = RESULT_ERROR_MESSAGES[normalized];
 	if (known) return known;
 	if (fallback) {
 		try {
@@ -675,7 +684,7 @@ function mapKoalError(code: number, fallback?: Nullable<string>): string {
 			// ignore
 		}
 	}
-	return `中间件返回错误码 0x${code.toString(16).padStart(8, "0")}`;
+	return `中间件返回错误码 0x${normalized.toString(16).toUpperCase().padStart(8, "0")}`;
 }
 
 export function formatKoalError(error: unknown): string {
