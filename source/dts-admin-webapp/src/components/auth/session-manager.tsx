@@ -141,41 +141,35 @@ export function SessionManager() {
 		const run = async () => {
 			if (cancelled) return;
 			const idleFor = Date.now() - lastActivityRef.current;
-			if (idleFor > SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS) {
-				toast.error("会话已过期，请重新登录", { id: "session-expired" });
-				clearUserInfoAndToken();
-				localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-				cancelled = true;
-				router.replace("/auth/login");
-				return;
-			}
+			const forcedExpiry = idleFor >= SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS;
 			const nearingTimeout = idleFor >= SESSION_TIMEOUT_MS - SESSION_IDLE_GRACE_MS;
 			const shouldBackoff =
-				document.visibilityState === "hidden" && idleFor > SESSION_TIMEOUT_MS / 2 ? true : nearingTimeout;
+				!forcedExpiry &&
+				(document.visibilityState === "hidden" && idleFor > SESSION_TIMEOUT_MS / 2 ? true : nearingTimeout);
+
 			if (shouldBackoff) {
-				// Avoid extending server-side会话：进入宽限区间后仅保持短轮询，等待后续检查触发自动登出
+				// 避免在接近超时时继续刷新令牌，保持短轮询以等待后续检测
 				schedule(SESSION_IDLE_GRACE_MS);
 				return;
 			}
+
 			try {
 				const res = await userService.refresh(token.refreshToken!);
-				// If backend returns new tokens, update them; otherwise ignore
 				const nextAccess = (res as any)?.accessToken;
 				const nextRefresh = (res as any)?.refreshToken;
+				const delay = nextRefreshDelayMs(nextAccess || token.accessToken);
 				if (nextAccess) {
 					setUserToken({ accessToken: nextAccess, refreshToken: nextRefresh || token.refreshToken });
-					schedule(nextRefreshDelayMs(nextAccess));
-					return;
 				}
-				schedule(nextRefreshDelayMs(token.accessToken));
+				if (!cancelled) {
+					schedule(delay);
+				}
 			} catch (err) {
-				// Refresh failed (likely timeout). Force logout.
 				toast.error("会话已过期，请重新登录", { id: "session-expired" });
 				clearUserInfoAndToken();
 				localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
 				lastActivityRef.current = Date.now();
 				cancelled = true;
-				// Redirect to login under basename
 				router.replace("/auth/login");
 			}
 		};

@@ -150,9 +150,11 @@ export default function SessionManager() {
 				cancelled = true;
 				return;
 			}
+			const forcedExpiry = idleFor >= SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS;
 			const nearingTimeout = idleFor >= SESSION_TIMEOUT_MS - SESSION_IDLE_GRACE_MS;
 			const shouldBackoff =
-				document.visibilityState === "hidden" && idleFor > SESSION_TIMEOUT_MS / 2 ? true : nearingTimeout;
+				!forcedExpiry &&
+				(document.visibilityState === "hidden" && idleFor > SESSION_TIMEOUT_MS / 2 ? true : nearingTimeout);
 			if (shouldBackoff) {
 				schedule(SESSION_IDLE_GRACE_MS);
 				return;
@@ -178,10 +180,11 @@ export default function SessionManager() {
 						adminAccessTokenExpiresAt: adminAccessExpiresAt,
 						adminRefreshTokenExpiresAt: adminRefreshExpiresAt,
 					});
-					schedule(nextRefreshDelayMs(nextAccess));
-					return;
 				}
-				schedule(nextRefreshDelayMs(token.accessToken));
+				if (!cancelled) {
+					const delay = nextRefreshDelayMs(nextAccess || token.accessToken);
+					schedule(delay);
+				}
 			} catch (err) {
 				if (!logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
