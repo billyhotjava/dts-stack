@@ -25,12 +25,13 @@ export enum UserApi {
 
 const signin = (data: SignInReq) => apiClient.post<SignInRes>({ url: UserApi.SignIn, data });
 const signup = (data: SignUpReq) => apiClient.post<SignInRes>({ url: UserApi.SignUp, data });
-const logout = (refreshToken: string, username?: string) =>
+const logout = (refreshToken: string, username?: string, reason?: string) =>
 	apiClient.post({
 		url: UserApi.Logout,
 		data: {
 			refreshToken,
 			...(username ? { username } : {}),
+			...(reason ? { reason } : {}),
 		},
 	});
 const refresh = (refreshToken: string) => apiClient.post({ url: UserApi.Refresh, data: { refreshToken } });

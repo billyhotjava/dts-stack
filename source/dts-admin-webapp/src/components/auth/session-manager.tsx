@@ -57,6 +57,8 @@ export function SessionManager() {
 	const mySessionIdRef = useRef<string | null>(null);
 	const lastActivityRef = useRef<number>(Date.now());
 	const logoutInProgressRef = useRef(false);
+	const activitySinceRefreshRef = useRef(true);
+	const idleTimerRef = useRef<number>();
 
 	const isLoggedIn = useMemo(() => Boolean(token?.accessToken), [token?.accessToken]);
 	const loginName = user?.username || user?.email || "";
@@ -65,9 +67,12 @@ export function SessionManager() {
 	useEffect(() => {
 		if (!isLoggedIn) {
 			mySessionIdRef.current = null;
+			activitySinceRefreshRef.current = true;
+			logoutInProgressRef.current = false;
 			return;
 		}
 		lastActivityRef.current = Date.now();
+		activitySinceRefreshRef.current = true;
 		const current = localStorage.getItem(STORAGE_KEYS.SESSION_ID);
 		if (!current) {
 			const newId = `${loginName || "user"}#${genId()}#${tabIdRef.current}`;
@@ -112,6 +117,7 @@ export function SessionManager() {
 		if (!isLoggedIn) return;
 		const updateActivity = () => {
 			lastActivityRef.current = Date.now();
+			activitySinceRefreshRef.current = true;
 		};
 		const events: Array<keyof DocumentEventMap> = ["click", "keydown", "mousemove", "scroll", "touchstart"];
 		events.forEach((event) => window.addEventListener(event, updateActivity, { passive: true, capture: true }));
@@ -142,14 +148,11 @@ export function SessionManager() {
 			if (cancelled) return;
 			const idleFor = Date.now() - lastActivityRef.current;
 			const forcedExpiry = idleFor >= SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS;
-			const nearingTimeout = idleFor >= SESSION_TIMEOUT_MS - SESSION_IDLE_GRACE_MS;
-			const shouldBackoff =
-				!forcedExpiry &&
-				(document.visibilityState === "hidden" && idleFor > SESSION_TIMEOUT_MS / 2 ? true : nearingTimeout);
+			const hadActivity = activitySinceRefreshRef.current;
 
-			if (shouldBackoff) {
-				// 避免在接近超时时继续刷新令牌，保持短轮询以等待后续检测
-				schedule(SESSION_IDLE_GRACE_MS);
+			if (!hadActivity && !forcedExpiry) {
+				const wait = Math.max(SESSION_IDLE_GRACE_MS, SESSION_TIMEOUT_MS - idleFor);
+				schedule(wait);
 				return;
 			}
 
@@ -161,6 +164,7 @@ export function SessionManager() {
 				if (nextAccess) {
 					setUserToken({ accessToken: nextAccess, refreshToken: nextRefresh || token.refreshToken });
 				}
+				activitySinceRefreshRef.current = false;
 				if (!cancelled) {
 					schedule(delay);
 				}
@@ -181,6 +185,44 @@ export function SessionManager() {
 			if (timer) window.clearTimeout(timer);
 		};
 	}, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken, router]);
+
+	useEffect(() => {
+		if (!isLoggedIn) {
+			if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
+			idleTimerRef.current = undefined;
+			return;
+		}
+
+		const logoutDueToIdle = () => {
+			if (logoutInProgressRef.current) return;
+			logoutInProgressRef.current = true;
+			const refreshToken = token?.refreshToken;
+			const username = user?.username || user?.email || undefined;
+			if (refreshToken) {
+				userService.logout(refreshToken, username, "IDLE_TIMEOUT").catch(() => undefined);
+			}
+			toast.error("长时间未操作，已自动退出，请重新登录", { id: "session-expired" });
+			clearUserInfoAndToken();
+			localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
+			router.replace("/auth/login");
+		};
+
+		const resetTimer = () => {
+			if (logoutInProgressRef.current) return;
+			if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
+			idleTimerRef.current = window.setTimeout(logoutDueToIdle, SESSION_TIMEOUT_MS);
+		};
+
+		resetTimer();
+		const events: Array<keyof WindowEventMap> = ["click", "keydown", "mousemove", "scroll", "touchstart"];
+		events.forEach((event) => window.addEventListener(event, resetTimer, true));
+
+		return () => {
+			if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
+			idleTimerRef.current = undefined;
+			events.forEach((event) => window.removeEventListener(event, resetTimer, true));
+		};
+	}, [isLoggedIn, clearUserInfoAndToken, router, token?.refreshToken, user?.username, user?.email]);
 
 	return null;
 }

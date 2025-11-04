@@ -2873,6 +2873,8 @@ public class KeycloakApiResource {
     public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) Map<String, String> body, HttpServletRequest request) {
         String refreshToken = Optional.ofNullable(body).map(b -> b.get("refreshToken")).orElse(null);
         String actor = resolveActorForLogout(body, refreshToken);
+        String reason = Optional.ofNullable(body).map(b -> b.get("reason")).map(String::trim).orElse(null);
+        boolean autoTimeout = reason != null && reason.equalsIgnoreCase("IDLE_TIMEOUT");
         String authHeader = request == null ? null : request.getHeader("Authorization");
         String bearer = authHeader == null ? null : authHeader.trim();
         if (bearer != null && bearer.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())) {
@@ -2881,10 +2883,15 @@ public class KeycloakApiResource {
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("audience", "admin");
         detail.put("hasRefreshToken", StringUtils.hasText(refreshToken));
+        detail.put("trigger", autoTimeout ? "IDLE_TIMEOUT" : "MANUAL");
+        if (StringUtils.hasText(reason)) {
+            detail.put("reason", reason);
+        }
         String fallbackUri = Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/keycloak/auth/logout");
         String fallbackMethod = request != null ? request.getMethod() : "POST";
-        adminSessionRegistry.invalidateByAccessToken(bearer, AdminSessionCloseReason.LOGOUT);
-        adminSessionRegistry.invalidateByRefreshToken(refreshToken, AdminSessionCloseReason.LOGOUT);
+        AdminSessionCloseReason closeReason = autoTimeout ? AdminSessionCloseReason.EXPIRED : AdminSessionCloseReason.LOGOUT;
+        adminSessionRegistry.invalidateByAccessToken(bearer, closeReason);
+        adminSessionRegistry.invalidateByRefreshToken(refreshToken, closeReason);
         try {
             if (refreshToken != null && !refreshToken.isBlank()) {
                 try {
@@ -2903,7 +2910,7 @@ public class KeycloakApiResource {
                 request,
                 fallbackUri,
                 fallbackMethod,
-                "系统端登出成功"
+                autoTimeout ? "系统会话超时自动退出" : "系统端登出成功"
             );
             return ResponseEntity.ok(ApiResponse.ok(null));
         } catch (Exception ex) {
@@ -2918,7 +2925,7 @@ public class KeycloakApiResource {
                 request,
                 fallbackUri,
                 fallbackMethod,
-                "系统端登出失败"
+                autoTimeout ? "系统会话超时自动退出失败" : "系统端登出失败"
             );
             return ResponseEntity.ok(ApiResponse.ok(null));
         }

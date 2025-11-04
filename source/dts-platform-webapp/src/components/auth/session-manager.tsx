@@ -215,7 +215,7 @@ export default function SessionManager() {
 			const refreshToken = token?.refreshToken;
 			const username = user?.username || user?.email || undefined;
 			if (refreshToken) {
-				userService.logout(refreshToken, username).catch(() => undefined);
+				userService.logout(refreshToken, username, "IDLE_TIMEOUT").catch(() => undefined);
 			}
 			toast.error("长时间未操作，已自动退出，请重新登录", { id: "session-expired" });
 			clearUserInfoAndToken();
