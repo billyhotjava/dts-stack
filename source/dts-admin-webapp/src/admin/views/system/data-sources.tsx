@@ -412,10 +412,9 @@ export default function AdminDataSourcesView() {
 			jdbcUrl,
 			loginPrincipal: values.loginPrincipal.trim(),
 			krb5Conf: values.krb5Conf?.trim() || undefined,
-			authMethod: values.authMethod,
-			keytabBase64: values.authMethod === "KEYTAB" ? values.keytabBase64 || undefined : undefined,
-			keytabFileName: values.authMethod === "KEYTAB" ? values.keytabFileName || undefined : undefined,
-			password: values.authMethod === "PASSWORD" ? values.password : undefined,
+			authMethod: "KEYTAB" as const,
+			keytabBase64: values.keytabBase64 ? values.keytabBase64 : undefined,
+			keytabFileName: values.keytabFileName ? values.keytabFileName : undefined,
 			proxyUser: values.proxyUser?.trim() || undefined,
 			testQuery: values.testQuery?.trim() || undefined,
 			jdbcProperties: Object.keys(jdbcProps).length ? jdbcProps : undefined,
@@ -597,65 +596,43 @@ export default function AdminDataSourcesView() {
 								<div className="space-y-2">
 									<FormLabel>认证方式</FormLabel>
 									<div className="flex flex-wrap items-center gap-2">
-										<Select
-											value={authMethod}
-											onValueChange={(value) =>
-												form.setValue("authMethod", value as FormValues["authMethod"], { shouldDirty: true })
-											}
-										>
-											<SelectTrigger className="w-48">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="KEYTAB">Keytab</SelectItem>
-												<SelectItem value="PASSWORD">密码</SelectItem>
-											</SelectContent>
-										</Select>
-										<Badge variant="outline">推荐：Keytab</Badge>
-									</div>
-								</div>
-							</div>
+					<Select value="KEYTAB" disabled onValueChange={() => undefined}>
+						<SelectTrigger className="w-48" disabled>
+							<SelectValue placeholder="Keytab" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="KEYTAB">Keytab</SelectItem>
+						</SelectContent>
+					</Select>
+					<Badge variant="outline">已锁定：Keytab</Badge>
+				</div>
+			</div>
+		</div>
 
-							{authMethod === "KEYTAB" ? (
-								<FormField
-									control={form.control}
-									name="keytabBase64"
-									render={() => (
-										<FormItem>
-											<FormLabel>上传 Keytab</FormLabel>
-											<FormControl>
-												<Input type="file" accept=".keytab" onChange={handleKeytabUpload} />
-											</FormControl>
-											<FormMessage />
-											{watched.keytabFileName ? (
-												<div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
-													<Icon icon="solar:check-circle-bold" className="h-4 w-4 text-emerald-500" />
-													<span>已选择：{watched.keytabFileName}</span>
-													<Button type="button" variant="ghost" size="sm" onClick={resetKeytab}>
-														清除
-													</Button>
-												</div>
-											) : (
-												<p className="text-xs text-muted-foreground">请选择平台运维下发的客户端 keytab。</p>
-											)}
-										</FormItem>
-									)}
-								/>
-							) : (
-								<FormField
-									control={form.control}
-									name="password"
-									render={({ field }) => (
-										<FormItem>
-											<FormLabel>Kerberos 密码</FormLabel>
-											<FormControl>
-												<Input type="password" {...field} />
-											</FormControl>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
-							)}
+		<FormField
+			control={form.control}
+			name="keytabBase64"
+			render={() => (
+				<FormItem>
+					<FormLabel>上传 Keytab</FormLabel>
+					<FormControl>
+						<Input type="file" accept=".keytab" onChange={handleKeytabUpload} />
+					</FormControl>
+					<FormMessage />
+					{watched.keytabFileName ? (
+						<div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+							<Icon icon="solar:check-circle-bold" className="h-4 w-4 text-emerald-500" />
+							<span>已选择：{watched.keytabFileName}</span>
+							<Button type="button" variant="ghost" size="sm" onClick={resetKeytab}>
+								清除
+							</Button>
+						</div>
+					) : (
+						<p className="text-xs text-muted-foreground">请选择平台运维下发的客户端 keytab。</p>
+					)}
+				</FormItem>
+			)}
+		/>
 						</CardContent>
 					</Card>
 
