@@ -58,7 +58,7 @@ export function SessionManager() {
 	const lastActivityRef = useRef<number>(Date.now());
 	const logoutInProgressRef = useRef(false);
 	const activitySinceRefreshRef = useRef(true);
-	const idleTimerRef = useRef<number>();
+	const idleTimerRef = useRef<number | undefined>(undefined);
 
 	const isLoggedIn = useMemo(() => Boolean(token?.accessToken), [token?.accessToken]);
 	const loginName = user?.username || user?.email || "";
