@@ -7098,6 +7098,8 @@ public class AdminApiResource {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", r.getId());
         m.put("name", r.getName());
+        String displayName = StringUtils.hasText(r.getDisplayName()) ? r.getDisplayName().trim() : r.getName();
+        m.put("displayName", displayName);
         m.put("scope", r.getScope());
         m.put("description", r.getDescription());
         m.put("createdBy", r.getCreatedBy());

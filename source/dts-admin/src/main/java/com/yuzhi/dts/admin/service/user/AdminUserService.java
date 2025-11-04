@@ -10,6 +10,7 @@ import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
+import com.yuzhi.dts.admin.repository.AdminRoleMemberRepository;
 import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.service.approval.ApprovalStatus;
@@ -33,6 +34,7 @@ import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import com.yuzhi.dts.admin.domain.OrganizationNode;
 import com.yuzhi.dts.admin.security.SecurityUtils;
+import java.lang.reflect.Array;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -101,6 +103,7 @@ public class AdminUserService {
     private final ChangeRequestService changeRequestService;
     private final ChangeRequestRepository changeRequestRepository;
     private final AdminRoleAssignmentRepository roleAssignRepo;
+    private final AdminRoleMemberRepository roleMemberRepo;
     private final OrganizationRepository organizationRepository;
     private final ObjectMapper objectMapper;
     private final KeycloakAuthService keycloakAuthService;
@@ -129,6 +132,7 @@ public class AdminUserService {
         ChangeRequestService changeRequestService,
         ChangeRequestRepository changeRequestRepository,
         AdminRoleAssignmentRepository roleAssignRepo,
+        AdminRoleMemberRepository roleMemberRepo,
         OrganizationRepository organizationRepository,
         ChangeSnapshotFormatter changeSnapshotFormatter,
         ObjectMapper objectMapper,
@@ -145,6 +149,7 @@ public class AdminUserService {
         this.changeRequestService = changeRequestService;
         this.changeRequestRepository = changeRequestRepository;
         this.roleAssignRepo = roleAssignRepo;
+        this.roleMemberRepo = roleMemberRepo;
         this.organizationRepository = organizationRepository;
         this.changeSnapshotFormatter = changeSnapshotFormatter;
         this.objectMapper = objectMapper;
@@ -3887,6 +3892,20 @@ public class AdminUserService {
             }
             return list;
         }
+        if (value.getClass().isArray()) {
+            List<String> list = new ArrayList<>();
+            int length = Array.getLength(value);
+            for (int i = 0; i < length; i++) {
+                Object element = Array.get(value, i);
+                if (element != null) {
+                    String v = element.toString().trim();
+                    if (!v.isEmpty()) {
+                        list.add(v);
+                    }
+                }
+            }
+            return list;
+        }
         String text = value.toString();
         if (text.contains(",")) {
             String[] parts = text.split(",");
@@ -3898,6 +3917,87 @@ public class AdminUserService {
             return list;
         }
         return List.of(text.trim());
+    }
+
+    public List<String> aggregateRealmRoles(String username, Collection<String> directRoles) {
+        LinkedHashMap<String, String> resolved = new LinkedHashMap<>();
+        collectRoles(resolved, directRoles, false);
+        if (StringUtils.isNotBlank(username)) {
+            List<String> localRoles = roleMemberRepo
+                .findByUsernameIgnoreCase(username)
+                .stream()
+                .map(member -> member != null ? member.getRole() : null)
+                .filter(Objects::nonNull)
+                .toList();
+            collectRoles(resolved, localRoles, true);
+        }
+        return resolved
+            .values()
+            .stream()
+            .filter(v -> v != null && !v.trim().isEmpty())
+            .map(String::trim)
+            .toList();
+    }
+
+    private void collectRoles(Map<String, String> target, Collection<String> roles, boolean canonicalize) {
+        if (roles == null) {
+            return;
+        }
+        for (String role : roles) {
+            String key = normalizeRoleKey(role);
+            if (key == null || target.containsKey(key)) {
+                continue;
+            }
+            String value = canonicalize ? canonicalRoleValue(role) : safeRoleValue(role);
+            if (value != null) {
+                target.put(key, value);
+            }
+        }
+    }
+
+    private String safeRoleValue(String role) {
+        if (role == null) {
+            return null;
+        }
+        String trimmed = role.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String canonicalRoleValue(String role) {
+        String base = stripRolePrefix(role);
+        if (!StringUtils.isNotBlank(base)) {
+            return safeRoleValue(role);
+        }
+        String normalized = base.replace('-', '_').toUpperCase(Locale.ROOT);
+        return "ROLE_" + normalized;
+    }
+
+    private String normalizeRoleKey(String role) {
+        if (role == null) {
+            return null;
+        }
+        String base = stripRolePrefix(role);
+        if (!StringUtils.isNotBlank(base)) {
+            return null;
+        }
+        return base.replace('-', '_').toLowerCase(Locale.ROOT);
+    }
+
+    private String stripRolePrefix(String role) {
+        if (role == null) {
+            return null;
+        }
+        String text = role.trim();
+        if (text.isEmpty()) {
+            return "";
+        }
+        if (text.startsWith("ROLE_") || text.startsWith("ROLE-")) {
+            return text.substring(5);
+        }
+        if (text.startsWith("ROLE")) {
+            return text.substring(4);
+        }
+        return text;
     }
 
     private Map<String, List<String>> stringListMap(Object value) {

@@ -252,6 +252,7 @@ export interface AdminDataset {
 export interface AdminCustomRole {
 	id: number;
 	name: string;
+	displayName?: string;
 	scope: "DEPARTMENT" | "INSTITUTE";
 	operations?: DataOperation[];
 	description?: string;

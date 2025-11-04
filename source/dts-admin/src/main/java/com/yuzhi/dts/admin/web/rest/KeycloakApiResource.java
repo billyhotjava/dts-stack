@@ -1634,22 +1634,96 @@ public class KeycloakApiResource {
         } catch (Exception ex) {
             LOG.debug("Failed to resolve username for id {}: {}", id, ex.getMessage());
         }
+        LinkedHashMap<String, KeycloakRoleDTO> merged = new LinkedHashMap<>();
+        for (KeycloakRoleDTO role : roles) {
+            String key = normalizeRoleKey(role != null ? role.getName() : null);
+            if (key != null) {
+                merged.putIfAbsent(key, role);
+            }
+        }
+        if (StringUtils.hasText(targetPrincipal)) {
+            List<String> aggregated = adminUserService.aggregateRealmRoles(targetPrincipal, names);
+            for (String roleName : aggregated) {
+                if (!StringUtils.hasText(roleName) || isKeycloakDefaultRealmRole(roleName)) {
+                    continue;
+                }
+                String key = normalizeRoleKey(roleName);
+                if (key == null || merged.containsKey(key)) {
+                    continue;
+                }
+                KeycloakRoleDTO dto = resolveRoleDto(catalog, roleName);
+                merged.put(key, dto);
+            }
+        }
+        List<KeycloakRoleDTO> resultRoles = new ArrayList<>(merged.values());
         String displayTarget = StringUtils.hasText(targetPrincipal) ? targetPrincipal : id;
         Map<String, Object> payload = new HashMap<>();
-        payload.put("roleCount", roles.size());
+        payload.put("roleCount", resultRoles.size());
         payload.put("userId", id);
         if (StringUtils.hasText(targetPrincipal)) {
             payload.put("username", targetPrincipal);
         }
         if (!isAuditSuppressed()) {
         }
-        return ResponseEntity.ok(roles);
+        return ResponseEntity.ok(resultRoles);
     }
 
     private KeycloakRoleDTO fallbackRole(String name) {
         KeycloakRoleDTO dto = new KeycloakRoleDTO();
         dto.setName(name);
         return dto;
+    }
+
+    private KeycloakRoleDTO resolveRoleDto(Map<String, KeycloakRoleDTO> catalog, String roleName) {
+        if (catalog == null) {
+            return fallbackRole(roleName);
+        }
+        KeycloakRoleDTO direct = catalog.get(roleName);
+        if (direct != null) {
+            return direct;
+        }
+        String canonical = canonicalRoleValue(roleName);
+        if (canonical != null) {
+            KeycloakRoleDTO candidate = catalog.get(canonical);
+            if (candidate != null) {
+                return candidate;
+            }
+            return fallbackRole(canonical);
+        }
+        return fallbackRole(roleName);
+    }
+
+    private String normalizeRoleKey(String roleName) {
+        if (!StringUtils.hasText(roleName)) {
+            return null;
+        }
+        String base = stripRolePrefix(roleName);
+        if (!StringUtils.hasText(base)) {
+            return null;
+        }
+        return base.replace('-', '_').toLowerCase(Locale.ROOT);
+    }
+
+    private String canonicalRoleValue(String roleName) {
+        String base = stripRolePrefix(roleName);
+        if (!StringUtils.hasText(base)) {
+            return null;
+        }
+        return "ROLE_" + base.replace('-', '_').toUpperCase(Locale.ROOT);
+    }
+
+    private String stripRolePrefix(String roleName) {
+        if (!StringUtils.hasText(roleName)) {
+            return roleName;
+        }
+        String text = roleName.trim();
+        if (text.startsWith("ROLE_") || text.startsWith("ROLE-")) {
+            return text.substring(5);
+        }
+        if (text.startsWith("ROLE")) {
+            return text.substring(4);
+        }
+        return text;
     }
 
     private boolean isKeycloakDefaultRealmRole(String role) {

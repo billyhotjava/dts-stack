@@ -165,7 +165,7 @@ public class AdminUserResource {
         vm.setEmail(entity.getEmail());
         vm.setPhone(entity.getPhone());
         vm.setPersonSecurityLevel(entity.getPersonSecurityLevel());
-        vm.setRealmRoles(entity.getRealmRoles());
+        vm.setRealmRoles(adminUserService.aggregateRealmRoles(entity.getUsername(), entity.getRealmRoles()));
         vm.setGroupPaths(entity.getGroupPaths());
         vm.setEnabled(entity.isEnabled());
         vm.setLastSyncAt(entity.getLastSyncAt());

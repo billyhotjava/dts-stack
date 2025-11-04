@@ -178,10 +178,14 @@ export default function RoleManagementView() {
                         ? "DEPARTMENT"
                         : undefined);
             const existing = map.get(canonical);
+            const displayLabel = (role.displayName || role.name || "").toString().trim() || canonical;
             if (existing) {
                 existing.description = existing.description ?? role.description;
                 existing.scope = existing.scope ?? normalizedScope;
                 existing.source = existing.source ?? "custom";
+                if (!existing.displayName?.trim()) {
+                    existing.displayName = displayLabel;
+                }
                 if (!existing.menuIds.length) {
                     const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
                     existing.menuIds = menuIds;
@@ -195,26 +199,26 @@ export default function RoleManagementView() {
                 map.set(canonical, {
                     key: `custom-${role.id}`,
                     authority: role.name,
-                    displayName: role.name,
+                    displayName: displayLabel,
                     canonical,
                     description: role.description,
                     scope: normalizedScope ?? undefined,
                     canManage: canonical.endsWith("_OWNER"),
                     menuIds,
-                menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
-                source: "custom",
-                memberCount: matchedRole?.memberCount ?? 0,
-            });
-        }
-    });
+                    menuLabels: menuIds.map((id) => menuLabelMap.get(id) ?? `菜单 ${id}`),
+                    source: "custom",
+                    memberCount: matchedRole?.memberCount ?? 0,
+                });
+            }
+        });
 
-    map.forEach((entry, canonical) => {
-        if (!entry.source) {
-            entry.source = "服务端";
-        }
-        if (!entry.scope && entry.zone) {
-            entry.scope = entry.zone === "INST" ? "INSTITUTE" : entry.zone === "DEPT" ? "DEPARTMENT" : undefined;
-        }
+        map.forEach((entry, canonical) => {
+            if (!entry.source) {
+                entry.source = "服务端";
+            }
+            if (!entry.scope && entry.zone) {
+                entry.scope = entry.zone === "INST" ? "INSTITUTE" : entry.zone === "DEPT" ? "DEPARTMENT" : undefined;
+            }
             if (!entry.menuIds.length) {
                 const menuIds = Array.from(new Set(roleMenuIndex.get(canonical) ?? [])).sort((a, b) => a - b);
                 entry.menuIds = menuIds;
