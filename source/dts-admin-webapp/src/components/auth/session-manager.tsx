@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { useRouter } from "@/routes/hooks";
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
@@ -53,12 +53,44 @@ export function SessionManager() {
 	const token = useUserToken();
 	const { setUserToken, clearUserInfoAndToken } = useUserActions();
 
+	const tokenRef = useRef(token);
+	const userRef = useRef(user);
+
+	useEffect(() => {
+		tokenRef.current = token;
+	}, [token]);
+
+	useEffect(() => {
+		userRef.current = user;
+	}, [user]);
+
 	const tabIdRef = useRef<string>(genId());
 	const mySessionIdRef = useRef<string | null>(null);
 	const lastActivityRef = useRef<number>(Date.now());
 	const logoutInProgressRef = useRef(false);
-	const activitySinceRefreshRef = useRef(true);
+	const activitySinceRefreshRef = useRef<boolean>(false);
 	const idleTimerRef = useRef<number | undefined>(undefined);
+
+	const triggerAutoLogout = useCallback(() => {
+		if (logoutInProgressRef.current) return;
+		logoutInProgressRef.current = true;
+		if (idleTimerRef.current) {
+			window.clearTimeout(idleTimerRef.current);
+			idleTimerRef.current = undefined;
+		}
+		activitySinceRefreshRef.current = false;
+		const currentToken = tokenRef.current;
+		const currentUser = userRef.current;
+		const refreshToken = currentToken?.refreshToken;
+		const username = currentUser?.username || currentUser?.email || undefined;
+		if (refreshToken) {
+			userService.logout(refreshToken, username, "IDLE_TIMEOUT").catch(() => undefined);
+		}
+		toast.error("长时间未操作，已自动退出，请重新登录", { id: "session-expired" });
+		clearUserInfoAndToken();
+		localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
+		router.replace("/auth/login");
+	}, [clearUserInfoAndToken, router]);
 
 	const isLoggedIn = useMemo(() => Boolean(token?.accessToken), [token?.accessToken]);
 	const loginName = user?.username || user?.email || "";
@@ -67,12 +99,12 @@ export function SessionManager() {
 	useEffect(() => {
 		if (!isLoggedIn) {
 			mySessionIdRef.current = null;
-			activitySinceRefreshRef.current = true;
+			activitySinceRefreshRef.current = false;
 			logoutInProgressRef.current = false;
 			return;
 		}
 		lastActivityRef.current = Date.now();
-		activitySinceRefreshRef.current = true;
+		activitySinceRefreshRef.current = false;
 		const current = localStorage.getItem(STORAGE_KEYS.SESSION_ID);
 		if (!current) {
 			const newId = `${loginName || "user"}#${genId()}#${tabIdRef.current}`;
@@ -124,6 +156,7 @@ export function SessionManager() {
 		const visibilityHandler = () => {
 			if (document.visibilityState === "visible") {
 				lastActivityRef.current = Date.now();
+				activitySinceRefreshRef.current = true;
 			}
 		};
 		document.addEventListener("visibilitychange", visibilityHandler);
@@ -146,9 +179,19 @@ export function SessionManager() {
 
 		const run = async () => {
 			if (cancelled) return;
+			if (logoutInProgressRef.current) {
+				cancelled = true;
+				return;
+			}
 			const idleFor = Date.now() - lastActivityRef.current;
 			const forcedExpiry = idleFor >= SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS;
 			const hadActivity = activitySinceRefreshRef.current;
+
+			if (forcedExpiry) {
+				triggerAutoLogout();
+				cancelled = true;
+				return;
+			}
 
 			if (!hadActivity && !forcedExpiry) {
 				const wait = Math.max(SESSION_IDLE_GRACE_MS, SESSION_TIMEOUT_MS - idleFor);
@@ -169,12 +212,9 @@ export function SessionManager() {
 					schedule(delay);
 				}
 			} catch (err) {
-				toast.error("会话已过期，请重新登录", { id: "session-expired" });
-				clearUserInfoAndToken();
-				localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
+				triggerAutoLogout();
 				lastActivityRef.current = Date.now();
 				cancelled = true;
-				router.replace("/auth/login");
 			}
 		};
 
@@ -184,7 +224,7 @@ export function SessionManager() {
 			cancelled = true;
 			if (timer) window.clearTimeout(timer);
 		};
-	}, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken, router]);
+	}, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, triggerAutoLogout]);
 
 	useEffect(() => {
 		if (!isLoggedIn) {
@@ -193,24 +233,13 @@ export function SessionManager() {
 			return;
 		}
 
-		const logoutDueToIdle = () => {
-			if (logoutInProgressRef.current) return;
-			logoutInProgressRef.current = true;
-			const refreshToken = token?.refreshToken;
-			const username = user?.username || user?.email || undefined;
-			if (refreshToken) {
-				userService.logout(refreshToken, username, "IDLE_TIMEOUT").catch(() => undefined);
-			}
-			toast.error("长时间未操作，已自动退出，请重新登录", { id: "session-expired" });
-			clearUserInfoAndToken();
-			localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-			router.replace("/auth/login");
-		};
-
 		const resetTimer = () => {
 			if (logoutInProgressRef.current) return;
 			if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
-			idleTimerRef.current = window.setTimeout(logoutDueToIdle, SESSION_TIMEOUT_MS);
+			idleTimerRef.current = window.setTimeout(() => {
+				triggerAutoLogout();
+				idleTimerRef.current = undefined;
+			}, SESSION_TIMEOUT_MS);
 		};
 
 		resetTimer();
@@ -222,7 +251,7 @@ export function SessionManager() {
 			idleTimerRef.current = undefined;
 			events.forEach((event) => window.removeEventListener(event, resetTimer, true));
 		};
-	}, [isLoggedIn, clearUserInfoAndToken, router, token?.refreshToken, user?.username, user?.email]);
+	}, [isLoggedIn, triggerAutoLogout]);
 
 	return null;
 }
