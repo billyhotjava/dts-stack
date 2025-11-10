@@ -5,6 +5,7 @@ ARG MAVEN_IMAGE=maven:3.9.9-eclipse-temurin-21
 ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.5_11-jre
 FROM ${MAVEN_IMAGE} AS build
 
+COPY docker/apt-keys/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -46,6 +47,7 @@ RUN BUILD_POM=$(cat /workspace/.build-pom) && \
 # ---------- runtime stage ----------
 # Runtime stage uses Temurin JRE 21
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
+COPY docker/apt-keys/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
