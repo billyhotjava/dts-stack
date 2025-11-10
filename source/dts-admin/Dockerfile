@@ -28,8 +28,7 @@ RUN set -eu; \
         echo >&2 "  docker build -f source/dts-admin/Dockerfile source"; \
         exit 1; \
     fi
-RUN mkdir -p /root/.m2 && \
-    cat > /root/.m2/settings.xml <<'EOF'
+RUN mkdir -p /root/.m2 && cat > /root/.m2/settings.xml <<'EOF'
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
   <mirrors>
     <mirror>
