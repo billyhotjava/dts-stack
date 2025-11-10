@@ -71,7 +71,8 @@ RUN set -eux; \
       'E4GlHpregPNABgwTrWy3DQD/XpdyzHbfgShbJyVIdBVD60ta/D5O3GWC5kehKGXprgA=' \
     | base64 -d >/usr/share/keyrings/ubuntu-archive-keyring.gpg; \
     chmod 0644 /usr/share/keyrings/ubuntu-archive-keyring.gpg; \
-    cp /usr/share/keyrings/ubuntu-archive-keyring.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg
+    cp /usr/share/keyrings/ubuntu-archive-keyring.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
+    apt-key add /usr/share/keyrings/ubuntu-archive-keyring.gpg >/dev/null
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
 
