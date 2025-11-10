@@ -82,8 +82,8 @@ services:
       PG_USER_RANGER: ${PG_USER_RANGER}
       PG_PWD_RANGER: ${PG_PWD_RANGER}
     volumes:
-      - ./services/dts-pg/data:/var/lib/postgresql/data:Z
-      - ./services/dts-pg/init:/docker-entrypoint-initdb.d:ro,Z
+      - ./services/dts-pg/data:/var/lib/postgresql/data
+      - ./services/dts-pg/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       # Keep healthcheck lightweight and deterministic; do not rely on container env expansion
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null"]
@@ -91,6 +91,8 @@ services:
       timeout: 30s
       retries: 10
       start_period: 30s   
+    security_opt:
+      - label=disable
     restart: unless-stopped
     ports:
       - 5432:5432

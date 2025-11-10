@@ -9,12 +9,30 @@ FROM ${MAVEN_IMAGE} AS build
 # use a dedicated keyring path and repoint the Ubuntu sources to it.
 COPY apt-keys/ubuntu-archive-2021.gpg /tmp/ubuntu-archive-2021.gpg
 ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
+ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
 RUN set -eux; \
     install -d /usr/share/keyrings /etc/apt/trusted.gpg.d; \
     cp /tmp/ubuntu-archive-2021.gpg /usr/share/keyrings/ubuntu-archive-2021.gpg; \
     cp /tmp/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
-    sed -i 's#/usr/share/keyrings/ubuntu-archive-keyring.gpg#/usr/share/keyrings/ubuntu-archive-2021.gpg#g' /etc/apt/sources.list.d/ubuntu.sources; \
-    sed -i "s#http://ports.ubuntu.com/ubuntu-ports#${UBUNTU_PORTS_MIRROR}#g" /etc/apt/sources.list.d/ubuntu.sources
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+      arm*|aarch64) MIRROR="${UBUNTU_PORTS_MIRROR}";; \
+      *) MIRROR="${UBUNTU_ARCHIVE_MIRROR}";; \
+    esac; \
+    MIRROR="${MIRROR%/}"; \
+    printf '%s\n' \
+      "Types: deb" \
+      "URIs: ${MIRROR}/" \
+      "Suites: noble noble-updates noble-backports" \
+      "Components: main universe restricted multiverse" \
+      "Signed-By: /usr/share/keyrings/ubuntu-archive-2021.gpg" \
+      "" \
+      "Types: deb" \
+      "URIs: ${MIRROR}/" \
+      "Suites: noble-security" \
+      "Components: main universe restricted multiverse" \
+      "Signed-By: /usr/share/keyrings/ubuntu-archive-2021.gpg" \
+      > /etc/apt/sources.list.d/ubuntu.sources
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -57,11 +75,29 @@ RUN BUILD_POM=$(cat /workspace/.build-pom) && \
 # Use Temurin JRE 21 to run the compiled jar
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
 ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
+ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
 COPY --from=build /usr/share/keyrings/ubuntu-archive-2021.gpg /usr/share/keyrings/ubuntu-archive-2021.gpg
 COPY --from=build /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg
 RUN set -eux; \
-    sed -i 's#/usr/share/keyrings/ubuntu-archive-keyring.gpg#/usr/share/keyrings/ubuntu-archive-2021.gpg#g' /etc/apt/sources.list.d/ubuntu.sources; \
-    sed -i "s#http://ports.ubuntu.com/ubuntu-ports#${UBUNTU_PORTS_MIRROR}#g" /etc/apt/sources.list.d/ubuntu.sources
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+      arm*|aarch64) MIRROR="${UBUNTU_PORTS_MIRROR}";; \
+      *) MIRROR="${UBUNTU_ARCHIVE_MIRROR}";; \
+    esac; \
+    MIRROR="${MIRROR%/}"; \
+    printf '%s\n' \
+      "Types: deb" \
+      "URIs: ${MIRROR}/" \
+      "Suites: noble noble-updates noble-backports" \
+      "Components: main universe restricted multiverse" \
+      "Signed-By: /usr/share/keyrings/ubuntu-archive-2021.gpg" \
+      "" \
+      "Types: deb" \
+      "URIs: ${MIRROR}/" \
+      "Suites: noble-security" \
+      "Components: main universe restricted multiverse" \
+      "Signed-By: /usr/share/keyrings/ubuntu-archive-2021.gpg" \
+      > /etc/apt/sources.list.d/ubuntu.sources
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
