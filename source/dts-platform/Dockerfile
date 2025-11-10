@@ -12,8 +12,8 @@ ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
 ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
 RUN set -eux; \
     install -d /usr/share/keyrings /etc/apt/trusted.gpg.d; \
-    cp /tmp/ubuntu-archive-2021.gpg /usr/share/keyrings/ubuntu-archive-2021.gpg; \
-    cp /tmp/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
+    install -m 0644 /tmp/ubuntu-archive-2021.gpg /usr/share/keyrings/ubuntu-archive-2021.gpg; \
+    install -m 0644 /tmp/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
     ARCH=$(dpkg --print-architecture); \
     case "$ARCH" in \
       arm*|aarch64) MIRROR="${UBUNTU_PORTS_MIRROR}";; \
