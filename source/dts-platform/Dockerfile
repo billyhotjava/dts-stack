@@ -5,12 +5,14 @@ ARG MAVEN_IMAGE=maven:3.9.9-eclipse-temurin-21
 ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.5_11-jre
 FROM ${MAVEN_IMAGE} AS build
 
-# Embed Ubuntu archive signing key so apt works on older ARM mirrors
-COPY apt-keys/ubuntu-archive-2021.gpg /usr/share/keyrings/ubuntu-archive-keyring.gpg
+# Embed Ubuntu archive signing key so apt works on older ARM mirrors;
+# use a dedicated keyring path and repoint the Ubuntu sources to it.
+COPY apt-keys/ubuntu-archive-2021.gpg /tmp/ubuntu-archive-2021.gpg
 RUN set -eux; \
-    install -d /etc/apt/trusted.gpg.d; \
-    cp /usr/share/keyrings/ubuntu-archive-keyring.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
-    apt-key add /usr/share/keyrings/ubuntu-archive-keyring.gpg >/dev/null
+    install -d /usr/share/keyrings /etc/apt/trusted.gpg.d; \
+    cp /tmp/ubuntu-archive-2021.gpg /usr/share/keyrings/ubuntu-archive-2021.gpg; \
+    cp /tmp/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
+    sed -i 's#/usr/share/keyrings/ubuntu-archive-keyring.gpg#/usr/share/keyrings/ubuntu-archive-2021.gpg#g' /etc/apt/sources.list.d/ubuntu.sources
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -52,8 +54,9 @@ RUN BUILD_POM=$(cat /workspace/.build-pom) && \
 # ---------- runtime stage ----------
 # Runtime stage uses Temurin JRE 21
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
-COPY --from=build /usr/share/keyrings/ubuntu-archive-keyring.gpg /usr/share/keyrings/ubuntu-archive-keyring.gpg
+COPY --from=build /usr/share/keyrings/ubuntu-archive-2021.gpg /usr/share/keyrings/ubuntu-archive-2021.gpg
 COPY --from=build /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg
+RUN sed -i 's#/usr/share/keyrings/ubuntu-archive-keyring.gpg#/usr/share/keyrings/ubuntu-archive-2021.gpg#g' /etc/apt/sources.list.d/ubuntu.sources
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
