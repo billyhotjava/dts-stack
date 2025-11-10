@@ -7,7 +7,7 @@ FROM ${MAVEN_IMAGE} AS build
 
 # Embed Ubuntu archive signing key so apt works on older ARM mirrors
 RUN set -eux; \
-    install -d /etc/apt/trusted.gpg.d; \
+    install -d /usr/share/keyrings /etc/apt/trusted.gpg.d; \
     printf '%s' \
       'xsFNBFufwdoBEADv/Gxytx/LcSXYuM0MwKojbBye81s0G1nEx+lz6VAUpIUZnbkqdXBHC+dwrGS/' \
       'CeeLuAjPRLU8AoxE/jjvZVp8xFGEWHYdklqXGZ/gJfP5d3fIUBtZHZEJl8B8m9pMHf/AQQdsC+Yz' \
@@ -69,8 +69,9 @@ RUN set -eux; \
       '3ztmmSfPC5G3jJjAbtz8xWMj6rCAF4mfsvGAlbwxXzNKnZ5POFJsyavV6bw7wnUEEBYKAB0WIQTw' \
       '80f6dJPAgDsMroBMySP9QnCsXAUCZjkbogAKCRBMySP9QnCsXKkQAP0XqIeOx+aCSzadcZv+qHHz' \
       'E4GlHpregPNABgwTrWy3DQD/XpdyzHbfgShbJyVIdBVD60ta/D5O3GWC5kehKGXprgA=' \
-    | base64 -d >/etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
-    chmod 0644 /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg
+    | base64 -d >/usr/share/keyrings/ubuntu-archive-keyring.gpg; \
+    chmod 0644 /usr/share/keyrings/ubuntu-archive-keyring.gpg; \
+    cp /usr/share/keyrings/ubuntu-archive-keyring.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -112,6 +113,7 @@ RUN BUILD_POM=$(cat /workspace/.build-pom) && \
 # ---------- runtime stage ----------
 # Use Temurin JRE 21 to run the compiled jar
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
+COPY --from=build /usr/share/keyrings/ubuntu-archive-keyring.gpg /usr/share/keyrings/ubuntu-archive-keyring.gpg
 COPY --from=build /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
