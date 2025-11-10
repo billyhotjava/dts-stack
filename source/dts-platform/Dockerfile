@@ -9,7 +9,8 @@ FROM ${MAVEN_IMAGE} AS build
 COPY apt-keys/ubuntu-archive-2021.gpg /usr/share/keyrings/ubuntu-archive-keyring.gpg
 RUN set -eux; \
     install -d /etc/apt/trusted.gpg.d; \
-    cp /usr/share/keyrings/ubuntu-archive-keyring.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg
+    cp /usr/share/keyrings/ubuntu-archive-keyring.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
+    apt-key add /usr/share/keyrings/ubuntu-archive-keyring.gpg >/dev/null
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
 
