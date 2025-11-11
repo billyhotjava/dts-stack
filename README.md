@@ -59,3 +59,17 @@
 【openEuler 适配说明】
 - 已在 Compose 清单中为所有本地目录挂载添加了 SELinux 友好配置（z/Z 标签）。
 - 在 openEuler 上的安装与注意事项，请参考 docs/openeuler.md。
+
+## 常见问题
+
+### docker compose 报 “Invalid interpolation format … trustedIPs…”
+部署脚本使用了 Compose v2 才支持的 `${VAR:-default}` 语法。请安装 Docker Compose v2（`docker compose version` 有输出）或在无法升级 Docker Engine 时下载 `docker-compose 1.29.2` ARM64/x86_64 二进制放到 `/usr/local/bin/docker-compose`。
+
+### Postgres 初始化时报 “could not execute ... postgres -V: Operation not permitted”
+银河麒麟 / 鲲鹏主机通常启用 IMA Appraisal（`/sys/kernel/security/ima/policy` 中含 `appraise func=BPRM_CHECK`）。容器镜像里的 `/usr/lib/postgresql/17/bin/postgres` 没有 `security.ima` 签名，会被 IMA 拒绝执行，`initdb` 因此提示找不到 `postgres`。处理方式：
+
+1. 在 GRUB 中关闭或放宽 IMA（例如加 `ima_appraise=off`），然后 `grub2-mkconfig` 并重启。
+2. 将 Docker 数据目录迁移到未启用 IMA 审计的分区，或采用支持签名的存储驱动（如 LVM thinpool）。
+3. 仅用于定位问题时，可以临时 `sudo setenforce 0`（若启用 SELinux）并将 IMA 设为测量模式，确认容器可启动后再做永久配置。
+
+`./init.sh` 会在检测到 IMA appraisal policy 时给出 WARNING，出现该提示时请优先调整宿主机配置。

@@ -13,6 +13,7 @@ x-hc: &hc
 services:
 
   dts-proxy:
+    platform: linux/arm64
     image: ${IMAGE_TRAEFIK}
     container_name: dts-proxy
     command:
@@ -57,6 +58,7 @@ services:
       - dts-core
 
   dts-pg:
+    platform: linux/arm64
     image: ${IMAGE_POSTGRES}
     environment:
       POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD}
@@ -91,6 +93,7 @@ services:
       retries: 10
       start_period: 30s
     security_opt:
+      - seccomp=unconfined  # legacy Docker on Kunpeng lacks clone3 support
       - label=disable
     restart: unless-stopped
     ports:
@@ -99,6 +102,7 @@ services:
       - dts-core
 
   dts-keycloak:
+    platform: linux/arm64
     image: ${IMAGE_KEYCLOAK}
     container_name: dts-keycloak
     command:
@@ -127,6 +131,8 @@ services:
     depends_on:
       dts-pg:
         condition: service_healthy
+    security_opt:
+      - seccomp=unconfined  # loosen for legacy Docker; remove after engine upgrade
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kc-redirect.rule=Host(`${HOST_SSO}`)"
@@ -149,133 +155,6 @@ services:
       - dts-core
 
   # Note: Keycloak realm/clients are configured manually via UI. No auto-init.
-
-  # dts-minio:
-  #   image: ${IMAGE_MINIO}
-  #   command: server /data --console-address ":9001"
-  #   environment:
-  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-  #     MINIO_REGION_NAME: ${MINIO_REGION_NAME}
-  #     MINIO_SERVER_URL: ${MINIO_SERVER_URL}
-  #     MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL}
-  #   volumes:
-  #     - ./services/dts-minio/data:/data:Z
-  #   healthcheck:
-  #     test: ["CMD","curl","-fsS","http://localhost:9000/minio/health/live"]
-  #     <<: *hc
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.http.routers.dts-minio-console.rule=Host(`${HOST_MINIO}`) && PathPrefix(`/`)"
-  #     - "traefik.http.routers.dts-minio-console.entrypoints=websecure"
-  #     - "traefik.http.routers.dts-minio-console.tls=true"
-  #     - "traefik.http.routers.dts-minio-console.service=dts-minio-console"
-  #     - "traefik.http.services.dts-minio-console.loadbalancer.server.port=9001"
-  #     - "traefik.http.routers.dts-minio-api.rule=Host(`${HOST_MINIO}`) && PathPrefix(`/s3`)"
-  #     - "traefik.http.routers.dts-minio-api.entrypoints=websecure"
-  #     - "traefik.http.routers.dts-minio-api.tls=true"
-  #     - "traefik.http.routers.dts-minio-api.service=dts-minio-api"
-  #     - "traefik.http.services.dts-minio-api.loadbalancer.server.port=9000"
-  #     - "traefik.http.middlewares.dts-strip-s3.stripprefixregex.regex=/s3"
-  #     - "traefik.http.routers.dts-minio-api.middlewares=dts-strip-s3@docker"
-  #   restart: unless-stopped
-  #   networks:
-  #     - dts-core
-
-  # dts-minio-init:
-  #   image: ${IMAGE_MINIO_MC}
-  #   depends_on:
-  #     dts-minio:
-  #       condition: service_healthy
-  #   environment:
-  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-  #     S3_BUCKET: ${S3_BUCKET}
-  #   entrypoint: ["/bin/sh","-c","/init/init.sh"]
-  #   volumes:
-  #     - ./services/dts-minio-init/init:/init:ro,Z
-  #   restart: "no"
-  #   networks:
-  #     - dts-core
-
-  # dts-nessie:
-  #   image: ${IMAGE_NESSIE}
-  #   container_name: dts-nessie
-  #   healthcheck:
-  #     test: ["CMD-SHELL","curl -fsS http://127.0.0.1:19120/api/v1/config >/dev/null || wget -qO- http://127.0.0.1:19120/api/v1/config >/dev/null"]
-  #     <<: *hc
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.docker.network=dts-core"
-  #     - "traefik.http.routers.dts-nessie.rule=Host(`${HOST_NESSIE}`)"
-  #     - "traefik.http.routers.dts-nessie.entrypoints=websecure"
-  #     - "traefik.http.routers.dts-nessie.tls=true"
-  #     - "traefik.http.services.dts-nessie.loadbalancer.server.port=19120"
-  #   restart: unless-stopped
-  #   networks:
-  #     - dts-core
-
-  # dts-trino:
-  #   image: ${IMAGE_TRINO}
-  #   container_name: dts-trino
-  #   volumes:
-  #     - ./services/dts-trino/init/catalog:/etc/trino/catalog:ro,Z
-  #     - ./services/dts-trino/config.properties:/etc/trino/config.properties:ro,Z
-  #     - ./services/dts-trino/hive-conf:/etc/trino/hive-conf:ro,Z
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8080/v1/info >/dev/null || exit 1"]
-  #     <<: *hc
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.docker.network=dts-core"
-  #     - "traefik.http.routers.dts-trino.rule=Host(`${HOST_TRINO}`) && PathPrefix(`/`)"
-  #     - "traefik.http.routers.dts-trino.entrypoints=websecure"
-  #     - "traefik.http.routers.dts-trino.tls=true"
-  #     - "traefik.http.services.dts-trino.loadbalancer.server.port=8080"
-  #     - "traefik.http.middlewares.dts-trino-redirect.redirectregex.regex=^/$$"
-  #     - "traefik.http.middlewares.dts-trino-redirect.redirectregex.replacement=/ui/"
-  #     - "traefik.http.middlewares.dts-trino-https.redirectscheme.scheme=https"
-  #     - "traefik.http.middlewares.dts-trino-https.redirectscheme.permanent=true"
-  #     - "traefik.http.routers.dts-trino-http.rule=Host(`${HOST_TRINO}`)"
-  #     - "traefik.http.routers.dts-trino-http.entrypoints=web"
-  #     - "traefik.http.routers.dts-trino-http.middlewares=dts-trino-https@docker"
-  #     - "traefik.http.routers.dts-trino.middlewares=dts-trino-redirect@docker"
-  #   restart: unless-stopped
-  #   networks:
-  #     - dts-core
-
-  # dts-ranger:
-  #   image: ${IMAGE_RANGER_ADMIN}
-  #   container_name: dts-ranger
-  #   depends_on:
-  #     dts-pg:
-  #       condition: service_healthy
-  #   environment:
-  #     DB_FLAVOR: postgres
-  #     DB_HOST: ${PG_HOST}
-  #     DB_PORT: ${PG_PORT}
-  #     DB_NAME: ${PG_DB_RANGER}
-  #     DB_USER: ${PG_USER_RANGER}
-  #     DB_PASSWORD: ${PG_PWD_RANGER}
-  #     RANGER_ADMIN_PASSWORD: ${RANGER_ADMIN_PASSWORD}
-  #     RANGER_TAGSYNC_PASSWORD: ${RANGER_TAGSYNC_PASSWORD}
-  #     RANGER_USERSYNC_PASSWORD: ${RANGER_USERSYNC_PASSWORD}
-  #   healthcheck:
-  #     test: ["CMD-SHELL","curl -fsS http://127.0.0.1:6080 || wget -qO- http://127.0.0.1:6080 >/dev/null"]
-  #     <<: *hc
-  #   volumes:
-  #     # Mount a separate data directory to avoid shadowing image's /opt/ranger
-  #     - ./services/dts-ranger:/ranger-data
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.docker.network=dts-core"
-  #     - "traefik.http.routers.dts-ranger.rule=Host(`${HOST_RANGER}`)"
-  #     - "traefik.http.routers.dts-ranger.entrypoints=websecure"
-  #     - "traefik.http.routers.dts-ranger.tls=true"
-  #     - "traefik.http.services.dts-ranger.loadbalancer.server.port=6080"
-  #   restart: unless-stopped
-  #   networks:
-  #     - dts-core
 
   dts-admin:
     image: ${IMAGE_DTS_ADMIN:?Set IMAGE_DTS_ADMIN in imgversion.conf or .env}

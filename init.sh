@@ -92,6 +92,22 @@ fix_pg_permissions(){
   chown -R "${pg_runtime_uid}:${pg_runtime_gid}" "${pg_dir}" 2>/dev/null || true
 }
 
+warn_if_ima_appraise(){
+  local ima_policy="/sys/kernel/security/ima/policy"
+  if [[ -r "${ima_policy}" ]]; then
+    if grep -qi 'appraise' "${ima_policy}"; then
+      cat <<'EOF' >&2
+[init.sh] WARNING: Detected host IMA appraisal policy. Linux kernels configured
+[init.sh] WARNING: with ima_appraise enforce signature checks on every binary
+[init.sh] WARNING: (func=BPRM_CHECK). Containers may fail to start Postgres with
+[init.sh] WARNING: 'could not execute "/usr/lib/postgresql/17/bin/postgres" -V: Operation not permitted'.
+[init.sh] WARNING: Disable ima_appraise (e.g. boot with ima_appraise=off) or move Docker data
+[init.sh] WARNING: to a filesystem mounted without appraisal before continuing.
+EOF
+    fi
+  fi
+}
+
 prepare_data_dirs(){
   fix_pg_permissions
   local -a data_dirs=(
@@ -527,6 +543,8 @@ ensure_env LEGACY_STACK "${LEGACY_STACK}"
 # 加载镜像版本 & 目录
 load_img_versions
 prepare_data_dirs
+
+warn_if_ima_appraise
 
 # 记录部署模式
 if [[ -n "${MODE}" ]]; then ensure_env DEPLOY_MODE "${MODE}"; fi

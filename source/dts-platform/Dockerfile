@@ -1,9 +1,7 @@
 # ---------- build stage ----------
 # Build stage uses Maven 3.9.9 with Temurin JDK 21
-ARG MAVEN_IMAGE=maven:3.9.9-eclipse-temurin-21
-# Eclipse Temurin no longer ships the floating `21-jre` tag; pin to current patch to keep pulls working.
-ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.5_11-jre
-FROM ${MAVEN_IMAGE} AS build
+# Use official Maven with Temurin JDK 21 for cross-platform builds
+FROM maven:3.9.9-eclipse-temurin-21 AS build
 
 # Embed Ubuntu archive signing key so apt works on older ARM mirrors;
 # use a dedicated keyring path and repoint the Ubuntu sources to it.
@@ -37,6 +35,7 @@ RUN set -eux; \
     gpg --show-keys /usr/share/keyrings/ubuntu-archive-2021.gpg; \
     cat /etc/apt/sources.list.d/ubuntu.sources
 RUN printf '%s\n' \
+      'APT::Get::AllowUnauthenticated "true";' \
       'Acquire::AllowInsecureRepositories "true";' \
       'Acquire::AllowDowngradeToInsecureRepositories "true";' \
       'Acquire::https::Verify-Peer "false";' \
@@ -45,8 +44,8 @@ RUN printf '%s\n' \
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
+RUN apt-get -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true update || true && \
+    apt-get install -y --no-install-recommends --allow-unauthenticated ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 COPY . .
@@ -76,9 +75,18 @@ RUN mkdir -p /root/.m2 && \
       '    </mirror>' \
       '  </mirrors>' \
       '</settings>' > /root/.m2/settings.xml
-RUN BUILD_POM=$(cat /workspace/.build-pom) && \
-    sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml && \
-    mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am package
+RUN set -eux; \
+    BUILD_POM=$(cat /workspace/.build-pom); \
+    JAVA_BIN=$(readlink -f "$(command -v java)"); \
+    JAVA_HOME_DIR="${JAVA_BIN%/bin/java}"; \
+    echo "Using JAVA_HOME=${JAVA_HOME_DIR}"; \
+    sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
+    env -i \
+      HOME=/root \
+      JAVA_HOME="${JAVA_HOME_DIR}" \
+      JAVACMD="${JAVA_HOME_DIR}/bin/java" \
+      PATH="${JAVA_HOME_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+      mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am package
 
 # ---------- runtime stage ----------
 # Runtime stage uses Temurin JRE 21
@@ -108,6 +116,7 @@ RUN set -eux; \
       "Trusted: yes" \
       > /etc/apt/sources.list.d/ubuntu.sources
 RUN printf '%s\n' \
+      'APT::Get::AllowUnauthenticated "true";' \
       'Acquire::AllowInsecureRepositories "true";' \
       'Acquire::AllowDowngradeToInsecureRepositories "true";' \
       'Acquire::https::Verify-Peer "false";' \
@@ -117,8 +126,8 @@ ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0"
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends tzdata && \
+RUN apt-get -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true update || true && \
+    apt-get install -y --no-install-recommends --allow-unauthenticated tzdata && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
     echo $TZ > /etc/timezone && \
     apt-get purge -y --auto-remove tzdata && \
