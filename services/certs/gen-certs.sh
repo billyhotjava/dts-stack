@@ -196,11 +196,11 @@ keytool_exec() {
     for img in "${image_candidates[@]}"; do
       if docker image inspect "${img}" >/dev/null 2>&1 || docker pull "${img}" >/dev/null 2>&1; then
         # Try plain 'keytool' in PATH first
-        if docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs:z" -w /certs "${img}" keytool "$@"; then
+        if docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs" -w /certs "${img}" keytool "$@"; then
           return 0
         fi
         # Fallback: explicit Temurin path
-        if docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs:z" -w /certs "${img}" /opt/java/openjdk/bin/keytool "$@"; then
+        if docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs" -w /certs "${img}" /opt/java/openjdk/bin/keytool "$@"; then
           return 0
         fi
         log "WARNING: running keytool in image '${img}' failed (both PATH and explicit path). Trying next image..."
