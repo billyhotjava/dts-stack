@@ -53,6 +53,8 @@ services:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       # Optional: mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
       - ./services/dts-admin/vendor:/opt/dts/vendor:ro,z
+    security_opt:
+      - seccomp=unconfined
     extra_hosts:
       - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
     networks:
@@ -124,6 +126,8 @@ services:
       - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
       # Encrypted attachments storage (host-bound)
       - ./services/dts-platform/upload:/opt/dts/upload:Z
+    security_opt:
+      - seccomp=unconfined
     extra_hosts:
       - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
     networks:

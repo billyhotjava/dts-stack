@@ -76,6 +76,8 @@ services:
       # Mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
       - ./services/dts-admin/vendor:/opt/dts/vendor:ro,z
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
+    security_opt:
+      - seccomp=unconfined
     extra_hosts:
       # For Docker < 20.10, 'host-gateway' is unsupported; fall back to default bridge gateway IP.
       - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
@@ -171,6 +173,8 @@ services:
       - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
       - ./services/dts-platform/upload:/opt/dts/upload:Z
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
+    security_opt:
+      - seccomp=unconfined
     extra_hosts:
       - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
       - "tdh01:172.16.0.154"

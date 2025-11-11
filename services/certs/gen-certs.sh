@@ -166,77 +166,47 @@ find_keytool() {
   return 1
 }
 
-generate_truststores() {
-  # Build clean truststores using keytool to avoid legacy PKCS12 quirks
-  rm -rf "${CERT_DIR}/truststore.p12" "${CERT_DIR}/truststore.jks"
-  local ca_pem="${CERT_DIR}/ca.crt"
-  if ! find_keytool; then
-    log "ERROR: keytool not found; cannot generate truststores."
-    return 1
+# Execute keytool either from host or via a small Java container (Temurin JRE)
+keytool_exec() {
+  local image="${KEYTOOL_IMAGE:-eclipse-temurin:21-jre}"
+  if find_keytool; then
+    "${KEYTOOL_BIN}" "$@"
+    return $?
   fi
-  # JKS
-  if ! "${KEYTOOL_BIN}" -importcert -trustcacerts -noprompt -alias dts-ca -file "${ca_pem}" \
-      -keystore "${CERT_DIR}/truststore.jks" -storetype JKS -storepass "${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1; then
-    log "ERROR: keytool failed to generate truststore.jks"
-    return 1
+  if command -v docker >/dev/null 2>&1; then
+    docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs:z" -w /certs "${image}" keytool "$@"
+    return $?
   fi
-  chmod 0644 "${CERT_DIR}/truststore.jks" 2>/dev/null || true
-  # PKCS12
-  if ! "${KEYTOOL_BIN}" -importcert -trustcacerts -noprompt -alias dts-ca -file "${ca_pem}" \
-      -keystore "${CERT_DIR}/truststore.p12" -storetype PKCS12 -storepass "${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1; then
-    log "ERROR: keytool failed to generate truststore.p12"
-    return 1
-  fi
-  chmod 0644 "${CERT_DIR}/truststore.p12" 2>/dev/null || true
-  log "generated truststore.jks and truststore.p12 (CA only). Password: ${TRUSTSTORE_PASSWORD}"
+  return 1
 }
 
 generate_truststores() {
-  # Always produce PKCS12 truststore; JKS is optional.
-  rm -rf "${CERT_DIR}/truststore.p12" "${CERT_DIR}/truststore.jks"
-
+  # Always produce PKCS12 via keytool; optionally also JKS. Abort if keytool is unavailable.
+  rm -f "${CERT_DIR}/truststore.p12" "${CERT_DIR}/truststore.jks"
   local ca_pem="${CERT_DIR}/ca.crt"
-  local have_keytool="false"
-  local pkcs12_created="false"
 
-  if find_keytool; then
-    have_keytool="true"
-    if "${KEYTOOL_BIN}" -importcert -trustcacerts -noprompt \
+  if ! keytool_exec -importcert -trustcacerts -noprompt \
       -alias dts-ca -file "${ca_pem}" \
       -keystore "${CERT_DIR}/truststore.p12" -storetype PKCS12 -storepass "${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1; then
-      pkcs12_created="true"
-    else
-      log "WARNING: keytool failed to import certificate into PKCS12; falling back to openssl."
-      rm -f "${CERT_DIR}/truststore.p12"
-    fi
-  fi
-
-  if [[ "${pkcs12_created}" != "true" ]]; then
-    if ! openssl pkcs12 -export -nokeys -in "${ca_pem}" -name "dts-ca" \
-      -out "${CERT_DIR}/truststore.p12" -passout pass:"${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1; then
-      log "ERROR: openssl failed to generate truststore.p12"
-      return 1
-    fi
-    pkcs12_created="true"
+    log "ERROR: failed to generate truststore.p12 with keytool (host or container)."; return 1
   fi
   chmod 0644 "${CERT_DIR}/truststore.p12" 2>/dev/null || true
 
-  if [[ "${have_keytool}" == "true" ]]; then
-    if "${KEYTOOL_BIN}" -importkeystore -noprompt \
+  # Verify PKCS12 contains at least one entry
+  if ! keytool_exec -list -keystore "${CERT_DIR}/truststore.p12" -storetype PKCS12 -storepass "${TRUSTSTORE_PASSWORD}" >/dev/null 2>&1; then
+    log "ERROR: generated truststore.p12 is not readable by Java keytool."; return 1
+  fi
+
+  # Also produce JKS for environments that prefer it
+  if keytool_exec -importkeystore -noprompt \
       -srckeystore "${CERT_DIR}/truststore.p12" -srcstoretype PKCS12 -srcstorepass "${TRUSTSTORE_PASSWORD}" \
       -destkeystore "${CERT_DIR}/truststore.jks" -deststoretype JKS -deststorepass "${TRUSTSTORE_PASSWORD}" \
       -srcalias dts-ca -destalias dts-ca >/dev/null 2>&1; then
-      chmod 0644 "${CERT_DIR}/truststore.jks" 2>/dev/null || true
-      log "generated truststore.jks and truststore.p12 (CA only). Password: ${TRUSTSTORE_PASSWORD}"
-      return 0
-    fi
-    log "WARNING: keytool importkeystore failed; keeping truststore.p12 only."
+    chmod 0644 "${CERT_DIR}/truststore.jks" 2>/dev/null || true
+    log "generated truststore.p12 and truststore.jks (CA only). Password: ${TRUSTSTORE_PASSWORD}"
   else
-    log "WARNING: keytool not found; only truststore.p12 was generated."
+    log "WARNING: could not generate truststore.jks; proceeding with truststore.p12 only."
   fi
-
-  log "generated truststore.p12 (CA only). Password: ${TRUSTSTORE_PASSWORD}"
-  return 0
 }
 
 main() {
