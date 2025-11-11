@@ -1,4 +1,4 @@
-ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.5_11-jre
+ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21-jre
 # ---------- build stage ----------
 # Build stage uses Maven 3.9.9 with Temurin JDK 21
 # Use official Maven with Temurin JDK 21 for cross-platform builds
