@@ -8,8 +8,8 @@ FROM ${MAVEN_IMAGE} AS build
 # Embed Ubuntu archive signing key so apt works on older ARM mirrors;
 # use a dedicated keyring path and repoint the Ubuntu sources to it.
 COPY apt-keys/ubuntu-archive-2021.gpg /tmp/ubuntu-archive-2021.gpg
-ARG UBUNTU_PORTS_MIRROR=https://repo.huaweicloud.com/ubuntu-ports
-ARG UBUNTU_ARCHIVE_MIRROR=https://repo.huaweicloud.com/ubuntu
+ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
+ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
 RUN set -eux; \
     install -d /usr/share/keyrings /etc/apt/trusted.gpg.d; \
     gpg --dearmor --batch --yes --output /usr/share/keyrings/ubuntu-archive-2021.gpg /tmp/ubuntu-archive-2021.gpg; \
@@ -25,13 +25,13 @@ RUN set -eux; \
       "URIs: ${MIRROR}/" \
       "Suites: noble noble-updates noble-backports" \
       "Components: main universe restricted multiverse" \
-      "Signed-By: /usr/share/keyrings/ubuntu-archive-2021.gpg" \
+      "Trusted: yes" \
       "" \
       "Types: deb" \
       "URIs: ${MIRROR}/" \
       "Suites: noble-security" \
       "Components: main universe restricted multiverse" \
-      "Signed-By: /usr/share/keyrings/ubuntu-archive-2021.gpg" \
+      "Trusted: yes" \
       > /etc/apt/sources.list.d/ubuntu.sources; \
     sha256sum /usr/share/keyrings/ubuntu-archive-2021.gpg; \
     gpg --show-keys /usr/share/keyrings/ubuntu-archive-2021.gpg; \
@@ -99,13 +99,13 @@ RUN set -eux; \
       "URIs: ${MIRROR}/" \
       "Suites: noble noble-updates noble-backports" \
       "Components: main universe restricted multiverse" \
-      "Signed-By: /usr/share/keyrings/ubuntu-archive-2021.gpg" \
+      "Trusted: yes" \
       "" \
       "Types: deb" \
       "URIs: ${MIRROR}/" \
       "Suites: noble-security" \
       "Components: main universe restricted multiverse" \
-      "Signed-By: /usr/share/keyrings/ubuntu-archive-2021.gpg" \
+      "Trusted: yes" \
       > /etc/apt/sources.list.d/ubuntu.sources
 RUN printf '%s\n' \
       'Acquire::AllowInsecureRepositories "true";' \
