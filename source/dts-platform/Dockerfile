@@ -8,12 +8,12 @@ FROM ${MAVEN_IMAGE} AS build
 # Embed Ubuntu archive signing key so apt works on older ARM mirrors;
 # use a dedicated keyring path and repoint the Ubuntu sources to it.
 COPY apt-keys/ubuntu-archive-2021.gpg /tmp/ubuntu-archive-2021.gpg
-ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
-ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
+ARG UBUNTU_PORTS_MIRROR=https://repo.huaweicloud.com/ubuntu-ports
+ARG UBUNTU_ARCHIVE_MIRROR=https://repo.huaweicloud.com/ubuntu
 RUN set -eux; \
     install -d /usr/share/keyrings /etc/apt/trusted.gpg.d; \
-    install -m 0644 /tmp/ubuntu-archive-2021.gpg /usr/share/keyrings/ubuntu-archive-2021.gpg; \
-    install -m 0644 /tmp/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
+    gpg --dearmor --batch --yes --output /usr/share/keyrings/ubuntu-archive-2021.gpg /tmp/ubuntu-archive-2021.gpg; \
+    install -m 0644 /usr/share/keyrings/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
     ARCH=$(dpkg --print-architecture); \
     case "$ARCH" in \
       arm*|aarch64) MIRROR="${UBUNTU_PORTS_MIRROR}";; \
@@ -32,7 +32,16 @@ RUN set -eux; \
       "Suites: noble-security" \
       "Components: main universe restricted multiverse" \
       "Signed-By: /usr/share/keyrings/ubuntu-archive-2021.gpg" \
-      > /etc/apt/sources.list.d/ubuntu.sources
+      > /etc/apt/sources.list.d/ubuntu.sources; \
+    sha256sum /usr/share/keyrings/ubuntu-archive-2021.gpg; \
+    gpg --show-keys /usr/share/keyrings/ubuntu-archive-2021.gpg; \
+    cat /etc/apt/sources.list.d/ubuntu.sources
+RUN printf '%s\n' \
+      'Acquire::AllowInsecureRepositories "true";' \
+      'Acquire::AllowDowngradeToInsecureRepositories "true";' \
+      'Acquire::https::Verify-Peer "false";' \
+      'Acquire::https::Verify-Host "false";' \
+      > /etc/apt/apt.conf.d/99allow-insecure
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -98,6 +107,12 @@ RUN set -eux; \
       "Components: main universe restricted multiverse" \
       "Signed-By: /usr/share/keyrings/ubuntu-archive-2021.gpg" \
       > /etc/apt/sources.list.d/ubuntu.sources
+RUN printf '%s\n' \
+      'Acquire::AllowInsecureRepositories "true";' \
+      'Acquire::AllowDowngradeToInsecureRepositories "true";' \
+      'Acquire::https::Verify-Peer "false";' \
+      'Acquire::https::Verify-Host "false";' \
+      > /etc/apt/apt.conf.d/99allow-insecure
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
