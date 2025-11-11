@@ -169,23 +169,41 @@ find_keytool() {
 # Execute keytool either from host or via a small Java container (Temurin JRE)
 keytool_exec() {
   # Try host keytool first; otherwise try a local Docker image that contains keytool
-  # Resolution order for images (first available is used):
-  #   1) $KEYTOOL_IMAGE (if set)
+  # Resolution order for images (first available is used unless KEYTOOL_IMAGE_STRICT=true):
+  #   1) $KEYTOOL_IMAGE (if set in env or repo .env)
   #   2) eclipse-temurin:21-jre
   #   3) $IMAGE_MAVEN from repo .env (if present)
   #   4) maven:3.9.9-eclipse-temurin-21
   local image_candidates=()
-  if [[ -n "${KEYTOOL_IMAGE:-}" ]]; then image_candidates+=("${KEYTOOL_IMAGE}"); fi
-  image_candidates+=("eclipse-temurin:21-jre")
-  # Try to load IMAGE_MAVEN from repo .env (two levels up from services/certs)
+  local strict="${KEYTOOL_IMAGE_STRICT:-}"
   local repo_env
   repo_env="${CERT_DIR}/../../.env"
+  # Load optional overrides from repo .env
   if [[ -f "${repo_env}" ]]; then
     # shellcheck disable=SC2046
-    eval $(grep -E '^IMAGE_MAVEN=' "${repo_env}" | sed -E 's#\r$##') || true
-    if [[ -n "${IMAGE_MAVEN:-}" ]]; then image_candidates+=("${IMAGE_MAVEN}"); fi
+    eval $(grep -E '^(IMAGE_MAVEN|KEYTOOL_IMAGE|KEYTOOL_IMAGE_STRICT)=' "${repo_env}" | sed -E 's#\r$##') || true
   fi
-  image_candidates+=("maven:3.9.9-eclipse-temurin-21")
+  if [[ -n "${KEYTOOL_IMAGE:-}" ]]; then image_candidates+=("${KEYTOOL_IMAGE}"); fi
+  if [[ -z "${strict}" || "${strict}" != "true" ]]; then
+    image_candidates+=("eclipse-temurin:21-jre")
+    if [[ -n "${IMAGE_MAVEN:-}" ]]; then image_candidates+=("${IMAGE_MAVEN}"); fi
+    image_candidates+=("maven:3.9.9-eclipse-temurin-21")
+  fi
+
+  # Helper: rewrite host paths under CERT_DIR to container paths under /certs
+  _rewrite_args_for_container() {
+    local out=()
+    local a prefix
+    prefix="${CERT_DIR%/}/"
+    for a in "$@"; do
+      if [[ "$a" == "${prefix}"* ]]; then
+        out+=("/certs/${a#${prefix}}")
+      else
+        out+=("$a")
+      fi
+    done
+    printf '%s\n' "${out[@]}"
+  }
 
   if find_keytool; then
     "${KEYTOOL_BIN}" "$@"
@@ -194,13 +212,24 @@ keytool_exec() {
   if command -v docker >/dev/null 2>&1; then
     local img
     for img in "${image_candidates[@]}"; do
-      if docker image inspect "${img}" >/dev/null 2>&1 || docker pull "${img}" >/dev/null 2>&1; then
+      # Offline-friendly: only use local images; do not pull
+      if docker image inspect "${img}" >/dev/null 2>&1; then
         # Try plain 'keytool' in PATH first
-        if docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs" -w /certs "${img}" keytool "$@"; then
+        # Rewrite host paths to /certs/* for container
+        # shellcheck disable=SC2207
+        local args1=( $( _rewrite_args_for_container "$@" ) )
+        if docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs" -w /certs "${img}" keytool "${args1[@]}"; then
           return 0
         fi
         # Fallback: explicit Temurin path
-        if docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs" -w /certs "${img}" /opt/java/openjdk/bin/keytool "$@"; then
+        if docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs" -w /certs "${img}" /opt/java/openjdk/bin/keytool "${args1[@]}"; then
+          return 0
+        fi
+        # Fallback with SELinux relabel variants (:Z and :z)
+        if docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs:Z" -w /certs "${img}" keytool "${args1[@]}"; then
+          return 0
+        fi
+        if docker run --rm --security-opt seccomp=unconfined -v "${CERT_DIR}:/certs:z" -w /certs "${img}" keytool "${args1[@]}"; then
           return 0
         fi
         log "WARNING: running keytool in image '${img}' failed (both PATH and explicit path). Trying next image..."
@@ -215,27 +244,27 @@ keytool_exec() {
 generate_truststores() {
   # Always produce PKCS12 via keytool; optionally also JKS. Abort if keytool is unavailable.
   rm -f "${CERT_DIR}/truststore.p12" "${CERT_DIR}/truststore.jks"
-  # Use in-container relative paths for keytool (we mount CERT_DIR to /certs and set -w /certs)
-  local ca_pem_rel="ca.crt"
-  local p12_rel="truststore.p12"
-  local jks_rel="truststore.jks"
+  # Use host-absolute paths; keytool_exec will rewrite them to container paths when needed
+  local ca_pem_host="${CERT_DIR}/ca.crt"
+  local p12_host="${CERT_DIR}/truststore.p12"
+  local jks_host="${CERT_DIR}/truststore.jks"
 
   if ! keytool_exec -importcert -trustcacerts -noprompt \
-      -alias dts-ca -file "${ca_pem_rel}" \
-      -keystore "${p12_rel}" -storetype PKCS12 -storepass "${TRUSTSTORE_PASSWORD}"; then
+      -alias dts-ca -file "${ca_pem_host}" \
+      -keystore "${p12_host}" -storetype PKCS12 -storepass "${TRUSTSTORE_PASSWORD}"; then
     log "ERROR: failed to generate truststore.p12 with keytool (host or container)."; return 1
   fi
   chmod 0644 "${CERT_DIR}/truststore.p12" 2>/dev/null || true
 
   # Verify PKCS12 contains at least one entry
-  if ! keytool_exec -list -keystore "${p12_rel}" -storetype PKCS12 -storepass "${TRUSTSTORE_PASSWORD}"; then
+  if ! keytool_exec -list -keystore "${p12_host}" -storetype PKCS12 -storepass "${TRUSTSTORE_PASSWORD}"; then
     log "ERROR: generated truststore.p12 is not readable by Java keytool."; return 1
   fi
 
   # Also produce JKS for environments that prefer it
   if keytool_exec -importkeystore -noprompt \
-      -srckeystore "${p12_rel}" -srcstoretype PKCS12 -srcstorepass "${TRUSTSTORE_PASSWORD}" \
-      -destkeystore "${jks_rel}" -deststoretype JKS -deststorepass "${TRUSTSTORE_PASSWORD}" \
+      -srckeystore "${p12_host}" -srcstoretype PKCS12 -srcstorepass "${TRUSTSTORE_PASSWORD}" \
+      -destkeystore "${jks_host}" -deststoretype JKS -deststorepass "${TRUSTSTORE_PASSWORD}" \
       -srcalias dts-ca -destalias dts-ca; then
     chmod 0644 "${CERT_DIR}/truststore.jks" 2>/dev/null || true
     log "generated truststore.p12 and truststore.jks (CA only). Password: ${TRUSTSTORE_PASSWORD}"

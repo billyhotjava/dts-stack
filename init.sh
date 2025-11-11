@@ -193,6 +193,10 @@ generate_env_base(){
   : "${TRAEFIK_ENABLE_PING:=true}"
   : "${TRUSTSTORE_PASSWORD:=changeit}"
   : "${IMAGE_MAVEN:=maven:3.9.9-eclipse-temurin-21}"
+  # Optional: image to run keytool in cert generation (offline/air-gapped)
+  # Default to IMAGE_MAVEN so no new image is required offline.
+  : "${KEYTOOL_IMAGE:=${IMAGE_MAVEN}}"
+  : "${KEYTOOL_IMAGE_STRICT:=true}"
 
   # ---------- Keycloak ----------
   : "${KC_ADMIN:=admin}"
@@ -318,6 +322,8 @@ TRAEFIK_ENABLE_PING=${TRAEFIK_ENABLE_PING}
 
 # ====== Build Helpers ======
 IMAGE_MAVEN=${IMAGE_MAVEN}
+KEYTOOL_IMAGE=${KEYTOOL_IMAGE}
+KEYTOOL_IMAGE_STRICT=${KEYTOOL_IMAGE_STRICT}
 
 # ====== Hosts ======
 HOST_SSO=${HOST_SSO}
