@@ -31,10 +31,10 @@ These map to `dts.pki.*` in `source/dts-admin/src/main/resources/config/applicat
 
 ## Verify (without integration)
 - With defaults (disabled):
-  - `curl -k https://admin.${BASE_DOMAIN}/api/keycloak/auth/pki-login` → 404
+  - `curl -k https://biadmin.${BASE_DOMAIN}/api/keycloak/auth/pki-login` → 404
 - Enable the flag:
   - Set `DTS_PKI_ENABLED=true` and restart admin
-  - `curl -k -X POST https://admin.${BASE_DOMAIN}/api/keycloak/auth/pki-login -d '{}' -H 'Content-Type: application/json'` → 501
+  - `curl -k -X POST https://biadmin.${BASE_DOMAIN}/api/keycloak/auth/pki-login -d '{}' -H 'Content-Type: application/json'` → 501
 
 ## Token Issuance (finalized)
 - 策略：Keycloak Token Exchange（优先）
@@ -120,7 +120,7 @@ DTS_PKI_ISSUER_CN=""
 
 ```bash
 # Expect 401/400 when params missing; 200 with tokens when集成完成
-curl -k -X POST https://admin.${BASE_DOMAIN}/api/keycloak/auth/pki-login -H 'Content-Type: application/json' -d '{"challengeId":"...","plain":"...nonce...","p7Signature":"...","certB64":"...","mode":"agent"}'
+curl -k -X POST https://biadmin.${BASE_DOMAIN}/api/keycloak/auth/pki-login -H 'Content-Type: application/json' -d '{"challengeId":"...","plain":"...nonce...","p7Signature":"...","certB64":"...","mode":"agent"}'
 ```
 
 When full PKI integration is developed, the endpoint will return the same payload shape as password login.

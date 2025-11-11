@@ -109,7 +109,7 @@ pnpm build
 docker compose -f docker-compose.yml -f docker-compose-app.yml up -d
 ```
 
-访问管理端 UI：`https://admin.${BASE_DOMAIN}`。
+访问管理端 UI：`https://biadmin.${BASE_DOMAIN}`。
 
 ## Git贡献提交规范
 

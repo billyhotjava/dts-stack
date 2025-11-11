@@ -109,7 +109,7 @@ From repo root:
 docker compose -f docker-compose.yml -f docker-compose-app.yml up -d
 ```
 
-Access the admin UI at `https://admin.${BASE_DOMAIN}`.
+Access the admin UI at `https://biadmin.${BASE_DOMAIN}`.
 
 ## Git Contribution submission specification
 - `feat` new features

@@ -26,7 +26,7 @@ Todo:
 
 2. Compose 拓扑
    - `docker-compose.yml`：定义所有基础服务（Traefik、Postgres、Keycloak、MinIO(+mc init)、Nessie、Trino、预留 Ranger）。各服务通过 `dts-core` 网络互联，Traefik 统一暴露 80/443/metrics，TLS 证书来自 `services/certs`。
-   - `docker-compose-app.yml`：生产态应用层，挂载预构建镜像 `IMAGE_DTS_*`，并把 truststore、OIDC Issuer、CORS/同域路由配置好。Traefik 规则保证 `https://admin.<BASE_DOMAIN>` → admin-webapp、`https://platform.<BASE_DOMAIN>` → platform-webapp，API 通过子路径 `/admin`、`/platform` 进入后端。
+   - `docker-compose-app.yml`：生产态应用层，挂载预构建镜像 `IMAGE_DTS_*`，并把 truststore、OIDC Issuer、CORS/同域路由配置好。Traefik 规则保证 `https://biadmin.<BASE_DOMAIN>` → admin-webapp、`https://bi.<BASE_DOMAIN>` → platform-webapp，API 通过子路径 `/admin`、`/platform` 进入后端。
    - `docker-compose.dev.yml`：本地源码挂载。Java 服务使用 Maven 容器镜像运行：
        * 启动流程：Patch application-dev.yml 使用 env datasource；构建并 `spring-boot:run`，开启 5005 调试端口；自动安装 `dts-common`。
        * React 前端使用 node:22 容器 + pnpm，`pnpm install` 后以 Vite dev server 暴露 18011/18012。脚本 `builds/patch-vite-env.sh` 写入代理目标。

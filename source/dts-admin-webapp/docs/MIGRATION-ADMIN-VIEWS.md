@@ -36,7 +36,7 @@ The old directory `src/pages/management/system/user` has been removed.
 - Packaged: `docker compose -f docker-compose.yml -f docker-compose-app.yml up -d`
 
 2) UI checks (as a sysadmin role)
-- Open `https://admin.${BASE_DOMAIN}`
+- Open `https://biadmin.${BASE_DOMAIN}`
 - Nav → 管理：点击 用户/角色/组织/审批/草稿/审计/菜单 管理项
 - Confirm URLs are `/admin/users`, `/admin/roles`, `/admin/orgs`, `/admin/approval`, `/admin/audit`, `/admin/portal-menus`
 

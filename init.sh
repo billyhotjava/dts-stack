@@ -213,8 +213,8 @@ generate_env_base(){
   HOST_NESSIE="nessie.${BASE_DOMAIN}"
   HOST_API="api.${BASE_DOMAIN}"
   HOST_RANGER="ranger.${BASE_DOMAIN}"
-  HOST_ADMIN_UI="admin.${BASE_DOMAIN}"
-  HOST_PLATFORM_UI="platform.${BASE_DOMAIN}"
+  HOST_ADMIN_UI="biadmin.${BASE_DOMAIN}"
+  HOST_PLATFORM_UI="bi.${BASE_DOMAIN}"
 
   # ---------- MinIO/S3 (placed before Airflow uses it) ----------
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then

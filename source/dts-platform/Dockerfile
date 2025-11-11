@@ -1,6 +1,7 @@
 # ---------- build stage ----------
 # Build stage uses Maven 3.9.9 with Temurin JDK 21
 # Use official Maven with Temurin JDK 21 for cross-platform builds
+# syntax=docker/dockerfile:1.6
 FROM maven:3.9.9-eclipse-temurin-21 AS build
 
 # Embed Ubuntu archive signing key so apt works on older ARM mirrors;
@@ -43,6 +44,7 @@ RUN printf '%s\n' \
       > /etc/apt/apt.conf.d/99allow-insecure
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
+ARG ENABLE_MAVEN_BUILD=true
 
 RUN apt-get -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true update || true && \
     apt-get install -y --no-install-recommends --allow-unauthenticated ca-certificates && \
@@ -77,19 +79,28 @@ RUN mkdir -p /root/.m2 && \
       '</settings>' > /root/.m2/settings.xml
 RUN set -eux; \
     BUILD_POM=$(cat /workspace/.build-pom); \
-    JAVA_BIN=$(readlink -f "$(command -v java)"); \
-    JAVA_HOME_DIR="${JAVA_BIN%/bin/java}"; \
-    echo "Using JAVA_HOME=${JAVA_HOME_DIR}"; \
-    sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
-    env -i \
-      HOME=/root \
-      JAVA_HOME="${JAVA_HOME_DIR}" \
-      JAVACMD="${JAVA_HOME_DIR}/bin/java" \
-      PATH="${JAVA_HOME_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-      mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am package
+    if [ "${ENABLE_MAVEN_BUILD}" = "true" ]; then \
+      # Resolve JAVA_HOME and run Maven build
+      if [ -x "${JAVA_HOME:-/opt/java/openjdk}/bin/java" ]; then \
+        export JAVA_HOME="${JAVA_HOME:-/opt/java/openjdk}"; \
+      else \
+        JAVA_BIN=$(readlink -f "$(command -v java)"); \
+        export JAVA_HOME="${JAVA_BIN%/bin/java}"; \
+      fi; \
+      echo "Using JAVA_HOME=${JAVA_HOME}"; \
+      sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
+      /usr/share/maven/bin/mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am package; \
+    else \
+      # Offline/locked-down fallback: use prebuilt jar from builds/
+      echo "Skipping Maven build; using prebuilt jar from /workspace/builds"; \
+      mkdir -p /workspace/dts-platform/target; \
+      test -f /workspace/builds/dts-platform.jar; \
+      cp /workspace/builds/dts-platform.jar /workspace/dts-platform/target/dts-platform-prebuilt.jar; \
+    fi
 
 # ---------- runtime stage ----------
 # Runtime stage uses Temurin JRE 21
+ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.5_11-jre
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
 ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
 ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu

@@ -66,7 +66,7 @@ services:
       - "traefik.http.services.dts-admin.loadbalancer.server.port=8081"
       - "traefik.http.middlewares.dts-strip-admin.stripprefixregex.regex=/admin"
       - "traefik.http.routers.dts-admin.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file"
-      # Same-origin API under admin domain to avoid CORS: https://admin.${BASE_DOMAIN}/api/* -> dts-admin:8081
+      # Same-origin API under admin domain to avoid CORS: https://biadmin.${BASE_DOMAIN}/api/* -> dts-admin:8081
       - "traefik.http.routers.dts-admin-uiapi.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.dts-admin-uiapi.entrypoints=websecure"
       - "traefik.http.routers.dts-admin-uiapi.tls=true"
@@ -137,7 +137,7 @@ services:
       - "traefik.http.services.dts-platform.loadbalancer.server.port=8081"
       - "traefik.http.middlewares.dts-strip-platform.stripprefixregex.regex=/platform"
       - "traefik.http.routers.dts-platform.middlewares=dts-strip-platform@docker,cors-allow@file,security-headers@file"
-      # Same-origin API under platform domain: https://platform.${BASE_DOMAIN}/api/* -> dts-platform:8081
+      # Same-origin API under platform domain: https://bi.${BASE_DOMAIN}/api/* -> dts-platform:8081
       - "traefik.http.routers.dts-platform-uiapi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.dts-platform-uiapi.entrypoints=websecure"
       - "traefik.http.routers.dts-platform-uiapi.tls=true"

@@ -26,8 +26,8 @@
   - `./init.sh single 'Strong@2025!' dts.local`
   - `docker compose -f docker-compose.yml -f docker-compose-app.yml up -d`
 - 访问：
-  - Admin：`https://admin.${BASE_DOMAIN}`（同域 `/api` → dts-admin）
-  - Platform：`https://platform.${BASE_DOMAIN}`（同域 `/api` → dts-platform）
+  - Admin：`https://biadmin.${BASE_DOMAIN}`（同域 `/api` → dts-admin）
+  - Platform：`https://bi.${BASE_DOMAIN}`（同域 `/api` → dts-platform）
 - 更新代码后：
   - 仅重建改动服务镜像并重启该服务（示例）：
     - `docker build -t dts-admin:NEW_TAG -f source/dts-admin/Dockerfile source && docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-admin`
