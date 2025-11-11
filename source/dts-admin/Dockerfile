@@ -1,3 +1,4 @@
+ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.5_11-jre
 # ---------- build stage ----------
 # Build against Maven 3.9.9 with Temurin JDK 21
 # Use official Maven with Temurin JDK 21 for cross-platform builds
@@ -44,7 +45,7 @@ RUN printf '%s\n' \
       > /etc/apt/apt.conf.d/99allow-insecure
 ARG MAVEN_MIRROR_URL=https://maven.aliyun.com/repository/public
 ARG DEBIAN_FRONTEND=noninteractive
-ARG ENABLE_MAVEN_BUILD=true
+ARG ENABLE_MAVEN_BUILD=false
 
 RUN apt-get -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true update || true && \
     apt-get install -y --no-install-recommends --allow-unauthenticated ca-certificates && \
@@ -100,7 +101,6 @@ RUN set -eux; \
 
 # ---------- runtime stage ----------
 # Use Temurin JRE 21 to run the compiled jar
-ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.5_11-jre
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
 ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
 ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
