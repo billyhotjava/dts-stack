@@ -7,6 +7,7 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import { fileURLToPath } from "node:url";
 import { resolve as resolvePath } from "node:path";
 import legacy from "@vitejs/plugin-legacy";
+import { unwrapCssLayers } from "../../tools/postcss/unwrap-css-layers";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const legacySupportedBrowsers = ["chrome >= 95", "edge >= 95", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 95"];
@@ -165,10 +166,13 @@ export default defineConfig(({ mode }) => {
 				drop: isProduction ? ["console", "debugger"] : [],
 				legalComments: "none",
 				target: buildTarget,
-			},
+		},
 
-    // Do not attempt to resolve absolute container paths in CSS urls
-    css: {
+		css: {
+			postcss: {
+				plugins: legacyEnabled ? [unwrapCssLayers()] : [],
+			},
+      // Do not attempt to resolve absolute container paths in CSS urls
       url: {
         filter: (url) => {
           if (url.startsWith("/workspace/")) return false;
