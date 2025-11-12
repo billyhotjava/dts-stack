@@ -34,6 +34,7 @@
     - `docker build -t dts-platform:NEW_TAG -f source/dts-platform/Dockerfile source && docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-platform`
     - `docker build -t dts-admin-webapp:NEW_TAG source/dts-admin-webapp && docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-admin-webapp`
     - `docker build -t dts-admin:NEW_TAG source/dts-admin` 与 `docker build -t dts-platform:NEW_TAG source/dts-platform` 依旧可用；如未包含 `dts-common`，Dockerfile 将自动注入轻量版审计依赖，仅影响容器内构建。
+    - 代理/离线环境：前端镜像在执行 `npm install -g pnpm` 与 `pnpm install` 时，可通过 `--build-arg NPM_HTTP_PROXY=http://proxy:port --build-arg NPM_HTTPS_PROXY=http://proxy:port --build-arg NPM_REGISTRY=https://npm-mirror.local` 指定出口或私有源；RUN 结束后会清理这些环境变量，不影响离线运行。Alpine 包依旧使用 `APK_HTTP_PROXY`/`APK_HTTPS_PROXY` build-arg，二者互不干扰。
   - 使用固定标签时可：`up -d --force-recreate <服务名>`（不推荐长期使用）
 
 【说明】

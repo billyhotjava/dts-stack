@@ -5,9 +5,26 @@ FROM ${BASE_IMAGE_NODE} AS build
 
 WORKDIR /app
 
+# Optional proxy/registry for npm & pnpm downloads during build. Pass via
+# --build-arg NPM_HTTP_PROXY=..., NPM_HTTPS_PROXY=..., NPM_REGISTRY=...
+ARG NPM_HTTP_PROXY
+ARG NPM_HTTPS_PROXY
+ARG NPM_REGISTRY
+
 # Install pnpm matching the repo's packageManager. Corepack bundled with Node 20.17 lacks the latest signing key,
 # so install via npm to avoid signature verification failures.
-RUN npm install -g pnpm@10.8.0 && pnpm --version
+RUN set -eux; \
+    if [ -n "${NPM_REGISTRY:-}" ]; then \
+        export npm_config_registry="${NPM_REGISTRY}"; \
+    fi; \
+    if [ -n "${NPM_HTTP_PROXY:-}${NPM_HTTPS_PROXY:-}" ]; then \
+        export http_proxy="${NPM_HTTP_PROXY:-${NPM_HTTPS_PROXY:-}}"; \
+        export https_proxy="${NPM_HTTPS_PROXY:-${NPM_HTTP_PROXY:-}}"; \
+        export npm_config_proxy="${http_proxy}"; \
+        export npm_config_https_proxy="${https_proxy}"; \
+    fi; \
+    npm install -g pnpm@10.8.0 && pnpm --version; \
+    unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
 # Disable opening visualizer report during Docker build
 ENV VISUALIZER_OPEN=false
@@ -16,7 +33,19 @@ ENV VISUALIZER_OPEN=false
 COPY pnpm-lock.yaml package.json ./
 
 # Install dependencies without running lifecycle scripts (skip lefthook, etc.)
-RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN set -eux; \
+    if [ -n "${NPM_REGISTRY:-}" ]; then \
+        export npm_config_registry="${NPM_REGISTRY}"; \
+    fi; \
+    if [ -n "${NPM_HTTP_PROXY:-}${NPM_HTTPS_PROXY:-}" ]; then \
+        export http_proxy="${NPM_HTTP_PROXY:-${NPM_HTTPS_PROXY:-}}"; \
+        export https_proxy="${NPM_HTTPS_PROXY:-${NPM_HTTP_PROXY:-}}"; \
+        export npm_config_proxy="${http_proxy}"; \
+        export npm_config_https_proxy="${https_proxy}"; \
+    fi; \
+    pnpm install --frozen-lockfile --ignore-scripts; \
+    rm -rf /root/.pnpm-store/*tmp* 2>/dev/null || true; \
+    unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
 # Copy the remaining project files and build the production bundle
 COPY . .
