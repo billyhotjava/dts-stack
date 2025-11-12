@@ -30,9 +30,9 @@ ARG APK_HTTP_PROXY
 ARG APK_HTTPS_PROXY
 
 RUN set -eux; \
-    if [ -n "${APK_HTTP_PROXY}${APK_HTTPS_PROXY}" ]; then \
-        export http_proxy="${APK_HTTP_PROXY:-${APK_HTTPS_PROXY}}"; \
-        export https_proxy="${APK_HTTPS_PROXY:-${APK_HTTP_PROXY}}"; \
+    if [ -n "${APK_HTTP_PROXY:-}${APK_HTTPS_PROXY:-}" ]; then \
+        export http_proxy="${APK_HTTP_PROXY:-${APK_HTTPS_PROXY:-}}"; \
+        export https_proxy="${APK_HTTPS_PROXY:-${APK_HTTP_PROXY:-}}"; \
     fi; \
     apk add --no-cache nginx gettext && \
     unset http_proxy https_proxy && \
