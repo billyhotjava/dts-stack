@@ -29,7 +29,7 @@ function SheetPortal({
 const SheetOverlay = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
->(({ className, ...props }, ref) => {
+>(({ className, style, ...props }, ref) => {
   return (
     <SheetPrimitive.Overlay
       ref={ref}
@@ -38,6 +38,7 @@ const SheetOverlay = React.forwardRef<
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
         className
       )}
+      style={{ backgroundColor: "rgba(0, 0, 0, 0.5)", ...style }}
       {...props}
     />
   )
