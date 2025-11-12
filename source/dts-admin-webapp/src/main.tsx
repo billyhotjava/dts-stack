@@ -1,3 +1,4 @@
+import "./polyfills/legacy-browser";
 import "./global.css";
 import "./theme/theme.css";
 import "./locales/i18n";

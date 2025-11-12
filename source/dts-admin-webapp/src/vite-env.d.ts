@@ -5,8 +5,12 @@ interface ImportMetaEnv {
 	readonly VITE_APP_DEFAULT_ROUTE: string;
 	/** Public path for static assets */
 	readonly VITE_APP_PUBLIC_PATH: string;
+	/** Legacy public path shorthand */
+	readonly VITE_PUBLIC_PATH: string;
 	/** Base URL for API endpoints */
 	readonly VITE_APP_API_BASE_URL: string;
+	/** Legacy API base shorthand */
+	readonly VITE_API_BASE_URL: string;
 	/** Routing mode: frontend routing or backend routing */
 	readonly VITE_APP_ROUTER_MODE: "frontend" | "backend";
 }

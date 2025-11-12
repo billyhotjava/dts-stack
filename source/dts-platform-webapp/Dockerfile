@@ -25,7 +25,17 @@ RUN pnpm build
 ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
 FROM ${BASE_IMAGE_NODE} AS runtime
 
-RUN apk add --no-cache nginx gettext && \
+# Optional proxy settings for apk; pass via --build-arg APK_HTTP_PROXY=http://host:port (and/or HTTPS).
+ARG APK_HTTP_PROXY
+ARG APK_HTTPS_PROXY
+
+RUN set -eux; \
+    if [ -n "${APK_HTTP_PROXY}${APK_HTTPS_PROXY}" ]; then \
+        export http_proxy="${APK_HTTP_PROXY:-${APK_HTTPS_PROXY}}"; \
+        export https_proxy="${APK_HTTPS_PROXY:-${APK_HTTP_PROXY}}"; \
+    fi; \
+    apk add --no-cache nginx gettext && \
+    unset http_proxy https_proxy && \
     rm -f /etc/nginx/http.d/default.conf /etc/nginx/conf.d/default.conf && \
     mkdir -p /usr/share/nginx/html
 

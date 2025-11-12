@@ -100,6 +100,14 @@ Run the following command to build the production version:
 pnpm build
 ```
 
+> Note: `pnpm build` now runs with `LEGACY_BROWSER_BUILD=1`, generating bundles compatible with Chrome 95. Use `pnpm build:modern` when you only target evergreen browsers during local debugging.
+
+### Chrome 95 Compatibility
+
+- Browserslist, Vite targets, and the legacy plugin now cover Chrome 95 to prevent syntax/runtime errors on locked-down endpoints.
+- The bootstrap sequence loads `src/polyfills/legacy-browser.ts` before React mounts, providing shims for `structuredClone`, `URL.canParse`, and `crypto.randomUUID`.
+- Extend the same polyfill file if your enterprise clients require additional browser fixes.
+
 ### Build & Run in DTS stack
 
 From repo root:

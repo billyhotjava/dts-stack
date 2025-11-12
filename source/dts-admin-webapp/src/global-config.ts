@@ -46,6 +46,14 @@ const ensureLeadingSlash = (path: string, fallback: string) => {
 	return normalized.startsWith("/") ? normalized : `/${normalized}`;
 };
 
+const removeTrailingSlash = (path: string) => {
+	if (path === "/") {
+		return "/";
+	}
+	const trimmed = path.replace(/\/+$/, "");
+	return trimmed || "/";
+};
+
 const resolveDefaultRoute = () => {
 	const fallback = "/admin/my-changes";
 	const rawDefaultRoute = import.meta.env.VITE_APP_DEFAULT_ROUTE || fallback;
@@ -62,6 +70,15 @@ const resolveApiBaseUrl = () => {
 	return ensureLeadingSlash(normalized, "/api");
 };
 
+const resolvePublicPath = () => {
+	const rawPublicPath = import.meta.env.VITE_PUBLIC_PATH || import.meta.env.VITE_APP_PUBLIC_PATH || "/";
+	if (isAbsoluteUrl(rawPublicPath)) {
+		return removeTrailingSlash(rawPublicPath);
+	}
+	const withLeadingSlash = ensureLeadingSlash(rawPublicPath, "/");
+	return removeTrailingSlash(withLeadingSlash);
+};
+
 const resolveAllowedLoginRoles = (): string[] => {
 	const raw = (import.meta.env.VITE_ALLOWED_LOGIN_ROLES ||
 		// default to admin-console super roles only
@@ -76,7 +93,7 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 	appName: import.meta.env.VITE_APP_NAME || "BI数智平台(机密)",
 	appVersion: packageJson.version,
 	defaultRoute: resolveDefaultRoute(),
-	publicPath: import.meta.env.VITE_PUBLIC_PATH || "/",
+	publicPath: resolvePublicPath(),
 	apiBaseUrl: resolveApiBaseUrl(),
 	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
 	allowedLoginRoles: resolveAllowedLoginRoles(),

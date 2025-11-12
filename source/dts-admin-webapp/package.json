@@ -7,7 +7,8 @@
 	"scripts": {
 		"dev": "VITE_CACHE_DIR=.vite-cache vite",
 		"predev": "node scripts/sync-portal-menus.mjs",
-		"build": "VITE_CACHE_DIR=.vite-cache tsc && VITE_CACHE_DIR=.vite-cache vite build",
+		"build": "LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache tsc && LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache vite build",
+		"build:modern": "LEGACY_BROWSER_BUILD=0 VITE_CACHE_DIR=.vite-cache tsc && LEGACY_BROWSER_BUILD=0 VITE_CACHE_DIR=.vite-cache vite build",
 		"prebuild": "node scripts/sync-portal-menus.mjs",
 		"sync:portal-menus": "node scripts/sync-portal-menus.mjs",
 		"preview": "vite preview",
@@ -32,6 +33,7 @@
 		"@iconify/utils": "^2.3.0",
 		"@tailwindcss/vite": "^4.1.3",
 		"@tanstack/react-query": "^5.60.2",
+		"@ungap/structured-clone": "^1.3.0",
 		"@vanilla-extract/css": "^1.17.0",
 		"@vanilla-extract/vite-plugin": "^5.0.7",
 		"@vitejs/plugin-legacy": "^5.4.0",
@@ -100,12 +102,12 @@
 	"packageManager": "pnpm@10.8.0",
 	"browserslist": {
 		"production": [
-			"Chrome >= 109",
-			"Edge >= 109",
+			"Chrome >= 95",
+			"Edge >= 95",
 			"Firefox >= 102",
 			"Safari >= 15.4",
 			"iOS >= 15.5",
-			"Android >= 109"
+			"Android >= 95"
 		],
 		"development": [
 			"last 1 Chrome version"
