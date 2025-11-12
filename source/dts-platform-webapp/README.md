@@ -85,6 +85,14 @@ Run the following command to build the production version:
 pnpm build
 ```
 
+> Note: `pnpm build` now runs with `LEGACY_BROWSER_BUILD=1` to emit bundles compatible with Chrome 95. Use `pnpm build:modern` if you only need to target evergreen browsers during local testing.
+
+### Chrome 95 Compatibility
+
+- Browserslist, Vite targets, and the legacy plugin were lowered to Chrome 95 to avoid syntax/runtime crashes in locked-down environments.
+- The app bootstrap imports `src/polyfills/legacy-browser.ts`, providing shims for `structuredClone`, `URL.canParse`, and `crypto.randomUUID` so certificate login keeps working.
+- Extend the same polyfill module if additional enterprise browsers require more shims.
+
 ## DTS Customization (Client)
 
 - Client navigation is provided by static frontend routes; no menu-creation API is required.

@@ -85,6 +85,14 @@ pnpm dev
 pnpm build
 ```
 
+> 说明：`pnpm build` 现在默认以 `LEGACY_BROWSER_BUILD=1` 运行，输出兼容 Chrome 95 的产物。若仅在现代浏览器中调试，可执行 `pnpm build:modern` 获取更小的 bundle。
+
+### Chrome 95 兼容说明
+
+- Vite 构建目标、Browserslist 以及 Legacy 插件均已下调至 Chrome 95，避免老旧内核解析现代语法时报错。
+- 入口在加载应用前会注入 `src/polyfills/legacy-browser.ts`，补齐 `structuredClone`、`URL.canParse`、`crypto.randomUUID` 等缺失特性，确保证书登录流程可用。
+- 如需进一步扩展旧浏览器支持，可在同一 polyfill 文件中追加自定义兼容逻辑。
+
 ## 项目定制说明（DTS 业务端）
 
 - 业务端（客户端）菜单使用前端静态导航，无需菜单创建 API。

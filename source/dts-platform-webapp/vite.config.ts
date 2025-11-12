@@ -9,13 +9,25 @@ import { resolve as resolvePath } from "node:path";
 import legacy from "@vitejs/plugin-legacy";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
-const supportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 109"];
+const legacySupportedBrowsers = ["chrome >= 95", "edge >= 95", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 95"];
+const modernSupportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 115", "safari >= 16.4", "ios >= 16.4", "android >= 109"];
 
 export default defineConfig(({ mode }) => {
 	const rawEnv = loadEnv(mode, process.cwd(), "");
 	const env = { ...rawEnv, ...process.env } as Record<string, string | undefined>;
 	const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
 	const isProduction = mode === "production";
+
+	const legacyFlagRaw =
+		env.LEGACY_BROWSER_BUILD ??
+		rawEnv.LEGACY_BROWSER_BUILD ??
+		env.VITE_LEGACY_BUILD ??
+		rawEnv.VITE_LEGACY_BUILD ??
+		(isProduction ? "1" : "0");
+	const normalizedLegacyFlag = String(legacyFlagRaw).trim().toLowerCase();
+	const legacyEnabled = normalizedLegacyFlag !== "0" && normalizedLegacyFlag !== "false";
+	const browserTargets = legacyEnabled ? legacySupportedBrowsers : modernSupportedBrowsers;
+	const buildTarget = legacyEnabled ? "chrome95" : "chrome109";
 
 	const rawProxyTarget = rawEnv.VITE_API_PROXY_TARGET;
 	const runtimeProxyTarget = env.VITE_API_PROXY_TARGET || rawProxyTarget || "http://localhost:18082";
@@ -57,7 +69,7 @@ export default defineConfig(({ mode }) => {
 			}),
 			tailwindcss(),
 			legacy({
-				targets: supportedBrowsers,
+				targets: browserTargets,
 				modernPolyfills: true,
 				renderLegacyChunks: false,
 			}),
@@ -126,10 +138,10 @@ export default defineConfig(({ mode }) => {
 			},
 		},
 
-		build: {
-			target: "chrome98",
-			minify: "esbuild",
-			sourcemap: !isProduction,
+			build: {
+				target: buildTarget,
+				minify: "esbuild",
+				sourcemap: !isProduction,
 			cssCodeSplit: true,
 			chunkSizeWarningLimit: 1500,
 			rollupOptions: {
@@ -149,11 +161,11 @@ export default defineConfig(({ mode }) => {
 			exclude: ["@iconify/react", "@vanilla-extract/css"],
 		},
 
-		esbuild: {
-			drop: isProduction ? ["console", "debugger"] : [],
-			legalComments: "none",
-			target: "chrome98",
-		},
+			esbuild: {
+				drop: isProduction ? ["console", "debugger"] : [],
+				legalComments: "none",
+				target: buildTarget,
+			},
 
     // Do not attempt to resolve absolute container paths in CSS urls
     css: {
