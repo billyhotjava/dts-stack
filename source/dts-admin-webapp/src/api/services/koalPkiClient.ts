@@ -56,23 +56,66 @@ function collectEndpoints(options?: KoalConnectOptions): string[] {
   return result;
 }
 
+function derivePlatformVendorBase(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const loc = window.location;
+    const host = String(loc.hostname || "");
+    const prefix = "biadmin.";
+    if (host.startsWith(prefix)) {
+      const baseDomain = host.substring(prefix.length);
+      if (baseDomain) {
+        return `${loc.protocol}//bi.${baseDomain}/vendor/koal`;
+      }
+    }
+  } catch {}
+  return null;
+}
+
 async function ensureKoalSdk(): Promise<void> {
   if (typeof window !== "undefined" && (window as any).Thrift) return;
-  const scripts = [
-    "/koal/thrift.js",
-    "/koal/pkiService.js",
-    "/koal/deviceOperator.js",
-    "/koal/signxPlugin.js",
+  const bases: string[] = [
+    "/koal",
+    "/vendor/koal",
   ];
-  for (const src of scripts) {
-    await new Promise<void>((resolve, reject) => {
-      const el = document.createElement("script");
-      el.src = src;
-      el.onload = () => resolve();
-      el.onerror = () => reject(new Error(`Failed to load ${src}`));
-      document.head.appendChild(el);
-    });
+  const alt = derivePlatformVendorBase();
+  if (alt) bases.push(alt);
+
+  const files = [
+    // Core thrift runtime + helpers
+    "thrift.js",
+    "base64.js",
+    // Thrift generated type definitions (some vendor SDKs require them)
+    "commdef_types.js",
+    "pkiService_types.js",
+    "devService_types.js",
+    "signXService_types.js",
+    // Service proxies
+    "pkiService.js",
+    "deviceOperator.js",
+    "signXService.js",
+  ];
+  let lastErr: any = null;
+  for (const base of bases) {
+    try {
+      for (const f of files) {
+        const src = `${base}/${f}`;
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise<void>((resolve, reject) => {
+          const el = document.createElement("script");
+          el.src = src;
+          el.onload = () => resolve();
+          el.onerror = () => reject(new Error(`Failed to load ${src}`));
+          document.head.appendChild(el);
+        });
+      }
+      return; // loaded successfully from this base
+    } catch (e) {
+      lastErr = e;
+      // try next base
+    }
   }
+  throw lastErr || new Error("未能加载 PKI 前端 SDK 脚本");
 }
 
 export class KoalMiddlewareClient {
