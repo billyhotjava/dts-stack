@@ -58,6 +58,36 @@ read_secret(){ while true; do read -rsp "Password: " p1; echo; read -rsp "Confir
 ensure_env(){ k="$1"; shift; v="$*"; if grep -qE "^${k}=" .env 2>/dev/null; then sed -i -E "s|^${k}=.*|${k}=${v}|g" .env; else echo "${k}=${v}" >> .env; fi; }
 load_img_versions(){ conf="imgversion.conf"; [[ -f "$conf" ]] || return 0; while IFS='=' read -r k v; do [[ -z "${k// }" || "${k#\#}" != "$k" ]] && continue; v="$(echo "$v"|sed -E 's/^\s+|\s+$//g')"; ensure_env "$k" "$v"; done < <(grep -E '^[[:space:]]*([A-Z0-9_]+)[[:space:]]*=' "$conf" || true); echo "[init.sh] loaded image versions"; }
 
+# Try to detect a stable IPv4 address on the host for containers to reach services exposed on the host
+detect_host_ipv4(){
+  # 1) routing-based detection
+  if command -v ip >/dev/null 2>&1; then
+    local ip4
+    ip4=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '/src/ {for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}') || true
+    if [[ -n "${ip4:-}" && "${ip4}" != 127.* ]]; then
+      printf '%s' "$ip4"; return 0
+    fi
+  fi
+  # 2) hostname -I fallback
+  if command -v hostname >/dev/null 2>&1; then
+    local first
+    first=$(hostname -I 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9.]+$/ && $i !~ /^127\./){print $i; exit}}') || true
+    if [[ -n "${first:-}" ]]; then
+      printf '%s' "$first"; return 0
+    fi
+  fi
+  # 3) ip addr scan fallback
+  if command -v ip >/dev/null 2>&1; then
+    local any
+    any=$(ip -4 addr show scope global 2>/dev/null | awk '/ inet /{print $2}' | sed -E 's#/.*##' | head -n1) || true
+    if [[ -n "${any:-}" ]]; then
+      printf '%s' "$any"; return 0
+    fi
+  fi
+  # 4) last resort: docker default gateway on many hosts
+  printf '%s' "172.17.0.1"
+}
+
 # Determine which optional services are enabled based on imgversion.conf
 determine_enabled_services(){
   local conf="imgversion.conf"
@@ -220,6 +250,10 @@ generate_env_base(){
   HOST_ADMIN_UI="biadmin.${BASE_DOMAIN}"
   HOST_PLATFORM_UI="bi.${BASE_DOMAIN}"
 
+  # ---------- Host reachability for in-container calls to host services ----------
+  # Allow operators to pin this via environment; otherwise auto-detect.
+  : "${HOST_GATEWAY_IP:=$(detect_host_ipv4)}"
+
   # ---------- MinIO/S3 (placed before Airflow uses it) ----------
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     : "${MINIO_ROOT_USER:=minio}"
@@ -332,6 +366,7 @@ HOST_API=${HOST_API}
 HOST_RANGER=${HOST_RANGER}
 HOST_ADMIN_UI=${HOST_ADMIN_UI}
 HOST_PLATFORM_UI=${HOST_PLATFORM_UI}
+HOST_GATEWAY_IP=${HOST_GATEWAY_IP}
 
 # ====== Keycloak ======
 KC_ADMIN=${KC_ADMIN}

@@ -1,5 +1,5 @@
 import { Loader2, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -165,9 +165,14 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				return;                       // 退出后续流程
 
 			}
-            setPkiCerts(certificates);
-            const selectable = certificates.find((cert) => cert.canSign) ?? certificates[0];
-            setSelectedCertId(selectable?.id ?? "");
+			setPkiCerts(certificates);
+			const signables = certificates.filter((c) => c.canSign);
+			// 若只有一个可签名证书，默认选中；多于一个时要求用户显式选择，避免误选
+			if (signables.length === 1) {
+				setSelectedCertId(signables[0]?.id ?? "");
+			} else {
+				setSelectedCertId("");
+			}
 			setPinCode("");
 			setPkiClientState({ client, challenge });
 			setPkiDialogOpen(true);
@@ -422,8 +427,18 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 										onValueChange={setSelectedCertId}
 										className="space-y-3"
 									>
-										{pkiCerts.map((cert, index) => {
-											const uname = deriveUsernameFromCert(cert) || cert.subjectCn || cert.sn || cert.id;
+										{(() => {
+											const nameCounts = new Map<string, number>();
+											for (const c of pkiCerts) {
+												const n = (deriveUsernameFromCert(c) || c.subjectCn || c.sn || c.id) as string;
+												nameCounts.set(n, (nameCounts.get(n) ?? 0) + 1);
+											}
+
+											return pkiCerts.map((cert, index) => {
+												const uname = deriveUsernameFromCert(cert) || cert.subjectCn || cert.sn || cert.id;
+												const dup = (nameCounts.get(String(uname)) ?? 0) > 1;
+												const tail = (cert.sn && String(cert.sn).slice(-4)) || String(cert.id).slice(-4);
+												const display = dup ? `${uname}（尾号 ${tail}）` : String(uname);
 											return (
 												<label
 													key={cert.id}
@@ -434,11 +449,11 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 												>
 													<RadioGroupItem value={cert.id} id={`cert-${index}`} disabled={!cert.canSign} className="mt-1" />
 													<div className="flex-1">
-														<div className="font-medium text-foreground">用户名：{uname}{!cert.canSign ? "（不可签）" : ""}</div>
+														<div className="font-medium text-foreground">用户名：{display}{!cert.canSign ? "（不可签）" : ""}</div>
 													</div>
 												</label>
 											);
-										})}
+										})();}
 									</RadioGroup>
 								)}
 							</div>

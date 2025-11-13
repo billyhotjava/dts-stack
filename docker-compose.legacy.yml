@@ -16,9 +16,13 @@ services:
     platform: linux/arm64
     image: ${IMAGE_TRAEFIK}
     container_name: dts-proxy
+    network_mode: host
     command:
-      - "--api.dashboard=${TRAEFIK_DASHBOARD}"
-      - "--api.insecure=${TRAEFIK_DASHBOARD}"
+      #- "--api.dashboard=${TRAEFIK_DASHBOARD}"
+      #- "--api.insecure=${TRAEFIK_DASHBOARD}"
+      - "--entrypoints.traefik.address=127.0.0.1:38080"
+      - "--api.dashboard=false"
+      - "--api.insecure=false"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=dts-core"
@@ -38,11 +42,6 @@ services:
       - "--metrics.prometheus.entryPoint=metrics"
       - "--metrics.prometheus.addEntryPointsLabels=true"
       - "--metrics.prometheus.addServicesLabels=true"
-    ports:
-      - "80:80"
-      - "${TLS_PORT}:443"
-      - "127.0.0.1:${TRAEFIK_DASHBOARD_PORT}:8080"
-      - "127.0.0.1:${TRAEFIK_METRICS_PORT}:${TRAEFIK_METRICS_PORT}"
     volumes:
       # Do not relabel docker.sock; keep read-only
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -50,12 +49,10 @@ services:
       - ./services/certs:/etc/traefik/certs:ro,z
       - ./services/certs/server.crt:/certs/server.crt:ro,z
       - ./services/certs/server.key:/certs/server.key:ro,z
-    labels:
-      - "traefik.enable=true"
+    #labels:
+      #- "traefik.enable=true"
       # Default TLS store and certificates are defined via file provider (dynamic/traefik-dynamic.yml)
     restart: unless-stopped
-    networks:
-      - dts-core
 
   dts-pg:
     platform: linux/arm64
