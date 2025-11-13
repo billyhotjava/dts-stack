@@ -136,12 +136,13 @@ RUN printf '%s\n' \
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive \
     JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0 --add-exports=java.base/sun.security.x509=ALL-UNNAMED --add-exports=java.base/sun.security.util=ALL-UNNAMED --add-opens=java.base/sun.security.x509=ALL-UNNAMED --add-opens=java.base/sun.security.util=ALL-UNNAMED"
-RUN apt-get -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true update || true && \
-    apt-get install -y --no-install-recommends --allow-unauthenticated tzdata && \
-    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
-    echo $TZ > /etc/timezone && \
-    apt-get purge -y --auto-remove tzdata && \
+RUN set -eux; \
+    apt-get -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true update || true; \
+    apt-get install -y --no-install-recommends tzdata ca-certificates; \
+    cp /usr/share/zoneinfo/$TZ /etc/localtime; \
+    echo $TZ > /etc/timezone; \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /workspace/dts-admin/target/dts-admin-*.jar /app/app.jar

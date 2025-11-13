@@ -2,8 +2,6 @@
 // Provides connect/listCertificates/verifyPin/signData/exportCertificate
 
 import { GLOBAL_CONFIG } from "@/global-config";
-
-type Nullable<T> = T | null | undefined;
 const IS_DEV = typeof import.meta !== "undefined" && Boolean((import.meta as any)?.env?.DEV);
 
 export type KoalCertificate = {
@@ -227,4 +225,3 @@ function firstNonBlank(...candidates: Array<unknown>): string | null {
   }
   return null;
 }
-

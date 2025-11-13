@@ -24,6 +24,8 @@ export type GlobalConfig = {
 	hideBuiltinRoles: boolean;
 	/** Hide default-roles-* from role catalogs/tables */
 	hideDefaultRoles: boolean;
+	/** Local Koal middleware endpoints, used for PKI login */
+	koalPkiEndpoints: string[];
 };
 
 /**
@@ -89,6 +91,15 @@ const resolveAllowedLoginRoles = (): string[] => {
 		.filter(Boolean);
 };
 
+const resolveKoalPkiEndpoints = (): string[] => {
+	const raw = (import.meta.env.VITE_KOAL_PKI_ENDPOINTS || "") as string;
+	if (!raw) return [];
+	return raw
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+};
+
 export const GLOBAL_CONFIG: GlobalConfig = {
 	appName: import.meta.env.VITE_APP_NAME || "BI数智平台(机密)",
 	appVersion: packageJson.version,
@@ -100,4 +111,5 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 	hideKeycloakBranding: String(import.meta.env.VITE_HIDE_KEYCLOAK_BRANDING ?? "true").toLowerCase() === "true",
 	hideBuiltinRoles: String(import.meta.env.VITE_HIDE_BUILTIN_ROLES ?? "true").toLowerCase() === "true",
 	hideDefaultRoles: String(import.meta.env.VITE_HIDE_DEFAULT_ROLES ?? "true").toLowerCase() === "true",
+	koalPkiEndpoints: resolveKoalPkiEndpoints(),
 };

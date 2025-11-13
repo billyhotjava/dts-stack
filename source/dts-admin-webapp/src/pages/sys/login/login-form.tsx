@@ -1,5 +1,5 @@
 import { Loader2, Eye, EyeOff } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -64,6 +64,147 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			console.error("Login failed:", error);
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	// 开关：默认隐藏账号/密码表单，仅保留证书登录入口（后端能力仍保留）
+	const hidePasswordForm: boolean = (() => {
+		const enabledRaw = (import.meta as any)?.env?.WEBAPP_PASSWORD_LOGIN_ENABLED;
+		if (enabledRaw !== undefined && enabledRaw !== null && String(enabledRaw).trim() !== "") {
+			const v = String(enabledRaw).trim().toLowerCase();
+			if (v === "1" || v === "true" || v === "yes" || v === "on") return false;
+			if (v === "0" || v === "false" || v === "no" || v === "off") return true;
+		}
+		const raw = (import.meta as any)?.env?.VITE_HIDE_PASSWORD_LOGIN;
+		if (raw === undefined || raw === null || String(raw).trim() === "") return true; // 默认隐藏
+		const v = String(raw).trim().toLowerCase();
+		return v !== "0" && v !== "false";
+	})();
+
+	// PKI 状态与操作
+	const [pkiDialogOpen, setPkiDialogOpen] = useState(false);
+	const [pkiCerts, setPkiCerts] = useState<KoalCertificate[]>([]);
+	const [selectedCertId, setSelectedCertId] = useState("");
+	const [pinCode, setPinCode] = useState("");
+	const [pkiClientState, setPkiClientState] = useState<{ client: KoalMiddlewareClient; challenge: PkiChallenge } | null>(null);
+	const [pkiSubmitting, setPkiSubmitting] = useState(false);
+
+	const selectedCert = pkiCerts.find((c) => c.id === selectedCertId);
+
+	function parseDnFor(keys: string[], dn?: string): string | null {
+		if (!dn || typeof dn !== "string") return null;
+		try {
+			const parts = dn.split(",");
+			for (const k of keys) {
+				const upper = k.toUpperCase();
+				for (const p of parts) {
+					const seg = p.trim();
+					const idx = seg.indexOf("=");
+					if (idx > 0) {
+						const name = seg.substring(0, idx).trim().toUpperCase();
+						if (name === upper) return seg.substring(idx + 1).trim();
+					}
+				}
+			}
+		} catch {}
+		return null;
+	}
+
+	function deriveUsernameFromCert(cert?: KoalCertificate | null): string {
+		if (!cert) return "";
+		const raw: any = cert.raw || {};
+		const subjectName = raw.subjectName || raw.SubjectName || {};
+		const uidFromObj = subjectName.UID || raw.UID || raw.uid;
+		if (typeof uidFromObj === "string" && uidFromObj.trim()) return uidFromObj.trim();
+		const subjectStr: string | undefined =
+			typeof raw.subject === "string"
+				? raw.subject
+				: typeof raw.Subject === "string"
+				? raw.Subject
+				: typeof raw.subjectDN === "string"
+				? raw.subjectDN
+				: typeof raw.SubjectDN === "string"
+				? raw.SubjectDN
+				: undefined;
+		const uidFromDn = parseDnFor(["UID"], subjectStr || undefined);
+		if (uidFromDn) return uidFromDn;
+		const cnFromDn = parseDnFor(["CN"], subjectStr || undefined);
+		if (cnFromDn) return cnFromDn;
+		return cert.subjectCn || "";
+	}
+
+	const handlePkiLogin = async () => {
+		setLoading(true);
+		try {
+			const challenge = await getPkiChallenge();
+			const client = await KoalMiddlewareClient.connect();
+			const certificates = await client.listCertificates();
+			const uniq = (() => {
+				const m = new Map<string, KoalCertificate>();
+				for (const c of certificates) if (!m.has(c.id)) m.set(c.id, c);
+				return Array.from(m.values());
+			})();
+			setPkiCerts(uniq);
+			setSelectedCertId(uniq.length === 1 ? uniq[0]?.id ?? "" : "");
+			setPinCode("");
+			setPkiClientState({ client, challenge });
+			setPkiDialogOpen(true);
+		} catch (error) {
+			toast.error(String((error as Error)?.message || "证书登录初始化失败"), { position: "top-center" });
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const handleConfirmPki = async () => {
+		if (!pkiClientState) return;
+		const { client, challenge } = pkiClientState;
+		if (!selectedCertId) return;
+		const cert = pkiCerts.find((c) => c.id === selectedCertId);
+		if (!cert) return;
+		setPkiSubmitting(true);
+		try {
+			await client.verifyPin(cert, pinCode);
+			const signed = await client.signData(cert, challenge.nonce);
+			const certContentB64 = await client.exportCertificate(cert);
+			const resp: any = await pkiLogin({
+				challengeId: challenge.challengeId,
+				nonce: challenge.nonce,
+				originDataB64: signed.originDataB64,
+				signDataB64: signed.signDataB64,
+				certContentB64,
+				mode: "agent",
+				signType: signed.signType,
+				dupCertB64: signed.dupCertB64,
+			});
+
+			const accessToken = String(resp?.accessToken || resp?.token || "").trim();
+			const refreshToken = String(resp?.refreshToken || "").trim();
+			const user = (resp?.user || resp?.userInfo || {}) as any;
+			if (!accessToken) throw new Error("登录响应缺少访问令牌");
+
+			// 仅允许三员角色进入管理端（与密码登录一致）
+			const rolesLower: string[] = Array.isArray(user?.roles) ? (user.roles as any[]).map((r) => String(r).toLowerCase()) : [];
+			const isTri =
+				rolesLower.includes("role_sys_admin") ||
+				rolesLower.includes("role_auth_admin") ||
+				rolesLower.includes("role_security_auditor");
+			if (!isTri) {
+				toast.error("无权访问管理端，请使用业务端登录", { position: "top-center" });
+				await client.logout();
+				setPkiDialogOpen(false);
+				return;
+			}
+			setUserToken({ accessToken, refreshToken });
+			setUserInfo(user);
+			navigate(GLOBAL_CONFIG.defaultRoute, { replace: true });
+			toast.success("登录成功", { closeButton: true });
+			await client.logout();
+			setPkiDialogOpen(false);
+		} catch (error) {
+			toast.error(String((error as Error)?.message || "签名失败"), { position: "top-center" });
+		} finally {
+			setPkiSubmitting(false);
 		}
 	};
 
@@ -208,152 +349,5 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	);
 }
 
+
 export default LoginForm;
-	// 开关：默认隐藏账号/密码表单，仅保留证书登录入口（后端能力仍保留）
-	const hidePasswordForm: boolean = (() => {
-		const enabledRaw = (import.meta as any)?.env?.WEBAPP_PASSWORD_LOGIN_ENABLED;
-		if (enabledRaw !== undefined && enabledRaw !== null && String(enabledRaw).trim() !== "") {
-			const v = String(enabledRaw).trim().toLowerCase();
-			if (v === "1" || v === "true" || v === "yes" || v === "on") return false;
-			if (v === "0" || v === "false" || v === "no" || v === "off") return true;
-		}
-		const raw = (import.meta as any)?.env?.VITE_HIDE_PASSWORD_LOGIN;
-		if (raw === undefined || raw === null || String(raw).trim() === "") return true; // 默认隐藏
-		const v = String(raw).trim().toLowerCase();
-		return v !== "0" && v !== "false";
-	})();
-
-	// PKI 状态
-	const [pkiDialogOpen, setPkiDialogOpen] = useState(false);
-	const [pkiCerts, setPkiCerts] = useState<KoalCertificate[]>([]);
-	const [selectedCertId, setSelectedCertId] = useState("");
-	const [pinCode, setPinCode] = useState("");
-	const [pkiClientState, setPkiClientState] = useState<{ client: KoalMiddlewareClient; challenge: PkiChallenge } | null>(null);
-	const [pkiSubmitting, setPkiSubmitting] = useState(false);
-
-	const selectedCert = pkiCerts.find((c) => c.id === selectedCertId);
-	const certNameCounts = useMemo(() => {
-		const m = new Map<string, number>();
-		for (const c of pkiCerts) {
-			const n = String(deriveUsernameFromCert(c) || c.subjectCn || c.sn || c.id);
-			m.set(n, (m.get(n) ?? 0) + 1);
-		}
-		return m;
-	}, [pkiCerts]);
-
-	function parseDnFor(keys: string[], dn?: string): string | null {
-		if (!dn || typeof dn !== "string") return null;
-		try {
-			const parts = dn.split(",");
-			for (const k of keys) {
-				const upper = k.toUpperCase();
-				for (const p of parts) {
-					const seg = p.trim();
-					const idx = seg.indexOf("=");
-					if (idx > 0) {
-						const name = seg.substring(0, idx).trim().toUpperCase();
-						if (name === upper) return seg.substring(idx + 1).trim();
-					}
-				}
-			}
-		} catch {}
-		return null;
-	}
-
-	function deriveUsernameFromCert(cert?: KoalCertificate | null): string {
-		if (!cert) return "";
-		const raw: any = cert.raw || {};
-		const subjectName = raw.subjectName || raw.SubjectName || {};
-		const uidFromObj = subjectName.UID || raw.UID || raw.uid;
-		if (typeof uidFromObj === "string" && uidFromObj.trim()) return uidFromObj.trim();
-		const subjectStr: string | undefined =
-			typeof raw.subject === "string"
-				? raw.subject
-				: typeof raw.Subject === "string"
-				? raw.Subject
-				: typeof raw.subjectDN === "string"
-				? raw.subjectDN
-				: typeof raw.SubjectDN === "string"
-				? raw.SubjectDN
-				: undefined;
-		const uidFromDn = parseDnFor(["UID"], subjectStr || undefined);
-		if (uidFromDn) return uidFromDn;
-		const cnFromDn = parseDnFor(["CN"], subjectStr || undefined);
-		if (cnFromDn) return cnFromDn;
-		return cert.subjectCn || "";
-	}
-
-	const handlePkiLogin = async () => {
-		setLoading(true);
-		try {
-			const challenge = await getPkiChallenge();
-			const client = await KoalMiddlewareClient.connect();
-			const certificates = await client.listCertificates();
-			const uniq = (() => {
-				const m = new Map<string, KoalCertificate>();
-				for (const c of certificates) if (!m.has(c.id)) m.set(c.id, c);
-				return Array.from(m.values());
-			})();
-			setPkiCerts(uniq);
-			setSelectedCertId(uniq.length === 1 ? uniq[0]?.id ?? "" : "");
-			setPinCode("");
-			setPkiClientState({ client, challenge });
-			setPkiDialogOpen(true);
-		} catch (error) {
-			toast.error(String((error as Error)?.message || "证书登录初始化失败"), { position: "top-center" });
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	const handleConfirmPki = async () => {
-		if (!pkiClientState) return;
-		const { client, challenge } = pkiClientState;
-		if (!selectedCertId) return;
-		const cert = pkiCerts.find((c) => c.id === selectedCertId);
-		if (!cert) return;
-		setPkiSubmitting(true);
-		try {
-			await client.verifyPin(cert, pinCode);
-			const signed = await client.signData(cert, challenge.nonce);
-			const certContentB64 = await client.exportCertificate(cert);
-			const resp: any = await pkiLogin({
-				challengeId: challenge.challengeId,
-				nonce: challenge.nonce,
-				originDataB64: signed.originDataB64,
-				signDataB64: signed.signDataB64,
-				certContentB64,
-				mode: "agent",
-				signType: signed.signType,
-				dupCertB64: signed.dupCertB64,
-			});
-
-			const accessToken = String(resp?.accessToken || resp?.token || "").trim();
-			const refreshToken = String(resp?.refreshToken || "").trim();
-			const user = (resp?.user || resp?.userInfo || {}) as any;
-			if (!accessToken) throw new Error("登录响应缺少访问令牌");
-
-			// 仅允许三员角色进入管理端（与密码登录一致）
-			const rolesLower: string[] = Array.isArray(user?.roles) ? (user.roles as any[]).map((r) => String(r).toLowerCase()) : [];
-			const isTri =
-				rolesLower.includes("role_sys_admin") ||
-				rolesLower.includes("role_auth_admin") ||
-				rolesLower.includes("role_security_auditor");
-			if (!isTri) {
-				toast.error("无权访问管理端，请使用业务端登录", { position: "top-center" });
-				await client.logout();
-				setPkiDialogOpen(false);
-				return;
-			}
-			setUserToken({ accessToken, refreshToken });
-			setUserInfo(user);
-			navigate(GLOBAL_CONFIG.defaultRoute, { replace: true });
-			toast.success("登录成功", { closeButton: true });
-			await client.logout();
-			setPkiDialogOpen(false);
-		} catch (error) {
-			toast.error(String((error as Error)?.message || "签名失败"), { position: "top-center" });
-		} finally {
-			setPkiSubmitting(false);
-		}
-	};

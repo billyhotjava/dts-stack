@@ -1,5 +1,5 @@
 import { Loader2, Eye, EyeOff } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -41,15 +41,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	const selectedCert = pkiCerts.find((item) => item.id === selectedCertId);
 
-	const certNameCounts = useMemo(() => {
-		const counts = new Map<string, number>();
-		for (const c of pkiCerts) {
-			const uname = String(deriveUsernameFromCert(c) || c.subjectCn || c.sn || c.id);
-			counts.set(uname, (counts.get(uname) ?? 0) + 1);
-		}
-		return counts;
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [pkiCerts]);
+
 
 	// 简单开关：默认隐藏账号/密码，仅保留证书登录按钮（仍保留密码登录后端能力）
 	const hidePasswordForm: boolean = (() => {
