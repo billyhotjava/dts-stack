@@ -175,11 +175,17 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				return;                       // 退出后续流程
 
 			}
-			setPkiCerts(certificates);
 			const signables = certificates.filter((c) => c.canSign);
+			// 去重（部分中间件可能返回重复条目）
+			const uniq = (() => {
+				const m = new Map<string, KoalCertificate>();
+				for (const c of signables) if (!m.has(c.id)) m.set(c.id, c);
+				return Array.from(m.values());
+			})();
+			setPkiCerts(uniq);
 			// 若只有一个可签名证书，默认选中；多于一个时要求用户显式选择，避免误选
-			if (signables.length === 1) {
-				setSelectedCertId(signables[0]?.id ?? "");
+			if (uniq.length === 1) {
+				setSelectedCertId(uniq[0]?.id ?? "");
 			} else {
 				setSelectedCertId("");
 			}

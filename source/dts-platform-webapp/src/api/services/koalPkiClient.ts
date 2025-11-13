@@ -610,8 +610,10 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
 		signType = "SM2";
 	}
 
-	const keyUsageRaw = item?.keyUsage ?? item?.KeyUsage;
-	const keyUsage = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? undefined);
+  const keyUsageRaw = item?.keyUsage ?? item?.KeyUsage;
+  const keyUsage = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? undefined);
+  const signFlagRaw = item?.signFlag ?? item?.SignFlag;
+  const signFlag = typeof signFlagRaw === "string" ? Number(signFlagRaw) : Number(signFlagRaw ?? undefined);
 
 	const idParts = [devId, appName, conName, sn].filter((part) => typeof part === "string" && part.trim() !== "");
 	let id = idParts.join("::");
@@ -619,14 +621,27 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
 		id = `cert-${index}`;
 	}
 
-	const missingFields: string[] = [];
-	if (!devId) missingFields.push("devId");
-	if (!appName) missingFields.push("appName");
-	if (!conName) missingFields.push("conName");
+  const missingFields: string[] = [];
+  if (!devId) missingFields.push("devId");
+  if (!appName) missingFields.push("appName");
+  if (!conName) missingFields.push("conName");
 
-	const canSign = missingFields.length === 0;
+  // Heuristics for signable certificates:
+  // - signFlag (if provided by middleware) must be 1
+  // - keyUsage (if provided) should be 1 (digitalSignature) — other values treated as non-signing
+  // - device identifiers must be present
+  let signableByFlags = true;
+  if (Number.isFinite(signFlag)) {
+    signableByFlags = (Number(signFlag) === 1);
+  }
+  if (Number.isFinite(keyUsage)) {
+    // Common vendor convention: 1 => digitalSignature; other values denote encipherment/nonRepudiation etc.
+    signableByFlags = signableByFlags && (Number(keyUsage) === 1);
+  }
 
-	const cert: KoalCertificate = {
+  const canSign = missingFields.length === 0 && signableByFlags;
+
+  const cert: KoalCertificate = {
 		id,
 		devId,
 		appName,
@@ -635,13 +650,13 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
 		issuerCn: String(issuerCn ?? ""),
 		sn: String(sn ?? ""),
 		manufacturer,
-		keyUsage: Number.isNaN(keyUsage) ? undefined : keyUsage,
-		certType: item?.certType ? String(item.certType) : undefined,
-		signType,
-		raw: item,
-		canSign,
-		missingFields,
-	};
+    keyUsage: Number.isNaN(keyUsage) ? undefined : keyUsage,
+    certType: item?.certType ? String(item.certType) : undefined,
+    signType,
+    raw: item,
+    canSign,
+    missingFields,
+  };
 	return cert;
 }
 

@@ -96,6 +96,16 @@ discover() {
   fi
   DOCKER_SUBNET="$subnet"
 
+  # Discover bridge interface for this Docker network (used for host->bridge forwarding when proxies run on host)
+  local br
+  br=$(docker network inspect "$NETWORK_NAME" -f '{{ index .Options "com.docker.network.bridge.name" }}' 2>/dev/null || true)
+  if [ -z "$br" ]; then
+    local nid
+    nid=$(docker network inspect "$NETWORK_NAME" -f '{{.Id}}' 2>/dev/null | cut -c1-12 || true)
+    if [ -n "$nid" ]; then br="br-${nid}"; fi
+  fi
+  DOCKER_BRIDGE_IF="$br"
+
   # Egress interface via route to target
   local target_ip
   target_ip=$(resolve_ipv4 "$TARGET_HOST" || true)
@@ -121,7 +131,7 @@ print_status() {
   if have_cmd sysctl; then
     ipf=$(sysctl -n net.ipv4.ip_forward 2>/dev/null || true)
   fi
-  log "Mode=$MODE Network=$NETWORK_NAME Subnet=${DOCKER_SUBNET} Target=${TARGET_HOST}(${TARGET_IP}) IFACE=${EGRESS_IF} ip_forward=${ipf}"
+  log "Mode=$MODE Network=$NETWORK_NAME Subnet=${DOCKER_SUBNET} Bridge=${DOCKER_BRIDGE_IF} Target=${TARGET_HOST}(${TARGET_IP}) IFACE=${EGRESS_IF} ip_forward=${ipf}"
   if have_cmd nft; then
     echo "--- nftables forward (inet) ---"
     nft list chain inet filter forward 2>/dev/null || true
@@ -166,11 +176,18 @@ nft_apply() {
   local mark_est="dts-netfix-forward-established"
   local mark_eg="dts-netfix-forward-egress-${DOCKER_SUBNET}-to-${EGRESS_IF}"
   local mark_ret="dts-netfix-forward-return-${EGRESS_IF}-to-${DOCKER_SUBNET}"
+  local mark_h2b="dts-netfix-host2bridge-${DOCKER_BRIDGE_IF}-to-${DOCKER_SUBNET}"
+  local mark_h2b_ret="dts-netfix-host2bridge-return-${DOCKER_BRIDGE_IF}"
 
   nft_has_rule "$mark_nat" || nft add rule ip nat postrouting ip saddr ${DOCKER_SUBNET} oifname "${EGRESS_IF}" masquerade comment ${mark_nat} || true
   nft_has_rule "$mark_est" || nft add rule inet filter forward ct state related,established accept comment ${mark_est} || true
   nft_has_rule "$mark_eg"  || nft add rule inet filter forward ip saddr ${DOCKER_SUBNET} oifname "${EGRESS_IF}" accept comment ${mark_eg} || true
   nft_has_rule "$mark_ret" || nft add rule inet filter forward iifname "${EGRESS_IF}" ip daddr ${DOCKER_SUBNET} ct state related,established accept comment ${mark_ret} || true
+  # Host (proxy on host net) -> containers on this bridge/subnet allow + return
+  if [ -n "${DOCKER_BRIDGE_IF}" ]; then
+    nft_has_rule "$mark_h2b" || nft add rule inet filter forward oifname "${DOCKER_BRIDGE_IF}" ip daddr ${DOCKER_SUBNET} accept comment ${mark_h2b} || true
+    nft_has_rule "$mark_h2b_ret" || nft add rule inet filter forward iifname "${DOCKER_BRIDGE_IF}" ct state related,established accept comment ${mark_h2b_ret} || true
+  fi
 }
 
 nft_rollback() {
@@ -205,6 +222,11 @@ ipt_apply() {
   iptables -C DOCKER-USER -i "$EGRESS_IF" -d "$DOCKER_SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER 2 -i "$EGRESS_IF" -d "$DOCKER_SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
   # Ensure SNAT
   iptables -t nat -C POSTROUTING -s "$DOCKER_SUBNET" -o "$EGRESS_IF" -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s "$DOCKER_SUBNET" -o "$EGRESS_IF" -j MASQUERADE
+  # Host (oif bridge) -> containers allow + return
+  if [ -n "${DOCKER_BRIDGE_IF}" ]; then
+    iptables -C FORWARD -o "$DOCKER_BRIDGE_IF" -d "$DOCKER_SUBNET" -j ACCEPT 2>/dev/null || iptables -I FORWARD -o "$DOCKER_BRIDGE_IF" -d "$DOCKER_SUBNET" -j ACCEPT
+    iptables -C FORWARD -i "$DOCKER_BRIDGE_IF" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -I FORWARD -i "$DOCKER_BRIDGE_IF" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  fi
 }
 
 ipt_rollback() {
@@ -214,6 +236,10 @@ ipt_rollback() {
   iptables -D DOCKER-USER -s "$DOCKER_SUBNET" -o "$EGRESS_IF" -j ACCEPT 2>/dev/null || true
   iptables -D DOCKER-USER -i "$EGRESS_IF" -d "$DOCKER_SUBNET" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
   iptables -t nat -D POSTROUTING -s "$DOCKER_SUBNET" -o "$EGRESS_IF" -j MASQUERADE 2>/dev/null || true
+  if [ -n "${DOCKER_BRIDGE_IF}" ]; then
+    iptables -D FORWARD -o "$DOCKER_BRIDGE_IF" -d "$DOCKER_SUBNET" -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -i "$DOCKER_BRIDGE_IF" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+  fi
 }
 
 main() {
