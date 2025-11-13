@@ -81,6 +81,15 @@ export default defineConfig(({ mode }) => {
 			// Ignore any sibling mounts like /workspace/dts-platform-webapp/**
 			watch: { ignored: ["**/dts-platform-webapp/**"] },
 			proxy: {
+				// Serve Koal SDK assets in dev by proxying to the platform dev server,
+				// which ships the vendor bundle under /vendor/koal in its public directory.
+				// Both dev servers are attached to the same docker network in compose.dev.
+				"/vendor/koal": {
+					target: process.env.KOAL_VENDOR_PROXY_TARGET || "http://dts-platform-webapp:3001",
+					changeOrigin: true,
+					secure: false,
+					xfwd: true,
+				},
 				"/api": {
 					target: apiProxyTarget,
 					changeOrigin: true,
