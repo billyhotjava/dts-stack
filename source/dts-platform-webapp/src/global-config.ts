@@ -126,13 +126,28 @@ const resolveAllowedLoginRoles = (): string[] => {
         .filter(Boolean);
 };
 
+declare global {
+    interface Window { __RUNTIME_CONFIG__?: { koalPkiEndpoints?: string[] } }
+}
+
 const resolveKoalPkiEndpoints = (): string[] => {
-    const raw = import.meta.env.VITE_KOAL_PKI_ENDPOINTS;
-    if (typeof raw !== "string") return [];
-    return raw
-        .split(",")
-        .map((endpoint) => endpoint.trim())
-        .filter(Boolean);
+    // 1) Prefer runtime-injected config (unified for admin & platform)
+    try {
+        const arr = (typeof window !== "undefined" && (window.__RUNTIME_CONFIG__?.koalPkiEndpoints)) || [];
+        if (Array.isArray(arr) && arr.length > 0) return arr.map((s) => String(s).trim()).filter(Boolean);
+    } catch {}
+    // 2) Fall back to build-time env
+    const raw = import.meta.env.VITE_KOAL_PKI_ENDPOINTS as any;
+    if (typeof raw === "string") {
+        return raw
+            .split(",")
+            .map((endpoint) => endpoint.trim())
+            .filter(Boolean);
+    }
+    if (Array.isArray(raw)) {
+        return raw.map((s) => String(s).trim()).filter(Boolean);
+    }
+    return [];
 };
 
 

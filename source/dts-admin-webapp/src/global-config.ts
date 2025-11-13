@@ -3,6 +3,10 @@ import packageJson from "../package.json";
 /**
  * Global application configuration type definition
  */
+declare global {
+    interface Window { __RUNTIME_CONFIG__?: { koalPkiEndpoints?: string[] } }
+}
+
 export type GlobalConfig = {
 	/** Application name */
 	appName: string;
@@ -92,9 +96,16 @@ const resolveAllowedLoginRoles = (): string[] => {
 };
 
 const resolveKoalPkiEndpoints = (): string[] => {
-	const raw = (import.meta.env.VITE_KOAL_PKI_ENDPOINTS || "") as string;
+	// Prefer runtime-injected unified config
+	try {
+		const arr = (typeof window !== "undefined" && (window.__RUNTIME_CONFIG__?.koalPkiEndpoints)) || [];
+		if (Array.isArray(arr) && arr.length > 0) return arr.map((s) => String(s).trim()).filter(Boolean);
+	} catch {}
+	// Fallback to build-time env
+	const raw = (import.meta.env.VITE_KOAL_PKI_ENDPOINTS || "") as string | string[];
+	if (Array.isArray(raw)) return raw.map((s) => String(s).trim()).filter(Boolean);
 	if (!raw) return [];
-	return raw
+	return String(raw)
 		.split(",")
 		.map((s) => s.trim())
 		.filter(Boolean);

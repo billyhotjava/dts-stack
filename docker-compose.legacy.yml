@@ -300,6 +300,9 @@ services:
 
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}
+    environment:
+      # Unified PKI endpoints for both webapps (optional). Comma-separated list.
+      KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
     ports: []
     networks:
       - dts-core
@@ -318,6 +321,8 @@ services:
       API_PROXY_TARGET: http://dts-platform:8081
       # Admin API base URL for Keycloak localization and other admin-proxied calls
       VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
+      # Unified PKI endpoints for both webapps (optional). Comma-separated list.
+      KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
     networks:
       - dts-core
     labels:
