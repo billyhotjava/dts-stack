@@ -14,12 +14,20 @@ export async function getPkiChallenge(): Promise<PkiChallenge> {
 }
 
 export type PkiLoginPayload = {
-	challengeId: string;
-	plain: string;
-	p7Signature: string;
-	certB64?: string;
-	mode?: "agent" | "gateway";
-	username?: string; // optional for mock/dev
+  // Preferred modern shape (matches backend validation)
+  challengeId: string;
+  nonce?: string;
+  originDataB64?: string;
+  signDataB64?: string;
+  certContentB64?: string;
+  signType?: string;
+  dupCertB64?: string;
+  mode?: "agent" | "gateway";
+  username?: string;
+  // Legacy fallback fields supported by backend
+  plain?: string;
+  p7Signature?: string;
+  certB64?: string;
 };
 
 export async function pkiLogin(payload: PkiLoginPayload): Promise<any> {
