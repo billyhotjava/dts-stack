@@ -41,6 +41,61 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	const selectedCert = pkiCerts.find((item) => item.id === selectedCertId);
 
+	// 简单开关：默认隐藏账号/密码，仅保留证书登录按钮（仍保留密码登录后端能力）
+	const hidePasswordForm: boolean = (() => {
+		const raw = (import.meta as any)?.env?.VITE_HIDE_PASSWORD_LOGIN;
+		if (raw === undefined || raw === null || String(raw).trim() === "") return true; // 默认隐藏
+		const v = String(raw).trim().toLowerCase();
+		return v !== "0" && v !== "false";
+	})();
+
+	function parseDnFor(keys: string[], dn?: string): string | null {
+		if (!dn || typeof dn !== "string") return null;
+		try {
+			const parts = dn.split(",");
+			for (const k of keys) {
+				const upper = k.toUpperCase();
+				for (const p of parts) {
+					const seg = p.trim();
+					const idx = seg.indexOf("=");
+					if (idx > 0) {
+						const name = seg.substring(0, idx).trim().toUpperCase();
+						if (name === upper) {
+							return seg.substring(idx + 1).trim();
+						}
+					}
+				}
+			}
+		} catch {}
+		return null;
+	}
+
+	function deriveUsernameFromCert(cert?: KoalCertificate | null): string {
+		if (!cert) return "";
+		const raw: any = cert.raw || {};
+		// 优先取 UID，再回退 CN
+		const subjectName = raw.subjectName || raw.SubjectName || {};
+		const uidFromObj = subjectName.UID || raw.UID || raw.uid;
+		if (typeof uidFromObj === "string" && uidFromObj.trim()) return uidFromObj.trim();
+		// 尝试从字符串 DN 解析
+		const subjectStr: string | undefined =
+			typeof raw.subject === "string"
+				? raw.subject
+				: typeof raw.Subject === "string"
+				? raw.Subject
+				: typeof raw.subjectDN === "string"
+				? raw.subjectDN
+				: typeof raw.SubjectDN === "string"
+				? raw.SubjectDN
+				: undefined;
+		const uidFromDn = parseDnFor(["UID"], subjectStr || undefined);
+		if (uidFromDn) return uidFromDn;
+		const cnFromDn = parseDnFor(["CN"], subjectStr || undefined);
+		if (cnFromDn) return cnFromDn;
+		// 最后回退 cert.subjectCn
+		return cert.subjectCn || "";
+	}
+
 	const form = useForm<SignInReq>({
 		defaultValues: {
 			username: "",
@@ -269,53 +324,58 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 						{/* <p className="text-balance text-sm text-muted-foreground">{bilingual("sys.login.signInFormDescription")}</p> */}
 					</div>
 
-					<FormField
-						control={form.control}
-						name="username"
-						rules={{ required: bilingual("sys.login.accountPlaceholder") }}
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>{bilingual("sys.login.userName")}</FormLabel>
-								<FormControl>
-									<Input placeholder={bilingual("sys.login.accountPlaceholder")} {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+					{!hidePasswordForm && (
+						<>
+							<FormField
+								control={form.control}
+								name="username"
+								rules={{ required: bilingual("sys.login.accountPlaceholder") }}
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>{bilingual("sys.login.userName")}</FormLabel>
+										<FormControl>
+											<Input placeholder={bilingual("sys.login.accountPlaceholder")} {...field} />
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
 
-					<FormField
-						control={form.control}
-						name="password"
-						rules={{ required: bilingual("sys.login.passwordPlaceholder") }}
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>{bilingual("sys.login.password")}</FormLabel>
-								<FormControl>
-									<div className="relative">
-										<Input
-											type={showPassword ? "text" : "password"}
-											placeholder={bilingual("sys.login.passwordPlaceholder")}
-											{...field}
-											suppressHydrationWarning
-											className="pr-10"
-										/>
-										<button
-											type="button"
-											aria-label={showPassword ? "隐藏密码" : "显示密码"}
-											onClick={() => setShowPassword((v) => !v)}
-											className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
-										>
-											{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-										</button>
-									</div>
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+							<FormField
+								control={form.control}
+								name="password"
+								rules={{ required: bilingual("sys.login.passwordPlaceholder") }}
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>{bilingual("sys.login.password")}</FormLabel>
+										<FormControl>
+											<div className="relative">
+												<Input
+													type={showPassword ? "text" : "password"}
+													placeholder={bilingual("sys.login.passwordPlaceholder")}
+													{...field}
+													suppressHydrationWarning
+													className="pr-10"
+												/>
+												<button
+													type="button"
+													aria-label={showPassword ? "隐藏密码" : "显示密码"}
+													onClick={() => setShowPassword((v) => !v)}
+													className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+												>
+													{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+												</button>
+											</div>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+						</>
+					)}
 
 					{/* 记住我 */}
+					{!hidePasswordForm && (
 					<div className="flex flex-row justify-start">
 						<div className="flex items-center space-x-2">
 							<Checkbox
@@ -331,80 +391,75 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 							</label>
 						</div>
 					</div>
+					)}
 
 					{/* 登录按钮 */}
-					<Button type="submit" className="w-full">
-						{loading && <Loader2 className="animate-spin mr-2" />}
-						{bilingual("sys.login.loginButton")}
-					</Button>
+					{!hidePasswordForm && (
+						<Button type="submit" className="w-full">
+							{loading && <Loader2 className="animate-spin mr-2" />}
+							{bilingual("sys.login.loginButton")}
+						</Button>
+					)}
 					<Button type="button" variant="outline" className="w-full" onClick={handlePkiLogin} disabled={loading}>
 						{loading && <Loader2 className="animate-spin mr-2" />}
 						证书登录
 					</Button>
 				</form>
 			</Form>
-			<Dialog open={pkiDialogOpen} onOpenChange={handlePkiDialogOpenChange}>
-				<DialogContent className="sm:max-w-md">
-					<DialogHeader>
-						<DialogTitle>证书登录</DialogTitle>
-					</DialogHeader>
-					<div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground">选择证书</label>
-                            {pkiCerts.length === 0 ? (
-                                <p className="text-xs text-muted-foreground">未检测到可用证书</p>
-                            ) : (
-                                <RadioGroup
-                                    value={selectedCertId}
-                                    onValueChange={setSelectedCertId}
-                                    className="space-y-3"
-                                >
-                                    {pkiCerts.map((cert, index) => (
-                                        <label
-                                            key={cert.id}
-                                            htmlFor={`cert-${index}`}
-                                            className={`flex cursor-pointer gap-3 rounded-md border p-3 text-xs leading-5 transition-colors ${
-                                                selectedCertId === cert.id
-                                                    ? "border-primary bg-primary/5"
-                                                    : "hover:border-primary/50"
-                                            } ${!cert.canSign ? "opacity-70" : ""}`}
-                                        >
-                                            <RadioGroupItem
-                                                value={cert.id}
-                                                id={`cert-${index}`}
-                                                disabled={!cert.canSign}
-                                                className="mt-1"
-                                            />
-                                            <div className="flex-1 text-muted-foreground">
-                                                <div className="font-medium text-foreground">
-                                                    {cert.subjectCn || cert.sn || cert.id}
-                                                    {!cert.canSign ? "（不可签）" : ""}
-                                                </div>
-                                                <div>颁发者：{cert.issuerCn || "-"}</div>
-                                                <div>序列号：{cert.sn || "-"}</div>
-                                                <div>算法类型：{cert.signType}</div>
-                                                <div>介质厂商：{cert.manufacturer || "-"}</div>
-                                                {!cert.canSign && (
-                                                    <div className="mt-1 text-destructive">
-                                                        缺少必要字段：{cert.missingFields.join("、") || "关键信息"}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </label>
-                                    ))}
-                                </RadioGroup>
-                            )}
-                        </div>
-						<div className="space-y-2">
-							<label className="text-sm font-medium text-muted-foreground">输入 PIN 码</label>
-							<Input
-								type="password"
-								value={pinCode}
-								onChange={(event) => setPinCode(event.target.value)}
-								placeholder="请输入 PIN 码"
-							/>
+				<Dialog open={pkiDialogOpen} onOpenChange={handlePkiDialogOpenChange}>
+					<DialogContent className="sm:max-w-md">
+						<DialogHeader>
+							<DialogTitle>证书登录</DialogTitle>
+						</DialogHeader>
+						<div className="space-y-4">
+							<div className="space-y-2">
+								<label className="text-sm font-medium text-muted-foreground">选择证书</label>
+								{pkiCerts.length === 0 ? (
+									<p className="text-xs text-muted-foreground">未检测到可用证书</p>
+								) : (
+									<RadioGroup
+										value={selectedCertId}
+										onValueChange={setSelectedCertId}
+										className="space-y-3"
+									>
+										{pkiCerts.map((cert, index) => {
+											const uname = deriveUsernameFromCert(cert) || cert.subjectCn || cert.sn || cert.id;
+											return (
+												<label
+													key={cert.id}
+													htmlFor={`cert-${index}`}
+													className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm leading-6 transition-colors ${
+														selectedCertId === cert.id ? "border-primary bg-primary/5" : "hover:border-primary/50"
+													} ${!cert.canSign ? "opacity-70" : ""}`}
+												>
+													<RadioGroupItem value={cert.id} id={`cert-${index}`} disabled={!cert.canSign} className="mt-1" />
+													<div className="flex-1">
+														<div className="font-medium text-foreground">用户名：{uname}{!cert.canSign ? "（不可签）" : ""}</div>
+													</div>
+												</label>
+											);
+										})}
+									</RadioGroup>
+								)}
+							</div>
+
+							{/* 用户名提示 */}
+							{selectedCert && (
+								<div className="rounded-md bg-muted/40 p-2 text-sm text-muted-foreground">
+									将以 <span className="text-foreground font-medium">{deriveUsernameFromCert(selectedCert) || selectedCert.subjectCn || selectedCert.sn}</span> 登录
+								</div>
+							)}
+
+							<div className="space-y-2">
+								<label className="text-sm font-medium text-muted-foreground">输入 PIN 码</label>
+								<Input
+									type="password"
+									value={pinCode}
+									onChange={(event) => setPinCode(event.target.value)}
+									placeholder="请输入 PIN 码"
+								/>
+							</div>
 						</div>
-					</div>
 					<DialogFooter>
 						<Button type="button" variant="outline" onClick={() => void closePkiDialog(true)} disabled={pkiSubmitting}>
 							取消
