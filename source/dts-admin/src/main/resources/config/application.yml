@@ -381,3 +381,13 @@ dts:
     digest: ${DTS_PKI_DIGEST:SHA1}
     # Optional path to vendor client jar (e.g. svs-uk_custom.jar) for runtime loading
     vendor-jar-path: ${DTS_PKI_VENDOR_JAR:}
+
+  # Admin console specific settings
+  admin:
+    # Comma-separated roles to exclude from the user list views (admin users should not appear in "普通用户"列表)
+    # Default excludes governance triad and OP admin.
+    userlist:
+      exclude-roles: ${DTS_ADMIN_USERLIST_EXCLUDE_ROLES:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR,ROLE_OP_ADMIN}
+    # Roles allowed to log into the admin console (when using PKI admin login audience)
+    login:
+      allowed-roles: ${DTS_ADMIN_LOGIN_ALLOWED_ROLES:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR}

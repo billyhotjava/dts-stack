@@ -88,7 +88,10 @@ export default function DatasetsPage() {
 		}
 		return "";
 	}, [userInfo]);
-	const isOpadmin = useMemo(() => preferredUsername.toLowerCase() === "opadmin", [preferredUsername]);
+	const isOpadmin = useMemo(
+		() => roleSet.has("ROLE_OP_ADMIN") || roleSet.has("OPADMIN") || preferredUsername.toLowerCase() === "opadmin",
+		[roleSet, preferredUsername],
+	);
 	const userDeptCode = useMemo(() => {
 		if (!userInfo) return undefined;
 		const attrs = ((userInfo as any)?.attributes || {}) as Record<string, unknown>;

@@ -53,6 +53,13 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	// 简单开关：默认隐藏账号/密码，仅保留证书登录按钮（仍保留密码登录后端能力）
 	const hidePasswordForm: boolean = (() => {
+		const enabledRaw = (import.meta as any)?.env?.WEBAPP_PASSWORD_LOGIN_ENABLED;
+		if (enabledRaw !== undefined && enabledRaw !== null && String(enabledRaw).trim() !== "") {
+			const v = String(enabledRaw).trim().toLowerCase();
+			// 显式开启则不隐藏
+			if (v === "1" || v === "true" || v === "yes" || v === "on") return false;
+			if (v === "0" || v === "false" || v === "no" || v === "off") return true;
+		}
 		const raw = (import.meta as any)?.env?.VITE_HIDE_PASSWORD_LOGIN;
 		if (raw === undefined || raw === null || String(raw).trim() === "") return true; // 默认隐藏
 		const v = String(raw).trim().toLowerCase();
@@ -287,6 +294,16 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			const username = String(rawUser?.username || rawUser?.preferred_username || "").trim();
 			if (!username) throw new Error("无法识别用户名");
 
+			// 三员账号不允许登录业务平台（与密码登录一致）
+			const unameLower = username.toLowerCase();
+			if (["sysadmin", "authadmin", "auditadmin"].includes(unameLower)) {
+				toast.error("系统管理角色用户不能登录业务平台", { position: "top-center" });
+				await client.logout();
+				loggedOut = true;
+				await closePkiDialog(false);
+				return;
+			}
+
 			const portal = await createPortalSessionFromPki(username, rawUser);
 			const portalUser = portal?.user ?? rawUser;
 			const accessToken = String(portal?.accessToken || portal?.token || "").trim();
@@ -445,9 +462,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 									>
 										{pkiCerts.map((cert, index) => {
 											const uname = deriveUsernameFromCert(cert) || cert.subjectCn || cert.sn || cert.id;
-											const dup = (certNameCounts.get(String(uname)) ?? 0) > 1;
-											const tail = (cert.sn && String(cert.sn).slice(-4)) || String(cert.id).slice(-4);
-											const display = dup ? `${uname}（尾号 ${tail}）` : String(uname);
+											const display = String(uname);
 											return (
 												<label
 													key={cert.id}
@@ -458,7 +473,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 												>
 													<RadioGroupItem value={cert.id} id={`cert-${index}`} disabled={!cert.canSign} className="mt-1" />
 													<div className="flex-1">
-														<div className="font-medium text-foreground">用户名：{display}{!cert.canSign ? "（不可签）" : ""}</div>
+														<div className="font-medium text-foreground">用户名：{display}</div>
 													</div>
 												</label>
 											);

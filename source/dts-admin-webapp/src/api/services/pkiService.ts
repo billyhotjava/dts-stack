@@ -31,7 +31,12 @@ export type PkiLoginPayload = {
 };
 
 export async function pkiLogin(payload: PkiLoginPayload): Promise<any> {
-	const data = await apiClient.post<any>({ url: "/keycloak/auth/pki-login", data: payload });
+	// Admin console PKI login: explicitly mark audience=admin so backend应用管理员角色校验
+	const data = await apiClient.post<any>({
+		url: "/keycloak/auth/pki-login",
+		data: payload,
+		headers: { "X-Login-Audience": "admin" },
+	});
 	return data;
 }
 

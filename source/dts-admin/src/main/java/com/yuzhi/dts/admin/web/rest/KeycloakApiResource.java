@@ -89,6 +89,12 @@ public class KeycloakApiResource {
     @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}")
     private String managementClientSecret;
 
+    @org.springframework.beans.factory.annotation.Value("${dts.admin.userlist.exclude-roles:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR,ROLE_OP_ADMIN}")
+    private String excludeRolesForUserList;
+
+    @org.springframework.beans.factory.annotation.Value("${dts.admin.login.allowed-roles:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR}")
+    private String allowedRolesForAdminLogin;
+
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
     private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin",  "authadmin", "auditadmin", "opadmin");
     private static final Map<String, String> BUILTIN_ADMIN_LABELS = Map.of(
@@ -133,16 +139,25 @@ public class KeycloakApiResource {
     ) {
         String token = adminAccessToken();
         List<KeycloakUserDTO> list = filterProtectedUsers(keycloakAdminClient.listUsers(first, max, token));
+        // Exclude users who have any of the configured admin roles
+        Set<String> excludedIdsByRole = resolveExcludedUserIdsByRoles(token);
+        if (!excludedIdsByRole.isEmpty() && list != null && !list.isEmpty()) {
+            list = list.stream().filter(u -> u.getId() == null || !excludedIdsByRole.contains(u.getId())).toList();
+        }
         boolean fromCache = false;
         if (!list.isEmpty()) {
             list.forEach(this::cacheUser);
         } else {
             list = filterProtectedUsers(stores.listUsers(first, max));
+            if (list != null && !list.isEmpty() && !excludedIdsByRole.isEmpty()) {
+                list = list.stream().filter(u -> u.getId() == null || !excludedIdsByRole.contains(u.getId())).toList();
+            }
             fromCache = true;
         }
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("count", list.size());
         auditDetail.put("source", fromCache ? "cache" : "keycloak");
+        auditDetail.put("excludedByRoleCount", excludedIdsByRole.size());
         String actor = currentUser();
         if (!isAuditSuppressed()) {
             recordUserActionV2(
@@ -165,6 +180,7 @@ public class KeycloakApiResource {
     @GetMapping("/keycloak/users/search")
     public ResponseEntity<List<KeycloakUserDTO>> searchUsers(@RequestParam String username, HttpServletRequest request) {
         String q = username == null ? "" : username.toLowerCase();
+        String token = adminAccessToken();
         List<KeycloakUserDTO> list = filterProtectedUsers(keycloakAdminClient
             .findByUsername(username, adminAccessToken())
             .map(List::of)
@@ -179,9 +195,15 @@ public class KeycloakApiResource {
         } else {
             list.forEach(this::cacheUser);
         }
+        // Exclude by admin roles
+        Set<String> excludedIdsByRole = resolveExcludedUserIdsByRoles(token);
+        if (!excludedIdsByRole.isEmpty() && list != null && !list.isEmpty()) {
+            list = list.stream().filter(u -> u.getId() == null || !excludedIdsByRole.contains(u.getId())).toList();
+        }
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("query", q);
         auditDetail.put("count", list.size());
+        auditDetail.put("excludedByRoleCount", excludedIdsByRole.size());
         String actor = currentUser();
         recordUserActionV2(
             actor,
@@ -817,6 +839,40 @@ public class KeycloakApiResource {
             .stream()
             .filter(u -> u.getUsername() == null || PROTECTED_USERNAMES.stream().noneMatch(name -> name.equalsIgnoreCase(u.getUsername())))
             .toList();
+    }
+
+    private Set<String> parseRoleList(String csv) {
+        if (csv == null || csv.isBlank()) return java.util.Set.of();
+        String[] parts = csv.split(",");
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+        for (String p : parts) {
+            if (p == null) continue;
+            String s = p.trim();
+            if (!s.isBlank()) set.add(s);
+        }
+        return set;
+    }
+
+    private Set<String> resolveExcludedUserIdsByRoles(String accessToken) {
+        Set<String> excluded = new java.util.HashSet<>();
+        try {
+            Set<String> roles = parseRoleList(this.excludeRolesForUserList);
+            for (String role : roles) {
+                try {
+                    List<KeycloakUserDTO> members = keycloakAdminClient.listUsersByRealmRole(role, accessToken);
+                    if (members != null && !members.isEmpty()) {
+                        for (KeycloakUserDTO u : members) {
+                            if (u != null && u.getId() != null && !u.getId().isBlank()) excluded.add(u.getId());
+                        }
+                    }
+                } catch (Exception ex) {
+                    LOG.warn("Failed to load users for role {} when filtering list: {}", role, ex.getMessage());
+                }
+            }
+        } catch (Exception ex) {
+            LOG.warn("Failed to resolve excluded user ids by roles: {}", ex.getMessage());
+        }
+        return excluded;
     }
 
     private List<String> normalizeList(Collection<?> values) {
@@ -3185,8 +3241,14 @@ public class KeycloakApiResource {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("无法从证书映射用户名"));
             }
 
+            // Determine login audience: platform (default) or admin (admin console)
+            String loginAudience = Optional
+                .ofNullable(request.getHeader("X-Login-Audience"))
+                .orElse(Optional.ofNullable(request.getParameter("audience")).orElse("platform"));
+            boolean adminAudience = "admin".equalsIgnoreCase(loginAudience);
+
             Map<String, Object> auditContext = new LinkedHashMap<>();
-            auditContext.put("audience", "platform");
+            auditContext.put("audience", loginAudience);
             auditContext.put("mode", "pki");
             auditContext.put("challengeId", challengeId);
             auditContext.put("nonce", nonce);
@@ -3209,25 +3271,25 @@ public class KeycloakApiResource {
             if (signedAtObj != null) auditContext.put("signedAt", signedAtObj);
             if (org.springframework.util.StringUtils.hasText(dupCertB64)) auditContext.put("dupCertB64", dupCertB64);
 
-            // Enforce: admin-only users must NOT log into platform via PKI
+            // Platform audience: forbid triad built-ins via PKI and ensure user snapshot enabled
             String normalized = mappedUsername.toLowerCase();
-            if (normalized.equals("sysadmin") || normalized.equals("authadmin") || normalized.equals("auditadmin")) {
-                Map<String, Object> failAudit = new HashMap<>(auditContext);
-                failAudit.put("error", "forbidden_role");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("系统管理角色用户不能登录业务平台"));
-            }
-
-            // Gate login: built-ins may always log in; others must exist and be enabled in admin snapshot
-            boolean isProtected = PROTECTED_USERNAMES.contains(normalized);
-            if (!isProtected) {
-                boolean allowed = adminUserService
-                    .findSnapshotByUsername(mappedUsername)
-                    .map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::isEnabled)
-                    .orElse(false);
-                if (!allowed) {
+            if (!adminAudience) {
+                if (normalized.equals("sysadmin") || normalized.equals("authadmin") || normalized.equals("auditadmin")) {
                     Map<String, Object> failAudit = new HashMap<>(auditContext);
-                    failAudit.put("error", "not_approved");
-                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
+                    failAudit.put("error", "forbidden_role");
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("系统管理角色用户不能登录业务平台"));
+                }
+                boolean isProtected = PROTECTED_USERNAMES.contains(normalized);
+                if (!isProtected) {
+                    boolean allowed = adminUserService
+                        .findSnapshotByUsername(mappedUsername)
+                        .map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::isEnabled)
+                        .orElse(false);
+                    if (!allowed) {
+                        Map<String, Object> failAudit = new HashMap<>(auditContext);
+                        failAudit.put("error", "not_approved");
+                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
+                    }
                 }
             }
 
@@ -3287,6 +3349,20 @@ public class KeycloakApiResource {
                 if (LOG.isDebugEnabled()) LOG.debug("DB role enrichment failed for {}: {}", principal, ex.getMessage());
             }
             userOut.put("roles", java.util.List.copyOf(roles));
+
+            // Admin audience: require allowed admin roles
+            if (adminAudience) {
+                java.util.Set<String> allowedRoles = parseRoleList(this.allowedRolesForAdminLogin);
+                boolean hasAllowed = false;
+                for (String r : roles) {
+                    if (allowedRoles.contains(r)) { hasAllowed = true; break; }
+                }
+                if (!hasAllowed) {
+                    Map<String, Object> failAudit = new HashMap<>(auditContext);
+                    failAudit.put("error", "role_not_allowed");
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("仅系统管理角色可登录系统端"));
+                }
+            }
 
             data.put("user", userOut);
             data.put("accessToken", loginResult.tokens().accessToken());

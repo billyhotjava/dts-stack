@@ -44,6 +44,16 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		try {
 			const user = await signIn(values);
 			const roles = Array.isArray(user?.roles) ? (user.roles as string[]) : [];
+			// 仅允许三员角色进入管理端：基于角色判断（不依赖具体用户名）
+			const rolesLower = roles.map((r) => String(r).toLowerCase());
+			const isTri =
+				rolesLower.includes("role_sys_admin") ||
+				rolesLower.includes("role_auth_admin") ||
+				rolesLower.includes("role_security_auditor");
+			if (!isTri) {
+				toast.error("无权访问管理端，请使用业务端登录", { position: "top-center" });
+				return;
+			}
 			const targetRoute = resolveHomePathForRoles(roles);
 			navigate(targetRoute || GLOBAL_CONFIG.defaultRoute, { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
@@ -160,13 +170,11 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 								<p className="text-xs text-muted-foreground">未检测到可用证书</p>
 							) : (
 								<RadioGroup value={selectedCertId} onValueChange={setSelectedCertId} className="space-y-3">
-									{pkiCerts.map((cert, idx) => {
-										const uname = deriveUsernameFromCert(cert) || cert.subjectCn || cert.sn || cert.id;
-										const dup = (certNameCounts.get(String(uname)) ?? 0) > 1;
-										const tail = (cert.sn && String(cert.sn).slice(-4)) || String(cert.id).slice(-4);
-										const display = dup ? `${uname}（尾号 ${tail}）` : String(uname);
-										return (
-											<label key={cert.id} htmlFor={`cert-${idx}`} className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm leading-6 transition-colors ${selectedCertId === cert.id ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}>
+										{pkiCerts.map((cert, idx) => {
+											const uname = deriveUsernameFromCert(cert) || cert.subjectCn || cert.sn || cert.id;
+											const display = String(uname);
+											return (
+												<label key={cert.id} htmlFor={`cert-${idx}`} className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm leading-6 transition-colors ${selectedCertId === cert.id ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}>
 												<RadioGroupItem value={cert.id} id={`cert-${idx}`} className="mt-1" />
 												<div className="flex-1">
 													<div className="font-medium text-foreground">用户名：{display}</div>
@@ -203,6 +211,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 export default LoginForm;
 	// 开关：默认隐藏账号/密码表单，仅保留证书登录入口（后端能力仍保留）
 	const hidePasswordForm: boolean = (() => {
+		const enabledRaw = (import.meta as any)?.env?.WEBAPP_PASSWORD_LOGIN_ENABLED;
+		if (enabledRaw !== undefined && enabledRaw !== null && String(enabledRaw).trim() !== "") {
+			const v = String(enabledRaw).trim().toLowerCase();
+			if (v === "1" || v === "true" || v === "yes" || v === "on") return false;
+			if (v === "0" || v === "false" || v === "no" || v === "off") return true;
+		}
 		const raw = (import.meta as any)?.env?.VITE_HIDE_PASSWORD_LOGIN;
 		if (raw === undefined || raw === null || String(raw).trim() === "") return true; // 默认隐藏
 		const v = String(raw).trim().toLowerCase();
@@ -318,6 +332,19 @@ export default LoginForm;
 			const refreshToken = String(resp?.refreshToken || "").trim();
 			const user = (resp?.user || resp?.userInfo || {}) as any;
 			if (!accessToken) throw new Error("登录响应缺少访问令牌");
+
+			// 仅允许三员角色进入管理端（与密码登录一致）
+			const rolesLower: string[] = Array.isArray(user?.roles) ? (user.roles as any[]).map((r) => String(r).toLowerCase()) : [];
+			const isTri =
+				rolesLower.includes("role_sys_admin") ||
+				rolesLower.includes("role_auth_admin") ||
+				rolesLower.includes("role_security_auditor");
+			if (!isTri) {
+				toast.error("无权访问管理端，请使用业务端登录", { position: "top-center" });
+				await client.logout();
+				setPkiDialogOpen(false);
+				return;
+			}
 			setUserToken({ accessToken, refreshToken });
 			setUserInfo(user);
 			navigate(GLOBAL_CONFIG.defaultRoute, { replace: true });

@@ -117,6 +117,11 @@ public final class SecurityUtils {
     }
 
     public static boolean isOpAdminAccount() {
+        // Prefer role-based check
+        if (hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.OP_ADMIN)) {
+            return true;
+        }
+        // Backward-compatible fallback: legacy username special-case
         return getCurrentUserLogin()
             .map(String::trim)
             .filter(s -> !s.isEmpty())
