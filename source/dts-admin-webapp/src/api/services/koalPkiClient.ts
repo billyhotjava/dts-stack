@@ -32,8 +32,9 @@ export type KoalSignedPayload = {
 export type KoalConnectOptions = { endpoints?: readonly string[]; includeDefaults?: boolean };
 
 const DEFAULT_ENDPOINTS = [
-  "https://127.0.0.1:18080/multiplex",
-  "http://127.0.0.1:18080/multiplex",
+  // Align with platform-webapp defaults; Koal agent usually listens on 16080/18080
+  "https://127.0.0.1:16080",
+  "http://127.0.0.1:18080",
 ];
 
 function collectEndpoints(options?: KoalConnectOptions): string[] {
@@ -92,7 +93,9 @@ async function ensureKoalSdk(): Promise<void> {
     "signXService_types.js",
     // Service proxies
     "pkiService.js",
-    "deviceOperator.js",
+    // The SDK provides devService.js (client exported as window.devServiceClient)
+    // Older naming like deviceOperator.js is not present in our bundled vendor assets
+    "devService.js",
     "signXService.js",
   ];
   let lastErr: any = null;
@@ -116,6 +119,47 @@ async function ensureKoalSdk(): Promise<void> {
     }
   }
   throw lastErr || new Error("未能加载 PKI 前端 SDK 脚本");
+}
+
+// Error code mapping (subset from platform-webapp for better messages)
+const RESULT_ERROR_MESSAGES: Record<number, string> = {
+  0x00000000: "调用成功",
+  0x00000001: "session 不存在，请先调用 login 接口",
+  0x00000006: "app 已经登录，建议业务完成后调用 logout 接口",
+  0x00000007: "超时：调用耗时超过 30 秒，可能程序阻塞或存在人工交互",
+  0x0a000000: "未知错误",
+  0x0a000006: "无效的参数，请对照接口文档检查",
+  0x0a00001c: "未发现证书：请在驱动工具中确认证书是否存在",
+  0x0a000020: "缓冲区不足",
+  0x0a000024: "PIN 错误：输入的 PIN 与预置值不匹配",
+  0x0a000025: "PIN 锁死：错误次数过多，请使用驱动工具或调用 unlockPIN 解锁",
+  0x0b000035: "容器不存在，请新建或更换已有容器名",
+  0x8010006c: "智能钥匙服务未就绪，请确认客户端驱动已启动后重试",
+};
+
+function parseJson(value?: string | null): any {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeErrCode(raw: number): number {
+  if (!Number.isFinite(raw)) return 0;
+  return raw >>> 0; // ensure unsigned
+}
+
+function mapKoalError(code: number, jsonBody?: string | null): string {
+  const normalized = normalizeErrCode(code);
+  const known = RESULT_ERROR_MESSAGES[normalized];
+  if (known) return known;
+  if (jsonBody) {
+    const payload = parseJson(jsonBody);
+    if (payload?.message) return String(payload.message);
+  }
+  return `中间件返回错误码 0x${normalized.toString(16).toUpperCase().padStart(8, "0")}`;
 }
 
 export class KoalMiddlewareClient {
@@ -160,47 +204,141 @@ export class KoalMiddlewareClient {
     throw new Error(`无法连接到 PKI 中间件：${agg}`);
   }
 
+  private async thriftCall<TResult>(client: any, method: string, ...args: any[]): Promise<TResult> {
+    return new Promise<TResult>((resolve, reject) => {
+      try {
+        client[method](...args, (result: TResult | Error) => {
+          if (result instanceof Error) {
+            reject(result);
+            return;
+          }
+          resolve(result);
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private buildRequest(msgType: number, body?: Record<string, unknown>) {
+    // @ts-ignore
+    const req = new window.msgRequest();
+    // simple counter for reqid
+    const now = Date.now() & 0xffffffff;
+    // @ts-ignore
+    req.reqid = now >>> 0;
+    // @ts-ignore
+    req.msgType = msgType;
+    // @ts-ignore
+    req.version = 1;
+    // @ts-ignore
+    req.extend = 0;
+    // @ts-ignore
+    req.jsonBody = body ? JSON.stringify(body) : "{}";
+    return req;
+  }
+
+  private buildTicket() {
+    if (!this.session) throw new Error("尚未建立 PKI 会话");
+    // @ts-ignore
+    const ticket = new window.sessionTicket();
+    // @ts-ignore
+    ticket.sessionID = this.session.sessionID;
+    // @ts-ignore
+    ticket.ticket = this.session.ticket;
+    return ticket;
+  }
+
   private async login(): Promise<void> {
-    const resp = await this.pkiClient.login({ appName: "dts-admin-webapp" });
-    const session = resp?.session || resp;
-    if (!session || !Number.isFinite(session.sessionID)) throw new Error("中间件登录失败");
-    this.session = { sessionID: Number(session.sessionID), ticket: String(session.ticket || "") };
+    // Use the same vendor demo credentials as platform-webapp
+    const credentials = {
+      appName: "ZF-App",
+      appID: "7ea7b92a-3091-3d79-639f-3ef4c3e2d6d7",
+      token: "7ea7b92a-3091-3d79-639f-3ef4c3e2d6d7",
+    };
+    const request = this.buildRequest(0x01, credentials);
+    const response: any = await this.thriftCall<any>(this.pkiClient, "login", request);
+    const code = Number(response?.errCode ?? 0);
+    if (code !== 0 && code !== 6) throw new Error(mapKoalError(code, response?.jsonBody));
+    const payload = parseJson(response?.jsonBody);
+    if (!payload?.sessionID || !payload?.ticket) throw new Error("PKI 中间件响应缺少 session 信息");
+    this.session = { sessionID: Number(payload.sessionID), ticket: String(payload.ticket) };
   }
 
   async logout(): Promise<void> {
     try {
-      if (this.session) await this.pkiClient.logout(this.session.sessionID);
+      if (this.session) {
+        const ticket = this.buildTicket();
+        await this.thriftCall<any>(this.pkiClient, "logout", ticket);
+      }
     } catch {}
     this.session = null;
   }
 
   async listCertificates(): Promise<KoalCertificate[]> {
-    const rawList = await this.devClient.listCertificates?.() ?? [];
+    const ticket = this.buildTicket();
+    const request = this.buildRequest(0x28);
+    const response: any = await this.thriftCall<any>(this.devClient, "getAllCert", ticket, request);
+    const code = Number(response?.errCode ?? 0);
+    if (code !== 0) throw new Error(mapKoalError(code, response?.jsonBody));
+    const payload = parseJson(response?.jsonBody);
+    const list = Array.isArray(payload?.certs) ? payload.certs : [];
     const out: KoalCertificate[] = [];
-    for (let i = 0; i < rawList.length; i++) {
-      out.push(normalizeCertificate(rawList[i], i));
-    }
+    for (let i = 0; i < list.length; i++) out.push(normalizeCertificate(list[i], i));
     return out.filter((c) => c.canSign);
   }
 
   async verifyPin(cert: KoalCertificate, pin: string): Promise<void> {
-    const ok = await this.devClient.verifyPin?.(cert.raw, pin);
-    if (ok === false) throw new Error("PIN 验证失败");
+    const ticket = this.buildTicket();
+    const request = this.buildRequest(0x18, {
+      devID: cert.devId,
+      appName: cert.appName,
+      PINType: "1",
+      PIN: pin,
+    });
+    const response: any = await this.thriftCall<any>(this.devClient, "verifyPIN", ticket, request);
+    const code = Number(response?.errCode ?? 0);
+    if (code !== 0) throw new Error(mapKoalError(code, response?.jsonBody));
   }
 
   async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayload> {
-    const resp = await this.signClient.sign?.(cert.raw, plainText);
-    const originDataB64 = String(resp?.originDataB64 || resp?.origin || btoa(plainText));
-    const signDataB64 = String(resp?.signDataB64 || resp?.signature || "");
-    if (!signDataB64) throw new Error("未返回签名数据");
-    const mdType = String(resp?.mdType || "");
-    const dupCertB64 = resp?.dupCertB64 ? String(resp.dupCertB64) : undefined;
-    const signType = (normalizeCertificate(cert.raw).signType) as KoalCertificate["signType"];
-    return { originDataB64, signDataB64, signType, mdType, dupCertB64 };
+    const ticket = this.buildTicket();
+    const originDataB64 = (window as any)?.Base64?.encode?.(plainText) ?? btoa(plainText);
+    const signTypeCode = cert.signType === "PM-BD" ? "1" : "2";
+    let mdType = "3"; // 默认 SM3
+    if (cert.signType === "RSA" || cert.signType === "PM-BD") mdType = "2"; // SHA1
+    const request = this.buildRequest(0x10, {
+      devID: cert.devId,
+      appName: cert.appName,
+      conName: cert.conName,
+      srcData: originDataB64,
+      isBase64SrcData: "1",
+      type: signTypeCode,
+      mdType,
+    });
+    const response: any = await this.thriftCall<any>(this.signClient, "signData", ticket, request);
+    const code = Number(response?.errCode ?? 0);
+    if (code !== 0) throw new Error(mapKoalError(code, response?.jsonBody));
+    const payload = parseJson(response?.jsonBody);
+    const signDataB64: string | undefined = payload?.b64signData ?? payload?.signData;
+    if (!signDataB64) throw new Error("签名失败：缺少签名数据");
+    const dupCertB64: string | undefined = payload?.dupCert ?? payload?.dupCertB64 ?? payload?.dup_cert;
+    return { originDataB64, signDataB64: String(signDataB64).trim(), signType: cert.signType, mdType, dupCertB64 };
   }
 
   async exportCertificate(cert: KoalCertificate): Promise<string> {
-    const certB64 = await this.devClient.exportCertificate?.(cert.raw);
+    const ticket = this.buildTicket();
+    const request = this.buildRequest(0x22, {
+      devID: cert.devId,
+      appName: cert.appName,
+      containerName: cert.conName,
+      signFlag: "1",
+    });
+    const response: any = await this.thriftCall<any>(this.devClient, "exportCertificate", ticket, request);
+    const code = Number(response?.errCode ?? 0);
+    if (code !== 0) throw new Error(mapKoalError(code, response?.jsonBody));
+    const payload = parseJson(response?.jsonBody);
+    const certB64: string | undefined = payload?.cert;
     if (!certB64) throw new Error("未获取到证书内容");
     return String(certB64);
   }
