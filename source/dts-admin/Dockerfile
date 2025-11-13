@@ -99,6 +99,17 @@ RUN set -eux; \
       cp /workspace/builds/dts-admin.jar /workspace/dts-admin/target/dts-admin-prebuilt.jar; \
     fi
 
+# Normalize artifact name to a deterministic jar path for the runtime stage
+RUN set -eux; \
+    mkdir -p /workspace/dist; \
+    if [ -f /workspace/dts-admin/target/dts-admin-prebuilt.jar ]; then \
+      cp /workspace/dts-admin/target/dts-admin-prebuilt.jar /workspace/dist/app.jar; \
+    else \
+      JAR=$(find /workspace/dts-admin/target -maxdepth 1 -type f -name '*.jar' ! -name '*.original' | head -n 1); \
+      test -n "${JAR:-}"; \
+      cp "$JAR" /workspace/dist/app.jar; \
+    fi
+
 # ---------- runtime stage ----------
 # Use Temurin JRE 21 to run the compiled jar
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
@@ -145,6 +156,6 @@ RUN set -eux; \
     echo $TZ > /etc/timezone; \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=build /workspace/dts-admin/target/dts-admin-*.jar /app/app.jar
+COPY --from=build /workspace/dist/app.jar /app/app.jar
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
