@@ -160,15 +160,17 @@ nft_apply() {
   nft list table inet filter >/dev/null 2>&1 || nft add table inet filter || true
   nft list chain inet filter forward >/dev/null 2>&1 || nft add chain inet filter forward '{ type filter hook forward priority 0; }' || true
 
-  local mark_nat="dts-netfix nat ${DOCKER_SUBNET}->${EGRESS_IF}"
-  local mark_est="dts-netfix forward established"
-  local mark_eg="dts-netfix forward egress ${DOCKER_SUBNET}->${EGRESS_IF}"
-  local mark_ret="dts-netfix forward return ${EGRESS_IF}->${DOCKER_SUBNET}"
+  # Use comment markers without spaces/shell metacharacters so nft CLI doesn't require quoting.
+  # Example: dts-netfix-nat-172.17.0.0/16-to-eth0
+  local mark_nat="dts-netfix-nat-${DOCKER_SUBNET}-to-${EGRESS_IF}"
+  local mark_est="dts-netfix-forward-established"
+  local mark_eg="dts-netfix-forward-egress-${DOCKER_SUBNET}-to-${EGRESS_IF}"
+  local mark_ret="dts-netfix-forward-return-${EGRESS_IF}-to-${DOCKER_SUBNET}"
 
-  nft_has_rule "$mark_nat" || nft add rule ip nat postrouting ip saddr ${DOCKER_SUBNET} oifname "${EGRESS_IF}" masquerade comment "$mark_nat" || true
-  nft_has_rule "$mark_est" || nft add rule inet filter forward ct state related,established accept comment "$mark_est" || true
-  nft_has_rule "$mark_eg"  || nft add rule inet filter forward ip saddr ${DOCKER_SUBNET} oifname "${EGRESS_IF}" accept comment "$mark_eg" || true
-  nft_has_rule "$mark_ret" || nft add rule inet filter forward iifname "${EGRESS_IF}" ip daddr ${DOCKER_SUBNET} ct state related,established accept comment "$mark_ret" || true
+  nft_has_rule "$mark_nat" || nft add rule ip nat postrouting ip saddr ${DOCKER_SUBNET} oifname "${EGRESS_IF}" masquerade comment ${mark_nat} || true
+  nft_has_rule "$mark_est" || nft add rule inet filter forward ct state related,established accept comment ${mark_est} || true
+  nft_has_rule "$mark_eg"  || nft add rule inet filter forward ip saddr ${DOCKER_SUBNET} oifname "${EGRESS_IF}" accept comment ${mark_eg} || true
+  nft_has_rule "$mark_ret" || nft add rule inet filter forward iifname "${EGRESS_IF}" ip daddr ${DOCKER_SUBNET} ct state related,established accept comment ${mark_ret} || true
 }
 
 nft_rollback() {
@@ -253,4 +255,3 @@ main() {
 }
 
 main "$@"
-
