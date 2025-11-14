@@ -3472,8 +3472,8 @@ public class KeycloakApiResource {
     /**
      * Enforce single-IP allowlist for triad accounts (sysadmin/authadmin/auditadmin) on password login endpoints.
      * Returns null if OK/not applicable; otherwise returns an error code:
-     *  - MISSING_ALLOWED_IP: triad user has no allowed-ip attribute
-     *  - IP_NOT_ALLOWED: client IP does not match allowed-ip
+     *  - MISSING_ALLOWED_IP: triad user has no allowed_ip attribute
+     *  - IP_NOT_ALLOWED: client IP does not match allowed_ip
      *  - IP_CHECK_ERROR: internal error while resolving or fetching attributes
      */
     private String enforceTriadIpAllowlist(String username, jakarta.servlet.http.HttpServletRequest request) {
@@ -3492,7 +3492,7 @@ public class KeycloakApiResource {
             if (clientIp == null) clientIp = "";
             clientIp = stripPort(clientIp.trim());
 
-            // Fetch allowed-ip from Keycloak via admin client
+            // Fetch allowed_ip from Keycloak via admin client
             String adminToken = adminAccessToken();
             java.util.Optional<com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO> userOpt =
                 keycloakAdminClient.findByUsername(username, adminToken);
@@ -3500,7 +3500,7 @@ public class KeycloakApiResource {
             if (user == null || user.getAttributes() == null) {
                 return "MISSING_ALLOWED_IP";
             }
-            java.util.List<String> list = user.getAttributes().get("allowed-ip");
+            java.util.List<String> list = user.getAttributes().get("allowed_ip");
             String allowed = null;
             if (list != null) {
                 for (String v : list) { if (v != null && !v.trim().isEmpty()) { allowed = v.trim(); break; } }
