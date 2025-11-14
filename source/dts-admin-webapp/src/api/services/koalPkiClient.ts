@@ -4,12 +4,25 @@
 import { GLOBAL_CONFIG } from "@/global-config";
 const IS_DEV = typeof import.meta !== "undefined" && Boolean((import.meta as any)?.env?.DEV);
 
+type PkiDebugEntry = { ts: number; tag: string; data?: any };
+function dbg(tag: string, data?: any): void {
+  try {
+    const w: any = typeof window !== "undefined" ? window : null;
+    if (!w) return;
+    w.__PKI_DEBUG_LOGS__ = Array.isArray(w.__PKI_DEBUG_LOGS__) ? w.__PKI_DEBUG_LOGS__ : [];
+    const buf: PkiDebugEntry[] = w.__PKI_DEBUG_LOGS__;
+    buf.push({ ts: Date.now(), tag, data });
+    if (buf.length > 300) buf.splice(0, buf.length - 300);
+  } catch {}
+}
+
 function isDebug(): boolean {
   try {
     // 开启条件：开发模式 或 运行时 __RUNTIME_CONFIG__.pkiDebug 为 'true'/'1'
     const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
     const flag = String(rc.pkiDebug ?? "").trim().toLowerCase();
-    return IS_DEV || flag === "1" || flag === "true" || flag === "yes" || flag === "on";
+    const on = IS_DEV || flag === "1" || flag === "true" || flag === "yes" || flag === "on";
+    return on;
   } catch {
     return IS_DEV;
   }
@@ -123,11 +136,13 @@ async function ensureKoalSdk(): Promise<void> {
           document.head.appendChild(el);
         });
       }
-      if (isDebug()) console.info("[pki-sdk] loaded from base", base);
+      if (isDebug()) { try { console.info("[pki-sdk] loaded from base", base); } catch {} }
+      dbg("pki-sdk.loaded", { base, files });
       return; // loaded successfully from this base
     } catch (e) {
       lastErr = e;
-      if (isDebug()) console.warn("[pki-sdk] load failed at base", base, e);
+      if (isDebug()) { try { console.warn("[pki-sdk] load failed at base", base, e); } catch {} }
+      dbg("pki-sdk.load-failed", { base, error: String(e) });
       // try next base
     }
   }
@@ -201,16 +216,19 @@ export class KoalMiddlewareClient {
     await ensureKoalSdk();
     const endpoints = collectEndpoints(options);
     if (!endpoints.length) throw new Error("未配置可用的 PKI 中间件地址");
-    if (isDebug()) console.info("[pki] endpoints", endpoints);
+    if (isDebug()) { try { console.info("[pki] endpoints", endpoints); } catch {} }
+    dbg("pki.endpoints", endpoints);
     const errors: Error[] = [];
     for (const url of endpoints) {
       try {
         const client = new KoalMiddlewareClient(url);
         await client.login();
-        if (isDebug()) console.info("[pki] connected via", url);
+        if (isDebug()) { try { console.info("[pki] connected via", url); } catch {} }
+        dbg("pki.connected", { url });
         return client;
       } catch (e) {
         errors.push(new Error(`${url}：${(e as Error).message}`));
+        dbg("pki.connect-failed", { url, error: String(e) });
       }
     }
     const agg = errors.map((e) => e.message).join("; ");
@@ -298,8 +316,7 @@ export class KoalMiddlewareClient {
     const list = Array.isArray(payload?.certs) ? payload.certs : [];
     const out: KoalCertificate[] = [];
     for (let i = 0; i < list.length; i++) out.push(normalizeCertificate(list[i], i));
-    if (isDebug()) {
-      const snap = out.map((c, i) => ({
+    const snap = out.map((c, i) => ({
         i,
         id: c.id,
         devId: c.devId,
@@ -314,8 +331,8 @@ export class KoalMiddlewareClient {
         canSign: c.canSign,
         missing: c.missingFields,
       }));
-      console.info("[pki] raw certs=", list.length, "normalized=", out.length, snap);
-    }
+    if (isDebug()) { try { console.info("[pki] raw certs=", list.length, "normalized=", out.length, snap); } catch {} }
+    dbg("pki.certs", { rawCount: list.length, normCount: out.length, snap });
     return out.filter((c) => c.canSign);
   }
 
@@ -330,7 +347,8 @@ export class KoalMiddlewareClient {
     const response: any = await this.thriftCall<any>(this.devClient, "verifyPIN", ticket, request);
     const code = Number(response?.errCode ?? 0);
     if (code !== 0) throw new Error(mapKoalError(code, response?.jsonBody));
-    if (isDebug()) console.info("[pki] PIN verified for", { id: cert.id, devId: cert.devId, conName: cert.conName });
+    if (isDebug()) { try { console.info("[pki] PIN verified for", { id: cert.id, devId: cert.devId, conName: cert.conName }); } catch {} }
+    dbg("pki.pin.ok", { id: cert.id, devId: cert.devId, conName: cert.conName });
   }
 
   async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayload> {
@@ -356,14 +374,15 @@ export class KoalMiddlewareClient {
     if (!signDataB64) throw new Error("签名失败：缺少签名数据");
     const dupCertB64: string | undefined = payload?.dupCert ?? payload?.dupCertB64 ?? payload?.dup_cert;
     const res = { originDataB64, signDataB64: String(signDataB64).trim(), signType: cert.signType, mdType, dupCertB64 };
-    if (isDebug()) console.info("[pki] signed", {
+    if (isDebug()) { try { console.info("[pki] signed", {
       id: cert.id,
       mdType,
       signType: cert.signType,
       originLen: originDataB64.length,
       signLen: res.signDataB64.length,
       dupCertLen: res.dupCertB64 ? res.dupCertB64.length : 0,
-    });
+    }); } catch {} }
+    dbg("pki.sign.ok", { id: cert.id, mdType, signType: cert.signType, originLen: originDataB64.length, signLen: res.signDataB64.length, dupCertLen: res.dupCertB64 ? res.dupCertB64.length : 0 });
     return res;
   }
 
@@ -382,7 +401,8 @@ export class KoalMiddlewareClient {
     const certB64: string | undefined = payload?.cert;
     if (!certB64) throw new Error("未获取到证书内容");
     const out = String(certB64);
-    if (isDebug()) console.info("[pki] export cert length", out.length, { id: cert.id });
+    if (isDebug()) { try { console.info("[pki] export cert length", out.length, { id: cert.id }); } catch {} }
+    dbg("pki.export.ok", { id: cert.id, certLen: out.length });
     return out;
   }
 }
@@ -409,6 +429,8 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
       item?.deviceID,
       item?.device,
       item?.DeviceID,
+      item?.devSn,
+      item?.DevSn,
       item?.deviceSN,
       item?.deviceSerial,
     ) ?? "";

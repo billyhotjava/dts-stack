@@ -20,6 +20,17 @@ import { getPkiChallenge, pkiLogin, type PkiChallenge } from "@/api/services/pki
 import { KoalMiddlewareClient, KoalCertificate } from "@/api/services/koalPkiClient";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
+	// 简易调试缓冲：生产构建不会被 esbuild 删除
+	function dbg(tag: string, data?: any) {
+		try {
+			const w: any = typeof window !== "undefined" ? window : null;
+			if (!w) return;
+			w.__PKI_DEBUG_LOGS__ = Array.isArray(w.__PKI_DEBUG_LOGS__) ? w.__PKI_DEBUG_LOGS__ : [];
+			const buf: Array<{ ts: number; tag: string; data?: any }> = w.__PKI_DEBUG_LOGS__;
+			buf.push({ ts: Date.now(), tag, data });
+			if (buf.length > 300) buf.splice(0, buf.length - 300);
+		} catch {}
+	}
 	const [loading, setLoading] = useState(false);
 	const [remember, setRemember] = useState(true);
 	const [showPassword, setShowPassword] = useState(false);
@@ -42,9 +53,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
 		const dbg = Boolean((import.meta as any)?.env?.DEV) || ["1","true","yes","on"].includes(String(rc.pkiDebug ?? "").trim().toLowerCase());
 		if (dbg) {
-			console.info("[pki-config] runtime rc=", rc);
-			console.info("[pki-config] endpoints=", GLOBAL_CONFIG.koalPkiEndpoints);
+			try { console.info("[pki-config] runtime rc=", rc); } catch {}
+			try { console.info("[pki-config] endpoints=", GLOBAL_CONFIG.koalPkiEndpoints); } catch {}
 		}
+		dbg("pki.config", { rc, endpoints: GLOBAL_CONFIG.koalPkiEndpoints });
 	} catch {}
 
 	if (loginState !== LoginStateEnum.LOGIN) return null;
@@ -203,16 +215,19 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		setLoading(true);
 		try {
 			const challenge = await getPkiChallenge();
-			if (debug) console.info("[pki-login] challenge", challenge);
+			if (debug) { try { console.info("[pki-login] challenge", challenge); } catch {} }
+			dbg("pki.challenge", challenge);
 			const client = await KoalMiddlewareClient.connect();
 			const certificates = await client.listCertificates();
-			if (debug) console.info("[pki-login] certificates count", certificates.length);
+			if (debug) { try { console.info("[pki-login] certificates count", certificates.length); } catch {} }
+			dbg("pki.certs.count", certificates.length);
 			const uniq = (() => {
 				const m = new Map<string, KoalCertificate>();
 				for (const c of certificates) if (!m.has(c.id)) m.set(c.id, c);
 				return Array.from(m.values());
 			})();
-			if (debug) console.info("[pki-login] uniq cert ids", uniq.map((c) => c.id));
+			if (debug) { try { console.info("[pki-login] uniq cert ids", uniq.map((c) => c.id)); } catch {} }
+			dbg("pki.certs.uniq", uniq.map((c) => ({ id: c.id, snTail: c.sn ? c.sn.slice(-8) : "", con: c.conName })));
 			setPkiCerts(uniq);
 			setSelectedCertId(uniq.length === 1 ? uniq[0]?.id ?? "" : "");
 			setPinCode("");
@@ -220,7 +235,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			setPkiDialogOpen(true);
 		} catch (error) {
 			toast.error(String((error as Error)?.message || "证书登录初始化失败"), { position: "top-center" });
-			console.error("[pki-login] init failed", error);
+			try { console.error("[pki-login] init failed", error); } catch {}
+			dbg("pki.init.failed", String((error as any)?.message || error));
 		} finally {
 			setLoading(false);
 		}
@@ -247,7 +263,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				signType: signed.signType,
 				dupCertB64: signed.dupCertB64,
 			});
-			console.info("[pki-login] backend ok, user snapshot", {
+			try { console.info("[pki-login] backend ok, user snapshot", {
+				username: String(resp?.user?.username || resp?.user?.preferred_username || ""),
+				roles: resp?.user?.roles,
+				sessionTakeover: resp?.sessionTakeover,
+			}); } catch {}
+			dbg("pki.backend.ok", {
 				username: String(resp?.user?.username || resp?.user?.preferred_username || ""),
 				roles: resp?.user?.roles,
 				sessionTakeover: resp?.sessionTakeover,
@@ -276,7 +297,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			await client.logout();
 			setPkiDialogOpen(false);
 		} catch (error) {
-			console.error("[pki-login] confirm failed", error);
+			try { console.error("[pki-login] confirm failed", error); } catch {}
+			dbg("pki.confirm.failed", String((error as any)?.message || error));
 			toast.error(String((error as Error)?.message || "签名失败"), { position: "top-center" });
 		} finally {
 			setPkiSubmitting(false);
