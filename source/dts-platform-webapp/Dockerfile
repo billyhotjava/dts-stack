@@ -86,6 +86,12 @@ RUN set -eux; \
 
 WORKDIR /usr/share/nginx/html
 COPY --from=build /app/dist ./
+RUN set -eux; \
+    if [ -d "/usr/share/nginx/html/vendor" ]; then \
+      chmod -R a+rX "/usr/share/nginx/html/vendor"; \
+    fi; \
+    # Ensure all JS assets are world-readable
+    find /usr/share/nginx/html -type f -name '*.js' -exec chmod a+r {} + || true
 
 # Template-based Nginx config rendered at container start
 COPY nginx.conf.template /etc/nginx/http.d/default.conf.template
