@@ -192,3 +192,11 @@ services:
       - "traefik.http.routers.dts-platform-ui.entrypoints=websecure"
       - "traefik.http.routers.dts-platform-ui.tls=true"
       - "traefik.http.services.dts-platform-ui.loadbalancer.server.port=80"
+      - "traefik.http.routers.dts-platform-ui.middlewares=security-headers@file"
+      # Expose Koal SDK under admin domain to avoid cross-origin TLS/CSP issues:
+      # https://${HOST_ADMIN_UI}/vendor/koal/* -> dts-platform-webapp:80
+      - "traefik.http.routers.dts-platform-koal-vendor.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/vendor/koal`)"
+      - "traefik.http.routers.dts-platform-koal-vendor.entrypoints=websecure"
+      - "traefik.http.routers.dts-platform-koal-vendor.tls=true"
+      - "traefik.http.routers.dts-platform-koal-vendor.service=dts-platform-ui"
+      - "traefik.http.routers.dts-platform-koal-vendor.middlewares=security-headers@file"
