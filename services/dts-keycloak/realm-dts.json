@@ -496,7 +496,8 @@
       "profile.attributes.person_security_level": "person_security_level",
       "profile.attributes.phone": "phone",
       "profile.attributes.dept_code": "dept_code",
-      "profile.attributes.fullName": "fullName"
+      "profile.attributes.fullName": "fullName",
+      "profile.attributes.allowed_ip": "allowed_ip"
     },
     "zh-CN": {
       "profile.attributes.username": "用户名",
@@ -504,7 +505,8 @@
       "profile.attributes.person_security_level": "人员密级",
       "profile.attributes.phone": "联系方式",
       "profile.attributes.dept_code": "所属部门",
-      "profile.attributes.fullName": "姓名"
+      "profile.attributes.fullName": "姓名",
+      "profile.attributes.allowed_ip": "IP绑定值"
     }
   },
   "webAuthnPolicyRpEntityName": "keycloak",
@@ -766,7 +768,7 @@
       "protocol": "openid-connect",
       "attributes": {
         "realm_client": "false",
-        "client.secret.creation.time": "1761285804"
+        "client.secret.creation.time": "1763149042"
       },
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": true,
@@ -782,45 +784,24 @@
         "decisionStrategy": "UNANIMOUS",
         "authorizationSchema": {
           "resourceTypes": {
-            "Roles": {
-              "type": "Roles",
-              "scopes": [
-                "map-role",
-                "map-role-composite",
-                "map-role-client-scope"
-              ],
-              "scopeAliases": {}
-            },
-            "Groups": {
-              "type": "Groups",
-              "scopes": [
-                "impersonate-members",
-                "view-members",
-                "manage-members",
-                "manage-membership",
-                "view",
-                "manage"
-              ],
-              "scopeAliases": {}
-            },
             "Users": {
               "type": "Users",
               "scopes": [
+                "map-roles",
+                "manage",
                 "impersonate",
                 "manage-group-membership",
-                "view",
-                "map-roles",
-                "manage"
+                "view"
               ],
               "scopeAliases": {
+                "manage": [
+                  "manage-members"
+                ],
                 "view": [
                   "view-members"
                 ],
                 "impersonate": [
                   "impersonate-members"
-                ],
-                "manage": [
-                  "manage-members"
                 ]
               },
               "groupType": "Groups"
@@ -828,11 +809,32 @@
             "Clients": {
               "type": "Clients",
               "scopes": [
+                "map-roles",
+                "manage",
                 "map-roles-composite",
                 "view",
-                "map-roles-client-scope",
-                "map-roles",
-                "manage"
+                "map-roles-client-scope"
+              ],
+              "scopeAliases": {}
+            },
+            "Roles": {
+              "type": "Roles",
+              "scopes": [
+                "map-role-composite",
+                "map-role-client-scope",
+                "map-role"
+              ],
+              "scopeAliases": {}
+            },
+            "Groups": {
+              "type": "Groups",
+              "scopes": [
+                "manage",
+                "impersonate-members",
+                "view-members",
+                "manage-members",
+                "manage-membership",
+                "view"
               ],
               "scopeAliases": {}
             }
@@ -902,7 +904,7 @@
       "attributes": {
         "realm_client": "false",
         "oidc.ciba.grant.enabled": "false",
-        "client.secret.creation.time": "1761285837",
+        "client.secret.creation.time": "1763149051",
         "backchannel.logout.session.required": "true",
         "standard.token.exchange.enabled": "false",
         "post.logout.redirect.uris": "+",
@@ -1818,14 +1820,14 @@
         "subComponents": {},
         "config": {
           "allowed-protocol-mapper-types": [
+            "oidc-usermodel-attribute-mapper",
             "oidc-usermodel-property-mapper",
-            "oidc-address-mapper",
+            "saml-user-property-mapper",
+            "oidc-full-name-mapper",
             "oidc-sha256-pairwise-sub-mapper",
             "saml-user-attribute-mapper",
             "saml-role-list-mapper",
-            "oidc-usermodel-attribute-mapper",
-            "saml-user-property-mapper",
-            "oidc-full-name-mapper"
+            "oidc-address-mapper"
           ]
         }
       },
@@ -1837,14 +1839,14 @@
         "subComponents": {},
         "config": {
           "allowed-protocol-mapper-types": [
-            "oidc-usermodel-property-mapper",
-            "saml-user-property-mapper",
-            "oidc-address-mapper",
             "saml-role-list-mapper",
+            "oidc-usermodel-property-mapper",
             "oidc-sha256-pairwise-sub-mapper",
-            "oidc-full-name-mapper",
             "oidc-usermodel-attribute-mapper",
-            "saml-user-attribute-mapper"
+            "saml-user-attribute-mapper",
+            "oidc-address-mapper",
+            "oidc-full-name-mapper",
+            "saml-user-property-mapper"
           ]
         }
       },
@@ -1899,7 +1901,7 @@
         "subComponents": {},
         "config": {
           "kc.user.profile.config": [
-            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{},\"length\":{\"min\":\"2\",\"max\":\"255\"}},\"annotations\":{},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"fullName\",\"displayName\":\"${profile.attributes.fullName}\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"annotations\":{},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"phone\",\"displayName\":\"${profile.attributes.phone}\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"person_security_level\",\"displayName\":\"${profile.attributes.person_security_level}\",\"validations\":{\"options\":{\"options\":[\"GENERAL\",\"IMPORTANT\",\"CORE\"]}},\"annotations\":{\"inputType\":\"select\"},\"required\":{\"roles\":[\"admin\",\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"dept_code\",\"displayName\":\"${profile.attributes.dept_code}\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{},\"length\":{\"min\":\"2\",\"max\":\"255\"}},\"annotations\":{},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"fullName\",\"displayName\":\"${profile.attributes.fullName}\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"annotations\":{},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"phone\",\"displayName\":\"${profile.attributes.phone}\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"person_security_level\",\"displayName\":\"${profile.attributes.person_security_level}\",\"validations\":{\"options\":{\"options\":[\"GENERAL\",\"IMPORTANT\",\"CORE\"]}},\"annotations\":{\"inputType\":\"select\"},\"required\":{\"roles\":[\"admin\",\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"dept_code\",\"displayName\":\"${profile.attributes.dept_code}\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"allowed_ip\",\"displayName\":\"${profile.attributes.allowed_ip}\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
           ]
         }
       }
