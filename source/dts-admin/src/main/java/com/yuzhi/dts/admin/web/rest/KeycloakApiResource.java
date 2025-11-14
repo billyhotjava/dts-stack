@@ -3496,10 +3496,11 @@ public class KeycloakApiResource {
             String adminToken = adminAccessToken();
             java.util.Optional<com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO> userOpt =
                 keycloakAdminClient.findByUsername(username, adminToken);
-            if (userOpt.isEmpty() || userOpt.get().getAttributes() == null) {
+            com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO user = userOpt.orElse(null);
+            if (user == null || user.getAttributes() == null) {
                 return "MISSING_ALLOWED_IP";
             }
-            java.util.List<String> list = userOpt.get().getAttributes().get("allowed-ip");
+            java.util.List<String> list = user.getAttributes().get("allowed-ip");
             String allowed = null;
             if (list != null) {
                 for (String v : list) { if (v != null && !v.trim().isEmpty()) { allowed = v.trim(); break; } }
