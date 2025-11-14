@@ -10,6 +10,8 @@ set -eu
 RUNTIME_JS="/usr/share/nginx/html/runtime-config.js"
 # Initialize file to ensure it's present (safe if empty)
 printf '%s\n' '(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};})(window);' > "$RUNTIME_JS"
+# Ensure runtime-config.js is world-readable (served by nginx worker)
+chmod 0644 "$RUNTIME_JS" 2>/dev/null || true
 
 if [ -n "${KOAL_PKI_ENDPOINTS:-}" ]; then
   json=$(printf '%s' "$KOAL_PKI_ENDPOINTS" | awk -F',' 'BEGIN{printf("[");first=1} {for(i=1;i<=NF;i++){gsub(/^ +| +$/, "", $i); if(length($i)){ if(!first) printf(","); printf("\"%s\"", $i); first=0}}} END{printf("]")}')
@@ -33,6 +35,11 @@ if [ -n "${PKI_DEBUG:-}" ]; then
   val=$(printf '%s' "$PKI_DEBUG" | tr '[:upper:]' '[:lower:]')
   printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.pkiDebug='${val}';})(window);" >> "$RUNTIME_JS"
   echo "[entrypoint] runtime-config.js: pkiDebug=${PKI_DEBUG}"
+fi
+
+# Fix permissions for vendor assets so nginx workers can read them (avoid 403 -> HTML)
+if [ -d "/usr/share/nginx/html/vendor" ]; then
+  chmod -R a+rX "/usr/share/nginx/html/vendor" 2>/dev/null || true
 fi
 
 # Optional: explicit Koal vendor base for admin webapp (e.g., '/vendor/koal' or full https URL)
