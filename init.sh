@@ -344,11 +344,12 @@ generate_env_base(){
   : "${VITE_KOAL_PKI_ENDPOINTS:=https://127.0.0.1:16080,http://127.0.0.1:18080}"
   # Unified runtime injection for both webapps (optional). If unset, frontends fall back to defaults.
   : "${KOAL_PKI_ENDPOINTS:=${VITE_KOAL_PKI_ENDPOINTS}}"
-  # Optional: Explicit base URL for Koal SDK assets used by admin webapp.
-  # Examples: '/vendor/koal' (same-origin) or 'https://bi.${BASE_DOMAIN}/vendor/koal'
-  : "${KOAL_VENDOR_BASE:=}"
+  # Optional: Explicit base URL for Koal SDK assets used by webapps.
+  # Default to same-origin '/vendor/koal' so offline/air‑gapped deployments work out-of-the-box.
+  # Can be overridden by environment if needed (e.g., a full https URL).
+  : "${KOAL_VENDOR_BASE:=/vendor/koal}"
   # Optional dev-only alias (read by Vite when serving /runtime-config.js in dev)
-  : "${VITE_KOAL_VENDOR_BASE:=}"
+  : "${VITE_KOAL_VENDOR_BASE:=${KOAL_VENDOR_BASE}}"
   # —— 分别控制 admin 与 platform 前端密码登录显示（运行时注入，无需重建镜像）——
   # 默认均为通过 PKI 登录（隐藏密码登录表单）
   : "${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:=}"
@@ -357,7 +358,7 @@ generate_env_base(){
   : "${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:=true}"
 
   # ---------- 管理端来源 IP 白名单（按单/多 IP，/32 形式由脚本生成） ----------
-  # 输入：纯 IP，逗号分隔；应急后门 IP 同样逗号分隔。留空表示暂未配置（compose 侧有 127.0.0.1/32 兜底）。
+  # 输入：纯 IP，逗号分隔；应急后门 IP 同样逗号分隔。留空时默认放开 0.0.0.0/0（便于离线/内网环境调试）。
   : "${ADMIN_ALLOWED_IPS:=}"
   : "${ADMIN_BACKUP_IPS:=}"
 
@@ -373,7 +374,7 @@ generate_env_base(){
       # 粗略过滤 0-255 之外的情况留给运维自行校验；此处仅做形态检查
       echo "${ip}/32"
     fi
-  done | awk '!x[$0]++' | paste -sd, - | sed 's/^$/127.0.0.1\/32/' | { read -r line || true; ADMIN_WHITELIST_CIDRS="${line:-127.0.0.1/32}"; }
+  done | awk '!x[$0]++' | paste -sd, - | sed 's/^$/0.0.0.0\/0/' | { read -r line || true; ADMIN_WHITELIST_CIDRS="${line:-0.0.0.0/0}"; }
 
   # 注意：若需要覆盖默认行为，可在 .env 中修改上述四个变量
 
