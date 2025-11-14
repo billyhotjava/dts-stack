@@ -81,23 +81,33 @@ RUN mkdir -p /root/.m2 && \
       > /root/.m2/settings.xml
 RUN set -eux; \
     BUILD_POM=$(cat /workspace/.build-pom); \
-    if [ "${ENABLE_MAVEN_BUILD}" = "true" ]; then \
-      # Resolve JAVA_HOME and run Maven build
+    PREBUILT_JAR="/workspace/builds/dts-admin.jar"; \
+    USE_MAVEN="${ENABLE_MAVEN_BUILD}"; \
+    if [ ! -f "${PREBUILT_JAR}" ]; then \
+      echo "[build] Prebuilt jar missing at ${PREBUILT_JAR}; forcing Maven build"; \
+      USE_MAVEN="true"; \
+    fi; \
+    if [ "${USE_MAVEN}" = "true" ]; then \
+      echo "[build] Building dts-admin via Maven"; \
       if [ -x "${JAVA_HOME:-/opt/java/openjdk}/bin/java" ]; then \
         export JAVA_HOME="${JAVA_HOME:-/opt/java/openjdk}"; \
+        echo "[build] Reusing preset JAVA_HOME=${JAVA_HOME}"; \
+      elif command -v javac >/dev/null 2>&1; then \
+        JAVA_BIN=$(readlink -f "$(command -v javac)"); \
+        export JAVA_HOME="${JAVA_BIN%/bin/javac}"; \
+        echo "[build] Derived JAVA_HOME from javac: ${JAVA_HOME}"; \
       else \
         JAVA_BIN=$(readlink -f "$(command -v java)"); \
         export JAVA_HOME="${JAVA_BIN%/bin/java}"; \
+        echo "[build] Derived JAVA_HOME from java: ${JAVA_HOME}"; \
       fi; \
-      echo "Using JAVA_HOME=${JAVA_HOME}"; \
+      export PATH="${JAVA_HOME}/bin:${PATH}"; \
       sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
-      /usr/share/maven/bin/mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package; \
+      mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package; \
     else \
-      # Offline/locked-down fallback: use prebuilt jar from builds/
-      echo "Skipping Maven build; using prebuilt jar from /workspace/builds"; \
+      echo "[build] Using prebuilt jar from ${PREBUILT_JAR}"; \
       mkdir -p /workspace/dts-admin/target; \
-      test -f /workspace/builds/dts-admin.jar; \
-      cp /workspace/builds/dts-admin.jar /workspace/dts-admin/target/dts-admin-prebuilt.jar; \
+      cp "${PREBUILT_JAR}" /workspace/dts-admin/target/dts-admin-prebuilt.jar; \
     fi
 
 # Normalize artifact name to a deterministic jar path for the runtime stage
