@@ -61,25 +61,65 @@ export default defineConfig(({ mode }) => {
 		);
 	}
 
-	return {
-		base,
-		plugins: [
-			react(),
-			vanillaExtractPlugin({
-				identifiers: ({ debugId }) => `${debugId}`,
-			}),
-			tailwindcss(),
-			legacy({
-				targets: browserTargets,
-				modernPolyfills: true,
-				renderLegacyChunks: false,
-			}),
-			tsconfigPaths(),
+  // Dev-only helper: serve /runtime-config.js, mirroring prod entrypoint behavior.
+  const runtimeConfigPlugin = (() => {
+    const koalCsv = (env as any).KOAL_PKI_ENDPOINTS || (env as any).VITE_KOAL_PKI_ENDPOINTS || "";
+    const koalList = String(koalCsv)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const enableRaw = (env as any).WEBAPP_PASSWORD_LOGIN_ENABLED ?? "";
+    const hideRaw = (env as any).VITE_HIDE_PASSWORD_LOGIN ?? "";
+    const enable = String(enableRaw).trim().toLowerCase();
+    const hide = String(hideRaw).trim().toLowerCase();
+    return {
+      name: "dev-runtime-config",
+      apply: "serve",
+      configureServer(server: any) {
+        server.middlewares.use((req: any, res: any, next: any) => {
+          if (req.url === "/runtime-config.js") {
+            let js = "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};";
+            if (koalList.length > 0) {
+              js += `w.__RUNTIME_CONFIG__.koalPkiEndpoints=${JSON.stringify(koalList)};`;
+            }
+            if (enable) {
+              js += `w.__RUNTIME_CONFIG__.enablePasswordLogin=${JSON.stringify(enable)};`;
+            }
+            if (hide) {
+              js += `w.__RUNTIME_CONFIG__.hidePasswordLogin=${JSON.stringify(hide)};`;
+            }
+            js += "})(window);\n";
+            res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+            res.end(js);
+            return;
+          }
+          next();
+        });
+      },
+    };
+  })();
 
-			isProduction &&
-			visualizer({
-				// Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
-				open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,
+  return {
+    base,
+    envPrefix: ["VITE_", "WEBAPP_"],
+    plugins: [
+      react(),
+      vanillaExtractPlugin({
+        identifiers: ({ debugId }) => `${debugId}`,
+      }),
+      tailwindcss(),
+      legacy({
+        targets: browserTargets,
+        modernPolyfills: true,
+        renderLegacyChunks: false,
+      }),
+      tsconfigPaths(),
+      runtimeConfigPlugin,
+
+      isProduction &&
+      visualizer({
+        // Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
+        open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,
 				gzipSize: true,
 				brotliSize: true,
 				template: "treemap",
@@ -93,10 +133,13 @@ export default defineConfig(({ mode }) => {
 			},
 		},
 
-		server: {
-			open: true,
-			host: true,
-			port: 3001,
+    server: {
+      open: true,
+      host: true,
+      port: 3001,
+      // Accept requests from other containers (admin dev proxy) by host header
+      // like 'dts-platform-webapp'.
+      allowedHosts: true,
       // Restrict file serving to this project only
       fs: { strict: true, allow: [rootDir] },
       // Ignore sibling workspace mounts to avoid cross-project file watching

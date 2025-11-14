@@ -214,6 +214,9 @@ services:
       PORT: "3001"
       # Vite dev proxy target for admin webapp: call dts-admin directly
       VITE_API_PROXY_TARGET: http://dts-admin:8081
+      # Toggle password login UI for admin webapp during dev builds
+      WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
+      VITE_HIDE_PASSWORD_LOGIN: ${ADMIN_VITE_HIDE_PASSWORD_LOGIN:-}
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18011:3001"
@@ -261,6 +264,9 @@ services:
       # Vite dev proxy target for admin API; use direct container address in dev to avoid TLS and Traefik
       # Note: vite.config rewrites '/admin/api' -> '/api' for the target, so do NOT include '/api' suffix here.
       VITE_ADMIN_PROXY_TARGET: "http://dts-admin:8081"
+      # Toggle password login UI for platform webapp during dev builds
+      WEBAPP_PASSWORD_LOGIN_ENABLED: ${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
+      VITE_HIDE_PASSWORD_LOGIN: ${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:-}
     command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false || PORT=${PORT:-3001} pnpm start; else echo no\ package.json\ found; tail -f /dev/null; fi"]
     ports:
       - "18012:3001"

@@ -154,6 +154,11 @@ services:
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       # Example: "https://127.0.0.1:18080/multiplex,http://127.0.0.1:18080/multiplex"
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
+      # Control password login visibility per webapp at runtime (no rebuild):
+      # Set to true to show password login in admin UI
+      WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
+      # Alternatively, hide via explicit flag (takes effect if ENABLED not set)
+      VITE_HIDE_PASSWORD_LOGIN: ${ADMIN_VITE_HIDE_PASSWORD_LOGIN:-}
     ports: []
     networks:
       - dts-core
@@ -174,6 +179,10 @@ services:
       VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
+      # Control password login visibility per webapp at runtime (no rebuild):
+      # Leave platform password login hidden by default, or enable explicitly here
+      WEBAPP_PASSWORD_LOGIN_ENABLED: ${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
+      VITE_HIDE_PASSWORD_LOGIN: ${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:-}
     networks:
       - dts-core
     labels:

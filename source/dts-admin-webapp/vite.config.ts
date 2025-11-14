@@ -40,25 +40,66 @@ export default defineConfig(({ mode }) => {
 	})();
 	const apiProxyPrefix = env.VITE_API_PROXY_PREFIX || autoPrefix || "";
 
-	return {
-		base,
-		plugins: [
-			react(),
-			vanillaExtractPlugin({
-				identifiers: ({ debugId }) => `${debugId}`,
-			}),
-			tailwindcss(),
-			legacy({
-				targets: browserTargets,
-				modernPolyfills: true,
-				renderLegacyChunks: false,
-			}),
-			tsconfigPaths(),
+    // Dev-only helper: serve /runtime-config.js so the app can read
+    // runtime toggles (same shape as the Nginx entrypoint emits in prod).
+    const runtimeConfigPlugin = (() => {
+        const koalCsv = (env as any).KOAL_PKI_ENDPOINTS || (env as any).VITE_KOAL_PKI_ENDPOINTS || "";
+        const koalList = String(koalCsv)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        const enableRaw = (env as any).WEBAPP_PASSWORD_LOGIN_ENABLED ?? "";
+        const hideRaw = (env as any).VITE_HIDE_PASSWORD_LOGIN ?? "";
+        const enable = String(enableRaw).trim().toLowerCase();
+        const hide = String(hideRaw).trim().toLowerCase();
+        return {
+            name: "dev-runtime-config",
+            apply: "serve",
+            configureServer(server: any) {
+                server.middlewares.use((req: any, res: any, next: any) => {
+                    if (req.url === "/runtime-config.js") {
+                        let js = "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};";
+                        if (koalList.length > 0) {
+                            js += `w.__RUNTIME_CONFIG__.koalPkiEndpoints=${JSON.stringify(koalList)};`;
+                        }
+                        if (enable) {
+                            js += `w.__RUNTIME_CONFIG__.enablePasswordLogin=${JSON.stringify(enable)};`;
+                        }
+                        if (hide) {
+                            js += `w.__RUNTIME_CONFIG__.hidePasswordLogin=${JSON.stringify(hide)};`;
+                        }
+                        js += "})(window);\n";
+                        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+                        res.end(js);
+                        return;
+                    }
+                    next();
+                });
+            },
+        };
+    })();
 
-			isProduction &&
-				visualizer({
-					// Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
-					open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,
+    return {
+        base,
+        envPrefix: ["VITE_", "WEBAPP_"],
+        plugins: [
+            react(),
+            vanillaExtractPlugin({
+                identifiers: ({ debugId }) => `${debugId}`,
+            }),
+            tailwindcss(),
+            legacy({
+                targets: browserTargets,
+                modernPolyfills: true,
+                renderLegacyChunks: false,
+            }),
+            tsconfigPaths(),
+            runtimeConfigPlugin,
+
+            isProduction &&
+                visualizer({
+                    // Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
+                    open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,
 					gzipSize: true,
 					brotliSize: true,
 					template: "treemap",
@@ -80,21 +121,30 @@ export default defineConfig(({ mode }) => {
 			fs: { strict: true, allow: [rootDir] },
 			// Ignore any sibling mounts like /workspace/dts-platform-webapp/**
 			watch: { ignored: ["**/dts-platform-webapp/**"] },
-			proxy: {
-				// Serve Koal SDK assets in dev by proxying to the platform dev server,
-				// which ships the vendor bundle under /vendor/koal in its public directory.
-				// Both dev servers are attached to the same docker network in compose.dev.
-				"/vendor/koal": {
-					target: process.env.KOAL_VENDOR_PROXY_TARGET || "http://dts-platform-webapp:3001",
-					changeOrigin: true,
-					secure: false,
-					xfwd: true,
-				},
-				"/api": {
-					target: apiProxyTarget,
-					changeOrigin: true,
-					// If targeting Traefik via HTTPS, auto prefix '/admin'
-					rewrite: apiProxyPrefix ? (p) => p.replace(/^\/api/, `${apiProxyPrefix}/api`) : undefined,
+            proxy: {
+                // Serve Koal SDK assets in dev by proxying to the platform dev server,
+                // which ships the vendor bundle under /vendor/koal in its public directory.
+                // Both dev servers are attached to the same docker network in compose.dev.
+                "/vendor/koal": {
+                    target: (env as any).KOAL_VENDOR_PROXY_TARGET || "http://dts-platform-webapp:3001",
+                    changeOrigin: true,
+                    secure: false,
+                    xfwd: true,
+                },
+                // Also support '/koal/*' for clients that try this base first;
+                // rewrite to '/vendor/koal/*' on the target platform dev server.
+                "/koal": {
+                    target: (env as any).KOAL_VENDOR_PROXY_TARGET || "http://dts-platform-webapp:3001",
+                    changeOrigin: true,
+                    secure: false,
+                    xfwd: true,
+                    rewrite: (p: string) => p.replace(/^\/koal/, "/vendor/koal"),
+                },
+                "/api": {
+                    target: apiProxyTarget,
+                    changeOrigin: true,
+                    // If targeting Traefik via HTTPS, auto prefix '/admin'
+                    rewrite: apiProxyPrefix ? (p) => p.replace(/^\/api/, `${apiProxyPrefix}/api`) : undefined,
 					secure: false,
 					xfwd: true,
 				},

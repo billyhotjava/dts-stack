@@ -69,6 +69,23 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	// 开关：默认隐藏账号/密码表单，仅保留证书登录入口（后端能力仍保留）
 	const hidePasswordForm: boolean = (() => {
+		// 1) 优先读取运行时注入的配置（容器 entrypoint 生成的 /runtime-config.js）
+		try {
+			const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
+			const enableRaw = rc.enablePasswordLogin;
+			if (enableRaw !== undefined && enableRaw !== null && String(enableRaw).trim() !== "") {
+				const v = String(enableRaw).trim().toLowerCase();
+				if (v === "1" || v === "true" || v === "yes" || v === "on") return false;
+				if (v === "0" || v === "false" || v === "no" || v === "off") return true;
+			}
+			const hideRaw = rc.hidePasswordLogin;
+			if (hideRaw !== undefined && hideRaw !== null && String(hideRaw).trim() !== "") {
+				const v = String(hideRaw).trim().toLowerCase();
+				return v !== "0" && v !== "false";
+			}
+		} catch {}
+
+		// 2) 回退到构建期变量（Vite 注入）
 		const enabledRaw = (import.meta as any)?.env?.WEBAPP_PASSWORD_LOGIN_ENABLED;
 		if (enabledRaw !== undefined && enabledRaw !== null && String(enabledRaw).trim() !== "") {
 			const v = String(enabledRaw).trim().toLowerCase();
