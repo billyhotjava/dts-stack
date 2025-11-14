@@ -37,6 +37,16 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		},
 	});
 
+	// Debug: 打印运行时开关与 PKI 端点配置，便于环境排查
+	try {
+		const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
+		const dbg = Boolean((import.meta as any)?.env?.DEV) || ["1","true","yes","on"].includes(String(rc.pkiDebug ?? "").trim().toLowerCase());
+		if (dbg) {
+			console.info("[pki-config] runtime rc=", rc);
+			console.info("[pki-config] endpoints=", GLOBAL_CONFIG.koalPkiEndpoints);
+		}
+	} catch {}
+
 	if (loginState !== LoginStateEnum.LOGIN) return null;
 
 	const handleFinish = async (values: SignInReq) => {
@@ -98,6 +108,18 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		return v !== "0" && v !== "false";
 	})();
 
+	// 调试：打印登录开关最终解析结果与来源
+	try {
+		const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
+		const dbg = Boolean((import.meta as any)?.env?.DEV) || ["1","true","yes","on"].includes(String(rc.pkiDebug ?? "").trim().toLowerCase());
+		if (dbg) {
+			console.info("[login-flags] runtime enable=", rc.enablePasswordLogin, "runtime hide=", rc.hidePasswordLogin,
+				"build enable=", (import.meta as any)?.env?.WEBAPP_PASSWORD_LOGIN_ENABLED,
+				"build hide=", (import.meta as any)?.env?.VITE_HIDE_PASSWORD_LOGIN,
+				"=> hidePasswordForm=", hidePasswordForm);
+		}
+	} catch {}
+
 	// PKI 状态与操作
 	const [pkiDialogOpen, setPkiDialogOpen] = useState(false);
 	const [pkiCerts, setPkiCerts] = useState<KoalCertificate[]>([]);
@@ -150,17 +172,47 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		return cert.subjectCn || "";
 	}
 
+	function lastDigits(value: string, n: number): string {
+		const s = String(value || "");
+		if (!s) return "";
+		return s.length > n ? s.slice(-n) : s;
+	}
+
+	function buildCertLabel(cert: KoalCertificate, index: number): string {
+		const uname = deriveUsernameFromCert(cert) || cert.subjectCn || cert.id;
+		// 优先使用 SN 尾号区分；其次容器名/设备号；都无则用序号兜底，确保视觉唯一
+		const snTail = cert.sn ? lastDigits(cert.sn, 8) : "";
+		const container = (cert.conName || "").trim();
+		const devTail = cert.devId ? lastDigits(cert.devId, 6) : "";
+		let suffix = "";
+		if (snTail) suffix = `SN:${snTail}`;
+		else if (container) suffix = container;
+		else if (devTail) suffix = `DEV:${devTail}`;
+		else suffix = `#${index + 1}`;
+		return `用户名：${uname}（${suffix}）`;
+	}
+
 	const handlePkiLogin = async () => {
+		const debug = (() => {
+			try {
+				const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
+				const flag = String(rc.pkiDebug ?? "").trim().toLowerCase();
+				return Boolean((import.meta as any)?.env?.DEV) || ["1", "true", "yes", "on"].includes(flag);
+			} catch { return Boolean((import.meta as any)?.env?.DEV); }
+		})();
 		setLoading(true);
 		try {
 			const challenge = await getPkiChallenge();
+			if (debug) console.info("[pki-login] challenge", challenge);
 			const client = await KoalMiddlewareClient.connect();
 			const certificates = await client.listCertificates();
+			if (debug) console.info("[pki-login] certificates count", certificates.length);
 			const uniq = (() => {
 				const m = new Map<string, KoalCertificate>();
 				for (const c of certificates) if (!m.has(c.id)) m.set(c.id, c);
 				return Array.from(m.values());
 			})();
+			if (debug) console.info("[pki-login] uniq cert ids", uniq.map((c) => c.id));
 			setPkiCerts(uniq);
 			setSelectedCertId(uniq.length === 1 ? uniq[0]?.id ?? "" : "");
 			setPinCode("");
@@ -168,6 +220,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			setPkiDialogOpen(true);
 		} catch (error) {
 			toast.error(String((error as Error)?.message || "证书登录初始化失败"), { position: "top-center" });
+			console.error("[pki-login] init failed", error);
 		} finally {
 			setLoading(false);
 		}
@@ -194,7 +247,11 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				signType: signed.signType,
 				dupCertB64: signed.dupCertB64,
 			});
-
+			console.info("[pki-login] backend ok, user snapshot", {
+				username: String(resp?.user?.username || resp?.user?.preferred_username || ""),
+				roles: resp?.user?.roles,
+				sessionTakeover: resp?.sessionTakeover,
+			});
 			const accessToken = String(resp?.accessToken || resp?.token || "").trim();
 			const refreshToken = String(resp?.refreshToken || "").trim();
 			const user = (resp?.user || resp?.userInfo || {}) as any;
@@ -219,6 +276,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			await client.logout();
 			setPkiDialogOpen(false);
 		} catch (error) {
+			console.error("[pki-login] confirm failed", error);
 			toast.error(String((error as Error)?.message || "签名失败"), { position: "top-center" });
 		} finally {
 			setPkiSubmitting(false);
@@ -329,8 +387,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 							) : (
 								<RadioGroup value={selectedCertId} onValueChange={setSelectedCertId} className="space-y-3">
 										{pkiCerts.map((cert, idx) => {
-											const uname = deriveUsernameFromCert(cert) || cert.subjectCn || cert.sn || cert.id;
-											const display = String(uname);
+											const display = buildCertLabel(cert, idx);
 											return (
 												<label key={cert.id} htmlFor={`cert-${idx}`} className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm leading-6 transition-colors ${selectedCertId === cert.id ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}>
 												<RadioGroupItem value={cert.id} id={`cert-${idx}`} className="mt-1" />

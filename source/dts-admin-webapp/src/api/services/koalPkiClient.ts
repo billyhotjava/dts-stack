@@ -4,6 +4,17 @@
 import { GLOBAL_CONFIG } from "@/global-config";
 const IS_DEV = typeof import.meta !== "undefined" && Boolean((import.meta as any)?.env?.DEV);
 
+function isDebug(): boolean {
+  try {
+    // 开启条件：开发模式 或 运行时 __RUNTIME_CONFIG__.pkiDebug 为 'true'/'1'
+    const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
+    const flag = String(rc.pkiDebug ?? "").trim().toLowerCase();
+    return IS_DEV || flag === "1" || flag === "true" || flag === "yes" || flag === "on";
+  } catch {
+    return IS_DEV;
+  }
+}
+
 export type KoalCertificate = {
   id: string;
   devId: string;
@@ -112,9 +123,11 @@ async function ensureKoalSdk(): Promise<void> {
           document.head.appendChild(el);
         });
       }
+      if (isDebug()) console.info("[pki-sdk] loaded from base", base);
       return; // loaded successfully from this base
     } catch (e) {
       lastErr = e;
+      if (isDebug()) console.warn("[pki-sdk] load failed at base", base, e);
       // try next base
     }
   }
@@ -188,13 +201,13 @@ export class KoalMiddlewareClient {
     await ensureKoalSdk();
     const endpoints = collectEndpoints(options);
     if (!endpoints.length) throw new Error("未配置可用的 PKI 中间件地址");
-
+    if (isDebug()) console.info("[pki] endpoints", endpoints);
     const errors: Error[] = [];
     for (const url of endpoints) {
       try {
         const client = new KoalMiddlewareClient(url);
         await client.login();
-        if (IS_DEV) console.info(`[koal] connected via ${url}`);
+        if (isDebug()) console.info("[pki] connected via", url);
         return client;
       } catch (e) {
         errors.push(new Error(`${url}：${(e as Error).message}`));
@@ -285,6 +298,24 @@ export class KoalMiddlewareClient {
     const list = Array.isArray(payload?.certs) ? payload.certs : [];
     const out: KoalCertificate[] = [];
     for (let i = 0; i < list.length; i++) out.push(normalizeCertificate(list[i], i));
+    if (isDebug()) {
+      const snap = out.map((c, i) => ({
+        i,
+        id: c.id,
+        devId: c.devId,
+        appName: c.appName,
+        conName: c.conName,
+        snTail: c.sn ? c.sn.slice(-8) : "",
+        subjectCn: c.subjectCn,
+        issuerCn: c.issuerCn,
+        manufacturer: c.manufacturer,
+        signType: c.signType,
+        keyUsage: c.keyUsage,
+        canSign: c.canSign,
+        missing: c.missingFields,
+      }));
+      console.info("[pki] raw certs=", list.length, "normalized=", out.length, snap);
+    }
     return out.filter((c) => c.canSign);
   }
 
@@ -299,6 +330,7 @@ export class KoalMiddlewareClient {
     const response: any = await this.thriftCall<any>(this.devClient, "verifyPIN", ticket, request);
     const code = Number(response?.errCode ?? 0);
     if (code !== 0) throw new Error(mapKoalError(code, response?.jsonBody));
+    if (isDebug()) console.info("[pki] PIN verified for", { id: cert.id, devId: cert.devId, conName: cert.conName });
   }
 
   async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayload> {
@@ -323,7 +355,16 @@ export class KoalMiddlewareClient {
     const signDataB64: string | undefined = payload?.b64signData ?? payload?.signData;
     if (!signDataB64) throw new Error("签名失败：缺少签名数据");
     const dupCertB64: string | undefined = payload?.dupCert ?? payload?.dupCertB64 ?? payload?.dup_cert;
-    return { originDataB64, signDataB64: String(signDataB64).trim(), signType: cert.signType, mdType, dupCertB64 };
+    const res = { originDataB64, signDataB64: String(signDataB64).trim(), signType: cert.signType, mdType, dupCertB64 };
+    if (isDebug()) console.info("[pki] signed", {
+      id: cert.id,
+      mdType,
+      signType: cert.signType,
+      originLen: originDataB64.length,
+      signLen: res.signDataB64.length,
+      dupCertLen: res.dupCertB64 ? res.dupCertB64.length : 0,
+    });
+    return res;
   }
 
   async exportCertificate(cert: KoalCertificate): Promise<string> {
@@ -340,7 +381,9 @@ export class KoalMiddlewareClient {
     const payload = parseJson(response?.jsonBody);
     const certB64: string | undefined = payload?.cert;
     if (!certB64) throw new Error("未获取到证书内容");
-    return String(certB64);
+    const out = String(certB64);
+    if (isDebug()) console.info("[pki] export cert length", out.length, { id: cert.id });
+    return out;
   }
 }
 
@@ -348,11 +391,54 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
   const subjectCn = item?.subjectName?.CN ?? item?.subject ?? item?.Subject ?? "";
   const issuerCn = item?.issuerName?.CN ?? item?.issuer ?? item?.Issuer ?? "";
   const signHint = String(item?.certType ?? item?.certAlgorithm ?? item?.algName ?? "").toUpperCase();
-  const manufacturer = String(item?.manufacturer ?? item?.Manufacturer ?? item?.Vendor ?? "").trim();
-  const devId = firstNonBlank(item?.devID, item?.devId, item?.deviceId, item?.deviceID, item?.device, item?.DeviceID) ?? "";
-  const appName = firstNonBlank(item?.appName, item?.AppName, item?.appname, item?.application) ?? "";
-  const conName = firstNonBlank(item?.containerName, item?.container, item?.conName, item?.ConName, item?.container_name, item?.containerID) ?? "";
-  const sn = firstNonBlank(item?.SN, item?.sn, item?.serialNumber, item?.SerialNumber) ?? "";
+  const manufacturer = String(
+    firstNonBlank(
+      item?.manufacturer,
+      item?.Manufacturer,
+      item?.Vendor,
+      item?.vendor,
+      item?.vendorName,
+      item?.VendorName,
+    ) ?? "",
+  ).trim();
+  const devId =
+    firstNonBlank(
+      item?.devID,
+      item?.devId,
+      item?.deviceId,
+      item?.deviceID,
+      item?.device,
+      item?.DeviceID,
+      item?.deviceSN,
+      item?.deviceSerial,
+    ) ?? "";
+  const appName = firstNonBlank(item?.appName, item?.AppName, item?.appname, item?.application, item?.applicationName) ?? "";
+  const conName =
+    firstNonBlank(
+      item?.containerName,
+      item?.container,
+      item?.conName,
+      item?.ConName,
+      item?.container_name,
+      item?.containerID,
+      item?.containerId,
+      item?.KeyContainerName,
+    ) ?? "";
+  const sn =
+    firstNonBlank(
+      item?.SN,
+      item?.sn,
+      item?.serialNumber,
+      item?.SerialNumber,
+      item?.Serial,
+      item?.serial,
+      item?.SerialNo,
+      item?.serialNo,
+      item?.SerialNoHex,
+      item?.certSN,
+      item?.CertSN,
+      item?.CertSerial,
+    ) ?? "";
 
   let signType: KoalCertificate["signType"] = "UNKNOWN";
   if (signHint.includes("PM") || signHint.includes("P7")) signType = "PM-BD";
