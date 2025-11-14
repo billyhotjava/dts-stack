@@ -51,8 +51,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	// Debug: 打印运行时开关与 PKI 端点配置，便于环境排查
 	try {
 		const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
-		const dbg = Boolean((import.meta as any)?.env?.DEV) || ["1","true","yes","on"].includes(String(rc.pkiDebug ?? "").trim().toLowerCase());
-		if (dbg) {
+		const debugEnabled = Boolean((import.meta as any)?.env?.DEV) || ["1","true","yes","on"].includes(String(rc.pkiDebug ?? "").trim().toLowerCase());
+		if (debugEnabled) {
 			try { console.info("[pki-config] runtime rc=", rc); } catch {}
 			try { console.info("[pki-config] endpoints=", GLOBAL_CONFIG.koalPkiEndpoints); } catch {}
 		}
@@ -123,8 +123,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	// 调试：打印登录开关最终解析结果与来源
 	try {
 		const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
-		const dbg = Boolean((import.meta as any)?.env?.DEV) || ["1","true","yes","on"].includes(String(rc.pkiDebug ?? "").trim().toLowerCase());
-		if (dbg) {
+		const debugEnabled = Boolean((import.meta as any)?.env?.DEV) || ["1","true","yes","on"].includes(String(rc.pkiDebug ?? "").trim().toLowerCase());
+		if (debugEnabled) {
 			console.info("[login-flags] runtime enable=", rc.enablePasswordLogin, "runtime hide=", rc.hidePasswordLogin,
 				"build enable=", (import.meta as any)?.env?.WEBAPP_PASSWORD_LOGIN_ENABLED,
 				"build hide=", (import.meta as any)?.env?.VITE_HIDE_PASSWORD_LOGIN,
