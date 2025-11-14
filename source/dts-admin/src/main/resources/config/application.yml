@@ -391,3 +391,10 @@ dts:
     # Roles allowed to log into the admin console (when using PKI admin login audience)
     login:
       allowed-roles: ${DTS_ADMIN_LOGIN_ALLOWED_ROLES:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR}
+
+  security:
+    ip-allowlist:
+      # Enable/disable triad password-login IP allowlist (PKI login unaffected)
+      enabled: ${DTS_SECURITY_IP_ALLOWLIST_ENABLED:true}
+      # Comma-separated usernames (lowercase) to enforce single-IP allowlist
+      triad-usernames: ${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:sysadmin,authadmin,auditadmin}

@@ -48,6 +48,9 @@ services:
       DTS_PKI_GATEWAY_PORT: "${DTS_PKI_GATEWAY_PORT:-0}"
       DTS_PKI_DIGEST: "${DTS_PKI_DIGEST:-SHA1}"
       DTS_PKI_VENDOR_JAR: "${DTS_PKI_VENDOR_JAR:-}"
+      # Password-login triad IP allowlist (PKI login unaffected)
+      DTS_SECURITY_IP_ALLOWLIST_ENABLED: "${DTS_SECURITY_IP_ALLOWLIST_ENABLED:-true}"
+      DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES: "${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:-sysadmin,authadmin,auditadmin}"
       
     volumes:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z

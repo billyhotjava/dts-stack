@@ -95,6 +95,14 @@ public class KeycloakApiResource {
     @org.springframework.beans.factory.annotation.Value("${dts.admin.login.allowed-roles:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR}")
     private String allowedRolesForAdminLogin;
 
+    // Config: triad IP allowlist (password login only; PKI unaffected)
+    @org.springframework.beans.factory.annotation.Value("${dts.security.ip-allowlist.enabled:true}")
+    private boolean ipAllowEnabled;
+
+    @org.springframework.beans.factory.annotation.Value("${dts.security.ip-allowlist.triad-usernames:sysadmin,authadmin,auditadmin}")
+    private String ipAllowTriadCsv;
+    private java.util.Set<String> triadConfigured;
+
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
     private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin",  "authadmin", "auditadmin", "opadmin");
     private static final Map<String, String> BUILTIN_ADMIN_LABELS = Map.of(
@@ -2694,6 +2702,7 @@ public class KeycloakApiResource {
             return ResponseEntity.badRequest().body(ApiResponse.error("用户名或密码不能为空"));
         }
         try {
+            // 平台端登录：不做 IP 白名单校验（普通用户通过 PKI 登录；此处保持原平台直登逻辑）
             // Note: Do NOT enforce triad-only here. This endpoint serves the business platform audience.
             KeycloakAuthService.LoginResult loginResult = keycloakAuthService.login(username, password);
 
@@ -2826,6 +2835,22 @@ public class KeycloakApiResource {
             return ResponseEntity.badRequest().body(ApiResponse.error("用户名或密码不能为空"));
         }
         try {
+            // IP allowlist (single IP) for triad accounts only (sysadmin/authadmin/auditadmin)
+            String ipCheckError = enforceTriadIpAllowlist(username, request);
+            if (ipCheckError != null) {
+                recordAuthActionV2(
+                    username,
+                    ButtonCodes.AUTH_ADMIN_LOGIN,
+                    AuditResultStatus.FAILED,
+                    Map.of("error", ipCheckError),
+                    request,
+                    Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/keycloak/auth/login"),
+                    request != null ? request.getMethod() : "POST",
+                    "系统端登录失败（IP 白名单不匹配）"
+                );
+                String msg = "MISSING_ALLOWED_IP".equals(ipCheckError) ? "该账号未绑定登录 IP" : "登录 IP 不在白名单";
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(msg));
+            }
             KeycloakAuthService.LoginResult loginResult = keycloakAuthService.login(username, password);
             // Enforce triad-only for admin console
             Map<String, Object> user = loginResult.user();
@@ -3442,5 +3467,83 @@ public class KeycloakApiResource {
             }
         } catch (Exception ignore) {}
         return "";
+    }
+
+    /**
+     * Enforce single-IP allowlist for triad accounts (sysadmin/authadmin/auditadmin) on password login endpoints.
+     * Returns null if OK/not applicable; otherwise returns an error code:
+     *  - MISSING_ALLOWED_IP: triad user has no allowed-ip attribute
+     *  - IP_NOT_ALLOWED: client IP does not match allowed-ip
+     *  - IP_CHECK_ERROR: internal error while resolving or fetching attributes
+     */
+    private String enforceTriadIpAllowlist(String username, jakarta.servlet.http.HttpServletRequest request) {
+        try {
+            if (!org.springframework.util.StringUtils.hasText(username)) return null;
+            if (!ipAllowEnabled) return null;
+            String uname = username.toLowerCase(java.util.Locale.ROOT).trim();
+            if (!triadUsernamesConfigured().contains(uname)) return null; // only configured triad accounts
+
+            String clientIp = IpAddressUtils.resolveClientIp(
+                request.getHeader("X-Forwarded-For"),
+                request.getHeader("X-Real-IP"),
+                request.getRemoteAddr()
+            );
+            if (!org.springframework.util.StringUtils.hasText(clientIp)) clientIp = request.getRemoteAddr();
+            if (clientIp == null) clientIp = "";
+            clientIp = stripPort(clientIp.trim());
+
+            // Fetch allowed-ip from Keycloak via admin client
+            String adminToken = adminAccessToken();
+            java.util.Optional<com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO> userOpt =
+                keycloakAdminClient.findByUsername(username, adminToken);
+            if (userOpt.isEmpty() || userOpt.get().getAttributes() == null) {
+                return "MISSING_ALLOWED_IP";
+            }
+            java.util.List<String> list = userOpt.get().getAttributes().get("allowed-ip");
+            String allowed = null;
+            if (list != null) {
+                for (String v : list) { if (v != null && !v.trim().isEmpty()) { allowed = v.trim(); break; } }
+            }
+            if (!org.springframework.util.StringUtils.hasText(allowed)) {
+                return "MISSING_ALLOWED_IP";
+            }
+            allowed = stripPort(allowed);
+            if (allowed.equals(clientIp)) return null;
+            return "IP_NOT_ALLOWED";
+        } catch (Exception ex) {
+            return "IP_CHECK_ERROR";
+        }
+    }
+
+    private static String stripPort(String ip) {
+        if (ip == null) return "";
+        String s = ip.trim();
+        // If looks like IPv4 with trailing :port, drop port
+        int idx = s.lastIndexOf(':');
+        if (idx > 0 && s.indexOf('.') >= 0) {
+            String candidate = s.substring(0, idx);
+            String portPart = s.substring(idx + 1);
+            boolean digits = true;
+            for (int i = 0; i < portPart.length(); i++) { char c = portPart.charAt(i); if (c < '0' || c > '9') { digits = false; break; } }
+            if (digits) return candidate;
+        }
+        return s;
+    }
+
+    private java.util.Set<String> triadUsernamesConfigured() {
+        if (this.triadConfigured != null) return this.triadConfigured;
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        String raw = this.ipAllowTriadCsv == null ? "" : this.ipAllowTriadCsv;
+        for (String part : raw.split(",")) {
+            if (part != null) {
+                String v = part.trim().toLowerCase(java.util.Locale.ROOT);
+                if (!v.isEmpty()) out.add(v);
+            }
+        }
+        if (out.isEmpty()) {
+            out.add("sysadmin"); out.add("authadmin"); out.add("auditadmin");
+        }
+        this.triadConfigured = java.util.Collections.unmodifiableSet(out);
+        return this.triadConfigured;
     }
 }

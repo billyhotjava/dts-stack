@@ -345,6 +345,10 @@ generate_env_base(){
   : "${DTS_PKI_API_TIMEOUT:=3000}"
   : "${DTS_PKI_GATEWAY_HOST:=}"
   : "${DTS_PKI_GATEWAY_PORT:=0}"
+
+  # ---------- Admin password-login IP allowlist (triad only; PKI unaffected) ----------
+  : "${DTS_SECURITY_IP_ALLOWLIST_ENABLED:=true}"
+  : "${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:=sysadmin,authadmin,auditadmin}"
   : "${DTS_PKI_DIGEST:=SHA1}"
   : "${DTS_PKI_VENDOR_JAR:=/opt/dts/vendor}"
   : "${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA:=--add-exports=java.base/sun.security.x509=ALL-UNNAMED --add-exports=java.base/sun.security.util=ALL-UNNAMED --add-opens=java.base/sun.security.x509=ALL-UNNAMED --add-opens=java.base/sun.security.util=ALL-UNNAMED}"
@@ -483,8 +487,12 @@ DTS_PKI_API_TIMEOUT=${DTS_PKI_API_TIMEOUT}
 DTS_PKI_GATEWAY_HOST=${DTS_PKI_GATEWAY_HOST}
 DTS_PKI_GATEWAY_PORT=${DTS_PKI_GATEWAY_PORT}
 DTS_PKI_DIGEST=${DTS_PKI_DIGEST}
-DTS_PKI_VENDOR_JAR=${DTS_PKI_VENDOR_JAR}
-DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA=${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ESCAPED}
+  DTS_PKI_VENDOR_JAR=${DTS_PKI_VENDOR_JAR}
+  DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA=${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ESCAPED}
+
+# ====== Admin password-login IP allowlist (triad only; PKI unaffected) ======
+DTS_SECURITY_IP_ALLOWLIST_ENABLED=${DTS_SECURITY_IP_ALLOWLIST_ENABLED}
+DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES=${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES}
 
 # ====== Frontend PKI defaults ======
 VITE_ADMIN_API_BASE_URL=${VITE_ADMIN_API_BASE_URL}
