@@ -86,6 +86,10 @@ RUN set -eux; \
 
 WORKDIR /usr/share/nginx/html
 COPY --from=build /app/dist ./
+# Ship a fallback copy of vendor SDK assets independent of build output
+RUN mkdir -p /opt/vendor-koal
+COPY --from=build /app/public/vendor/ /opt/vendor-koal/
+RUN chmod -R a+rX /usr/share/nginx/html /opt/vendor-koal
 RUN set -eux; \
     if [ -d "/usr/share/nginx/html/vendor" ]; then \
       chmod -R a+rX "/usr/share/nginx/html/vendor"; \

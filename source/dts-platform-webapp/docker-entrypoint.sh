@@ -17,6 +17,16 @@ if [ -f "$TEMPLATE" ]; then
   envsubst '${UPSTREAM}' < "$TEMPLATE" > "$TARGET"
 fi
 
+# Ensure Koal SDK vendor assets are readable; repair permissions if needed
+# Also render runtime-config.js for front-end to read runtime flags
+# (Attempts are best-effort and safe to ignore if paths are missing.)
+chmod -R a+rX /usr/share/nginx/html/vendor 2>/dev/null || true
+if [ ! -r "/usr/share/nginx/html/vendor/koal/deviceOperator.js" ] && [ -d "/opt/vendor-koal" ]; then
+  echo "[entrypoint] Vendor assets missing/unreadable under /usr/share/nginx/html/vendor; copying fallback from /opt/vendor-koal"
+  cp -a /opt/vendor-koal /usr/share/nginx/html/vendor 2>/dev/null || true
+  chmod -R a+rX /usr/share/nginx/html/vendor 2>/dev/null || true
+fi
+
 # Render runtime-config.js for front-end to read runtime flags
 # Supports:
 #   - KOAL_PKI_ENDPOINTS: comma-separated local agent endpoints

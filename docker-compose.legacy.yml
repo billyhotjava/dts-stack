@@ -312,9 +312,6 @@ services:
     ports: []
     networks:
       - dts-core
-    volumes:
-      # Provide Koal SDK assets directly from workspace (offline-friendly fallback)
-      - ./source/dts-platform-webapp/public/vendor:/usr/share/nginx/html/vendor:ro,z
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -347,9 +344,6 @@ services:
       VITE_HIDE_PASSWORD_LOGIN: ${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:-}
     networks:
       - dts-core
-    volumes:
-      # Ensure Koal SDK assets are available even if the image build omitted them (offline-friendly)
-      - ./source/dts-platform-webapp/public/vendor:/usr/share/nginx/html/vendor:ro,z
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -358,13 +352,29 @@ services:
       - "traefik.http.routers.dts-platform-ui.tls=true"
       - "traefik.http.services.dts-platform-ui.loadbalancer.server.port=80"
       - "traefik.http.routers.dts-platform-ui.middlewares=security-headers@file"
-      # Serve Koal vendor SDK under admin domain as well (same-origin for admin UI)
-      - "traefik.http.routers.dts-platform-koal-vendor.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/vendor/koal`)"
-      - "traefik.http.routers.dts-platform-koal-vendor.entrypoints=websecure"
-      - "traefik.http.routers.dts-platform-koal-vendor.tls=true"
-      - "traefik.http.routers.dts-platform-koal-vendor.service=dts-platform-ui"
-      - "traefik.http.routers.dts-platform-koal-vendor.priority=100"
-      - "traefik.http.routers.dts-platform-koal-vendor.middlewares=security-headers@file"
+
+  dts-koal-vendor:
+    image: nginx:1.27-alpine
+    platform: linux/arm64
+    networks:
+      - dts-core
+    volumes:
+      - ./services/koal-vendor/vendor:/usr/share/nginx/html/vendor:ro,z
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      # Platform domain vendor path
+      - "traefik.http.routers.koal-vendor-platform.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/vendor/koal`)"
+      - "traefik.http.routers.koal-vendor-platform.entrypoints=websecure"
+      - "traefik.http.routers.koal-vendor-platform.tls=true"
+      - "traefik.http.routers.koal-vendor-platform.service=koal-vendor"
+      # Admin domain vendor path (same-origin for admin UI)
+      - "traefik.http.routers.koal-vendor-admin.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/vendor/koal`)"
+      - "traefik.http.routers.koal-vendor-admin.entrypoints=websecure"
+      - "traefik.http.routers.koal-vendor-admin.tls=true"
+      - "traefik.http.routers.koal-vendor-admin.service=koal-vendor"
+      # Backend service port
+      - "traefik.http.services.koal-vendor.loadbalancer.server.port=80"
 
 volumes:
   maven-cache:

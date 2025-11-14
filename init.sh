@@ -122,6 +122,16 @@ fix_pg_permissions(){
   chown -R "${pg_runtime_uid}:${pg_runtime_gid}" "${pg_dir}" 2>/dev/null || true
 }
 
+# Ensure /docker-entrypoint-initdb.d contents are world-readable and shell scripts executable
+# This avoids 'permission denied' when the Postgres container (user 'postgres') reads host-mounted init files.
+fix_pg_initdir_permissions(){
+  local init_dir="services/dts-pg/init"
+  if [[ -d "${init_dir}" ]]; then
+    chmod -R a+rX "${init_dir}" 2>/dev/null || true
+    find "${init_dir}" -type f -name '*.sh' -exec chmod 755 {} + 2>/dev/null || true
+  fi
+}
+
 warn_if_ima_appraise(){
   local ima_policy="/sys/kernel/security/ima/policy"
   if [[ -r "${ima_policy}" ]]; then
@@ -140,6 +150,7 @@ EOF
 
 prepare_data_dirs(){
   fix_pg_permissions
+  fix_pg_initdir_permissions
   local -a data_dirs=(
     "services/certs"
     "services/dts-ranger"
@@ -352,8 +363,8 @@ generate_env_base(){
   : "${VITE_KOAL_VENDOR_BASE:=${KOAL_VENDOR_BASE}}"
   # —— 分别控制 admin 与 platform 前端密码登录显示（运行时注入，无需重建镜像）——
   # 默认均为通过 PKI 登录（隐藏密码登录表单）
-  : "${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:=}"
-  : "${ADMIN_VITE_HIDE_PASSWORD_LOGIN:=true}"
+  : "${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:=true}"
+  : "${ADMIN_VITE_HIDE_PASSWORD_LOGIN:=false}"
   : "${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:=}"
   : "${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:=true}"
 
@@ -363,7 +374,7 @@ generate_env_base(){
   : "${ADMIN_BACKUP_IPS:=}"
 
   # 生成 /32 CIDR 并集，去重
-  ADMIN_WHITELIST_CIDRS=""
+  ADMIN_WHITELIST_CIDRS="0.0.0.0/0"
   {
     printf '%s' "${ADMIN_ALLOWED_IPS}"
     printf ','
@@ -481,11 +492,11 @@ VITE_ADMIN_PROXY_TARGET=${VITE_ADMIN_PROXY_TARGET}
 VITE_KOAL_PKI_ENDPOINTS=${VITE_KOAL_PKI_ENDPOINTS}
 KOAL_VENDOR_BASE=${KOAL_VENDOR_BASE}
 VITE_KOAL_VENDOR_BASE=${VITE_KOAL_VENDOR_BASE}
-  KOAL_PKI_ENDPOINTS=${KOAL_PKI_ENDPOINTS}
-  ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED=${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED}
-  ADMIN_VITE_HIDE_PASSWORD_LOGIN=${ADMIN_VITE_HIDE_PASSWORD_LOGIN}
-  PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED=${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED}
-  PLATFORM_VITE_HIDE_PASSWORD_LOGIN=${PLATFORM_VITE_HIDE_PASSWORD_LOGIN}
+KOAL_PKI_ENDPOINTS=${KOAL_PKI_ENDPOINTS}
+ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED=${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED}
+ADMIN_VITE_HIDE_PASSWORD_LOGIN=${ADMIN_VITE_HIDE_PASSWORD_LOGIN}
+PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED=${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED}
+PLATFORM_VITE_HIDE_PASSWORD_LOGIN=${PLATFORM_VITE_HIDE_PASSWORD_LOGIN}
 
 # ====== Admin IP 白名单（由 init.sh 生成） ======
 ADMIN_ALLOWED_IPS=${ADMIN_ALLOWED_IPS}
