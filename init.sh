@@ -344,6 +344,11 @@ generate_env_base(){
   : "${VITE_KOAL_PKI_ENDPOINTS:=https://127.0.0.1:16080,http://127.0.0.1:18080}"
   # Unified runtime injection for both webapps (optional). If unset, frontends fall back to defaults.
   : "${KOAL_PKI_ENDPOINTS:=${VITE_KOAL_PKI_ENDPOINTS}}"
+  # Optional: Explicit base URL for Koal SDK assets used by admin webapp.
+  # Examples: '/vendor/koal' (same-origin) or 'https://bi.${BASE_DOMAIN}/vendor/koal'
+  : "${KOAL_VENDOR_BASE:=}"
+  # Optional dev-only alias (read by Vite when serving /runtime-config.js in dev)
+  : "${VITE_KOAL_VENDOR_BASE:=}"
   # —— 分别控制 admin 与 platform 前端密码登录显示（运行时注入，无需重建镜像）——
   # 默认均为通过 PKI 登录（隐藏密码登录表单）
   : "${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:=}"
@@ -473,6 +478,8 @@ DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA=${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ESCAPED}
 VITE_ADMIN_API_BASE_URL=${VITE_ADMIN_API_BASE_URL}
 VITE_ADMIN_PROXY_TARGET=${VITE_ADMIN_PROXY_TARGET}
 VITE_KOAL_PKI_ENDPOINTS=${VITE_KOAL_PKI_ENDPOINTS}
+KOAL_VENDOR_BASE=${KOAL_VENDOR_BASE}
+VITE_KOAL_VENDOR_BASE=${VITE_KOAL_VENDOR_BASE}
   KOAL_PKI_ENDPOINTS=${KOAL_PKI_ENDPOINTS}
   ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED=${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED}
   ADMIN_VITE_HIDE_PASSWORD_LOGIN=${ADMIN_VITE_HIDE_PASSWORD_LOGIN}

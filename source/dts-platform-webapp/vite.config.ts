@@ -70,6 +70,7 @@ export default defineConfig(({ mode }) => {
       .filter(Boolean);
     const enableRaw = (env as any).WEBAPP_PASSWORD_LOGIN_ENABLED ?? "";
     const hideRaw = (env as any).VITE_HIDE_PASSWORD_LOGIN ?? "";
+    const vendorBase = (env as any).KOAL_VENDOR_BASE || (env as any).VITE_KOAL_VENDOR_BASE || "";
     const enable = String(enableRaw).trim().toLowerCase();
     const hide = String(hideRaw).trim().toLowerCase();
     return {
@@ -87,6 +88,9 @@ export default defineConfig(({ mode }) => {
             }
             if (hide) {
               js += `w.__RUNTIME_CONFIG__.hidePasswordLogin=${JSON.stringify(hide)};`;
+            }
+            if (String(vendorBase).trim()) {
+              js += `w.__RUNTIME_CONFIG__.koalVendorBase=${JSON.stringify(String(vendorBase).trim())};`;
             }
             js += "})(window);\n";
             res.setHeader("Content-Type", "application/javascript; charset=utf-8");

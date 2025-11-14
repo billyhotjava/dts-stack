@@ -304,12 +304,17 @@ services:
     environment:
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
+      # Optional explicit Koal SDK base (mirrors runtime-config koalVendorBase)
+      KOAL_VENDOR_BASE: ${KOAL_VENDOR_BASE:-}
       # Runtime password-login toggles (admin webapp)
       WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
       VITE_HIDE_PASSWORD_LOGIN: ${ADMIN_VITE_HIDE_PASSWORD_LOGIN:-}
     ports: []
     networks:
       - dts-core
+    volumes:
+      # Provide Koal SDK assets directly from workspace (offline-friendly fallback)
+      - ./source/dts-platform-webapp/public/vendor:/usr/share/nginx/html/vendor:ro,z
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -318,6 +323,13 @@ services:
       - "traefik.http.routers.dts-admin-ui.tls=true"
       - "traefik.http.services.dts-admin-ui.loadbalancer.server.port=80"
       - "traefik.http.routers.dts-admin-ui.middlewares=admin-ipwhitelist@docker,security-headers@file"
+      # Allow fetching runtime-config.js without IP whitelist to ensure runtime flags are readable even during IP whitelist misconfig.
+      - "traefik.http.routers.dts-admin-rc.rule=Host(`${HOST_ADMIN_UI}`) && Path(`/runtime-config.js`)"
+      - "traefik.http.routers.dts-admin-rc.entrypoints=websecure"
+      - "traefik.http.routers.dts-admin-rc.tls=true"
+      - "traefik.http.routers.dts-admin-rc.service=dts-admin-ui"
+      - "traefik.http.routers.dts-admin-rc.priority=100"
+      - "traefik.http.routers.dts-admin-rc.middlewares=security-headers@file"
 
   dts-platform-webapp:
     image: ${IMAGE_DTS_PLATFORM_WEBAPP:?Set IMAGE_DTS_PLATFORM_WEBAPP in imgversion.conf or .env}

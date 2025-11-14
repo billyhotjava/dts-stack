@@ -99,10 +99,23 @@ function derivePlatformVendorBase(): string | null {
 
 async function ensureKoalSdk(): Promise<void> {
   if (typeof window !== "undefined" && (window as any).Thrift) return;
-  const bases: string[] = [
-    "/koal",
+  // Optional runtime override via /runtime-config.js:
+  // window.__RUNTIME_CONFIG__.koalVendorBase = "/vendor/koal" | "https://bi.example.com/vendor/koal" | ...
+  let overrideBase: string | null = null;
+  try {
+    const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
+    if (rc && typeof rc.koalVendorBase === "string" && rc.koalVendorBase.trim()) {
+      overrideBase = rc.koalVendorBase.trim();
+    }
+  } catch {}
+
+  const bases: string[] = [];
+  if (overrideBase) bases.push(overrideBase);
+  // Prefer vendor path first to avoid needless 404s on /koal in most setups
+  bases.push(
     "/vendor/koal",
-  ];
+    "/koal",
+  );
   const alt = derivePlatformVendorBase();
   if (alt) bases.push(alt);
 
