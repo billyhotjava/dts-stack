@@ -68,17 +68,17 @@ RUN set -eu; \
         exit 1; \
     fi
 RUN mkdir -p /root/.m2 && \
-    cat > /root/.m2/settings.xml <<'EOF' && true
-<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
-  <mirrors>
-    <mirror>
-      <id>mirror-default</id>
-      <mirrorOf>*</mirrorOf>
-      <url>__MIRROR_URL__</url>
-    </mirror>
-  </mirrors>
-</settings>
-EOF
+    printf '%s\n' \
+      '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">' \
+      '  <mirrors>' \
+      '    <mirror>' \
+      '      <id>mirror-default</id>' \
+      '      <mirrorOf>*</mirrorOf>' \
+      '      <url>__MIRROR_URL__</url>' \
+      '    </mirror>' \
+      '  </mirrors>' \
+      '</settings>' \
+      > /root/.m2/settings.xml
 RUN set -eux; \
     BUILD_POM=$(cat /workspace/.build-pom); \
     if [ "${ENABLE_MAVEN_BUILD}" = "true" ]; then \
