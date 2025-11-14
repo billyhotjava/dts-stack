@@ -154,6 +154,8 @@ services:
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       # Example: "https://127.0.0.1:18080/multiplex,http://127.0.0.1:18080/multiplex"
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
+      # Optional explicit Koal SDK base (mirrors runtime-config koalVendorBase)
+      KOAL_VENDOR_BASE: ${KOAL_VENDOR_BASE:-}
       # Control password login visibility per webapp at runtime (no rebuild):
       # Set to true to show password login in admin UI
       WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
@@ -162,6 +164,9 @@ services:
     ports: []
     networks:
       - dts-core
+    volumes:
+      # Provide Koal SDK assets directly from workspace (offline-friendly fallback)
+      - ./source/dts-platform-webapp/public/vendor:/usr/share/nginx/html/vendor:ro,z
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -179,12 +184,17 @@ services:
       VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
+      # Optional explicit Koal SDK base (mirrors runtime-config koalVendorBase)
+      KOAL_VENDOR_BASE: ${KOAL_VENDOR_BASE:-}
       # Control password login visibility per webapp at runtime (no rebuild):
       # Leave platform password login hidden by default, or enable explicitly here
       WEBAPP_PASSWORD_LOGIN_ENABLED: ${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
       VITE_HIDE_PASSWORD_LOGIN: ${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:-}
     networks:
       - dts-core
+    volumes:
+      # Ensure Koal SDK assets are available even if the image build omitted them (offline-friendly)
+      - ./source/dts-platform-webapp/public/vendor:/usr/share/nginx/html/vendor:ro,z
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -199,4 +209,5 @@ services:
       - "traefik.http.routers.dts-platform-koal-vendor.entrypoints=websecure"
       - "traefik.http.routers.dts-platform-koal-vendor.tls=true"
       - "traefik.http.routers.dts-platform-koal-vendor.service=dts-platform-ui"
+      - "traefik.http.routers.dts-platform-koal-vendor.priority=100"
       - "traefik.http.routers.dts-platform-koal-vendor.middlewares=security-headers@file"

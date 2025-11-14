@@ -363,6 +363,7 @@ services:
       - "traefik.http.routers.dts-platform-koal-vendor.entrypoints=websecure"
       - "traefik.http.routers.dts-platform-koal-vendor.tls=true"
       - "traefik.http.routers.dts-platform-koal-vendor.service=dts-platform-ui"
+      - "traefik.http.routers.dts-platform-koal-vendor.priority=100"
       - "traefik.http.routers.dts-platform-koal-vendor.middlewares=security-headers@file"
 
 volumes:
