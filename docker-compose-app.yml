@@ -155,7 +155,7 @@ services:
       # Example: "https://127.0.0.1:18080/multiplex,http://127.0.0.1:18080/multiplex"
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
       # Optional explicit Koal SDK base (mirrors runtime-config koalVendorBase)
-      KOAL_VENDOR_BASE: ${KOAL_VENDOR_BASE:-}
+      KOAL_VENDOR_BASE: /vendor/koal
       # Control password login visibility per webapp at runtime (no rebuild):
       # Set to true to show password login in admin UI
       WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
@@ -182,7 +182,7 @@ services:
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
       # Optional explicit Koal SDK base (mirrors runtime-config koalVendorBase)
-      KOAL_VENDOR_BASE: ${KOAL_VENDOR_BASE:-}
+      KOAL_VENDOR_BASE: /vendor/koal
       # Control password login visibility per webapp at runtime (no rebuild):
       # Leave platform password login hidden by default, or enable explicitly here
       WEBAPP_PASSWORD_LOGIN_ENABLED: ${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
@@ -197,11 +197,5 @@ services:
       - "traefik.http.routers.dts-platform-ui.tls=true"
       - "traefik.http.services.dts-platform-ui.loadbalancer.server.port=80"
       - "traefik.http.routers.dts-platform-ui.middlewares=security-headers@file"
-      # Serve Koal vendor assets for admin domain via platform webapp (no duplication)
-      - "traefik.http.routers.dts-platform-koal-vendor.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/vendor/koal`)"
-      - "traefik.http.routers.dts-platform-koal-vendor.entrypoints=websecure"
-      - "traefik.http.routers.dts-platform-koal-vendor.tls=true"
-      - "traefik.http.routers.dts-platform-koal-vendor.service=dts-platform-ui"
-      - "traefik.http.routers.dts-platform-koal-vendor.priority=100"
-      - "traefik.http.routers.dts-platform-koal-vendor.middlewares=security-headers@file"
+      
   

@@ -305,7 +305,7 @@ services:
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
       # Optional explicit Koal SDK base (mirrors runtime-config koalVendorBase)
-      KOAL_VENDOR_BASE: ${KOAL_VENDOR_BASE:-}
+      KOAL_VENDOR_BASE: /vendor/koal
       # Runtime password-login toggles (admin webapp)
       WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
       VITE_HIDE_PASSWORD_LOGIN: ${ADMIN_VITE_HIDE_PASSWORD_LOGIN:-}
@@ -338,7 +338,7 @@ services:
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
       # Optional explicit Koal SDK base (mirrors runtime-config koalVendorBase)
-      KOAL_VENDOR_BASE: ${KOAL_VENDOR_BASE:-}
+      KOAL_VENDOR_BASE: /vendor/koal
       # Runtime password-login toggles (platform webapp)
       WEBAPP_PASSWORD_LOGIN_ENABLED: ${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
       VITE_HIDE_PASSWORD_LOGIN: ${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:-}
