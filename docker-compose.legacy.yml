@@ -303,6 +303,9 @@ services:
     environment:
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
+      # Runtime password-login toggles (admin webapp)
+      WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
+      VITE_HIDE_PASSWORD_LOGIN: ${ADMIN_VITE_HIDE_PASSWORD_LOGIN:-}
     ports: []
     networks:
       - dts-core
@@ -323,8 +326,14 @@ services:
       VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
+      # Runtime password-login toggles (platform webapp)
+      WEBAPP_PASSWORD_LOGIN_ENABLED: ${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
+      VITE_HIDE_PASSWORD_LOGIN: ${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:-}
     networks:
       - dts-core
+    volumes:
+      # Ensure Koal SDK assets are available even if the image build omitted them (offline-friendly)
+      - ./source/dts-platform-webapp/public/vendor:/usr/share/nginx/html/vendor:ro,z
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -332,6 +341,13 @@ services:
       - "traefik.http.routers.dts-platform-ui.entrypoints=websecure"
       - "traefik.http.routers.dts-platform-ui.tls=true"
       - "traefik.http.services.dts-platform-ui.loadbalancer.server.port=80"
+      - "traefik.http.routers.dts-platform-ui.middlewares=security-headers@file"
+      # Serve Koal vendor SDK under admin domain as well (same-origin for admin UI)
+      - "traefik.http.routers.dts-platform-koal-vendor.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/vendor/koal`)"
+      - "traefik.http.routers.dts-platform-koal-vendor.entrypoints=websecure"
+      - "traefik.http.routers.dts-platform-koal-vendor.tls=true"
+      - "traefik.http.routers.dts-platform-koal-vendor.service=dts-platform-ui"
+      - "traefik.http.routers.dts-platform-koal-vendor.middlewares=security-headers@file"
 
 volumes:
   maven-cache:
