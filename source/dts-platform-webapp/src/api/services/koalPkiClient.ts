@@ -2,16 +2,16 @@ import { GLOBAL_CONFIG } from "@/global-config";
 
 type Nullable<T> = T | null | undefined;
 
-const KOAL_SCRIPT_PATHS = [
-	"/vendor/koal/thrift.js",
-	"/vendor/koal/base64.js",
-	"/vendor/koal/commdef_types.js",
-	"/vendor/koal/pkiService_types.js",
-	"/vendor/koal/devService_types.js",
-	"/vendor/koal/signXService_types.js",
-	"/vendor/koal/pkiService.js",
-	"/vendor/koal/devService.js",
-	"/vendor/koal/signXService.js",
+const KOAL_VENDOR_FILES = [
+  "thrift.js",
+  "base64.js",
+  "commdef_types.js",
+  "pkiService_types.js",
+  "devService_types.js",
+  "signXService_types.js",
+  "pkiService.js",
+  "devService.js",
+  "signXService.js",
 ] as const;
 
 const DEFAULT_ENDPOINTS = ["https://127.0.0.1:16080", "http://127.0.0.1:18080"] as const;
@@ -223,23 +223,73 @@ function applyChrome109TransportWorkaround() {
 	chrome109TransportPatched = true;
 }
 
+function dbg(tag: string, data?: any): void {
+  try {
+    const w: any = typeof window !== "undefined" ? window : null;
+    if (!w) return;
+    w.__PKI_DEBUG_LOGS__ = Array.isArray(w.__PKI_DEBUG_LOGS__) ? w.__PKI_DEBUG_LOGS__ : [];
+    const buf: Array<{ ts: number; tag: string; data?: any }> = w.__PKI_DEBUG_LOGS__;
+    buf.push({ ts: Date.now(), tag, data });
+    if (buf.length > 300) buf.splice(0, buf.length - 300);
+  } catch {}
+}
+
+function deriveAdminVendorBase(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const loc = window.location;
+    const host = String(loc.hostname || "");
+    const prefix = "bi.";
+    if (host.startsWith(prefix)) {
+      const baseDomain = host.substring(prefix.length);
+      if (baseDomain) {
+        return `${loc.protocol}//biadmin.${baseDomain}/vendor/koal`;
+      }
+    }
+  } catch {}
+  return null;
+}
+
 async function ensureKoalSdk() {
-	if (!koalSdkPromise) {
-		koalSdkPromise = (async () => {
-			for (const path of KOAL_SCRIPT_PATHS) {
-				try {
-					await loadScript(path);
-				} catch (error) {
-					if (IS_DEV) {
-						console.error("[koal] 脚本加载失败", path, error);
-					}
-					throw error;
-				}
-			}
-			applyChrome109TransportWorkaround();
-		})();
-	}
-	return koalSdkPromise;
+  if (typeof window !== "undefined" && (window as any).Thrift) return;
+  if (!koalSdkPromise) {
+    koalSdkPromise = (async () => {
+      let overrideBase: string | null = null;
+      try {
+        const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
+        if (rc && typeof rc.koalVendorBase === "string" && rc.koalVendorBase.trim()) {
+          overrideBase = rc.koalVendorBase.trim();
+        }
+      } catch {}
+
+      const bases: string[] = [];
+      if (overrideBase) bases.push(overrideBase);
+      bases.push("/vendor/koal", "/koal");
+      const alt = deriveAdminVendorBase();
+      if (alt) bases.push(alt);
+
+      let lastErr: any = null;
+      for (const base of bases) {
+        try {
+          for (const f of KOAL_VENDOR_FILES) {
+            const src = `${base}/${f}`;
+            // eslint-disable-next-line no-await-in-loop
+            await loadScript(src);
+          }
+          if (IS_DEV) { try { console.info("[pki-sdk] loaded from base", base); } catch {} }
+          dbg("pki-sdk.loaded", { base, files: KOAL_VENDOR_FILES });
+          applyChrome109TransportWorkaround();
+          return;
+        } catch (e) {
+          lastErr = e;
+          if (IS_DEV) { try { console.warn("[pki-sdk] load failed at base", base, e); } catch {} }
+          dbg("pki-sdk.load-failed", { base, error: String(e) });
+        }
+      }
+      throw lastErr || new Error("未能加载 PKI 前端 SDK 脚本");
+    })();
+  }
+  return koalSdkPromise;
 }
 
 declare global {

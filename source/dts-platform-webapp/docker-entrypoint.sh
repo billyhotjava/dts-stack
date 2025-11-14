@@ -45,4 +45,10 @@ if [ -n "${VITE_HIDE_PASSWORD_LOGIN:-}" ]; then
   echo "[entrypoint] runtime-config.js: hidePasswordLogin=${VITE_HIDE_PASSWORD_LOGIN}"
 fi
 
+# Optional: explicit Koal vendor base for platform webapp (e.g., '/vendor/koal' or full https URL)
+if [ -n "${KOAL_VENDOR_BASE:-}" ]; then
+  printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.koalVendorBase='${KOAL_VENDOR_BASE}';})(window);" >> "$RUNTIME_JS"
+  echo "[entrypoint] runtime-config.js: koalVendorBase=${KOAL_VENDOR_BASE}"
+fi
+
 exec nginx -g 'daemon off;'
