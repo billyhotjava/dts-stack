@@ -54,7 +54,11 @@ public enum AdminAuditOperation {
     ADMIN_SETTING_VIEW("ADMIN_SETTING_VIEW", "查看系统配置", AuditOperationType.READ, "admin.settings", "系统配置", "system_config"),
     ADMIN_AUTH_LOGIN("ADMIN_AUTH_LOGIN", "管理员登录", AuditOperationType.LOGIN, "admin.auth", "认证登录", "admin_keycloak_user"),
     ADMIN_AUTH_LOGOUT("ADMIN_AUTH_LOGOUT", "管理员登出", AuditOperationType.LOGOUT, "admin.auth", "认证登录", "admin_keycloak_user"),
-    ADMIN_AUTH_REFRESH("ADMIN_AUTH_REFRESH", "刷新登录状态", AuditOperationType.REFRESH, "admin.auth", "认证登录", "admin_keycloak_user");
+    ADMIN_AUTH_REFRESH("ADMIN_AUTH_REFRESH", "刷新登录状态", AuditOperationType.REFRESH, "admin.auth", "认证登录", "admin_keycloak_user"),
+    ADMIN_PERSON_IMPORT_API("ADMIN_PERSON_IMPORT_API", "人员主数据 API 导入", AuditOperationType.IMPORT, "admin.masterdata", "主数据管理", "person_import_batch"),
+    ADMIN_PERSON_IMPORT_EXCEL("ADMIN_PERSON_IMPORT_EXCEL", "人员主数据 Excel 导入", AuditOperationType.IMPORT, "admin.masterdata", "主数据管理", "person_import_batch"),
+    ADMIN_PERSON_IMPORT_MANUAL("ADMIN_PERSON_IMPORT_MANUAL", "人员主数据人工导入", AuditOperationType.IMPORT, "admin.masterdata", "主数据管理", "person_import_batch"),
+    ADMIN_PERSON_PROFILE_UPDATE("ADMIN_PERSON_PROFILE_UPDATE", "同步人员主数据", AuditOperationType.UPDATE, "admin.masterdata", "主数据管理", "person_profile");
 
     private final String code;
     private final String defaultName;

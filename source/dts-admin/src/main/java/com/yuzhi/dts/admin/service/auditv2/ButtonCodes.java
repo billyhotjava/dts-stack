@@ -107,4 +107,9 @@ public final class ButtonCodes {
 
     // Platform ingestion fallback
     public static final String PLATFORM_GENERIC_EVENT = "PLATFORM_GENERIC_EVENT";
+
+    // Master data
+    public static final String MASTERDATA_PERSON_IMPORT_API = "ADMIN_PERSON_IMPORT_API";
+    public static final String MASTERDATA_PERSON_IMPORT_EXCEL = "ADMIN_PERSON_IMPORT_EXCEL";
+    public static final String MASTERDATA_PERSON_IMPORT_MANUAL = "ADMIN_PERSON_IMPORT_MANUAL";
 }

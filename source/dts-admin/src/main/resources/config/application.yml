@@ -276,6 +276,17 @@ dts:
     unassigned-name: ${DTS_ORG_UNASSIGNED_NAME:}
     unassigned-description: ${DTS_ORG_UNASSIGNED_DESCRIPTION:}
     unassigned-data-level: ${DTS_ORG_UNASSIGNED_DATA_LEVEL:}
+  personnel:
+    api:
+      enabled: ${DTS_PERSONNEL_API_ENABLED:false}
+      endpoint: ${DTS_PERSONNEL_API_ENDPOINT:}
+      method: ${DTS_PERSONNEL_API_METHOD:GET}
+      auth-token: ${DTS_PERSONNEL_API_TOKEN:}
+    excel:
+      enabled: ${DTS_PERSONNEL_EXCEL_ENABLED:true}
+      max-rows: ${DTS_PERSONNEL_EXCEL_MAX_ROWS:10000}
+    logging:
+      operations-log: ${DTS_PERSONNEL_LOG_PATH:logs/personnel-operations.log}
   admin:
     infra:
       encryption-key: ${DTS_ADMIN_INFRA_ENCRYPTION_KEY:}
