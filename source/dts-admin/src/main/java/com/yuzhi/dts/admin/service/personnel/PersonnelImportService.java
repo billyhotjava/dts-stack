@@ -213,13 +213,13 @@ public class PersonnelImportService {
         AuditActionRequest.Builder builder = AuditActionRequest
             .builder(actor, resolveButtonCode(sourceType))
             .summary(summary)
-            .result(hasFailure ? AuditResultStatus.FAILURE : AuditResultStatus.SUCCESS)
+            .result(hasFailure ? AuditResultStatus.FAILED : AuditResultStatus.SUCCESS)
             .detail("statistics", detail)
             .allowEmptyTargets()
             .metadata("batchId", String.valueOf(batch.getId()));
 
         AdminAuditOperation operation = resolveAuditOperation(sourceType);
-        builder.operationOverride(operation.code(), summary, AuditOperationKind.BUSINESS);
+        builder.operationOverride(operation.code(), summary, AuditOperationKind.IMPORT);
         builder.moduleOverride(operation.moduleKey(), operation.moduleLabel());
         auditV2Service.record(builder.build());
     }

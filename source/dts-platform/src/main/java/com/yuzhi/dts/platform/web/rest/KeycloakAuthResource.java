@@ -848,6 +848,10 @@ public class KeycloakAuthResource {
                     mapped.add("ROLE_DEPT_DATA_OWNER");
                     yield true;
                 }
+                case "DEPT_LEADER", "DEPARTMENT_LEADER" -> {
+                    mapped.add("ROLE_DEPT_LEADER");
+                    yield true;
+                }
                 case "INST_DATA_VIEWER", "INST_VIEWER", "INSTITUTE_VIEWER", "INSTITUTION_VIEWER" -> {
                     mapped.add("ROLE_INST_DATA_VIEWER");
                     yield true;
@@ -858,6 +862,14 @@ public class KeycloakAuthResource {
                 }
                 case "INST_DATA_OWNER", "INST_OWNER", "INSTITUTE_OWNER", "INSTITUTION_OWNER" -> {
                     mapped.add("ROLE_INST_DATA_OWNER");
+                    yield true;
+                }
+                case "INST_LEADER", "INSTITUTE_LEADER", "INSTITUTION_LEADER" -> {
+                    mapped.add("ROLE_INST_LEADER");
+                    yield true;
+                }
+                case "EMPLOYEE", "USER_EMPLOYEE" -> {
+                    mapped.add("ROLE_EMPLOYEE");
                     yield true;
                 }
                 case "SYS_ADMIN", "SYSADMIN", "AUTH_ADMIN", "AUTHADMIN", "SECURITY_AUDITOR", "SECURITYAUDITOR", "AUDIT_ADMIN", "AUDITADMIN", "AUDITOR_ADMIN" -> {

@@ -280,6 +280,9 @@
 				"DEPT_DATA_DEV": "部门数据开发员",
 				"INST_DATA_OWNER": "研究所数据管理员",
 				"INST_DATA_DEV": "研究所数据开发员",
+				"DEPT_LEADER": "部门领导",
+				"INST_LEADER": "研究所领导",
+				"EMPLOYEE": "普通员工",
 				"DATA_STEWARD": "数据管家",
 				"DATA_ANALYST": "数据分析师"
 			},

@@ -199,6 +199,82 @@ services:
       - "traefik.http.routers.dts-platform-ui.entrypoints=websecure"
       - "traefik.http.routers.dts-platform-ui.tls=true"
       - "traefik.http.services.dts-platform-ui.loadbalancer.server.port=80"
-      - "traefik.http.routers.dts-platform-ui.middlewares=security-headers@file"
-      
-  
+
+  dts-superset:
+    image: ${IMAGE_SUPERSET:?Set IMAGE_SUPERSET in imgversion.conf or .env}
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+    environment:
+      SUPERSET_ENV: production
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_LOAD_DEFAULT_CONNECTIONS: "false"
+      SUPERSET_LOAD_EXAMPLES: ${SUPERSET_LOAD_EXAMPLES:-false}
+      SUPERSET_FEATURE_FLAGS: ${SUPERSET_FEATURE_FLAGS:-{}}
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
+      SUPERSET_ADMIN_FIRST_NAME: ${SUPERSET_ADMIN_FIRST_NAME}
+      SUPERSET_ADMIN_LAST_NAME: ${SUPERSET_ADMIN_LAST_NAME}
+      SUPERSET_DATABASE_URI: postgresql+psycopg2://${PG_USER_SUPERSET:-superset}:${PG_PWD_SUPERSET:-superset}@${PG_HOST:-dts-pg}:${PG_PORT:-5432}/${PG_DB_SUPERSET:-superset}
+      SUPERSET_WEBSERVER_WORKERS: ${SUPERSET_WEBSERVER_WORKERS:-2}
+      SUPERSET_WEBSERVER_TIMEOUT: ${SUPERSET_WEBSERVER_TIMEOUT:-120}
+      SUPERSET_CONFIG_PATH: ${SUPERSET_CONFIG_PATH:-}
+      SUPERSET_OIDC_CLIENT_ID: ${SUPERSET_OIDC_CLIENT_ID}
+      SUPERSET_OIDC_CLIENT_SECRET: ${SUPERSET_OIDC_CLIENT_SECRET}
+      SUPERSET_OIDC_METADATA_URL: ${SUPERSET_OIDC_METADATA_URL}
+      SUPERSET_OIDC_REDIRECT_URI: ${SUPERSET_OIDC_REDIRECT_URI}
+      SUPERSET_OIDC_LOGOUT_URL: ${SUPERSET_OIDC_LOGOUT_URL}
+      SUPERSET_OIDC_SCOPES: ${SUPERSET_OIDC_SCOPES}
+      SUPERSET_EXTRA_CLI_ARGS: ${SUPERSET_EXTRA_CLI_ARGS}
+      SUPERSET_PORT: 8088
+    volumes:
+      - ./services/dts-superset/home:/app/superset_home:Z
+    extra_hosts:
+      - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
+    restart: unless-stopped
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-superset.rule=Host(`${HOST_SUPERSET}`)"
+      - "traefik.http.routers.dts-superset.entrypoints=websecure"
+      - "traefik.http.routers.dts-superset.tls=true"
+      - "traefik.http.services.dts-superset.loadbalancer.server.port=8088"
+      - "traefik.http.routers.dts-superset.middlewares=security-headers@file"
+
+  dts-metabase:
+    image: ${IMAGE_METABASE:?Set IMAGE_METABASE in imgversion.conf or .env}
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: ${PG_DB_METABASE:-metabase}
+      MB_DB_PORT: ${PG_PORT:-5432}
+      MB_DB_USER: ${PG_USER_METABASE:-metabase}
+      MB_DB_PASS: ${PG_PWD_METABASE:-metabase}
+      MB_DB_HOST: ${PG_HOST:-dts-pg}
+      MB_ENCRYPTION_SECRET_KEY: ${METABASE_ENCRYPTION_SECRET}
+      MB_SITE_URL: ${METABASE_SITE_URL}
+      MB_JETTY_HOST: 0.0.0.0
+      MB_JETTY_PORT: 3000
+      MB_PLUGINS_DIR: /plugins
+      JAVA_TOOL_OPTIONS: ${METABASE_JAVA_TOOL_OPTIONS}
+    volumes:
+      - ./services/dts-metabase/data:/metabase-data:Z
+      - ./services/dts-metabase/plugins:/plugins:ro,Z
+    extra_hosts:
+      - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
+    restart: unless-stopped
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-metabase.rule=Host(`${HOST_METABASE}`)"
+      - "traefik.http.routers.dts-metabase.entrypoints=websecure"
+      - "traefik.http.routers.dts-metabase.tls=true"
+      - "traefik.http.services.dts-metabase.loadbalancer.server.port=3000"
+      - "traefik.http.routers.dts-metabase.middlewares=security-headers@file"

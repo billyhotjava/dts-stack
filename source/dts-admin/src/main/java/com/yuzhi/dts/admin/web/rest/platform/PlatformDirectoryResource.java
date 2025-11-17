@@ -69,6 +69,27 @@ public class PlatformDirectoryResource {
             "在全所共享区开展数据开发；可读取共享区密级不超的数据并写入共享区；无密级或共享策略调整、授权能力；导出受策略限制。",
             "INSTITUTE",
             List.of("read", "write", "export")
+        ),
+        new BuiltinRole(
+            "ROLE_INST_LEADER",
+            "研究所领导",
+            "所级领导角色，拥有研究所数据管理员全部能力，可查看跨部门高阶指标并参与审批流程；导出高敏数据需审批。",
+            "INSTITUTE",
+            List.of("read", "write", "export")
+        ),
+        new BuiltinRole(
+            "ROLE_DEPT_LEADER",
+            "部门领导",
+            "部门级领导角色，具备部门数据管理员所有能力，可审批与查看部门范围内的模型和共享资源；导出高敏数据需审批。",
+            "DEPARTMENT",
+            List.of("read", "write", "export")
+        ),
+        new BuiltinRole(
+            "ROLE_EMPLOYEE",
+            "普通员工",
+            "面向业务人员的只读角色，仅可访问授权的 BI 报表与数据产品，不具备治理或开发权限。",
+            "DEPARTMENT",
+            List.of("read")
         )
     );
 

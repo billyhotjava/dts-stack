@@ -27,6 +27,9 @@ public final class AuthoritiesConstants {
     public static final String DEPT_DATA_OWNER = "ROLE_DEPT_DATA_OWNER";
     public static final String DEPT_DATA_DEV = "ROLE_DEPT_DATA_DEV";
     public static final String DEPT_DATA_VIEWER = "ROLE_DEPT_DATA_VIEWER";
+    public static final String INST_LEADER = "ROLE_INST_LEADER";
+    public static final String DEPT_LEADER = "ROLE_DEPT_LEADER";
+    public static final String EMPLOYEE = "ROLE_EMPLOYEE";
 
     private AuthoritiesConstants() {}
 }

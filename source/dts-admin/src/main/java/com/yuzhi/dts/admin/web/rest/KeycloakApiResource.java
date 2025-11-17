@@ -4,6 +4,7 @@ import com.yuzhi.dts.admin.service.dto.keycloak.ApprovalDTOs;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
+import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.admin.service.inmemory.InMemoryStores;
@@ -105,6 +106,17 @@ public class KeycloakApiResource {
 
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
     private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin",  "authadmin", "auditadmin", "opadmin");
+    private static final Set<String> TRIAD_AUTHORITIES = Set.of(
+        AuthoritiesConstants.SYS_ADMIN,
+        AuthoritiesConstants.AUTH_ADMIN,
+        AuthoritiesConstants.AUDITOR_ADMIN
+    );
+    private static final Set<String> PROTECTED_AUTHORITIES = Set.of(
+        AuthoritiesConstants.SYS_ADMIN,
+        AuthoritiesConstants.AUTH_ADMIN,
+        AuthoritiesConstants.AUDITOR_ADMIN,
+        AuthoritiesConstants.OP_ADMIN
+    );
     private static final Map<String, String> BUILTIN_ADMIN_LABELS = Map.of(
         "sysadmin",
         "系统管理员",
@@ -3296,28 +3308,6 @@ public class KeycloakApiResource {
             if (signedAtObj != null) auditContext.put("signedAt", signedAtObj);
             if (org.springframework.util.StringUtils.hasText(dupCertB64)) auditContext.put("dupCertB64", dupCertB64);
 
-            // Platform audience: forbid triad built-ins via PKI and ensure user snapshot enabled
-            String normalized = mappedUsername.toLowerCase();
-            if (!adminAudience) {
-                if (normalized.equals("sysadmin") || normalized.equals("authadmin") || normalized.equals("auditadmin")) {
-                    Map<String, Object> failAudit = new HashMap<>(auditContext);
-                    failAudit.put("error", "forbidden_role");
-                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("系统管理角色用户不能登录业务平台"));
-                }
-                boolean isProtected = PROTECTED_USERNAMES.contains(normalized);
-                if (!isProtected) {
-                    boolean allowed = adminUserService
-                        .findSnapshotByUsername(mappedUsername)
-                        .map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::isEnabled)
-                        .orElse(false);
-                    if (!allowed) {
-                        Map<String, Object> failAudit = new HashMap<>(auditContext);
-                        failAudit.put("error", "not_approved");
-                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
-                    }
-                }
-            }
-
             // Issue tokens via Keycloak Token Exchange (impersonation)
             KeycloakAuthService.LoginResult loginResult;
             try {
@@ -3374,6 +3364,28 @@ public class KeycloakApiResource {
                 if (LOG.isDebugEnabled()) LOG.debug("DB role enrichment failed for {}: {}", principal, ex.getMessage());
             }
             userOut.put("roles", java.util.List.copyOf(roles));
+
+            boolean hasTriadRole = roles.stream().anyMatch(TRIAD_AUTHORITIES::contains);
+            boolean hasProtectedRole = roles.stream().anyMatch(PROTECTED_AUTHORITIES::contains);
+
+            if (!adminAudience) {
+                if (hasTriadRole) {
+                    Map<String, Object> failAudit = new HashMap<>(auditContext);
+                    failAudit.put("error", "forbidden_role");
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("系统管理角色用户不能登录业务平台"));
+                }
+                if (!hasProtectedRole) {
+                    boolean allowed = adminUserService
+                        .findSnapshotByUsername(mappedUsername)
+                        .map(com.yuzhi.dts.admin.domain.AdminKeycloakUser::isEnabled)
+                        .orElse(false);
+                    if (!allowed) {
+                        Map<String, Object> failAudit = new HashMap<>(auditContext);
+                        failAudit.put("error", "not_approved");
+                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
+                    }
+                }
+            }
 
             // Admin audience: require allowed admin roles
             if (adminAudience) {

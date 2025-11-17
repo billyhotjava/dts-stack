@@ -3866,10 +3866,15 @@ public class AdminUserService {
     }
 
     private boolean isDataRole(String role) {
-        if (role == null || role.isBlank()) return false;
+        if (role == null || role.isBlank()) {
+            return false;
+        }
         String r = role.trim().toUpperCase(java.util.Locale.ROOT);
-        if (r.startsWith("ROLE_")) r = r.substring(5);
-        return r.startsWith("DEPT_DATA_") || r.startsWith("INST_DATA_");
+        if (r.startsWith("ROLE_")) {
+            r = r.substring(5);
+        }
+        r = r.replace('-', '_');
+        return r.startsWith("DEPT_") || r.startsWith("INST_") || "EMPLOYEE".equals(r);
     }
 
     private String normalizeRole(String role) {
@@ -4075,7 +4080,7 @@ public class AdminUserService {
     private String defaultOpsForRole(String roleCode) {
         if (roleCode == null) return "read";
         String r = roleCode.toUpperCase(java.util.Locale.ROOT);
-        if (r.endsWith("_OWNER")) return "read,write,export";
+        if (r.endsWith("_OWNER") || r.endsWith("_LEADER")) return "read,write,export";
         if (r.endsWith("_DEV") || r.endsWith("_DATA_DEV")) return "read,write";
         return "read"; // VIEWER and others default to read
     }

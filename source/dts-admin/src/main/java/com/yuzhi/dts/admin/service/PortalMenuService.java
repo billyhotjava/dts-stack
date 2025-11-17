@@ -1115,7 +1115,10 @@ public class PortalMenuService {
     }
 
     private boolean isOwnerRole(String normalizedRole) {
-        return normalizedRole != null && normalizedRole.endsWith("_OWNER");
+        if (normalizedRole == null) {
+            return false;
+        }
+        return normalizedRole.endsWith("_OWNER") || normalizedRole.endsWith("_LEADER");
     }
 
     private String normalizeRoleCode(String role) {

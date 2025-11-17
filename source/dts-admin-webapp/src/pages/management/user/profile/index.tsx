@@ -18,6 +18,9 @@ const ROLE_LABEL_MAP: Record<string, string> = {
 	DEPT_DATA_DEV: "部门数据开发员",
 	INST_DATA_OWNER: "研究所数据管理员",
 	INST_DATA_DEV: "研究所数据开发员",
+	DEPT_LEADER: "部门领导",
+	INST_LEADER: "研究所领导",
+	EMPLOYEE: "普通员工",
 	// Legacy aliases retained for兼容
 	DEPT_OWNER: "部门数据管理员",
 	DEPT_EDITOR: "部门数据开发员",

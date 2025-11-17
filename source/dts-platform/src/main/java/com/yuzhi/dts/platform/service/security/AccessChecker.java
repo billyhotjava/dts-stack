@@ -123,49 +123,52 @@ public class AccessChecker {
         if (dataset.getId() != null && isExplicitlyGranted(dataset)) {
             return true;
         }
-        if (isSuperAdmin() || hasAuthority(AuthoritiesConstants.INST_DATA_OWNER)) {
+        if (isSuperAdmin() || SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
             return true;
         }
-        String ownerDept = dataset.getOwnerDept();
-        if (!StringUtils.hasText(ownerDept)) {
-            return true;
-        }
-        if (organizationVisibilityService.isRoot(ownerDept)) {
-            return true;
-        }
-        String normalizedOwner = DepartmentUtils.normalize(ownerDept);
-        // Without explicit owner department, keep legacy permissive behaviour
-        if (normalizedOwner.isEmpty()) {
-            return true;
-        }
-        String normalizedContext = DepartmentUtils.normalize(activeDept);
-        if (normalizedContext.isEmpty()) {
-            // Missing context cannot satisfy department restriction
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPARTMENT_PRIVILEGED_ROLES)) {
+            String ownerDept = dataset.getOwnerDept();
+            if (!StringUtils.hasText(ownerDept)) {
+                return true;
+            }
+            if (organizationVisibilityService.isRoot(ownerDept)) {
+                return true;
+            }
+            String normalizedOwner = DepartmentUtils.normalize(ownerDept);
+            // Without explicit owner department, keep legacy permissive behaviour
+            if (normalizedOwner.isEmpty()) {
+                return true;
+            }
+            String normalizedContext = DepartmentUtils.normalize(activeDept);
+            if (normalizedContext.isEmpty()) {
+                // Missing context cannot satisfy department restriction
+                if (log.isDebugEnabled()) {
+                    log.debug(
+                        "Dataset {}({}) blocked by department gate: ownerDept={}, normalizedOwner={}, activeDept={}, normalizedActive=<empty>",
+                        dataset.getName(),
+                        dataset.getId(),
+                        dataset.getOwnerDept(),
+                        normalizedOwner,
+                        activeDept
+                    );
+                }
+                return false;
+            }
+            if (DepartmentUtils.matches(dataset.getOwnerDept(), activeDept)) {
+                return true;
+            }
             if (log.isDebugEnabled()) {
                 log.debug(
-                    "Dataset {}({}) blocked by department gate: ownerDept={}, normalizedOwner={}, activeDept={}, normalizedActive=<empty>",
+                    "Dataset {}({}) blocked by department gate: ownerDept={}, normalizedOwner={}, activeDept={}, normalizedActive={}",
                     dataset.getName(),
                     dataset.getId(),
                     dataset.getOwnerDept(),
                     normalizedOwner,
-                    activeDept
+                    activeDept,
+                    normalizedContext
                 );
             }
             return false;
-        }
-        if (DepartmentUtils.matches(dataset.getOwnerDept(), activeDept)) {
-            return true;
-        }
-        if (log.isDebugEnabled()) {
-            log.debug(
-                "Dataset {}({}) blocked by department gate: ownerDept={}, normalizedOwner={}, activeDept={}, normalizedActive={}",
-                dataset.getName(),
-                dataset.getId(),
-                dataset.getOwnerDept(),
-                normalizedOwner,
-                activeDept,
-                normalizedContext
-            );
         }
         return false;
     }

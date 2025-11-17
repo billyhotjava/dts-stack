@@ -244,8 +244,8 @@ public class InfraResource {
     @PostMapping("/data-sources/inceptor/refresh")
     @PreAuthorize(
         "hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "'," +
-            "'" + AuthoritiesConstants.INST_DATA_OWNER + "','" + AuthoritiesConstants.INST_DATA_DEV + "','" + AuthoritiesConstants.INST_DATA_VIEWER + "'," +
-            "'" + AuthoritiesConstants.DEPT_DATA_OWNER + "','" + AuthoritiesConstants.DEPT_DATA_DEV + "','" + AuthoritiesConstants.DEPT_DATA_VIEWER + "')"
+            "'" + AuthoritiesConstants.INST_DATA_OWNER + "','" + AuthoritiesConstants.INST_LEADER + "','" + AuthoritiesConstants.INST_DATA_DEV + "','" + AuthoritiesConstants.INST_DATA_VIEWER + "'," +
+            "'" + AuthoritiesConstants.DEPT_DATA_OWNER + "','" + AuthoritiesConstants.DEPT_LEADER + "','" + AuthoritiesConstants.DEPT_DATA_DEV + "','" + AuthoritiesConstants.DEPT_DATA_VIEWER + "')"
     )
     public ResponseEntity<ApiResponse<InfraFeatureFlags>> refreshInceptor(HttpServletRequest request) {
         ActorResolution actor = resolveActor(request);

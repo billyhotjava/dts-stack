@@ -716,15 +716,24 @@ public class AuditLogResource {
 
     private VisibilityScope resolveVisibilityScope() {
         Optional<String> login = SecurityUtils.getCurrentUserLogin();
-        if (login.isEmpty()) {
-            return VisibilityScope.unrestricted();
-        }
-        String normalized = login.orElseThrow().trim().toLowerCase(Locale.ROOT);
-        if ("authadmin".equals(normalized)) {
+        String normalized = login.map(value -> value.trim().toLowerCase(Locale.ROOT)).orElse(null);
+        boolean hasAuthRole = SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.AUTH_ADMIN,
+            "AUTHADMIN",
+            "ROLE_AUTHADMIN",
+            "AUTH_ADMIN"
+        );
+        boolean hasAuditRole = SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.AUDITOR_ADMIN,
+            "AUDITADMIN",
+            "ROLE_AUDITADMIN",
+            "AUDITOR_ADMIN"
+        );
+        if (hasAuthRole && !hasAuditRole) {
             return new VisibilityScope(Set.of("auditadmin"), Set.of());
         }
-        if ("auditadmin".equals(normalized)) {
-            return new VisibilityScope(Set.of(), Set.of("auditadmin"));
+        if (hasAuditRole && normalized != null) {
+            return new VisibilityScope(Set.of(), Set.of(normalized));
         }
         return VisibilityScope.unrestricted();
     }

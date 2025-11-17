@@ -1082,18 +1082,13 @@ public class CatalogResource {
         if (dataset == null) {
             return false;
         }
-        if (
-            SecurityUtils.isOpAdminAccount() ||
-            SecurityUtils.hasCurrentUserAnyOfAuthorities(
-                AuthoritiesConstants.DATA_MAINTAINER_ROLES
-            )
-        ) {
+        if (SecurityUtils.isOpAdminAccount()) {
             return true;
         }
-        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INST_DATA_OWNER)) {
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
             return true;
         }
-        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPT_DATA_OWNER)) {
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPARTMENT_PRIVILEGED_ROLES)) {
             String userDept = claim("dept_code");
             if (userDept == null || userDept.isBlank()) {
                 return false;

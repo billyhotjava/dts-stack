@@ -254,6 +254,9 @@
 				"DEPT_DATA_DEV": "Department Data Developer",
 				"INST_DATA_OWNER": "Institute Data Administrator",
 				"INST_DATA_DEV": "Institute Data Developer",
+				"DEPT_LEADER": "Department Leader",
+				"INST_LEADER": "Institute Leader",
+				"EMPLOYEE": "Employee",
 				"DATA_STEWARD": "Data Steward",
 				"DATA_ANALYST": "Data Analyst"
 			},

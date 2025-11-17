@@ -55,7 +55,11 @@ export default function DatasetsPage() {
 	}, [userInfo]);
 	const roleSet = useMemo(() => new Set(roles), [roles]);
 	const hasInstOwnerRole = useMemo(
-		() => roleSet.has("INST_DATA_OWNER") || roleSet.has("ROLE_INST_DATA_OWNER"),
+		() =>
+			roleSet.has("INST_DATA_OWNER") ||
+			roleSet.has("ROLE_INST_DATA_OWNER") ||
+			roleSet.has("INST_LEADER") ||
+			roleSet.has("ROLE_INST_LEADER"),
 		[roleSet],
 	);
 	const hasDataMaintainerRole = useMemo(() => {
@@ -66,10 +70,14 @@ export default function DatasetsPage() {
 			"ADMIN",
 			"ROLE_INST_DATA_OWNER",
 			"INST_DATA_OWNER",
+			"ROLE_INST_LEADER",
+			"INST_LEADER",
 			"ROLE_INST_DATA_DEV",
 			"INST_DATA_DEV",
 			"ROLE_DEPT_DATA_OWNER",
 			"DEPT_DATA_OWNER",
+			"ROLE_DEPT_LEADER",
+			"DEPT_LEADER",
 			"ROLE_DEPT_DATA_DEV",
 			"DEPT_DATA_DEV",
 		];

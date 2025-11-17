@@ -112,7 +112,11 @@ export default function DatasetDetailPage() {
 		return set;
 	}, [userRoles]);
 	const isInstituteDataAdmin = useMemo(
-		() => normalizedRoleSet.has("INST_DATA_OWNER") || normalizedRoleSet.has("ROLE_INST_DATA_OWNER"),
+		() =>
+			normalizedRoleSet.has("INST_DATA_OWNER") ||
+			normalizedRoleSet.has("ROLE_INST_DATA_OWNER") ||
+			normalizedRoleSet.has("INST_LEADER") ||
+			normalizedRoleSet.has("ROLE_INST_LEADER"),
 		[normalizedRoleSet],
 	);
 	const hasDataMaintainerRole = useMemo(() => {
@@ -123,10 +127,14 @@ export default function DatasetDetailPage() {
 			"ADMIN",
 			"ROLE_INST_DATA_OWNER",
 			"INST_DATA_OWNER",
+			"ROLE_INST_LEADER",
+			"INST_LEADER",
 			"ROLE_INST_DATA_DEV",
 			"INST_DATA_DEV",
 			"ROLE_DEPT_DATA_OWNER",
 			"DEPT_DATA_OWNER",
+			"ROLE_DEPT_LEADER",
+			"DEPT_LEADER",
 			"ROLE_DEPT_DATA_DEV",
 			"DEPT_DATA_DEV",
 		];

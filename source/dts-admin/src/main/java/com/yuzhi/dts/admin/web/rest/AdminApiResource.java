@@ -333,6 +333,30 @@ public class AdminApiResource {
                 "INSTITUTE",
                 "在全所共享区开展数据开发；可读取共享区密级不超的数据并写入共享区；无密级或共享策略调整、授权能力。"
             )
+        ),
+        Map.entry(
+            "INST_LEADER",
+            new BuiltinRoleSpec(
+                "研究所领导",
+                "INSTITUTE",
+                "所级领导与审批角色；拥有研究所数据管理员的全部读写与授权能力，并可查看跨部门高阶指标。"
+            )
+        ),
+        Map.entry(
+            "DEPT_LEADER",
+            new BuiltinRoleSpec(
+                "部门领导",
+                "DEPARTMENT",
+                "部门级领导/审批者；具备部门数据管理员全部能力，并可查看授权到本部门的所有模型与报表。"
+            )
+        ),
+        Map.entry(
+            "EMPLOYEE",
+            new BuiltinRoleSpec(
+                "普通员工",
+                "DEPARTMENT",
+                "面向业务人员的只读角色；可访问获授权的 BI 资源，不具备数据治理或模型编辑权限。"
+            )
         )
     );
 
@@ -2094,7 +2118,7 @@ public class AdminApiResource {
             summary.put("memberCount", countRoleMembers(canonical));
             summary.put("menuBindings", safeCountMenuBindings(canonical));
             summary.put("updatedAt", now.toString());
-            summary.put("canManage", canonical.endsWith("_OWNER"));
+            summary.put("canManage", canonical.endsWith("_OWNER") || canonical.endsWith("_LEADER"));
             summaries.put(canonical, summary);
         }
 
@@ -2127,7 +2151,7 @@ public class AdminApiResource {
             summary.put("memberCount", countRoleMembers(canonical));
             summary.put("menuBindings", safeCountMenuBindings(canonical));
             summary.put("updatedAt", role.getLastModifiedDate() != null ? role.getLastModifiedDate().toString() : now.toString());
-            summary.put("canManage", canonical.endsWith("_OWNER"));
+            summary.put("canManage", canonical.endsWith("_OWNER") || canonical.endsWith("_LEADER"));
         }
 
         List<Map<String, Object>> list = new ArrayList<>(summaries.values());

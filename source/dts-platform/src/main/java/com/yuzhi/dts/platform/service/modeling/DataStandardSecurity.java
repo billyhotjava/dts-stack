@@ -21,20 +21,22 @@ import org.springframework.util.StringUtils;
 @Component
 public class DataStandardSecurity {
 
-    private static final String ROLE_INST_VIEWER = "ROLE_INST_DATA_VIEWER";
-    private static final String ROLE_DEPT_VIEWER = "ROLE_DEPT_DATA_VIEWER";
+    private static final String ROLE_INST_VIEWER = AuthoritiesConstants.INST_DATA_VIEWER;
+    private static final String ROLE_DEPT_VIEWER = AuthoritiesConstants.DEPT_DATA_VIEWER;
 
     private static final String[] INSTITUTE_AUTHORITIES = new String[] {
         AuthoritiesConstants.ADMIN,
         AuthoritiesConstants.OP_ADMIN,
         AuthoritiesConstants.INST_DATA_OWNER,
         AuthoritiesConstants.INST_DATA_DEV,
+        AuthoritiesConstants.INST_LEADER,
         ROLE_INST_VIEWER
     };
 
     private static final String[] DEPARTMENT_AUTHORITIES = new String[] {
         AuthoritiesConstants.DEPT_DATA_OWNER,
         AuthoritiesConstants.DEPT_DATA_DEV,
+        AuthoritiesConstants.DEPT_LEADER,
         ROLE_DEPT_VIEWER
     };
 
@@ -153,4 +155,3 @@ public class DataStandardSecurity {
         return trimmed.isEmpty() ? null : trimmed;
     }
 }
-

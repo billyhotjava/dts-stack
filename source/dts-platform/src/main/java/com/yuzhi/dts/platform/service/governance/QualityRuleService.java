@@ -435,19 +435,11 @@ public class QualityRuleService {
     }
 
     private boolean hasInstituteScope() {
-        return SecurityUtils.hasCurrentUserAnyOfAuthorities(
-            AuthoritiesConstants.ADMIN,
-            AuthoritiesConstants.OP_ADMIN,
-            AuthoritiesConstants.INST_DATA_DEV,
-            AuthoritiesConstants.INST_DATA_OWNER
-        );
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
     }
 
     private boolean hasDepartmentScope() {
-        return SecurityUtils.hasCurrentUserAnyOfAuthorities(
-            AuthoritiesConstants.DEPT_DATA_DEV,
-            AuthoritiesConstants.DEPT_DATA_OWNER
-        );
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPARTMENT_PRIVILEGED_ROLES);
     }
 
     private void applyRuleMetadata(GovRule rule, QualityRuleUpsertRequest request, String ownerDept) {
