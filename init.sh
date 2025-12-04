@@ -104,6 +104,24 @@ determine_enabled_services(){
   export ENABLE_MINIO ENABLE_NESSIE
 }
 
+detect_docker_api_version(){
+  if grep -qE "^DOCKER_API_VERSION=" .env 2>/dev/null; then
+    return
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "[init.sh] WARNING: docker not found; unable to detect Docker API version. Set DOCKER_API_VERSION in .env if Traefik reports client version too old." >&2
+    return
+  fi
+  local api_version
+  api_version=$(docker version --format '{{.Server.APIVersion}}' 2>/dev/null | head -n1 || true)
+  if [[ -n "${api_version:-}" ]]; then
+    ensure_env DOCKER_API_VERSION "${api_version}"
+    echo "[init.sh] Detected Docker API version ${api_version} (written to .env for Traefik docker provider)."
+  else
+    echo "[init.sh] WARNING: Could not detect Docker API version. Set DOCKER_API_VERSION manually in .env if you see 'client version ... too old' errors." >&2
+  fi
+}
+
 fix_pg_permissions(){
   if [[ "${PG_MODE:-}" != "embedded" ]]; then
     return
@@ -756,6 +774,7 @@ fi
 # 生成 .env（在生成前判定可选服务开关）
 determine_enabled_services
 generate_env_base
+detect_docker_api_version
 ensure_env PG_MODE "${PG_MODE}"
 ensure_env PG_HOST "${PG_HOST}"
 ensure_env LEGACY_STACK "${LEGACY_STACK}"
