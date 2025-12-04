@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251117-01-org-mdm-fields" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="organization_node"/>
+        </preConditions>
+        <comment>Add MDM fields (dept/org codes) to organization_node for external sync</comment>
+        <addColumn tableName="organization_node">
+            <column name="dept_code" type="varchar(128)"/>
+            <column name="org_code" type="varchar(128)"/>
+            <column name="parent_code" type="varchar(128)"/>
+            <column name="short_name" type="varchar(256)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="sort_order" type="varchar(64)"/>
+            <column name="mdm_type" type="varchar(64)"/>
+        </addColumn>
+        <addUniqueConstraint tableName="organization_node" columnNames="dept_code" constraintName="uk_org_node_dept_code"/>
+    </changeSet>
+</databaseChangeLog>

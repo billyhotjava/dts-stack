@@ -23,6 +23,27 @@ public class OrganizationNode extends AbstractAuditingEntity<Long> implements Se
     @Column(name = "contact")
     private String contact;
 
+    @Column(name = "dept_code", unique = true, length = 128)
+    private String deptCode;
+
+    @Column(name = "org_code", length = 128)
+    private String orgCode;
+
+    @Column(name = "parent_code", length = 128)
+    private String parentCode;
+
+    @Column(name = "short_name", length = 256)
+    private String shortName;
+
+    @Column(name = "status", length = 32)
+    private String status;
+
+    @Column(name = "sort_order", length = 64)
+    private String sortOrder;
+
+    @Column(name = "mdm_type", length = 64)
+    private String mdmType;
+
     @Column(name = "phone")
     private String phone;
 
@@ -73,6 +94,62 @@ public class OrganizationNode extends AbstractAuditingEntity<Long> implements Se
 
     public void setContact(String contact) {
         this.contact = contact;
+    }
+
+    public String getDeptCode() {
+        return deptCode;
+    }
+
+    public void setDeptCode(String deptCode) {
+        this.deptCode = deptCode;
+    }
+
+    public String getOrgCode() {
+        return orgCode;
+    }
+
+    public void setOrgCode(String orgCode) {
+        this.orgCode = orgCode;
+    }
+
+    public String getParentCode() {
+        return parentCode;
+    }
+
+    public void setParentCode(String parentCode) {
+        this.parentCode = parentCode;
+    }
+
+    public String getShortName() {
+        return shortName;
+    }
+
+    public void setShortName(String shortName) {
+        this.shortName = shortName;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getSortOrder() {
+        return sortOrder;
+    }
+
+    public void setSortOrder(String sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
+    public String getMdmType() {
+        return mdmType;
+    }
+
+    public void setMdmType(String mdmType) {
+        this.mdmType = mdmType;
     }
 
     public String getPhone() {

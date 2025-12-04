@@ -12,13 +12,23 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
 
 @Service
 public class PkiVerificationService {
@@ -28,12 +38,32 @@ public class PkiVerificationService {
     public record VerifyResult(boolean ok, String message, Map<String, Object> identity) {}
 
     private final PkiAuthProperties props;
+    private final RestTemplate restTemplate;
 
-    public PkiVerificationService(PkiAuthProperties props) {
+    public PkiVerificationService(PkiAuthProperties props, RestTemplateBuilder restTemplateBuilder) {
         this.props = props;
+        this.restTemplate =
+            restTemplateBuilder
+                .setConnectTimeout(Duration.ofMillis(Math.max(1000, props.getApiTimeoutMs())))
+                .setReadTimeout(Duration.ofMillis(Math.max(1000, props.getApiTimeoutMs())))
+                .build();
+    }
+
+    public VerifyResult verifyPkcs7(String originDataBase64, String p7SignatureBase64, String certBase64Optional, String signType) {
+        return verifyPkcs7(originDataBase64, p7SignatureBase64, certBase64Optional, signType, false);
     }
 
     public VerifyResult verifyPkcs7(String originDataBase64, String p7SignatureBase64, String certBase64Optional) {
+        return verifyPkcs7(originDataBase64, p7SignatureBase64, certBase64Optional, null, true);
+    }
+
+    private VerifyResult verifyPkcs7(
+        String originDataBase64,
+        String p7SignatureBase64,
+        String certBase64Optional,
+        String signType,
+        boolean allowLegacyReturn
+    ) {
         if (originDataBase64 == null || p7SignatureBase64 == null) {
             return new VerifyResult(false, "缺少签名参数", null);
         }
@@ -63,8 +93,11 @@ public class PkiVerificationService {
                 return new VerifyResult(false, "厂商网关验签失败: " + ex.getMessage(), null);
             }
         } else {
-            // Without vendor JAR we cannot reliably verify P7 here
-            return new VerifyResult(false, "未配置厂商JAR，无法完成服务端验签", null);
+            // HTTP 网关模式（普密/无厂商 JAR）
+            VerifyResult http = verifyViaHttpGateway(originText, normalizedSignature, certBase64Optional, signType);
+            if (!http.ok()) {
+                return allowLegacyReturn ? http : new VerifyResult(false, http.message(), null);
+            }
         }
 
         Map<String, Object> id = new HashMap<>();
@@ -212,6 +245,74 @@ public class PkiVerificationService {
                 Throwable cause = ite.getTargetException() != null ? ite.getTargetException() : ite;
                 throw new Exception(cause);
             }
+    }
+
+    private VerifyResult verifyViaHttpGateway(String originText, String signatureB64, String certBase64Optional, String signType) {
+        if (props == null) {
+            return new VerifyResult(false, "未配置 PKI 参数", null);
+        }
+        String baseUrl = props.getApiBaseUrl();
+        String host = props.getGatewayHost();
+        int port = resolveGatewayPort(signType);
+        if ((baseUrl == null || baseUrl.isBlank()) && (host == null || host.isBlank() || port <= 0)) {
+            return new VerifyResult(false, "未配置厂商JAR或网关 HTTP 地址", null);
+        }
+        String endpoint = props.getGatewayEndpoint();
+        if (endpoint == null || endpoint.isBlank()) {
+            endpoint = "/wglogin";
+        }
+        if (!endpoint.startsWith("/")) {
+            endpoint = "/" + endpoint;
+        }
+        String url;
+        if (baseUrl != null && !baseUrl.isBlank()) {
+            url = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) + endpoint : baseUrl + endpoint;
+        } else {
+            url = "http://" + host + ":" + port + endpoint;
+        }
+
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("signData", signatureB64);
+        form.add("originData", originText);
+        if (certBase64Optional != null) {
+            form.add("certContent", certBase64Optional);
+        }
+        if (host != null && !host.isBlank()) {
+            form.add("gwIP", host);
+        }
+        if (port > 0) {
+            form.add("gwPort", String.valueOf(port));
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setAccept(java.util.List.of(MediaType.TEXT_PLAIN, MediaType.ALL));
+
+        try {
+            ResponseEntity<String> resp = restTemplate.postForEntity(url, new HttpEntity<>(form, headers), String.class);
+            String body = resp.getBody() == null ? "" : resp.getBody();
+            boolean success = resp.getStatusCode().is2xxSuccessful() && (body.contains("成功") || body.toLowerCase().contains("success"));
+            if (success) {
+                return new VerifyResult(true, "verified", null);
+            }
+            String msg = resp.getStatusCode().is2xxSuccessful() ? body : ("HTTP " + resp.getStatusCodeValue());
+            return new VerifyResult(false, "网关验签失败: " + msg, null);
+        } catch (Exception ex) {
+            return new VerifyResult(false, "网关验签异常: " + ex.getMessage(), null);
+        }
+    }
+
+    private int resolveGatewayPort(String signType) {
+        int primary = props.getGatewayPort();
+        int alt = props.getGatewayAltPort();
+        if (signType == null || signType.isBlank()) {
+            return primary > 0 ? primary : alt;
+        }
+        String upper = signType.trim().toUpperCase(java.util.Locale.ROOT);
+        if (upper.contains("SM2") || upper.contains("RSA")) {
+            return primary > 0 ? primary : 5000;
+        }
+        return alt > 0 ? alt : (primary > 0 ? primary : 10009);
     }
 
     private static String normalizeBase64(String value) {

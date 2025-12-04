@@ -14,6 +14,10 @@ public interface OrganizationRepository extends JpaRepository<OrganizationNode, 
 
     Optional<OrganizationNode> findFirstByNameAndParentIsNull(String name);
 
+    Optional<OrganizationNode> findFirstByDeptCodeIgnoreCase(String deptCode);
+
+    Optional<OrganizationNode> findFirstByOrgCodeIgnoreCase(String orgCode);
+
     Optional<OrganizationNode> findFirstByParentIdAndName(Long parentId, String name);
 
     List<OrganizationNode> findByRootTrue();

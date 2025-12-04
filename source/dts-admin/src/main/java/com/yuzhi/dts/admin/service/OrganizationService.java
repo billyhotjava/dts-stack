@@ -73,6 +73,76 @@ public class OrganizationService {
         return roots;
     }
 
+    /**
+     * 基于院方 MDM 数据同步组织树（deptCode 作为唯一键，parentCode 建立层级）。
+     */
+    public int syncFromMdm(List<MdmOrgRecord> records) {
+        if (records == null || records.isEmpty()) {
+            return 0;
+        }
+        Map<String, MdmOrgRecord> byCode = new LinkedHashMap<>();
+        for (MdmOrgRecord r : records) {
+            if (StringUtils.isNotBlank(r.deptCode())) {
+                byCode.putIfAbsent(r.deptCode().toUpperCase(Locale.ROOT), r);
+            }
+        }
+        Map<String, OrganizationNode> cache = new LinkedHashMap<>();
+        repository.findAll().forEach(node -> {
+            if (StringUtils.isNotBlank(node.getDeptCode())) {
+                cache.put(node.getDeptCode().toUpperCase(Locale.ROOT), node);
+            }
+        });
+
+        int changed = 0;
+        boolean progress = true;
+        int guard = byCode.size() + 5;
+        while (progress && guard-- > 0) {
+            progress = false;
+            for (MdmOrgRecord r : byCode.values()) {
+                String code = r.deptCode().toUpperCase(Locale.ROOT);
+                if (cache.containsKey(code)) {
+                    continue;
+                }
+                OrganizationNode parent = null;
+                if (StringUtils.isNotBlank(r.parentCode())) {
+                    parent = cache.get(r.parentCode().toUpperCase(Locale.ROOT));
+                    if (parent == null) {
+                        continue; // wait until parent created
+                    }
+                }
+                OrganizationNode node = repository.findFirstByDeptCodeIgnoreCase(r.deptCode()).orElseGet(OrganizationNode::new);
+                node.setDeptCode(r.deptCode());
+                node.setOrgCode(r.orgCode());
+                node.setParentCode(r.parentCode());
+                node.setName(StringUtils.defaultIfBlank(r.deptName(), r.shortName()));
+                node.setShortName(r.shortName());
+                node.setStatus(r.status());
+                node.setSortOrder(r.sort());
+                node.setMdmType(r.type());
+                node.setDataLevel(determineDataLevel(parent, node.getDataLevel()));
+                node.setRoot(!StringUtils.isNotBlank(r.parentCode()));
+                if (parent != null) {
+                    node.setParent(parent);
+                } else {
+                    node.setParent(null);
+                }
+                OrganizationNode saved = repository.save(node);
+                cache.put(code, saved);
+                changed++;
+                progress = true;
+                if (isKeycloakSyncEnabled()) {
+                    String token = resolveManagementToken();
+                    if (parent != null) {
+                        ensureGroupSynced(parent, token);
+                    }
+                    ensureGroupSynced(saved, token, saved.getParent());
+                    synchronizeGroup(saved, token);
+                }
+            }
+        }
+        return changed;
+    }
+
     private void touch(OrganizationNode node) {
         if (node.getChildren() != null) {
             node.getChildren().forEach(this::touch);
@@ -408,7 +478,6 @@ public class OrganizationService {
 
     private void deleteKeycloakGroupRecursive(OrganizationNode node, String token) {
         if (node.getChildren() != null) {
-            // copy to avoid ConcurrentModification when JPA orphan removal kicks in
             List<OrganizationNode> childrenSnapshot = new ArrayList<>(node.getChildren());
             for (OrganizationNode child : childrenSnapshot) {
                 deleteKeycloakGroupRecursive(child, token);
@@ -575,4 +644,15 @@ public class OrganizationService {
             LOG.debug("Suppressed Keycloak provisioning failure details", ex);
         }
     }
+
+    public record MdmOrgRecord(
+        String deptCode,
+        String orgCode,
+        String parentCode,
+        String deptName,
+        String shortName,
+        String status,
+        String sort,
+        String type
+    ) {}
 }

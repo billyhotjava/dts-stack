@@ -155,7 +155,8 @@ services:
 
   dts-admin:
     image: ${IMAGE_DTS_ADMIN:?Set IMAGE_DTS_ADMIN in imgversion.conf or .env}
-    ports: []
+    ports:
+      - "38012:8081"  # 为院端 IP 回调暴露 HTTP 端口（MDM）
     depends_on:
       dts-pg:
         condition: service_healthy

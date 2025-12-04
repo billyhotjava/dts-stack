@@ -71,6 +71,10 @@ public class PersonnelImportService {
         return processBatch(PersonSourceType.MANUAL, reference, dryRun, payloads, Map.of());
     }
 
+    public PersonnelImportResult importFromMdm(String reference, List<PersonnelPayload> payloads, Map<String, Object> metadata) {
+        return processBatch(PersonSourceType.MDM, reference, false, payloads, metadata == null ? Map.of() : metadata);
+    }
+
     private PersonnelImportResult processBatch(
         PersonSourceType sourceType,
         String reference,

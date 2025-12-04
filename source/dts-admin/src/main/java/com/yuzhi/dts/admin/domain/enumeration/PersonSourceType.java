@@ -6,7 +6,8 @@ package com.yuzhi.dts.admin.domain.enumeration;
 public enum PersonSourceType {
     API,
     EXCEL,
-    MANUAL;
+    MANUAL,
+    MDM;
 
     public String getCode() {
         return name();

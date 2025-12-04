@@ -10,6 +10,7 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
     <springProperty name="personnelLogPath" source="dts.personnel.logging.operations-log" defaultValue="logs/personnel-operations.log"/>
+    <springProperty name="mdmLogPath" source="dts.mdm.gateway.log-path" defaultValue="logs/mdm-gateway.log"/>
 
     <appender name="PERSONNEL_OPS" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${personnelLogPath}</file>
@@ -18,6 +19,19 @@
         </encoder>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <fileNamePattern>${personnelLogPath}.%d{yyyy-MM-dd}.%i</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>10GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="MDM_GATEWAY" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${mdmLogPath}</file>
+        <encoder>
+            <pattern>${PERSONNEL_LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${mdmLogPath}.%d{yyyy-MM-dd}.%i</fileNamePattern>
             <maxFileSize>100MB</maxFileSize>
             <maxHistory>30</maxHistory>
             <totalSizeCap>10GB</totalSizeCap>
@@ -84,6 +98,10 @@
     <!-- jhipster-needle-logback-add-log - JHipster will add a new log with level -->
     <logger name="dts.personnel.operations" level="INFO" additivity="false">
         <appender-ref ref="PERSONNEL_OPS"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+    <logger name="dts.mdm.gateway" level="INFO" additivity="false">
+        <appender-ref ref="MDM_GATEWAY"/>
         <appender-ref ref="CONSOLE"/>
     </logger>
 

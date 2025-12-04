@@ -1,0 +1,46 @@
+dts:
+  mdm:
+    gateway:
+      enabled: true
+      # 文件落盘目录
+      storage-path: data/mdm
+      # 基本字段（院方示例）
+      registry:
+        system-code: 10XT
+        data-range: 9010
+        area-security: 9001
+        area-business: B
+        data-type: sync_demand
+      upstream:
+        # 院方握手/拉取地址 = base-url + pull-path
+        base-url: http://mdm-upstream.example.com
+        pull-path: /api/mdm/pull
+        auth-token:
+        use-multipart: true
+        file-part-name: file
+        file-prefix: orgItDemand
+        file-suffix: .txt
+        # multipart 附带的表单参数（院方示例）
+        form-params:
+          targetNodeCode: "9000"
+          targetDomainCode: "B"
+          targetServiceId: "orgit"
+          sourceServiceId: "WXXXXXDDD"
+          approval: "1"
+          title: "9000"
+          dataType: "9000"
+          securityLevel: "9000"
+          filedType: "9000"
+          version: "9000"
+        # JSON 内容（随文件发送），可按需补充或覆盖
+        payload-template:
+          pushMode: FULL
+          # 其他字段按需添加
+      callback:
+        url: http://10.10.10.135:38012/api/mdm/receive
+        auth-token:
+        signature-header: X-Signature
+      required-fields: orgCode,deptCode,status
+      required:
+        users: userCode,userName,deptCode
+        depts: deptCode,deptName

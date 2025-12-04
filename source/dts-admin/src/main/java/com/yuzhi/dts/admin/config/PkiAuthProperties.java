@@ -16,6 +16,8 @@ public class PkiAuthProperties {
     private boolean allowMock = false;
     private String gatewayHost;
     private int gatewayPort = 0;
+    private int gatewayAltPort = 10009; // 非商密/其他算法端口
+    private String gatewayEndpoint = "/wglogin";
     private String digest = "SHA1"; // SHA1|MD5|NONE (depends on vendor profile)
     private String vendorJarPath; // Path to svs-uk_custom.jar (optional)
 
@@ -105,6 +107,22 @@ public class PkiAuthProperties {
 
     public void setGatewayPort(int gatewayPort) {
         this.gatewayPort = gatewayPort;
+    }
+
+    public int getGatewayAltPort() {
+        return gatewayAltPort;
+    }
+
+    public void setGatewayAltPort(int gatewayAltPort) {
+        this.gatewayAltPort = gatewayAltPort;
+    }
+
+    public String getGatewayEndpoint() {
+        return gatewayEndpoint;
+    }
+
+    public void setGatewayEndpoint(String gatewayEndpoint) {
+        this.gatewayEndpoint = gatewayEndpoint;
     }
 
     public String getDigest() {

@@ -3238,7 +3238,7 @@ public class KeycloakApiResource {
 
             // Verify signature via gateway/vendor
             com.yuzhi.dts.admin.service.pki.PkiVerificationService verifier = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiVerificationService.class);
-            var vr = verifier.verifyPkcs7(originDataB64, signatureB64, certB64);
+            var vr = verifier.verifyPkcs7(originDataB64, signatureB64, certB64, signType);
             if (!vr.ok()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(vr.message()));
             }
