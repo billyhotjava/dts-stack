@@ -19,3 +19,6 @@ builds/offline/
 # Local Maven cache used by dts-admin dev container
 source/dts-admin/.m2/
 .env.bak
+./vscode
+./codex
+./specify
