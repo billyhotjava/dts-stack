@@ -1,0 +1,30 @@
+{
+  "users": [
+    {
+      "userCode": "A1001",
+      "userName": "张三",
+      "deptCode": "D001",
+      "status": "1",
+      "securityLevel": "INTERNAL"
+    },
+    {
+      "userCode": "A1002",
+      "userName": "李四",
+      "deptCode": "D002",
+      "status": "1",
+      "securityLevel": "INTERNAL"
+    }
+  ],
+  "depts": [
+    {
+      "deptCode": "D001",
+      "deptName": "研发部",
+      "parentCode": "ROOT"
+    },
+    {
+      "deptCode": "D002",
+      "deptName": "运维部",
+      "parentCode": "ROOT"
+    }
+  ]
+}
