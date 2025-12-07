@@ -13,7 +13,7 @@ dts:
         data-type: sync_demand
       upstream:
         # 院方握手/拉取地址 = base-url + pull-path
-        base-url: http://mdm-upstream.example.com
+        base-url: http://mdm-upstream-mock:28080
         pull-path: /api/mdm/pull
         auth-token:
         use-multipart: true
@@ -37,7 +37,8 @@ dts:
           pushMode: FULL
           # 其他字段按需添加
       callback:
-        url: http://10.10.10.135:38012/api/mdm/receive
+        #url: http://localhost:38012/api/mdm/receive
+        url: http://dts-admin:8081/api/mdm/receive
         auth-token:
         signature-header: X-Signature
       required-fields: orgCode,deptCode,status

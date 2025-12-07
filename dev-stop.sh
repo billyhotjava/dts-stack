@@ -27,7 +27,6 @@ fi
 
 # Load envs if present to avoid compose warnings on missing variables
 if [[ -f ./.env ]]; then set -a; source ./.env; set +a; fi
-if [[ -f ./.env.dts-source ]]; then set -a; source ./.env.dts-source; set +a; fi
 
 # Fill missing optional PG triplets to avoid compose interpolation warnings on stop
 set -a

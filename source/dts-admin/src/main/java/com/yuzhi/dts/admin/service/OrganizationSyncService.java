@@ -1,7 +1,12 @@
 package com.yuzhi.dts.admin.service;
 
+import com.yuzhi.dts.admin.config.MdmGatewayProperties;
+import com.yuzhi.dts.admin.service.mdm.MdmGatewayService;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -21,6 +26,8 @@ public class OrganizationSyncService {
     private static final int MAX_ATTEMPTS = 12;
 
     private final OrganizationService organizationService;
+    private final MdmGatewayService mdmGatewayService;
+    private final MdmGatewayProperties mdmGatewayProperties;
     private final JdbcTemplate jdbcTemplate;
     private final ScheduledExecutorService retryExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "organization-sync-init");
@@ -29,8 +36,15 @@ public class OrganizationSyncService {
     });
     private volatile boolean bootstrapComplete = false;
 
-    public OrganizationSyncService(OrganizationService organizationService, JdbcTemplate jdbcTemplate) {
+    public OrganizationSyncService(
+        OrganizationService organizationService,
+        MdmGatewayService mdmGatewayService,
+        MdmGatewayProperties mdmGatewayProperties,
+        JdbcTemplate jdbcTemplate
+    ) {
         this.organizationService = organizationService;
+        this.mdmGatewayService = mdmGatewayService;
+        this.mdmGatewayProperties = mdmGatewayProperties;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -43,9 +57,11 @@ public class OrganizationSyncService {
         organizationService.ensureUnassignedRoot();
     }
 
-    public void syncAll() {
+    public Optional<MdmGatewayService.PullResult> syncAll() {
         organizationService.ensureUnassignedRoot();
+        Optional<MdmGatewayService.PullResult> pullResult = triggerUpstreamPull();
         organizationService.pushTreeToKeycloak();
+        return pullResult;
     }
 
     private void scheduleEnsure(int attempt, String reason) {
@@ -103,5 +119,21 @@ public class OrganizationSyncService {
     @PreDestroy
     public void shutdown() {
         retryExecutor.shutdownNow();
+    }
+
+    private Optional<MdmGatewayService.PullResult> triggerUpstreamPull() {
+        if (mdmGatewayProperties == null || !mdmGatewayProperties.isEnabled()) {
+            return Optional.empty();
+        }
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("dataRange", mdmGatewayProperties.getRegistry().getDataRange());
+            payload.put("dataType", mdmGatewayProperties.getRegistry().getDataType());
+            payload.put("sendTime", System.currentTimeMillis() / 1000);
+            return Optional.of(mdmGatewayService.triggerUpstreamPull(payload));
+        } catch (RuntimeException ex) {
+            LOG.warn("mdm upstream pull failed: {}", ex.getMessage());
+            return Optional.empty();
+        }
     }
 }

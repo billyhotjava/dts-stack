@@ -67,6 +67,7 @@ import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
+import com.yuzhi.dts.admin.service.mdm.MdmGatewayService;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.common.audit.ChangeSnapshot;
@@ -1485,9 +1486,14 @@ public class AdminApiResource {
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("sync", "keycloak");
         try {
-            organizationSyncService.syncAll();
+            Optional<MdmGatewayService.PullResult> upstream = organizationSyncService.syncAll();
             Map<String, Object> success = new LinkedHashMap<>(auditDetail);
             success.put("status", "SUCCESS");
+            upstream.ifPresent(pull -> {
+                success.put("upstreamStatus", pull.upstreamStatus);
+                success.put("upstreamBody", pull.upstreamBody);
+                success.put("upstreamRequestId", pull.requestId);
+            });
             recordOrgActionV2(
                 actor,
                 ButtonCodes.ORG_SYNC,

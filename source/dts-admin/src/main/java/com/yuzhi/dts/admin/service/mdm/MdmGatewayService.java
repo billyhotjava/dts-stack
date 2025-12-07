@@ -194,18 +194,22 @@ public class MdmGatewayService {
             return result;
         }
 
-        LocalDateTime now = LocalDateTime.now();
-        String batchId = TS_FILE.format(now);
-        Path dir = Path.of(properties.getStoragePath(), TS_DIR.format(now));
-        Files.createDirectories(dir);
-        Path saveTo = dir.resolve(batchId + ".json");
-
         byte[] bytes;
         if (file != null && !file.isEmpty()) {
             bytes = file.getBytes();
         } else {
             bytes = rawBody == null ? new byte[0] : rawBody.getBytes(StandardCharsets.UTF_8);
         }
+        String body = new String(bytes, StandardCharsets.UTF_8);
+        Object parsedObj = parseObject(body);
+
+        LocalDateTime now = LocalDateTime.now();
+        String batchId = TS_FILE.format(now);
+        String fileBase = StringUtils.firstNonBlank(deriveFileBase(parsedObj), batchId);
+        Path dir = Path.of(properties.getStoragePath(), TS_DIR.format(now));
+        Files.createDirectories(dir);
+        Path saveTo = dir.resolve(fileBase + ".json");
+
         Files.write(saveTo, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
         String md5 = DigestUtils.md5DigestAsHex(bytes);
         Map<String, Object> meta = new HashMap<>();
@@ -223,9 +227,7 @@ public class MdmGatewayService {
         result.size = bytes.length;
         result.md5 = md5;
         result.clientIp = clientIp;
-        String body = new String(bytes, StandardCharsets.UTF_8);
 
-        Object parsedObj = parseObject(body);
         List<Map<String, Object>> rawUsers = extractUsers(parsedObj);
         List<Map<String, Object>> rawDepts = extractDepts(parsedObj);
         result.userRecords = rawUsers.size();
@@ -380,7 +382,8 @@ public class MdmGatewayService {
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> extractUsers(Object parsed) {
         if (parsed instanceof Map<?, ?> map) {
-            return extractList(map.get("users"));
+            Object val = firstNonNull(map.get("users"), map.get("user"));
+            return extractList(val);
         }
         if (parsed instanceof List<?>) {
             return castList((List<?>) parsed);
@@ -391,7 +394,8 @@ public class MdmGatewayService {
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> extractDepts(Object parsed) {
         if (parsed instanceof Map<?, ?> map) {
-            return extractList(map.get("depts"));
+            Object val = firstNonNull(map.get("depts"), map.get("orgId"), map.get("orgIds"), map.get("orgs"));
+            return extractList(val);
         }
         return List.of();
     }
@@ -444,6 +448,51 @@ public class MdmGatewayService {
             }
         }
         return missing;
+    }
+
+    private Object firstNonNull(Object... candidates) {
+        if (candidates == null) {
+            return null;
+        }
+        for (Object c : candidates) {
+            if (c != null) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String deriveFileBase(Object parsed) {
+        if (!(parsed instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Object desp = map.get("desp");
+        if (desp instanceof Map<?, ?> m) {
+            String sendTime = string(m.get("sendTime"));
+            if (StringUtils.isNotBlank(sendTime)) {
+                return sanitizeFilename(sendTime);
+            }
+        }
+        Object users = firstNonNull(map.get("user"), map.get("users"));
+        if (users instanceof List<?> list && !list.isEmpty()) {
+            Object first = list.get(0);
+            if (first instanceof Map<?, ?> u) {
+                String ts = string(u.get("updateTime"));
+                if (StringUtils.isNotBlank(ts)) {
+                    return sanitizeFilename(ts);
+                }
+            }
+        }
+        return null;
+    }
+
+    private String sanitizeFilename(String name) {
+        if (name == null) {
+            return null;
+        }
+        String cleaned = name.replaceAll("[^0-9A-Za-z_-]", "");
+        return StringUtils.isNotBlank(cleaned) ? cleaned : null;
     }
 
     public static class PullResult {

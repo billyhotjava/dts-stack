@@ -3,7 +3,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-ENV_DEV=".env.dts-source"
 ENV_BASE=".env"
 
 MODE="images"  # images | local
@@ -106,11 +105,6 @@ if [[ "$MODE" == "images" && -z "${WITH_WEBAPP+x}" ]]; then
   WITH_WEBAPP_DEFAULT=0
 fi
 
-if [[ ! -f "$ENV_DEV" ]]; then
-  echo "[dev-up] ${ENV_DEV} not found. Generating via init.dts-source.sh ..."
-  ./init.dts-source.sh
-fi
-
 if [[ ! -f "$ENV_BASE" ]]; then
   echo "[dev-up] ERROR: ${ENV_BASE} not found. Please run './init.sh' first to generate the core stack env." >&2
   exit 1
@@ -125,10 +119,9 @@ else
   exit 1
 fi
 
-# Load both env files into current shell so compose gets complete variables
+# Load env file into current shell so compose gets complete variables
 set -a
 source "$ENV_BASE"
-source "$ENV_DEV"
 set +a
 
 # Load optional image versions into current env (does not modify files)

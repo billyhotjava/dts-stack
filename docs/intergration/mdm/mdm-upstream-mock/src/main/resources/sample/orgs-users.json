@@ -1,30 +1,33 @@
 {
-  "users": [
+  "desp": {
+    "dataRange": "9010",
+    "sendTime": 1765057111
+  },
+  "user": [
     {
-      "userCode": "A1001",
-      "userName": "张三",
-      "deptCode": "D001",
+      "createTime": "1765057111",
+      "deptCode": "9010",
+      "diepId": "32",
+      "identityCard": "510xxxx",
+      "orgCode": "9010",
+      "securityLevel": "3",
       "status": "1",
-      "securityLevel": "INTERNAL"
-    },
-    {
-      "userCode": "A1002",
-      "userName": "李四",
-      "deptCode": "D002",
-      "status": "1",
-      "securityLevel": "INTERNAL"
+      "updateTime": "202512081765085911",
+      "userCode": "ldgbgusd-10",
+      "userName": "测试员工1"
     }
   ],
-  "depts": [
+  "orgId": [
     {
-      "deptCode": "D001",
-      "deptName": "研发部",
-      "parentCode": "ROOT"
-    },
-    {
-      "deptCode": "D002",
-      "deptName": "运维部",
-      "parentCode": "ROOT"
+      "deptCode": "9010",
+      "deptName": "demo app",
+      "diepId": "9a3Eaxxx",
+      "orgCode": "9010",
+      "parentCode": "90",
+      "shortName": "十所",
+      "sort": "11",
+      "status": "1",
+      "type": "0"
     }
   ]
 }

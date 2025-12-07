@@ -104,6 +104,12 @@ determine_enabled_services(){
   export ENABLE_MINIO ENABLE_NESSIE
 }
 
+# Default log root (can be overridden before running init)
+set_default_log_root(){
+  local default_root="${SCRIPT_DIR}/logs"
+  ensure_env LOG_ROOT "${LOG_ROOT:-${default_root}}"
+}
+
 detect_docker_api_version(){
   if grep -qE "^DOCKER_API_VERSION=" .env 2>/dev/null; then
     return
@@ -773,6 +779,7 @@ fi
 
 # 生成 .env（在生成前判定可选服务开关）
 determine_enabled_services
+set_default_log_root
 generate_env_base
 detect_docker_api_version
 ensure_env PG_MODE "${PG_MODE}"

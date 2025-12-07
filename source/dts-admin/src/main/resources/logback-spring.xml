@@ -7,10 +7,32 @@
     <property name="CONSOLE_LOG_PATTERN" value="${CONSOLE_LOG_PATTERN:-%clr(%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd'T'HH:mm:ss.SSSXXX}}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %crlf(%m){red} %n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}}"/>
     <property name="PERSONNEL_LOG_PATTERN" value="%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd'T'HH:mm:ss.SSSXXX}} ${LOG_LEVEL_PATTERN:-%5p} ${PID:- } --- [%t] %-40.40logger{39} : %crlf(%m) %n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
 
+    <springProperty name="log.root" source="LOG_ROOT" defaultValue="../logs"/>
+    <property name="MODULE_LOG_DIR" value="${log.root}/dts-admin"/>
+
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
-    <springProperty name="personnelLogPath" source="dts.personnel.logging.operations-log" defaultValue="logs/personnel-operations.log"/>
-    <springProperty name="mdmLogPath" source="dts.mdm.gateway.log-path" defaultValue="logs/mdm-gateway.log"/>
+    <springProperty name="personnelLogPath" source="dts.personnel.logging.operations-log" defaultValue="${MODULE_LOG_DIR}/personnel-operations.log"/>
+    <springProperty name="mdmLogPath" source="dts.mdm.gateway.log-path" defaultValue="${MODULE_LOG_DIR}/mdm-gateway.log"/>
+
+    <appender name="APP_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${MODULE_LOG_DIR}/app.log</file>
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${MODULE_LOG_DIR}/app.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>10GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="ASYNC_APP" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <appender-ref ref="APP_FILE"/>
+    </appender>
 
     <appender name="PERSONNEL_OPS" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${personnelLogPath}</file>
@@ -108,6 +130,7 @@
     <springProperty name="log.level" source="logging.level.root" defaultValue="INFO" />
     <root level="${log.level}">
         <appender-ref ref="CONSOLE" />
+        <appender-ref ref="ASYNC_APP" />
     </root>
 
     <!-- Prevent logback from outputting its own status -->

@@ -79,6 +79,7 @@ export default function OrgManagementView() {
 	});
 	const [search, setSearch] = useState("");
 	const [selectedId, setSelectedId] = useState<number | null>(null);
+	const [syncDialogOpen, setSyncDialogOpen] = useState(false);
 	const [formState, setFormState] = useState<FormState>({
 		open: false,
 		mode: "create",
@@ -215,6 +216,18 @@ export default function OrgManagementView() {
 			toast.error(error instanceof Error ? error.message : "删除部门失败");
 		},
 	});
+	const syncMutation = useMutation({
+		mutationFn: () => adminApi.syncOrganizations(),
+		onSuccess: (tree) => {
+			queryClient.setQueryData(["admin", "organizations"], tree);
+			setSelectedId(null);
+			toast.success("已从院端同步组织机构，列表已更新");
+		},
+		onError: (error: unknown) => {
+			console.error(error);
+			toast.error(error instanceof Error ? error.message : "同步组织数据失败");
+		},
+	});
 
 	const refreshOrganizations = async () => {
 		await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
@@ -243,6 +256,12 @@ export default function OrgManagementView() {
 	const openDelete = () => {
 		if (!selected) return;
 		setDeleteState({ open: true, target: selected });
+	};
+	const openSyncDialog = () => setSyncDialogOpen(true);
+	const closeSyncDialog = () => {
+		if (!syncMutation.isPending) {
+			setSyncDialogOpen(false);
+		}
 	};
 
 	const closeForm = () => setFormState({ open: false, mode: "create", parentId: null, target: null });
@@ -306,6 +325,15 @@ export default function OrgManagementView() {
 			});
 			await refreshOrganizations();
 			toast.success("部门已删除并同步 服务端");
+		} catch (error) {
+			console.error(error);
+		}
+	};
+
+	const handleConfirmSync = async () => {
+		try {
+			await syncMutation.mutateAsync();
+			closeSyncDialog();
 		} catch (error) {
 			console.error(error);
 		}
@@ -378,10 +406,23 @@ export default function OrgManagementView() {
 
 			<div className="grid gap-6 xl:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
 				<Card>
-					<CardHeader className="space-y-3">
-						<div className="flex items-center justify-between gap-3">
-							<CardTitle>组织结构</CardTitle>
-							<div className="flex items-center gap-2">
+					<CardHeader className="space-y-4 border-b border-border/70 pb-4">
+						<div className="flex flex-wrap items-center justify-between gap-3">
+							<div className="flex items-center gap-3">
+								<CardTitle className="whitespace-nowrap">组织结构</CardTitle>
+								<Badge variant="secondary" className="rounded-full px-3 py-1 text-xs font-medium">
+									共 {totalOrg} 个
+								</Badge>
+							</div>
+							<div className="flex flex-wrap items-center gap-2">
+								<Button
+									size="sm"
+									variant="secondary"
+									onClick={openSyncDialog}
+									disabled={syncMutation.isPending}
+								>
+									{syncMutation.isPending ? "同步中…" : "同步院端数据"}
+								</Button>
 								<Button
 									size="sm"
 									onClick={openCreateRoot}
@@ -392,8 +433,15 @@ export default function OrgManagementView() {
 								</Button>
 							</div>
 						</div>
-						<Input placeholder="搜索部门" value={search} onChange={(event) => setSearch(event.target.value)} />
-						<div className="text-sm text-muted-foreground">组织数：{totalOrg}</div>
+						<div className="flex flex-wrap items-center gap-3">
+							<Input
+								className="flex-1 min-w-[220px]"
+								placeholder="搜索部门"
+								value={search}
+								onChange={(event) => setSearch(event.target.value)}
+							/>
+							<p className="text-xs text-muted-foreground">按名称、描述或组路径快速定位</p>
+						</div>
 					</CardHeader>
 					<CardContent className="h-[560px] p-0">
 						{isLoading ? (
@@ -416,7 +464,7 @@ export default function OrgManagementView() {
 
 				<div className="space-y-6">
 					<Card>
-						<CardHeader className="flex flex-wrap items-center justify-between gap-3">
+						<CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 pb-4">
 							<CardTitle>组织详情</CardTitle>
 							<div className="flex flex-wrap gap-2">
 								<Button variant="outline" size="sm" onClick={openCreateChild} disabled={!selected}>
@@ -436,7 +484,7 @@ export default function OrgManagementView() {
 								</Button>
 							</div>
 						</CardHeader>
-						<CardContent className="space-y-4 text-sm">
+						<CardContent className="space-y-4 text-sm leading-relaxed">
 							{selected ? (
 								<>
 									<Text variant="body2" className="font-semibold">
@@ -474,11 +522,11 @@ export default function OrgManagementView() {
 					</Card>
 
 					<Card>
-						<CardHeader className="flex items-center justify-between gap-3">
+						<CardHeader className="flex items-center justify-between gap-3 border-b border-border/70 pb-4">
 							<CardTitle>员工列表</CardTitle>
 							{selected && <Badge variant="outline">{members.length}</Badge>}
 						</CardHeader>
-						<CardContent className="min-h-[120px]">
+						<CardContent className="min-h-[120px] space-y-2">
 							{!selected ? (
 								<Text variant="body3" className="text-muted-foreground">
 									请选择左侧组织查看成员。
@@ -542,6 +590,33 @@ export default function OrgManagementView() {
 				onCancel={closeDelete}
 				onConfirm={handleConfirmDelete}
 			/>
+
+			<Dialog open={syncDialogOpen} onOpenChange={(val) => (val ? openSyncDialog() : closeSyncDialog())}>
+				<DialogContent className="max-w-[480px]">
+					<DialogHeader>
+						<DialogTitle>同步院端组织数据</DialogTitle>
+						<DialogDescription>将从院端拉取最新组织机构并覆盖本地数据。</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-2 text-sm text-muted-foreground">
+						<p className="text-foreground">
+							执行后本地组织、Keycloak 群组映射可能发生变化，请确认已经备份或在测试环境操作。
+						</p>
+						<ul className="list-disc space-y-1 pl-5">
+							<li>同步过程会更新本地组织数据</li>
+							<li>期间成员列表可能出现短暂变动</li>
+							<li>建议在低峰期执行，避免影响正在进行的审批</li>
+						</ul>
+					</div>
+					<DialogFooter className="justify-end gap-2">
+						<Button variant="ghost" onClick={closeSyncDialog} disabled={syncMutation.isPending}>
+							取消
+						</Button>
+						<Button variant="destructive" onClick={handleConfirmSync} disabled={syncMutation.isPending}>
+							{syncMutation.isPending ? "同步中…" : "确认同步"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

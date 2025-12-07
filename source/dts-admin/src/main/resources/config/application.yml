@@ -304,24 +304,24 @@ dts:
         area-business: ${DTS_MDM_REGISTRY_AREA_BUSINESS:B}
         data-type: ${DTS_MDM_REGISTRY_DATA_TYPE:sync_demand}
       upstream:
-        base-url: ${DTS_MDM_UPSTREAM_BASE_URL:http://mdm-upstream.example.com}
-        pull-path: ${DTS_MDM_UPSTREAM_PULL_PATH:/api/mdm/pull} # base + path = 握手/拉取地址
-        auth-token: ${DTS_MDM_UPSTREAM_AUTH_TOKEN:}
-        use-multipart: ${DTS_MDM_UPSTREAM_USE_MULTIPART:false}
-        file-part-name: ${DTS_MDM_UPSTREAM_FILE_PART_NAME:file}
-        file-prefix: ${DTS_MDM_UPSTREAM_FILE_PREFIX:orgItDemand}
-        file-suffix: ${DTS_MDM_UPSTREAM_FILE_SUFFIX:.txt}
+        base-url: ${DTS_MDM_GATEWAY_UPSTREAM_BASE_URL:${DTS_MDM_UPSTREAM_BASE_URL:http://mdm-upstream.example.com}}
+        pull-path: ${DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH:${DTS_MDM_UPSTREAM_PULL_PATH:/api/mdm/pull}} # base + path = 握手/拉取地址
+        auth-token: ${DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN:${DTS_MDM_UPSTREAM_AUTH_TOKEN:}}
+        use-multipart: ${DTS_MDM_GATEWAY_UPSTREAM_USE_MULTIPART:${DTS_MDM_UPSTREAM_USE_MULTIPART:false}}
+        file-part-name: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_PART_NAME:${DTS_MDM_UPSTREAM_FILE_PART_NAME:file}}
+        file-prefix: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_PREFIX:${DTS_MDM_UPSTREAM_FILE_PREFIX:orgItDemand}}
+        file-suffix: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_SUFFIX:${DTS_MDM_UPSTREAM_FILE_SUFFIX:.txt}}
         form-params: {} # 例如 targetNodeCode/targetDomainCode/targetServiceId/approval 等
         payload-template: {} # 额外 JSON 字段，如 pushMode/securityLevel 等
-        connect-timeout: ${DTS_MDM_UPSTREAM_CONNECT_TIMEOUT:5s}
-        read-timeout: ${DTS_MDM_UPSTREAM_READ_TIMEOUT:30s}
+        connect-timeout: ${DTS_MDM_GATEWAY_UPSTREAM_CONNECT_TIMEOUT:${DTS_MDM_UPSTREAM_CONNECT_TIMEOUT:5s}}
+        read-timeout: ${DTS_MDM_GATEWAY_UPSTREAM_READ_TIMEOUT:${DTS_MDM_UPSTREAM_READ_TIMEOUT:30s}}
       callback:
-        url: ${DTS_MDM_CALLBACK_URL:}
-        auth-token: ${DTS_MDM_CALLBACK_AUTH_TOKEN:}
-        signature-header: ${DTS_MDM_CALLBACK_SIGNATURE_HEADER:X-Signature}
+        url: ${DTS_MDM_GATEWAY_CALLBACK_URL:${DTS_MDM_CALLBACK_URL:}}
+        auth-token: ${DTS_MDM_GATEWAY_CALLBACK_AUTH_TOKEN:${DTS_MDM_CALLBACK_AUTH_TOKEN:}}
+        signature-header: ${DTS_MDM_GATEWAY_CALLBACK_SIGNATURE_HEADER:${DTS_MDM_CALLBACK_SIGNATURE_HEADER:X-Signature}}
       required:
-        users: ${DTS_MDM_REQUIRED_USERS:userCode,userName,deptCode}
-        depts: ${DTS_MDM_REQUIRED_DEPTS:deptCode,deptName}
+        users: ${DTS_MDM_GATEWAY_REQUIRED_USERS:${DTS_MDM_REQUIRED_USERS:userCode,userName,deptCode}}
+        depts: ${DTS_MDM_GATEWAY_REQUIRED_DEPTS:${DTS_MDM_REQUIRED_DEPTS:deptCode,deptName}}
   admin:
     infra:
       encryption-key: ${DTS_ADMIN_INFRA_ENCRYPTION_KEY:}

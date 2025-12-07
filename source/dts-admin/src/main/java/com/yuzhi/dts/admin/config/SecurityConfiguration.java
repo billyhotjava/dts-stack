@@ -67,6 +67,8 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
                     // Ingest endpoint for platform-forwarded audit logs (token validated inside controller)
                     .requestMatchers(mvc.pattern("/api/audit-events")).permitAll()
+                    // MDM 回调/对接无需认证，由网关自身校验签名/令牌
+                    .requestMatchers(mvc.pattern("/api/mdm/**")).permitAll()
                     // Admin service is governance-only: restrict all API endpoints to the triad roles
                     .requestMatchers(mvc.pattern("/api/admin/**"))
                         .hasAnyAuthority(

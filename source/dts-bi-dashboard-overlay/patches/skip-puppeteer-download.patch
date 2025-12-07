@@ -1,0 +1,15 @@
+diff --git a/Dockerfile b/Dockerfile
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -35,6 +35,10 @@ FROM --platform=${BUILDPLATFORM} node:20-trixie-slim AS superset-node-ci
+ ARG BUILD_TRANSLATIONS
+ ENV BUILD_TRANSLATIONS=${BUILD_TRANSLATIONS}
+ ARG DEV_MODE="false"           # Skip frontend build in dev mode
+ ENV DEV_MODE=${DEV_MODE}
++# Avoid downloading Chromium during npm ci (network-heavy, unnecessary for build)
++ENV PUPPETEER_SKIP_DOWNLOAD=true \
++    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
++    NPM_CONFIG_PUPPETEER_SKIP_DOWNLOAD=true
+ 
+ COPY docker/ /app/docker/
+ # Arguments for build configuration

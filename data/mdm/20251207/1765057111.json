@@ -1,0 +1,33 @@
+{
+  "desp": {
+    "dataRange": "9010",
+    "sendTime": 1765057111
+  },
+  "user": [
+    {
+      "createTime": "1765057111",
+      "deptCode": "9010",
+      "diepId": "32",
+      "identityCard": "510xxxx",
+      "orgCode": "9010",
+      "securityLevel": "3",
+      "status": "1",
+      "updateTime": "202512081765085911",
+      "userCode": "ldgbgusd-10",
+      "userName": "测试员工1"
+    }
+  ],
+  "orgId": [
+    {
+      "deptCode": "9010",
+      "deptName": "demo app",
+      "diepId": "9a3Eaxxx",
+      "orgCode": "9010",
+      "parentCode": "90",
+      "shortName": "十所",
+      "sort": "11",
+      "status": "1",
+      "type": "0"
+    }
+  ]
+}

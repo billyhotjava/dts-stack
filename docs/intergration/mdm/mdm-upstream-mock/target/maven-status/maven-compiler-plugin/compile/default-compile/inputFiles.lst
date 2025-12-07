@@ -1,0 +1,4 @@
+/opt/prod/s10/dts-stack/docs/intergration/mdm/mdm-upstream-mock/src/main/java/com/yuzhi/dts/mdm/upstream/UpstreamMockApplication.java
+/opt/prod/s10/dts-stack/docs/intergration/mdm/mdm-upstream-mock/src/main/java/com/yuzhi/dts/mdm/upstream/config/RestTemplateConfig.java
+/opt/prod/s10/dts-stack/docs/intergration/mdm/mdm-upstream-mock/src/main/java/com/yuzhi/dts/mdm/upstream/config/UpstreamMockProperties.java
+/opt/prod/s10/dts-stack/docs/intergration/mdm/mdm-upstream-mock/src/main/java/com/yuzhi/dts/mdm/upstream/web/UpstreamMockController.java

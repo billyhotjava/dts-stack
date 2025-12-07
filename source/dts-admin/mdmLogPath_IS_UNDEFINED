@@ -1,0 +1,1 @@
+2025-12-07T07:12:42.496Z  INFO 262 --- [XNIO-1 task-2] dts.mdm.gateway                          : mdm.pull.request (json) url=http://mdm-upstream.example.com/api/mdm/pull payload={_  "sysCode" : "10XT",_  "areaBusiness" : "B",_  "dataRange" : "9010",_  "areaSecurity" : "9001",_  "dataType" : "sync_demand",_  "sendTime" : 1765091562_} 

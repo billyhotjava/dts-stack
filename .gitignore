@@ -22,3 +22,4 @@ source/dts-admin/.m2/
 ./vscode
 ./codex
 ./specify
+./logs

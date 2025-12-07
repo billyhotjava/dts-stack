@@ -1,0 +1,14 @@
+server:
+  port: ${MDM_UPSTREAM_MOCK_PORT:28080}
+
+mdm:
+  mock:
+    port: ${MDM_UPSTREAM_MOCK_PORT:28080}
+    callback-url: ${MDM_UPSTREAM_MOCK_CALLBACK_URL:http://localhost:38012/api/mdm/receive}
+    data-type: ${MDM_UPSTREAM_MOCK_DATA_TYPE:full}
+    signature-header: ${MDM_UPSTREAM_MOCK_SIGNATURE_HEADER:X-Signature}
+    callback-token: ${MDM_UPSTREAM_MOCK_CALLBACK_TOKEN:}
+    file-part-name: ${MDM_UPSTREAM_MOCK_FILE_PART:file}
+    file-prefix: ${MDM_UPSTREAM_MOCK_FILE_PREFIX:mdm-full-}
+    file-suffix: ${MDM_UPSTREAM_MOCK_FILE_SUFFIX:.json}
+    sample-location: ${MDM_UPSTREAM_MOCK_SAMPLE:classpath:sample/orgs-users.json}

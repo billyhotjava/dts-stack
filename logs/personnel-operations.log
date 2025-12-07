@@ -1,0 +1,2 @@
+2025-12-07T10:35:30.921Z  INFO 235 --- [XNIO-1 task-2] dts.personnel.operations                 : [batch-start] id=2951 type=MDM ref=mdm-callback-20251207103530880 total=1 dryRun=false 
+2025-12-07T10:35:30.941Z  INFO 235 --- [XNIO-1 task-2] dts.personnel.operations                 : [batch-end] id=2951 type=MDM total=1 success=1 failed=0 skipped=0 status=COMPLETED dryRun=false 

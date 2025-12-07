@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MDM Upstream Mock 日志</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #4fd1c5;
+      --danger: #f87171;
+      --table-border: #30363d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+    }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    p { margin: 0 0 16px; color: var(--muted); }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    button {
+      background: var(--accent);
+      border: none;
+      color: #0d1117;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--table-border);
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      color: var(--accent);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid var(--table-border);
+      padding: 8px 10px;
+      vertical-align: top;
+      word-break: break-all;
+    }
+    th {
+      background: rgba(79, 209, 197, 0.08);
+      color: var(--text);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .muted { color: var(--muted); }
+    .error { color: var(--danger); font-weight: 600; }
+    .table-wrap {
+      max-height: 400px;
+      overflow: auto;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>MDM Upstream Mock 日志</h1>
+  <p>左侧展示其他系统主动调用（/api/mdm/pull）的记录，右侧展示回调推送数据的结果。最新记录在最上方，5 秒自动刷新。</p>
+  <div class="controls">
+    <button id="refreshBtn">手动刷新</button>
+    <span id="status" class="muted"></span>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>其他系统主动调用记录</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 120px;">时间</th>
+              <th style="width: 110px;">callbackUrl</th>
+              <th style="width: 70px;">dataType</th>
+              <th style="width: 110px;">文件名</th>
+              <th style="width: 70px;">大小(bytes)</th>
+              <th>参数</th>
+            </tr>
+          </thead>
+          <tbody id="pullBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h2>推送数据记录</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 120px;">时间</th>
+              <th style="width: 110px;">callbackUrl</th>
+              <th style="width: 70px;">dataType</th>
+              <th style="width: 110px;">文件名</th>
+              <th style="width: 60px;">状态</th>
+              <th>信息</th>
+            </tr>
+          </thead>
+          <tbody id="callbackBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const pullBody = document.getElementById('pullBody');
+    const callbackBody = document.getElementById('callbackBody');
+    const statusEl = document.getElementById('status');
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    async function fetchJson(url) {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      return resp.json();
+    }
+
+    function renderPulls(rows) {
+      pullBody.innerHTML = '';
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.time || ''}</td>
+          <td>${row.callbackUrl || ''}</td>
+          <td>${row.dataType || ''}</td>
+          <td>${row.filename || ''}</td>
+          <td>${row.payloadBytes ?? ''}</td>
+          <td>${formatParams(row.params)}</td>
+        `;
+        pullBody.appendChild(tr);
+      });
+    }
+
+    function renderCallbacks(rows) {
+      callbackBody.innerHTML = '';
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.time || ''}</td>
+          <td>${row.callbackUrl || ''}</td>
+          <td>${row.dataType || ''}</td>
+          <td>${row.filename || ''}</td>
+          <td>${row.status ?? ''}</td>
+          <td>${row.message || ''}</td>
+        `;
+        if (row.status && row.status >= 400) {
+          tr.querySelector('td:nth-child(5)').classList.add('error');
+          tr.querySelector('td:nth-child(6)').classList.add('error');
+        }
+        callbackBody.appendChild(tr);
+      });
+    }
+
+    function formatParams(params) {
+      if (!params) return '';
+      return Object.entries(params)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('<br>');
+    }
+
+    async function refresh() {
+      refreshBtn.disabled = true;
+      statusEl.textContent = '刷新中...';
+      try {
+        const [pulls, callbacks] = await Promise.all([
+          fetchJson('/api/mdm/logs/pulls'),
+          fetchJson('/api/mdm/logs/callbacks'),
+        ]);
+        renderPulls(pulls);
+        renderCallbacks(callbacks);
+        statusEl.textContent = `已更新 ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        statusEl.textContent = `加载失败：${err.message}`;
+        statusEl.classList.add('error');
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    }
+
+    refreshBtn.addEventListener('click', refresh);
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

@@ -203,10 +203,12 @@ services:
       # Password-login triad IP allowlist (PKI login unaffected)
       DTS_SECURITY_IP_ALLOWLIST_ENABLED: "${DTS_SECURITY_IP_ALLOWLIST_ENABLED:-true}"
       DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES: "${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:-sysadmin,authadmin,auditadmin}"
+      LOG_ROOT: /logs
     security_opt:
       - seccomp=unconfined
     volumes:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
+      - ./logs/dts-admin:/logs/dts-admin:z
       # Optional: mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
       - ./services/dts-admin/vendor:/opt/dts/vendor:ro,z
     extra_hosts:
@@ -268,6 +270,7 @@ services:
       DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
       DTS_JDBC_DRIVER_JAR: "quark-driver-8.37.3.jar"
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
+      LOG_ROOT: /logs
       # Data Standard attachments: encrypted filesystem storage
       DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY: "filesystem"
       DATA_STANDARD_STORAGE_DIR: "/opt/dts/upload"
@@ -279,6 +282,7 @@ services:
       - seccomp=unconfined
     volumes:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
+      - ./logs/dts-platform:/logs/dts-platform:z
       # Mount vendor JDBC driver(s) for Hive to avoid Hadoop conflicts
       - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
       # Encrypted attachments storage (host-bound)
