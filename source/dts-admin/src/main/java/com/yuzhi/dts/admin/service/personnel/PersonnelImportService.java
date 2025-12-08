@@ -269,16 +269,27 @@ public class PersonnelImportService {
         }
         String token = resolveManagementToken();
         if (token == null) {
+            OPS_LOG.warn("skip keycloak provisioning for user {}: management token unavailable", username);
             return;
         }
         try {
             var existingOpt = keycloakAdminClient.findByUsername(username, token);
             if (existingOpt.isPresent()) {
                 KeycloakUserDTO existing = existingOpt.orElseThrow();
-                existing.setFullName(payload.fullName());
-                existing.setFirstName(payload.fullName());
-                existing.setAttributes(toKcAttributes(payload));
-                keycloakAdminClient.updateUser(existing.getId(), existing, token);
+                boolean dirty = false;
+                if (!StringUtils.equals(existing.getFullName(), payload.fullName())) {
+                    existing.setFullName(payload.fullName());
+                    existing.setFirstName(payload.fullName());
+                    dirty = true;
+                }
+                Map<String, List<String>> desiredAttrs = toKcAttributes(payload);
+                if (!attributesEqual(existing.getAttributes(), desiredAttrs)) {
+                    existing.setAttributes(desiredAttrs);
+                    dirty = true;
+                }
+                if (dirty) {
+                    keycloakAdminClient.updateUser(existing.getId(), existing, token);
+                }
                 assignBaseRoles(existing.getId(), token);
                 assignDeptGroup(existing.getId(), payload, token);
                 return;
@@ -309,6 +320,30 @@ public class PersonnelImportService {
         } catch (Exception ex) {
             OPS_LOG.warn("auto-provision keycloak user failed: username={} reason={}", username, ex.getMessage());
         }
+    }
+
+    private boolean attributesEqual(Map<String, List<String>> left, Map<String, List<String>> right) {
+        return normalizeAttributes(left).equals(normalizeAttributes(right));
+    }
+
+    private Map<String, List<String>> normalizeAttributes(Map<String, List<String>> source) {
+        if (source == null) {
+            return Map.of();
+        }
+        Map<String, List<String>> normalized = new HashMap<>();
+        source.forEach((k, v) -> {
+            List<String> vals = v == null
+                ? List.of()
+                : v
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .map(String::valueOf)
+                    .map(StringUtils::trimToEmpty)
+                    .sorted()
+                    .toList();
+            normalized.put(k, vals);
+        });
+        return normalized;
     }
 
     private Map<String, List<String>> toKcAttributes(PersonnelPayload payload) {
@@ -400,6 +435,9 @@ public class PersonnelImportService {
                 String groupId = node.getKeycloakGroupId();
                 if (StringUtils.isBlank(groupId)) {
                     String path = buildGroupPath(node);
+                    if (StringUtils.isBlank(path)) {
+                        path = buildGroupPathFromRepository(node);
+                    }
                     if (StringUtils.isNotBlank(path)) {
                         keycloakAdminClient.findGroupByPath(path, token).ifPresent(found -> {
                             node.setKeycloakGroupId(found.getId());
@@ -411,6 +449,7 @@ public class PersonnelImportService {
                 if (StringUtils.isNotBlank(groupId)) {
                     try {
                         keycloakAdminClient.addUserToGroup(userId, groupId, token);
+                        OPS_LOG.info("bind user {} to dept {} group {}", userId, deptCode, groupId);
                     } catch (Exception ex) {
                         OPS_LOG.warn("bind user {} to org {} failed: {}", userId, deptCode, ex.getMessage());
                     }
@@ -436,6 +475,33 @@ public class PersonnelImportService {
                 segments.add(0, name);
             }
             cursor = cursor.getParent();
+        }
+        if (segments.isEmpty()) {
+            return null;
+        }
+        return "/" + String.join("/", segments);
+    }
+
+    /**
+     * 当 JPA 未加载 parent 时，基于 parentCode 逐级查询数据库补齐路径。
+     */
+    private String buildGroupPathFromRepository(OrganizationNode node) {
+        if (node == null) {
+            return null;
+        }
+        List<String> segments = new java.util.ArrayList<>();
+        OrganizationNode cursor = node;
+        int guard = 20; // 防止环
+        while (cursor != null && guard-- > 0) {
+            String name = StringUtils.trimToNull(cursor.getName());
+            if (name != null) {
+                segments.add(0, name);
+            }
+            OrganizationNode parent = cursor.getParent();
+            if (parent == null && StringUtils.isNotBlank(cursor.getParentCode())) {
+                parent = organizationRepository.findFirstByDeptCodeIgnoreCase(cursor.getParentCode()).orElse(null);
+            }
+            cursor = parent;
         }
         if (segments.isEmpty()) {
             return null;

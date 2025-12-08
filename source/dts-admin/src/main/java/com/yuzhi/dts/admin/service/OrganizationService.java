@@ -78,6 +78,13 @@ public class OrganizationService {
         return roots;
     }
 
+    public Optional<OrganizationNode> findByDeptCodeIgnoreCase(String deptCode) {
+        if (!StringUtils.isNotBlank(deptCode)) {
+            return Optional.empty();
+        }
+        return repository.findFirstByDeptCodeIgnoreCase(deptCode.trim());
+    }
+
     /**
      * 基于院方 MDM 数据同步组织树（deptCode 作为唯一键，parentCode 建立层级）。
      */
@@ -541,6 +548,29 @@ public class OrganizationService {
                 parentGroupId
             );
         } catch (RuntimeException ex) {
+            if (StringUtils.isNotBlank(expectedPath) && StringUtils.containsIgnoreCase(ex.getMessage(), "already exists")) {
+                try {
+                    keycloakAdminClient
+                        .findGroupByPath(expectedPath, token)
+                        .ifPresent(existing -> {
+                            node.setKeycloakGroupId(existing.getId());
+                            repository.save(node);
+                            markProvisioningHealthy();
+                            LOG.info(
+                                "Linked existing Keycloak group {} for organization {} (id={}) via path {} after conflict",
+                                existing.getId(),
+                                node.getName(),
+                                node.getId(),
+                                expectedPath
+                            );
+                        });
+                    if (StringUtils.isNotBlank(node.getKeycloakGroupId())) {
+                        return;
+                    }
+                } catch (RuntimeException probeEx) {
+                    LOG.warn("Failed to recover existing group at path {}: {}", expectedPath, probeEx.getMessage());
+                }
+            }
             suppressProvisioning("create", node, ex);
         }
 

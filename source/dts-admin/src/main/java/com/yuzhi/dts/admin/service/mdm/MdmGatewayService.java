@@ -54,6 +54,7 @@ public class MdmGatewayService {
     private final ObjectMapper objectMapper;
     private final PersonnelImportService personnelImportService;
     private final OrganizationService organizationService;
+    private final com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository;
     private final Executor taskExecutor;
 
     public MdmGatewayService(
@@ -62,12 +63,14 @@ public class MdmGatewayService {
         ObjectMapper objectMapper,
         PersonnelImportService personnelImportService,
         OrganizationService organizationService,
+        com.yuzhi.dts.admin.repository.OrganizationRepository organizationRepository,
         @Qualifier("taskExecutor") ObjectProvider<Executor> taskExecutorProvider
     ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.personnelImportService = personnelImportService;
         this.organizationService = organizationService;
+        this.organizationRepository = organizationRepository;
         this.taskExecutor = taskExecutorProvider.getIfAvailable(() -> (Runnable command) -> command.run());
         this.restTemplate = restTemplateBuilder
             .setConnectTimeout(properties.getUpstream().getConnectTimeout())
@@ -386,6 +389,7 @@ public class MdmGatewayService {
         if (!StringUtils.isNotBlank(userCode) && !StringUtils.isNotBlank(userName)) {
             return null;
         }
+        String deptName = resolveDeptName(deptCode);
         return new PersonnelPayload(
             userCode, // personCode
             string(m.get("diepId")), // externalId
@@ -393,7 +397,7 @@ public class MdmGatewayService {
             userName,
             string(m.get("identityCard")),
             deptCode,
-            null,
+            deptName,
             null,
             null,
             string(m.get("sort")),
@@ -404,6 +408,16 @@ public class MdmGatewayService {
             null,
             attrs
         );
+    }
+
+    private String resolveDeptName(String deptCode) {
+        if (!StringUtils.isNotBlank(deptCode)) {
+            return null;
+        }
+        return organizationService
+            .findByDeptCodeIgnoreCase(deptCode)
+            .map(com.yuzhi.dts.admin.domain.OrganizationNode::getName)
+            .orElse(null);
     }
 
     private String string(Object value) {
@@ -528,7 +542,10 @@ public class MdmGatewayService {
         if (desp instanceof Map<?, ?> m) {
             String sendTime = string(m.get("sendTime"));
             if (StringUtils.isNotBlank(sendTime)) {
-                return sanitizeFilename(sendTime);
+                String normalized = normalizeSendTime(sendTime);
+                if (StringUtils.isNotBlank(normalized)) {
+                    return normalized;
+                }
             }
         }
         Object users = firstNonNull(map.get("user"), map.get("users"));
@@ -550,6 +567,36 @@ public class MdmGatewayService {
         }
         String cleaned = name.replaceAll("[^0-9A-Za-z_-]", "");
         return StringUtils.isNotBlank(cleaned) ? cleaned : null;
+    }
+
+    /**
+     * Accept both epoch seconds/millis and formatted yyyyMMddHHmmssSSS strings.
+     * Falls back to a sanitized version if parsing fails.
+     */
+    private String normalizeSendTime(String raw) {
+        String trimmed = StringUtils.trimToEmpty(raw);
+        // Already looks like yyyyMMddHHmmssSSS
+        if (trimmed.matches("\\d{17}")) {
+            return trimmed;
+        }
+        // Epoch seconds or millis
+        String digitsOnly = trimmed.replaceAll("\\D", "");
+        if (digitsOnly.length() == 13) {
+            try {
+                long millis = Long.parseLong(digitsOnly);
+                return TS_FILE.format(java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime());
+            } catch (Exception ignored) {}
+        }
+        if (digitsOnly.length() == 10) {
+            try {
+                long seconds = Long.parseLong(digitsOnly);
+                return TS_FILE.format(
+                    java.time.Instant.ofEpochSecond(seconds).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+                );
+            } catch (Exception ignored) {}
+        }
+        // last resort: sanitized raw
+        return sanitizeFilename(trimmed);
     }
 
     public static class PullResult {

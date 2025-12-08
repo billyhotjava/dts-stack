@@ -164,6 +164,7 @@ public class KeycloakApiResource {
         if (!excludedIdsByRole.isEmpty() && list != null && !list.isEmpty()) {
             list = list.stream().filter(u -> u.getId() == null || !excludedIdsByRole.contains(u.getId())).toList();
         }
+        populateGroups(list, token);
         boolean fromCache = false;
         if (!list.isEmpty()) {
             list.forEach(this::cacheUser);
@@ -197,6 +198,31 @@ public class KeycloakApiResource {
         return ResponseEntity.ok(list);
     }
 
+    private void populateGroups(List<KeycloakUserDTO> users, String token) {
+        if (users == null || users.isEmpty() || !StringUtils.hasText(token)) {
+            return;
+        }
+        for (KeycloakUserDTO user : users) {
+            if (user == null || !StringUtils.hasText(user.getId())) {
+                continue;
+            }
+            try {
+                List<String> paths = keycloakAdminClient
+                    .listUserGroups(user.getId(), token)
+                    .stream()
+                    .map(g -> StringUtils.hasText(g.getPath()) ? g.getPath() : g.getName())
+                    .filter(StringUtils::hasText)
+                    .toList();
+                if (!paths.isEmpty()) {
+                    user.setGroups(paths);
+                }
+            } catch (Exception ex) {
+                // 静默失败，不影响列表返回
+                LOG.debug("populate groups for user {} failed: {}", user.getId(), ex.getMessage());
+            }
+        }
+    }
+
     @GetMapping("/keycloak/users/search")
     public ResponseEntity<List<KeycloakUserDTO>> searchUsers(@RequestParam String username, HttpServletRequest request) {
         String q = username == null ? "" : username.toLowerCase();
@@ -205,6 +231,7 @@ public class KeycloakApiResource {
             .findByUsername(username, adminAccessToken())
             .map(List::of)
             .orElseGet(List::of));
+        populateGroups(list, token);
         if (list.isEmpty()) {
             list = filterProtectedUsers(stores
                 .users
