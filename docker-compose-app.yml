@@ -53,6 +53,8 @@ services:
       DTS_SECURITY_IP_ALLOWLIST_ENABLED: "${DTS_SECURITY_IP_ALLOWLIST_ENABLED:-true}"
       DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES: "${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:-sysadmin,authadmin,auditadmin}"
       LOG_ROOT: /logs
+      DTS_MDM_GATEWAY_LOG_PATH: "${DTS_MDM_GATEWAY_LOG_PATH:-/logs/dts-admin/mdm-gateway.log}"
+      DTS_PERSONNEL_LOG_PATH: "${DTS_PERSONNEL_LOG_PATH:-/logs/dts-admin/personnel-operations.log}"
       
     volumes:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z

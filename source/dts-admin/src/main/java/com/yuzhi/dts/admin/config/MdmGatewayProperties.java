@@ -28,6 +28,22 @@ public class MdmGatewayProperties {
     private final Callback callback = new Callback();
     private final Registry registry = new Registry();
     private final Required required = new Required();
+    /**
+     * 本地组织根节点的代码，用于缺失 parentCode 时兜底挂载。
+     */
+    private String rootCode = "90";
+    /**
+     * 是否在 MDM 导入时自动为人员创建 Keycloak 用户（若不存在）。
+     */
+    private boolean autoProvisionUsers = true;
+    /**
+     * 自动创建用户时分配的基础角色（realm 角色），逗号分隔。
+     */
+    private String autoProvisionRoles = "EMPLOYEE";
+    /**
+     * 自动创建用户时是否启用登录（PKI 环境可禁用口令登录）。
+     */
+    private boolean autoProvisionEnableLogin = true;
 
     public boolean isEnabled() {
         return enabled;
@@ -67,6 +83,38 @@ public class MdmGatewayProperties {
 
     public Required getRequired() {
         return required;
+    }
+
+    public String getRootCode() {
+        return rootCode;
+    }
+
+    public void setRootCode(String rootCode) {
+        this.rootCode = rootCode;
+    }
+
+    public boolean isAutoProvisionUsers() {
+        return autoProvisionUsers;
+    }
+
+    public void setAutoProvisionUsers(boolean autoProvisionUsers) {
+        this.autoProvisionUsers = autoProvisionUsers;
+    }
+
+    public String getAutoProvisionRoles() {
+        return autoProvisionRoles;
+    }
+
+    public void setAutoProvisionRoles(String autoProvisionRoles) {
+        this.autoProvisionRoles = autoProvisionRoles;
+    }
+
+    public boolean isAutoProvisionEnableLogin() {
+        return autoProvisionEnableLogin;
+    }
+
+    public void setAutoProvisionEnableLogin(boolean autoProvisionEnableLogin) {
+        this.autoProvisionEnableLogin = autoProvisionEnableLogin;
     }
 
     public static class Upstream {

@@ -296,6 +296,9 @@ dts:
       enabled: ${DTS_MDM_GATEWAY_ENABLED:true}
       storage-path: ${DTS_MDM_GATEWAY_STORAGE_PATH:data/mdm}
       log-path: ${DTS_MDM_GATEWAY_LOG_PATH:logs/mdm-gateway.log}
+      auto-provision-users: ${DTS_MDM_AUTO_PROVISION_USERS:true}
+      auto-provision-roles: ${DTS_MDM_AUTO_PROVISION_ROLES:EMPLOYEE}
+      auto-provision-enable-login: ${DTS_MDM_AUTO_PROVISION_ENABLE_LOGIN:true}
       required-fields: ${DTS_MDM_REQUIRED_FIELDS:orgCode,deptCode,status}
       registry:
         system-code: ${DTS_MDM_REGISTRY_SYSTEM_CODE:10XT}

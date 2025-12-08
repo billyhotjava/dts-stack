@@ -403,7 +403,7 @@ generate_env_base(){
   # ---------- MDM Gateway ----------
   : "${DTS_MDM_GATEWAY_ENABLED:=true}"
   : "${DTS_MDM_GATEWAY_STORAGE_PATH:=data/mdm}"
-  : "${DTS_MDM_GATEWAY_LOG_PATH:=logs/mdm-gateway.log}"
+: "${DTS_MDM_GATEWAY_LOG_PATH:=/logs/dts-admin/mdm-gateway.log}"
   : "${DTS_MDM_UPSTREAM_BASE_URL:=http://mdm-upstream.example.com}"
   : "${DTS_MDM_UPSTREAM_PULL_PATH:=/api/mdm/pull}"
   : "${DTS_MDM_UPSTREAM_AUTH_TOKEN:=}"

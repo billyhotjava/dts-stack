@@ -57,7 +57,9 @@ services:
       DTS_MDM_GATEWAY_ENABLED: "${DTS_MDM_GATEWAY_ENABLED:-true}"
       # 存储/日志路径与 .env 同级（仓库根目录的 data/mdm、logs）
       DTS_MDM_GATEWAY_STORAGE_PATH: "${DTS_MDM_GATEWAY_STORAGE_PATH:-data/mdm}"
-      DTS_MDM_GATEWAY_LOG_PATH: "${DTS_MDM_GATEWAY_LOG_PATH:-logs/mdm-gateway.log}"
+      DTS_MDM_GATEWAY_LOG_PATH: "${DTS_MDM_GATEWAY_LOG_PATH:-/workspace/logs/dts-admin/mdm-gateway.log}"
+      DTS_PERSONNEL_LOG_PATH: "${DTS_PERSONNEL_LOG_PATH:-/workspace/logs/dts-admin/personnel-operations.log}"
+      LOG_ROOT: "${LOG_ROOT:-/workspace/logs}"
       DTS_MDM_GATEWAY_UPSTREAM_BASE_URL: "${DTS_MDM_GATEWAY_UPSTREAM_BASE_URL:-http://localhost:28080}"
       DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH: "${DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH:-/api/mdm/pull}"
       DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN: "${DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN:-}"
@@ -94,7 +96,7 @@ services:
     volumes:
       - ./source:/workspace-src:z
       - ./data:/workspace-src/dts-admin/data:z
-      - ./logs:/workspace-src/dts-admin/logs:z
+      - ./logs/dts-admin:/workspace/logs/dts-admin:z
       - maven-cache:/root/.m2
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       # Mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
@@ -174,6 +176,7 @@ services:
       # Decodes to ASCII: 0123456789abcdef (16 bytes)
       DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
       # Centralize audit logs to admin in dev as well
+      LOG_ROOT: "${LOG_ROOT:-/workspace/logs}"
     command:
       - bash
       - -lc
@@ -197,6 +200,7 @@ services:
       - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
       - ./services/dts-platform/upload:/opt/dts/upload:Z
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
+      - ./logs/dts-platform:/workspace/logs/dts-platform:z
     security_opt:
       - seccomp=unconfined
     extra_hosts:

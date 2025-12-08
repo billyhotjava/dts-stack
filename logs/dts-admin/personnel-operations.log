@@ -1,0 +1,6 @@
+2025-12-08T01:38:29.376Z  INFO 240 --- [dts-admin-task-2] dts.personnel.operations                 : [batch-start] id=4751 type=MDM ref=mdm-callback-20251208013825884 total=9 dryRun=false 
+2025-12-08T01:38:29.649Z  INFO 240 --- [dts-admin-task-2] dts.personnel.operations                 : [batch-end] id=4751 type=MDM total=9 success=9 failed=0 skipped=0 status=COMPLETED dryRun=false 
+2025-12-08T01:46:16.382Z  INFO 233 --- [dts-admin-task-2] dts.personnel.operations                 : [batch-start] id=4851 type=MDM ref=mdm-callback-20251208014610386 total=9 dryRun=false 
+2025-12-08T01:46:16.591Z  INFO 233 --- [dts-admin-task-2] dts.personnel.operations                 : [batch-end] id=4851 type=MDM total=9 success=9 failed=0 skipped=0 status=COMPLETED dryRun=false 
+2025-12-08T01:56:47.375Z  INFO 242 --- [dts-admin-task-2] dts.personnel.operations                 : [batch-start] id=4951 type=MDM ref=mdm-callback-20251208015640781 total=9 dryRun=false 
+2025-12-08T01:56:47.636Z  INFO 242 --- [dts-admin-task-2] dts.personnel.operations                 : [batch-end] id=4951 type=MDM total=9 success=9 failed=0 skipped=0 status=COMPLETED dryRun=false 

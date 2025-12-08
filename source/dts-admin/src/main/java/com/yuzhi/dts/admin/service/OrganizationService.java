@@ -2,6 +2,7 @@ package com.yuzhi.dts.admin.service;
 
 import com.yuzhi.dts.admin.domain.OrganizationNode;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
+import com.yuzhi.dts.admin.config.MdmGatewayProperties;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
@@ -40,6 +41,7 @@ public class OrganizationService {
     private final String defaultUnassignedName;
     private final String defaultUnassignedDescription;
     private final String defaultUnassignedDataLevel;
+    private final MdmGatewayProperties mdmGatewayProperties;
     private final AtomicLong provisioningRetryAfter = new AtomicLong(0L);
     private final AtomicBoolean resyncPending = new AtomicBoolean(false);
 
@@ -53,18 +55,21 @@ public class OrganizationService {
         @Value("${dts.organization.default-root-name:}") String defaultRootName,
         @Value("${dts.organization.unassigned-name:}") String defaultUnassignedName,
         @Value("${dts.organization.unassigned-description:}") String defaultUnassignedDescription,
-        @Value("${dts.organization.unassigned-data-level:}") String defaultUnassignedDataLevel
+        @Value("${dts.organization.unassigned-data-level:}") String defaultUnassignedDataLevel,
+        MdmGatewayProperties mdmGatewayProperties
     ) {
         this.repository = repository;
         this.keycloakAdminClient = keycloakAdminClient;
         this.keycloakAuthService = keycloakAuthService;
         this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
         this.managementClientSecret = managementClientSecret == null ? "" : managementClientSecret.trim();
-        this.groupProvisioningEnabled = groupProvisioningEnabled;
+        this.groupProvisioningEnabled =
+            groupProvisioningEnabled || (mdmGatewayProperties != null && mdmGatewayProperties.isAutoProvisionUsers());
         this.defaultRootName = StringUtils.trimToEmpty(defaultRootName);
         this.defaultUnassignedName = StringUtils.trimToEmpty(defaultUnassignedName);
         this.defaultUnassignedDescription = StringUtils.trimToEmpty(defaultUnassignedDescription);
         this.defaultUnassignedDataLevel = normalizeDataLevel(defaultUnassignedDataLevel);
+        this.mdmGatewayProperties = mdmGatewayProperties;
     }
 
     public List<OrganizationNode> findTree() {
@@ -96,21 +101,42 @@ public class OrganizationService {
         int changed = 0;
         boolean progress = true;
         int guard = byCode.size() + 5;
+        String rootCodeProp = mdmGatewayProperties != null ? StringUtils.trimToNull(mdmGatewayProperties.getRootCode()) : null;
+        String rootCodeUpper = rootCodeProp != null ? rootCodeProp.toUpperCase(Locale.ROOT) : null;
         while (progress && guard-- > 0) {
             progress = false;
             for (MdmOrgRecord r : byCode.values()) {
                 String code = r.deptCode().toUpperCase(Locale.ROOT);
-                if (cache.containsKey(code)) {
-                    continue;
-                }
+                OrganizationNode node = cache.get(code);
                 OrganizationNode parent = null;
-                if (StringUtils.isNotBlank(r.parentCode())) {
-                    parent = cache.get(r.parentCode().toUpperCase(Locale.ROOT));
+                boolean orphanToRoot = false;
+                String parentCode = StringUtils.trimToNull(r.parentCode());
+                boolean parentInPayload = parentCode != null && byCode.containsKey(parentCode.toUpperCase(Locale.ROOT));
+
+                if (StringUtils.isNotBlank(parentCode)) {
+                    parent = cache.get(parentCode.toUpperCase(Locale.ROOT));
                     if (parent == null) {
-                        continue; // wait until parent created
+                        if (parentInPayload) {
+                            continue; // 等待父级先处理
+                        } else {
+                            orphanToRoot = true; // 父级不在 payload/库，挂到根
+                        }
                     }
                 }
-                OrganizationNode node = repository.findFirstByDeptCodeIgnoreCase(r.deptCode()).orElseGet(OrganizationNode::new);
+                if (Objects.equals(parent, node)) {
+                    parent = null; // 避免自引用造成环
+                }
+                if (rootCodeUpper != null && code.equals(rootCodeUpper)) {
+                    parent = null; // 根节点不应挂到自身
+                } else if (parent == null && rootCodeUpper != null) {
+                    OrganizationNode rootNode = cache.get(rootCodeUpper);
+                    if (rootNode != null && !Objects.equals(rootNode.getId(), node != null ? node.getId() : null)) {
+                        parent = rootNode;
+                    }
+                }
+                if (node == null) {
+                    node = repository.findFirstByDeptCodeIgnoreCase(r.deptCode()).orElseGet(OrganizationNode::new);
+                }
                 node.setDeptCode(r.deptCode());
                 node.setOrgCode(r.orgCode());
                 node.setParentCode(r.parentCode());
@@ -120,11 +146,17 @@ public class OrganizationService {
                 node.setSortOrder(r.sort());
                 node.setMdmType(r.type());
                 node.setDataLevel(determineDataLevel(parent, node.getDataLevel()));
-                node.setRoot(!StringUtils.isNotBlank(r.parentCode()));
+                node.setRoot(parent == null);
                 if (parent != null) {
                     node.setParent(parent);
+                    node.setRoot(false);
                 } else {
                     node.setParent(null);
+                    node.setRoot(true);
+                    if (orphanToRoot) {
+                        // 父级缺失但仍允许作为顶级节点接入
+                        node.setParentCode(null);
+                    }
                 }
                 OrganizationNode saved = repository.save(node);
                 cache.put(code, saved);
@@ -391,14 +423,23 @@ public class OrganizationService {
     }
 
     private void ensureGroupSynced(OrganizationNode node, String token) {
-        ensureGroupSynced(node, token, node.getParent());
+        ensureGroupSynced(node, token, node.getParent(), new java.util.HashSet<>());
     }
 
     private void ensureGroupSynced(OrganizationNode node, String token, OrganizationNode parent) {
+        ensureGroupSynced(node, token, parent, new java.util.HashSet<>());
+    }
+
+    private void ensureGroupSynced(OrganizationNode node, String token, OrganizationNode parent, java.util.Set<Long> visited) {
         if (!isKeycloakSyncEnabled()) {
             return;
         }
         if (node == null) {
+            return;
+        }
+        Long nodeId = node.getId();
+        if (nodeId != null && !visited.add(nodeId)) {
+            LOG.warn("Detected cycle while syncing Keycloak groups for org id={} name={}", nodeId, node.getName());
             return;
         }
         if (StringUtils.isNotBlank(node.getKeycloakGroupId())) {
@@ -427,7 +468,7 @@ public class OrganizationService {
         }
         OrganizationNode resolvedParent = parent != null ? parent : node.getParent();
         if (resolvedParent != null) {
-            ensureGroupSynced(resolvedParent, token);
+            ensureGroupSynced(resolvedParent, token, resolvedParent.getParent(), visited);
         }
         String parentGroupId = resolvedParent != null ? resolvedParent.getKeycloakGroupId() : null;
 
@@ -455,6 +496,31 @@ public class OrganizationService {
             } catch (RuntimeException ex) {
                 LOG.warn("Failed probing Keycloak group by path {}: {}", expectedPath, ex.getMessage());
             }
+        }
+
+        try {
+            KeycloakGroupDTO created = keycloakAdminClient.createGroup(toKeycloakGroupDto(node), parentGroupId, token);
+            if (created != null && StringUtils.isNotBlank(created.getId())) {
+                node.setKeycloakGroupId(created.getId());
+                repository.save(node);
+                markProvisioningHealthy();
+                LOG.info(
+                    "Created Keycloak group {} for organization {} (id={}) under parent {}",
+                    created.getId(),
+                    node.getName(),
+                    node.getId(),
+                    parentGroupId
+                );
+                return;
+            }
+            LOG.warn(
+                "Keycloak createGroup returned empty id for organization {} (id={}) under parent {}",
+                node.getName(),
+                node.getId(),
+                parentGroupId
+            );
+        } catch (RuntimeException ex) {
+            suppressProvisioning("create", node, ex);
         }
 
         LOG.debug(

@@ -38,6 +38,9 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.core.io.ByteArrayResource;
+import java.util.concurrent.Executor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 @Service
 public class MdmGatewayService {
@@ -51,18 +54,21 @@ public class MdmGatewayService {
     private final ObjectMapper objectMapper;
     private final PersonnelImportService personnelImportService;
     private final OrganizationService organizationService;
+    private final Executor taskExecutor;
 
     public MdmGatewayService(
         RestTemplateBuilder restTemplateBuilder,
         MdmGatewayProperties properties,
         ObjectMapper objectMapper,
         PersonnelImportService personnelImportService,
-        OrganizationService organizationService
+        OrganizationService organizationService,
+        @Qualifier("taskExecutor") ObjectProvider<Executor> taskExecutorProvider
     ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.personnelImportService = personnelImportService;
         this.organizationService = organizationService;
+        this.taskExecutor = taskExecutorProvider.getIfAvailable(() -> (Runnable command) -> command.run());
         this.restTemplate = restTemplateBuilder
             .setConnectTimeout(properties.getUpstream().getConnectTimeout())
             .setReadTimeout(properties.getUpstream().getReadTimeout())
@@ -228,40 +234,91 @@ public class MdmGatewayService {
         result.md5 = md5;
         result.clientIp = clientIp;
 
-        List<Map<String, Object>> rawUsers = extractUsers(parsedObj);
-        List<Map<String, Object>> rawDepts = extractDepts(parsedObj);
-        result.userRecords = rawUsers.size();
-        result.deptRecords = rawDepts.size();
-        result.records = result.userRecords + result.deptRecords;
-        result.missingUsers = findMissing(rawUsers, properties.getRequired().getUsers());
-        result.missingDepts = findMissing(rawDepts, properties.getRequired().getDepts());
-        Set<String> union = new HashSet<>();
-        union.addAll(result.missingUsers);
-        union.addAll(result.missingDepts);
-        result.missingRequired = union;
-
-        List<OrganizationService.MdmOrgRecord> orgs = rawDepts
-            .stream()
-            .map(this::mapOrgPayload)
-            .filter(Objects::nonNull)
-            .toList();
-        List<PersonnelPayload> users = rawUsers.stream().map(this::mapUserPayload).filter(Objects::nonNull).toList();
-
-        if (!orgs.isEmpty()) {
-            int applied = organizationService.syncFromMdm(orgs);
-            result.imported = applied;
-        }
-        if (!users.isEmpty()) {
-            var importResult = personnelImportService.importFromMdm(
-                "mdm-callback-" + batchId,
-                users,
-                Map.of("file", result.file, "md5", md5, "clientIp", clientIp, "dataType", dataType)
-            );
-            result.imported = importResult.successRecords();
-            result.importBatchId = importResult.batchId();
-            result.importFailed = importResult.failureRecords();
-        }
+        // 异步解析与导入，快速向院方返回成功
+        final Object parsedSnapshot = parsedObj;
+        final byte[] bytesSnapshot = bytes;
+        final CallbackResult resultSnapshot = result;
+        final String dataTypeSnapshot = dataType;
+        final String clientIpSnapshot = clientIp;
+        final String md5Snapshot = md5;
+        taskExecutor.execute(() -> processSavedPayload(parsedSnapshot, bytesSnapshot, resultSnapshot, dataTypeSnapshot, clientIpSnapshot, md5Snapshot));
         return result;
+    }
+
+    private void processSavedPayload(Object parsedObj, byte[] bytes, CallbackResult result, String dataType, String clientIp, String md5) {
+        try {
+            LOG.info("mdm.callback.async.start file={} dataType={} clientIp={}", result.file, dataType, clientIp);
+            Object parsed = parsedObj != null ? parsedObj : parseObject(new String(bytes, StandardCharsets.UTF_8));
+            List<Map<String, Object>> rawUsers = extractUsers(parsed);
+            List<Map<String, Object>> rawDepts = extractDepts(parsed);
+            result.userRecords = rawUsers.size();
+            result.deptRecords = rawDepts.size();
+            result.records = result.userRecords + result.deptRecords;
+            result.missingUsers = findMissing(rawUsers, properties.getRequired().getUsers());
+            result.missingDepts = findMissing(rawDepts, properties.getRequired().getDepts());
+            Set<String> union = new HashSet<>();
+            union.addAll(result.missingUsers);
+            union.addAll(result.missingDepts);
+            result.missingRequired = union;
+
+            if (!result.missingRequired.isEmpty()) {
+                LOG.warn(
+                    "mdm.callback.validation failed missingRequired={} file={} clientIp={}",
+                    result.missingRequired,
+                    result.file,
+                    clientIp
+                );
+                return;
+            }
+            LOG.info(
+                "mdm.callback.parsed file={} clientIp={} users={} depts={} dataType={} md5={}",
+                result.file,
+                clientIp,
+                result.userRecords,
+                result.deptRecords,
+                dataType,
+                md5
+            );
+
+            List<OrganizationService.MdmOrgRecord> orgs = rawDepts
+                .stream()
+                .map(this::mapOrgPayload)
+                .filter(Objects::nonNull)
+                .toList();
+            List<PersonnelPayload> users = rawUsers.stream().map(this::mapUserPayload).filter(Objects::nonNull).toList();
+
+            if (!orgs.isEmpty()) {
+                int applied = organizationService.syncFromMdm(orgs);
+                result.imported = applied;
+                LOG.info("mdm.callback.import.orgs file={} applied={} payloadDepts={}", result.file, applied, orgs.size());
+            }
+            if (!users.isEmpty()) {
+                var importResult = personnelImportService.importFromMdm(
+                    "mdm-callback-" + result.batchId,
+                    users,
+                    Map.of("file", result.file, "md5", md5, "clientIp", clientIp, "dataType", dataType)
+                );
+                result.imported = importResult.successRecords();
+                result.importBatchId = importResult.batchId();
+                result.importFailed = importResult.failureRecords();
+                LOG.info(
+                    "mdm.callback.import.users file={} success={} failed={} payloadUsers={}",
+                    result.file,
+                    importResult.successRecords(),
+                    importResult.failureRecords(),
+                    users.size()
+                );
+            }
+            if (!orgs.isEmpty()) {
+                try {
+                    organizationService.pushTreeToKeycloak();
+                } catch (Exception e) {
+                    LOG.warn("mdm.callback.push-keycloak failed: {}", e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            LOG.error("mdm.callback.async.failed file={} error={}", result.file, e.getMessage(), e);
+        }
     }
 
     private void validateToken(HttpServletRequest request) {
@@ -394,7 +451,7 @@ public class MdmGatewayService {
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> extractDepts(Object parsed) {
         if (parsed instanceof Map<?, ?> map) {
-            Object val = firstNonNull(map.get("depts"), map.get("orgId"), map.get("orgIds"), map.get("orgs"));
+            Object val = firstNonNull(map.get("depts"), map.get("orgId"), map.get("orgIds"), map.get("orgs"), map.get("orgIt"));
             return extractList(val);
         }
         return List.of();

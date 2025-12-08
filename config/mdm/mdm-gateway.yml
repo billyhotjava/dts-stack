@@ -1,6 +1,8 @@
 dts:
   mdm:
     gateway:
+      # 本地组织根节点代码，缺失 parentCode 时会挂到该根下
+      root-code: "90"
       enabled: true
       # 文件落盘目录
       storage-path: data/mdm
@@ -37,7 +39,6 @@ dts:
           pushMode: FULL
           # 其他字段按需添加
       callback:
-        #url: http://localhost:38012/api/mdm/receive
         url: http://dts-admin:8081/api/mdm/receive
         auth-token:
         signature-header: X-Signature

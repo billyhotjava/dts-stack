@@ -79,16 +79,25 @@ public class UpstreamMockController {
         byte[] payloadBytes = loadSample(bytesOrNull(file), body);
         long payloadSize = payloadBytes == null ? 0 : payloadBytes.length;
 
+        addPullLog(callbackUrl, dataType, filename, payloadSize, params);
+        CallbackResult cb = sendCallback(callbackUrl, dataType, filename, payloadBytes);
+        LOG.info(
+            "mock.pull received params={} body={} payloadBytes={} -> callback status={} msg={}",
+            params,
+            body,
+            payloadSize,
+            cb.status,
+            cb.message
+        );
         Map<String, Object> requestEcho = new LinkedHashMap<>();
         requestEcho.put("params", params);
         requestEcho.put("body", body);
         requestEcho.put("callbackUrl", callbackUrl);
         requestEcho.put("dataType", dataType);
         requestEcho.put("sentFilename", filename);
-
-        addPullLog(callbackUrl, dataType, filename, payloadSize, params);
-        CallbackResult cb = sendCallback(callbackUrl, dataType, filename, payloadBytes);
-        LOG.info("mock.pull received params={} body={} -> callback status={} msg={}", params, body, cb.status, cb.message);
+        requestEcho.put("payloadBytes", payloadSize);
+        requestEcho.put("callbackStatus", cb.status);
+        requestEcho.put("callbackMessage", cb.message);
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("status", "ok");
         resp.put("callbackStatus", cb.status);
@@ -137,7 +146,7 @@ public class UpstreamMockController {
             r.message = "sent";
         } catch (Exception e) {
             r.status = 500;
-            r.message = e.getMessage();
+            r.message = e.getClass().getSimpleName() + ": " + e.getMessage();
         }
         addCallbackLog(callbackUrl, dataType, filename, r.status, r.message);
         return r;
@@ -151,68 +160,85 @@ public class UpstreamMockController {
     }
 
     private byte[] loadSample(byte[] uploaded, Map<String, Object> body) throws IOException {
+        byte[] candidate = null;
         // 优先使用真实推送样例；如果上传内容只是 sync_demand 请求（无用户/组织数据），则改用示例文件
         if (uploaded != null && uploaded.length > 0) {
             try {
                 Object parsed = objectMapper.readValue(uploaded, Object.class);
                 if (looksLikePayload(parsed)) {
-                    return uploaded;
+                    candidate = uploaded;
+                } else {
+                    LOG.info("uploaded payload looks like sync_demand; fallback to sample");
                 }
-                LOG.info("uploaded payload looks like sync_demand; fallback to sample");
             } catch (Exception e) {
                 LOG.warn("parse uploaded payload failed: {}", e.getMessage());
-                return uploaded;
+                candidate = uploaded;
             }
         }
         // 如果 body 里有 json 字符串则优先使用
-        if (body != null && !body.isEmpty()) {
-            return objectMapper.writeValueAsBytes(body);
+        if (candidate == null && body != null && !body.isEmpty()) {
+            candidate = objectMapper.writeValueAsBytes(body);
         }
-        Resource res = resourceLoader.getResource(props.getSampleLocation());
-        if (res.exists()) {
-            try {
-                return res.getInputStream().readAllBytes();
-            } catch (Exception e) {
-                LOG.warn("load sample failed: {}", e.getMessage());
+        if (candidate == null) {
+            Resource res = resourceLoader.getResource(props.getSampleLocation());
+            if (res.exists()) {
+                try {
+                    candidate = res.getInputStream().readAllBytes();
+                } catch (Exception e) {
+                    LOG.warn("load sample failed: {}", e.getMessage());
+                }
             }
         }
-        // fallback 内置示例
-        String fallback = """
-            {
-              "desp": {
-                "dataRange": "9010",
-                "sendTime": 1765057111
-              },
-              "user": [
+        if (candidate == null) {
+            // fallback 内置示例
+            String fallback = """
                 {
-                  "createTime": "1765057111",
-                  "deptCode": "9010",
-                  "diepId": "32",
-                  "identityCard": "510xxxx",
-                  "orgCode": "9010",
-                  "securityLevel": "3",
-                  "status": "1",
-                  "updateTime": "202512081765085911",
-                  "userCode": "ldgbgusd-10",
-                  "userName": "测试员工1"
+                  "desp": {
+                    "dataRange": "9010",
+                    "sendTime": 1765057111
+                  },
+                  "user": [
+                    {
+                      "createTime": "1765057111",
+                      "deptCode": "9010",
+                      "diepId": "32",
+                      "identityCard": "510xxxx",
+                      "orgCode": "9010",
+                      "securityLevel": "3",
+                      "status": "1",
+                      "updateTime": "202512081765085911",
+                      "userCode": "ldgbgusd-10",
+                      "userName": "测试员工1"
+                    }
+                  ],
+                  "orgId": [
+                    {
+                      "deptCode": "9010",
+                      "deptName": "demo app",
+                      "diepId": "9a3Eaxxx",
+                      "orgCode": "9010",
+                      "parentCode": "90",
+                      "shortName": "十所",
+                      "sort": "11",
+                      "status": "1",
+                      "type": "0"
+                    }
+                  ]
                 }
-              ],
-              "orgId": [
-                {
-                  "deptCode": "9010",
-                  "deptName": "demo app",
-                  "diepId": "9a3Eaxxx",
-                  "orgCode": "9010",
-                  "parentCode": "90",
-                  "shortName": "十所",
-                  "sort": "11",
-                  "status": "1",
-                  "type": "0"
-                }
-              ]
+                """;
+            candidate = fallback.getBytes(StandardCharsets.UTF_8);
+        }
+        // 合并多文档样例，院方真实数据是单文件包含全部人员/机构
+        try {
+            Map<String, Object> merged = mergeMultiDoc(candidate);
+            if (merged != null) {
+                LOG.info("mock.sample merged users={} orgs={}", sizeOfList(merged.get("user")), sizeOfList(merged.get("orgId")));
+                return objectMapper.writeValueAsBytes(merged);
             }
-            """;
-        return fallback.getBytes(StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            LOG.warn("merge sample docs failed: {}", e.getMessage());
+        }
+        return candidate;
     }
 
     private boolean looksLikePayload(Object parsed) {
@@ -223,8 +249,81 @@ public class UpstreamMockController {
         if (users instanceof List<?> list && !list.isEmpty()) {
             return true;
         }
-        Object depts = map.get("orgId");
+        Object depts = firstNonNull(map.get("orgId"), map.get("orgIt"));
         return depts instanceof List<?> list && !list.isEmpty();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> mergeMultiDoc(byte[] data) throws IOException {
+        String raw = new String(data, StandardCharsets.UTF_8);
+        if (!raw.contains("---")) {
+            Object parsed = objectMapper.readValue(raw, Object.class);
+            if (parsed instanceof Map<?, ?> m) {
+                return (Map<String, Object>) m;
+            }
+            return null;
+        }
+        String[] parts = raw.split("(?m)^---\\s*$");
+        List<Map<String, Object>> docs = new ArrayList<>();
+        for (String part : parts) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            try {
+                String cleaned = java.util.Arrays
+                    .stream(trimmed.split("\\R"))
+                    .filter(line -> !line.trim().startsWith("#"))
+                    .collect(java.util.stream.Collectors.joining("\n"))
+                    .trim();
+                if (cleaned.isEmpty()) {
+                    continue;
+                }
+                Object parsed = objectMapper.readValue(cleaned, Object.class);
+                if (parsed instanceof Map<?, ?> m) {
+                    docs.add((Map<String, Object>) m);
+                }
+            } catch (Exception e) {
+                LOG.warn("skip invalid sample part: {}", e.getMessage());
+            }
+        }
+        if (docs.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> merged = new LinkedHashMap<>();
+        merged.putAll(docs.get(0)); // desp 等保持第一段
+
+        List<Map<String, Object>> allUsers = new ArrayList<>();
+        List<Map<String, Object>> allOrgs = new ArrayList<>();
+        for (Map<String, Object> m : docs) {
+            Object u = m.get("user");
+            if (u instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> mm) {
+                        allUsers.add(new LinkedHashMap<>((Map<String, Object>) mm));
+                    }
+                }
+            }
+            Object o = firstNonNull(m.get("orgId"), m.get("orgIt"));
+            if (o instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> mm) {
+                        allOrgs.add(new LinkedHashMap<>((Map<String, Object>) mm));
+                    }
+                }
+            }
+        }
+        merged.put("user", allUsers);
+        merged.put("orgId", allOrgs);
+        merged.put("orgIt", allOrgs);
+        return merged;
+    }
+
+    private int sizeOfList(Object obj) {
+        if (obj instanceof List<?> list) {
+            return list.size();
+        }
+        return 0;
     }
 
     private String firstNonBlank(String... vals) {
