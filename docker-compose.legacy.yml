@@ -311,6 +311,7 @@ services:
 
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}
+    entrypoint: ["sh", "/docker-entrypoint.sh"]
     environment:
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}

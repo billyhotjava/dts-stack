@@ -160,6 +160,7 @@ services:
 
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}
+    entrypoint: ["sh", "/docker-entrypoint.sh"]
     environment:
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       # Example: "https://127.0.0.1:18080/multiplex,http://127.0.0.1:18080/multiplex"
