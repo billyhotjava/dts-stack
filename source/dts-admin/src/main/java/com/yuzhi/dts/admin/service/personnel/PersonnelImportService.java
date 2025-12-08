@@ -272,7 +272,15 @@ public class PersonnelImportService {
             return;
         }
         try {
-            if (keycloakAdminClient.findByUsername(username, token).isPresent()) {
+            var existingOpt = keycloakAdminClient.findByUsername(username, token);
+            if (existingOpt.isPresent()) {
+                KeycloakUserDTO existing = existingOpt.orElseThrow();
+                existing.setFullName(payload.fullName());
+                existing.setFirstName(payload.fullName());
+                existing.setAttributes(toKcAttributes(payload));
+                keycloakAdminClient.updateUser(existing.getId(), existing, token);
+                assignBaseRoles(existing.getId(), token);
+                assignDeptGroup(existing.getId(), payload, token);
                 return;
             }
             KeycloakUserDTO dto = new KeycloakUserDTO();

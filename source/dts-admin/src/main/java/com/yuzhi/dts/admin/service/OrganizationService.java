@@ -442,9 +442,36 @@ public class OrganizationService {
             LOG.warn("Detected cycle while syncing Keycloak groups for org id={} name={}", nodeId, node.getName());
             return;
         }
+        OrganizationNode resolvedParent = parent != null ? parent : node.getParent();
+        if (resolvedParent != null) {
+            ensureGroupSynced(resolvedParent, token, resolvedParent.getParent(), visited);
+        }
+        String parentGroupId = resolvedParent != null ? resolvedParent.getKeycloakGroupId() : null;
+        if (resolvedParent != null && StringUtils.isBlank(parentGroupId)) {
+            LOG.debug(
+                "Skip provisioning org {} (id={}) because parent {} has no Keycloak group yet; will be retried after parent is ready",
+                node.getName(),
+                node.getId(),
+                resolvedParent.getName()
+            );
+            return;
+        }
+
+        String expectedPath = buildKeycloakGroupPath(node);
+
+        // 已有 groupId 时校验路径并必要时移动到正确父节点
         if (StringUtils.isNotBlank(node.getKeycloakGroupId())) {
             try {
-                if (keycloakAdminClient.findGroup(node.getKeycloakGroupId(), token).isPresent()) {
+                var existing = keycloakAdminClient.findGroup(node.getKeycloakGroupId(), token);
+                if (existing.isPresent()) {
+                    var found = existing.orElseThrow();
+                    if (
+                        StringUtils.isNotBlank(parentGroupId) &&
+                        StringUtils.isNotBlank(expectedPath) &&
+                        !expectedPath.equals(found.getPath())
+                    ) {
+                        moveGroup(node, token, parentGroupId);
+                    }
                     markProvisioningHealthy();
                     return;
                 }
@@ -466,14 +493,8 @@ public class OrganizationService {
             node.setKeycloakGroupId(null);
             repository.save(node);
         }
-        OrganizationNode resolvedParent = parent != null ? parent : node.getParent();
-        if (resolvedParent != null) {
-            ensureGroupSynced(resolvedParent, token, resolvedParent.getParent(), visited);
-        }
-        String parentGroupId = resolvedParent != null ? resolvedParent.getKeycloakGroupId() : null;
 
         // Reuse existing Keycloak groups when possible to avoid duplicate-creation failures.
-        String expectedPath = buildKeycloakGroupPath(node);
         if (StringUtils.isNotBlank(expectedPath)) {
             try {
                 keycloakAdminClient
