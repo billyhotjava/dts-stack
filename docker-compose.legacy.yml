@@ -320,6 +320,9 @@ services:
       WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
       VITE_HIDE_PASSWORD_LOGIN: ${ADMIN_VITE_HIDE_PASSWORD_LOGIN:-}
     ports: []
+    volumes:
+      # Ensure entrypoint fixes web root permissions at runtime to avoid 403 from nginx
+      - ./source/dts-admin-webapp/docker-entrypoint.sh:/docker-entrypoint.sh:ro,z
     networks:
       - dts-core
     labels:

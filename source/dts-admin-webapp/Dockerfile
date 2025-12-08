@@ -87,8 +87,9 @@ RUN set -eux; \
     if [ -d "/usr/share/nginx/html/vendor" ]; then \
       chmod -R a+rX "/usr/share/nginx/html/vendor"; \
     fi; \
-    # Ensure all JS assets are world-readable
-    find /usr/share/nginx/html -type f -name '*.js' -exec chmod a+r {} + || true
+    # Ensure all assets are world-readable & directories executable for nginx worker
+    find /usr/share/nginx/html -type d -exec chmod 755 {} + || true; \
+    find /usr/share/nginx/html -type f -exec chmod 644 {} + || true
 COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

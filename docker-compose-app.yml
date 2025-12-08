@@ -172,6 +172,9 @@ services:
       # Alternatively, hide via explicit flag (takes effect if ENABLED not set)
       VITE_HIDE_PASSWORD_LOGIN: ${ADMIN_VITE_HIDE_PASSWORD_LOGIN:-}
     ports: []
+    volumes:
+      # Override entrypoint to ensure web root permissions are fixed at runtime (prevents 403)
+      - ./source/dts-admin-webapp/docker-entrypoint.sh:/docker-entrypoint.sh:ro,z
     networks:
       - dts-core
     labels:

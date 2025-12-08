@@ -41,6 +41,8 @@ fi
 if [ -d "/usr/share/nginx/html/vendor" ]; then
   chmod -R a+rX "/usr/share/nginx/html/vendor" 2>/dev/null || true
 fi
+# Ensure the full web root is world-readable (nginx worker is non-root)
+chmod -R a+rX "/usr/share/nginx/html" 2>/dev/null || true
 
 # Optional: explicit Koal vendor base for admin webapp (e.g., '/vendor/koal' or full https URL)
 if [ -n "${KOAL_VENDOR_BASE:-}" ]; then
