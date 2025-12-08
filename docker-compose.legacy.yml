@@ -204,11 +204,12 @@ services:
       DTS_SECURITY_IP_ALLOWLIST_ENABLED: "${DTS_SECURITY_IP_ALLOWLIST_ENABLED:-true}"
       DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES: "${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:-sysadmin,authadmin,auditadmin}"
       LOG_ROOT: /logs
+      DATA_ROOT: /data
       DTS_MDM_GATEWAY_LOG_PATH: "${DTS_MDM_GATEWAY_LOG_PATH:-/logs/dts-admin/mdm-gateway.log}"
       DTS_PERSONNEL_LOG_PATH: "${DTS_PERSONNEL_LOG_PATH:-/logs/dts-admin/personnel-operations.log}"
       # MDM Gateway (ensure runtime picks up .env overrides)
       DTS_MDM_GATEWAY_ENABLED: "${DTS_MDM_GATEWAY_ENABLED:-true}"
-      DTS_MDM_GATEWAY_STORAGE_PATH: "${DTS_MDM_GATEWAY_STORAGE_PATH:-data/mdm}"
+      DTS_MDM_GATEWAY_STORAGE_PATH: "${DTS_MDM_GATEWAY_STORAGE_PATH:-/data/mdm}"
       DTS_MDM_GATEWAY_UPSTREAM_BASE_URL: "${DTS_MDM_GATEWAY_UPSTREAM_BASE_URL:-http://mdm-upstream.example.com}"
       DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH: "${DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH:-/api/mdm/pull}"
       DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN: "${DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN:-}"
@@ -239,6 +240,7 @@ services:
     volumes:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       - ./logs/dts-admin:/logs/dts-admin:z
+      - ./data:/data:z
       # Optional: mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
       - ./services/dts-admin/vendor:/opt/dts/vendor:ro,z
     extra_hosts:

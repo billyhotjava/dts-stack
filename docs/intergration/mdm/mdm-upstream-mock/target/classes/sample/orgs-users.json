@@ -17,7 +17,7 @@
       "userName": "测试员工1"
     }
   ],
-  "orgId": [
+  "orgIt": [
     {
       "deptCode": "9010",
       "deptName": "demo app",
@@ -62,7 +62,7 @@
       "userName": "部门9101-用户B"
     }
   ],
-  "orgId": [
+  "orgIt": [
     {
       "deptCode": "9100",
       "deptName": "研发中心",
@@ -118,7 +118,7 @@
       "userName": "部门9201-停用用户"
     }
   ],
-  "orgId": [
+  "orgIt": [
     {
       "deptCode": "9200",
       "deptName": "运营中心",
@@ -162,7 +162,7 @@
       "userName": "部门9300-用户A"
     }
   ],
-  "orgId": [
+  "orgIt": [
     {
       "deptCode": "9300",
       "deptName": "独立事业部",
@@ -207,7 +207,7 @@
       "userName": "部门9400-用户B"
     }
   ],
-  "orgId": [
+  "orgIt": [
     {
       "deptCode": "9400",
       "deptName": "人力资源部",
@@ -240,7 +240,7 @@
       "userName": "ROOT-管理员"
     }
   ],
-  "orgId": [
+  "orgIt": [
     {
       "deptCode": "90",
       "deptName": "总部ROOT",

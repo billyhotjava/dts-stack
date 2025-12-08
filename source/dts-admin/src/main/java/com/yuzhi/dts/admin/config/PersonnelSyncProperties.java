@@ -116,7 +116,7 @@ public class PersonnelSyncProperties {
 
     public static class Logging {
 
-        private String operationsLog = "logs/personnel-operations.log";
+        private String operationsLog = "../../logs/dts-admin/personnel-operations.log";
         private long maxSizeBytes = 100L * 1024 * 1024;
 
         public String getOperationsLog() {

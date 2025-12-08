@@ -40,6 +40,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
 import java.util.Set;
 import java.util.UUID;
 import java.util.Base64;
@@ -174,6 +175,25 @@ public class KeycloakApiResource {
                 list = list.stream().filter(u -> u.getId() == null || !excludedIdsByRole.contains(u.getId())).toList();
             }
             fromCache = true;
+        }
+        if (list == null || list.isEmpty()) {
+            Page<com.yuzhi.dts.admin.domain.AdminKeycloakUser> snapshots = adminUserService.listSnapshots(0, Math.max(max, 1), null);
+            if (snapshots != null && !snapshots.isEmpty()) {
+                List<KeycloakUserDTO> fallback = new ArrayList<>(snapshots.getNumberOfElements());
+                for (com.yuzhi.dts.admin.domain.AdminKeycloakUser snap : snapshots.getContent()) {
+                    if (snap == null || !StringUtils.hasText(snap.getUsername())) {
+                        continue;
+                    }
+                    KeycloakUserDTO dto = new KeycloakUserDTO();
+                    dto.setId(StringUtils.hasText(snap.getKeycloakId()) ? snap.getKeycloakId() : snap.getUsername());
+                    dto.setUsername(snap.getUsername());
+                    dto.setFullName(snap.getFullName());
+                    dto.setGroups(snap.getGroupPaths());
+                    fallback.add(dto);
+                }
+                list = filterProtectedUsers(fallback);
+                fromCache = true;
+            }
         }
         Map<String, Object> auditDetail = new LinkedHashMap<>();
         auditDetail.put("count", list.size());

@@ -16,13 +16,13 @@ public class MdmGatewayProperties {
      * 本地落盘目录，用于保存院端推送的全量 JSON。
      */
     @NotBlank
-    private String storagePath = "data/mdm";
+    private String storagePath = "../../data/mdm";
 
     /**
      * 网关专用日志文件路径，配合 logback 滚动 100MB。
      */
     @NotBlank
-    private String logPath = "logs/mdm-gateway.log";
+    private String logPath = "../../logs/dts-admin/mdm-gateway.log";
 
     private final Upstream upstream = new Upstream();
     private final Callback callback = new Callback();

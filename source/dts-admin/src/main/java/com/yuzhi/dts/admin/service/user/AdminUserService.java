@@ -28,11 +28,13 @@ import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
+import com.yuzhi.dts.admin.repository.PersonProfileRepository;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import com.yuzhi.dts.admin.domain.OrganizationNode;
+import com.yuzhi.dts.admin.domain.PersonProfile;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import java.lang.reflect.Array;
 import java.time.Instant;
@@ -63,6 +65,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -105,6 +108,7 @@ public class AdminUserService {
     private final AdminRoleAssignmentRepository roleAssignRepo;
     private final AdminRoleMemberRepository roleMemberRepo;
     private final OrganizationRepository organizationRepository;
+    private final PersonProfileRepository personProfileRepository;
     private final ObjectMapper objectMapper;
     private final KeycloakAuthService keycloakAuthService;
     private final ChangeSnapshotFormatter changeSnapshotFormatter;
@@ -134,6 +138,7 @@ public class AdminUserService {
         AdminRoleAssignmentRepository roleAssignRepo,
         AdminRoleMemberRepository roleMemberRepo,
         OrganizationRepository organizationRepository,
+        PersonProfileRepository personProfileRepository,
         ChangeSnapshotFormatter changeSnapshotFormatter,
         ObjectMapper objectMapper,
         KeycloakAuthService keycloakAuthService,
@@ -151,6 +156,7 @@ public class AdminUserService {
         this.roleAssignRepo = roleAssignRepo;
         this.roleMemberRepo = roleMemberRepo;
         this.organizationRepository = organizationRepository;
+        this.personProfileRepository = personProfileRepository;
         this.changeSnapshotFormatter = changeSnapshotFormatter;
         this.objectMapper = objectMapper;
         this.keycloakAuthService = keycloakAuthService;
@@ -160,20 +166,154 @@ public class AdminUserService {
         this.useClientRoles = useClientRoles;
     }
 
-    @Transactional(readOnly = true)
+@Transactional(propagation = Propagation.REQUIRED)
     public Page<AdminKeycloakUser> listSnapshots(int page, int size, String keyword) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.max(size, 1);
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "username"));
+        Page<AdminKeycloakUser> result;
+        LOG.debug("listSnapshots start page={} size={} keyword='{}'", safePage, safeSize, StringUtils.trimToEmpty(keyword));
         if (StringUtils.isNotBlank(keyword)) {
-            return userRepository.findByUsernameContainingIgnoreCase(keyword.trim(), pageable);
+            result = userRepository.findByUsernameContainingIgnoreCase(keyword.trim(), pageable);
+        } else {
+            result = userRepository.findAll(pageable);
         }
-        return userRepository.findAll(pageable);
+        if (result.getTotalElements() == 0) {
+            LOG.info("user snapshots empty, refreshing from keycloak then profiles");
+            refreshSnapshotsFromKeycloak();
+            if (result.getTotalElements() == 0) {
+                refreshSnapshotsFromProfiles();
+            }
+            if (StringUtils.isNotBlank(keyword)) {
+                result = userRepository.findByUsernameContainingIgnoreCase(keyword.trim(), pageable);
+            } else {
+                result = userRepository.findAll(pageable);
+            }
+            LOG.info("user snapshots after refresh total={}", result.getTotalElements());
+        } else if (page == 0 && result.getNumberOfElements() < safeSize) {
+            // 数据量明显偏少时尝试补齐（兼容同步后快照缺失的场景）
+            LOG.info("user snapshots count={} (<pageSize={}), refreshing profiles+keycloak", result.getNumberOfElements(), safeSize);
+            refreshSnapshotsFromProfiles();
+            refreshSnapshotsFromKeycloak();
+            if (StringUtils.isNotBlank(keyword)) {
+                result = userRepository.findByUsernameContainingIgnoreCase(keyword.trim(), pageable);
+            } else {
+                result = userRepository.findAll(pageable);
+            }
+            LOG.info("user snapshots after top-up total={}", result.getTotalElements());
+        }
+        LOG.debug("listSnapshots end totalElements={} pageElements={}", result.getTotalElements(), result.getNumberOfElements());
+        return result;
     }
 
     @Transactional(readOnly = true)
     public Optional<AdminKeycloakUser> findSnapshotByUsername(String username) {
         return userRepository.findByUsernameIgnoreCase(username);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void refreshSnapshotsFromKeycloak() {
+        String token = resolveManagementToken();
+        if (!StringUtils.isNotBlank(token)) {
+            LOG.warn("skip snapshot refresh: management token unavailable");
+            return;
+        }
+        try {
+            List<KeycloakUserDTO> users = keycloakAdminClient.listUsers(0, 500, token);
+            int saved = 0;
+            for (KeycloakUserDTO dto : users) {
+                if (dto == null || !StringUtils.isNotBlank(dto.getId()) || !StringUtils.isNotBlank(dto.getUsername())) {
+                    continue;
+                }
+                AdminKeycloakUser snapshot = userRepository
+                    .findByKeycloakId(dto.getId())
+                    .orElseGet(() -> userRepository.findByUsernameIgnoreCase(dto.getUsername()).orElseGet(AdminKeycloakUser::new));
+                snapshot.setKeycloakId(dto.getId());
+                snapshot.setUsername(dto.getUsername());
+                if (StringUtils.isNotBlank(dto.getFullName())) {
+                    snapshot.setFullName(dto.getFullName());
+                }
+                String secLevel = normalizeSecurityLevel(extractSingle(dto, "person_security_level"));
+                snapshot.setPersonSecurityLevel(StringUtils.defaultIfBlank(secLevel, "GENERAL"));
+                snapshot.setEnabled(Boolean.TRUE.equals(dto.getEnabled()));
+                List<String> groupPaths = normalizeGroupPathList(dto.getGroups());
+                if (groupPaths.isEmpty()) {
+                    groupPaths = resolveGroupPathsFromProfiles(dto.getUsername());
+                }
+                if (!groupPaths.isEmpty()) {
+                    snapshot.setGroupPaths(mergeGroupPaths(snapshot.getGroupPaths(), groupPaths));
+                }
+                snapshot.setLastSyncAt(Instant.now());
+                userRepository.save(snapshot);
+                saved++;
+            }
+            LOG.info("refreshed {} user snapshots from keycloak", saved);
+        } catch (Exception ex) {
+            LOG.warn("refresh snapshots from keycloak failed: {}", ex.getMessage());
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void refreshSnapshotsFromProfiles() {
+        try {
+            var page = personProfileRepository.findAll(PageRequest.of(0, 1000));
+            if (page.isEmpty()) {
+                return;
+            }
+            int saved = 0;
+            for (var profile : page.getContent()) {
+                String username = firstNonBlank(profile.getAccount(), profile.getPersonCode(), profile.getExternalId());
+                if (!StringUtils.isNotBlank(username)) {
+                    continue;
+                }
+                AdminKeycloakUser snapshot = userRepository
+                    .findByUsernameIgnoreCase(username)
+                    .orElseGet(() -> {
+                        AdminKeycloakUser u = new AdminKeycloakUser();
+                        u.setUsername(username);
+                        return u;
+                    });
+                Object kcIdAttr = profile.getAttributes() == null ? null : profile.getAttributes().get("keycloakId");
+                if (StringUtils.isBlank(snapshot.getKeycloakId()) && kcIdAttr != null) {
+                    snapshot.setKeycloakId(String.valueOf(kcIdAttr));
+                }
+                if (StringUtils.isBlank(snapshot.getKeycloakId())) {
+                    String token = resolveManagementToken();
+                    if (StringUtils.isNotBlank(token)) {
+                        try {
+                            keycloakAdminClient.findByUsername(username, token).ifPresent(dto -> snapshot.setKeycloakId(dto.getId()));
+                        } catch (Exception ignored) {
+                        }
+                    }
+                }
+                if (StringUtils.isNotBlank(profile.getFullName())) {
+                    snapshot.setFullName(profile.getFullName());
+                }
+                snapshot.setPersonSecurityLevel(
+                    StringUtils.defaultIfBlank(
+                        normalizeSecurityLevel(
+                            extractSingle(profile.getAttributes(), "person_security_level", "securityLevel", "person_level")
+                        ),
+                        DEFAULT_PERSON_LEVEL
+                    )
+                );
+                snapshot.setEnabled(true);
+                List<String> resolvedPaths = resolveGroupPathsFromProfile(profile);
+                if (!resolvedPaths.isEmpty()) {
+                    snapshot.setGroupPaths(mergeGroupPaths(snapshot.getGroupPaths(), resolvedPaths));
+                }
+                snapshot.setLastSyncAt(Instant.now());
+                if (StringUtils.isNotBlank(snapshot.getKeycloakId())) {
+                    userRepository.save(snapshot);
+                    saved++;
+                } else {
+                    LOG.debug("skip snapshot without kcId (username={} dept={})", snapshot.getUsername(), profile.getDeptCode());
+                }
+            }
+            LOG.info("refreshed {} user snapshots from person profiles", saved);
+        } catch (Exception ex) {
+            LOG.warn("refresh snapshots from profiles failed: {}", ex.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)
@@ -1814,11 +1954,17 @@ public class AdminUserService {
         if (!StringUtils.isNotBlank(path)) {
             return null;
         }
-        String trimmed = path.trim();
+        String trimmed = path.trim().replaceAll("/{2,}", "/");
         if (trimmed.isEmpty()) {
             return null;
         }
-        return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
+        if (!trimmed.startsWith("/")) {
+            trimmed = "/" + trimmed;
+        }
+        if (trimmed.endsWith("/") && trimmed.length() > 1) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     private List<String> normalizeGroupPathList(Collection<?> source) {
@@ -1838,6 +1984,12 @@ public class AdminUserService {
         return result;
     }
 
+    private List<String> mergeGroupPaths(Collection<String> existing, Collection<String> additions) {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(normalizeGroupPathList(existing));
+        merged.addAll(normalizeGroupPathList(additions));
+        return new ArrayList<>(merged);
+    }
+
     private List<String> normalizeGroupPathListForDiff(Collection<?> source) {
         List<String> normalized = normalizeGroupPathList(source);
         if (normalized == null || normalized.isEmpty()) {
@@ -1846,6 +1998,78 @@ public class AdminUserService {
         List<String> sorted = new ArrayList<>(normalized);
         sorted.sort(String::compareTo);
         return sorted;
+    }
+
+    private String resolveGroupPathByDept(String deptCode) {
+        if (!StringUtils.isNotBlank(deptCode)) {
+            return null;
+        }
+        return organizationRepository
+            .findFirstByDeptCodeIgnoreCase(deptCode)
+            .map(this::buildGroupPath)
+            .orElse(null);
+    }
+
+    private List<String> resolveGroupPathsFromProfile(PersonProfile profile) {
+        if (profile == null) {
+            return List.of();
+        }
+        List<String> paths = new ArrayList<>();
+        String fromDeptCode = resolveGroupPathByDept(profile.getDeptCode());
+        if (StringUtils.isNotBlank(fromDeptCode)) {
+            paths.add(fromDeptCode);
+        }
+        String fromDeptPath = StringUtils.firstNonBlank(
+            profile.getDeptPath(),
+            extractSingle(profile.getAttributes(), "dept_path", "deptPath", "departmentPath", "org_path")
+        );
+        if (StringUtils.isNotBlank(fromDeptPath)) {
+            String normalized = normalizeGroupPath(fromDeptPath);
+            if (normalized != null && !paths.contains(normalized)) {
+                paths.add(normalized);
+            }
+        }
+        return normalizeGroupPathList(paths);
+    }
+
+    private List<String> resolveGroupPathsFromProfiles(String username) {
+        if (!StringUtils.isNotBlank(username)) {
+            return List.of();
+        }
+        // account 优先，其次按 personCode 兜底
+        return personProfileRepository
+            .findByAccountIgnoreCase(username.trim())
+            .map(this::resolveGroupPathsFromProfile)
+            .orElseGet(() ->
+                personProfileRepository
+                    .findByPersonCodeIgnoreCase(username.trim())
+                    .map(this::resolveGroupPathsFromProfile)
+                    .orElse(List.of())
+            );
+    }
+
+    private String buildGroupPath(OrganizationNode node) {
+        if (node == null) {
+            return null;
+        }
+        List<String> segments = new ArrayList<>();
+        OrganizationNode cursor = node;
+        int guard = 20;
+        while (cursor != null && guard-- > 0) {
+            String name = StringUtils.trimToNull(cursor.getName());
+            if (name != null) {
+                segments.add(0, name);
+            }
+            OrganizationNode parent = cursor.getParent();
+            if (parent == null && StringUtils.isNotBlank(cursor.getParentCode())) {
+                parent = organizationRepository.findFirstByDeptCodeIgnoreCase(cursor.getParentCode()).orElse(null);
+            }
+            cursor = parent;
+        }
+        if (segments.isEmpty()) {
+            return null;
+        }
+        return normalizeGroupPath("/" + String.join("/", segments));
     }
 
     private void ensureDeptCodeAttribute(KeycloakUserDTO dto, List<String> groupPaths) {
@@ -1925,6 +2149,33 @@ public class AdminUserService {
             return null;
         }
         return values.get(0);
+    }
+
+    private String extractSingle(Map<String, Object> attrs, String... keys) {
+        if (attrs == null || attrs.isEmpty() || keys == null) {
+            return null;
+        }
+        for (String key : keys) {
+            if (StringUtils.isBlank(key)) {
+                continue;
+            }
+            Object val = attrs.get(key);
+            if (val == null) {
+                continue;
+            }
+            if (val instanceof List<?> list && !list.isEmpty()) {
+                Object first = list.get(0);
+                if (first != null) {
+                    return StringUtils.trimToNull(String.valueOf(first));
+                }
+            } else {
+                String str = StringUtils.trimToNull(String.valueOf(val));
+                if (str != null) {
+                    return str;
+                }
+            }
+        }
+        return null;
     }
 
     private List<String> extractList(KeycloakUserDTO dto, String key) {

@@ -21,7 +21,9 @@ import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService.TokenResponse;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.admin.config.MdmGatewayProperties;
+import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.domain.OrganizationNode;
+import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import java.time.Instant;
 import java.util.Arrays;
@@ -53,6 +55,7 @@ public class PersonnelImportService {
     private final AuditV2Service auditV2Service;
     private final KeycloakAdminClient keycloakAdminClient;
     private final KeycloakAuthService keycloakAuthService;
+    private final AdminKeycloakUserRepository adminKeycloakUserRepository;
     private final OrganizationRepository organizationRepository;
     private final String managementClientId;
     private final String managementClientSecret;
@@ -68,6 +71,7 @@ public class PersonnelImportService {
         AuditV2Service auditV2Service,
         KeycloakAdminClient keycloakAdminClient,
         KeycloakAuthService keycloakAuthService,
+        AdminKeycloakUserRepository adminKeycloakUserRepository,
         OrganizationRepository organizationRepository,
         @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}") String managementClientId,
         @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}") String managementClientSecret,
@@ -81,6 +85,7 @@ public class PersonnelImportService {
         this.auditV2Service = auditV2Service;
         this.keycloakAdminClient = keycloakAdminClient;
         this.keycloakAuthService = keycloakAuthService;
+        this.adminKeycloakUserRepository = adminKeycloakUserRepository;
         this.organizationRepository = organizationRepository;
         this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
         this.managementClientSecret = managementClientSecret == null ? "" : managementClientSecret.trim();
@@ -290,6 +295,7 @@ public class PersonnelImportService {
                 if (dirty) {
                     keycloakAdminClient.updateUser(existing.getId(), existing, token);
                 }
+                upsertSnapshot(existing.getId(), username, payload.fullName(), desiredAttrs.get("person_security_level"), null);
                 assignBaseRoles(existing.getId(), token);
                 assignDeptGroup(existing.getId(), payload, token);
                 return;
@@ -314,6 +320,7 @@ public class PersonnelImportService {
                     OPS_LOG.warn("set temp password failed for user {}: {}", username, ex.getMessage());
                 }
             }
+            upsertSnapshot(kcId, username, payload.fullName(), dto.getAttributes().get("person_security_level"), null);
             assignBaseRoles(kcId, token);
             assignDeptGroup(kcId, payload, token);
             // 若有部门组同步，可在此按 deptCode 挂组；依赖外层已开启组同步
@@ -368,6 +375,67 @@ public class PersonnelImportService {
             }
         });
         return attrs;
+    }
+
+    private void persistUserGroupPath(String keycloakUserId, PersonnelPayload payload, String rawPath) {
+        String normalized = normalizeGroupPath(rawPath);
+        if (StringUtils.isBlank(keycloakUserId) || StringUtils.isBlank(normalized)) {
+            return;
+        }
+        upsertSnapshot(keycloakUserId, firstNonBlank(payload.account(), payload.personCode()), payload.fullName(), payload.attributes().get("person_security_level"), normalized);
+    }
+
+    private void upsertSnapshot(
+        String keycloakUserId,
+        String username,
+        String fullName,
+        Object secLevelObj,
+        String groupPath
+    ) {
+        if (StringUtils.isBlank(keycloakUserId) || StringUtils.isBlank(username)) {
+            return;
+        }
+        String level = normalizeSecurityLevel(secLevelObj == null ? null : String.valueOf(secLevelObj));
+        if (StringUtils.isBlank(level)) {
+            level = "GENERAL";
+        }
+        AdminKeycloakUser snapshot = adminKeycloakUserRepository
+            .findByKeycloakId(keycloakUserId)
+            .orElseGet(() -> adminKeycloakUserRepository.findByUsernameIgnoreCase(username).orElseGet(AdminKeycloakUser::new));
+        snapshot.setKeycloakId(keycloakUserId);
+        snapshot.setUsername(username);
+        if (StringUtils.isNotBlank(fullName)) {
+            snapshot.setFullName(fullName);
+        }
+        snapshot.setPersonSecurityLevel(level);
+        snapshot.setEnabled(true);
+        if (StringUtils.isNotBlank(groupPath)) {
+            String normalized = normalizeGroupPath(groupPath);
+            if (StringUtils.isNotBlank(normalized)) {
+                List<String> paths = new java.util.ArrayList<>(snapshot.getGroupPaths() == null ? List.of() : snapshot.getGroupPaths());
+                boolean exists = paths.stream().map(this::normalizeGroupPath).anyMatch(normalized::equalsIgnoreCase);
+                if (!exists) {
+                    paths.add(normalized);
+                    snapshot.setGroupPaths(paths);
+                }
+            }
+        }
+        snapshot.setLastSyncAt(Instant.now());
+        adminKeycloakUserRepository.save(snapshot);
+    }
+
+    private String normalizeGroupPath(String path) {
+        if (!StringUtils.isNotBlank(path)) {
+            return null;
+        }
+        String trimmed = path.trim().replaceAll("/{2,}", "/");
+        if (!trimmed.startsWith("/")) {
+            trimmed = "/" + trimmed;
+        }
+        if (trimmed.endsWith("/") && trimmed.length() > 1) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     private String safeString(Object obj) {
@@ -433,13 +501,13 @@ public class PersonnelImportService {
             .findFirstByDeptCodeIgnoreCase(deptCode)
             .ifPresent(node -> {
                 String groupId = node.getKeycloakGroupId();
+                String groupPath = buildGroupPath(node);
                 if (StringUtils.isBlank(groupId)) {
-                    String path = buildGroupPath(node);
-                    if (StringUtils.isBlank(path)) {
-                        path = buildGroupPathFromRepository(node);
+                    if (StringUtils.isBlank(groupPath)) {
+                        groupPath = buildGroupPathFromRepository(node);
                     }
-                    if (StringUtils.isNotBlank(path)) {
-                        keycloakAdminClient.findGroupByPath(path, token).ifPresent(found -> {
+                    if (StringUtils.isNotBlank(groupPath)) {
+                        keycloakAdminClient.findGroupByPath(groupPath, token).ifPresent(found -> {
                             node.setKeycloakGroupId(found.getId());
                             organizationRepository.save(node);
                         });
@@ -449,6 +517,7 @@ public class PersonnelImportService {
                 if (StringUtils.isNotBlank(groupId)) {
                     try {
                         keycloakAdminClient.addUserToGroup(userId, groupId, token);
+                        persistUserGroupPath(userId, payload, groupPath);
                         OPS_LOG.info("bind user {} to dept {} group {}", userId, deptCode, groupId);
                     } catch (Exception ex) {
                         OPS_LOG.warn("bind user {} to org {} failed: {}", userId, deptCode, ex.getMessage());
