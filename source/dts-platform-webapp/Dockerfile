@@ -23,7 +23,7 @@ RUN set -eux; \
         export npm_config_proxy="${http_proxy}"; \
         export npm_config_https_proxy="${https_proxy}"; \
     fi; \
-    npm install -g pnpm@10.8.0 && pnpm --version; \
+    npm install -g pnpm@10.24.0 && pnpm --version; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
 # Disable opening visualizer report during Docker build
