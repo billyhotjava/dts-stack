@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -360,6 +361,11 @@ public class MdmGatewayProperties {
         private String systemCode = "10XT";
 
         /**
+         * 兼容院方配置 key=sysCode。
+         */
+        private String sysCode;
+
+        /**
          * 数据范围 dataRange（院方示例值：9010）
          */
         private String dataRange = "9010";
@@ -377,14 +383,25 @@ public class MdmGatewayProperties {
         /**
          * dataType，院方示例 sync_demand 表示准备数据。
          */
-        private String dataType = "sync_demand";
+        private String dataType = "sync-demand";
 
         public String getSystemCode() {
-            return systemCode;
+            return StringUtils.defaultIfBlank(systemCode, sysCode);
         }
 
         public void setSystemCode(String systemCode) {
             this.systemCode = systemCode;
+        }
+
+        public String getSysCode() {
+            return getSystemCode();
+        }
+
+        public void setSysCode(String sysCode) {
+            this.sysCode = sysCode;
+            if (StringUtils.isBlank(this.systemCode)) {
+                this.systemCode = sysCode;
+            }
         }
 
         public String getDataRange() {

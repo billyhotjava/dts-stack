@@ -192,8 +192,8 @@ public class MdmGatewayService {
             );
         validateToken(request);
 
-        // dataType=sync_demand 时仅登记请求
-        if ("sync_demand".equalsIgnoreCase(dataType)) {
+        // dataType=sync_demand/sync-demand 时仅登记请求
+        if (isSyncDemand(dataType)) {
             CallbackResult result = new CallbackResult();
             result.batchId = "sync-" + TS_FILE.format(LocalDateTime.now());
             result.clientIp = clientIp;
@@ -322,6 +322,10 @@ public class MdmGatewayService {
         } catch (Exception e) {
             LOG.error("mdm.callback.async.failed file={} error={}", result.file, e.getMessage(), e);
         }
+    }
+
+    private boolean isSyncDemand(String dataType) {
+        return StringUtils.equalsIgnoreCase("sync_demand", dataType) || StringUtils.equalsIgnoreCase("sync-demand", dataType);
     }
 
     private void validateToken(HttpServletRequest request) {

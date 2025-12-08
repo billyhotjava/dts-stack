@@ -402,7 +402,11 @@ generate_env_base(){
 
   # ---------- MDM Gateway ----------
   : "${DTS_MDM_GATEWAY_ENABLED:=true}"
-  : "${DTS_MDM_GATEWAY_STORAGE_PATH:=data/mdm}"
+  if [[ "${LEGACY_STACK}" == "true" ]]; then
+    : "${DTS_MDM_GATEWAY_STORAGE_PATH:=/data/mdm}"
+  else
+    : "${DTS_MDM_GATEWAY_STORAGE_PATH:=data/mdm}"
+  fi
   : "${DTS_MDM_GATEWAY_LOG_PATH:=/logs/dts-admin/mdm-gateway.log}"
   : "${DTS_MDM_GATEWAY_UPSTREAM_BASE_URL:=http://localhost:28080}"
   : "${DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH:=/api/mdm/pull}"

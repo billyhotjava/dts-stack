@@ -305,7 +305,7 @@ dts:
         data-range: ${DTS_MDM_GATEWAY_REGISTRY_DATA_RANGE:9010}
         area-security: ${DTS_MDM_GATEWAY_REGISTRY_AREA_SECURITY:9001}
         area-business: ${DTS_MDM_GATEWAY_REGISTRY_AREA_BUSINESS:B}
-        data-type: ${DTS_MDM_GATEWAY_REGISTRY_DATA_TYPE:sync_demand}
+        data-type: ${DTS_MDM_GATEWAY_REGISTRY_DATA_TYPE:sync-demand}
       upstream:
         base-url: ${DTS_MDM_GATEWAY_UPSTREAM_BASE_URL:http://mdm-upstream.example.com}
         pull-path: ${DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH:/api/mdm/pull} # base + path = 握手/拉取地址
