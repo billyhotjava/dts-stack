@@ -67,15 +67,18 @@ public class MdmDemoService {
             throw new IllegalStateException("缺少握手地址 mdm.demo.upstream.handshake-url");
         }
         Map<String, Object> payload = new HashMap<>();
-        payload.put("systemCode", properties.getRegistry().getSystemCode());
-        payload.put("callbackUrl", properties.getCallback().getUrl());
-        payload.put("callbackSecret", properties.getCallback().getAuthToken());
-        payload.put("securityDomain", properties.getRegistry().getSecurityDomain());
-        payload.put("pushMode", properties.getRegistry().getPushMode());
-        payload.put("dataTypes", properties.getRegistry().getDataTypes());
+        // payload.put("systemCode", properties.getRegistry().getSystemCode());
+        // payload.put("callbackUrl", properties.getCallback().getUrl());
+        // payload.put("callbackSecret", properties.getCallback().getAuthToken());
+        // payload.put("securityDomain", properties.getRegistry().getSecurityDomain());
+        // payload.put("pushMode", properties.getRegistry().getPushMode());
+        // payload.put("dataTypes", properties.getRegistry().getDataTypes());
         // 院方示例中的扩展参数，可继续按需添加
-        payload.put("targetNode", "B");
-
+        payload.put("sysCode", "BI9010");
+        payload.put("dataRange", "9010");
+        payload.put("areaSecurity", "9001");
+        payload.put("areaBusiness", "B");
+        payload.put("dataType", "sync-demand");
         String sendStr;
         try {
             sendStr = objectMapper.writeValueAsString(payload);
@@ -93,7 +96,16 @@ public class MdmDemoService {
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
         form.add("file", fileRes);
         // 院方示例中的参数表单（可按需扩展），保持与文件内容分离
-        form.add("targetNode", "B"); // 示例参数：院方 demo 使用 targetNode/targetNodeCode
+        form.add("targetNodeCode","9000");
+        form.add("targetDomainCode","B");
+        form.add("targetServiceId","orgit");
+        form.add("sourceServiceId","WXXXX");
+        form.add("approval","1");
+        form.add("title","BI9010_IT_ORG_SYNC");
+        form.add("dataType","sync-demand");
+        form.add("securityLevel","1");
+        form.add("filedType","B");
+        form.add("version","1");
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);

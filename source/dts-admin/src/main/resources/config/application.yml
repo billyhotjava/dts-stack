@@ -310,11 +310,22 @@ dts:
         base-url: ${DTS_MDM_GATEWAY_UPSTREAM_BASE_URL:http://mdm-upstream.example.com}
         pull-path: ${DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH:/api/mdm/pull} # base + path = 握手/拉取地址
         auth-token: ${DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN:}
-        use-multipart: ${DTS_MDM_GATEWAY_UPSTREAM_USE_MULTIPART:false}
+        use-multipart: ${DTS_MDM_GATEWAY_UPSTREAM_USE_MULTIPART:true}
         file-part-name: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_PART_NAME:file}
         file-prefix: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_PREFIX:orgItDemand}
         file-suffix: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_SUFFIX:.txt}
-        form-params: {} # 例如 targetNodeCode/targetDomainCode/targetServiceId/approval 等
+        # 默认将院方示例参数一起发送，方便现场直接拉取；可用环境变量覆盖
+        form-params:
+          targetNodeCode: ${DTS_MDM_GATEWAY_UPSTREAM_TARGET_NODE_CODE:9000}
+          targetDomainCode: ${DTS_MDM_GATEWAY_UPSTREAM_TARGET_DOMAIN_CODE:B}
+          targetServiceId: ${DTS_MDM_GATEWAY_UPSTREAM_TARGET_SERVICE_ID:orgit}
+          sourceServiceId: ${DTS_MDM_GATEWAY_UPSTREAM_SOURCE_SERVICE_ID:WXXXXXDDD}
+          approval: ${DTS_MDM_GATEWAY_UPSTREAM_APPROVAL:1}
+          title: ${DTS_MDM_GATEWAY_UPSTREAM_TITLE:9000}
+          dataType: ${DTS_MDM_GATEWAY_UPSTREAM_DATA_TYPE:9000}
+          securityLevel: ${DTS_MDM_GATEWAY_UPSTREAM_SECURITY_LEVEL:9000}
+          filedType: ${DTS_MDM_GATEWAY_UPSTREAM_FILED_TYPE:9000}
+          version: ${DTS_MDM_GATEWAY_UPSTREAM_VERSION:9000}
         payload-template: {} # 额外 JSON 字段，如 pushMode/securityLevel 等
         connect-timeout: ${DTS_MDM_GATEWAY_UPSTREAM_CONNECT_TIMEOUT:5s}
         read-timeout: ${DTS_MDM_GATEWAY_UPSTREAM_READ_TIMEOUT:30s}

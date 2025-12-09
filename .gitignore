@@ -23,5 +23,6 @@ source/dts-admin/.m2/
 ./vscode
 ./codex
 ./specify
-./logs
 logs/
+docs/intergration/mdm/mdmdemo/mvn
+docs/intergration/mdm/mdmdemo/target
