@@ -33,6 +33,8 @@ public class MdmGatewayResource {
             return ResponseEntity.badRequest().body(ApiResponse.error("MDM 网关未启用"));
         }
         MdmGatewayService.PullResult result = gatewayService.triggerUpstreamPull(payload == null ? Map.of() : payload);
+        // 记录手工触发的拉取操作
+        LOG.info("mdm.manual.pull requested payloadKeys={} upstreamStatus={} requestId={}", payload == null ? 0 : payload.keySet(), result.upstreamStatus, result.requestId);
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
