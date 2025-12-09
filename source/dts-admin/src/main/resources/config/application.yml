@@ -16,7 +16,9 @@
 
 spring:
   config:
-    import: optional:file:./config/mdm/
+    import:
+      - optional:file:./config/mdm/
+      - optional:file:./config/mdm/mdm-gateway.yml
 
 ---
 # Conditionally disable springdoc on missing api-docs profile

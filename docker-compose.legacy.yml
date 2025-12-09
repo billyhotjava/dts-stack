@@ -200,7 +200,7 @@ services:
       DTS_PKI_GATEWAY_PORT: "${DTS_PKI_GATEWAY_PORT:-0}"
       DTS_PKI_DIGEST: "${DTS_PKI_DIGEST:-SHA1}"
       DTS_PKI_VENDOR_JAR: "${DTS_PKI_VENDOR_JAR:-}"
-      SPRING_CONFIG_IMPORT: "optional:file:/opt/dts/config/mdm/"
+      SPRING_CONFIG_IMPORT: "optional:file:/opt/dts/config/mdm/mdm-gateway.yml,optional:file:/opt/dts/config/mdm/"
       # Password-login triad IP allowlist (PKI login unaffected)
       DTS_SECURITY_IP_ALLOWLIST_ENABLED: "${DTS_SECURITY_IP_ALLOWLIST_ENABLED:-true}"
       DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES: "${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:-sysadmin,authadmin,auditadmin}"
