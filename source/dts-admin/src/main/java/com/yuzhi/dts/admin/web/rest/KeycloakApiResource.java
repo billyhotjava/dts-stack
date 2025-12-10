@@ -155,7 +155,7 @@ public class KeycloakApiResource {
     @GetMapping("/keycloak/users")
     public ResponseEntity<List<KeycloakUserDTO>> listUsers(
         @RequestParam(defaultValue = "0") int first,
-        @RequestParam(defaultValue = "100") int max,
+        @RequestParam(defaultValue = "1000") int max,
         HttpServletRequest request
     ) {
         String token = adminAccessToken();

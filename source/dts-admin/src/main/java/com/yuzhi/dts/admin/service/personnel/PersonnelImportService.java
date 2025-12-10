@@ -486,11 +486,11 @@ public class PersonnelImportService {
         String normalized = level.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
         // 与 AdminUserService 的映射保持一致，补充数字密级到平台枚举
         return switch (normalized) {
-            case "0" -> "NON_SECRET";
-            case "1", "GENERAL", "GN", "GE", "G" -> "GENERAL";
-            case "2", "IMPORTANT", "IM", "I" -> "IMPORTANT";
-            case "3", "CORE", "CO", "C" -> "CORE";
-            case "NONE_SECRET", "NON_SECRET", "NS" -> "NON_SECRET";
+            case "0" -> "GENERAL"; // 院方：0=一般
+            case "1", "IMPORTANT", "IM", "I" -> "IMPORTANT"; // 院方：1=重要
+            case "2", "CORE", "CO", "C" -> "CORE"; // 院方：2=核心
+            case "GENERAL", "GN", "GE", "G" -> "GENERAL";
+            case "NONE_SECRET", "NON_SECRET", "NS" -> "GENERAL"; // 兼容旧值，收敛为 GENERAL
             default -> normalized;
         };
     }

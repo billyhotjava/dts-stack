@@ -84,9 +84,12 @@ public class AdminUserService {
     private static final Set<String> FORBIDDEN_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET");
     private static final Set<String> KEYCLOAK_DEFAULT_REALM_ROLE_NAMES = Set.of("offline_access", "uma_authorization");
     private static final Map<String, String> SECURITY_LEVEL_ALIASES = Map.ofEntries(
-        Map.entry("NONE_SECRET", "NON_SECRET"),
-        Map.entry("NON_SECRET", "NON_SECRET"),
-        Map.entry("NS", "NON_SECRET"),
+        Map.entry("0", "GENERAL"), // 院方：0=一般
+        Map.entry("1", "IMPORTANT"), // 院方：1=重要
+        Map.entry("2", "CORE"), // 院方：2=核心
+        Map.entry("NONE_SECRET", "GENERAL"),
+        Map.entry("NON_SECRET", "GENERAL"),
+        Map.entry("NS", "GENERAL"),
         Map.entry("GENERAL", "GENERAL"),
         Map.entry("GN", "GENERAL"),
         Map.entry("GE", "GENERAL"),

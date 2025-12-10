@@ -93,6 +93,10 @@ export default function UserManagementView() {
 	const [list, setList] = useState<KeycloakUser[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [searchValue, setSearchValue] = useState("");
+	const [pagination, setPagination] = useState<{ current: number; pageSize: number }>({
+		current: 1,
+		pageSize: 20,
+	});
 	const [rolesMap, setRolesMap] = useState<Record<string, string[]>>({});
 	const [roleDisplayNameMap, setRoleDisplayNameMap] = useState<Record<string, string>>({
 		SYSADMIN: "系统管理员",
@@ -113,7 +117,7 @@ export default function UserManagementView() {
 		try {
 			const data = searchValue.trim()
 				? await KeycloakUserService.searchUsers(searchValue.trim())
-				: await KeycloakUserService.getAllUsers({ first: 0, max: 100 });
+				: await KeycloakUserService.getAllUsers({ first: 0, max: 1000 });
 			setList(data || []);
 			setRolesMap({});
 		} catch (e: any) {
@@ -534,11 +538,14 @@ export default function UserManagementView() {
 							dataSource={list}
 							loading={loading}
 							pagination={{
-								pageSize: 10,
+								current: pagination.current,
+								pageSize: pagination.pageSize,
+								onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
 								showSizeChanger: true,
-								pageSizeOptions: [10, 20, 50, 100],
+								pageSizeOptions: [10, 20, 50, 100, 200],
 								showQuickJumper: true,
 								showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+								total: list.length,
 							}}
 							size="small"
 							className="text-sm"

@@ -549,11 +549,10 @@ export class KoalMiddlewareClient {
 	async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayload> {
 		const ticket = this.buildTicket();
 		const originDataB64 = window.Base64?.encode?.(plainText) ?? btoa(plainText);
-		const signTypeCode = cert.signType === "PM-BD" ? "1" : "2";
-		let mdType = "3"; // 默认 SM3
-		if (cert.signType === "RSA" || cert.signType === "PM-BD") {
-			mdType = "2"; // SHA1 与厂商示例一致
-		}
+		// 厂商协议：type=1 通常对应 RSA，type=2 对应 SM2
+		const signTypeCode = cert.signType === "RSA" ? "1" : "2";
+		// mdType：SM2 用 SM3(3)，RSA/PM-BD 用 SHA1(2) 与厂商示例一致
+		let mdType = cert.signType === "SM2" ? "3" : "2";
 
 		const request = this.buildRequest(0x10, {
 			devID: cert.devId,

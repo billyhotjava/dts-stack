@@ -32,7 +32,7 @@ export class KeycloakUserService {
 			url: KeycloakUserService.BASE_URL,
 			params: {
 				first: params.first || 0,
-				max: params.max || 100,
+				max: params.max || 1000,
 			},
 		});
 	}
