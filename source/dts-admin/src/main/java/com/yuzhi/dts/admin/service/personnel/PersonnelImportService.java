@@ -25,6 +25,7 @@ import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.domain.OrganizationNode;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -57,6 +58,7 @@ public class PersonnelImportService {
     private final KeycloakAuthService keycloakAuthService;
     private final AdminKeycloakUserRepository adminKeycloakUserRepository;
     private final OrganizationRepository organizationRepository;
+    private final ObjectMapper objectMapper;
     private final String managementClientId;
     private final String managementClientSecret;
     private final MdmGatewayProperties mdmGatewayProperties;
@@ -73,6 +75,7 @@ public class PersonnelImportService {
         KeycloakAuthService keycloakAuthService,
         AdminKeycloakUserRepository adminKeycloakUserRepository,
         OrganizationRepository organizationRepository,
+        ObjectMapper objectMapper,
         @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}") String managementClientId,
         @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}") String managementClientSecret,
         MdmGatewayProperties mdmGatewayProperties
@@ -87,6 +90,7 @@ public class PersonnelImportService {
         this.keycloakAuthService = keycloakAuthService;
         this.adminKeycloakUserRepository = adminKeycloakUserRepository;
         this.organizationRepository = organizationRepository;
+        this.objectMapper = objectMapper;
         this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
         this.managementClientSecret = managementClientSecret == null ? "" : managementClientSecret.trim();
         this.mdmGatewayProperties = mdmGatewayProperties;
@@ -160,12 +164,25 @@ public class PersonnelImportService {
                 record.setStatus(PersonRecordStatus.FAILED);
                 record.setMessage(ex.getMessage());
                 failed++;
-                OPS_LOG.warn("[record-fail] batch={} personCode={} reason={}", batch.getId(), payload.personCode(), ex.getMessage());
+                OPS_LOG.warn(
+                    "[record-fail] batch={} personCode={} reason={} payload={}",
+                    batch.getId(),
+                    payload.personCode(),
+                    ex.getMessage(),
+                    summarizePayload(payload)
+                );
             } catch (Exception ex) {
                 record.setStatus(PersonRecordStatus.FAILED);
                 record.setMessage("处理异常: " + ex.getMessage());
                 failed++;
-                OPS_LOG.error("[record-error] batch={} personCode={} {}", batch.getId(), payload.personCode(), ex.getMessage(), ex);
+                OPS_LOG.error(
+                    "[record-error] batch={} personCode={} payload={} {}",
+                    batch.getId(),
+                    payload.personCode(),
+                    summarizePayload(payload),
+                    ex.getMessage(),
+                    ex
+                );
             }
             record.setProcessedAt(Instant.now());
             recordRepository.save(record);
@@ -215,6 +232,25 @@ public class PersonnelImportService {
         record.setPayload(payload.safeAttributes());
         record.setAttributes(payload.safeAttributes());
         return record;
+    }
+
+    private String summarizePayload(PersonnelPayload payload) {
+        try {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("personCode", payload.personCode());
+            map.put("account", payload.account());
+            map.put("userName", payload.fullName());
+            map.put("deptCode", payload.deptCode());
+            map.put("deptName", payload.deptName());
+            map.put("status", payload.status());
+            map.put("securityLevel", payload.attributes().get("securityLevel"));
+            map.put("person_security_level", payload.attributes().get("person_security_level"));
+            map.put("deptPath", payload.deptPath());
+            map.put("attrs", payload.safeAttributes());
+            return objectMapper.writeValueAsString(map);
+        } catch (Exception e) {
+            return String.valueOf(payload.safeAttributes());
+        }
     }
 
     private PersonImportStatus resolveStatus(int success, int failed) {

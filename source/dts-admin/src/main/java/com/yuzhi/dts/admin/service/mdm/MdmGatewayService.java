@@ -288,18 +288,20 @@ public class MdmGatewayService {
                 .map(this::mapOrgPayload)
                 .filter(Objects::nonNull)
                 .toList();
-            List<PersonnelPayload> users = rawUsers.stream().map(this::mapUserPayload).filter(Objects::nonNull).toList();
 
+            int orgsApplied = 0;
             if (!orgs.isEmpty()) {
-                int applied = organizationService.syncFromMdm(orgs);
-                result.imported = applied;
-                LOG.info("mdm.callback.import.orgs file={} applied={} payloadDepts={}", result.file, applied, orgs.size());
+                orgsApplied = organizationService.syncFromMdm(orgs);
+                result.imported = orgsApplied;
+                LOG.info("mdm.callback.import.orgs file={} applied={} payloadDepts={}", result.file, orgsApplied, orgs.size());
             }
+
+            List<PersonnelPayload> users = rawUsers.stream().map(this::mapUserPayload).filter(Objects::nonNull).toList();
             if (!users.isEmpty()) {
                 var importResult = personnelImportService.importFromMdm(
                     "mdm-callback-" + result.batchId,
                     users,
-                    Map.of("file", result.file, "md5", md5, "clientIp", clientIp, "dataType", dataType)
+                    Map.of("file", result.file, "md5", md5, "clientIp", clientIp, "dataType", dataType, "orgsApplied", orgsApplied)
                 );
                 result.imported = importResult.successRecords();
                 result.importBatchId = importResult.batchId();
@@ -393,7 +395,7 @@ public class MdmGatewayService {
         if (!StringUtils.isNotBlank(userCode) && !StringUtils.isNotBlank(userName)) {
             return null;
         }
-        String deptName = resolveDeptName(deptCode);
+        String deptName = StringUtils.defaultIfBlank(string(m.get("deptName")), resolveDeptName(deptCode));
         return new PersonnelPayload(
             userCode, // personCode
             string(m.get("diepId")), // externalId
