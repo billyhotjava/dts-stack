@@ -5,7 +5,7 @@
 - 认证：禁用匿名与自助注册，开启 OIDC/SAML（Keycloak），在 env 中配置 `MB_OIDC_*`。组/角色与 dept_code/person_security_level 可通过 claim 映射到 Metabase 组。
 - 插件/驱动：DM JDBC 驱动、Inceptor/Hive 驱动放在 `services/dts-metabase/plugins/`；容器用 `MB_PLUGINS_DIR=/plugins`.
 - 日志：挂载到宿主机，按 100MB 轮转（logrotate）。
-- HTTPS/证书：反代层处理，证书与信任链可挂载在 `services/dts-metabase/certs/`（如需客户端校验）。
+- HTTPS/证书：反代层处理，证书与信任链统一放在 `services/certs/`，通过 compose 挂载到容器 `/certs`（如需客户端校验）。
 
 ## RLS / 数据权限示例
 - OIDC claims：`roles`（过滤掉 `offline_access`、`uma_authorization`、`default-roles-*`）、`dept_code`、`person_security_level`。

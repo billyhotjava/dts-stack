@@ -16,7 +16,7 @@ services:
       - ./home:/app/superset_home
       - ./home/drivers:/app/superset_home/drivers:ro
       - ./home/logs:/app/superset_home/logs
-      - ./home/certs:/app/superset_home/certs:ro
+      - ../certs:/app/superset_home/certs:ro
       - ./home/exports:/app/superset_home/exports
     ports:
       - "8088:8088"

@@ -6,7 +6,7 @@
 - SQL Lab：默认关闭 DML（ALLOW_DML=False），限制危险命令。
 - 日志：挂载到宿主机，采用 100MB 轮转（logrotate 或内置处理）。
 - 驱动：DM JDBC、Inceptor/Hive JDBC 等统一放在 `services/dts-superset/home/drivers/` 并在 config 中加入 `JAVA_HOME`/`CLASSPATH` 或 provider extra。
-- 证书：HTTPS/反代证书与信任链放在 `home/certs/`.
+- 证书：HTTPS/反代证书与信任链统一放在 `services/certs/`，通过 compose 挂载到 `/app/superset_home/certs`.
 - 导出：仪表盘/数据集导入导出目录 `home/exports/`.
 - OIDC 配置：复制 `home/client_secrets.example.json` 为 `client_secrets.json`，填入真实 client_id/secret 与回调地址；`superset_config.py` 默认从 `/app/pythonpath/client_secrets.json` 读取。
 

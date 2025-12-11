@@ -13,7 +13,7 @@ services:
       - ./plugins:/plugins
       - ./data:/metabase-data
       - ./logs:/var/log/metabase
-      - ./certs:/certs:ro
+      - ../certs:/certs:ro
     ports:
       - "3000:3000"
     healthcheck:
