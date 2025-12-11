@@ -192,17 +192,6 @@ public class MdmGatewayService {
             );
         validateToken(request);
 
-        // dataType=sync_demand/sync-demand 时仅登记请求
-        if (isSyncDemand(dataType)) {
-            CallbackResult result = new CallbackResult();
-            result.batchId = "sync-" + TS_FILE.format(LocalDateTime.now());
-            result.clientIp = clientIp;
-            result.dataType = dataType;
-            result.mode = "sync_demand";
-            LOG.info("mdm.callback.sync-demand accepted clientIp={} dataType={}, skip parsing payload", clientIp, dataType);
-            return result;
-        }
-
         byte[] bytes;
         if (file != null && !file.isEmpty()) {
             bytes = file.getBytes();
@@ -210,6 +199,18 @@ public class MdmGatewayService {
             bytes = rawBody == null ? new byte[0] : rawBody.getBytes(StandardCharsets.UTF_8);
         }
         String body = new String(bytes, StandardCharsets.UTF_8);
+        boolean isSyncDemand = isSyncDemand(dataType);
+        // sync-demand 且无负载时仅登记
+        if (isSyncDemand && (bytes == null || bytes.length == 0)) {
+            CallbackResult result = new CallbackResult();
+            result.batchId = "sync-" + TS_FILE.format(LocalDateTime.now());
+            result.clientIp = clientIp;
+            result.dataType = dataType;
+            result.mode = "sync_demand";
+            LOG.info("mdm.callback.sync-demand accepted (no payload) clientIp={} dataType={}", clientIp, dataType);
+            return result;
+        }
+
         Object parsedObj = parseObject(body);
 
         LocalDateTime now = LocalDateTime.now();
