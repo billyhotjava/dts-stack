@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  dts-superset:
+    image: ${IMAGE_SUPERSET:-apache/superset:2.1.3}
+    container_name: dts-superset
+    restart: unless-stopped
+    depends_on:
+      - dts-pg
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-superset-secret}
+      SUPERSET_DATABASE_URI: ${SUPERSET_DATABASE_URI:-postgresql+psycopg2://superset:superset@dts-pg:5432/superset}
+      JAVA_HOME: ${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk}
+      EXTRA_JAVA_CLASSPATH: /app/superset_home/drivers/*
+    volumes:
+      - ./home:/app/superset_home
+      - ./home/drivers:/app/superset_home/drivers:ro
+      - ./home/logs:/app/superset_home/logs
+      - ./home/certs:/app/superset_home/certs:ro
+      - ./home/exports:/app/superset_home/exports
+    ports:
+      - "8088:8088"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    command: >
+      /bin/sh -c "superset db upgrade &&
+                  superset init &&
+                  gunicorn --bind 0.0.0.0:8088 --workers 3 'superset.app:create_app()'"
+
+  dts-pg:
+    image: ${IMAGE_POSTGRES:-postgres:17.6}
+    container_name: dts-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:

@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  dts-metabase:
+    image: ${IMAGE_METABASE:-metabase/metabase:v0.49.15}
+    container_name: dts-metabase
+    restart: unless-stopped
+    depends_on:
+      - dts-pg
+    env_file:
+      - ./metabase.env
+    volumes:
+      - ./plugins:/plugins
+      - ./data:/metabase-data
+      - ./logs:/var/log/metabase
+      - ./certs:/certs:ro
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  dts-pg:
+    image: ${IMAGE_POSTGRES:-postgres:17.6}
+    container_name: dts-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: metabase
+      POSTGRES_USER: metabase
+      POSTGRES_PASSWORD: metabase
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:
