@@ -17,56 +17,48 @@
       "name": "mdm.mock.callback-url",
       "type": "java.lang.String",
       "description": "回调目标 URL，缺省指向 dts-admin 的 \/api\/mdm\/receive。",
-      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties",
-      "defaultValue": "http:\/\/localhost:38012\/api\/mdm\/receive"
+      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties"
     },
     {
       "name": "mdm.mock.data-type",
       "type": "java.lang.String",
-      "description": "回调时的 dataType（院方示例 sync_demand 表示准备数据；其他值为推送）",
-      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties",
-      "defaultValue": "full"
+      "description": "回调时的 dataType（院方示例 sync-demand 表示准备数据；其他值为推送）",
+      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties"
     },
     {
       "name": "mdm.mock.file-part-name",
       "type": "java.lang.String",
       "description": "文件字段名（院方示例 file）",
-      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties",
-      "defaultValue": "file"
+      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties"
     },
     {
       "name": "mdm.mock.file-prefix",
       "type": "java.lang.String",
       "description": "回调文件名前缀\/后缀",
-      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties",
-      "defaultValue": "mdm-full-"
+      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties"
     },
     {
       "name": "mdm.mock.file-suffix",
       "type": "java.lang.String",
-      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties",
-      "defaultValue": ".json"
+      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties"
     },
     {
       "name": "mdm.mock.port",
       "type": "java.lang.Integer",
       "description": "本地服务端口，默认 28080（可通过运行参数覆盖）",
-      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties",
-      "defaultValue": 28080
+      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties"
     },
     {
       "name": "mdm.mock.sample-location",
       "type": "java.lang.String",
       "description": "用于回调的样例 JSON（类路径或文件路径）",
-      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties",
-      "defaultValue": "classpath:sample\/orgs-users.json"
+      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties"
     },
     {
       "name": "mdm.mock.signature-header",
       "type": "java.lang.String",
       "description": "回调时带的签名头名称（与 dts-admin 配置一致）",
-      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties",
-      "defaultValue": "X-Signature"
+      "sourceType": "com.yuzhi.dts.mdm.upstream.config.UpstreamMockProperties"
     }
   ],
   "hints": []

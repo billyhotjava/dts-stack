@@ -317,7 +317,7 @@ export type KoalCertificate = {
 	issuerCn: string;
 	sn: string;
 	manufacturer: string;
-	keyUsage?: number;
+	keyUsage?: numbesignTyper
 	certType?: string;
 	signType: "SM2" | "RSA" | "PM-BD" | "UNKNOWN";
 	raw: Record<string, any>;
@@ -549,8 +549,8 @@ export class KoalMiddlewareClient {
 	async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayload> {
 		const ticket = this.buildTicket();
 		const originDataB64 = window.Base64?.encode?.(plainText) ?? btoa(plainText);
-		// 厂商协议：type=1 通常对应 RSA，type=2 对应 SM2
-		const signTypeCode = cert.signType === "RSA" ? "1" : "2";
+		// 厂商协议：type=1 表示 PM-BD（商密/厂商自有），type=2 表示 SM2/RSA 签名
+		const signTypeCode = cert.signType === "PM-BD" ? "1" : "2";
 		// mdType：SM2 用 SM3(3)，RSA/PM-BD 用 SHA1(2) 与厂商示例一致
 		let mdType = cert.signType === "SM2" ? "3" : "2";
 
@@ -610,6 +610,17 @@ function filterCertificate(item: Record<string, any>): boolean {
 	const keyUsageNumber = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? Number.NaN);
 	const signFlagRaw = item?.signFlag ?? item?.SignFlag;
 	const signFlag = typeof signFlagRaw === "string" ? Number(signFlagRaw) : Number(signFlagRaw ?? 1);
+	const certTypeRaw = item?.certType ?? item?.CertType ?? item?.cert_type;
+	const certType = typeof certTypeRaw === "string" ? Number(certTypeRaw) : Number(certTypeRaw ?? Number.NaN);
+
+	// 厂商 demo：certType=1 签名证书，0 加密证书。加密证书直接过滤。
+	if (Number.isFinite(certType) && certType !== 1) {
+		if (IS_DEV) {
+			console.info("[koal] 过滤加密用途证书 certType=", certType, item);
+		}
+		return false;
+	}
+
 	if (IS_DEV) {
 		const hints: string[] = [];
 		if (Number.isNaN(keyUsageNumber)) {
@@ -631,6 +642,9 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
 	const subjectCn = item?.subjectName?.CN ?? item?.subject ?? item?.Subject ?? "";
 	const issuerCn = item?.issuerName?.CN ?? item?.issuer ?? item?.Issuer ?? "";
 	const signHint = String(item?.certType ?? item?.certAlgorithm ?? item?.algName ?? "").toUpperCase();
+
+	const certTypeRaw = item?.certType ?? item?.CertType ?? item?.cert_type;
+	const certType = typeof certTypeRaw === "string" ? Number(certTypeRaw) : Number(certTypeRaw ?? Number.NaN);
 
 	const manufacturer = String(item?.manufacturer ?? item?.Manufacturer ?? item?.Vendor ?? "").trim();
 
@@ -661,8 +675,8 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
 
   const keyUsageRaw = item?.keyUsage ?? item?.KeyUsage;
   const keyUsage = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? undefined);
-  const signFlagRaw = item?.signFlag ?? item?.SignFlag;
-  const signFlag = typeof signFlagRaw === "string" ? Number(signFlagRaw) : Number(signFlagRaw ?? undefined);
+	const signFlagRaw = item?.signFlag ?? item?.SignFlag;
+	const signFlag = typeof signFlagRaw === "string" ? Number(signFlagRaw) : Number(signFlagRaw ?? undefined);
 
 	const idParts = [devId, appName, conName, sn].filter((part) => typeof part === "string" && part.trim() !== "");
 	let id = idParts.join("::");
@@ -679,7 +693,11 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
   // - signFlag (if provided by middleware) must be 1
   // - keyUsage (if provided) should be 1 (digitalSignature) — other values treated as non-signing
   // - device identifiers must be present
+  // - certType=1 表示签名证书；0 为加密证书（过滤）
   let signableByFlags = true;
+  if (Number.isFinite(certType)) {
+    signableByFlags = signableByFlags && (Number(certType) === 1);
+  }
   if (Number.isFinite(signFlag)) {
     signableByFlags = (Number(signFlag) === 1);
   }
