@@ -18,7 +18,7 @@ public class UpstreamMockProperties {
     private String callbackUrl = "http://localhost:38012/api/mdm/receive";
 
     /**
-     * 回调时的 dataType（院方示例 sync_demand 表示准备数据；其他值为推送）
+     * 回调时的 dataType（院方示例 sync-demand 表示准备数据；其他值为推送）
      */
     private String dataType = "full";
 

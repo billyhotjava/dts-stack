@@ -128,7 +128,12 @@ public class OrganizationSyncService {
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("dataRange", mdmGatewayProperties.getRegistry().getDataRange());
-            payload.put("dataType", mdmGatewayProperties.getRegistry().getDataType());
+            String dataType = mdmGatewayProperties.getRegistry().getDataType();
+            // 手工同步直接请求全量数据；若配置为 sync-demand 则改为 full
+            if ("sync-demand".equalsIgnoreCase(dataType) || "sync_demand".equalsIgnoreCase(dataType)) {
+                dataType = "full";
+            }
+            payload.put("dataType", dataType);
             payload.put("sendTime", System.currentTimeMillis() / 1000);
             return Optional.of(mdmGatewayService.triggerUpstreamPull(payload));
         } catch (RuntimeException ex) {

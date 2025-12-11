@@ -3,7 +3,7 @@
 独立的小型 Spring Boot 应用，用来离线验证院方 MDM 平台的交互：
 - `/api/mdm/handshake`：我方向院方发起“请求推送”，失败重试/手动触发时调用。  
 - `/api/mdm/receive`：院方唯一推送入口，dataType 控制行为；  
-  - `dataType=sync_demand`：仅表示“准备数据”，不带文件；  
+  - `dataType=sync-demand`：仅表示“准备数据”，不带文件；  
   - 其他值：multipart 携带 `file`，内容为人员+组织的全量 JSON。
 
 ## 目录与离线依赖
@@ -51,8 +51,8 @@ mvn -s offline-settings.xml -o "-Dmaven.repo.local=./mvn" -DskipTests package
 POST http://10.10.10.135:18080/api/mdm/receive
 Header: X-Signature: <token-if-set>
 Form-data (multipart):
-  dataType=sync_demand              # 若仅通知准备数据，可不带 file
-  file=<全量JSON文件>               # dataType≠sync_demand 时必须；接收后按时间戳命名存盘
+  dataType=sync-demand              # 若仅通知准备数据，可不带 file
+  file=<全量JSON文件>               # dataType≠sync-demand 时必须；接收后按时间戳命名存盘
                                    # JSON示例：
                                    # {"users":[{"userCode":"A10001","userName":"张三","deptCode":"D001",...}],
                                    #  "depts":[{"deptCode":"D001","deptName":"研发部","parentCode":"ROOT",...}]}

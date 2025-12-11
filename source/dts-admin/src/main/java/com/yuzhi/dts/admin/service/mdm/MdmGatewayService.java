@@ -199,7 +199,7 @@ public class MdmGatewayService {
             result.clientIp = clientIp;
             result.dataType = dataType;
             result.mode = "sync_demand";
-            LOG.info("mdm.callback.sync-demand accepted clientIp={} dataType={}", clientIp, dataType);
+            LOG.info("mdm.callback.sync-demand accepted clientIp={} dataType={}, skip parsing payload", clientIp, dataType);
             return result;
         }
 

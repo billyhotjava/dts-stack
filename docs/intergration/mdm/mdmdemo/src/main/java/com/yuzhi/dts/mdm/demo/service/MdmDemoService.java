@@ -127,17 +127,17 @@ public class MdmDemoService {
         dataType = StringUtils.defaultString(dataType, "unknown");
         checkSignature(request);
 
-        if ("sync_demand".equalsIgnoreCase(dataType)) {
+        if ("sync-demand".equalsIgnoreCase(dataType) || "sync_demand".equalsIgnoreCase(dataType)) {
             CallbackResult result = new CallbackResult();
             result.mode = "sync_demand";
             result.dataType = dataType;
             result.clientIp = clientIp(request);
-            LOG.info("mdm.receive sync_demand accepted clientIp={} dataType={}", result.clientIp, dataType);
+            LOG.info("mdm.receive sync-demand accepted clientIp={} dataType={}", result.clientIp, dataType);
             return result;
         }
 
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("缺少文件，且 dataType 不是 sync_demand");
+            throw new IllegalArgumentException("缺少文件，且 dataType 不是 sync-demand");
         }
 
         LocalDateTime now = LocalDateTime.now();

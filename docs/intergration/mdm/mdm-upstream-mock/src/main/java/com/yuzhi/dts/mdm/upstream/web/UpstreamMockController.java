@@ -161,14 +161,14 @@ public class UpstreamMockController {
 
     private byte[] loadSample(byte[] uploaded, Map<String, Object> body) throws IOException {
         byte[] candidate = null;
-        // 优先使用真实推送样例；如果上传内容只是 sync_demand 请求（无用户/组织数据），则改用示例文件
+        // 优先使用真实推送样例；如果上传内容只是 sync-demand 请求（无用户/组织数据），则改用示例文件
         if (uploaded != null && uploaded.length > 0) {
             try {
                 Object parsed = objectMapper.readValue(uploaded, Object.class);
                 if (looksLikePayload(parsed)) {
                     candidate = uploaded;
                 } else {
-                    LOG.info("uploaded payload looks like sync_demand; fallback to sample");
+                    LOG.info("uploaded payload looks like sync-demand; fallback to sample");
                 }
             } catch (Exception e) {
                 LOG.warn("parse uploaded payload failed: {}", e.getMessage());
