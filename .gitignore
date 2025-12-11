@@ -20,9 +20,9 @@ builds/offline/
 source/dts-admin/.m2/
 .env.bak
 .env
-./vscode
-./codex
-./specify
 logs/
 docs/intergration/mdm/mdmdemo/mvn
 docs/intergration/mdm/mdmdemo/target
+.codex
+.vscode
+.specify
