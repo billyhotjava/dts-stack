@@ -619,11 +619,11 @@ function filterCertificate(item: Record<string, any>): boolean {
 	const certType = typeof certTypeRaw === "string" ? Number(certTypeRaw) : Number(certTypeRaw ?? Number.NaN);
 	const signType = resolveSignType(item);
 
-	// 厂商 demo：certType=1 签名证书，0 加密证书。加密证书直接过滤。
+	// 厂商 demo：certType=1 签名证书，0 加密证书。
+	// 兼容：普密 RSA 证书有时标记为 0，仍允许出现；其余 certType!=1 过滤。
 	if (Number.isFinite(certType) && certType !== 1) {
-		// 兼容部分厂商普密 RSA 证书 certType=0 的场景，仍允许出现
 		if (signType === "RSA") {
-			console.info("[koal] 兼容放行 RSA 证书但 certType!=1", { certType, signType, keyUsage: keyUsageNumber, signFlag });
+			console.info("[koal] 兼容放行 RSA 证书但 certType!=1", { certType, keyUsage: keyUsageNumber, signFlag });
 		} else {
 			console.info("[koal] 过滤非签名用途证书", { certType, signType, keyUsage: keyUsageNumber, signFlag });
 			return false;
@@ -691,7 +691,7 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
   // - signFlag (if provided by middleware) must be 1
   // - keyUsage (if provided) should be 1 (digitalSignature) — other values treated as non-signing
   // - device identifiers must be present
-  // - certType=1 表示签名证书；0 为加密证书（过滤），但兼容部分厂商 RSA 普密证书 certType=0
+  // - certType=1 表示签名证书；兼容 certType=0 的 RSA 普密证书
   let signableByFlags = true;
   if (Number.isFinite(certType)) {
     const ct = Number(certType);
