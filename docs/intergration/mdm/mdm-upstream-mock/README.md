@@ -23,42 +23,8 @@ mvn -s ../mdmdemo/offline-settings.xml -o -Dmaven.repo.local=../mdmdemo/mvn spri
 - `MDM_UPSTREAM_MOCK_FILE_PART` / `MDM_UPSTREAM_MOCK_FILE_PREFIX` / `MDM_UPSTREAM_MOCK_FILE_SUFFIX`
 - `MDM_UPSTREAM_MOCK_SAMPLE`：样例 JSON 路径（默认类路径 `sample/orgs-users.json`）
 
-默认样例文件结构：
-```json
-{
-  "desp": {
-    "dataRange": "9010",
-    "sendTime": 1765057111
-  },
-  "user": [
-    {
-      "createTime": "1765057111",
-      "deptCode": "9010",
-      "diepId": "32",
-      "identityCard": "510xxxx",
-      "orgCode": "9010",
-      "securityLevel": "3",
-      "status": "1",
-      "updateTime": "202512081765085911",
-      "userCode": "ldgbgusd-10",
-      "userName": "测试员工1"
-    }
-  ],
-  "orgId": [
-    {
-      "deptCode": "9010",
-      "deptName": "demo app",
-      "diepId": "9a3Eaxxx",
-      "orgCode": "9010",
-      "parentCode": "90",
-      "shortName": "十所",
-      "sort": "11",
-      "status": "1",
-      "type": "0"
-    }
-  ]
-}
-```
+- 默认样例：`sample/orgs-users-large.json`，含 50 个部门、1000 条人员数据，便于测试性能/导入。
+- 旧的多场景示例仍在 `sample/orgs-users.json`（多段，用 `---` 分隔，手动复制需要的片段即可）。
 
 ## 用法
 1) 启动本 mock。  

@@ -46,7 +46,7 @@ public class UpstreamMockProperties {
     /**
      * 用于回调的样例 JSON（类路径或文件路径）
      */
-    private String sampleLocation = "classpath:sample/orgs-users.json";
+    private String sampleLocation = "classpath:sample/orgs-users-large.json";
 
     public int getPort() {
         return port;
