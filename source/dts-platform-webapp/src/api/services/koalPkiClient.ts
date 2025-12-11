@@ -317,7 +317,7 @@ export type KoalCertificate = {
 	issuerCn: string;
 	sn: string;
 	manufacturer: string;
-	keyUsage?: numbesignTyper
+	keyUsage?: number;
 	certType?: string;
 	signType: "SM2" | "RSA" | "PM-BD" | "UNKNOWN";
 	raw: Record<string, any>;
