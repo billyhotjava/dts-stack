@@ -302,6 +302,7 @@ declare global {
 		pkiServiceClient: any;
 		devServiceClient: any;
 		signXServiceClient: any;
+		enRollServiceClient: any;
 		Base64: {
 			encode(value: string): string;
 			decode(value: string): string;

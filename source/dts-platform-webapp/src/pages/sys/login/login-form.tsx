@@ -280,9 +280,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			if (IS_DEV) {
 				console.info("[pki-login] signed nonce", signed);
 			}
-			const certContentB64 = await client.exportCertificate(certificate);
+			const certContentB64 = signed.dupCertB64 ?? (await client.exportCertificate(certificate));
 			if (IS_DEV) {
-				console.info("[pki-login] exported certificate");
+				console.info("[pki-login] exported certificate (or reused dupCert)");
 			}
 
 			const resp: any = await pkiLogin({
