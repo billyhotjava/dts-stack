@@ -152,10 +152,13 @@ public class PlatformDirectoryResource {
         try {
             String token = adminAccessToken();
             if (StringUtils.hasText(query)) {
-                candidates = keycloakAdminClient
-                    .findByUsername(query, token)
-                    .map(List::of)
-                    .orElseGet(List::of);
+                candidates = keycloakAdminClient.searchUsers(query, token);
+                if (candidates == null || candidates.isEmpty()) {
+                    candidates = keycloakAdminClient
+                        .findByUsername(query, token)
+                        .map(List::of)
+                        .orElseGet(List::of);
+                }
             } else {
                 candidates = keycloakAdminClient.listUsers(0, 200, token);
             }

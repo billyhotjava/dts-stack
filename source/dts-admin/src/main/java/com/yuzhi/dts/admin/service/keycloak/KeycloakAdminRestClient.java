@@ -115,6 +115,32 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     }
 
     @Override
+    public List<KeycloakUserDTO> searchUsers(String keyword, String accessToken) {
+        String query = keyword == null ? "" : keyword.trim();
+        if (query.isEmpty()) {
+            return List.of();
+        }
+        URI uri = UriComponentsBuilder
+            .fromUri(usersEndpoint)
+            .queryParam("search", query)
+            .queryParam("max", 200)
+            .build()
+            .encode()
+            .toUri();
+        try {
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return List.of();
+            }
+            List<Map<String, Object>> body = objectMapper.readValue(response.getBody(), LIST_OF_MAP);
+            return body.stream().map(this::toUserDto).toList();
+        } catch (Exception ex) {
+            LOG.warn("Failed to fuzzy-search Keycloak users by '{}': {}", keyword, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
     public KeycloakUserDTO createUser(KeycloakUserDTO payload, String accessToken) {
         Map<String, Object> representation = toRepresentation(payload);
         ResponseEntity<String> response = exchange(usersEndpoint, HttpMethod.POST, accessToken, representation);

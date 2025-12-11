@@ -10,6 +10,11 @@ public interface KeycloakAdminClient {
 
     List<KeycloakUserDTO> listUsers(int first, int max, String accessToken);
 
+    /**
+     * Fuzzy search users by keyword (username/fullName/email depending on Keycloak implementation).
+     */
+    List<KeycloakUserDTO> searchUsers(String keyword, String accessToken);
+
     Optional<KeycloakUserDTO> findByUsername(String username, String accessToken);
 
     Optional<KeycloakUserDTO> findById(String userId, String accessToken);

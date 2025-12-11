@@ -29,6 +29,21 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
     }
 
     @Override
+    public List<KeycloakUserDTO> searchUsers(String keyword, String accessToken) {
+        String query = keyword == null ? "" : keyword.trim();
+        if (query.isEmpty()) {
+            return List.of();
+        }
+        String lower = query.toLowerCase();
+        return stores
+            .users
+            .values()
+            .stream()
+            .filter(user -> user != null && matches(user, lower))
+            .toList();
+    }
+
+    @Override
     public Optional<KeycloakUserDTO> findByUsername(String username, String accessToken) {
         return stores.findUserByUsername(username);
     }
@@ -331,6 +346,42 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
             .ifPresent(u -> {
                 throw new IllegalStateException("用户名已存在: " + username);
             });
+    }
+
+    private boolean matches(KeycloakUserDTO user, String lower) {
+        if (user == null || lower == null || lower.isBlank()) {
+            return false;
+        }
+        return contains(user.getUsername(), lower)
+            || contains(user.getFullName(), lower)
+            || contains(user.getFirstName(), lower)
+            || contains(user.getLastName(), lower)
+            || contains(firstAttribute(user.getAttributes(), "fullName", "fullname", "displayName", "display_name"), lower);
+    }
+
+    private boolean contains(String value, String needle) {
+        if (value == null || needle == null || needle.isBlank()) {
+            return false;
+        }
+        return value.toLowerCase().contains(needle);
+    }
+
+    private String firstAttribute(Map<String, List<String>> attributes, String... keys) {
+        if (attributes == null || keys == null || keys.length == 0) {
+            return null;
+        }
+        for (String key : keys) {
+            List<String> values = attributes.get(key);
+            if (values == null || values.isEmpty()) {
+                continue;
+            }
+            for (String v : values) {
+                if (v != null && !v.isBlank()) {
+                    return v.trim();
+                }
+            }
+        }
+        return null;
     }
 
     private KeycloakUserDTO copyUser(KeycloakUserDTO source) {

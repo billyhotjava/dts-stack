@@ -245,19 +245,27 @@ public class KeycloakApiResource {
 
     @GetMapping("/keycloak/users/search")
     public ResponseEntity<List<KeycloakUserDTO>> searchUsers(@RequestParam String username, HttpServletRequest request) {
-        String q = username == null ? "" : username.toLowerCase();
+        String q = username == null ? "" : username.trim();
+        String qLower = q.toLowerCase();
         String token = adminAccessToken();
-        List<KeycloakUserDTO> list = filterProtectedUsers(keycloakAdminClient
-            .findByUsername(username, adminAccessToken())
-            .map(List::of)
-            .orElseGet(List::of));
-        populateGroups(list, token);
+        List<KeycloakUserDTO> list = List.of();
+
+        if (StringUtils.hasText(q)) {
+            list = filterProtectedUsers(keycloakAdminClient.searchUsers(q, token));
+            populateGroups(list, token);
+        }
+        if (list.isEmpty() && StringUtils.hasText(q)) {
+            list = filterProtectedUsers(
+                keycloakAdminClient.findByUsername(q, adminAccessToken()).map(List::of).orElseGet(List::of)
+            );
+            populateGroups(list, token);
+        }
         if (list.isEmpty()) {
             list = filterProtectedUsers(stores
                 .users
                 .values()
                 .stream()
-                .filter(u -> u.getUsername() != null && u.getUsername().toLowerCase().contains(q))
+                .filter(u -> matchesQuery(u, qLower))
                 .toList());
         } else {
             list.forEach(this::cacheUser);
@@ -268,7 +276,7 @@ public class KeycloakApiResource {
             list = list.stream().filter(u -> u.getId() == null || !excludedIdsByRole.contains(u.getId())).toList();
         }
         Map<String, Object> auditDetail = new LinkedHashMap<>();
-        auditDetail.put("query", q);
+        auditDetail.put("query", qLower);
         auditDetail.put("count", list.size());
         auditDetail.put("excludedByRoleCount", excludedIdsByRole.size());
         String actor = currentUser();
@@ -906,6 +914,36 @@ public class KeycloakApiResource {
             .stream()
             .filter(u -> u.getUsername() == null || PROTECTED_USERNAMES.stream().noneMatch(name -> name.equalsIgnoreCase(u.getUsername())))
             .toList();
+    }
+
+    private boolean matchesQuery(KeycloakUserDTO user, String lower) {
+        if (user == null || lower == null || lower.isBlank()) {
+            return false;
+        }
+        if (containsIgnoreCase(user.getUsername(), lower)) return true;
+        if (containsIgnoreCase(user.getFullName(), lower)) return true;
+        if (containsIgnoreCase(user.getFirstName(), lower)) return true;
+        if (containsIgnoreCase(user.getLastName(), lower)) return true;
+        Map<String, List<String>> attrs = user.getAttributes();
+        if (attrs != null) {
+            for (String key : List.of("fullName", "fullname", "displayName", "display_name")) {
+                List<String> values = attrs.get(key);
+                if (values == null || values.isEmpty()) continue;
+                for (String v : values) {
+                    if (containsIgnoreCase(v, lower)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean containsIgnoreCase(String value, String lower) {
+        if (value == null || lower == null || lower.isBlank()) {
+            return false;
+        }
+        return value.toLowerCase().contains(lower);
     }
 
     private Set<String> parseRoleList(String csv) {
