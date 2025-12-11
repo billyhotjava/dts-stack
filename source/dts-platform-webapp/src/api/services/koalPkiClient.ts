@@ -5,15 +5,13 @@ type Nullable<T> = T | null | undefined;
 const KOAL_VENDOR_FILES = [
   "thrift.js",
   "base64.js",
-  "commdef_types.js",
-  "pkiService_types.js",
-  "devService_types.js",
-  "enRollService_types.js",
-  "signXService_types.js",
-  "pkiService.js",
-  "devService.js",
-  "enRollService.js",
-  "signXService.js",
+	"commdef_types.js",
+	"pkiService_types.js",
+	"devService_types.js",
+	"signXService_types.js",
+	"pkiService.js",
+	"devService.js",
+	"signXService.js",
 ] as const;
 
 const DEFAULT_ENDPOINTS = ["https://127.0.0.1:16080", "http://127.0.0.1:18080"] as const;
@@ -375,7 +373,6 @@ export class KoalMiddlewareClient {
 	private readonly pkiClient: any;
 	private readonly devClient: any;
 	private readonly signClient: any;
-	private readonly enrollClient: any;
 	private session: { sessionID: number; ticket: string } | null = null;
 
 	private constructor(baseUrl: string) {
@@ -384,7 +381,6 @@ export class KoalMiddlewareClient {
 		this.pkiClient = this.multiplexer.createClient("pkiService", window.pkiServiceClient, this.transport);
 		this.devClient = this.multiplexer.createClient("deviceOperator", window.devServiceClient, this.transport);
 		this.signClient = this.multiplexer.createClient("signxPlugin", window.signXServiceClient, this.transport);
-		this.enrollClient = this.multiplexer.createClient("enRollService", (window as any).enRollServiceClient, this.transport);
 	}
 
 	static async connect(options?: KoalConnectOptions): Promise<KoalMiddlewareClient> {
@@ -610,34 +606,7 @@ async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayl
 	}
 
 	private async fetchCertificateForSign(cert: KoalCertificate): Promise<string> {
-		if (cert.signType === "PM-BD") {
-			return this.getCertFromEnroll(cert);
-		}
 		return this.exportCertificate(cert);
-	}
-
-	private async getCertFromEnroll(cert: KoalCertificate): Promise<string> {
-		const ticket = this.buildTicket();
-		const request = this.buildRequest(0x25, {
-			devID: cert.devId,
-			appName: cert.appName,
-			conName: cert.conName,
-			certType: "1", // 签名证书
-		});
-		const response = await this.thriftCall<any>(this.enrollClient, "getCert", ticket, request);
-		const code = Number(response?.errCode ?? 0);
-		if (code !== 0) {
-			throw new Error(mapKoalError(code, response?.jsonBody));
-		}
-		const payload = parseJson(response?.jsonBody);
-		const certB64: Nullable<string> =
-			(payload && typeof payload === "object"
-				? payload.cert ?? payload.b64cert ?? payload.p7cert ?? payload.certificate
-				: undefined) ?? (typeof response?.jsonBody === "string" ? response.jsonBody : undefined);
-		if (!certB64) {
-			throw new Error("未获取到证书内容（enRollService.getCert）");
-		}
-		return String(certB64);
 	}
 }
 
