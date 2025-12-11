@@ -546,13 +546,13 @@ export class KoalMiddlewareClient {
 		}
 	}
 
-	async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayload> {
-		const ticket = this.buildTicket();
-		const originDataB64 = window.Base64?.encode?.(plainText) ?? btoa(plainText);
-		// 厂商协议：type=1 表示 PM-BD（商密/厂商自有），type=2 表示 SM2/RSA 签名
-		const signTypeCode = cert.signType === "PM-BD" ? "1" : "2";
-		// mdType：SM2 用 SM3(3)，RSA/PM-BD 用 SHA1(2) 与厂商示例一致
-		let mdType = cert.signType === "SM2" ? "3" : "2";
+async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayload> {
+	const ticket = this.buildTicket();
+	const originDataB64 = window.Base64?.encode?.(plainText) ?? btoa(plainText);
+	// 厂商最新要求：统一使用 P1 签名接口，type 固定为 2
+	const signTypeCode = "2";
+	// mdType：SM2 用 SM3(3)，RSA/PM-BD 用 SHA1(2)
+	let mdType = cert.signType === "SM2" ? "3" : "2";
 
 		const request = this.buildRequest(0x10, {
 			devID: cert.devId,
