@@ -7,7 +7,6 @@ import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,7 +33,6 @@ import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
-import org.springframework.web.util.UriUtils;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -96,12 +94,12 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         if (username == null || username.isBlank()) {
             return Optional.empty();
         }
-        String encodedUsername = UriUtils.encodeQueryParam(username, StandardCharsets.UTF_8);
         URI uri = UriComponentsBuilder
             .fromUri(usersEndpoint)
-            .queryParam("username", encodedUsername)
+            .queryParam("username", username)
             .queryParam("exact", true)
-            .build(true)
+            .build()
+            .encode()
             .toUri();
         try {
             ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
