@@ -8,9 +8,11 @@ const KOAL_VENDOR_FILES = [
 	"commdef_types.js",
 	"pkiService_types.js",
 	"devService_types.js",
+	"enRollService_types.js",
 	"signXService_types.js",
 	"pkiService.js",
 	"devService.js",
+	"enRollService.js",
 	"signXService.js",
 ] as const;
 
@@ -373,6 +375,7 @@ export class KoalMiddlewareClient {
 	private readonly pkiClient: any;
 	private readonly devClient: any;
 	private readonly signClient: any;
+	private readonly enrollClient: any;
 	private session: { sessionID: number; ticket: string } | null = null;
 
 	private constructor(baseUrl: string) {
@@ -381,6 +384,7 @@ export class KoalMiddlewareClient {
 		this.pkiClient = this.multiplexer.createClient("pkiService", window.pkiServiceClient, this.transport);
 		this.devClient = this.multiplexer.createClient("deviceOperator", window.devServiceClient, this.transport);
 		this.signClient = this.multiplexer.createClient("signxPlugin", window.signXServiceClient, this.transport);
+		this.enrollClient = this.multiplexer.createClient("enRollService", (window as any).enRollServiceClient, this.transport);
 	}
 
 	static async connect(options?: KoalConnectOptions): Promise<KoalMiddlewareClient> {
@@ -510,20 +514,27 @@ export class KoalMiddlewareClient {
 		if (code !== 0) {
 			throw new Error(mapKoalError(code, response?.jsonBody));
 		}
-		const payload = parseJson(response?.jsonBody);
-		if (!payload || !Array.isArray(payload.certs)) {
-			if (IS_DEV) {
-				console.info("[koal] 未返回证书列表", payload);
-			}
-			return [];
-		}
-		console.info("[koal] 原始证书列表", payload.certs);
+	const payload = parseJson(response?.jsonBody);
+	if (!payload || !Array.isArray(payload.certs)) {
+		console.info("[koal] 未返回证书列表", payload);
+		try {
+			localStorage.setItem("koal_certs_raw", JSON.stringify(payload ?? null));
+		} catch {}
+		return [];
+	}
+	console.info("[koal] 原始证书列表", payload.certs);
+	try {
+		localStorage.setItem("koal_certs_raw", JSON.stringify(payload.certs ?? []));
+	} catch {}
 
-		const filtered = payload.certs
-			.filter((item: any) => filterCertificate(item))
-			.map((item: any, index: number) => normalizeCertificate(item, index));
+	const filtered = payload.certs
+		.filter((item: any) => filterCertificate(item))
+		.map((item: any, index: number) => normalizeCertificate(item, index));
 
-		console.info("[koal] 过滤后证书", filtered);
+	console.info("[koal] 过滤后证书", filtered);
+	try {
+		localStorage.setItem("koal_certs_filtered", JSON.stringify(filtered ?? []));
+	} catch {}
 
 		return filtered;
 	}
@@ -572,7 +583,6 @@ async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayl
 		}
 		let dupCertB64: Nullable<string> = payload?.dupCert ?? payload?.dupCertB64 ?? payload?.dup_cert;
 		if (!dupCertB64) {
-			// 若中间件未返回证书，SM2/RSA 走 exportCertificate，PM-BD 走 enRollService.getCert
 			dupCertB64 = await this.fetchCertificateForSign(cert);
 		}
 		return {
@@ -606,7 +616,37 @@ async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayl
 	}
 
 	private async fetchCertificateForSign(cert: KoalCertificate): Promise<string> {
-		return this.exportCertificate(cert);
+		// 先尝试生成/获取证书（enRollService.getCert），失败则退回 exportCertificate
+		try {
+			return await this.getCertFromEnroll(cert);
+		} catch (err) {
+			console.info("[koal] getCert 失败，改用 exportCertificate", err);
+			return this.exportCertificate(cert);
+		}
+	}
+
+	private async getCertFromEnroll(cert: KoalCertificate): Promise<string> {
+		const ticket = this.buildTicket();
+		const request = this.buildRequest(0x25, {
+			devID: cert.devId,
+			appName: cert.appName,
+			conName: cert.conName,
+			certType: "1", // 签名证书
+		});
+		const response = await this.thriftCall<any>(this.enrollClient, "getCert", ticket, request);
+		const code = Number(response?.errCode ?? 0);
+		if (code !== 0) {
+			throw new Error(mapKoalError(code, response?.jsonBody));
+		}
+		const payload = parseJson(response?.jsonBody);
+		const certB64: Nullable<string> =
+			(payload && typeof payload === "object"
+				? payload.cert ?? payload.b64cert ?? payload.p7cert ?? payload.certificate
+				: undefined) ?? (typeof response?.jsonBody === "string" ? response.jsonBody : undefined);
+		if (!certB64) {
+			throw new Error("未获取到证书内容（enRollService.getCert）");
+		}
+		return String(certB64);
 	}
 }
 
@@ -619,15 +659,9 @@ function filterCertificate(item: Record<string, any>): boolean {
 	const certType = typeof certTypeRaw === "string" ? Number(certTypeRaw) : Number(certTypeRaw ?? Number.NaN);
 	const signType = resolveSignType(item);
 
-	// 厂商 demo：certType=1 签名证书，0 加密证书。
-	// 兼容：普密 RSA 证书有时标记为 0，允许出现在列表中（但后续 canSign 会判定为不可签），其余 certType!=1 过滤。
+	// 放宽：certType 仅作为提示，不拦截
 	if (Number.isFinite(certType) && certType !== 1) {
-		if (signType === "RSA") {
-			console.info("[koal] 发现 RSA 证书但 certType!=1，将显示但标记为不可签", { certType, keyUsage: keyUsageNumber, signFlag });
-		} else {
-			console.info("[koal] 过滤非签名用途证书", { certType, signType, keyUsage: keyUsageNumber, signFlag });
-			return false;
-		}
+		console.info("[koal] 非签名 certType 仍显示以便排查", { certType, signType, keyUsage: keyUsageNumber, signFlag });
 	}
 
 	if (IS_DEV) {
@@ -689,30 +723,16 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
 
   // Heuristics for signable certificates:
   // - device identifiers must be present
-  // - RSA 场景放宽（certType/flag/keyUsage 异常仍允许尝试签名）
-  // - 非 RSA：要求 certType=1；signFlag=1（若提供）；keyUsage=1（若提供）
+  // - 全部算法放宽：certType/signFlag/keyUsage 仅提示，不阻断
   let signableByFlags = true;
-  if (signType === "RSA") {
-    // 放宽：仅在存在显式信息且明确不等于 1 时打印提示
-    if (Number.isFinite(certType) && Number(certType) !== 1) {
-      console.info("[koal] RSA certType!=1 仍尝试签名", { certType });
-    }
-    if (Number.isFinite(signFlag) && Number(signFlag) !== 1) {
-      console.info("[koal] RSA signFlag!=1 仍尝试签名", { signFlag });
-    }
-    if (Number.isFinite(keyUsage) && Number(keyUsage) !== 1) {
-      console.info("[koal] RSA keyUsage!=1 仍尝试签名", { keyUsage });
-    }
-  } else {
-    if (Number.isFinite(certType)) {
-      signableByFlags = signableByFlags && Number(certType) === 1;
-    }
-    if (Number.isFinite(signFlag)) {
-      signableByFlags = signableByFlags && Number(signFlag) === 1;
-    }
-    if (Number.isFinite(keyUsage)) {
-      signableByFlags = signableByFlags && Number(keyUsage) === 1;
-    }
+  if (Number.isFinite(certType) && Number(certType) !== 1) {
+    console.info("[koal] certType!=1 仍尝试签名", { certType });
+  }
+  if (Number.isFinite(signFlag) && Number(signFlag) !== 1) {
+    console.info("[koal] signFlag!=1 仍尝试签名", { signFlag });
+  }
+  if (Number.isFinite(keyUsage) && Number(keyUsage) !== 1) {
+    console.info("[koal] keyUsage!=1 仍尝试签名", { keyUsage });
   }
 
   const canSign = missingFields.length === 0 && signableByFlags;
