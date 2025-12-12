@@ -554,53 +554,105 @@ export class KoalMiddlewareClient {
 		}
 	}
 
-async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayload> {
-	const ticket = this.buildTicket();
-	const originDataB64 = window.Base64?.encode?.(plainText) ?? btoa(plainText);
-	// 厂商最新要求：统一使用 P1 签名接口，type 固定为 2
-	const signTypeCode = "2";
-	// mdType：SM2 用 SM3(3)，RSA/PM-BD 用 SHA1(2)
-	let mdType = cert.signType === "SM2" ? "3" : "2";
+	async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayload> {
+		const ticket = this.buildTicket();
+		const originDataB64 = window.Base64?.encode?.(plainText) ?? btoa(plainText);
 
-		const request = this.buildRequest(0x10, {
-			devID: cert.devId,
-			appName: cert.appName,
-			conName: cert.conName,
-			srcData: originDataB64,
-			isBase64SrcData: "1",
-			type: signTypeCode,
-			mdType,
-		});
-		const response = await this.thriftCall<any>(this.signClient, "signData", ticket, request);
-		const code = Number(response?.errCode ?? 0);
-		if (code !== 0) {
-			throw new Error(mapKoalError(code, response?.jsonBody));
+		// 兼容策略：
+		// - 优先按厂商 demo：SM2/RSA 走 type=2（P1）；SM2 用 SM3(3)，RSA 默认 SHA1(2)
+		// - 对 certType=other / PM 证书，若 P1 失败，再回退 type=1（PM-BD）
+		const isPmLike = cert.signType === "PM-BD" || String(cert.certType ?? "").toLowerCase() === "other";
+		const mdTypeP1 = cert.signType === "SM2" ? "3" : "2";
+
+		const attempts: Array<{ type: string; mdType: string; label: string }> = [
+			{ type: "2", mdType: mdTypeP1, label: "P1(type=2)" },
+		];
+		if (isPmLike) {
+			attempts.push({ type: "1", mdType: "2", label: "PM(type=1)" });
 		}
-		const payload = parseJson(response?.jsonBody);
-		const signDataB64: Nullable<string> = payload?.b64signData ?? payload?.signData;
-		if (!signDataB64) {
-			throw new Error("签名失败：缺少签名数据");
+
+		let lastErr: Error | null = null;
+
+		for (const attempt of attempts) {
+			try {
+				const request = this.buildRequest(0x10, {
+					devID: cert.devId,
+					appName: cert.appName,
+					conName: cert.conName,
+					srcData: originDataB64,
+					isBase64SrcData: "1",
+					type: attempt.type,
+					mdType: attempt.mdType,
+				});
+				const response = await this.thriftCall<any>(this.signClient, "signData", ticket, request);
+				const code = Number(response?.errCode ?? 0);
+				if (code !== 0) {
+					throw new Error(mapKoalError(code, response?.jsonBody));
+				}
+				const payload = parseJson(response?.jsonBody);
+				const signDataB64: Nullable<string> = payload?.b64signData ?? payload?.signData;
+				if (!signDataB64) {
+					throw new Error("签名失败：缺少签名数据");
+				}
+				let dupCertB64: Nullable<string> = payload?.dupCert ?? payload?.dupCertB64 ?? payload?.dup_cert;
+				if (!dupCertB64) {
+					dupCertB64 = await this.fetchCertificateForSign(cert);
+				}
+
+				dbg("pki.sign.ok", {
+					attempt,
+					signType: cert.signType,
+					certType: cert.certType,
+					signFlag: cert.signFlag,
+					devId: cert.devId,
+					conName: cert.conName,
+				});
+				try {
+					window.localStorage?.setItem(
+						"pki_last_sign_attempt",
+						JSON.stringify({
+							ts: Date.now(),
+							attempt,
+							signType: cert.signType,
+							certType: cert.certType,
+							signFlag: cert.signFlag,
+							devId: cert.devId,
+							conName: cert.conName,
+						})
+					);
+				} catch {}
+
+				return {
+					signDataB64: String(signDataB64).trim(),
+					originDataB64,
+					signType: cert.signType,
+					mdType: attempt.mdType,
+					dupCertB64: dupCertB64 ? String(dupCertB64).trim() : undefined,
+				};
+			} catch (error) {
+				lastErr = error instanceof Error ? error : new Error(String(error));
+				dbg("pki.sign.failed", {
+					attempt,
+					error: lastErr.message,
+					signType: cert.signType,
+					certType: cert.certType,
+					signFlag: cert.signFlag,
+				});
+			}
 		}
-		let dupCertB64: Nullable<string> = payload?.dupCert ?? payload?.dupCertB64 ?? payload?.dup_cert;
-		if (!dupCertB64) {
-			dupCertB64 = await this.fetchCertificateForSign(cert);
-		}
-		return {
-			signDataB64: String(signDataB64).trim(),
-			originDataB64,
-			signType: cert.signType,
-			mdType,
-			dupCertB64: dupCertB64 ? String(dupCertB64).trim() : undefined,
-		};
+
+		throw lastErr ?? new Error("签名失败：未知错误");
 	}
 
 	async exportCertificate(cert: KoalCertificate): Promise<string> {
 		const ticket = this.buildTicket();
+		const signFlag = cert.signFlag === 0 ? "0" : "1";
 		const request = this.buildRequest(0x22, {
 			devID: cert.devId,
 			appName: cert.appName,
 			containerName: cert.conName,
-			signFlag: "1",
+			// 1=签名证书，0=加密证书；按用户选中的证书用途导出
+			signFlag,
 		});
 		const response = await this.thriftCall<any>(this.devClient, "exportCertificate", ticket, request);
 		const code = Number(response?.errCode ?? 0);
@@ -627,11 +679,13 @@ async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayl
 
 	private async getCertFromEnroll(cert: KoalCertificate): Promise<string> {
 		const ticket = this.buildTicket();
+		const certType = cert.signFlag === 0 ? "0" : "1";
 		const request = this.buildRequest(0x25, {
 			devID: cert.devId,
 			appName: cert.appName,
 			conName: cert.conName,
-			certType: "1", // 签名证书
+			// 1=签名证书, 0=加密证书；按用户选中的证书用途获取
+			certType,
 		});
 		const response = await this.thriftCall<any>(this.enrollClient, "getCert", ticket, request);
 		const code = Number(response?.errCode ?? 0);

@@ -50,8 +50,8 @@ export default function RoleDetailView() {
 		queryFn: () => adminApi.getOrganizations({ auditSilent: true }),
 	});
 	const { data: adminUsers } = useQuery({
-		queryKey: ["admin", "users"],
-		queryFn: () => adminApi.getAdminUsers({ size: 500 }),
+		queryKey: ["admin", "users", "all"],
+		queryFn: () => adminApi.getAllAdminUsers(),
 	});
 	const { data: pendingChangeList } = useQuery({
 		queryKey: ["admin", "role-change-pending", canonical],
@@ -140,10 +140,6 @@ export default function RoleDetailView() {
 	const adminUsersList = useMemo<AdminUser[]>(() => {
 		if (!adminUsers) return [];
 		if (Array.isArray(adminUsers)) return adminUsers;
-		const content = (adminUsers as any)?.content;
-		if (Array.isArray(content)) return content;
-		const records = (adminUsers as any)?.records;
-		if (Array.isArray(records)) return records;
 		return [];
 	}, [adminUsers]);
 

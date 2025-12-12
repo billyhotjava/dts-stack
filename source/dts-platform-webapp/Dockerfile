@@ -1,7 +1,7 @@
 # Allow overriding Node base from internal mirror
 # Alpine tags for Node.js stopped publishing the floating `20-alpine` tag; pin to a known patch.
 ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
-FROM ${BASE_IMAGE_NODE} AS build
+FROM ${BASE_IMAGE_NODE} AS builder
 
 WORKDIR /app
 
@@ -85,10 +85,10 @@ RUN set -eux; \
     mkdir -p /usr/share/nginx/html
 
 WORKDIR /usr/share/nginx/html
-COPY --from=build /app/dist ./
+COPY --from=builder /app/dist ./
 # Ship a fallback copy of vendor SDK assets independent of build output
 RUN mkdir -p /opt/vendor-koal
-COPY --from=build /app/public/vendor/ /opt/vendor-koal/
+COPY --from=builder /app/public/vendor/ /opt/vendor-koal/
 RUN chmod -R a+rX /usr/share/nginx/html /opt/vendor-koal
 RUN set -eux; \
     if [ -d "/usr/share/nginx/html/vendor" ]; then \

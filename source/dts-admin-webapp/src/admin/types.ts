@@ -154,7 +154,8 @@ export type DataOperation = "read" | "write" | "export";
 
 export interface PagedResult<T> {
 	content: T[];
-	total: number;
+	total?: number;
+	totalElements?: number;
 	page: number;
 	size: number;
 }
