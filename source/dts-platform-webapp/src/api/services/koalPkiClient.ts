@@ -3,15 +3,17 @@ import { GLOBAL_CONFIG } from "@/global-config";
 type Nullable<T> = T | null | undefined;
 
 const KOAL_VENDOR_FILES = [
-  "thrift.js",
-  "base64.js",
+	"thrift.js",
+	"base64.js",
 	"commdef_types.js",
 	"pkiService_types.js",
 	"devService_types.js",
 	"signXService_types.js",
+	"enRollService_types.js",
 	"pkiService.js",
 	"devService.js",
 	"signXService.js",
+	"enRollService.js",
 ] as const;
 
 const DEFAULT_ENDPOINTS = ["https://127.0.0.1:16080", "http://127.0.0.1:18080"] as const;
@@ -368,20 +370,22 @@ function collectEndpoints(options?: KoalConnectOptions): string[] {
 }
 
 export class KoalMiddlewareClient {
-	private readonly transport: any;
-	private readonly multiplexer: any;
-	private readonly pkiClient: any;
-	private readonly devClient: any;
-	private readonly signClient: any;
-	private session: { sessionID: number; ticket: string } | null = null;
+ private readonly transport: any;
+ private readonly multiplexer: any;
+ private readonly pkiClient: any;
+ private readonly devClient: any;
+ private readonly signClient: any;
+	private readonly enrollClient: any;
+  private session: { sessionID: number; ticket: string } | null = null;
 
-	private constructor(baseUrl: string) {
-		this.transport = new window.Thrift.TXHRTransport(baseUrl);
-		this.multiplexer = new window.Thrift.Multiplexer();
-		this.pkiClient = this.multiplexer.createClient("pkiService", window.pkiServiceClient, this.transport);
-		this.devClient = this.multiplexer.createClient("deviceOperator", window.devServiceClient, this.transport);
-		this.signClient = this.multiplexer.createClient("signxPlugin", window.signXServiceClient, this.transport);
-	}
+  private constructor(baseUrl: string) {
+    this.transport = new window.Thrift.TXHRTransport(baseUrl);
+    this.multiplexer = new window.Thrift.Multiplexer();
+    this.pkiClient = this.multiplexer.createClient("pkiService", window.pkiServiceClient, this.transport);
+    this.devClient = this.multiplexer.createClient("deviceOperator", window.devServiceClient, this.transport);
+    this.signClient = this.multiplexer.createClient("signxPlugin", window.signXServiceClient, this.transport);
+		this.enrollClient = this.multiplexer.createClient("enrollPlugin", window.enRollServiceClient, this.transport);
+  }
 
 	static async connect(options?: KoalConnectOptions): Promise<KoalMiddlewareClient> {
 		if (IS_DEV && typeof window !== "undefined") {
@@ -517,13 +521,20 @@ export class KoalMiddlewareClient {
 			}
 			return [];
 		}
-		console.info("[koal] 原始证书列表", payload.certs);
+		const rawCerts = payload.certs ?? [];
+		console.info("[koal] 原始证书列表", rawCerts);
+		try {
+			window.localStorage?.setItem("koal_certs_raw", JSON.stringify(rawCerts));
+		} catch {}
 
-		const filtered = payload.certs
+		const filtered = rawCerts
 			.filter((item: any) => filterCertificate(item))
 			.map((item: any, index: number) => normalizeCertificate(item, index));
 
 		console.info("[koal] 过滤后证书", filtered);
+		try {
+			window.localStorage?.setItem("koal_certs_filtered", JSON.stringify(filtered));
+		} catch {}
 
 		return filtered;
 	}
@@ -606,7 +617,40 @@ async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayl
 	}
 
 	private async fetchCertificateForSign(cert: KoalCertificate): Promise<string> {
+		try {
+			const fromEnroll = await this.getCertFromEnroll(cert);
+			if (fromEnroll) return fromEnroll;
+		} catch (error) {
+			dbg("pki.enroll.getCert.failed", { error: String(error) });
+			if (IS_DEV) {
+				console.warn("[koal] enroll.getCert 失败，改用 exportCertificate", error);
+			}
+		}
 		return this.exportCertificate(cert);
+	}
+
+	private async getCertFromEnroll(cert: KoalCertificate): Promise<string | null> {
+		const ticket = this.buildTicket();
+		const request = this.buildRequest(0x25, {
+			devID: cert.devId,
+			appName: cert.appName,
+			conName: cert.conName,
+			certType: 1, // 1=签名证书；厂商 demo
+		});
+		const response = await this.thriftCall<any>(this.enrollClient, "getCert", ticket, request);
+		const code = Number(response?.errCode ?? 0);
+		if (code !== 0) {
+			throw new Error(mapKoalError(code, response?.jsonBody));
+		}
+		const payload = parseJson(response?.jsonBody);
+		const certB64: Nullable<string> = payload?.cert ?? payload?.b64cert ?? payload?.certContent;
+		if (!certB64) {
+			if (IS_DEV) {
+				console.info("[koal] enroll.getCert 缺少证书内容", payload);
+			}
+			return null;
+		}
+		return String(certB64);
 	}
 }
 
@@ -619,30 +663,21 @@ function filterCertificate(item: Record<string, any>): boolean {
 	const certType = typeof certTypeRaw === "string" ? Number(certTypeRaw) : Number(certTypeRaw ?? Number.NaN);
 	const signType = resolveSignType(item);
 
-	// 厂商 demo：certType=1 签名证书，0 加密证书。
-	// 兼容：普密 RSA 证书有时标记为 0，仍允许出现；其余 certType!=1 过滤。
+	const hints: string[] = [];
 	if (Number.isFinite(certType) && certType !== 1) {
-		if (signType === "RSA") {
-			console.info("[koal] 兼容放行 RSA 证书但 certType!=1", { certType, keyUsage: keyUsageNumber, signFlag });
-		} else {
-			console.info("[koal] 过滤非签名用途证书", { certType, signType, keyUsage: keyUsageNumber, signFlag });
-			return false;
-		}
+		hints.push(`certType=${certType}`);
 	}
-
-	if (IS_DEV) {
-		const hints: string[] = [];
-		if (Number.isNaN(keyUsageNumber)) {
-			hints.push(`keyUsage 未解析 -> ${String(keyUsageRaw)}`);
-		} else if (keyUsageNumber !== 1) {
-			hints.push(`keyUsage=${keyUsageNumber}`);
-		}
-		if (!Number.isNaN(signFlag) && signFlag !== 1) {
-			hints.push(`signFlag=${signFlag}`);
-		}
-		if (hints.length > 0) {
-			console.info("[koal] 非标准签名证书仍返回给前端", hints.join("; "), item);
-		}
+	if (!Number.isNaN(signFlag) && signFlag !== 1) {
+		hints.push(`signFlag=${signFlag}`);
+	}
+	if (!Number.isNaN(keyUsageNumber) && keyUsageNumber !== 1) {
+		hints.push(`keyUsage=${keyUsageNumber}`);
+	}
+	if (hints.length > 0) {
+		try {
+			console.info("[koal] 放行非标准签名证书", hints.join("; "), { signType, certType, signFlag, keyUsage: keyUsageNumber });
+		} catch {}
+		dbg("pki.cert.hints", { hints, signType, certType, signFlag, keyUsage: keyUsageNumber });
 	}
 	return true;
 }
@@ -687,26 +722,17 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
   if (!appName) missingFields.push("appName");
   if (!conName) missingFields.push("conName");
 
-  // Heuristics for signable certificates:
-  // - signFlag (if provided by middleware) must be 1
-  // - keyUsage (if provided) should be 1 (digitalSignature) — other values treated as non-signing
-  // - device identifiers must be present
-  // - certType=1 表示签名证书；兼容 certType=0 的 RSA 普密证书
-  let signableByFlags = true;
-  if (Number.isFinite(certType)) {
-    const ct = Number(certType);
-    const isSignatureCert = ct === 1 || (ct === 0 && signType === "RSA");
-    signableByFlags = signableByFlags && isSignatureCert;
-  }
-  if (Number.isFinite(signFlag)) {
-    signableByFlags = (Number(signFlag) === 1);
-  }
-  if (Number.isFinite(keyUsage)) {
-    // Common vendor convention: 1 => digitalSignature; other values denote encipherment/nonRepudiation etc.
-    signableByFlags = signableByFlags && (Number(keyUsage) === 1);
-  }
+  const canSign = missingFields.length === 0;
 
-  const canSign = missingFields.length === 0 && signableByFlags;
+	if (canSign && (!Number.isNaN(keyUsage) || !Number.isNaN(signFlag) || Number.isFinite(certType))) {
+		const hints: string[] = [];
+		if (!Number.isNaN(keyUsage) && keyUsage !== 1) hints.push(`keyUsage=${keyUsage}`);
+		if (!Number.isNaN(signFlag) && signFlag !== 1) hints.push(`signFlag=${signFlag}`);
+		if (Number.isFinite(certType) && Number(certType) !== 1) hints.push(`certType=${certType}`);
+		if (hints.length > 0) {
+			dbg("pki.cert.flags", { id, hints, signType, raw: item });
+		}
+	}
 
   const cert: KoalCertificate = {
 		id,
