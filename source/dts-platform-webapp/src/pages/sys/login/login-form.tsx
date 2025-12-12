@@ -41,7 +41,19 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	const selectedCert = pkiCerts.find((item) => item.id === selectedCertId);
 
+	const isSignatureHint = (cert: KoalCertificate) => {
+		const flag = typeof cert.signFlag === "number" ? cert.signFlag : undefined;
+		const keyUsage = typeof cert.keyUsage === "number" ? cert.keyUsage : undefined;
+		const certTypeStr = (cert.certType ?? "").toString().trim().toLowerCase();
+		const certTypeNum = Number(cert.certType);
+		const isOther = certTypeStr === "other";
+		return flag === 1 || keyUsage === 1 || certTypeNum === 1 || isOther;
+	};
 
+	const describeCertUsage = (cert: KoalCertificate) => {
+		if (isSignatureHint(cert)) return "签名";
+		return "加密/普密";
+	};
 
 	// 简单开关：默认隐藏账号/密码，仅保留证书登录按钮（仍保留密码登录后端能力）
 	const hidePasswordForm: boolean = (() => {
@@ -199,11 +211,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				return Array.from(m.values());
 			})();
 			setPkiCerts(uniq);
-			// 若只有一个可签名证书，默认选中；多于一个时要求用户显式选择，避免误选
+			// 若只有一个可签名证书，默认选中；多于一个时优先选签名用途
 			if (uniq.length === 1) {
 				setSelectedCertId(uniq[0]?.id ?? "");
 			} else {
-				setSelectedCertId("");
+				const preferred = uniq.find((c) => isSignatureHint(c)) ?? uniq[0];
+				setSelectedCertId(preferred?.id ?? "");
 			}
 			setPinCode("");
 			setPkiClientState({ client, challenge });
@@ -270,6 +283,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		setPkiSubmitting(true);
 		setLoading(true);
 		let loggedOut = false;
+		let keepDialogOpen = false;
 
 		try {
 			if (IS_DEV) {
@@ -346,10 +360,27 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			await client.logout();
 			loggedOut = true;
 		} catch (error) {
-			toast.error(formatKoalError(error), { position: "top-center" });
+			const msg = formatKoalError(error);
+			toast.error(msg, { position: "top-center" });
+
+			if (msg.includes("0x0a00001b") || msg.includes("容器中无密钥对")) {
+				const alternatives = pkiCerts.filter(
+					(c) => c.devId === certificate.devId && c.id !== certificate.id && isSignatureHint(c)
+				);
+				if (alternatives.length > 0) {
+					const names = alternatives.map((c) => c.conName || c.id).join(" / ");
+					toast.info(`当前容器无签名密钥，请尝试切换容器：${names}`, { position: "top-center" });
+					setSelectedCertId(alternatives[0].id);
+					keepDialogOpen = true;
+				}
+			}
 		} finally {
 			setPkiSubmitting(false);
 			setLoading(false);
+			if (keepDialogOpen) {
+				// 保持会话和弹窗，方便用户切换容器重试
+				return;
+			}
 			if (!loggedOut) {
 				try {
 					await client.logout();
@@ -483,6 +514,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 													<RadioGroupItem value={cert.id} id={`cert-${index}`} disabled={!cert.canSign} className="mt-1" />
 													<div className="flex-1">
 														<div className="font-medium text-foreground">用户名：{display}</div>
+														<div className="text-xs text-muted-foreground">
+															用途：{describeCertUsage(cert)} / 容器：{cert.conName || "未知"} / 算法：
+															{cert.signType}
+														</div>
 													</div>
 												</label>
 											);
