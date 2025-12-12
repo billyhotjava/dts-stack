@@ -620,10 +620,10 @@ function filterCertificate(item: Record<string, any>): boolean {
 	const signType = resolveSignType(item);
 
 	// 厂商 demo：certType=1 签名证书，0 加密证书。
-	// 兼容：普密 RSA 证书有时标记为 0，仍允许出现；其余 certType!=1 过滤。
+	// 兼容：普密 RSA 证书有时标记为 0，允许出现在列表中（但后续 canSign 会判定为不可签），其余 certType!=1 过滤。
 	if (Number.isFinite(certType) && certType !== 1) {
 		if (signType === "RSA") {
-			console.info("[koal] 兼容放行 RSA 证书但 certType!=1", { certType, keyUsage: keyUsageNumber, signFlag });
+			console.info("[koal] 发现 RSA 证书但 certType!=1，将显示但标记为不可签", { certType, keyUsage: keyUsageNumber, signFlag });
 		} else {
 			console.info("[koal] 过滤非签名用途证书", { certType, signType, keyUsage: keyUsageNumber, signFlag });
 			return false;
@@ -688,22 +688,31 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
   if (!conName) missingFields.push("conName");
 
   // Heuristics for signable certificates:
-  // - signFlag (if provided by middleware) must be 1
-  // - keyUsage (if provided) should be 1 (digitalSignature) — other values treated as non-signing
   // - device identifiers must be present
-  // - certType=1 表示签名证书；兼容 certType=0 的 RSA 普密证书
+  // - RSA 场景放宽（certType/flag/keyUsage 异常仍允许尝试签名）
+  // - 非 RSA：要求 certType=1；signFlag=1（若提供）；keyUsage=1（若提供）
   let signableByFlags = true;
-  if (Number.isFinite(certType)) {
-    const ct = Number(certType);
-    const isSignatureCert = ct === 1 || (ct === 0 && signType === "RSA");
-    signableByFlags = signableByFlags && isSignatureCert;
-  }
-  if (Number.isFinite(signFlag)) {
-    signableByFlags = (Number(signFlag) === 1);
-  }
-  if (Number.isFinite(keyUsage)) {
-    // Common vendor convention: 1 => digitalSignature; other values denote encipherment/nonRepudiation etc.
-    signableByFlags = signableByFlags && (Number(keyUsage) === 1);
+  if (signType === "RSA") {
+    // 放宽：仅在存在显式信息且明确不等于 1 时打印提示
+    if (Number.isFinite(certType) && Number(certType) !== 1) {
+      console.info("[koal] RSA certType!=1 仍尝试签名", { certType });
+    }
+    if (Number.isFinite(signFlag) && Number(signFlag) !== 1) {
+      console.info("[koal] RSA signFlag!=1 仍尝试签名", { signFlag });
+    }
+    if (Number.isFinite(keyUsage) && Number(keyUsage) !== 1) {
+      console.info("[koal] RSA keyUsage!=1 仍尝试签名", { keyUsage });
+    }
+  } else {
+    if (Number.isFinite(certType)) {
+      signableByFlags = signableByFlags && Number(certType) === 1;
+    }
+    if (Number.isFinite(signFlag)) {
+      signableByFlags = signableByFlags && Number(signFlag) === 1;
+    }
+    if (Number.isFinite(keyUsage)) {
+      signableByFlags = signableByFlags && Number(keyUsage) === 1;
+    }
   }
 
   const canSign = missingFields.length === 0 && signableByFlags;
