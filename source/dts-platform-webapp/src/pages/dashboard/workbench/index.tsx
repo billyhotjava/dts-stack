@@ -2,16 +2,24 @@ import { Title, Text } from "@/ui/typography";
 
 type GaugeBarProps = { value: number; tone?: "blue" | "emerald" | "amber" };
 const barTone: Record<NonNullable<GaugeBarProps["tone"]>, string> = {
-  blue: "bg-blue-500",
-  emerald: "bg-emerald-500",
-  amber: "bg-amber-500",
+  blue: "#3b82f6",
+  emerald: "#10b981",
+  amber: "#f59e0b",
 };
 
 function GaugeBar({ value, tone = "blue" }: GaugeBarProps) {
   const width = Math.min(Math.max(value, 0), 100);
+  // 使用内联样式保证低版本浏览器(Chrome 95)也能渲染
   return (
-    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-      <div className={`h-2 ${barTone[tone]}`} style={{ width: `${width}%` }} />
+    <div
+      style={{ width: "100%", background: "#e5e7eb", height: 8, borderRadius: 8, overflow: "hidden" }}
+      className="gauge-bar"
+      role="presentation"
+    >
+      <div
+        style={{ width: `${width}%`, background: barTone[tone], height: "100%", borderRadius: 8 }}
+        className="gauge-bar__fill"
+      />
     </div>
   );
 }
