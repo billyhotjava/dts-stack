@@ -18,6 +18,42 @@ import type {
 import apiClient from "@/api/apiClient";
 
 type AuditSilentOption = { auditSilent?: boolean };
+const ADMIN_USER_PAGE_SIZE = 200;
+
+type AdminUsersPage = PagedResult<AdminUser> | AdminUser[] | null | undefined;
+
+const normalizeAdminUsersPage = (
+	page: AdminUsersPage,
+	fallbackSize: number = ADMIN_USER_PAGE_SIZE,
+): { items: AdminUser[]; total: number; size: number } => {
+	if (Array.isArray(page)) {
+		const list = (page as AdminUser[]).filter(Boolean);
+		return {
+			items: list,
+			total: list.length,
+			size: list.length || fallbackSize,
+		};
+	}
+	if (!page || typeof page !== "object") {
+		return { items: [], total: 0, size: fallbackSize };
+	}
+	const content = Array.isArray((page as any).content)
+		? ((page as any).content as AdminUser[])
+		: Array.isArray((page as any).records)
+			? ((page as any).records as AdminUser[])
+			: [];
+	const total =
+		(page as any).totalElements ??
+		(page as any).total ??
+		(page as any).totalRecords ??
+		content.length;
+	const size = (page as any).size;
+	return {
+		items: content,
+		total: typeof total === "number" ? total : content.length,
+		size: typeof size === "number" && size > 0 ? size : fallbackSize,
+	};
+};
 
 export interface ChangeRequestQuery {
 	status?: string;
@@ -147,10 +183,41 @@ export const adminApi = {
 			url: "/admin/users",
 			params: {
 				page: options?.page ?? 0,
-				size: options?.size ?? 200,
+				size: options?.size ?? ADMIN_USER_PAGE_SIZE,
 				keyword: options?.keyword,
 			},
 		}),
+
+	getAllAdminUsers: async () => {
+		const collected = new Map<string, AdminUser>();
+		let page = 0;
+		let expectedTotal = Number.POSITIVE_INFINITY;
+		while (page === 0 || collected.size < expectedTotal) {
+			const response = await adminApi.getAdminUsers({ page, size: ADMIN_USER_PAGE_SIZE });
+			const { items, total, size } = normalizeAdminUsersPage(response);
+			if (Number.isFinite(total)) {
+				expectedTotal = total;
+			} else if (!Number.isFinite(expectedTotal)) {
+				expectedTotal = Math.max(items.length, collected.size);
+			}
+			if (!items.length) {
+				break;
+			}
+			for (const user of items) {
+				const username = user?.username?.trim();
+				if (!username) continue;
+				const key = username.toLowerCase();
+				if (!collected.has(key)) {
+					collected.set(key, user);
+				}
+			}
+			page += 1;
+			if (items.length < size || page >= 50) {
+				break;
+			}
+		}
+		return Array.from(collected.values());
+	},
 
 	resolveUserDisplayNames: (usernames: string[]) =>
 		apiClient.get<Record<string, string>>({

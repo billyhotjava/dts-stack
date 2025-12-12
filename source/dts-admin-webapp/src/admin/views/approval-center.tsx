@@ -4,7 +4,7 @@ import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
 import { sanitizeChangePayload } from "@/admin/utils/change-sanitizer";
-import type { AdminUser, ChangeRequest, PagedResult } from "@/admin/types";
+import type { AdminUser, ChangeRequest } from "@/admin/types";
 import { AdminSessionContext } from "@/admin/lib/session-context";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -409,18 +409,14 @@ export default function ApprovalCenterView() {
 	});
 	const changeRequests = Array.isArray(changeRequestsData) ? changeRequestsData : [];
 	const shouldFetchFallback = !isChangeRequestsLoading && Array.isArray(changeRequestsData) && changeRequestsData.length === 0;
-	const { data: adminUsersPage } = useQuery<PagedResult<AdminUser>>({
-		queryKey: ["admin", "users"],
-		queryFn: () => adminApi.getAdminUsers({ size: 500 }),
+	const { data: adminUsersPage } = useQuery<AdminUser[]>({
+		queryKey: ["admin", "users", "all"],
+		queryFn: () => adminApi.getAllAdminUsers(),
 		enabled: isSysAdmin,
 	});
 	const adminUsers = useMemo<AdminUser[]>(() => {
 		if (!adminUsersPage) return [];
-		if (Array.isArray((adminUsersPage as unknown) as AdminUser[])) {
-			return (adminUsersPage as unknown as AdminUser[]) ?? [];
-		}
-		const content = (adminUsersPage as any)?.content;
-		if (Array.isArray(content)) return content as AdminUser[];
+		if (Array.isArray(adminUsersPage)) return adminUsersPage;
 		return [];
 	}, [adminUsersPage]);
 
