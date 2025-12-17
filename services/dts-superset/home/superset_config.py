@@ -3,6 +3,22 @@ from datetime import timedelta
 from flask_appbuilder.security.manager import AUTH_OID
 from superset_ext.security import CustomSsm
 
+# 反向代理子路径（同域名挂载）支持：
+# - Traefik 会 StripPrefix(/dashboards) 并注入 X-Forwarded-Prefix: /dashboards
+# - 这里通过中间件把 SCRIPT_NAME 设置为前缀，确保 Superset 生成的链接/静态资源路径正确
+class ReverseProxied:  # noqa: D101
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+        forwarded_prefix = environ.get("HTTP_X_FORWARDED_PREFIX", "").rstrip("/")
+        if forwarded_prefix:
+            environ["SCRIPT_NAME"] = forwarded_prefix
+        forwarded_proto = environ.get("HTTP_X_FORWARDED_PROTO")
+        if forwarded_proto:
+            environ["wsgi.url_scheme"] = forwarded_proto
+        return self.app(environ, start_response)
+
 # 基础配置
 SECRET_KEY = os.environ.get("SUPERSET_SECRET_KEY", "change-me")
 SQLALCHEMY_DATABASE_URI = os.environ.get(
@@ -12,7 +28,10 @@ SQLALCHEMY_DATABASE_URI = os.environ.get(
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 WTF_CSRF_ENABLED = True
 SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_PATH = os.environ.get("SUPERSET_SESSION_COOKIE_PATH", "/dashboards")
 PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+APP_NAME = os.environ.get("SUPERSET_APP_NAME", "数据驾驶舱")
 
 # 认证与 SSO（Keycloak OIDC）
 ENABLE_PROXY_FIX = True
@@ -52,7 +71,7 @@ EXTRA_JAVA_CLASSPATH = os.environ.get("EXTRA_JAVA_CLASSPATH", "/app/superset_hom
 
 # RLS 示例（数据集过滤条件可使用 current_user.extra_attributes）
 #   dept_code = '{{ current_user.extra_attributes.get("dept_code") }}'
-#   person_security_level >= '{{ current_user.extra_attributes.get("person_security_level") }}'
+#   max_data_security_level = '{{ current_user.extra_attributes.get("max_data_security_level") }}'
 
 # 安全 HTTP 头
 TALISMAN_CONFIG = {
@@ -60,3 +79,7 @@ TALISMAN_CONFIG = {
     "session_cookie_secure": True,
     "content_security_policy": None,
 }
+
+def FLASK_APP_MUTATOR(app):  # noqa: D103
+    app.wsgi_app = ReverseProxied(app.wsgi_app)
+    return app

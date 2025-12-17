@@ -13,11 +13,24 @@ class CustomSsm(SupersetSecurityManager):
     """
 
     ROLE_MAP = {
+        # legacy admin roles
         "SYSADMIN": "Admin",
         "AUTHADMIN": "Admin",
         "AUDITADMIN": "Alpha",
         "OPADMIN": "Alpha",
         "EMPLOYEE": "Gamma",
+        # platform roles (ROLE_*)
+        "ROLE_ADMIN": "Admin",
+        "ROLE_OP_ADMIN": "Admin",
+        "ROLE_INST_DATA_OWNER": "Alpha",
+        "ROLE_INST_DATA_DEV": "Alpha",
+        "ROLE_INST_DATA_VIEWER": "Gamma",
+        "ROLE_INST_LEADER": "Alpha",
+        "ROLE_DEPT_DATA_OWNER": "Alpha",
+        "ROLE_DEPT_DATA_DEV": "Alpha",
+        "ROLE_DEPT_DATA_VIEWER": "Gamma",
+        "ROLE_DEPT_LEADER": "Alpha",
+        "ROLE_EMPLOYEE": "Gamma",
     }
     EXCLUDED_ROLES = {"offline_access", "uma_authorization"}
 
@@ -30,9 +43,18 @@ class CustomSsm(SupersetSecurityManager):
         first_name = self._first(data, "given_name", "name", "preferred_username")
         last_name = self._first(data, "family_name")
         dept_code = self._first(data, "dept_code")
-        person_level = self._first(data, "person_security_level")
+        person_level_raw = self._first(data, "person_security_level")
         raw_roles = self._roles_from_claims(data)
         roles = self._map_roles(raw_roles)
+
+        person_level = self._parse_int(person_level_raw, default=0)
+        max_data_security_level = 3 if person_level >= 1 else 2
+
+        # dept scope:
+        # - institute roles can view all departments
+        # - others default to own department
+        upper_raw_roles = {self._normalize_role(r) for r in raw_roles if r}
+        scope_all_dept = self._has_institute_scope(upper_raw_roles)
 
         return {
             "username": username,
@@ -43,7 +65,9 @@ class CustomSsm(SupersetSecurityManager):
             "roles": roles,
             "extra": {
                 "dept_code": dept_code,
-                "person_security_level": person_level.upper() if person_level else None,
+                "person_security_level": person_level,
+                "max_data_security_level": max_data_security_level,
+                "scope_all_dept": scope_all_dept,
             },
         }
 
@@ -108,6 +132,24 @@ class CustomSsm(SupersetSecurityManager):
 
     def _normalize_role(self, role: str) -> str:
         return str(role).strip().upper()
+
+    def _parse_int(self, value: Optional[str], default: int = 0) -> int:
+        if value is None:
+            return default
+        try:
+            return int(str(value).strip())
+        except Exception:
+            return default
+
+    def _has_institute_scope(self, roles: Iterable[str]) -> bool:
+        inst_roles = {
+            "ROLE_ADMIN",
+            "ROLE_OP_ADMIN",
+            "ROLE_INST_DATA_DEV",
+            "ROLE_INST_DATA_OWNER",
+            "ROLE_INST_LEADER",
+        }
+        return any(r in inst_roles for r in roles)
 
 
 # Keep importable constant for config
