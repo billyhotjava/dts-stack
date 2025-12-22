@@ -831,16 +831,30 @@ function resolveSignType(item: Record<string, any>): KoalCertificate["signType"]
 			item?.keyAlgorithm,
 			item?.keyAlg,
 			item?.Algorithm,
-			item?.algorithm
+			item?.algorithm,
+			item?.appName,
+			item?.AppName,
+			item?.appname,
+			item?.containerName,
+			item?.container,
+			item?.conName,
+			item?.ConName,
+			item?.manufacturer,
+			item?.Manufacturer,
+			item?.Vendor
 		) ?? String(item?.certType ?? "");
 	const signHint = String(hint ?? "").toUpperCase();
 	if (signHint.includes("PM") || signHint.includes("P7")) {
 		return "PM-BD";
 	}
-	if (signHint.includes("SM2")) {
+	if (signHint.includes("SM2") || signHint.includes("1.2.156.10197")) {
 		return "SM2";
 	}
-	if (signHint.includes("RSA")) {
+	if (
+		signHint.includes("RSA") ||
+		signHint.includes("RSASSA") ||
+		signHint.includes("1.2.840.113549")
+	) {
 		return "RSA";
 	}
 	// 默认按国密处理
