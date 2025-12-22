@@ -710,8 +710,6 @@ function filterCertificate(item: Record<string, any>): boolean {
 	const keyUsageNumber = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? Number.NaN);
 	const signFlagRaw = item?.signFlag ?? item?.SignFlag;
 	const signFlag = typeof signFlagRaw === "string" ? Number(signFlagRaw) : Number(signFlagRaw ?? 1);
-	const signType = resolveSignType(item);
-
 	if (IS_DEV) {
 		const hints: string[] = [];
 		if (Number.isNaN(keyUsageNumber)) {
