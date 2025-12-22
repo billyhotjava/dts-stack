@@ -778,16 +778,13 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
 
   // Heuristics for signable certificates:
   // - device identifiers must be present
-  // - 全部算法放宽：certType/signFlag/keyUsage 仅提示，不阻断
+  // - signFlag/keyUsage are respected when provided by middleware
   let signableByFlags = true;
-  if (Number.isFinite(certType) && Number(certType) !== 1) {
-    console.info("[koal] certType!=1 仍尝试签名", { certType });
-  }
   if (Number.isFinite(signFlag) && Number(signFlag) !== 1) {
-    console.info("[koal] signFlag!=1 仍尝试签名", { signFlag });
+    signableByFlags = false;
   }
-  if (Number.isFinite(keyUsage) && Number(keyUsage) !== 1) {
-    console.info("[koal] keyUsage!=1 仍尝试签名", { keyUsage });
+  if (Number.isFinite(keyUsage) && Number(keyUsage) !== 1 && Number(keyUsage) !== 2) {
+    signableByFlags = false;
   }
 
   const canSign = missingFields.length === 0 && signableByFlags;
@@ -824,7 +821,7 @@ function firstNonBlank(...candidates: Array<unknown>): string | null {
 }
 
 function resolveSignType(item: Record<string, any>): KoalCertificate["signType"] {
-	const hint =
+	const algoHint =
 		firstNonBlank(
 			item?.certAlgorithm,
 			item?.certAlg,
@@ -833,19 +830,29 @@ function resolveSignType(item: Record<string, any>): KoalCertificate["signType"]
 			item?.keyAlgorithm,
 			item?.keyAlg,
 			item?.Algorithm,
-			item?.algorithm,
+			item?.algorithm
+		) ?? "";
+	const certTypeHintRaw = firstNonBlank(item?.certType, item?.CertType, item?.cert_type) ?? "";
+	const certTypeHint = /^[0-9]+$/.test(String(certTypeHintRaw).trim()) ? "" : String(certTypeHintRaw);
+	const vendorHint =
+		firstNonBlank(
+			item?.devName,
+			item?.devProvider,
+			item?.manufacturer,
+			item?.Manufacturer,
+			item?.Vendor
+		) ?? "";
+	const appHint =
+		firstNonBlank(
 			item?.appName,
 			item?.AppName,
 			item?.appname,
 			item?.containerName,
 			item?.container,
 			item?.conName,
-			item?.ConName,
-			item?.manufacturer,
-			item?.Manufacturer,
-			item?.Vendor
-		) ?? String(item?.certType ?? "");
-	const signHint = String(hint ?? "").toUpperCase();
+			item?.ConName
+		) ?? "";
+	const signHint = String(algoHint || certTypeHint || vendorHint || appHint || "").toUpperCase();
 	if (signHint.includes("PM") || signHint.includes("P7")) {
 		return "PM-BD";
 	}
