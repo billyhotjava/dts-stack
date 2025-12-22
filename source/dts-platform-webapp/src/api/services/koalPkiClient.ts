@@ -738,8 +738,6 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
 	const subjectCn = item?.subjectName?.CN ?? item?.subject ?? item?.Subject ?? "";
 	const issuerCn = item?.issuerName?.CN ?? item?.issuer ?? item?.Issuer ?? "";
 
-	const certTypeRaw = item?.certType ?? item?.CertType ?? item?.cert_type;
-	const certType = typeof certTypeRaw === "string" ? Number(certTypeRaw) : Number(certTypeRaw ?? Number.NaN);
 	const signType = resolveSignType(item);
 
 	const manufacturer = String(item?.manufacturer ?? item?.Manufacturer ?? item?.Vendor ?? "").trim();
