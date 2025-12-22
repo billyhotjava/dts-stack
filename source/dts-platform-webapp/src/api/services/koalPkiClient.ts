@@ -559,11 +559,32 @@ export class KoalMiddlewareClient {
 		const ticket = this.buildTicket();
 		const originDataB64 = window.Base64?.encode?.(plainText) ?? btoa(plainText);
 
+		let resolvedSignType = cert.signType;
+		let prefetchedCertB64: Nullable<string> = null;
+
+		if (resolvedSignType === "UNKNOWN" || isOtherCertType(cert.certType)) {
+			try {
+				prefetchedCertB64 = await this.fetchCertificateForSign(cert);
+				const detected = detectSignTypeFromCertContent(prefetchedCertB64);
+				if (detected !== "UNKNOWN") {
+					resolvedSignType = detected;
+					cert.signType = detected;
+				}
+			} catch (error) {
+				dbg("pki.sign.resolve-cert.failed", { error: String(error) });
+			}
+		}
+
+		if (resolvedSignType === "UNKNOWN") {
+			resolvedSignType = isOtherCertType(cert.certType) ? "RSA" : "SM2";
+			cert.signType = resolvedSignType;
+		}
+
 		// 兼容策略：
 		// - 优先按厂商 demo：SM2/RSA 走 type=2（P1）；SM2 用 SM3(3)，RSA 默认 SHA1(2)
 		// - 对 certType=other / PM 证书，若 P1 失败，再回退 type=1（PM-BD）
-		const isPmLike = cert.signType === "PM-BD" || String(cert.certType ?? "").toLowerCase() === "other";
-		const mdTypeP1 = cert.signType === "SM2" ? "3" : "2";
+		const isPmLike = resolvedSignType === "PM-BD" || isOtherCertType(cert.certType);
+		const mdTypeP1 = resolvedSignType === "SM2" ? "3" : "2";
 
 		const attempts: Array<{ type: string; mdType: string; label: string }> = [
 			{ type: "2", mdType: mdTypeP1, label: "P1(type=2)" },
@@ -597,12 +618,12 @@ export class KoalMiddlewareClient {
 				}
 				let dupCertB64: Nullable<string> = payload?.dupCert ?? payload?.dupCertB64 ?? payload?.dup_cert;
 				if (!dupCertB64) {
-					dupCertB64 = await this.fetchCertificateForSign(cert);
+					dupCertB64 = prefetchedCertB64 ?? (await this.fetchCertificateForSign(cert));
 				}
 
 				dbg("pki.sign.ok", {
 					attempt,
-					signType: cert.signType,
+					signType: resolvedSignType,
 					certType: cert.certType,
 					signFlag: cert.signFlag,
 					devId: cert.devId,
@@ -614,7 +635,7 @@ export class KoalMiddlewareClient {
 						JSON.stringify({
 							ts: Date.now(),
 							attempt,
-							signType: cert.signType,
+							signType: resolvedSignType,
 							certType: cert.certType,
 							signFlag: cert.signFlag,
 							devId: cert.devId,
@@ -626,7 +647,7 @@ export class KoalMiddlewareClient {
 				return {
 					signDataB64: String(signDataB64).trim(),
 					originDataB64,
-					signType: cert.signType,
+					signType: resolvedSignType,
 					mdType: attempt.mdType,
 					dupCertB64: dupCertB64 ? String(dupCertB64).trim() : undefined,
 				};
@@ -635,7 +656,7 @@ export class KoalMiddlewareClient {
 				dbg("pki.sign.failed", {
 					attempt,
 					error: lastErr.message,
-					signType: cert.signType,
+					signType: resolvedSignType,
 					certType: cert.certType,
 					signFlag: cert.signFlag,
 				});
@@ -822,7 +843,7 @@ function resolveSignType(item: Record<string, any>): KoalCertificate["signType"]
 			item?.algorithm
 		) ?? "";
 	const certTypeHintRaw = firstNonBlank(item?.certType, item?.CertType, item?.cert_type) ?? "";
-	const certTypeHint = /^[0-9]+$/.test(String(certTypeHintRaw).trim()) ? "" : String(certTypeHintRaw);
+	const certTypeHint = normalizeCertTypeHint(certTypeHintRaw);
 	const vendorHint =
 		firstNonBlank(
 			item?.devName,
@@ -842,6 +863,9 @@ function resolveSignType(item: Record<string, any>): KoalCertificate["signType"]
 			item?.ConName
 		) ?? "";
 	const signHint = String(algoHint || certTypeHint || vendorHint || appHint || "").toUpperCase();
+	if (!signHint) {
+		return "UNKNOWN";
+	}
 	if (signHint.includes("PM") || signHint.includes("P7")) {
 		return "PM-BD";
 	}
@@ -855,8 +879,89 @@ function resolveSignType(item: Record<string, any>): KoalCertificate["signType"]
 	) {
 		return "RSA";
 	}
-	// 默认按国密处理
-	return "SM2";
+	return "UNKNOWN";
+}
+
+function normalizeCertTypeHint(raw: string | null): string {
+	const trimmed = String(raw ?? "").trim();
+	if (!trimmed) return "";
+	const lowered = trimmed.toLowerCase();
+	if (lowered === "other" || lowered === "othere" || lowered === "unknown") {
+		return "";
+	}
+	if (/^[0-9]+$/.test(trimmed)) {
+		return "";
+	}
+	return trimmed;
+}
+
+function isOtherCertType(raw?: string | null): boolean {
+	const lowered = String(raw ?? "").trim().toLowerCase();
+	return lowered === "other" || lowered === "othere" || lowered === "unknown";
+}
+
+function decodeBase64ToBytes(input: string): Uint8Array | null {
+	const cleaned = String(input)
+		.replace(/-----BEGIN CERTIFICATE-----/g, "")
+		.replace(/-----END CERTIFICATE-----/g, "")
+		.replace(/\s+/g, "");
+	if (!cleaned) return null;
+	let binary = "";
+	try {
+		if (typeof atob === "function") {
+			binary = atob(cleaned);
+		} else if ((globalThis as any).Buffer) {
+			binary = (globalThis as any).Buffer.from(cleaned, "base64").toString("binary");
+		} else {
+			return null;
+		}
+	} catch {
+		return null;
+	}
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i += 1) {
+		bytes[i] = binary.charCodeAt(i) & 0xff;
+	}
+	return bytes;
+}
+
+function bytesIncludes(haystack: Uint8Array, needle: number[] | Uint8Array): boolean {
+	const target = Array.isArray(needle) ? new Uint8Array(needle) : needle;
+	if (target.length === 0 || haystack.length < target.length) return false;
+	for (let i = 0; i <= haystack.length - target.length; i += 1) {
+		let matched = true;
+		for (let j = 0; j < target.length; j += 1) {
+			if (haystack[i + j] !== target[j]) {
+				matched = false;
+				break;
+			}
+		}
+		if (matched) return true;
+	}
+	return false;
+}
+
+function detectSignTypeFromCertContent(certB64: string): KoalCertificate["signType"] {
+	const bytes = decodeBase64ToBytes(certB64);
+	if (!bytes) return "UNKNOWN";
+	// OID bytes for common algorithms.
+	const rsaEncryption = [0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01];
+	const rsassaPss = [0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0a];
+	const sm2p256v1 = [0x06, 0x08, 0x2a, 0x81, 0x1c, 0xcf, 0x55, 0x01, 0x82, 0x2d];
+	const sm2Sign = [0x06, 0x08, 0x2a, 0x81, 0x1c, 0xcf, 0x55, 0x01, 0x83, 0x75];
+	const sm2Encrypt = [0x06, 0x08, 0x2a, 0x81, 0x1c, 0xcf, 0x55, 0x01, 0x83, 0x76];
+
+	if (bytesIncludes(bytes, rsaEncryption) || bytesIncludes(bytes, rsassaPss)) {
+		return "RSA";
+	}
+	if (
+		bytesIncludes(bytes, sm2p256v1) ||
+		bytesIncludes(bytes, sm2Sign) ||
+		bytesIncludes(bytes, sm2Encrypt)
+	) {
+		return "SM2";
+	}
+	return "UNKNOWN";
 }
 
 function parseJson(value: Nullable<string>): any {
