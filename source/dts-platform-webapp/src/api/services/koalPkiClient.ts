@@ -320,6 +320,7 @@ export type KoalCertificate = {
 	issuerCn: string;
 	sn: string;
 	manufacturer: string;
+	signFlag?: number;
 	keyUsage?: number;
 	certType?: string;
 	signType: "SM2" | "RSA" | "PM-BD" | "UNKNOWN";
@@ -800,6 +801,7 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
 		issuerCn: String(issuerCn ?? ""),
 		sn: String(sn ?? ""),
 		manufacturer,
+    signFlag: Number.isNaN(signFlag) ? undefined : signFlag,
     keyUsage: Number.isNaN(keyUsage) ? undefined : keyUsage,
     certType: item?.certType ? String(item.certType) : undefined,
     signType,
