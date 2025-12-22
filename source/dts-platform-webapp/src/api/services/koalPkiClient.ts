@@ -710,14 +710,7 @@ function filterCertificate(item: Record<string, any>): boolean {
 	const keyUsageNumber = typeof keyUsageRaw === "string" ? Number(keyUsageRaw) : Number(keyUsageRaw ?? Number.NaN);
 	const signFlagRaw = item?.signFlag ?? item?.SignFlag;
 	const signFlag = typeof signFlagRaw === "string" ? Number(signFlagRaw) : Number(signFlagRaw ?? 1);
-	const certTypeRaw = item?.certType ?? item?.CertType ?? item?.cert_type;
-	const certType = typeof certTypeRaw === "string" ? Number(certTypeRaw) : Number(certTypeRaw ?? Number.NaN);
 	const signType = resolveSignType(item);
-
-	// 放宽：certType 仅作为提示，不拦截
-	if (Number.isFinite(certType) && certType !== 1) {
-		console.info("[koal] 非签名 certType 仍显示以便排查", { certType, signType, keyUsage: keyUsageNumber, signFlag });
-	}
 
 	if (IS_DEV) {
 		const hints: string[] = [];
