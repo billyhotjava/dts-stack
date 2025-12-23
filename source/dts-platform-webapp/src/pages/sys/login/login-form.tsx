@@ -99,8 +99,11 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	function deriveUsernameFromCert(cert?: KoalCertificate | null): string {
 		if (!cert) return "";
 		const raw: any = cert.raw || {};
-		// 优先取 UID，再回退 CN
+		// 统一规则：优先取 CN（subjectName.CN），再回退 UID（subjectName.UID）
+		// 说明：普密证书可能同时携带 UID(证书内 userid) 与 CN(用户名)，实际登录账号以 CN 为准。
 		const subjectName = raw.subjectName || raw.SubjectName || {};
+		const cnFromObj = subjectName.CN || raw.CN || raw.cn;
+		if (typeof cnFromObj === "string" && cnFromObj.trim()) return cnFromObj.trim();
 		const uidFromObj = subjectName.UID || raw.UID || raw.uid;
 		if (typeof uidFromObj === "string" && uidFromObj.trim()) return uidFromObj.trim();
 		// 尝试从字符串 DN 解析
@@ -114,10 +117,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				: typeof raw.SubjectDN === "string"
 				? raw.SubjectDN
 				: undefined;
-		const uidFromDn = parseDnFor(["UID"], subjectStr || undefined);
-		if (uidFromDn) return uidFromDn;
 		const cnFromDn = parseDnFor(["CN"], subjectStr || undefined);
 		if (cnFromDn) return cnFromDn;
+		const uidFromDn = parseDnFor(["UID"], subjectStr || undefined);
+		if (uidFromDn) return uidFromDn;
 		// 最后回退 cert.subjectCn
 		return cert.subjectCn || "";
 	}

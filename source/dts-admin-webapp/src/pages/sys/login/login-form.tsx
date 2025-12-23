@@ -165,6 +165,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		if (!cert) return "";
 		const raw: any = cert.raw || {};
 		const subjectName = raw.subjectName || raw.SubjectName || {};
+		// 统一规则：优先取 CN（用户名），再回退 UID（证书内 userid）
+		const cnFromObj = subjectName.CN || raw.CN || raw.cn;
+		if (typeof cnFromObj === "string" && cnFromObj.trim()) return cnFromObj.trim();
 		const uidFromObj = subjectName.UID || raw.UID || raw.uid;
 		if (typeof uidFromObj === "string" && uidFromObj.trim()) return uidFromObj.trim();
 		const subjectStr: string | undefined =
@@ -177,10 +180,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				: typeof raw.SubjectDN === "string"
 				? raw.SubjectDN
 				: undefined;
-		const uidFromDn = parseDnFor(["UID"], subjectStr || undefined);
-		if (uidFromDn) return uidFromDn;
 		const cnFromDn = parseDnFor(["CN"], subjectStr || undefined);
 		if (cnFromDn) return cnFromDn;
+		const uidFromDn = parseDnFor(["UID"], subjectStr || undefined);
+		if (uidFromDn) return uidFromDn;
 		return cert.subjectCn || "";
 	}
 

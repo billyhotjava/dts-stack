@@ -3357,7 +3357,8 @@ public class KeycloakApiResource {
                 mappedUsername = payload.username.trim();
             }
             if ((mappedUsername == null || mappedUsername.isBlank()) && org.springframework.util.StringUtils.hasText(subjectDn)) {
-                mappedUsername = extractFromDn(subjectDn, "UID", "CN");
+                // 统一规则：优先取 CN（用户名），再回退 UID（证书内 userid）
+                mappedUsername = extractFromDn(subjectDn, "CN", "UID");
             }
             if (mappedUsername == null || mappedUsername.isBlank()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("无法从证书映射用户名"));
