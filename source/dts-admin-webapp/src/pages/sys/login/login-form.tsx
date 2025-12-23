@@ -196,12 +196,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		const snTail = cert.sn ? lastDigits(cert.sn, 8) : "";
 		const container = (cert.conName || "").trim();
 		const devTail = cert.devId ? lastDigits(cert.devId, 6) : "";
-		let suffix = "";
-		if (snTail) suffix = `SN:${snTail}`;
-		else if (container) suffix = container;
-		else if (devTail) suffix = `DEV:${devTail}`;
-		else suffix = `#${index + 1}`;
-		return `用户名：${uname}（${suffix}）`;
+		const suffixes: string[] = [];
+		if (snTail) suffixes.push(`SN:${snTail}`);
+		else if (container) suffixes.push(container);
+		else if (devTail) suffixes.push(`DEV:${devTail}`);
+		suffixes.push(`第${index + 1}`);
+		return `用户名：${uname}（${suffixes.join(" · ")}）`;
 	}
 
 	const handlePkiLogin = async () => {
@@ -252,7 +252,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		try {
 			await client.verifyPin(cert, pinCode);
 			const signed = await client.signData(cert, challenge.nonce);
-			const certContentB64 = await client.exportCertificate(cert);
+			const certContentB64 = signed.dupCertB64 ?? (await client.exportCertificate(cert));
 			const resp: any = await pkiLogin({
 				challengeId: challenge.challengeId,
 				nonce: challenge.nonce,
@@ -262,6 +262,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				mode: "agent",
 				signType: signed.signType,
 				dupCertB64: signed.dupCertB64,
+				devId: cert.devId,
+				appName: cert.appName,
+				conName: cert.conName,
 			});
 			try { console.info("[pki-login] backend ok, user snapshot", {
 				username: String(resp?.user?.username || resp?.user?.preferred_username || ""),
@@ -414,7 +417,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 												<label key={cert.id} htmlFor={`cert-${idx}`} className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm leading-6 transition-colors ${selectedCertId === cert.id ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}>
 												<RadioGroupItem value={cert.id} id={`cert-${idx}`} className="mt-1" />
 												<div className="flex-1">
-													<div className="font-medium text-foreground">用户名：{display}</div>
+													<div className="font-medium text-foreground">{display}</div>
 												</div>
 											</label>
 										);
@@ -429,7 +432,20 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 						)}
 						<div className="space-y-2">
 							<label className="text-sm font-medium text-muted-foreground">输入 PIN 码</label>
-							<Input type="password" value={pinCode} onChange={(e) => setPinCode(e.target.value)} placeholder="请输入 PIN 码" />
+							<Input
+								type="password"
+								value={pinCode}
+								onChange={(e) => setPinCode(e.target.value)}
+								onKeyDown={(event) => {
+									if (event.key !== "Enter") return;
+									if (pkiSubmitting) return;
+									if (!selectedCertId) return;
+									if (!pinCode.trim()) return;
+									event.preventDefault();
+									void handleConfirmPki();
+								}}
+								placeholder="请输入 PIN 码"
+							/>
 						</div>
 					</div>
 					<DialogFooter>

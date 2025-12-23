@@ -122,6 +122,25 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		return cert.subjectCn || "";
 	}
 
+	function lastDigits(value: string, n: number): string {
+		const s = String(value || "");
+		if (!s) return "";
+		return s.length > n ? s.slice(-n) : s;
+	}
+
+	function buildCertLabel(cert: KoalCertificate, index: number): string {
+		const uname = deriveUsernameFromCert(cert) || cert.subjectCn || cert.id;
+		const snTail = cert.sn ? lastDigits(cert.sn, 8) : "";
+		const container = (cert.conName || "").trim();
+		const devTail = cert.devId ? lastDigits(cert.devId, 6) : "";
+		const suffixes: string[] = [];
+		if (snTail) suffixes.push(`SN:${snTail}`);
+		else if (container) suffixes.push(container);
+		else if (devTail) suffixes.push(`DEV:${devTail}`);
+		suffixes.push(`第${index + 1}`);
+		return `用户名：${uname}（${suffixes.join(" · ")}）`;
+	}
+
 	const form = useForm<SignInReq>({
 		defaultValues: {
 			username: "",
@@ -466,28 +485,27 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 								) : (
 									<RadioGroup
 										value={selectedCertId}
-										onValueChange={setSelectedCertId}
-										className="space-y-3"
-									>
-										{pkiCerts.map((cert, index) => {
-											const uname = deriveUsernameFromCert(cert) || cert.subjectCn || cert.sn || cert.id;
-											const display = String(uname);
-											return (
-												<label
-													key={cert.id}
-													htmlFor={`cert-${index}`}
-													className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm leading-6 transition-colors ${
+											onValueChange={setSelectedCertId}
+											className="space-y-3"
+										>
+											{pkiCerts.map((cert, index) => {
+												const display = buildCertLabel(cert, index);
+												return (
+													<label
+														key={cert.id}
+														htmlFor={`cert-${index}`}
+														className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm leading-6 transition-colors ${
 														selectedCertId === cert.id ? "border-primary bg-primary/5" : "hover:border-primary/50"
 													} ${!cert.canSign ? "opacity-70" : ""}`}
-												>
-													<RadioGroupItem value={cert.id} id={`cert-${index}`} disabled={!cert.canSign} className="mt-1" />
-													<div className="flex-1">
-														<div className="font-medium text-foreground">用户名：{display}</div>
-													</div>
-												</label>
-											);
-										})}
-									</RadioGroup>
+													>
+														<RadioGroupItem value={cert.id} id={`cert-${index}`} disabled={!cert.canSign} className="mt-1" />
+														<div className="flex-1">
+															<div className="font-medium text-foreground">{display}</div>
+														</div>
+													</label>
+												);
+											})}
+										</RadioGroup>
 								)}
 							</div>
 
@@ -500,13 +518,21 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 							<div className="space-y-2">
 								<label className="text-sm font-medium text-muted-foreground">输入 PIN 码</label>
-								<Input
-									type="password"
-									value={pinCode}
-									onChange={(event) => setPinCode(event.target.value)}
-									placeholder="请输入 PIN 码"
-								/>
-							</div>
+									<Input
+										type="password"
+										value={pinCode}
+										onChange={(event) => setPinCode(event.target.value)}
+										onKeyDown={(event) => {
+											if (event.key !== "Enter") return;
+											if (pkiSubmitting) return;
+											if (!selectedCertId) return;
+											if (!pinCode.trim()) return;
+											event.preventDefault();
+											void handleConfirmPki();
+										}}
+										placeholder="请输入 PIN 码"
+									/>
+								</div>
 						</div>
 					<DialogFooter>
 						<Button type="button" variant="outline" onClick={() => void closePkiDialog(true)} disabled={pkiSubmitting}>

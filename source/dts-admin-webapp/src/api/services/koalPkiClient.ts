@@ -53,6 +53,19 @@ export type KoalSignedPayload = {
   dupCertB64?: string;
 };
 
+function isOtherCertType(raw?: string | null): boolean {
+  const lowered = String(raw ?? "").trim().toLowerCase();
+  return lowered === "other" || lowered === "othere" || lowered === "unknown";
+}
+
+function isPmCertificate(cert: KoalCertificate): boolean {
+  if (cert.signType === "PM-BD") return true;
+  if (isOtherCertType(cert.certType)) return true;
+  const raw: any = cert.raw ?? {};
+  const issuerCn = String(raw?.issuerName?.CN ?? raw?.issuerCn ?? cert.issuerCn ?? "").trim();
+  return issuerCn.toUpperCase().includes("ZWYCA");
+}
+
 export type KoalConnectOptions = { endpoints?: readonly string[]; includeDefaults?: boolean };
 
 const DEFAULT_ENDPOINTS = [
@@ -367,9 +380,13 @@ export class KoalMiddlewareClient {
   async signData(cert: KoalCertificate, plainText: string): Promise<KoalSignedPayload> {
     const ticket = this.buildTicket();
     const originDataB64 = (window as any)?.Base64?.encode?.(plainText) ?? btoa(plainText);
-    const signTypeCode = cert.signType === "PM-BD" ? "1" : "2";
+    const isPm = isPmCertificate(cert);
+    const effectiveSignType: KoalCertificate["signType"] = isPm ? "PM-BD" : cert.signType;
+    if (isPm) cert.signType = "PM-BD";
+    const signTypeCode = effectiveSignType === "PM-BD" ? "1" : "2";
     let mdType = "3"; // 默认 SM3
-    if (cert.signType === "RSA" || cert.signType === "PM-BD") mdType = "2"; // SHA1
+    if (effectiveSignType === "RSA") mdType = "2"; // SHA1
+    if (effectiveSignType === "PM-BD") mdType = "4"; // SHA256 (PM-BD)
     const request = this.buildRequest(0x10, {
       devID: cert.devId,
       appName: cert.appName,
@@ -385,17 +402,20 @@ export class KoalMiddlewareClient {
     const payload = parseJson(response?.jsonBody);
     const signDataB64: string | undefined = payload?.b64signData ?? payload?.signData;
     if (!signDataB64) throw new Error("签名失败：缺少签名数据");
-    const dupCertB64: string | undefined = payload?.dupCert ?? payload?.dupCertB64 ?? payload?.dup_cert;
-    const res = { originDataB64, signDataB64: String(signDataB64).trim(), signType: cert.signType, mdType, dupCertB64 };
+    let dupCertB64: string | undefined = payload?.dupCert ?? payload?.dupCertB64 ?? payload?.dup_cert;
+    if (!dupCertB64 && isPm) {
+      dupCertB64 = await this.dupCertWithTemplate(cert);
+    }
+    const res = { originDataB64, signDataB64: String(signDataB64).trim(), signType: effectiveSignType, mdType, dupCertB64 };
     if (isDebug()) { try { console.info("[pki] signed", {
       id: cert.id,
       mdType,
-      signType: cert.signType,
+      signType: effectiveSignType,
       originLen: originDataB64.length,
       signLen: res.signDataB64.length,
       dupCertLen: res.dupCertB64 ? res.dupCertB64.length : 0,
     }); } catch {} }
-    dbg("pki.sign.ok", { id: cert.id, mdType, signType: cert.signType, originLen: originDataB64.length, signLen: res.signDataB64.length, dupCertLen: res.dupCertB64 ? res.dupCertB64.length : 0 });
+    dbg("pki.sign.ok", { id: cert.id, mdType, signType: effectiveSignType, originLen: originDataB64.length, signLen: res.signDataB64.length, dupCertLen: res.dupCertB64 ? res.dupCertB64.length : 0 });
     return res;
   }
 
@@ -416,6 +436,25 @@ export class KoalMiddlewareClient {
     const out = String(certB64);
     if (isDebug()) { try { console.info("[pki] export cert length", out.length, { id: cert.id }); } catch {} }
     dbg("pki.export.ok", { id: cert.id, certLen: out.length });
+    return out;
+  }
+
+  private async dupCertWithTemplate(cert: KoalCertificate): Promise<string> {
+    const ticket = this.buildTicket();
+    const request = this.buildRequest(0x16, {
+      devID: cert.devId,
+      appName: cert.appName,
+      conName: cert.conName,
+      signFlag: "1",
+    });
+    const response: any = await this.thriftCall<any>(this.signClient, "dupCertWithTemplate", ticket, request);
+    const code = Number(response?.errCode ?? 0);
+    if (code !== 0) throw new Error(mapKoalError(code, response?.jsonBody));
+    const payload = parseJson(response?.jsonBody);
+    const certB64: string | undefined = payload?.cert;
+    if (!certB64) throw new Error("未获取到证书内容（signxPlugin.dupCertWithTemplate）");
+    const out = String(certB64);
+    dbg("pki.dupCert.ok", { id: cert.id, certLen: out.length });
     return out;
   }
 }
@@ -495,9 +534,9 @@ function normalizeCertificate(item: Record<string, any>, index = 0): KoalCertifi
   if (!appName) missingFields.push("appName");
   if (!conName) missingFields.push("conName");
 
-  let signableByFlags = true;
-  if (Number.isFinite(signFlag)) signableByFlags = Number(signFlag) === 1;
-  if (Number.isFinite(keyUsage)) signableByFlags = signableByFlags && Number(keyUsage) === 1;
+	  let signableByFlags = true;
+	  if (Number.isFinite(signFlag)) signableByFlags = Number(signFlag) === 1;
+	  if (Number.isFinite(keyUsage)) signableByFlags = signableByFlags && (Number(keyUsage) === 1 || Number(keyUsage) === 2);
 
   const canSign = missingFields.length === 0 && signableByFlags;
 

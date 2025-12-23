@@ -309,7 +309,8 @@ public class PkiVerificationService {
             return primary > 0 ? primary : alt;
         }
         String upper = signType.trim().toUpperCase(java.util.Locale.ROOT);
-        if (upper.contains("SM2") || upper.contains("RSA")) {
+        // Vendor confirmed: PM-BD also uses the same primary gateway port (typically 5000).
+        if (upper.contains("SM2") || upper.contains("RSA") || upper.contains("PM")) {
             return primary > 0 ? primary : 5000;
         }
         return alt > 0 ? alt : (primary > 0 ? primary : 10009);

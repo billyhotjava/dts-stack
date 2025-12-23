@@ -377,6 +377,7 @@ export class KoalMiddlewareClient {
 	private readonly devClient: any;
 	private readonly signClient: any;
 	private readonly enrollClient: any;
+	private readonly enrollClientAlt: any;
 	private session: { sessionID: number; ticket: string } | null = null;
 
 	private constructor(baseUrl: string) {
@@ -385,7 +386,18 @@ export class KoalMiddlewareClient {
 		this.pkiClient = this.multiplexer.createClient("pkiService", window.pkiServiceClient, this.transport);
 		this.devClient = this.multiplexer.createClient("deviceOperator", window.devServiceClient, this.transport);
 		this.signClient = this.multiplexer.createClient("signxPlugin", window.signXServiceClient, this.transport);
-		this.enrollClient = this.multiplexer.createClient("enRollService", (window as any).enRollServiceClient, this.transport);
+		// 厂商 demo 使用 Multiplexer 名称 enrollPlugin（而不是 enRollService）
+		// 为兼容不同版本中间件，这里同时创建两个名称的 client，按需回退。
+		this.enrollClient = this.multiplexer.createClient(
+			"enrollPlugin",
+			(window as any).enRollServiceClient,
+			this.transport
+		);
+		this.enrollClientAlt = this.multiplexer.createClient(
+			"enRollService",
+			(window as any).enRollServiceClient,
+			this.transport
+		);
 	}
 
 	static async connect(options?: KoalConnectOptions): Promise<KoalMiddlewareClient> {
@@ -559,14 +571,40 @@ export class KoalMiddlewareClient {
 		const ticket = this.buildTicket();
 		const originDataB64 = window.Base64?.encode?.(plainText) ?? btoa(plainText);
 
+		const isPm = isPmCertificate(cert);
 		let resolvedSignType = cert.signType;
 		let prefetchedCertB64: Nullable<string> = null;
 
-		if (resolvedSignType === "UNKNOWN" || isOtherCertType(cert.certType)) {
+		if (isPm) {
+			resolvedSignType = "PM-BD";
+			cert.signType = resolvedSignType;
+			try {
+				prefetchedCertB64 = await this.dupCertWithTemplate(cert);
+			} catch (error) {
+				dbg("pki.pm.dupCert.failed", { error: String(error) });
+			}
+		}
+
+		if (!isPm && (resolvedSignType === "UNKNOWN" || isOtherCertType(cert.certType))) {
 			try {
 				prefetchedCertB64 = await this.fetchCertificateForSign(cert);
-				const detected = detectSignTypeFromCertContent(prefetchedCertB64);
-				if (detected !== "UNKNOWN") {
+				let detected = "UNKNOWN" as KoalCertificate["signType"];
+				try {
+					const parsed = await this.parseCertificate(prefetchedCertB64);
+					detected = detectSignTypeFromParsedCert(parsed) ?? detected;
+					dbg("pki.cert.parsed", { detected, parsed });
+				} catch (error) {
+					dbg("pki.cert.parse.failed", { error: String(error) });
+				}
+				if (detected === "UNKNOWN") {
+					detected = detectSignTypeFromCertContent(prefetchedCertB64);
+				}
+				if (isOtherCertType(cert.certType)) {
+					// 对 certType=other 的“普密/面签”场景，不信任列表中的 signType（常被默认 SM2）：
+					// 优先用证书内容探测；探测失败时默认按 RSA 处理（避免误走 SM2 导致网关验签失败）。
+					resolvedSignType = detected !== "UNKNOWN" ? detected : "RSA";
+					cert.signType = resolvedSignType;
+				} else if (detected !== "UNKNOWN") {
 					resolvedSignType = detected;
 					cert.signType = detected;
 				}
@@ -576,22 +614,16 @@ export class KoalMiddlewareClient {
 		}
 
 		if (resolvedSignType === "UNKNOWN") {
-			resolvedSignType = isOtherCertType(cert.certType) ? "RSA" : "SM2";
+			resolvedSignType = "SM2";
 			cert.signType = resolvedSignType;
 		}
 
 		// 兼容策略：
-		// - 优先按厂商 demo：SM2/RSA 走 type=2（P1）；SM2 用 SM3(3)，RSA 默认 SHA1(2)
-		// - 对 certType=other / PM 证书，若 P1 失败，再回退 type=1（PM-BD）
-		const isPmLike = resolvedSignType === "PM-BD" || isOtherCertType(cert.certType);
-		const mdTypeP1 = resolvedSignType === "SM2" ? "3" : "2";
-
-		const attempts: Array<{ type: string; mdType: string; label: string }> = [
-			{ type: "2", mdType: mdTypeP1, label: "P1(type=2)" },
-		];
-		if (isPmLike) {
-			attempts.push({ type: "1", mdType: "2", label: "PM(type=1)" });
-		}
+		// - 商密/SM：SM2/RSA 使用 type=2；SM2 用 SM3(3)，RSA 用 SHA1(2)
+		// - 普密/PM：PM-BD 使用 type=1，摘要使用 SHA256(4)，证书内容来自 dupCertWithTemplate(0x16)
+		const attempts: Array<{ type: string; mdType: string; label: string }> = isPm
+			? [{ type: "1", mdType: "4", label: "PM(type=1)" }]
+			: [{ type: "2", mdType: resolvedSignType === "SM2" ? "3" : "2", label: "P1(type=2)" }];
 
 		let lastErr: Error | null = null;
 
@@ -690,7 +722,11 @@ export class KoalMiddlewareClient {
 	}
 
 	private async fetchCertificateForSign(cert: KoalCertificate): Promise<string> {
-		// 先尝试生成/获取证书（enRollService.getCert），失败则退回 exportCertificate
+		if (isPmCertificate(cert)) {
+			return this.dupCertWithTemplate(cert);
+		}
+
+		// 先尝试生成/获取证书（enrollPlugin.getCert），失败则退回 exportCertificate
 		try {
 			return await this.getCertFromEnroll(cert);
 		} catch (err) {
@@ -709,7 +745,14 @@ export class KoalMiddlewareClient {
 			// 1=签名证书, 0=加密证书；按用户选中的证书用途获取
 			certType,
 		});
-		const response = await this.thriftCall<any>(this.enrollClient, "getCert", ticket, request);
+		let response: any;
+		try {
+			response = await this.thriftCall<any>(this.enrollClient, "getCert", ticket, request);
+		} catch (error) {
+			// some middleware builds still expose service name enRollService
+			dbg("pki.enroll.getCert.retry", { error: String(error) });
+			response = await this.thriftCall<any>(this.enrollClientAlt, "getCert", ticket, request);
+		}
 		const code = Number(response?.errCode ?? 0);
 		if (code !== 0) {
 			throw new Error(mapKoalError(code, response?.jsonBody));
@@ -721,6 +764,41 @@ export class KoalMiddlewareClient {
 				: undefined) ?? (typeof response?.jsonBody === "string" ? response.jsonBody : undefined);
 		if (!certB64) {
 			throw new Error("未获取到证书内容（enRollService.getCert）");
+		}
+		return String(certB64);
+	}
+
+	private async parseCertificate(certB64: string): Promise<any> {
+		const ticket = this.buildTicket();
+		const request = this.buildRequest(0x17, {
+			cert: normalizeBase64String(certB64),
+		});
+		const response = await this.thriftCall<any>(this.signClient, "parseCert", ticket, request);
+		const code = Number(response?.errCode ?? 0);
+		if (code !== 0) {
+			throw new Error(mapKoalError(code, response?.jsonBody));
+		}
+		return parseJson(response?.jsonBody);
+	}
+
+	private async dupCertWithTemplate(cert: KoalCertificate): Promise<string> {
+		const ticket = this.buildTicket();
+		const signFlag = cert.signFlag === 0 ? "0" : "1";
+		const request = this.buildRequest(0x16, {
+			devID: cert.devId,
+			appName: cert.appName,
+			conName: cert.conName,
+			signFlag,
+		});
+		const response = await this.thriftCall<any>(this.signClient, "dupCertWithTemplate", ticket, request);
+		const code = Number(response?.errCode ?? 0);
+		if (code !== 0) {
+			throw new Error(mapKoalError(code, response?.jsonBody));
+		}
+		const payload = parseJson(response?.jsonBody);
+		const certB64: Nullable<string> = payload?.cert;
+		if (!certB64) {
+			throw new Error("未获取到证书内容（signxPlugin.dupCertWithTemplate）");
 		}
 		return String(certB64);
 	}
@@ -900,6 +978,16 @@ function isOtherCertType(raw?: string | null): boolean {
 	return lowered === "other" || lowered === "othere" || lowered === "unknown";
 }
 
+function isPmCertificate(cert: KoalCertificate): boolean {
+	if (cert.signType === "PM-BD") return true;
+	if (isOtherCertType(cert.certType)) return true;
+	const raw: any = cert.raw ?? {};
+	const issuerCn =
+		(firstNonBlank(raw?.issuerName?.CN, raw?.issuerCn, raw?.issuer, raw?.Issuer) ?? cert.issuerCn ?? "").trim();
+	const hint = issuerCn.toUpperCase();
+	return hint.includes("ZWYCA");
+}
+
 function decodeBase64ToBytes(input: string): Uint8Array | null {
 	const cleaned = String(input)
 		.replace(/-----BEGIN CERTIFICATE-----/g, "")
@@ -947,11 +1035,19 @@ function detectSignTypeFromCertContent(certB64: string): KoalCertificate["signTy
 	// OID bytes for common algorithms.
 	const rsaEncryption = [0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01];
 	const rsassaPss = [0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0a];
+	// sha1WithRSAEncryption / sha256WithRSAEncryption
+	const sha1WithRsa = [0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x05];
+	const sha256WithRsa = [0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b];
 	const sm2p256v1 = [0x06, 0x08, 0x2a, 0x81, 0x1c, 0xcf, 0x55, 0x01, 0x82, 0x2d];
 	const sm2Sign = [0x06, 0x08, 0x2a, 0x81, 0x1c, 0xcf, 0x55, 0x01, 0x83, 0x75];
 	const sm2Encrypt = [0x06, 0x08, 0x2a, 0x81, 0x1c, 0xcf, 0x55, 0x01, 0x83, 0x76];
 
-	if (bytesIncludes(bytes, rsaEncryption) || bytesIncludes(bytes, rsassaPss)) {
+	if (
+		bytesIncludes(bytes, rsaEncryption) ||
+		bytesIncludes(bytes, rsassaPss) ||
+		bytesIncludes(bytes, sha1WithRsa) ||
+		bytesIncludes(bytes, sha256WithRsa)
+	) {
 		return "RSA";
 	}
 	if (
@@ -962,6 +1058,33 @@ function detectSignTypeFromCertContent(certB64: string): KoalCertificate["signTy
 		return "SM2";
 	}
 	return "UNKNOWN";
+}
+
+function normalizeBase64String(value: string): string {
+	return String(value ?? "").trim().replaceAll("\\s+", "");
+}
+
+function detectSignTypeFromParsedCert(parsed: any): KoalCertificate["signType"] | null {
+	if (!parsed || typeof parsed !== "object") return null;
+	const candidates = [
+		(parsed as any).alg,
+		(parsed as any).algName,
+		(parsed as any).keyAlg,
+		(parsed as any).keyAlgorithm,
+		(parsed as any).publicKeyAlgorithm,
+		(parsed as any).publicKeyAlg,
+		(parsed as any).signatureAlgorithm,
+		(parsed as any).signAlgorithm,
+		(parsed as any).certType,
+		(parsed as any).type,
+		(parsed as any).oid,
+	];
+	const hint = String(firstNonBlank(...candidates) ?? "").toUpperCase();
+	if (!hint) return null;
+	if (hint.includes("SM2") || hint.includes("1.2.156.10197")) return "SM2";
+	if (hint.includes("RSA") || hint.includes("RSASSA") || hint.includes("1.2.840.113549")) return "RSA";
+	if (hint.includes("PM") || hint.includes("P7") || hint.includes("PKCS7")) return "PM-BD";
+	return null;
 }
 
 function parseJson(value: Nullable<string>): any {

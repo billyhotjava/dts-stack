@@ -20,6 +20,9 @@ export type PkiLoginPayload = {
   originDataB64?: string;
   signDataB64?: string;
   certContentB64?: string;
+  devId?: string;
+  appName?: string;
+  conName?: string;
   signType?: string;
   dupCertB64?: string;
   mode?: "agent" | "gateway";
