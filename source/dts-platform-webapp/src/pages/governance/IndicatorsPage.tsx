@@ -338,6 +338,7 @@ export default function IndicatorsPage() {
 									<th className="py-2 pr-4 font-medium">名称</th>
 									<th className="py-2 pr-4 font-medium">分类</th>
 									<th className="py-2 pr-4 font-medium">部门</th>
+									<th className="py-2 pr-4 font-medium">数据集</th>
 									<th className="py-2 pr-4 font-medium">密级</th>
 									<th className="py-2 pr-4 font-medium">状态</th>
 									<th className="py-2 pr-0 font-medium text-right">操作</th>
@@ -350,6 +351,9 @@ export default function IndicatorsPage() {
 										<td className="py-2 pr-4 font-medium">{row.name}</td>
 										<td className="py-2 pr-4 text-muted-foreground">{row.category || "-"}</td>
 										<td className="py-2 pr-4 text-muted-foreground">{row.ownerDept || "-"}</td>
+										<td className="py-2 pr-4 text-muted-foreground">
+											{row.datasetId ? <Badge variant="outline">已绑定</Badge> : <Badge variant="secondary">未绑定</Badge>}
+										</td>
 										<td className="py-2 pr-4">
 											<Badge variant="outline">{formatDataLevel(row.dataLevel)}</Badge>
 										</td>
@@ -415,7 +419,7 @@ export default function IndicatorsPage() {
 								))}
 								{items.length === 0 ? (
 									<tr>
-										<td colSpan={7} className="py-10 text-center text-muted-foreground">
+										<td colSpan={8} className="py-10 text-center text-muted-foreground">
 											{loading ? "加载中..." : "暂无数据"}
 										</td>
 									</tr>

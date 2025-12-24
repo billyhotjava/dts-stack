@@ -87,12 +87,26 @@ export default function IndicatorComputeRulesPage() {
 		setPreview(null);
 	}, []);
 
+	const isUuid = useCallback((value: string) => {
+		const v = (value || "").trim();
+		if (!v) return false;
+		return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v);
+	}, []);
+
 	const canSave = useMemo(() => {
-		return !!selected && !saving;
-	}, [saving, selected]);
+		return !!selected && !saving && isUuid(datasetId) && sqlText.trim().length > 0;
+	}, [datasetId, isUuid, saving, selected, sqlText]);
 
 	const saveComputeRule = useCallback(async () => {
 		if (!selected?.id) return;
+		if (!isUuid(datasetId)) {
+			toast.error("请先选择有效的数据集（UUID）");
+			return;
+		}
+		if (!sqlText.trim()) {
+			toast.error("请先填写 SQL");
+			return;
+		}
 		setSaving(true);
 		try {
 			const payload: any = {
@@ -120,12 +134,16 @@ export default function IndicatorComputeRulesPage() {
 		} finally {
 			setSaving(false);
 		}
-	}, [datasetId, selected, sqlText]);
+	}, [datasetId, isUuid, selected, sqlText]);
 
 	const runPreview = useCallback(async () => {
 		const effectiveDatasetId = datasetId.trim();
-		if (!effectiveDatasetId) {
-			toast.error("请先选择数据集");
+		if (!isUuid(effectiveDatasetId)) {
+			toast.error("请先选择有效的数据集（UUID）");
+			return;
+		}
+		if (!sqlText.trim()) {
+			toast.error("请先填写 SQL");
 			return;
 		}
 		setPreviewing(true);
@@ -138,12 +156,12 @@ export default function IndicatorComputeRulesPage() {
 		} finally {
 			setPreviewing(false);
 		}
-	}, [datasetId, sqlText]);
+	}, [datasetId, isUuid, sqlText]);
 
 	const fillSampleSql = useCallback(async () => {
 		const effectiveDatasetId = datasetId.trim();
-		if (!effectiveDatasetId) {
-			toast.error("请先选择数据集");
+		if (!isUuid(effectiveDatasetId)) {
+			toast.error("请先选择有效的数据集（UUID）");
 			return;
 		}
 		setPreviewing(true);
@@ -162,7 +180,7 @@ export default function IndicatorComputeRulesPage() {
 		} finally {
 			setPreviewing(false);
 		}
-	}, [datasetId]);
+	}, [datasetId, isUuid]);
 
 	const previewHeaders: string[] = useMemo(() => {
 		const headers = preview?.headers;
@@ -188,11 +206,24 @@ export default function IndicatorComputeRulesPage() {
 			<div className="mb-4 flex flex-wrap items-end gap-3">
 				<div className="min-w-[240px]">
 					<Label className="text-xs text-muted-foreground">指标搜索</Label>
-					<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="按名称/编码/分类搜索" />
+					<Input
+						value={keyword}
+						onChange={(e) => {
+							setKeyword(e.target.value);
+							setPage(0);
+						}}
+						placeholder="按名称/编码/分类搜索"
+					/>
 				</div>
 				<div className="min-w-[160px]">
 					<Label className="text-xs text-muted-foreground">状态</Label>
-					<Select value={status} onValueChange={(v) => setStatus(v)}>
+					<Select
+						value={status}
+						onValueChange={(v) => {
+							setStatus(v);
+							setPage(0);
+						}}
+					>
 						<SelectTrigger>
 							<SelectValue />
 						</SelectTrigger>
