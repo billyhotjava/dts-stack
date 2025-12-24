@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -56,6 +57,18 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
 
     @Column(name = "tags")
     private String tags;
+
+    @Column(name = "last_validation_status", length = 32)
+    private String lastValidationStatus;
+
+    @Column(name = "last_validation_message")
+    private String lastValidationMessage;
+
+    @Column(name = "last_validated_at")
+    private Instant lastValidatedAt;
+
+    @Column(name = "last_validation_signature", length = 64)
+    private String lastValidationSignature;
 
     @Override
     public UUID getId() {
@@ -168,5 +181,37 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
 
     public void setTags(String tags) {
         this.tags = tags;
+    }
+
+    public String getLastValidationStatus() {
+        return lastValidationStatus;
+    }
+
+    public void setLastValidationStatus(String lastValidationStatus) {
+        this.lastValidationStatus = lastValidationStatus;
+    }
+
+    public String getLastValidationMessage() {
+        return lastValidationMessage;
+    }
+
+    public void setLastValidationMessage(String lastValidationMessage) {
+        this.lastValidationMessage = lastValidationMessage;
+    }
+
+    public Instant getLastValidatedAt() {
+        return lastValidatedAt;
+    }
+
+    public void setLastValidatedAt(Instant lastValidatedAt) {
+        this.lastValidatedAt = lastValidatedAt;
+    }
+
+    public String getLastValidationSignature() {
+        return lastValidationSignature;
+    }
+
+    public void setLastValidationSignature(String lastValidationSignature) {
+        this.lastValidationSignature = lastValidationSignature;
     }
 }

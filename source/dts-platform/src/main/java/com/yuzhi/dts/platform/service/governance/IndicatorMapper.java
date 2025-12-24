@@ -29,6 +29,10 @@ final class IndicatorMapper {
         dto.setVersion(entity.getVersion());
         dto.setVersionNotes(entity.getVersionNotes());
         dto.setTags(entity.getTags());
+        dto.setLastValidationStatus(entity.getLastValidationStatus());
+        dto.setLastValidationMessage(entity.getLastValidationMessage());
+        dto.setLastValidatedAt(entity.getLastValidatedAt());
+        dto.setLastValidationSignature(entity.getLastValidationSignature());
         dto.setCreatedBy(entity.getCreatedBy());
         dto.setCreatedDate(entity.getCreatedDate());
         dto.setLastModifiedBy(entity.getLastModifiedBy());

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251225_02_governance_indicator_validation_fields" author="platform">
+        <addColumn tableName="gov_indicator_definition">
+            <column name="last_validation_status" type="varchar(32)"/>
+            <column name="last_validation_message" type="text"/>
+            <column name="last_validated_at" type="timestamp"/>
+            <column name="last_validation_signature" type="varchar(64)"/>
+        </addColumn>
+
+        <createIndex tableName="gov_indicator_definition" indexName="idx_gov_indicator_definition_last_validation_status">
+            <column name="last_validation_status"/>
+        </createIndex>
+        <createIndex tableName="gov_indicator_definition" indexName="idx_gov_indicator_definition_last_validated_at">
+            <column name="last_validated_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

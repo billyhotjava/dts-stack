@@ -19,6 +19,10 @@ public class IndicatorDto {
     private String version;
     private String versionNotes;
     private String tags;
+    private String lastValidationStatus;
+    private String lastValidationMessage;
+    private Instant lastValidatedAt;
+    private String lastValidationSignature;
 
     private String createdBy;
     private Instant createdDate;
@@ -135,6 +139,38 @@ public class IndicatorDto {
 
     public void setTags(String tags) {
         this.tags = tags;
+    }
+
+    public String getLastValidationStatus() {
+        return lastValidationStatus;
+    }
+
+    public void setLastValidationStatus(String lastValidationStatus) {
+        this.lastValidationStatus = lastValidationStatus;
+    }
+
+    public String getLastValidationMessage() {
+        return lastValidationMessage;
+    }
+
+    public void setLastValidationMessage(String lastValidationMessage) {
+        this.lastValidationMessage = lastValidationMessage;
+    }
+
+    public Instant getLastValidatedAt() {
+        return lastValidatedAt;
+    }
+
+    public void setLastValidatedAt(Instant lastValidatedAt) {
+        this.lastValidatedAt = lastValidatedAt;
+    }
+
+    public String getLastValidationSignature() {
+        return lastValidationSignature;
+    }
+
+    public void setLastValidationSignature(String lastValidationSignature) {
+        this.lastValidationSignature = lastValidationSignature;
     }
 
     public String getCreatedBy() {

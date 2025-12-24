@@ -97,6 +97,7 @@ export const updateIndicator = (id: string, data: any) => api.put({ url: `/gover
 export const deleteIndicator = (id: string) => api.delete({ url: `/governance/indicators/${id}` });
 export const publishIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/publish` });
 export const archiveIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/archive` });
+export const validateIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/validate` });
 
 // Dimensions
 export const listDimensions = (params: any = {}) => api.get({ url: "/governance/dimensions", params });

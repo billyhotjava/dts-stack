@@ -55,4 +55,5 @@
     <include file="config/liquibase/changelog/20251224_01_bi_reports.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251224_02_governance_indicator_tables.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251225_01_governance_indicator_compute_fields.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251225_02_governance_indicator_validation_fields.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

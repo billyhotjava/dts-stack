@@ -5,6 +5,7 @@ import com.yuzhi.dts.platform.service.governance.DimensionService;
 import com.yuzhi.dts.platform.service.governance.IndicatorService;
 import com.yuzhi.dts.platform.service.governance.dto.DimensionDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
+import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
 import com.yuzhi.dts.platform.service.governance.request.DimensionUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest;
 import com.yuzhi.dts.platform.security.SecurityUtils;
@@ -157,6 +158,26 @@ public class GovernanceIndicatorResource {
         return ApiResponses.ok(saved);
     }
 
+    @PostMapping("/indicators/{id}/validate")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<IndicatorValidationResultDto> validateIndicator(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        IndicatorValidationResultDto result = indicators.validateComputeRule(id, activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("targetId", id.toString());
+        detail.put("summary", "校验指标计算规则");
+        if (result != null) {
+            detail.put("status", result.getStatus());
+            if (StringUtils.hasText(result.getMessage())) {
+                detail.put("message", result.getMessage());
+            }
+        }
+        audit.recordAs(currentUser(), "WRITE", "governance.indicator.validation", "governance.indicator", id.toString(), "SUCCESS", detail, null);
+        return ApiResponses.ok(result);
+    }
+
     @DeleteMapping("/indicators/{id}")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteIndicator(
@@ -299,4 +320,3 @@ public class GovernanceIndicatorResource {
         return SecurityUtils.getCurrentUserLogin().orElse("system");
     }
 }
-
