@@ -2,6 +2,33 @@
 
 services:
 
+  # Traefik overlay (Hetu reverse proxy via path prefixes).
+  # Merged into `dts-proxy` from `docker-compose.yml`.
+  dts-proxy:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    labels:
+      - "traefik.http.routers.hetu-dashboards.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboards`)"
+      - "traefik.http.routers.hetu-dashboards.entrypoints=websecure"
+      - "traefik.http.routers.hetu-dashboards.tls=true"
+      - "traefik.http.routers.hetu-dashboards.priority=200"
+      - "traefik.http.routers.hetu-dashboards.service=hetu@file"
+      - "traefik.http.middlewares.hetu-strip-dashboards.stripprefixregex.regex=/dashboards"
+      - "traefik.http.routers.hetu-dashboards.middlewares=hetu-strip-dashboards@docker,security-headers@file"
+      - "traefik.http.routers.hetu-dashboard-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboard/hetu`)"
+      - "traefik.http.routers.hetu-dashboard-hetu.entrypoints=websecure"
+      - "traefik.http.routers.hetu-dashboard-hetu.tls=true"
+      - "traefik.http.routers.hetu-dashboard-hetu.priority=210"
+      - "traefik.http.routers.hetu-dashboard-hetu.service=hetu@file"
+      - "traefik.http.middlewares.hetu-strip-dashboard-hetu.stripprefixregex.regex=/dashboard/hetu"
+      - "traefik.http.routers.hetu-dashboard-hetu.middlewares=hetu-strip-dashboard-hetu@docker,security-headers@file"
+      - "traefik.http.routers.hetu-screen.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/screen`)"
+      - "traefik.http.routers.hetu-screen.entrypoints=websecure"
+      - "traefik.http.routers.hetu-screen.tls=true"
+      - "traefik.http.routers.hetu-screen.priority=190"
+      - "traefik.http.routers.hetu-screen.service=hetu@file"
+      - "traefik.http.routers.hetu-screen.middlewares=security-headers@file"
+
   # Java backend: dts-admin (Spring Boot)
   dts-admin:
     image: ${IMAGE_MAVEN}
