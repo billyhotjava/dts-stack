@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251225_01_governance_indicator_compute_fields" author="platform">
+        <addColumn tableName="gov_indicator_definition">
+            <column name="dataset_id" type="varchar(64)"/>
+        </addColumn>
+
+        <createIndex tableName="gov_indicator_definition" indexName="idx_gov_indicator_definition_dataset_id">
+            <column name="dataset_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

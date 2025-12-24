@@ -21,6 +21,7 @@ final class IndicatorMapper {
         dto.setCategory(entity.getCategory());
         dto.setDefinition(entity.getDefinition());
         dto.setExpressionSql(entity.getExpressionSql());
+        dto.setDatasetId(entity.getDatasetId());
         dto.setOwner(entity.getOwner());
         dto.setOwnerDept(entity.getOwnerDept());
         dto.setDataLevel(entity.getDataLevel());
@@ -42,6 +43,7 @@ final class IndicatorMapper {
         entity.setCategory(trimToNull(request.getCategory()));
         entity.setDefinition(trimToNull(request.getDefinition()));
         entity.setExpressionSql(trimToNull(request.getExpressionSql()));
+        entity.setDatasetId(trimToNull(request.getDatasetId()));
         entity.setOwner(trimToNull(request.getOwner()));
         entity.setOwnerDept(trimToNull(request.getOwnerDept()));
         entity.setDataLevel(trimToNull(request.getDataLevel()));
@@ -88,4 +90,3 @@ final class IndicatorMapper {
         return trimmed.isEmpty() ? null : trimmed;
     }
 }
-

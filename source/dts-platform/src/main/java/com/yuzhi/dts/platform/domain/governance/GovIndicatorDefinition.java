@@ -33,6 +33,9 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
     @Column(name = "expression_sql")
     private String expressionSql;
 
+    @Column(name = "dataset_id", length = 64)
+    private String datasetId;
+
     @Column(name = "owner", length = 64)
     private String owner;
 
@@ -103,6 +106,14 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
         this.expressionSql = expressionSql;
     }
 
+    public String getDatasetId() {
+        return datasetId;
+    }
+
+    public void setDatasetId(String datasetId) {
+        this.datasetId = datasetId;
+    }
+
     public String getOwner() {
         return owner;
     }
@@ -159,4 +170,3 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
         this.tags = tags;
     }
 }
-

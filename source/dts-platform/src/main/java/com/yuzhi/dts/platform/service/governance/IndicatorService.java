@@ -215,6 +215,13 @@ public class IndicatorService {
         if (!StringUtils.hasText(entity.getName())) {
             throw new IllegalArgumentException("指标名称不能为空");
         }
+        if (StringUtils.hasText(entity.getDatasetId())) {
+            try {
+                UUID.fromString(entity.getDatasetId().trim());
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("数据集ID格式错误");
+            }
+        }
         if (!SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
             if (StringUtils.hasText(activeDept) && StringUtils.hasText(entity.getOwnerDept())) {
                 if (!isGlobalOrRoot(entity.getOwnerDept()) && !DepartmentUtils.matches(entity.getOwnerDept(), activeDept)) {

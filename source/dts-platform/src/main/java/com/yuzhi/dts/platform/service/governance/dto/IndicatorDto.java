@@ -11,6 +11,7 @@ public class IndicatorDto {
     private String category;
     private String definition;
     private String expressionSql;
+    private String datasetId;
     private String owner;
     private String ownerDept;
     private String dataLevel;
@@ -70,6 +71,14 @@ public class IndicatorDto {
 
     public void setExpressionSql(String expressionSql) {
         this.expressionSql = expressionSql;
+    }
+
+    public String getDatasetId() {
+        return datasetId;
+    }
+
+    public void setDatasetId(String datasetId) {
+        this.datasetId = datasetId;
     }
 
     public String getOwner() {
@@ -160,4 +169,3 @@ public class IndicatorDto {
         this.lastModifiedDate = lastModifiedDate;
     }
 }
-

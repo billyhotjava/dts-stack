@@ -30,6 +30,7 @@ type IndicatorRow = {
 	category?: string | null;
 	definition?: string | null;
 	expressionSql?: string | null;
+	datasetId?: string | null;
 	owner?: string | null;
 	ownerDept?: string | null;
 	dataLevel?: DataLevel | string | null;
@@ -53,6 +54,7 @@ type FormState = {
 	tags: string;
 	definition: string;
 	expressionSql: string;
+	datasetId: string;
 };
 
 const PAGE_SIZE = 10;
@@ -91,6 +93,7 @@ const DEFAULT_FORM: FormState = {
 	tags: "",
 	definition: "",
 	expressionSql: "",
+	datasetId: "",
 };
 
 export default function IndicatorsPage() {
@@ -167,6 +170,7 @@ export default function IndicatorsPage() {
 					category: it?.category ?? "",
 					definition: it?.definition ?? "",
 					expressionSql: it?.expressionSql ?? "",
+					datasetId: it?.datasetId ?? "",
 					owner: it?.owner ?? "",
 					ownerDept: it?.ownerDept ?? "",
 					dataLevel: it?.dataLevel ?? "",
@@ -242,6 +246,7 @@ export default function IndicatorsPage() {
 			tags: String(row.tags ?? ""),
 			definition: String(row.definition ?? ""),
 			expressionSql: String(row.expressionSql ?? ""),
+			datasetId: String(row.datasetId ?? ""),
 		});
 		setDialogOpen(true);
 	};
@@ -265,6 +270,7 @@ export default function IndicatorsPage() {
 				tags: form.tags.trim() || null,
 				definition: form.definition.trim() || null,
 				expressionSql: form.expressionSql.trim() || null,
+				datasetId: form.datasetId.trim() || null,
 			};
 			if (form.id) {
 				await updateIndicator(form.id, payload);
@@ -573,4 +579,3 @@ function formatDataLevel(level: unknown) {
 	if (s === "DATA_SECRET") return "机密";
 	return s || "-";
 }
-

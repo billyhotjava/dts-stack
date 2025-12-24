@@ -7,6 +7,7 @@ public class IndicatorUpsertRequest {
     private String category;
     private String definition;
     private String expressionSql;
+    private String datasetId;
     private String owner;
     private String ownerDept;
     private String dataLevel;
@@ -53,6 +54,14 @@ public class IndicatorUpsertRequest {
 
     public void setExpressionSql(String expressionSql) {
         this.expressionSql = expressionSql;
+    }
+
+    public String getDatasetId() {
+        return datasetId;
+    }
+
+    public void setDatasetId(String datasetId) {
+        this.datasetId = datasetId;
     }
 
     public String getOwner() {
@@ -111,4 +120,3 @@ public class IndicatorUpsertRequest {
         this.tags = tags;
     }
 }
-
