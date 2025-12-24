@@ -244,6 +244,9 @@ public class AccessChecker {
                 if (value == null) {
                     value = extractStringClaim(claims.get("person_security_level"));
                 }
+                if (value == null) {
+                    value = extractStringClaim(claims.get("person_ssecurity_level"));
+                }
                 if (value != null) {
                     return PersonnelLevel.normalize(value);
                 }
@@ -251,6 +254,9 @@ public class AccessChecker {
                 String value = extractStringClaim(principal.getAttribute("personnel_level"));
                 if (value == null) {
                     value = extractStringClaim(principal.getAttribute("person_security_level"));
+                }
+                if (value == null) {
+                    value = extractStringClaim(principal.getAttribute("person_ssecurity_level"));
                 }
                 if (value != null) {
                     return PersonnelLevel.normalize(value);

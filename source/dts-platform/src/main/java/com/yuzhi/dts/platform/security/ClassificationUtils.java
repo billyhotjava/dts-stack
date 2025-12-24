@@ -70,6 +70,8 @@ public class ClassificationUtils {
             if (auth instanceof JwtAuthenticationToken token) {
                 Object v = token.getToken().getClaims().get("personnel_level");
                 if (v == null) v = token.getToken().getClaims().get("person_security_level");
+                // Compatibility for historical typo
+                if (v == null) v = token.getToken().getClaims().get("person_ssecurity_level");
                 String text = firstTextValue(v);
                 if (text != null) return mapPersonnelToClassification(text);
             }
@@ -77,6 +79,7 @@ public class ClassificationUtils {
             if (principal instanceof OAuth2AuthenticatedPrincipal p) {
                 Object v = p.getAttribute("personnel_level");
                 if (v == null) v = p.getAttribute("person_security_level");
+                if (v == null) v = p.getAttribute("person_ssecurity_level");
                 String text = firstTextValue(v);
                 if (text != null) return mapPersonnelToClassification(text);
             }
