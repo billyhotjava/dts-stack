@@ -333,7 +333,6 @@ export default function ReportsManagePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="HETU">HETU</SelectItem>
-                  <SelectItem value="SUPERSET">SUPERSET</SelectItem>
                   <SelectItem value="METABASE">METABASE</SelectItem>
                 </SelectContent>
               </Select>
@@ -388,7 +387,7 @@ export default function ReportsManagePage() {
               <Textarea
                 value={form.url}
                 onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-                placeholder="推荐填同域名反代路径：/dashboards/..."
+                placeholder="例如：https://metabase.xxx/dashboard/1 或 http(s)://河图/share/..."
               />
             </div>
 
