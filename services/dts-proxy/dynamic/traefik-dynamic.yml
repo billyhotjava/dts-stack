@@ -2,6 +2,15 @@
 # Keep lightweight; service-specific routers/middlewares are defined via labels.
 
 http:
+  services:
+    # Hetu BI (external process on the same host).
+    # Note: this points to the Docker host; if you deploy Hetu as a container,
+    # change the URL to something like http://dts-hetu:7778 and join `dts-core`.
+    hetu:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://host.docker.internal:7778"
   middlewares:
     security-headers:
       headers:
