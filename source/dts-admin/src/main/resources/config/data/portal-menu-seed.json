@@ -77,6 +77,29 @@
           "title": "结果集管理"
         }
       ]
+    },
+    {
+      "key": "visualization",
+      "path": "visualization",
+      "icon": "solar:pie-chart-bold-duotone",
+      "titleKey": "sys.nav.portal.visualization",
+      "title": "数据可视化",
+      "children": [
+        {
+          "key": "reports",
+          "path": "reports",
+          "icon": "solar:window-frame-bold-duotone",
+          "titleKey": "sys.nav.portal.visualizationReports",
+          "title": "报表与大屏"
+        },
+        {
+          "key": "reportsManage",
+          "path": "reports-manage",
+          "icon": "solar:settings-bold-duotone",
+          "titleKey": "sys.nav.portal.visualizationReportsManage",
+          "title": "报表链接管理"
+        }
+      ]
     }
   ]
 }

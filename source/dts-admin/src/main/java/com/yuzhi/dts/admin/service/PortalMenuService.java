@@ -60,6 +60,8 @@ public class PortalMenuService {
         Map.entry("visualization.finance", "/pages/visualization/FinanceSummaryPage"),
         Map.entry("visualization.supplyChain", "/pages/visualization/SupplyChainSummaryPage"),
         Map.entry("visualization.hr", "/pages/visualization/HRSummaryPage"),
+        Map.entry("visualization.reports", "/pages/visualization/ReportsPage"),
+        Map.entry("visualization.reportsManage", "/pages/visualization/ReportsManagePage"),
         Map.entry("foundation.dataSources", "/pages/foundation/DataSourcesPage"),
         Map.entry("foundation.dataStorage", "/pages/foundation/DataStoragePage"),
         Map.entry("foundation.taskScheduling", "/pages/foundation/TaskSchedulingPage")
@@ -556,6 +558,8 @@ public class PortalMenuService {
     }
 
     private String buildPath(PortalMenu parent, String segment) {
+        // Store path as a segment (not a full path).
+        // The platform backend computes full paths by concatenation; storing full paths would duplicate prefixes.
         String normalized = segment == null ? "" : segment.trim();
         if (normalized.startsWith("/")) {
             normalized = normalized.substring(1);
@@ -563,12 +567,7 @@ public class PortalMenuService {
         if (normalized.endsWith("/")) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
-        String parentPath = parent == null ? "" : parent.getPath();
-        if (!StringUtils.hasText(parentPath)) {
-            return "/" + normalized;
-        }
-        String base = parentPath.endsWith("/") ? parentPath.substring(0, parentPath.length() - 1) : parentPath;
-        return normalized.isEmpty() ? base : base + "/" + normalized;
+        return normalized;
     }
 
     private String resolveComponent(String compositeKey) {
@@ -917,9 +916,6 @@ public class PortalMenuService {
         if (sections == null || sections.isEmpty()) {
             return true;
         }
-        if (roots == null || roots.size() != sections.size()) {
-            return false;
-        }
         Set<String> expected = sections
             .stream()
             .map(MenuNode::key)
@@ -929,9 +925,24 @@ public class PortalMenuService {
         if (expected.isEmpty()) {
             return true;
         }
+        if (roots == null || roots.isEmpty()) {
+            return false;
+        }
+        Set<String> actual = new LinkedHashSet<>();
         for (PortalMenu root : roots) {
+            if (root == null) continue;
             String actualKey = extractMetadataKey(root);
-            if (actualKey == null || !expected.contains(actualKey.toLowerCase(Locale.ROOT))) {
+            if (!StringUtils.hasText(actualKey)) {
+                // Backward-compat: older rows only had sectionKey in metadata
+                actualKey = extractSectionKey(root);
+            }
+            if (StringUtils.hasText(actualKey)) {
+                actual.add(actualKey.trim().toLowerCase(Locale.ROOT));
+            }
+        }
+        // Seed keys must be present; allow extra root menus (custom/extended) without forcing a destructive reset.
+        for (String key : expected) {
+            if (!actual.contains(key)) {
                 return false;
             }
         }

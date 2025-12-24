@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd"
+>
+    <changeSet id="20251224-02-portal-menu-visualization-reports-seed" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="portal_menu"/>
+                <columnExists tableName="portal_menu" columnName="deleted"/>
+                <columnExists tableName="portal_menu" columnName="security_level"/>
+            </and>
+        </preConditions>
+
+        <comment>Ensure Visualization/Reports portal menus exist for dts-platform.</comment>
+        <sql dbms="postgresql" splitStatements="false">
+            DO $do$
+            DECLARE
+                root_id BIGINT;
+                reports_id BIGINT;
+                manage_id BIGINT;
+                root_meta TEXT;
+                reports_meta TEXT;
+                manage_meta TEXT;
+            BEGIN
+                root_meta := '{"key":"visualization","sectionKey":"visualization","titleKey":"sys.nav.portal.visualization","title":"数据可视化"}';
+                reports_meta := '{"key":"reports","sectionKey":"visualization","entryKey":"reports","titleKey":"sys.nav.portal.visualizationReports","title":"报表与大屏"}';
+                manage_meta := '{"key":"reportsManage","sectionKey":"visualization","entryKey":"reportsManage","titleKey":"sys.nav.portal.visualizationReportsManage","title":"报表链接管理"}';
+
+                -- Root section
+                SELECT id INTO root_id FROM portal_menu WHERE name = 'sys.nav.portal.visualization' LIMIT 1;
+                IF root_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.visualization', 'visualization', NULL, 50, root_meta, NULL, 'solar:pie-chart-bold-duotone', 'GENERAL', FALSE,
+                        'system', now(), 'system', now()
+                    )
+                    RETURNING id INTO root_id;
+                ELSE
+                    UPDATE portal_menu
+                    SET
+                        path = 'visualization',
+                        parent_id = NULL,
+                        metadata = root_meta,
+                        icon = 'solar:pie-chart-bold-duotone',
+                        security_level = 'GENERAL',
+                        deleted = FALSE,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE id = root_id;
+                END IF;
+
+                -- Reports list (end user)
+                SELECT id INTO reports_id FROM portal_menu WHERE name = 'sys.nav.portal.visualizationReports' LIMIT 1;
+                IF reports_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.visualizationReports', 'reports', '/pages/visualization/ReportsPage', 10, reports_meta, root_id,
+                        'solar:window-frame-bold-duotone', 'GENERAL', FALSE,
+                        'system', now(), 'system', now()
+                    )
+                    RETURNING id INTO reports_id;
+                ELSE
+                    UPDATE portal_menu
+                    SET
+                        path = 'reports',
+                        parent_id = root_id,
+                        component = '/pages/visualization/ReportsPage',
+                        sort_order = 10,
+                        metadata = reports_meta,
+                        icon = 'solar:window-frame-bold-duotone',
+                        security_level = 'GENERAL',
+                        deleted = FALSE,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE id = reports_id;
+                END IF;
+
+                -- Reports manage (admins)
+                SELECT id INTO manage_id FROM portal_menu WHERE name = 'sys.nav.portal.visualizationReportsManage' LIMIT 1;
+                IF manage_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.visualizationReportsManage', 'reports-manage', '/pages/visualization/ReportsManagePage', 20, manage_meta, root_id,
+                        'solar:settings-bold-duotone', 'GENERAL', FALSE,
+                        'system', now(), 'system', now()
+                    )
+                    RETURNING id INTO manage_id;
+                ELSE
+                    UPDATE portal_menu
+                    SET
+                        path = 'reports-manage',
+                        parent_id = root_id,
+                        component = '/pages/visualization/ReportsManagePage',
+                        sort_order = 20,
+                        metadata = manage_meta,
+                        icon = 'solar:settings-bold-duotone',
+                        security_level = 'GENERAL',
+                        deleted = FALSE,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE id = manage_id;
+                END IF;
+            END;
+            $do$;
+        </sql>
+    </changeSet>
+</databaseChangeLog>
+
