@@ -6,23 +6,58 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
-import reportsService, { type PublishedReport } from "@/api/services/reportsService";
+import deptService, { type DeptDto } from "@/api/services/deptService";
+import reportsService, { type ReportLink } from "@/api/services/reportsService";
+
+function classificationLabel(level: string | undefined | null) {
+	const upper = String(level || "").trim().toUpperCase();
+	if (upper === "CONFIDENTIAL") return { label: "机密", variant: "destructive" as const };
+	if (upper === "SECRET") return { label: "秘密", variant: "secondary" as const };
+	if (upper === "INTERNAL") return { label: "内部", variant: "outline" as const };
+	return { label: "公开", variant: "default" as const };
+}
+
+function formatDeptNames(codes: string[] | undefined, dict: Map<string, DeptDto>) {
+	const list = Array.isArray(codes) ? codes.filter(Boolean) : [];
+	if (!list.length) return "全部";
+	return list
+		.map((c) => dict.get(String(c))?.nameZh || dict.get(String(c))?.nameEn || String(c))
+		.join(", ");
+}
 
 export default function ReportsPage() {
-	const [reports, setReports] = useState<PublishedReport[]>([]);
+	const [reports, setReports] = useState<ReportLink[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [keyword, setKeyword] = useState("");
-	const [tool, setTool] = useState<string>("all");
+	const [deptCode, setDeptCode] = useState<string>("all");
+	const [reportType, setReportType] = useState<string>("all");
+	const [departments, setDepartments] = useState<DeptDto[]>([]);
 
-	const tools = useMemo(() => {
-		const set = new Set(reports.map((r) => r.biTool));
+	const reportTypes = useMemo(() => {
+		const set = new Set<string>();
+		for (const r of reports) {
+			const t = String(r.reportType || "").trim();
+			if (t) set.add(t);
+		}
 		return Array.from(set);
 	}, [reports]);
+
+	const deptDict = useMemo(() => {
+		const m = new Map<string, DeptDto>();
+		for (const d of departments) {
+			m.set(String(d.code), d);
+		}
+		return m;
+	}, [departments]);
 
 	const fetchReports = async () => {
 		setLoading(true);
 		try {
-			const data = await reportsService.getPublishedReports();
+			const data = await reportsService.getPublishedReports({
+				keyword: keyword.trim() || undefined,
+				deptCode: deptCode === "all" ? undefined : deptCode,
+				type: reportType === "all" ? undefined : reportType,
+			});
 			setReports(data);
 		} finally {
 			setLoading(false);
@@ -33,18 +68,29 @@ export default function ReportsPage() {
 		void fetchReports();
 	}, []);
 
-	const filtered = useMemo(() => {
-		const kw = keyword.trim().toLowerCase();
-		return reports.filter((r) => {
-			const kwMatch = kw
-				? r.title.toLowerCase().includes(kw) ||
-					r.owner.toLowerCase().includes(kw) ||
-					(r.domain || "").toLowerCase().includes(kw)
-				: true;
-			const toolMatch = tool === "all" ? true : r.biTool === tool;
-			return kwMatch && toolMatch;
-		});
-	}, [reports, keyword, tool]);
+	useEffect(() => {
+		deptService
+			.listDepartments()
+			.then((list) => setDepartments(Array.isArray(list) ? list : []))
+			.catch(() => setDepartments([]));
+	}, []);
+
+	const openReport = (r: ReportLink) => {
+		const url = String(r?.url || "").trim();
+		if (!url) return;
+		try {
+			const payload = JSON.stringify({
+				id: r.id,
+				code: r.code,
+				title: r.title,
+				url: r.url,
+				engine: r.engine,
+				classification: r.classification,
+			});
+			navigator.sendBeacon("/api/reports/visit", new Blob([payload], { type: "application/json" }));
+		} catch {}
+		window.open(url, "_blank", "noopener,noreferrer");
+	};
 
 	return (
 		<div className="space-y-4">
@@ -55,19 +101,33 @@ export default function ReportsPage() {
 						<Label className="text-xs text-muted-foreground">关键词</Label>
 						<Input
 							className="w-[220px]"
-							placeholder="搜索标题/负责人/数据域"
+							placeholder="搜索标题/编码"
 							value={keyword}
 							onChange={(e) => setKeyword(e.target.value)}
 							onKeyDown={(e) => e.key === "Enter" && fetchReports()}
 						/>
-						<Label className="ml-2 text-xs text-muted-foreground">BI 工具</Label>
-						<Select value={tool} onValueChange={setTool}>
+						<Label className="ml-2 text-xs text-muted-foreground">部门</Label>
+						<Select value={deptCode} onValueChange={setDeptCode}>
+							<SelectTrigger className="w-[180px]">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">全部</SelectItem>
+								{departments.map((d) => (
+									<SelectItem key={String(d.code)} value={String(d.code)}>
+										{d.nameZh || d.nameEn || d.code}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Label className="ml-2 text-xs text-muted-foreground">类型</Label>
+						<Select value={reportType} onValueChange={setReportType}>
 							<SelectTrigger className="w-[160px]">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="all">全部</SelectItem>
-								{tools.map((t) => (
+								{reportTypes.map((t) => (
 									<SelectItem key={t} value={t}>
 										{t}
 									</SelectItem>
@@ -85,58 +145,59 @@ export default function ReportsPage() {
 							<tr>
 								<th className="px-3 py-2 font-medium w-[32px]">#</th>
 								<th className="px-3 py-2 font-medium">报表标题</th>
-								<th className="px-3 py-2 font-medium w-[120px]">BI 工具</th>
-								<th className="px-3 py-2 font-medium w-[140px]">数据域</th>
-								<th className="px-3 py-2 font-medium w-[160px]">负责人</th>
-								<th className="px-3 py-2 font-medium w-[200px]">标签</th>
+								<th className="px-3 py-2 font-medium w-[110px]">引擎</th>
+								<th className="px-3 py-2 font-medium w-[120px]">类型</th>
+								<th className="px-3 py-2 font-medium w-[200px]">部门范围</th>
+								<th className="px-3 py-2 font-medium w-[90px]">密级</th>
 								<th className="px-3 py-2 font-medium w-[160px]">最近更新</th>
 								<th className="px-3 py-2 font-medium w-[120px]">操作</th>
 							</tr>
 						</thead>
 						<tbody>
-							{filtered.map((r, idx) => (
+							{reports.map((r, idx) => (
 								<tr key={r.id} className="border-b last:border-b-0">
 									<td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
 									<td className="px-3 py-2 font-medium">
 										<div className="flex items-center gap-2">
 											<span>{r.title}</span>
-											<a
+											<button
+												type="button"
 												className="text-primary hover:underline inline-flex items-center gap-1"
-												href={r.url}
-												target="_blank"
-												rel="noopener noreferrer"
 												title="在新窗口打开"
+												onClick={() => openReport(r)}
 											>
 												<Icon icon="solar:link-circle-bold-duotone" /> 打开
-											</a>
+											</button>
 										</div>
 									</td>
-									<td className="px-3 py-2">{r.biTool}</td>
-									<td className="px-3 py-2">{r.domain || "-"}</td>
-									<td className="px-3 py-2">{r.owner}</td>
+									<td className="px-3 py-2">{r.engine}</td>
+									<td className="px-3 py-2">{r.reportType || "-"}</td>
+									<td className="px-3 py-2">{formatDeptNames(r.deptCodes, deptDict)}</td>
 									<td className="px-3 py-2">
-										<div className="flex flex-wrap gap-1">
-											{(r.tags || []).map((t) => (
-												<Badge key={t} variant="secondary">
-													{t}
+										{(() => {
+											const v = classificationLabel(r.classification);
+											return (
+												<Badge variant={v.variant} className="whitespace-nowrap">
+													{v.label}
 												</Badge>
-											))}
-										</div>
+											);
+										})()}
 									</td>
-									<td className="px-3 py-2 text-xs text-muted-foreground">{new Date(r.updatedAt).toLocaleString()}</td>
+									<td className="px-3 py-2 text-xs text-muted-foreground">
+										{r.updatedAt ? new Date(r.updatedAt).toLocaleString() : "-"}
+									</td>
 									<td className="px-3 py-2">
-										<a
-											href={r.url}
-											target="_blank"
-											rel="noopener noreferrer"
+										<button
+											type="button"
+											onClick={() => openReport(r)}
 											className="inline-flex items-center gap-1 text-primary hover:underline"
 										>
 											<Icon icon="solar:external-drive-bold-duotone" /> 访问报表
-										</a>
+										</button>
 									</td>
 								</tr>
 							))}
-							{!filtered.length && (
+							{!reports.length && (
 								<tr>
 									<td colSpan={8} className="px-3 py-8 text-center text-xs text-muted-foreground">
 										{loading ? "加载中…" : "暂无符合条件的报表"}

@@ -64,7 +64,7 @@ export default function Workbench() {
         </Text>
         <div className="mb-4 flex gap-2">
           <RouterLink
-            href="/dashboard/bi"
+            href="/visualization/reports"
             className="inline-flex items-center justify-center px-3 py-2 rounded-md bg-blue-600 text-white text-sm"
           >
             进入领导驾驶舱

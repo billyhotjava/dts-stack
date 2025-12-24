@@ -52,4 +52,5 @@
     <include file="config/liquibase/changelog/20251029-01_portal_session_display_name.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251230-03_restore_catalog_dataset_data_level.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251230-04_data_level_confidential_update.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251224_01_bi_reports.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

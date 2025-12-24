@@ -4,6 +4,8 @@ import DashboardLayout from "@/layouts/dashboard";
 import LoginAuthGuard from "@/routes/components/login-auth-guard";
 import Workbench from "@/pages/dashboard/workbench";
 import BiScreensPage from "@/pages/dashboard/bi";
+import ReportsPage from "@/pages/visualization/ReportsPage";
+import ReportsManagePage from "@/pages/visualization/ReportsManagePage";
 import PersonalProfilePage from "@/pages/settings/profile";
 import { DynamicMenuResolver } from "./dynamic-resolver";
 import { STATIC_DASHBOARD_ROUTES } from "./static-routes";
@@ -28,6 +30,14 @@ export const dashboardRoutes: RouteObject[] = [
 					{ index: true, element: <Navigate to="workbench" replace /> },
 					{ path: "workbench", element: <Workbench /> },
 					{ path: "bi", element: <BiScreensPage /> },
+				],
+			},
+			{
+				path: "visualization",
+				children: [
+					{ index: true, element: <Navigate to="reports" replace /> },
+					{ path: "reports", element: <ReportsPage /> },
+					{ path: "reports-manage", element: <ReportsManagePage /> },
 				],
 			},
 				{

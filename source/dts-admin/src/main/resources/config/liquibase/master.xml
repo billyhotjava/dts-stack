@@ -46,10 +46,11 @@
     <include file="config/liquibase/changelog/20260105-01_audit_operation_mapping_platform_catalog.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-01_audit_operation_mapping_restore.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-02_organization_node_restore.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20251015-03_remove_visualization_foundation_menus.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20251016-02_infra_data_source.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20251016-03_infra_data_source_audit_columns.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20251016-04_infra_data_source_secrets.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251015-03_remove_visualization_foundation_menus.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251224-01_portal_menu_reports.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251016-02_infra_data_source.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251016-03_infra_data_source_audit_columns.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251016-04_infra_data_source_secrets.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-06_add_infra_audit_rules.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-07_add_audit_log_detail_rule.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-08_delete_all_secure_views.xml" relativeToChangelogFile="false"/>

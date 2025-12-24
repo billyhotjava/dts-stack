@@ -1,22 +1,121 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import java.util.ArrayList;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.visualization.BiReportLinkService;
+import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
+import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkRequest;
+import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @RestController
 @RequestMapping("/api/reports")
+@Transactional
 public class ReportsResource {
 
+    private static final String REPORT_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INSTITUTE_PRIVILEGED_ROLES)";
+
+    private final BiReportLinkService reports;
+    private final AuditService audit;
+
+    public ReportsResource(BiReportLinkService reports, AuditService audit) {
+        this.reports = reports;
+        this.audit = audit;
+    }
+
     @GetMapping("/published")
-    public ApiResponse<List<Map<String, Object>>> published(@RequestParam(required = false) String category) {
-        List<Map<String, Object>> out = new ArrayList<>();
-        out.add(Map.of("id", "r-1", "title", "部门数据看板", "url", "https://bi.example.com/dashboards/1", "category", "业务"));
-        out.add(Map.of("id", "r-2", "title", "安全统计", "url", "https://bi.example.com/dashboards/2", "category", "安全"));
-        return ApiResponses.ok(out);
+    public ApiResponse<List<BiReportLinkDto>> published(
+        @RequestParam(required = false) String deptCode,
+        @RequestParam(required = false, name = "type") String reportType,
+        @RequestParam(required = false) String keyword
+    ) {
+        List<BiReportLinkDto> list = reports.listPublished(deptCode, reportType, keyword);
+        audit.audit("READ", "vis.reports.published", "size=" + list.size());
+        return ApiResponses.ok(list);
+    }
+
+    @PostMapping("/visit")
+    public ApiResponse<Map<String, Object>> visit(@RequestBody(required = false) Map<String, Object> body) {
+        String id = text(body != null ? body.get("id") : null);
+        String code = text(body != null ? body.get("code") : null);
+        String title = text(body != null ? body.get("title") : null);
+        String url = text(body != null ? body.get("url") : null);
+        String engine = text(body != null ? body.get("engine") : null);
+        String classification = text(body != null ? body.get("classification") : null);
+
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        put(payload, "id", id);
+        put(payload, "code", code);
+        put(payload, "title", title);
+        put(payload, "url", url);
+        put(payload, "engine", engine);
+        put(payload, "classification", classification);
+        payload.put("ts", Instant.now().toString());
+        audit.recordAuxiliary("OPEN", "vis", "report", code != null ? code : (id != null ? id : "unknown"), payload);
+        return ApiResponses.ok(Map.of("ok", true));
+    }
+
+    @GetMapping
+    @PreAuthorize(REPORT_MAINTAINER_EXPRESSION)
+    public ApiResponse<List<BiReportLinkDto>> listAll(
+        @RequestParam(required = false) String deptCode,
+        @RequestParam(required = false, name = "type") String reportType,
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false, defaultValue = "false") boolean enabledOnly
+    ) {
+        List<BiReportLinkDto> list = reports.listAll(deptCode, reportType, keyword, enabledOnly);
+        audit.audit("READ", "vis.reports.manage.list", "size=" + list.size());
+        return ApiResponses.ok(list);
+    }
+
+    @PostMapping
+    @PreAuthorize(REPORT_MAINTAINER_EXPRESSION)
+    public ApiResponse<BiReportLinkDto> create(@Valid @RequestBody BiReportLinkRequest req) {
+        BiReportLinkDto dto = reports.create(req);
+        audit.audit("CREATE", "vis.reports.manage.create", dto.code());
+        return ApiResponses.ok(dto);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize(REPORT_MAINTAINER_EXPRESSION)
+    public ApiResponse<BiReportLinkDto> update(@PathVariable UUID id, @Valid @RequestBody BiReportLinkRequest req) {
+        BiReportLinkDto dto = reports.update(id, req);
+        audit.audit("UPDATE", "vis.reports.manage.update", dto.code());
+        return ApiResponses.ok(dto);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    @PreAuthorize(REPORT_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> delete(@PathVariable UUID id) {
+        reports.delete(id);
+        audit.audit("DELETE", "vis.reports.manage.delete", id.toString());
+        return ApiResponses.ok(Map.of("ok", true));
+    }
+
+    private String text(Object raw) {
+        if (raw == null) return null;
+        String s = String.valueOf(raw).trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    private void put(Map<String, Object> out, String key, String value) {
+        if (StringUtils.hasText(value)) {
+            out.put(key, value);
+        }
     }
 }

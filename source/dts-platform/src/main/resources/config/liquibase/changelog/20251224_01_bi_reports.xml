@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.16.xsd"
+>
+    <changeSet id="20251224-01-bi-report-link" author="platform">
+        <createTable tableName="bi_report_link">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="code" type="varchar(128)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="title" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="engine" type="varchar(32)" defaultValue="HETU">
+                <constraints nullable="false"/>
+            </column>
+            <column name="report_type" type="varchar(64)"/>
+            <column name="dept_codes" type="text"/>
+            <column name="role_codes" type="text"/>
+            <column name="classification" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="url" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sort_order" type="int" defaultValueNumeric="0"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex indexName="idx_bi_report_link_enabled_order" tableName="bi_report_link">
+            <column name="enabled"/>
+            <column name="sort_order"/>
+        </createIndex>
+        <createIndex indexName="idx_bi_report_link_type" tableName="bi_report_link">
+            <column name="report_type"/>
+        </createIndex>
+        <createIndex indexName="idx_bi_report_link_classification" tableName="bi_report_link">
+            <column name="classification"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+
