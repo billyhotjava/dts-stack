@@ -53,6 +53,8 @@ export default defineConfig(({ mode }) => {
 	})();
 
 	const apiProxyPrefix = explicitProxyPrefix !== undefined ? explicitProxyPrefix : autoPrefix;
+	const pollingEnabled = String(env.CHOKIDAR_USEPOLLING || "").trim().toLowerCase() === "true";
+	const pollingInterval = Number(env.CHOKIDAR_INTERVAL || 1000) || 1000;
 
 	if (mode !== "production") {
 		// Helpful runtime log for diagnosing 401 during login in dev
@@ -147,7 +149,17 @@ export default defineConfig(({ mode }) => {
       // Restrict file serving to this project only
       fs: { strict: true, allow: [rootDir] },
       // Ignore sibling workspace mounts to avoid cross-project file watching
-      watch: { ignored: ["**/dts-admin-webapp/**"] },
+      watch: {
+        ignored: [
+          "**/dts-admin-webapp/**",
+          "**/.pnpm-store/**",
+          "**/.pnpm/**",
+          "**/pnpm-store/**",
+          "**/.vite-cache/**",
+        ],
+        usePolling: pollingEnabled,
+        interval: pollingEnabled ? pollingInterval : undefined,
+      },
 			proxy: {
 				"/api": {
 					target: runtimeProxyTarget,

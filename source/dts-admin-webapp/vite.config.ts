@@ -39,6 +39,8 @@ export default defineConfig(({ mode }) => {
 		return "";
 	})();
 	const apiProxyPrefix = env.VITE_API_PROXY_PREFIX || autoPrefix || "";
+	const pollingEnabled = String(env.CHOKIDAR_USEPOLLING || "").trim().toLowerCase() === "true";
+	const pollingInterval = Number(env.CHOKIDAR_INTERVAL || 1000) || 1000;
 
     // Dev-only helper: serve /runtime-config.js so the app can read
     // runtime toggles (same shape as the Nginx entrypoint emits in prod).
@@ -124,7 +126,17 @@ export default defineConfig(({ mode }) => {
 			// Decouple from other workspaces; do not traverse outside project root
 			fs: { strict: true, allow: [rootDir] },
 			// Ignore any sibling mounts like /workspace/dts-platform-webapp/**
-			watch: { ignored: ["**/dts-platform-webapp/**"] },
+			watch: {
+				ignored: [
+					"**/dts-platform-webapp/**",
+					"**/.pnpm-store/**",
+					"**/.pnpm/**",
+					"**/pnpm-store/**",
+					"**/.vite-cache/**",
+				],
+				usePolling: pollingEnabled,
+				interval: pollingEnabled ? pollingInterval : undefined,
+			},
             proxy: {
                 // Serve Koal SDK assets in dev by proxying to the platform dev server,
                 // which ships the vendor bundle under /vendor/koal in its public directory.
