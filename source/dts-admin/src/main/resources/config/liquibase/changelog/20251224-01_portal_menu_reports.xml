@@ -19,7 +19,7 @@
                 root_id BIGINT;
                 reports_id BIGINT;
                 manage_id BIGINT;
-                role_code TEXT;
+                target_role_code TEXT;
                 base_meta TEXT;
             BEGIN
                 base_meta := '{"sectionKey":"visualization","titleKey":"sys.nav.portal.visualization","title":"数据可视化"}';
@@ -65,7 +65,7 @@
                 END IF;
 
                 -- Make reports menu visible to common roles (visibility table is the source of truth for portal menus).
-                FOR role_code IN
+                FOR target_role_code IN
                     SELECT unnest(ARRAY[
                         'ROLE_EMPLOYEE',
                         'ROLE_DEPT_DATA_VIEWER','ROLE_DEPT_DATA_DEV','ROLE_DEPT_DATA_OWNER','ROLE_DEPT_LEADER',
@@ -78,16 +78,16 @@
                         created_by, created_date, last_modified_by, last_modified_date
                     )
                     SELECT
-                        nextval('portal_menu_visibility_seq'), reports_id, role_code, NULL, 'INTERNAL',
+                        nextval('portal_menu_visibility_seq'), reports_id, target_role_code, NULL, 'INTERNAL',
                         'system', now(), 'system', now()
                     WHERE NOT EXISTS (
                         SELECT 1 FROM portal_menu_visibility v
-                        WHERE v.menu_id = reports_id AND upper(v.role_code) = upper(role_code)
+                        WHERE v.menu_id = reports_id AND upper(v.role_code) = upper(target_role_code)
                     );
                 END LOOP;
 
                 -- Restrict manage menu to institute-level privileged roles.
-                FOR role_code IN
+                FOR target_role_code IN
                     SELECT unnest(ARRAY[
                         'ROLE_ADMIN','ROLE_OP_ADMIN',
                         'ROLE_INST_DATA_DEV','ROLE_INST_DATA_OWNER','ROLE_INST_LEADER'
@@ -98,11 +98,11 @@
                         created_by, created_date, last_modified_by, last_modified_date
                     )
                     SELECT
-                        nextval('portal_menu_visibility_seq'), manage_id, role_code, NULL, 'INTERNAL',
+                        nextval('portal_menu_visibility_seq'), manage_id, target_role_code, NULL, 'INTERNAL',
                         'system', now(), 'system', now()
                     WHERE NOT EXISTS (
                         SELECT 1 FROM portal_menu_visibility v
-                        WHERE v.menu_id = manage_id AND upper(v.role_code) = upper(role_code)
+                        WHERE v.menu_id = manage_id AND upper(v.role_code) = upper(target_role_code)
                     );
                 END LOOP;
             END;
@@ -110,4 +110,3 @@
         </sql>
     </changeSet>
 </databaseChangeLog>
-
