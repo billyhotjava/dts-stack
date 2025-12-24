@@ -49,6 +49,18 @@ public enum PersonnelLevel {
     public static PersonnelLevel normalize(String value) {
         if (value == null) return null;
         String v = value.trim().toUpperCase(Locale.ROOT);
+        // Some integrations emit numeric clearance levels. Map them conservatively:
+        // 0 -> GENERAL, 1 -> IMPORTANT, >=2 -> CORE.
+        if (v.matches("^\\d+$")) {
+            try {
+                int n = Integer.parseInt(v);
+                if (n <= 0) return GENERAL;
+                if (n == 1) return IMPORTANT;
+                return CORE;
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
         return switch (v) {
             case "GENERAL" -> GENERAL;
             case "IMPORTANT", "IMPORTAN" -> IMPORTANT;

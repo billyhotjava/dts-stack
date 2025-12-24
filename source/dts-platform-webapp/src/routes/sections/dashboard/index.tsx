@@ -3,6 +3,7 @@ import { Navigate, type RouteObject, useLocation } from "react-router";
 import DashboardLayout from "@/layouts/dashboard";
 import LoginAuthGuard from "@/routes/components/login-auth-guard";
 import Workbench from "@/pages/dashboard/workbench";
+import BiScreensPage from "@/pages/dashboard/bi";
 import PersonalProfilePage from "@/pages/settings/profile";
 import { DynamicMenuResolver } from "./dynamic-resolver";
 import { STATIC_DASHBOARD_ROUTES } from "./static-routes";
@@ -26,6 +27,7 @@ export const dashboardRoutes: RouteObject[] = [
 				children: [
 					{ index: true, element: <Navigate to="workbench" replace /> },
 					{ path: "workbench", element: <Workbench /> },
+					{ path: "bi", element: <BiScreensPage /> },
 				],
 			},
 				{

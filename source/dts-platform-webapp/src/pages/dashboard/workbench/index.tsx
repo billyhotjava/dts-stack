@@ -1,4 +1,5 @@
 import { Title, Text } from "@/ui/typography";
+import { RouterLink } from "@/routes/components/router-link";
 
 type GaugeBarProps = { value: number; tone?: "blue" | "emerald" | "amber" };
 const barTone: Record<NonNullable<GaugeBarProps["tone"]>, string> = {
@@ -62,12 +63,12 @@ export default function Workbench() {
           参考示例布局，突出三大核心要素；页面样式简洁，兼容 Windows 7 + Chrome 95。
         </Text>
         <div className="mb-4 flex gap-2">
-          <a
-            href="/dashboards"
+          <RouterLink
+            href="/dashboard/bi"
             className="inline-flex items-center justify-center px-3 py-2 rounded-md bg-blue-600 text-white text-sm"
           >
             进入领导驾驶舱
-          </a>
+          </RouterLink>
           <span className="text-xs text-slate-500 self-center">（同域名路径访问，不暴露 BI 引擎名称）</span>
         </div>
 
