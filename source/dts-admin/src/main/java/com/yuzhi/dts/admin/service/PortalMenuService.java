@@ -49,11 +49,29 @@ public class PortalMenuService {
     private static final Set<String> IAM_SECTIONS = Set.of();
     private static final Map<String, String> MENU_COMPONENTS = Map.ofEntries(
         Map.entry("catalog.assets", "/pages/catalog/DatasetsPage"),
+        Map.entry("catalog.metadata", "/pages/catalog/MetadataPage"),
+        Map.entry("catalog.lineage", "/pages/catalog/LineagePage"),
+        Map.entry("catalog.lifecycle", "/pages/catalog/LifecyclePage"),
+        Map.entry("modeling.planning", "/pages/modeling/DataPlanningPage"),
         Map.entry("modeling.standards", "/pages/modeling/DataStandardsPage"),
+        Map.entry("modeling.glossary", "/pages/modeling/GlossaryPage"),
+        Map.entry("modeling.templates", "/pages/modeling/ModelTemplatesPage"),
+        Map.entry("governance.indicators.dictionary", "/pages/governance/IndicatorsPage"),
+        Map.entry("governance.indicators.dimensions", "/pages/governance/DimensionsPage"),
+        Map.entry("governance.indicators.computeRules", "/pages/governance/IndicatorComputeRulesPage"),
+        Map.entry("governance.indicators.publish", "/pages/governance/IndicatorPublishPage"),
         Map.entry("governance.rules", "/pages/governance/QualityRulesPage"),
+        Map.entry("governance.tasks", "/pages/governance/QualityTasksPage"),
+        Map.entry("governance.issues", "/pages/governance/QualityIssuesPage"),
         Map.entry("governance.compliance", "/pages/governance/CompliancePage"),
         Map.entry("explore.workbench", "/pages/explore/QueryWorkbenchPage"),
         Map.entry("explore.savedQueries", "/pages/explore/SavedQueriesPage"),
+        Map.entry("explore.etl.adapters", "/pages/explore/etl/AdaptersPage"),
+        Map.entry("explore.etl.fileExchange", "/pages/explore/etl/FileExchangePage"),
+        Map.entry("explore.etl.transform", "/pages/explore/etl/TransformPage"),
+        Map.entry("explore.etl.orchestration", "/pages/explore/etl/OrchestrationPage"),
+        Map.entry("explore.etl.warehouseLayers", "/pages/explore/etl/WarehouseLayersPage"),
+        Map.entry("explore.etl.reconciliation", "/pages/explore/etl/ReconciliationPage"),
         Map.entry("visualization.dashboards", "/pages/visualization/DashboardsPage"),
         Map.entry("visualization.cockpit", "/pages/visualization/CockpitPage"),
         Map.entry("visualization.projects", "/pages/visualization/ProjectsSummaryPage"),
@@ -62,6 +80,19 @@ public class PortalMenuService {
         Map.entry("visualization.hr", "/pages/visualization/HRSummaryPage"),
         Map.entry("visualization.reports", "/pages/visualization/ReportsPage"),
         Map.entry("visualization.reportsManage", "/pages/visualization/ReportsManagePage"),
+        Map.entry("security.overview", "/pages/security/data-security"),
+        Map.entry("security.accessMatrix", "/pages/security/AccessMatrixPage"),
+        Map.entry("security.masking", "/pages/security/MaskingPolicyPage"),
+        Map.entry("security.baseline", "/pages/security/SecurityBaselinePage"),
+        Map.entry("security.threeAdmins", "/pages/security/ThreeAdminsPage"),
+        Map.entry("security.authIntegration", "/pages/security/AuthIntegrationPage"),
+        Map.entry("security.backupRecovery", "/pages/security/BackupRecoveryPage"),
+        Map.entry("security.audit", "/pages/security/AuditLogsPage"),
+        Map.entry("ops.monitoring", "/pages/ops/MonitoringPage"),
+        Map.entry("ops.alerting", "/pages/ops/AlertingPage"),
+        Map.entry("ops.logs", "/pages/ops/LogsPage"),
+        Map.entry("ops.deploy", "/pages/ops/DeploymentPage"),
+        Map.entry("ops.settings", "/pages/ops/OpsSettingsPage"),
         Map.entry("foundation.dataSources", "/pages/foundation/DataSourcesPage"),
         Map.entry("foundation.dataStorage", "/pages/foundation/DataStoragePage"),
         Map.entry("foundation.taskScheduling", "/pages/foundation/TaskSchedulingPage")
@@ -607,20 +638,121 @@ public class PortalMenuService {
         try {
             MenuSeed seed = menuSeed();
             List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
-            if (!isSeedAligned(roots, seed)) {
+            if (roots == null || roots.isEmpty()) {
+                // Fresh install: create full seed (destructive reset is acceptable when no menus exist).
                 resetMenusToSeed();
-            } else {
-                // Seed is present; ensure defaults exist at least once
-                try {
-                    menuMutationTx.execute(status -> {
-                        applyDefaultRoleBindings();
-                        return null;
-                    });
-                } catch (Exception ignored) {}
+                return;
             }
+
+            // Non-destructive: ensure missing seed nodes exist; do not wipe customized menus on upgrades.
+            try {
+                menuMutationTx.execute(status -> {
+                    upsertMenusFromSeed(seed);
+                    return null;
+                });
+            } catch (Exception ex) {
+                log.warn("Failed ensuring portal menus from seed: {}", ex.getMessage());
+                log.debug("Portal menu seed upsert error stack", ex);
+            }
+
+            // Ensure default role bindings exist at least once
+            try {
+                menuMutationTx.execute(status -> {
+                    applyDefaultRoleBindings();
+                    return null;
+                });
+            } catch (Exception ignored) {}
         } catch (Exception ex) {
             log.warn("Skip portal menu seed verification due to: {}", ex.getMessage());
         }
+    }
+
+    private void upsertMenusFromSeed(MenuSeed seed) {
+        if (seed == null || seed.portalNavSections() == null || seed.portalNavSections().isEmpty()) {
+            return;
+        }
+        List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
+        int sortOrder = 1;
+        for (MenuNode section : seed.portalNavSections()) {
+            if (section == null) continue;
+            String sectionKey = StringUtils.hasText(section.key()) ? section.key().trim() : "section-" + sortOrder;
+            if (isDisabledSectionKey(sectionKey)) {
+                sortOrder++;
+                continue;
+            }
+            PortalMenu existingRoot = findChildByMetadataKey(null, roots, sectionKey);
+            if (existingRoot == null) {
+                String sectionComposite = StringUtils.hasText(section.key()) ? section.key() : sectionKey;
+                PortalMenu root = buildMenuTree(section, null, sortOrder, sectionComposite, sectionComposite);
+                menuRepo.save(root);
+            } else {
+                // Ensure seed subtree exists under this root
+                ensureChildrenFromSeed(existingRoot, section.children(), 1, sectionKey, sectionKey);
+            }
+            sortOrder++;
+        }
+        menuRepo.flush();
+    }
+
+    private void ensureChildrenFromSeed(
+        PortalMenu parent,
+        List<MenuNode> seedChildren,
+        int startOrder,
+        String compositeKey,
+        String sectionKey
+    ) {
+        if (parent == null || parent.getId() == null || seedChildren == null || seedChildren.isEmpty()) {
+            return;
+        }
+        List<PortalMenu> existingChildren = menuRepo.findByParentIdOrderBySortOrderAscIdAsc(parent.getId());
+        int childOrder = startOrder;
+        for (MenuNode child : seedChildren) {
+            if (child == null) continue;
+            String childKey = StringUtils.hasText(child.key()) ? child.key().trim() : "entry-" + childOrder;
+            String nextCompositeKey = compositeKey + "." + childKey;
+            PortalMenu existing = findChildByMetadataKey(parent.getId(), existingChildren, childKey);
+            if (existing == null) {
+                PortalMenu created = buildMenuTree(child, parent, childOrder, nextCompositeKey, sectionKey);
+                created.setParent(parent);
+                menuRepo.save(created);
+            } else {
+                // Recurse to ensure deeper nodes exist; keep existing attributes untouched.
+                ensureChildrenFromSeed(existing, child.children(), 1, nextCompositeKey, sectionKey);
+                // Ensure leaf component is present when seed defines a leaf but existing has none
+                if ((child.children() == null || child.children().isEmpty()) && !StringUtils.hasText(existing.getComponent())) {
+                    String component = resolveComponent(nextCompositeKey);
+                    if (StringUtils.hasText(component)) {
+                        existing.setComponent(component);
+                        menuRepo.save(existing);
+                    }
+                }
+            }
+            childOrder++;
+        }
+    }
+
+    private PortalMenu findChildByMetadataKey(Long parentId, List<PortalMenu> candidates, String expectedKey) {
+        if (candidates == null || candidates.isEmpty() || !StringUtils.hasText(expectedKey)) {
+            return null;
+        }
+        String normalizedExpected = expectedKey.trim().toLowerCase(Locale.ROOT);
+        for (PortalMenu menu : candidates) {
+            if (menu == null) continue;
+            if (parentId != null && menu.getParent() != null && menu.getParent().getId() != null) {
+                if (!parentId.equals(menu.getParent().getId())) {
+                    continue;
+                }
+            }
+            String actualKey = extractMetadataKey(menu);
+            if (!StringUtils.hasText(actualKey)) {
+                // Backward-compat: older rows might only contain sectionKey/entryKey in metadata.
+                actualKey = parentId == null ? extractSectionKey(menu) : extractEntryKey(menu);
+            }
+            if (StringUtils.hasText(actualKey) && actualKey.trim().toLowerCase(Locale.ROOT).equals(normalizedExpected)) {
+                return menu;
+            }
+        }
+        return null;
     }
 
     /**
@@ -1081,6 +1213,21 @@ public class PortalMenuService {
             JsonNode node = objectMapper.readTree(menu.getMetadata());
             if (node.hasNonNull("sectionKey")) {
                 return node.get("sectionKey").asText();
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to parse portal menu metadata for id {}: {}", menu.getId(), ex.getMessage());
+        }
+        return null;
+    }
+
+    private String extractEntryKey(PortalMenu menu) {
+        if (menu == null || !StringUtils.hasText(menu.getMetadata())) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(menu.getMetadata());
+            if (node.hasNonNull("entryKey")) {
+                return node.get("entryKey").asText();
             }
         } catch (Exception ex) {
             log.debug("Failed to parse portal menu metadata for id {}: {}", menu.getId(), ex.getMessage());

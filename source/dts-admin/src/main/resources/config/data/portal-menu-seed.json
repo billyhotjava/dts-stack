@@ -13,6 +13,27 @@
           "icon": "solar:database-bold-duotone",
           "titleKey": "sys.nav.portal.catalogAssetsDirectory",
           "title": "数据资产目录"
+        },
+        {
+          "key": "metadata",
+          "path": "metadata",
+          "icon": "solar:tag-bold-duotone",
+          "titleKey": "sys.nav.portal.catalogMetadata",
+          "title": "元数据采集与维护"
+        },
+        {
+          "key": "lineage",
+          "path": "lineage",
+          "icon": "solar:share-circle-bold-duotone",
+          "titleKey": "sys.nav.portal.catalogLineage",
+          "title": "血缘与影响分析"
+        },
+        {
+          "key": "lifecycle",
+          "path": "lifecycle",
+          "icon": "solar:calendar-bold-duotone",
+          "titleKey": "sys.nav.portal.catalogLifecycle",
+          "title": "生命周期管理"
         }
       ]
     },
@@ -24,11 +45,32 @@
       "title": "模型与标准",
       "children": [
         {
+          "key": "planning",
+          "path": "planning",
+          "icon": "solar:map-point-bold-duotone",
+          "titleKey": "sys.nav.portal.modelingPlanning",
+          "title": "数据规划管理"
+        },
+        {
           "key": "standards",
           "path": "standards",
           "icon": "solar:document-text-bold-duotone",
           "titleKey": "sys.nav.portal.modelingStandards",
           "title": "数据标准"
+        },
+        {
+          "key": "glossary",
+          "path": "glossary",
+          "icon": "solar:dictionary-bold-duotone",
+          "titleKey": "sys.nav.portal.modelingGlossary",
+          "title": "口径与术语"
+        },
+        {
+          "key": "templates",
+          "path": "templates",
+          "icon": "solar:layers-bold-duotone",
+          "titleKey": "sys.nav.portal.modelingTemplates",
+          "title": "模型规范与模板"
         }
       ]
     },
@@ -40,11 +82,62 @@
       "title": "治理与质量",
       "children": [
         {
+          "key": "indicators",
+          "path": "indicators",
+          "icon": "solar:chart-bold-duotone",
+          "titleKey": "sys.nav.portal.governanceIndicators",
+          "title": "指标管理",
+          "children": [
+            {
+              "key": "dictionary",
+              "path": "dictionary",
+              "icon": "solar:book-2-bold-duotone",
+              "titleKey": "sys.nav.portal.governanceIndicatorsDictionary",
+              "title": "指标字典"
+            },
+            {
+              "key": "dimensions",
+              "path": "dimensions",
+              "icon": "solar:hierarchy-2-bold-duotone",
+              "titleKey": "sys.nav.portal.governanceIndicatorsDimensions",
+              "title": "维度体系与字典"
+            },
+            {
+              "key": "computeRules",
+              "path": "compute-rules",
+              "icon": "solar:functions-bold-duotone",
+              "titleKey": "sys.nav.portal.governanceIndicatorsComputeRules",
+              "title": "计算规则"
+            },
+            {
+              "key": "publish",
+              "path": "publish",
+              "icon": "solar:upload-bold-duotone",
+              "titleKey": "sys.nav.portal.governanceIndicatorsPublish",
+              "title": "发布与一致性校验"
+            }
+          ]
+        },
+        {
           "key": "rules",
           "path": "rules",
           "icon": "solar:checklist-bold-duotone",
           "titleKey": "sys.nav.portal.governanceRules",
           "title": "质量规则"
+        },
+        {
+          "key": "tasks",
+          "path": "tasks",
+          "icon": "solar:calendar-search-bold-duotone",
+          "titleKey": "sys.nav.portal.governanceQualityTasks",
+          "title": "质量巡检计划"
+        },
+        {
+          "key": "issues",
+          "path": "issues",
+          "icon": "solar:danger-circle-bold-duotone",
+          "titleKey": "sys.nav.portal.governanceQualityIssues",
+          "title": "问题闭环与工单"
         },
         {
           "key": "compliance",
@@ -75,6 +168,57 @@
           "icon": "solar:folder-with-files-bold-duotone",
           "titleKey": "sys.nav.portal.exploreSavedQueries",
           "title": "结果集管理"
+        },
+        {
+          "key": "etl",
+          "path": "etl",
+          "icon": "solar:diagram-up-bold-duotone",
+          "titleKey": "sys.nav.portal.exploreEtl",
+          "title": "ETL与作业编排",
+          "children": [
+            {
+              "key": "adapters",
+              "path": "adapters",
+              "icon": "solar:plug-circle-bold-duotone",
+              "titleKey": "sys.nav.portal.exploreEtlAdapters",
+              "title": "多源集成适配器"
+            },
+            {
+              "key": "fileExchange",
+              "path": "file-exchange",
+              "icon": "solar:folder-transfer-bold-duotone",
+              "titleKey": "sys.nav.portal.exploreEtlFileExchange",
+              "title": "数据交换与文件接入"
+            },
+            {
+              "key": "transform",
+              "path": "transform",
+              "icon": "solar:settings-minimalistic-bold-duotone",
+              "titleKey": "sys.nav.portal.exploreEtlTransform",
+              "title": "数据加工与转换"
+            },
+            {
+              "key": "orchestration",
+              "path": "orchestration",
+              "icon": "solar:sitemap-bold-duotone",
+              "titleKey": "sys.nav.portal.exploreEtlOrchestration",
+              "title": "流程编排与作业管理"
+            },
+            {
+              "key": "warehouseLayers",
+              "path": "warehouse-layers",
+              "icon": "solar:buildings-3-bold-duotone",
+              "titleKey": "sys.nav.portal.exploreEtlWarehouseLayers",
+              "title": "数仓分层管理"
+            },
+            {
+              "key": "reconciliation",
+              "path": "reconciliation",
+              "icon": "solar:check-square-bold-duotone",
+              "titleKey": "sys.nav.portal.exploreEtlReconciliation",
+              "title": "装载对账校验"
+            }
+          ]
         }
       ]
     },
@@ -98,6 +242,115 @@
           "icon": "solar:settings-bold-duotone",
           "titleKey": "sys.nav.portal.visualizationReportsManage",
           "title": "报表链接管理"
+        }
+      ]
+    },
+    {
+      "key": "security",
+      "path": "security",
+      "icon": "solar:shield-bold-duotone",
+      "titleKey": "sys.nav.portal.security",
+      "title": "安全合规",
+      "children": [
+        {
+          "key": "overview",
+          "path": "overview",
+          "icon": "solar:shield-check-bold-duotone",
+          "titleKey": "sys.nav.portal.securityOverview",
+          "title": "安全总览"
+        },
+        {
+          "key": "accessMatrix",
+          "path": "access-matrix",
+          "icon": "solar:key-bold-duotone",
+          "titleKey": "sys.nav.portal.securityAccessMatrix",
+          "title": "访问权限矩阵"
+        },
+        {
+          "key": "masking",
+          "path": "masking",
+          "icon": "solar:eye-closed-bold-duotone",
+          "titleKey": "sys.nav.portal.securityMasking",
+          "title": "脱敏策略中心"
+        },
+        {
+          "key": "baseline",
+          "path": "baseline",
+          "icon": "solar:shield-up-bold-duotone",
+          "titleKey": "sys.nav.portal.securityBaseline",
+          "title": "安全基线与加固"
+        },
+        {
+          "key": "threeAdmins",
+          "path": "three-admins",
+          "icon": "solar:users-group-rounded-bold-duotone",
+          "titleKey": "sys.nav.portal.securityThreeAdmins",
+          "title": "三员管理与职责分离"
+        },
+        {
+          "key": "authIntegration",
+          "path": "auth-integration",
+          "icon": "solar:usb-bold-duotone",
+          "titleKey": "sys.nav.portal.securityAuthIntegration",
+          "title": "身份认证集成"
+        },
+        {
+          "key": "backupRecovery",
+          "path": "backup-recovery",
+          "icon": "solar:database-backup-bold-duotone",
+          "titleKey": "sys.nav.portal.securityBackupRecovery",
+          "title": "备份恢复与灾备"
+        },
+        {
+          "key": "audit",
+          "path": "audit",
+          "icon": "solar:document-text-bold-duotone",
+          "titleKey": "sys.nav.portal.securityAudit",
+          "title": "日志审计与报表"
+        }
+      ]
+    },
+    {
+      "key": "ops",
+      "path": "ops",
+      "icon": "solar:settings-bold-duotone",
+      "titleKey": "sys.nav.portal.ops",
+      "title": "运维",
+      "children": [
+        {
+          "key": "monitoring",
+          "path": "monitoring",
+          "icon": "solar:monitor-bold-duotone",
+          "titleKey": "sys.nav.portal.opsMonitoring",
+          "title": "系统监控"
+        },
+        {
+          "key": "alerting",
+          "path": "alerting",
+          "icon": "solar:bell-bing-bold-duotone",
+          "titleKey": "sys.nav.portal.opsAlerting",
+          "title": "告警与通知"
+        },
+        {
+          "key": "logs",
+          "path": "logs",
+          "icon": "solar:document-add-bold-duotone",
+          "titleKey": "sys.nav.portal.opsLogs",
+          "title": "运行日志"
+        },
+        {
+          "key": "deploy",
+          "path": "deploy",
+          "icon": "solar:server-square-bold-duotone",
+          "titleKey": "sys.nav.portal.opsDeploy",
+          "title": "部署与脚本"
+        },
+        {
+          "key": "settings",
+          "path": "settings",
+          "icon": "solar:tuning-2-bold-duotone",
+          "titleKey": "sys.nav.portal.opsSettings",
+          "title": "运维配置"
         }
       ]
     }

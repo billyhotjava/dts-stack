@@ -89,6 +89,24 @@ export const closeIssue = (id: string, resolution?: string) =>
 	api.post({ url: `/governance/issues/${id}/close`, data: { resolution } });
 export const appendIssueAction = (id: string, data: any) => api.post({ url: `/governance/issues/${id}/actions`, data });
 
+// Indicators
+export const listIndicators = (params: any = {}) => api.get({ url: "/governance/indicators", params });
+export const getIndicator = (id: string) => api.get({ url: `/governance/indicators/${id}` });
+export const createIndicator = (data: any) => api.post({ url: "/governance/indicators", data });
+export const updateIndicator = (id: string, data: any) => api.put({ url: `/governance/indicators/${id}`, data });
+export const deleteIndicator = (id: string) => api.delete({ url: `/governance/indicators/${id}` });
+export const publishIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/publish` });
+export const archiveIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/archive` });
+
+// Dimensions
+export const listDimensions = (params: any = {}) => api.get({ url: "/governance/dimensions", params });
+export const getDimension = (id: string) => api.get({ url: `/governance/dimensions/${id}` });
+export const createDimension = (data: any) => api.post({ url: "/governance/dimensions", data });
+export const updateDimension = (id: string, data: any) => api.put({ url: `/governance/dimensions/${id}`, data });
+export const deleteDimension = (id: string) => api.delete({ url: `/governance/dimensions/${id}` });
+export const publishDimension = (id: string) => api.post({ url: `/governance/dimensions/${id}/publish` });
+export const archiveDimension = (id: string) => api.post({ url: `/governance/dimensions/${id}/archive` });
+
 // Data quality (compatibility helpers)
 export const triggerQuality = (datasetId: string, ruleId?: string) =>
 	api.post({ url: "/data-quality-runs/trigger", params: { datasetId, ruleId } });
