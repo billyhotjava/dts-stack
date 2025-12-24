@@ -110,6 +110,30 @@ if [[ ! -f "$ENV_BASE" ]]; then
   exit 1
 fi
 
+# Guardrail: dev-up must never mutate the repo `.env`.
+# Some environments/tools may rewrite it (e.g. editors, hooks, external scripts),
+# so we make it read-only during the run and restore it if it changed.
+ENV_BACKUP="$(mktemp -t dts-stack-env.XXXXXX)"
+cp "$ENV_BASE" "$ENV_BACKUP"
+ENV_MODE="$(stat -c %a "$ENV_BASE" 2>/dev/null || true)"
+chmod a-w "$ENV_BASE" 2>/dev/null || true
+
+cleanup_env_protection() {
+  # Make it writable temporarily so we can restore contents if needed.
+  chmod u+w "$ENV_BASE" 2>/dev/null || true
+  if [[ -f "$ENV_BACKUP" ]]; then
+    if ! cmp -s "$ENV_BASE" "$ENV_BACKUP"; then
+      echo "[dev-up] WARNING: ${ENV_BASE} was modified during run; restoring original." >&2
+      cp "$ENV_BACKUP" "$ENV_BASE"
+    fi
+    rm -f "$ENV_BACKUP"
+  fi
+  if [[ -n "${ENV_MODE:-}" ]]; then
+    chmod "$ENV_MODE" "$ENV_BASE" 2>/dev/null || true
+  fi
+}
+trap cleanup_env_protection EXIT INT TERM HUP
+
 if docker compose version >/dev/null 2>&1; then
   compose_cmd=(docker compose)
 elif command -v docker-compose >/dev/null 2>&1; then
