@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Multi-arch builder for Superset/Metabase with overlay application.
+# Multi-arch builder for Metabase with overlay application.
 # Usage:
-#   tools/bi-build.sh superset <tag> [--push] [--platform linux/amd64,linux/arm64]
 #   tools/bi-build.sh metabase <tag> [--push] [--platform linux/amd64,linux/arm64]
 #
 # The script stages upstream source into a temp dir, applies overlay patches/files,
@@ -11,8 +10,8 @@ set -euo pipefail
 # and builds via docker buildx. No changes are made to upstream working trees.
 
 usage() {
-  echo "Usage: $0 {superset|metabase} <image_tag> [--push] [--platform linux/amd64,linux/arm64] [--output <path>] [--version <v>]"
-  echo "Default output (when not --push): builds/<service>-multi.oci"
+  echo "Usage: $0 metabase <image_tag> [--push] [--platform linux/amd64,linux/arm64] [--output <path>] [--version <v>]"
+  echo "Default output (when not --push): builds/metabase-multi.oci"
 }
 
 SERVICE="${1:-}"
@@ -38,24 +37,15 @@ done
 if [[ -z "${SERVICE}" || -z "${TAG}" ]]; then
   usage; exit 1
 fi
-if [[ "${SERVICE}" != "superset" && "${SERVICE}" != "metabase" ]]; then
-  echo "SERVICE must be superset or metabase" >&2; exit 1
+if [[ "${SERVICE}" != "metabase" ]]; then
+  echo "SERVICE must be metabase" >&2; exit 1
 fi
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p "${ROOT_DIR}/builds"
-case "${SERVICE}" in
-  superset)
-    UPSTREAM="${ROOT_DIR}/source/dts-bi-dashboard"
-    OVERLAY="${ROOT_DIR}/source/dts-bi-dashboard-overlay"
-    DEFAULT_DOCKERFILE="Dockerfile"
-    ;;
-  metabase)
-    UPSTREAM="${ROOT_DIR}/source/dts-bi-analytics"
-    OVERLAY="${ROOT_DIR}/source/dts-bi-analytics-overlay"
-    DEFAULT_DOCKERFILE="Dockerfile"
-    ;;
-esac
+UPSTREAM="${ROOT_DIR}/source/dts-bi-analytics"
+OVERLAY="${ROOT_DIR}/source/dts-bi-analytics-overlay"
+DEFAULT_DOCKERFILE="Dockerfile"
 
 if [[ ! -d "${UPSTREAM}" ]]; then
   echo "Upstream directory missing: ${UPSTREAM}" >&2
@@ -132,11 +122,8 @@ if [[ -z "${VERSION}" ]]; then
   fi
 fi
 
-# Only Metabase consumes VERSION; harmless to skip for Superset.
-if [[ "${SERVICE}" == "metabase" ]]; then
-  echo "[bi-build] Using Metabase version arg: ${VERSION}"
-  build_args+=(--build-arg "VERSION=${VERSION}")
-fi
+echo "[bi-build] Using Metabase version arg: ${VERSION}"
+build_args+=(--build-arg "VERSION=${VERSION}")
 
 "${build_args[@]}"
 
