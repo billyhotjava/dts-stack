@@ -3,11 +3,13 @@ import { toast } from "sonner";
 import {
 	getDataset,
 	getDatasetJob,
+	getCatalogSyncStatus,
 	listColumnsByTable,
 	listDatasets,
 	listDatasetJobs,
 	listTablesByDataset,
 	syncDatasetSchema,
+	triggerCatalogSync,
 	updateColumnSchema,
 	updateTableSchema,
 } from "@/api/platformApi";
@@ -28,6 +30,12 @@ type ColumnRow = { id: string; name: string; dataType?: string | null; nullable?
 const PAGE_SIZE = 200;
 
 export default function MetadataPage() {
+	const [fullSyncLoading, setFullSyncLoading] = useState(false);
+	const [fullSyncStatusLoading, setFullSyncStatusLoading] = useState(false);
+	const [fullSyncStatus, setFullSyncStatus] = useState<any | null>(null);
+	const [fullSyncIncludePrimary, setFullSyncIncludePrimary] = useState(true);
+	const [fullSyncIncludeJdbc, setFullSyncIncludeJdbc] = useState(true);
+
 	const [datasetKeyword, setDatasetKeyword] = useState("");
 	const [datasetsLoading, setDatasetsLoading] = useState(false);
 	const [datasets, setDatasets] = useState<DatasetOption[]>([]);
@@ -68,6 +76,42 @@ export default function MetadataPage() {
 	const [savingCol, setSavingCol] = useState(false);
 
 	const selectedTable = useMemo(() => tables.find((t) => t.id === selectedTableId) || null, [selectedTableId, tables]);
+
+	const loadFullSyncStatus = useCallback(async () => {
+		setFullSyncStatusLoading(true);
+		try {
+			const resp = (await getCatalogSyncStatus()) as any;
+			setFullSyncStatus(resp || null);
+		} catch (e: any) {
+			console.error(e);
+			setFullSyncStatus(null);
+			toast.error(e?.message || "加载采集状态失败");
+		} finally {
+			setFullSyncStatusLoading(false);
+		}
+	}, []);
+
+	const triggerFullSync = useCallback(async () => {
+		if (!fullSyncIncludePrimary && !fullSyncIncludeJdbc) {
+			toast.error("请至少选择一种采集范围（主数据源 / JDBC）");
+			return;
+		}
+		setFullSyncLoading(true);
+		try {
+			await triggerCatalogSync({
+				includePrimary: fullSyncIncludePrimary,
+				includeJdbc: fullSyncIncludeJdbc,
+				reason: "ui:metadata",
+			});
+			toast.success("已触发全量采集（异步执行）");
+			await loadFullSyncStatus();
+		} catch (e: any) {
+			console.error(e);
+			toast.error(e?.message || "触发采集失败");
+		} finally {
+			setFullSyncLoading(false);
+		}
+	}, [fullSyncIncludeJdbc, fullSyncIncludePrimary, loadFullSyncStatus]);
 
 	const loadDatasets = useCallback(async () => {
 		setDatasetsLoading(true);
@@ -179,6 +223,10 @@ export default function MetadataPage() {
 	useEffect(() => {
 		void loadDatasets();
 	}, [loadDatasets]);
+
+	useEffect(() => {
+		void loadFullSyncStatus();
+	}, [loadFullSyncStatus]);
 
 	useEffect(() => {
 		setSelectedTableId("");
@@ -303,6 +351,78 @@ export default function MetadataPage() {
 	return (
 		<div className="flex flex-col gap-6">
 			<Card>
+				<CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+					<CardTitle>自动采集（全量）</CardTitle>
+					<div className="flex flex-wrap items-center gap-2">
+						<Button variant="outline" onClick={loadFullSyncStatus} disabled={fullSyncStatusLoading}>
+							{fullSyncStatusLoading ? "加载中…" : "刷新状态"}
+						</Button>
+						<Button onClick={triggerFullSync} disabled={fullSyncLoading}>
+							{fullSyncLoading ? "触发中…" : "触发全量采集"}
+						</Button>
+					</div>
+				</CardHeader>
+				<CardContent className="space-y-3">
+					<div className="flex flex-wrap gap-4 text-sm">
+						<label className="flex items-center gap-2">
+							<input
+								type="checkbox"
+								checked={fullSyncIncludePrimary}
+								onChange={(e) => setFullSyncIncludePrimary(e.target.checked)}
+							/>
+							主数据源（Inceptor/内置回退）
+						</label>
+						<label className="flex items-center gap-2">
+							<input
+								type="checkbox"
+								checked={fullSyncIncludeJdbc}
+								onChange={(e) => setFullSyncIncludeJdbc(e.target.checked)}
+							/>
+							JDBC 多源采集
+						</label>
+					</div>
+					<div className="rounded-md border p-3 text-sm">
+						<div className="mb-2 text-xs text-muted-foreground">
+							说明：全量采集会扫描 `infra_data_source`（ACTIVE 且配置 jdbcUrl）并自动补齐数据集/表/字段；视图会尝试生成 AUTO_VIEW 血缘。
+						</div>
+						{fullSyncStatus ? (
+							<div className="grid gap-2 md:grid-cols-2">
+								<div>
+									<div className="font-medium mb-1">主数据源</div>
+									<div className="text-xs text-muted-foreground">
+										进行中：{String(fullSyncStatus?.primary?.inProgress ?? "-")}
+									</div>
+									<div className="text-xs text-muted-foreground">
+										最近：{String(fullSyncStatus?.primary?.last?.timestamp ?? "-")}
+									</div>
+									<div className="text-xs text-muted-foreground">
+										动作：{Array.isArray(fullSyncStatus?.primary?.last?.actions) ? fullSyncStatus.primary.last.actions.join("；") : "-"}
+									</div>
+								</div>
+								<div>
+									<div className="font-medium mb-1">JDBC 多源</div>
+									<div className="text-xs text-muted-foreground">
+										进行中：{String(fullSyncStatus?.jdbc?.inProgress ?? "-")}
+									</div>
+									<div className="text-xs text-muted-foreground">
+										最近：{String(fullSyncStatus?.jdbc?.last?.timestamp ?? "-")}
+									</div>
+									<div className="text-xs text-muted-foreground">
+										结果：{Array.isArray(fullSyncStatus?.jdbc?.last?.results) ? `sources=${fullSyncStatus.jdbc.last.results.length}` : "-"}
+									</div>
+									{fullSyncStatus?.jdbc?.last?.error ? (
+										<div className="text-xs text-destructive">错误：{String(fullSyncStatus.jdbc.last.error)}</div>
+									) : null}
+								</div>
+							</div>
+						) : (
+							<div className="text-xs text-muted-foreground">暂无状态</div>
+						)}
+					</div>
+				</CardContent>
+			</Card>
+
+			<Card>
 				<CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 					<CardTitle>元数据采集与维护</CardTitle>
 					<div className="flex flex-col gap-2 md:flex-row md:items-center">
@@ -350,7 +470,7 @@ export default function MetadataPage() {
 								</Button>
 							</div>
 							<div className="text-xs text-muted-foreground">
-								同步会写入 `catalog_table_schema` / `catalog_column_schema`，用于密级字段识别与后续查询安全策略。
+								同步会写入 `catalog_table_schema` / `catalog_column_schema`；全量采集用于“多源自动发现”，数据集同步用于“指定数据集补齐字段”。
 							</div>
 						</div>
 					</div>

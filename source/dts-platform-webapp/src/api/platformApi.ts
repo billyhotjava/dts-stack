@@ -165,6 +165,11 @@ export const getCatalogLineage = (datasetId: string) => api.get({ url: "/catalog
 export const createCatalogLineage = (data: any) => api.post({ url: "/catalog/lineage", data });
 export const deleteCatalogLineage = (id: string) => api.delete({ url: `/catalog/lineage/${id}` });
 
+// Catalog sync (full scan)
+export type CatalogSyncRequest = { includePrimary?: boolean; includeJdbc?: boolean; reason?: string };
+export const triggerCatalogSync = (data: CatalogSyncRequest = {}) => api.post({ url: "/catalog/sync", data });
+export const getCatalogSyncStatus = () => api.get({ url: "/catalog/sync/status" });
+
 // Visualization
 export const getCockpitMetrics = () => api.get({ url: "/vis/cockpit/metrics" });
 export const getProjectsSummary = () => api.get({ url: "/vis/projects/summary" });

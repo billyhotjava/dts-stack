@@ -23,6 +23,17 @@ type LineageEdge = {
 };
 
 const PAGE_SIZE = 200;
+const isAutoEdge = (edge: LineageEdge): boolean => {
+	const typ = String(edge?.relationType || "").trim().toUpperCase();
+	return typ === "AUTO_VIEW" || typ === "AUTO_ETL" || typ.startsWith("AUTO_");
+};
+const relationLabel = (edge: LineageEdge): string => {
+	const typ = String(edge?.relationType || "").trim().toUpperCase();
+	if (!typ) return "MANUAL";
+	if (typ === "AUTO_VIEW") return "自动(视图)";
+	if (typ === "MANUAL") return "手工";
+	return typ;
+};
 
 export default function LineagePage() {
 	const [datasetKeyword, setDatasetKeyword] = useState("");
@@ -144,6 +155,14 @@ export default function LineagePage() {
 	const removeEdge = useCallback(
 		async (edgeId: string) => {
 			if (!edgeId) return;
+			const edge =
+				upstreams.find((e) => e.id === edgeId) ||
+				downstreams.find((e) => e.id === edgeId) ||
+				null;
+			if (edge && isAutoEdge(edge)) {
+				toast.info("该血缘为自动生成（AUTO_*），不建议在这里删除；下次采集会自动重建。");
+				return;
+			}
 			if (!confirm("确认删除该血缘关系？")) return;
 			try {
 				await deleteCatalogLineage(edgeId);
@@ -154,7 +173,7 @@ export default function LineagePage() {
 				toast.error(e?.message || "删除失败（可能无权限）");
 			}
 		},
-		[loadLineage],
+		[downstreams, loadLineage, upstreams],
 	);
 
 	return (
@@ -204,7 +223,7 @@ export default function LineagePage() {
 								</Button>
 							</div>
 							<div className="text-xs text-muted-foreground">
-								当前实现为“手工血缘”，用于交付期快速形成影响分析闭环；后续可对接 ETL/SQL 解析自动补全。
+								当前支持“手工血缘 + 自动血缘(AUTO_*)”。自动血缘来自采集解析（例如视图 SQL），下次采集可能会重建自动边。
 							</div>
 						</div>
 					</div>
@@ -231,11 +250,20 @@ export default function LineagePage() {
 										<div className="flex items-center justify-between gap-2">
 											<div className="min-w-0">
 												<div className="truncate text-sm font-medium">{e.upstreamName || e.upstreamDatasetId}</div>
-												<div className="truncate text-xs text-muted-foreground">{e.relationType || "ETL"}</div>
+												<div className="truncate text-xs text-muted-foreground flex items-center gap-2">
+													<span>{relationLabel(e)}</span>
+													{isAutoEdge(e) ? <Badge variant="secondary">AUTO</Badge> : <Badge variant="outline">MANUAL</Badge>}
+												</div>
 											</div>
-											<Button size="sm" variant="outline" onClick={() => removeEdge(e.id)}>
-												删除
-											</Button>
+											{isAutoEdge(e) ? (
+												<Button size="sm" variant="secondary" disabled>
+													自动生成
+												</Button>
+											) : (
+												<Button size="sm" variant="outline" onClick={() => removeEdge(e.id)}>
+													删除
+												</Button>
+											)}
 										</div>
 										{e.notes ? <div className="mt-1 text-xs text-muted-foreground">{e.notes}</div> : null}
 									</div>
@@ -261,11 +289,20 @@ export default function LineagePage() {
 										<div className="flex items-center justify-between gap-2">
 											<div className="min-w-0">
 												<div className="truncate text-sm font-medium">{e.downstreamName || e.downstreamDatasetId}</div>
-												<div className="truncate text-xs text-muted-foreground">{e.relationType || "ETL"}</div>
+												<div className="truncate text-xs text-muted-foreground flex items-center gap-2">
+													<span>{relationLabel(e)}</span>
+													{isAutoEdge(e) ? <Badge variant="secondary">AUTO</Badge> : <Badge variant="outline">MANUAL</Badge>}
+												</div>
 											</div>
-											<Button size="sm" variant="outline" onClick={() => removeEdge(e.id)}>
-												删除
-											</Button>
+											{isAutoEdge(e) ? (
+												<Button size="sm" variant="secondary" disabled>
+													自动生成
+												</Button>
+											) : (
+												<Button size="sm" variant="outline" onClick={() => removeEdge(e.id)}>
+													删除
+												</Button>
+											)}
 										</div>
 										{e.notes ? <div className="mt-1 text-xs text-muted-foreground">{e.notes}</div> : null}
 									</div>
@@ -336,4 +373,3 @@ export default function LineagePage() {
 		</div>
 	);
 }
-

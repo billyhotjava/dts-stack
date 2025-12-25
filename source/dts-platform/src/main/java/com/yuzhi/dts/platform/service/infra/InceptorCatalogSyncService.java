@@ -201,14 +201,19 @@ public class InceptorCatalogSyncService {
                 tablesCreated++;
             }
 
-            Map<String, String> legacyComments = columnRepository
+            Map<String, LegacyColumnValues> legacyColumns = columnRepository
                 .findByTable(tableSchema)
                 .stream()
-                .filter(existing -> existing.getName() != null && StringUtils.hasText(existing.getComment()))
+                .filter(existing -> existing.getName() != null)
                 .collect(
                     Collectors.toMap(
                         existing -> existing.getName().trim().toLowerCase(Locale.ROOT),
-                        CatalogColumnSchema::getComment,
+                        existing ->
+                            new LegacyColumnValues(
+                                StringUtils.hasText(existing.getComment()) ? existing.getComment() : null,
+                                StringUtils.hasText(existing.getTags()) ? existing.getTags() : null,
+                                StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null
+                            ),
                         (left, right) -> left,
                         LinkedHashMap::new
                     )
@@ -225,9 +230,15 @@ public class InceptorCatalogSyncService {
                     entity.setNullable(column.nullable());
                     String comment = column.comment();
                     if (!StringUtils.hasText(comment)) {
-                        comment = legacyComments.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
+                        LegacyColumnValues legacy = legacyColumns.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
+                        comment = legacy != null ? legacy.comment() : null;
                     }
                     entity.setComment(comment);
+                    LegacyColumnValues legacy = legacyColumns.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
+                    if (legacy != null) {
+                        entity.setTags(legacy.tags());
+                        entity.setSensitiveTags(legacy.sensitiveTags());
+                    }
                     columnEntities.add(entity);
                 }
                 columnRepository.saveAll(columnEntities);
@@ -535,6 +546,8 @@ public class InceptorCatalogSyncService {
             LOG.debug("Purge dataset stack", ex);
         }
     }
+
+    private record LegacyColumnValues(String comment, String tags, String sensitiveTags) {}
 
     public record CatalogSyncResult(
         String database,

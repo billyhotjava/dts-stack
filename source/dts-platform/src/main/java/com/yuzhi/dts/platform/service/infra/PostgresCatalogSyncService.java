@@ -169,6 +169,24 @@ public class PostgresCatalogSyncService {
                 tablesCreated++;
             }
 
+            Map<String, LegacyColumnValues> legacyColumns = columnRepository
+                .findByTable(tableSchema)
+                .stream()
+                .filter(existing -> existing.getName() != null)
+                .collect(
+                    java.util.stream.Collectors.toMap(
+                        existing -> existing.getName().trim().toLowerCase(java.util.Locale.ROOT),
+                        existing ->
+                            new LegacyColumnValues(
+                                org.springframework.util.StringUtils.hasText(existing.getComment()) ? existing.getComment() : null,
+                                org.springframework.util.StringUtils.hasText(existing.getTags()) ? existing.getTags() : null,
+                                org.springframework.util.StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null
+                            ),
+                        (left, right) -> left,
+                        java.util.LinkedHashMap::new
+                    )
+                );
+
             columnRepository.deleteByTable(tableSchema);
             if (!columns.isEmpty()) {
                 List<CatalogColumnSchema> columnEntities = new ArrayList<>(columns.size());
@@ -178,7 +196,17 @@ public class PostgresCatalogSyncService {
                     entity.setName(column.name());
                     entity.setDataType(column.dataType());
                     entity.setNullable(column.nullable());
-                    entity.setComment(column.comment());
+                    String key = column.name() != null ? column.name().trim().toLowerCase(java.util.Locale.ROOT) : "";
+                    LegacyColumnValues legacy = key.isEmpty() ? null : legacyColumns.getOrDefault(key, null);
+                    String comment = column.comment();
+                    if (!org.springframework.util.StringUtils.hasText(comment) && legacy != null) {
+                        comment = legacy.comment();
+                    }
+                    entity.setComment(comment);
+                    if (legacy != null) {
+                        entity.setTags(legacy.tags());
+                        entity.setSensitiveTags(legacy.sensitiveTags());
+                    }
                     columnEntities.add(entity);
                 }
                 columnRepository.saveAll(columnEntities);
@@ -364,4 +392,6 @@ public class PostgresCatalogSyncService {
             return null;
         }
     }
+
+    private record LegacyColumnValues(String comment, String tags, String sensitiveTags) {}
 }

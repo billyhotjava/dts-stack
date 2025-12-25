@@ -182,14 +182,19 @@ public class JdbcCatalogSyncService {
                         tablesCreated++;
                     }
 
-                    Map<String, String> legacyComments = columnRepository
+                    Map<String, LegacyColumnValues> legacyColumns = columnRepository
                         .findByTable(tableSchema)
                         .stream()
-                        .filter(existing -> existing.getName() != null && StringUtils.hasText(existing.getComment()))
+                        .filter(existing -> existing.getName() != null)
                         .collect(
                             java.util.stream.Collectors.toMap(
                                 existing -> existing.getName().trim().toLowerCase(Locale.ROOT),
-                                CatalogColumnSchema::getComment,
+                                existing ->
+                                    new LegacyColumnValues(
+                                        StringUtils.hasText(existing.getComment()) ? existing.getComment() : null,
+                                        StringUtils.hasText(existing.getTags()) ? existing.getTags() : null,
+                                        StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null
+                                    ),
                                 (left, right) -> left,
                                 LinkedHashMap::new
                             )
@@ -207,9 +212,15 @@ public class JdbcCatalogSyncService {
                             entity.setNullable(column.nullable());
                             String comment = column.comment();
                             if (!StringUtils.hasText(comment)) {
-                                comment = legacyComments.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
+                                LegacyColumnValues legacy = legacyColumns.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
+                                comment = legacy != null ? legacy.comment() : null;
                             }
                             entity.setComment(normalizeComment(comment));
+                            LegacyColumnValues legacy = legacyColumns.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
+                            if (legacy != null) {
+                                entity.setTags(legacy.tags());
+                                entity.setSensitiveTags(legacy.sensitiveTags());
+                            }
                             columnEntities.add(entity);
                         }
                         columnRepository.saveAll(columnEntities);
@@ -680,6 +691,8 @@ public class JdbcCatalogSyncService {
         String trimmed = message.trim();
         return trimmed.length() > 240 ? trimmed.substring(0, 240) : trimmed;
     }
+
+    private record LegacyColumnValues(String comment, String tags, String sensitiveTags) {}
 
     private record TableMeta(String tableName, String tableType, String remarks) {
         boolean isView() {

@@ -192,14 +192,19 @@ public class DatasetJobService {
                 boolean newTable = table.getId() == null;
                 table = tableRepository.save(table);
 
-                Map<String, String> legacyComments = columnRepository
+                Map<String, LegacyColumnValues> legacyColumns = columnRepository
                     .findByTable(table)
                     .stream()
-                    .filter(existing -> existing.getName() != null && org.springframework.util.StringUtils.hasText(existing.getComment()))
+                    .filter(existing -> existing.getName() != null)
                     .collect(
                         java.util.stream.Collectors.toMap(
                             existing -> existing.getName().trim().toLowerCase(java.util.Locale.ROOT),
-                            existing -> existing.getComment(),
+                            existing ->
+                                new LegacyColumnValues(
+                                    org.springframework.util.StringUtils.hasText(existing.getComment()) ? existing.getComment() : null,
+                                    org.springframework.util.StringUtils.hasText(existing.getTags()) ? existing.getTags() : null,
+                                    org.springframework.util.StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null
+                                ),
                             (left, right) -> left,
                             java.util.LinkedHashMap::new
                         )
@@ -215,9 +220,15 @@ public class DatasetJobService {
                     column.setNullable(spec.nullable());
                     String comment = normalizeComment(spec.comment());
                     if (!org.springframework.util.StringUtils.hasText(comment)) {
-                        comment = legacyComments.getOrDefault(spec.name().trim().toLowerCase(java.util.Locale.ROOT), null);
+                        LegacyColumnValues legacy = legacyColumns.getOrDefault(spec.name().trim().toLowerCase(java.util.Locale.ROOT), null);
+                        comment = legacy != null ? legacy.comment() : null;
                     }
                     column.setComment(comment);
+                    LegacyColumnValues legacy = legacyColumns.getOrDefault(spec.name().trim().toLowerCase(java.util.Locale.ROOT), null);
+                    if (legacy != null) {
+                        column.setTags(legacy.tags());
+                        column.setSensitiveTags(legacy.sensitiveTags());
+                    }
                     columns.add(column);
                 }
                 columnRepository.saveAll(columns);
@@ -408,6 +419,8 @@ public class DatasetJobService {
             }
             return trimmed;
         }
+
+        private record LegacyColumnValues(String comment, String tags, String sensitiveTags) {}
 
         private record ColumnSpec(String name, String dataType, boolean nullable, String comment) {}
 
