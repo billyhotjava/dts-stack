@@ -56,4 +56,6 @@
     <include file="config/liquibase/changelog/20251224_02_governance_indicator_tables.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251225_01_governance_indicator_compute_fields.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251225_02_governance_indicator_validation_fields.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251225_03_catalog_dataset_lifecycle.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251225_04_catalog_dataset_lineage.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

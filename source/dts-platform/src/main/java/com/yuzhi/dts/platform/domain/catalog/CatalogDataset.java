@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.domain.AbstractAuditingEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -51,6 +52,15 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     // Optional Trino catalog for querying
     @Column(name = "trino_catalog", length = 64)
     private String trinoCatalog;
+
+    @Column(name = "lifecycle_status", length = 32)
+    private String lifecycleStatus;
+
+    @Column(name = "retention_days")
+    private Integer retentionDays;
+
+    @Column(name = "expires_at")
+    private Instant expiresAt;
 
     @Override
     public UUID getId() {
@@ -147,5 +157,29 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
 
     public void setTrinoCatalog(String trinoCatalog) {
         this.trinoCatalog = trinoCatalog;
+    }
+
+    public String getLifecycleStatus() {
+        return lifecycleStatus;
+    }
+
+    public void setLifecycleStatus(String lifecycleStatus) {
+        this.lifecycleStatus = lifecycleStatus;
+    }
+
+    public Integer getRetentionDays() {
+        return retentionDays;
+    }
+
+    public void setRetentionDays(Integer retentionDays) {
+        this.retentionDays = retentionDays;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiresAt = expiresAt;
     }
 }

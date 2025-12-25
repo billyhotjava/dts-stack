@@ -157,6 +157,13 @@ export const listTablesByDataset = (datasetId: string, keyword?: string) =>
   api.get({ url: "/catalog/tables", params: { datasetId, keyword } });
 export const listColumnsByTable = (tableId: string, keyword?: string) =>
   api.get({ url: "/catalog/columns", params: { tableId, keyword } });
+export const updateTableSchema = (id: string, data: any) => api.put({ url: `/catalog/tables/${id}`, data });
+export const updateColumnSchema = (id: string, data: any) => api.put({ url: `/catalog/columns/${id}`, data });
+
+// Catalog lineage
+export const getCatalogLineage = (datasetId: string) => api.get({ url: "/catalog/lineage", params: { datasetId } });
+export const createCatalogLineage = (data: any) => api.post({ url: "/catalog/lineage", data });
+export const deleteCatalogLineage = (id: string) => api.delete({ url: `/catalog/lineage/${id}` });
 
 // Visualization
 export const getCockpitMetrics = () => api.get({ url: "/vis/cockpit/metrics" });

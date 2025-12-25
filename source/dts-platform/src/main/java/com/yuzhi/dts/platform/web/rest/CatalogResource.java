@@ -342,6 +342,9 @@ public class CatalogResource {
         m.put("trinoCatalog", d.getTrinoCatalog());
         m.put("tags", d.getTags());
         m.put("exposedBy", d.getExposedBy());
+        m.put("lifecycleStatus", d.getLifecycleStatus());
+        m.put("retentionDays", d.getRetentionDays());
+        m.put("expiresAt", d.getExpiresAt());
         m.put("editable", canEditDataset(d));
         if (includeMetadata) {
             List<Map<String, Object>> tables = new ArrayList<>();
@@ -459,6 +462,9 @@ public class CatalogResource {
             existing.setTrinoCatalog(patch.getTrinoCatalog());
             existing.setTags(patch.getTags());
             existing.setExposedBy(patch.getExposedBy());
+            existing.setLifecycleStatus(trimToNull(patch.getLifecycleStatus()));
+            existing.setRetentionDays(patch.getRetentionDays());
+            existing.setExpiresAt(patch.getExpiresAt());
             CatalogDataset saved = datasetRepo.save(existing);
             Map<String, Object> after = datasetSnapshot(saved);
             audit.auditAction(
@@ -556,6 +562,15 @@ public class CatalogResource {
         }
         if (StringUtils.hasText(dataset.getTrinoCatalog())) {
             snapshot.put("trinoCatalog", dataset.getTrinoCatalog());
+        }
+        if (StringUtils.hasText(dataset.getLifecycleStatus())) {
+            snapshot.put("lifecycleStatus", dataset.getLifecycleStatus());
+        }
+        if (dataset.getRetentionDays() != null) {
+            snapshot.put("retentionDays", dataset.getRetentionDays());
+        }
+        if (dataset.getExpiresAt() != null) {
+            snapshot.put("expiresAt", dataset.getExpiresAt().toString());
         }
         return snapshot;
     }
@@ -868,8 +883,16 @@ public class CatalogResource {
 
     // Table schema CRUD, filter and bulk import
     @GetMapping("/tables")
-    public ApiResponse<Map<String, Object>> listTables(@RequestParam UUID datasetId, @RequestParam(required = false) String keyword) {
+    public ApiResponse<Map<String, Object>> listTables(
+        @RequestParam UUID datasetId,
+        @RequestParam(required = false) String keyword,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         var ds = datasetRepo.findById(datasetId).orElseThrow();
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        if (!accessChecker.canRead(ds) || !accessChecker.departmentAllowed(ds, effDept)) {
+            return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
+        }
         var list = tableRepo.findByDataset(ds);
         var filtered = list
             .stream()
@@ -969,8 +992,19 @@ public class CatalogResource {
 
     // Column schema CRUD
     @GetMapping("/columns")
-    public ApiResponse<Map<String, Object>> listColumns(@RequestParam UUID tableId, @RequestParam(required = false) String keyword) {
+    public ApiResponse<Map<String, Object>> listColumns(
+        @RequestParam UUID tableId,
+        @RequestParam(required = false) String keyword,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         var table = tableRepo.findById(tableId).orElseThrow();
+        CatalogDataset dataset = table.getDataset();
+        if (dataset != null) {
+            String effDept = activeDept != null ? activeDept : claim("dept_code");
+            if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, effDept)) {
+                return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
+            }
+        }
         var list = columnRepo.findByTable(table);
         var filtered = list
             .stream()
