@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251225_05_catalog_dataset_source_id" author="platform">
+        <addColumn tableName="catalog_dataset">
+            <column name="source_id" type="${uuidType}"/>
+        </addColumn>
+
+        <createIndex tableName="catalog_dataset" indexName="idx_catalog_dataset_source_schema_table">
+            <column name="source_id"/>
+            <column name="hive_database"/>
+            <column name="hive_table"/>
+        </createIndex>
+
+        <!-- Best-effort backfill for existing synced datasets -->
+        <sql dbms="postgresql">
+            UPDATE catalog_dataset
+            SET source_id = (
+                SELECT id FROM infra_data_source
+                WHERE upper(type) = 'INCEPTOR'
+                ORDER BY created_date DESC NULLS LAST
+                LIMIT 1
+            )
+            WHERE source_id IS NULL
+              AND upper(type) = 'INCEPTOR'
+              AND EXISTS (SELECT 1 FROM infra_data_source WHERE upper(type) = 'INCEPTOR');
+        </sql>
+
+        <sql dbms="postgresql">
+            UPDATE catalog_dataset
+            SET source_id = (
+                SELECT id FROM infra_data_source
+                WHERE upper(type) = 'POSTGRES' AND upper(status) = 'ACTIVE'
+                ORDER BY created_date DESC NULLS LAST
+                LIMIT 1
+            )
+            WHERE source_id IS NULL
+              AND upper(type) = 'POSTGRES'
+              AND EXISTS (SELECT 1 FROM infra_data_source WHERE upper(type) = 'POSTGRES' AND upper(status) = 'ACTIVE');
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

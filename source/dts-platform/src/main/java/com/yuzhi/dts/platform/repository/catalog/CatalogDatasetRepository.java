@@ -15,7 +15,11 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
 
     Optional<CatalogDataset> findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(String hiveDatabase, String hiveTable);
 
+    Optional<CatalogDataset> findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(UUID sourceId, String hiveDatabase, String hiveTable);
+
     List<CatalogDataset> findByHiveDatabaseIgnoreCaseAndTypeIgnoreCase(String hiveDatabase, String type);
 
     List<CatalogDataset> findByHiveDatabaseIgnoreCase(String hiveDatabase);
+
+    List<CatalogDataset> findBySourceIdAndHiveDatabaseIgnoreCase(UUID sourceId, String hiveDatabase);
 }

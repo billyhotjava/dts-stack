@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.transaction.Transactional;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -55,6 +57,7 @@ public class InceptorCatalogSyncService {
     private final CatalogDatasetJobRepository datasetJobRepository;
     private final PostgresCatalogSyncService postgresCatalogSyncService;
     private final com.yuzhi.dts.platform.config.CatalogFeatureProperties catalogFeatureProperties;
+    private final CatalogAutoLineageService autoLineageService;
 
     @Value("${dts.jdbc.statement-timeout-seconds:30}")
     private int statementTimeoutSeconds;
@@ -70,7 +73,8 @@ public class InceptorCatalogSyncService {
         CatalogDatasetGrantRepository datasetGrantRepository,
         CatalogDatasetJobRepository datasetJobRepository,
         PostgresCatalogSyncService postgresCatalogSyncService,
-        com.yuzhi.dts.platform.config.CatalogFeatureProperties catalogFeatureProperties
+        com.yuzhi.dts.platform.config.CatalogFeatureProperties catalogFeatureProperties,
+        CatalogAutoLineageService autoLineageService
     ) {
         this.registry = registry;
         this.connectionService = connectionService;
@@ -83,6 +87,7 @@ public class InceptorCatalogSyncService {
         this.datasetJobRepository = datasetJobRepository;
         this.postgresCatalogSyncService = postgresCatalogSyncService;
         this.catalogFeatureProperties = catalogFeatureProperties;
+        this.autoLineageService = autoLineageService;
     }
 
     public CatalogSyncResult synchronize() {
@@ -104,9 +109,10 @@ public class InceptorCatalogSyncService {
             return CatalogSyncResult.inactive();
         }
         InceptorDataSourceState state = stateOpt.orElseThrow();
+        UUID sourceId = state.id();
         String database = sanitizeDatabase(state.database());
 
-        Map<String, List<ColumnMeta>> metadata;
+        Map<String, TableMeta> metadata;
         try {
             metadata = fetchMetadata(state, database);
         } catch (Exception ex) {
@@ -130,7 +136,7 @@ public class InceptorCatalogSyncService {
         }
 
         if (metadata.isEmpty()) {
-            int datasetsRemoved = cleanupStaleDatasets(database, Collections.emptySet());
+            int datasetsRemoved = cleanupStaleDatasets(sourceId, database, Collections.emptySet());
             LOG.info(
                 "Catalog sync completed: no tables discovered in database {} (removed {} stale dataset(s))",
                 database,
@@ -149,17 +155,19 @@ public class InceptorCatalogSyncService {
         int columnsImported = 0;
         List<String> processedTables = new ArrayList<>(metadata.size());
 
-        for (Map.Entry<String, List<ColumnMeta>> entry : metadata.entrySet()) {
+        for (Map.Entry<String, TableMeta> entry : metadata.entrySet()) {
             String tableName = entry.getKey();
-            List<ColumnMeta> columns = entry.getValue();
+            TableMeta tableMeta = entry.getValue();
+            List<ColumnMeta> columns = tableMeta != null ? tableMeta.columns() : List.of();
             processedTables.add(tableName);
 
-            CatalogDataset dataset = datasetRepository
-                .findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(database, tableName)
-                .orElseGet(CatalogDataset::new);
+            CatalogDataset dataset = (sourceId != null)
+                ? datasetRepository.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(sourceId, database, tableName).orElseGet(CatalogDataset::new)
+                : datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(database, tableName).orElseGet(CatalogDataset::new);
 
             boolean isNewDataset = dataset.getId() == null;
 
+            dataset.setSourceId(sourceId);
             dataset.setHiveDatabase(database);
             dataset.setHiveTable(tableName);
             dataset.setType(DATASET_TYPE);
@@ -225,6 +233,14 @@ public class InceptorCatalogSyncService {
                 columnRepository.saveAll(columnEntities);
                 columnsImported += columnEntities.size();
             }
+
+            if (tableMeta != null && tableMeta.isView() && StringUtils.hasText(tableMeta.viewDefinition())) {
+                try {
+                    autoLineageService.syncAutoViewLineage(dataset, tableMeta.viewDefinition());
+                } catch (Exception ex) {
+                    LOG.debug("Auto lineage sync skipped for {}.{}: {}", database, tableName, ex.getMessage());
+                }
+            }
         }
 
         LOG.info(
@@ -242,7 +258,7 @@ public class InceptorCatalogSyncService {
             .filter(Objects::nonNull)
             .map(name -> name.trim().toLowerCase(Locale.ROOT))
             .collect(Collectors.toCollection(HashSet::new));
-        int datasetsRemoved = cleanupStaleDatasets(database, processedLower);
+        int datasetsRemoved = cleanupStaleDatasets(sourceId, database, processedLower);
         if (datasetsRemoved > 0) {
             LOG.info("Catalog sync cleanup: removed {} stale datasets in database {}", datasetsRemoved, database);
         }
@@ -257,7 +273,7 @@ public class InceptorCatalogSyncService {
         );
     }
 
-    private Map<String, List<ColumnMeta>> fetchMetadata(InceptorDataSourceState state, String database) throws Exception {
+    private Map<String, TableMeta> fetchMetadata(InceptorDataSourceState state, String database) throws Exception {
         HiveConnectionTestRequest request = buildRequest(state);
         return connectionService.executeWithConnection(request, (connection, connectStart) -> {
             long connectMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - connectStart);
@@ -270,22 +286,61 @@ public class InceptorCatalogSyncService {
             }
 
             java.util.LinkedHashSet<String> tableNames = new java.util.LinkedHashSet<>();
+            java.util.LinkedHashSet<String> viewNames = new java.util.LinkedHashSet<>();
             try (Statement stmt = connection.createStatement()) {
                 try {
                     stmt.setQueryTimeout(Math.max(1, statementTimeoutSeconds));
                 } catch (Throwable ignored) {}
                 collectIdentifiers(stmt, "SHOW TABLES", tableNames);
-                collectIdentifiers(stmt, "SHOW VIEWS", tableNames);
+                collectIdentifiers(stmt, "SHOW VIEWS", viewNames);
             }
+            tableNames.addAll(viewNames);
             List<String> tables = new ArrayList<>(tableNames);
+            Set<String> viewLower = viewNames
+                .stream()
+                .filter(StringUtils::hasText)
+                .map(name -> name.trim().toLowerCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toSet());
 
-            Map<String, List<ColumnMeta>> metadata = new LinkedHashMap<>();
+            Map<String, TableMeta> metadata = new LinkedHashMap<>();
             for (String table : tables) {
                 List<ColumnMeta> columns = describeTable(connection, table);
-                metadata.put(table, columns);
+                boolean isView = StringUtils.hasText(table) && viewLower.contains(table.trim().toLowerCase(Locale.ROOT));
+                String viewDefinition = isView ? fetchViewDefinition(connection, table) : null;
+                metadata.put(table, new TableMeta(table, columns, isView, viewDefinition));
             }
             return metadata;
         });
+    }
+
+    private String fetchViewDefinition(java.sql.Connection connection, String table) {
+        if (connection == null || !StringUtils.hasText(table)) {
+            return null;
+        }
+        String sanitizedTable = table.replace("`", "``");
+        String sql = "SHOW CREATE TABLE `" + sanitizedTable + "`";
+        StringBuilder out = new StringBuilder();
+        try (Statement stmt = connection.createStatement()) {
+            try {
+                stmt.setQueryTimeout(Math.max(1, statementTimeoutSeconds));
+            } catch (Throwable ignored) {}
+            try (ResultSet rs = stmt.executeQuery(sql)) {
+                while (rs.next()) {
+                    String part = rs.getString(1);
+                    if (part != null) {
+                        if (out.length() > 0) {
+                            out.append('\n');
+                        }
+                        out.append(part);
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.debug("Failed to fetch view definition for {}: {}", table, ex.getMessage());
+            return null;
+        }
+        String text = out.toString().trim();
+        return StringUtils.hasText(text) ? text : null;
     }
 
     private List<ColumnMeta> describeTable(java.sql.Connection connection, String table) {
@@ -419,8 +474,12 @@ public class InceptorCatalogSyncService {
 
     private record ColumnMeta(String name, String dataType, boolean nullable, String comment) {}
 
-    private int cleanupStaleDatasets(String database, Set<String> processedTablesLower) {
-        List<CatalogDataset> existingDatasets = datasetRepository.findByHiveDatabaseIgnoreCase(database);
+    private record TableMeta(String tableName, List<ColumnMeta> columns, boolean isView, String viewDefinition) {}
+
+    private int cleanupStaleDatasets(UUID sourceId, String database, Set<String> processedTablesLower) {
+        List<CatalogDataset> existingDatasets = (sourceId != null)
+            ? datasetRepository.findBySourceIdAndHiveDatabaseIgnoreCase(sourceId, database)
+            : datasetRepository.findByHiveDatabaseIgnoreCase(database);
         if (existingDatasets.isEmpty()) {
             return 0;
         }
@@ -431,6 +490,9 @@ public class InceptorCatalogSyncService {
             }
             String datasetType = dataset.getType();
             if (StringUtils.hasText(datasetType) && !DATASET_TYPE.equalsIgnoreCase(datasetType)) {
+                continue;
+            }
+            if (sourceId != null && dataset.getSourceId() != null && !Objects.equals(dataset.getSourceId(), sourceId)) {
                 continue;
             }
             String tableName = dataset.getHiveTable();

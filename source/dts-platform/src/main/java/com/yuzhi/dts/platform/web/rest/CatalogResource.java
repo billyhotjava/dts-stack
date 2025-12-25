@@ -333,6 +333,7 @@ public class CatalogResource {
         m.put("name", d.getName());
         m.put("domainId", domainId);
         m.put("type", d.getType());
+        m.put("sourceId", d.getSourceId());
         m.put("classification", d.getClassification());
         // ABAC fields (optional for backward compatibility)
         m.put("ownerDept", d.getOwnerDept());
@@ -539,6 +540,9 @@ public class CatalogResource {
         if (StringUtils.hasText(dataset.getType())) {
             snapshot.put("type", dataset.getType());
         }
+        if (dataset.getSourceId() != null) {
+            snapshot.put("sourceId", dataset.getSourceId().toString());
+        }
         if (StringUtils.hasText(dataset.getClassification())) {
             snapshot.put("classification", dataset.getClassification());
         }
@@ -637,6 +641,7 @@ public class CatalogResource {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "多数据源能力尚未解锁，请联系管理员升级");
             }
             dataset.setType(defaultSource);
+            dataset.setSourceId(null);
             return;
         }
 

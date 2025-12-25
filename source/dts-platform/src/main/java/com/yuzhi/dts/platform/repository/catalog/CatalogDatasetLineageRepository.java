@@ -16,9 +16,10 @@ public interface CatalogDatasetLineageRepository extends JpaRepository<CatalogDa
 
     List<CatalogDatasetLineage> findByDownstreamDatasetId(UUID downstreamDatasetId);
 
+    List<CatalogDatasetLineage> findByDownstreamDatasetIdAndRelationTypeIgnoreCase(UUID downstreamDatasetId, String relationType);
+
     Optional<CatalogDatasetLineage> findFirstByUpstreamDatasetIdAndDownstreamDatasetId(UUID upstreamDatasetId, UUID downstreamDatasetId);
 
     @Query("select l from CatalogDatasetLineage l where l.upstreamDatasetId = :datasetId or l.downstreamDatasetId = :datasetId")
     List<CatalogDatasetLineage> findByEitherSide(@Param("datasetId") UUID datasetId);
 }
-

@@ -10,6 +10,8 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
 import com.yuzhi.dts.platform.service.infra.InceptorCatalogSyncService.CatalogSyncResult;
 import jakarta.transaction.Transactional;
 import java.sql.Connection;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +49,7 @@ public class PostgresCatalogSyncService {
     private final CatalogFeatureProperties catalogFeatureProperties;
     private final DataSource dataSource;
     private final CatalogDomainRepository domainRepository;
+    private final CatalogAutoLineageService autoLineageService;
 
     public PostgresCatalogSyncService(
         InfraDataSourceRepository infraDataSourceRepository,
@@ -54,7 +58,8 @@ public class PostgresCatalogSyncService {
         CatalogColumnSchemaRepository columnRepository,
         CatalogFeatureProperties catalogFeatureProperties,
         DataSource dataSource,
-        CatalogDomainRepository domainRepository
+        CatalogDomainRepository domainRepository,
+        CatalogAutoLineageService autoLineageService
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.datasetRepository = datasetRepository;
@@ -63,6 +68,7 @@ public class PostgresCatalogSyncService {
         this.catalogFeatureProperties = catalogFeatureProperties;
         this.dataSource = dataSource;
         this.domainRepository = domainRepository;
+        this.autoLineageService = autoLineageService;
     }
 
     public boolean isFallbackActive() {
@@ -88,8 +94,13 @@ public class PostgresCatalogSyncService {
             return CatalogSyncResult.inactive();
         }
 
+        UUID sourceId = infraDataSourceRepository
+            .findFirstByTypeIgnoreCaseAndStatusIgnoreCase(TYPE_POSTGRES, STATUS_ACTIVE)
+            .map(InfraDataSource::getId)
+            .orElse(null);
+
         String schema = resolveSchema();
-        Map<String, List<ColumnMeta>> metadata;
+        Map<String, TableMeta> metadata;
         try {
             metadata = fetchMetadata(schema);
         } catch (Exception ex) {
@@ -110,16 +121,18 @@ public class PostgresCatalogSyncService {
 
         CatalogDomain databaseDomain = resolveOrCreateDomain(schema);
 
-        for (Map.Entry<String, List<ColumnMeta>> entry : metadata.entrySet()) {
+        for (Map.Entry<String, TableMeta> entry : metadata.entrySet()) {
             String tableName = entry.getKey();
-            List<ColumnMeta> columns = entry.getValue();
+            TableMeta tableMeta = entry.getValue();
+            List<ColumnMeta> columns = tableMeta != null ? tableMeta.columns() : List.of();
             processedTables.add(tableName);
 
-            CatalogDataset dataset = datasetRepository
-                .findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema, tableName)
-                .orElseGet(CatalogDataset::new);
+            CatalogDataset dataset = (sourceId != null)
+                ? datasetRepository.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(sourceId, schema, tableName).orElseGet(CatalogDataset::new)
+                : datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema, tableName).orElseGet(CatalogDataset::new);
             boolean isNewDataset = dataset.getId() == null;
 
+            dataset.setSourceId(sourceId);
             dataset.setHiveDatabase(schema);
             dataset.setHiveTable(tableName);
             dataset.setType(TYPE_POSTGRES);
@@ -175,6 +188,14 @@ public class PostgresCatalogSyncService {
                 dataset.setDomain(databaseDomain);
                 datasetRepository.save(dataset);
             }
+
+            if (tableMeta != null && tableMeta.isView() && org.springframework.util.StringUtils.hasText(tableMeta.viewDefinition())) {
+                try {
+                    autoLineageService.syncAutoViewLineage(dataset, tableMeta.viewDefinition());
+                } catch (Exception ex) {
+                    LOG.debug("Auto lineage sync skipped for {}.{}: {}", schema, tableName, ex.getMessage());
+                }
+            }
         }
 
         LOG.info(
@@ -218,11 +239,11 @@ public class PostgresCatalogSyncService {
         return configured;
     }
 
-    private Map<String, List<ColumnMeta>> fetchMetadata(String schema) throws SQLException {
-        Map<String, List<ColumnMeta>> result = new LinkedHashMap<>();
+    private Map<String, TableMeta> fetchMetadata(String schema) throws SQLException {
+        Map<String, TableMeta> result = new LinkedHashMap<>();
         String tableSql =
             """
-            SELECT table_name
+            SELECT table_name, table_type
             FROM information_schema.tables
             WHERE LOWER(table_schema) = LOWER(?) AND table_type IN ('BASE TABLE', 'VIEW')
             ORDER BY table_name
@@ -234,7 +255,13 @@ public class PostgresCatalogSyncService {
                     String table = rs.getString("table_name");
                     if (StringUtils.hasText(table)) {
                         List<ColumnMeta> columns = fetchColumns(connection, schema, table);
-                        result.put(table.trim(), columns);
+                        String tableType = rs.getString("table_type");
+                        tableType = tableType != null ? tableType.trim() : null;
+                        String viewDefinition = null;
+                        if ("VIEW".equalsIgnoreCase(tableType)) {
+                            viewDefinition = fetchViewDefinition(connection, schema, table);
+                        }
+                        result.put(table.trim(), new TableMeta(table.trim(), tableType, columns, viewDefinition));
                     }
                 }
             }
@@ -285,6 +312,35 @@ public class PostgresCatalogSyncService {
             }
         }
         return columns;
+    }
+
+    private String fetchViewDefinition(Connection connection, String schema, String view) {
+        String sql =
+            """
+            SELECT view_definition
+            FROM information_schema.views
+            WHERE LOWER(table_schema) = LOWER(?) AND LOWER(table_name) = LOWER(?)
+            LIMIT 1
+            """;
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, schema);
+            stmt.setString(2, view);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    String def = rs.getString("view_definition");
+                    return def != null ? def.trim() : null;
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.debug("Failed to fetch PostgreSQL view definition for {}.{}: {}", schema, view, ex.getMessage());
+        }
+        return null;
+    }
+
+    private record TableMeta(String tableName, String tableType, List<ColumnMeta> columns, String viewDefinition) {
+        boolean isView() {
+            return "VIEW".equalsIgnoreCase(tableType);
+        }
     }
 
     private String defaultIfBlank(String current, String fallback) {

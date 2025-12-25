@@ -112,7 +112,8 @@ public class CatalogLineageResource {
         CatalogDatasetLineage link = new CatalogDatasetLineage();
         link.setUpstreamDatasetId(body.upstreamDatasetId);
         link.setDownstreamDatasetId(body.downstreamDatasetId);
-        link.setRelationType(trimToNull(body.relationType));
+        String relationType = trimToNull(body.relationType);
+        link.setRelationType(relationType != null ? relationType : "MANUAL");
         link.setNotes(trimToNull(body.notes));
         CatalogDatasetLineage saved = lineageRepo.save(link);
         audit.audit("CREATE", "catalog.lineage", saved.getId().toString());

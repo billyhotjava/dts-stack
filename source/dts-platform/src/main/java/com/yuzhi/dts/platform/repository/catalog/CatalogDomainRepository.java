@@ -8,4 +8,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CatalogDomainRepository extends JpaRepository<CatalogDomain, UUID> {
     java.util.Optional<CatalogDomain> findFirstByNameIgnoreCase(String name);
+
+    java.util.Optional<CatalogDomain> findFirstByCodeIgnoreCase(String code);
 }

@@ -27,6 +27,9 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "type", length = 32)
     private String type; // hive|jdbc|file
 
+    @Column(name = "source_id", columnDefinition = "uuid")
+    private UUID sourceId;
+
     @Column(name = "classification", length = 32)
     private String classification; // PUBLIC/INTERNAL/SECRET/CONFIDENTIAL
 
@@ -93,6 +96,14 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public UUID getSourceId() {
+        return sourceId;
+    }
+
+    public void setSourceId(UUID sourceId) {
+        this.sourceId = sourceId;
     }
 
     public String getClassification() {

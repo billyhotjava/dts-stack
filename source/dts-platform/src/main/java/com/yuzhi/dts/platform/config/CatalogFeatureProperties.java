@@ -27,6 +27,16 @@ public class CatalogFeatureProperties {
      */
     private boolean inceptorSyncEnabled = false;
 
+    /**
+     * Whether to run scheduled catalog synchronization (multi-source JDBC + primary source).
+     */
+    private boolean autoSyncEnabled = false;
+
+    /**
+     * Cron expression for scheduled catalog synchronization.
+     */
+    private String autoSyncCron = "0 0 3 * * *";
+
     public boolean isMultiSourceEnabled() {
         return multiSourceEnabled;
     }
@@ -57,5 +67,21 @@ public class CatalogFeatureProperties {
 
     public void setInceptorSyncEnabled(boolean inceptorSyncEnabled) {
         this.inceptorSyncEnabled = inceptorSyncEnabled;
+    }
+
+    public boolean isAutoSyncEnabled() {
+        return autoSyncEnabled;
+    }
+
+    public void setAutoSyncEnabled(boolean autoSyncEnabled) {
+        this.autoSyncEnabled = autoSyncEnabled;
+    }
+
+    public String getAutoSyncCron() {
+        return autoSyncCron;
+    }
+
+    public void setAutoSyncCron(String autoSyncCron) {
+        this.autoSyncCron = autoSyncCron;
     }
 }
