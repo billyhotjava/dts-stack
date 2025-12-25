@@ -398,6 +398,9 @@ export default function MetadataPage() {
 									<div className="text-xs text-muted-foreground">
 										动作：{Array.isArray(fullSyncStatus?.primary?.last?.actions) ? fullSyncStatus.primary.last.actions.join("；") : "-"}
 									</div>
+									{fullSyncStatus?.primary?.last?.error ? (
+										<div className="text-xs text-destructive">错误：{String(fullSyncStatus.primary.last.error)}</div>
+									) : null}
 								</div>
 								<div>
 									<div className="font-medium mb-1">JDBC 多源</div>

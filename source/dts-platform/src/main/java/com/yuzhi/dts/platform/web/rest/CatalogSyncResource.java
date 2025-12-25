@@ -7,7 +7,6 @@ import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/catalog/sync")
-@Transactional
 public class CatalogSyncResource {
 
     private static final String CATALOG_MAINTAINER_EXPRESSION =
@@ -46,13 +44,7 @@ public class CatalogSyncResource {
         String reason = body != null && body.reason != null && !body.reason.isBlank() ? body.reason.trim() : "manual";
 
         if (includePrimary && !inceptorCoordinator.isSyncInProgress()) {
-            Thread t = new Thread(() -> {
-                try {
-                    inceptorCoordinator.synchronize("api:" + reason);
-                } catch (Exception ignore) {}
-            }, "inceptor-api-sync");
-            t.setDaemon(true);
-            t.start();
+            inceptorCoordinator.synchronizeAsync("api:" + reason);
         }
         if (includeJdbc && !jdbcCoordinator.isSyncInProgress()) {
             jdbcCoordinator.synchronizeAsync("api:" + reason);
@@ -80,4 +72,3 @@ public class CatalogSyncResource {
         return payload;
     }
 }
-

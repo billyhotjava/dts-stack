@@ -7,8 +7,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
@@ -41,54 +41,72 @@ public class InceptorIntegrationCoordinator {
     }
 
     public IntegrationStatus synchronize(String reason) {
-        syncing.set(true);
+        if (!syncing.compareAndSet(false, true)) {
+            return lastStatus.get();
+        }
         List<String> actions = new ArrayList<>();
-        if (cacheManager != null) {
-            Cache cache = cacheManager.getCache(SQL_CATALOG_CACHE);
-            if (cache != null) {
-                cache.clear();
-                actions.add("Cleared sqlCatalogTree cache");
+        CatalogSyncResult syncResult = null;
+        String error = null;
+        try {
+            if (cacheManager != null) {
+                Cache cache = cacheManager.getCache(SQL_CATALOG_CACHE);
+                if (cache != null) {
+                    cache.clear();
+                    actions.add("Cleared sqlCatalogTree cache");
+                }
             }
-        }
-        CatalogSyncResult syncResult = catalogSyncService.synchronize();
-        if (syncResult.error() != null) {
-            actions.add("Sync error: " + syncResult.error());
-        } else if (syncResult.tablesDiscovered() > 0) {
-            actions.add(
-                String.format(
-                    "Synced %d table(s) from %s",
-                    syncResult.tablesDiscovered(),
-                    syncResult.database() != null ? syncResult.database() : "default"
-                )
-            );
-        } else if (syncResult.database() != null) {
-            actions.add(
-                String.format(
-                    "No tables found in %s during sync",
-                    syncResult.database()
-                )
-            );
-        } else {
-            actions.add("Skipped catalog sync (no active Inceptor data source)");
-        }
 
-        long datasetCount = safeDatasetCount();
-        IntegrationStatus status = new IntegrationStatus(
-            Instant.now(),
-            reason,
-            List.copyOf(actions),
-            datasetCount,
-            syncResult.database(),
-            syncResult.tablesDiscovered(),
-            syncResult.datasetsCreated(),
-            syncResult.tablesCreated(),
-            syncResult.columnsImported(),
-            syncResult.error()
-        );
-        lastStatus.set(status);
-        LOG.info("Inceptor integration synchronized. reason={}, actions={}, datasets={}", reason, actions, datasetCount);
-        syncing.set(false);
-        return status;
+            syncResult = catalogSyncService.synchronize();
+            if (syncResult.error() != null) {
+                actions.add("Sync error: " + syncResult.error());
+            } else if (syncResult.tablesDiscovered() > 0) {
+                actions.add(
+                    String.format(
+                        "Synced %d table(s) from %s",
+                        syncResult.tablesDiscovered(),
+                        syncResult.database() != null ? syncResult.database() : "default"
+                    )
+                );
+            } else if (syncResult.database() != null) {
+                actions.add(String.format("No tables found in %s during sync", syncResult.database()));
+            } else {
+                actions.add("Skipped catalog sync (no active Inceptor data source)");
+            }
+        } catch (Exception ex) {
+            error = ex.getMessage();
+            actions.add("Sync failed: " + error);
+            LOG.warn("Inceptor integration sync failed. reason={}, error={}", reason, ex.getMessage());
+        } finally {
+            long datasetCount = safeDatasetCount();
+            IntegrationStatus status = new IntegrationStatus(
+                Instant.now(),
+                reason,
+                List.copyOf(actions),
+                datasetCount,
+                syncResult != null ? syncResult.database() : null,
+                syncResult != null ? syncResult.tablesDiscovered() : 0,
+                syncResult != null ? syncResult.datasetsCreated() : 0,
+                syncResult != null ? syncResult.tablesCreated() : 0,
+                syncResult != null ? syncResult.columnsImported() : 0,
+                syncResult != null && syncResult.error() != null ? syncResult.error() : error
+            );
+            lastStatus.set(status);
+            LOG.info("Inceptor integration synchronized. reason={}, actions={}, datasets={}", reason, actions, datasetCount);
+            syncing.set(false);
+        }
+        return lastStatus.get();
+    }
+
+    public void synchronizeAsync(String reason) {
+        Thread t = new Thread(() -> {
+            try {
+                synchronize(reason);
+            } catch (Exception ex) {
+                LOG.debug("Async inceptor catalog sync failed: {}", ex.getMessage());
+            }
+        }, "inceptor-catalog-sync");
+        t.setDaemon(true);
+        t.start();
     }
 
     @EventListener
@@ -98,15 +116,7 @@ public class InceptorIntegrationCoordinator {
             LOG.info("Inceptor publish event received but sync already in progress; skipping immediate re-sync");
             return;
         }
-        Thread t = new Thread(() -> {
-            try {
-                synchronize("publish-event");
-            } catch (Exception ex) {
-                LOG.warn("Async publish-event sync failed: {}", ex.getMessage());
-            }
-        }, "inceptor-publish-sync");
-        t.setDaemon(true);
-        t.start();
+        synchronizeAsync("publish-event");
     }
 
     public IntegrationStatus currentStatus() {
@@ -123,15 +133,7 @@ public class InceptorIntegrationCoordinator {
      */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        Thread t = new Thread(() -> {
-            try {
-                synchronize("startup-auto");
-            } catch (Exception ex) {
-                LOG.warn("Startup auto-sync failed: {}", ex.getMessage());
-            }
-        }, "inceptor-startup-sync");
-        t.setDaemon(true);
-        t.start();
+        synchronizeAsync("startup-auto");
     }
 
     private long safeDatasetCount() {
