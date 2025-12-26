@@ -159,7 +159,7 @@ public class JdbcCatalogSyncService {
                         dataset.setDomain(schemaDomain);
                     }
 
-                    dataset = datasetRepository.save(dataset);
+                    CatalogDataset savedDataset = datasetRepository.save(dataset);
                     if (isNewDataset) {
                         datasetsCreated++;
                     } else {
@@ -167,16 +167,16 @@ public class JdbcCatalogSyncService {
                     }
 
                     CatalogTableSchema tableSchema = tableRepository
-                        .findFirstByDatasetAndNameIgnoreCase(dataset, table.tableName())
+                        .findFirstByDatasetAndNameIgnoreCase(savedDataset, table.tableName())
                         .orElseGet(() -> {
                             CatalogTableSchema schemaEntity = new CatalogTableSchema();
-                            schemaEntity.setDataset(dataset);
+                            schemaEntity.setDataset(savedDataset);
                             schemaEntity.setName(table.tableName());
                             return schemaEntity;
                         });
                     boolean isNewTable = tableSchema.getId() == null;
-                    tableSchema.setOwner(defaultIfBlank(tableSchema.getOwner(), dataset.getOwner()));
-                    tableSchema.setClassification(defaultIfBlank(tableSchema.getClassification(), dataset.getClassification()));
+                    tableSchema.setOwner(defaultIfBlank(tableSchema.getOwner(), savedDataset.getOwner()));
+                    tableSchema.setClassification(defaultIfBlank(tableSchema.getClassification(), savedDataset.getClassification()));
                     tableSchema = tableRepository.save(tableSchema);
                     if (isNewTable) {
                         tablesCreated++;
@@ -231,7 +231,7 @@ public class JdbcCatalogSyncService {
                         String viewDefinition = fetchViewDefinition(connection, dbProduct, resolvedCatalog, normalizedSchema, table.tableName());
                         if (StringUtils.hasText(viewDefinition)) {
                             try {
-                                autoLineageService.syncAutoViewLineage(dataset, viewDefinition);
+                                autoLineageService.syncAutoViewLineage(savedDataset, viewDefinition);
                             } catch (Exception ex) {
                                 LOG.debug("Auto lineage sync skipped for {}.{}: {}", normalizedSchema, table.tableName(), ex.getMessage());
                             }
