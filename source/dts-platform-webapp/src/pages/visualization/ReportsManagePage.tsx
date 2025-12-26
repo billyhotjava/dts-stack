@@ -61,6 +61,25 @@ function toUpsertPayload(form: FormState): ReportLinkUpsertRequest {
   };
 }
 
+function normalizeHetuUrl(rawUrl: string): string {
+  const url = String(rawUrl || "").trim();
+  if (!url) return "";
+  if (url.startsWith("/")) return url;
+  try {
+    const parsed = new URL(url);
+    const isHetuPort = parsed.port === "7778";
+    const isHetuPath =
+      parsed.pathname?.startsWith("/screen") ||
+      parsed.pathname?.startsWith("/dashboards") ||
+      parsed.pathname?.startsWith("/dashboard/hetu") ||
+      parsed.pathname?.startsWith("/dashboard");
+    if (!isHetuPort && !isHetuPath) return url;
+    return `${parsed.pathname || ""}${parsed.search || ""}${parsed.hash || ""}` || url;
+  } catch {
+    return url;
+  }
+}
+
 export default function ReportsManagePage() {
   const [items, setItems] = useState<ReportLink[]>([]);
   const [loading, setLoading] = useState(false);
@@ -383,12 +402,30 @@ export default function ReportsManagePage() {
             </div>
 
             <div className="md:col-span-2 grid gap-2">
-              <Label>URL *</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label>URL *</Label>
+                {String(form.engine || "").toUpperCase() === "HETU" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setForm((f) => ({ ...f, url: normalizeHetuUrl(f.url) }))}
+                    title="将 http(s)://IP:7778/... 转成 /screen/... 或 /dashboards/...，便于关闭 7778 端口并通过 Traefik 访问"
+                  >
+                    规范化河图链接
+                  </Button>
+                ) : null}
+              </div>
               <Textarea
                 value={form.url}
                 onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
                 placeholder="例如：https://metabase.xxx/dashboard/1 或 http(s)://河图/share/..."
               />
+              {String(form.engine || "").toUpperCase() === "HETU" ? (
+                <div className="text-xs text-muted-foreground">
+                  建议：河图 URL 尽量保存为以 <code>/screen</code> 或 <code>/dashboards</code> 开头的相对路径，便于统一走平台域名反代并关闭 7778 直连。
+                </div>
+              ) : null}
             </div>
 
             <div className="md:col-span-2 flex items-center gap-2">

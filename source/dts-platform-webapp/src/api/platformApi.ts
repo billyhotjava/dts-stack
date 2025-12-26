@@ -206,5 +206,6 @@ export const apiExecute = (id: string, data?: any) => api.post({ url: `/apis/${i
 
 // Dashboards & Dev registry (tasks)
 export const listDashboards = () => api.get({ url: "/dashboards" });
+export const visitDashboard = (data?: Record<string, unknown>) => api.post({ url: "/dashboards/visit", data });
 export const submitEtlJob = (jobId: string) => api.post({ url: `/etl-jobs/${jobId}/submit` });
 export const getJobRunStatus = (runId: string) => api.get({ url: `/job-runs/${runId}/status` });

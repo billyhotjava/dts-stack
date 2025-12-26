@@ -25,6 +25,32 @@ function formatDeptNames(codes: string[] | undefined, dict: Map<string, DeptDto>
 		.join(", ");
 }
 
+function normalizeReportUrl(rawUrl: string, engine?: string | null): string {
+	const url = String(rawUrl || "").trim();
+	if (!url) return "";
+	if (url.startsWith("/")) return url;
+
+	// Best-effort normalize Hetu links so we can close 7778 and serve via Traefik on the same domain.
+	// Traefik routes already cover PathPrefix(/screen|/dashboards) and /dashboard/hetu.
+	const upperEngine = String(engine || "").trim().toUpperCase();
+	try {
+		const parsed = new URL(url);
+		const path = `${parsed.pathname || ""}${parsed.search || ""}${parsed.hash || ""}`;
+		const isHetuHostPort = parsed.port === "7778";
+		const isHetuPath =
+			parsed.pathname?.startsWith("/screen") ||
+			parsed.pathname?.startsWith("/dashboards") ||
+			parsed.pathname?.startsWith("/dashboard/hetu") ||
+			parsed.pathname?.startsWith("/dashboard");
+		if (upperEngine === "HETU" && (isHetuHostPort || isHetuPath)) {
+			return path || url;
+		}
+	} catch {
+		// ignore URL parse failures
+	}
+	return url;
+}
+
 export default function ReportsPage() {
 	const [reports, setReports] = useState<ReportLink[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -76,19 +102,20 @@ export default function ReportsPage() {
 	}, []);
 
 	const openReport = (r: ReportLink) => {
-		const url = String(r?.url || "").trim();
+		const url = normalizeReportUrl(String(r?.url || ""), r?.engine);
 		if (!url) return;
-		try {
-			const payload = JSON.stringify({
+		// Record audit via authorized API call (sendBeacon would miss Authorization in this project).
+		reportsService
+			.visit({
 				id: r.id,
 				code: r.code,
 				title: r.title,
 				url: r.url,
 				engine: r.engine,
 				classification: r.classification,
-			});
-			navigator.sendBeacon("/api/reports/visit", new Blob([payload], { type: "application/json" }));
-		} catch {}
+			})
+			.catch(() => {});
+
 		window.open(url, "_blank", "noopener,noreferrer");
 	};
 

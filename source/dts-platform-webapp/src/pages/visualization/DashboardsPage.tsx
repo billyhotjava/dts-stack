@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/ui/button";
 import { Badge } from "@/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
-import { listDashboards } from "@/api/platformApi";
+import { listDashboards, visitDashboard } from "@/api/platformApi";
 
 type DashboardItem = {
 	code: string;
@@ -55,6 +55,13 @@ export default function DashboardsPage() {
 
 	const items = useMemo(() => payload.items ?? [], [payload]);
 
+	const open = (d: DashboardItem) => {
+		const url = String(d?.url || "").trim();
+		if (!url) return;
+		visitDashboard({ code: d.code, name: d.name, url }).catch(() => {});
+		window.open(url, "_blank", "noopener,noreferrer");
+	};
+
 	return (
 		<div className="space-y-4">
 			<Card>
@@ -78,11 +85,10 @@ export default function DashboardsPage() {
 					{error ? <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</div> : null}
 					<div className="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 						{items.map((d) => (
-							<a
+							<button
 								key={d.code}
-								href={d.url}
-								target="_blank"
-								rel="noreferrer"
+								type="button"
+								onClick={() => open(d)}
 								className="block rounded-md border p-3 transition hover:border-primary hover:bg-muted/40"
 							>
 								<div className="flex items-center justify-between gap-2">
@@ -98,7 +104,7 @@ export default function DashboardsPage() {
 									{typeof d.availability === "number" ? <span>可用性 {(d.availability * 100).toFixed(1)}%</span> : null}
 								</div>
 								<div className="mt-2 truncate text-xs text-muted-foreground">{d.url}</div>
-							</a>
+							</button>
 						))}
 						{!items.length && !loading && !error ? (
 							<div className="col-span-full rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
