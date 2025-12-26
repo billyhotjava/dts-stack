@@ -45,6 +45,10 @@ function normalizeReportUrl(rawUrl: string, engine?: string | null): string {
 		if (upperEngine === "HETU" && (isHetuHostPort || isHetuPath)) {
 			return path || url;
 		}
+		if (upperEngine === "METABASE") {
+			if (!path) return url;
+			return `/analytics${path.startsWith("/") ? "" : "/"}${path}`;
+		}
 	} catch {
 		// ignore URL parse failures
 	}

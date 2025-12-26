@@ -407,7 +407,7 @@ services:
     environment:
       MB_DB_CONNECTION_URI: postgres://${PG_USER_METABASE:-metabase}:${PG_PWD_METABASE:-metabase}@${PG_HOST:-dts-pg}:${PG_PORT:-5432}/${PG_DB_METABASE:-metabase}
       MB_ENCRYPTION_SECRET_KEY: ${METABASE_ENCRYPTION_SECRET:-}
-      MB_SITE_URL: ${METABASE_SITE_URL:-}
+      MB_SITE_URL: "${METABASE_SITE_URL:-https://${HOST_PLATFORM_UI}/analytics}"
       MB_PLUGINS_DIR: /plugins
       MB_LOG_FILE: /var/log/metabase/metabase.log
       MB_OIDC_CLIENT_ID: ${METABASE_OIDC_CLIENT_ID:-}
@@ -436,6 +436,14 @@ services:
       - "traefik.http.routers.dts-metabase.tls=true"
       - "traefik.http.routers.dts-metabase.middlewares=security-headers@file"
       - "traefik.http.services.dts-metabase.loadbalancer.server.port=3000"
+      - "traefik.http.routers.dts-metabase-analytics.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`)"
+      - "traefik.http.routers.dts-metabase-analytics.entrypoints=websecure"
+      - "traefik.http.routers.dts-metabase-analytics.tls=true"
+      - "traefik.http.routers.dts-metabase-analytics.priority=180"
+      - "traefik.http.routers.dts-metabase-analytics.service=dts-metabase"
+      - "traefik.http.middlewares.metabase-strip-analytics.stripprefixregex.regex=/analytics"
+      - "traefik.http.middlewares.metabase-analytics-prefix.headers.customrequestheaders.X-Forwarded-Prefix=/analytics"
+      - "traefik.http.routers.dts-metabase-analytics.middlewares=metabase-strip-analytics@docker,metabase-analytics-prefix@docker,security-headers@file"
 
 
 volumes:

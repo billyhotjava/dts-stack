@@ -80,6 +80,21 @@ function normalizeHetuUrl(rawUrl: string): string {
   }
 }
 
+function normalizeMetabaseUrl(rawUrl: string): string {
+  const url = String(rawUrl || "").trim();
+  if (!url) return "";
+  if (url.startsWith("/analytics")) return url;
+  if (url.startsWith("/")) return `/analytics${url}`;
+  try {
+    const parsed = new URL(url);
+    const path = `${parsed.pathname || ""}${parsed.search || ""}${parsed.hash || ""}`;
+    if (!path) return url;
+    return `/analytics${path.startsWith("/") ? "" : "/"}${path}`;
+  } catch {
+    return url;
+  }
+}
+
 export default function ReportsManagePage() {
   const [items, setItems] = useState<ReportLink[]>([]);
   const [loading, setLoading] = useState(false);
@@ -414,6 +429,16 @@ export default function ReportsManagePage() {
                   >
                     规范化河图链接
                   </Button>
+                ) : String(form.engine || "").toUpperCase() === "METABASE" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setForm((f) => ({ ...f, url: normalizeMetabaseUrl(f.url) }))}
+                    title="将 https://metabase.xxx/... 转成 /analytics/...，统一挂载到平台域名下"
+                  >
+                    规范化 Metabase 链接
+                  </Button>
                 ) : null}
               </div>
               <Textarea
@@ -424,6 +449,10 @@ export default function ReportsManagePage() {
               {String(form.engine || "").toUpperCase() === "HETU" ? (
                 <div className="text-xs text-muted-foreground">
                   建议：河图 URL 尽量保存为以 <code>/screen</code> 或 <code>/dashboards</code> 开头的相对路径，便于统一走平台域名反代并关闭 7778 直连。
+                </div>
+              ) : String(form.engine || "").toUpperCase() === "METABASE" ? (
+                <div className="text-xs text-muted-foreground">
+                  建议：Metabase URL 保存为以 <code>/analytics</code> 开头的相对路径，便于统一走平台域名反代（同域名免跨域）。
                 </div>
               ) : null}
             </div>

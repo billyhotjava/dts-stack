@@ -8,7 +8,9 @@ http:
     # change the URL to something like http://dts-hetu:7778 and join `dts-core`.
     hetu:
       loadBalancer:
-        passHostHeader: true
+        # Some Hetu builds (or fronting nginx) are strict on Host and may return 404 when proxied via platform domain.
+        # Disable Host header passthrough so the backend sees its own host instead of `${HOST_PLATFORM_UI}`.
+        passHostHeader: false
         servers:
           - url: "http://host.docker.internal:7778"
   middlewares:
