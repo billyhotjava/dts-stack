@@ -6090,7 +6090,8 @@ public class AdminApiResource {
             entity.setComponent(Objects.toString(payload.get("component"), null));
             entity.setIcon(Objects.toString(payload.get("icon"), null));
             entity.setSortOrder(payload.get("sortOrder") == null ? null : Integer.valueOf(payload.get("sortOrder").toString()));
-            entity.setMetadata(Objects.toString(payload.get("metadata"), null));
+            // Keep metadata normalized for both JSON string and object payloads (approval payload may carry a map).
+            entity.setMetadata(normalizeMenuMetadata(payload.get("metadata")));
             entity.setSecurityLevel(normalizeMenuSecurityLevel(payload.get("securityLevel")));
             entity.setDeleted(false);
             if (parentId != null) {
@@ -6111,7 +6112,7 @@ public class AdminApiResource {
                     if (payload.containsKey("component")) target.setComponent(Objects.toString(payload.get("component"), target.getComponent()));
                     if (payload.containsKey("icon")) target.setIcon(Objects.toString(payload.get("icon"), target.getIcon()));
                     if (payload.containsKey("sortOrder")) target.setSortOrder(payload.get("sortOrder") == null ? null : Integer.valueOf(payload.get("sortOrder").toString()));
-                    if (payload.containsKey("metadata")) target.setMetadata(Objects.toString(payload.get("metadata"), target.getMetadata()));
+                    if (payload.containsKey("metadata")) target.setMetadata(normalizeMenuMetadata(payload.get("metadata")));
                     if (payload.containsKey("securityLevel")) {
                         target.setSecurityLevel(normalizeMenuSecurityLevel(payload.get("securityLevel")));
                     }

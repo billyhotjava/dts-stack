@@ -39,8 +39,17 @@ const generateProps = (metaInfo: MenuMetaInfo) => {
 	}
 	if (!props.src && (metaInfo as any)?.metadata) {
 		const meta = parseMenuMetadata((metaInfo as any).metadata);
-		if (meta && typeof (meta as any).externalLink === "string") {
-			props.src = String((meta as any).externalLink);
+		if (meta) {
+			const external =
+				(meta as any).externalLink ??
+				(meta as any).external_link ??
+				(meta as any).url ??
+				(meta as any).href ??
+				(meta as any).link ??
+				(meta as any).src;
+			if (typeof external === "string") {
+				props.src = String(external);
+			}
 		}
 	}
 	return props;

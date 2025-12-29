@@ -3,6 +3,29 @@ import { PermissionType } from "#/enum";
 
 export type MenuMetadata = Record<string, any> | null;
 
+const parseLegacyJavaMapString = (raw: string): Record<string, any> | null => {
+	const text = raw.trim();
+	if (!text.startsWith("{") || !text.endsWith("}") || !text.includes("=")) {
+		return null;
+	}
+	const inner = text.slice(1, -1).trim();
+	if (!inner) {
+		return {};
+	}
+	const out: Record<string, any> = {};
+	// Typical format: "{key=value, key2=value2}"
+	// Note: This is a best-effort parser for legacy rows; values containing ", " may not round-trip perfectly.
+	for (const part of inner.split(/,\s*/g)) {
+		const idx = part.indexOf("=");
+		if (idx <= 0) continue;
+		const key = part.slice(0, idx).trim();
+		const value = part.slice(idx + 1).trim();
+		if (!key) continue;
+		out[key] = value;
+	}
+	return Object.keys(out).length ? out : null;
+};
+
 export const parseMenuMetadata = (metadata: unknown): MenuMetadata => {
 	if (!metadata) return null;
 	if (typeof metadata === "object") {
@@ -15,11 +38,31 @@ export const parseMenuMetadata = (metadata: unknown): MenuMetadata => {
 	if (!trimmed) {
 		return null;
 	}
-	try {
-		return JSON.parse(trimmed);
-	} catch {
+
+	const tryParse = (text: string): unknown => {
+		try {
+			return JSON.parse(text);
+		} catch {
+			return parseLegacyJavaMapString(text);
+		}
+	};
+
+	const parsed = tryParse(trimmed);
+	// Handle double-encoded JSON string: "\"{\\\"externalLink\\\":\\\"...\\\"}\""
+	if (typeof parsed === "string") {
+		const nested = parsed.trim();
+		if (nested.startsWith("{") || nested.startsWith("[")) {
+			const parsed2 = tryParse(nested);
+			if (parsed2 && typeof parsed2 === "object") {
+				return parsed2 as Record<string, any>;
+			}
+		}
 		return null;
 	}
+	if (parsed && typeof parsed === "object") {
+		return parsed as Record<string, any>;
+	}
+	return null;
 };
 
 export const isExternalPath = (path: string): boolean => /^(https?:|mailto:|tel:)/i.test(path);
