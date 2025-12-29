@@ -153,6 +153,12 @@ public class PortalMenuService {
         if (Boolean.TRUE.equals(node.getDeleted())) {
             return null;
         }
+        // Platform-side hard removal for legacy portal menus:
+        // - ops: 运维菜单已迁移到 dts-admin 管理端
+        // - security.threeAdmins: 三员管理与职责分离已在 dts-admin 管理端实现
+        if (isDisabledForPlatform(node)) {
+            return null;
+        }
         Long id = parseLong(node.getId());
         if (activeIds != null && id != null && !activeIds.isEmpty()) {
             if (!activeIds.contains(String.valueOf(id))) {
@@ -203,6 +209,34 @@ public class PortalMenuService {
         }
 
         return current;
+    }
+
+    private boolean isDisabledForPlatform(RemoteMenuNode node) {
+        if (node == null) return true;
+        String metadata = node.getMetadata();
+        String name = node.getName();
+        String metaLower = metadata == null ? "" : metadata.toLowerCase(java.util.Locale.ROOT);
+        String nameLower = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
+
+        // Preferred: sectionKey / entryKey in metadata (seeded menus always include these).
+        if (metaLower.contains("\"sectionkey\":\"ops\"")) {
+            return true;
+        }
+        if (metaLower.contains("\"sectionkey\":\"security\"") && metaLower.contains("\"entrykey\":\"threeadmins\"")) {
+            return true;
+        }
+        if (metaLower.contains("\"sectionkey\":\"security\"") && metaLower.contains("\"entrykey\":\"three_admins\"")) {
+            return true;
+        }
+
+        // Fallback: name tokens (for old rows with missing metadata)
+        if (nameLower.contains("sys.nav.portal.ops") || nameLower.endsWith(".ops") || nameLower.contains(".ops.")) {
+            return true;
+        }
+        if (nameLower.contains("threeadmins") || nameLower.contains("three_admins") || nameLower.contains("three-admins")) {
+            return true;
+        }
+        return false;
     }
 
     private PortalMenuTreeNode toTreeNode(PortalMenuTreeItem item, String parentId) {
