@@ -1085,7 +1085,7 @@ public class AdminApiResource {
         }
         try {
             if (hard) {
-                portalMenuVisibilityRepo.deleteByMenuId(menuId);
+                visibilityRepo.deleteByMenuId(menuId);
                 portalMenuRepo.delete(entity);
                 portalMenuRepo.flush();
             } else {
@@ -6260,7 +6260,7 @@ public class AdminApiResource {
                 if (children != null && !children.isEmpty()) {
                     throw new IllegalStateException("仅支持删除叶子菜单；请先删除其子菜单或改为禁用");
                 }
-                portalMenuVisibilityRepo.deleteByMenuId(id);
+                visibilityRepo.deleteByMenuId(id);
                 portalMenuRepo
                     .findById(id)
                     .ifPresent(target -> {
