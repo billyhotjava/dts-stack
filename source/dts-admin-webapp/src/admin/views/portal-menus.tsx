@@ -51,6 +51,9 @@ export default function PortalMenusView() {
 	const [keyword, setKeyword] = useState("");
 	const [editTarget, setEditTarget] = useState<PortalMenuItem | null>(null);
 	const [disableTarget, setDisableTarget] = useState<{ menu: PortalMenuItem; roleCodes: string[] } | null>(null);
+	const [quickAddOpen, setQuickAddOpen] = useState(false);
+	const [quickAddDraft, setQuickAddDraft] = useState<{ title: string; url: string }>({ title: "", url: "" });
+	const [quickAddBusy, setQuickAddBusy] = useState(false);
 
 	const filteredTreeMenus = useMemo(() => {
 		const trimmed = keyword.trim();
@@ -216,15 +219,70 @@ export default function PortalMenusView() {
 		}
 	};
 
+	const handleSubmitQuickAdd = async () => {
+		const title = quickAddDraft.title.trim();
+		const url = quickAddDraft.url.trim();
+		if (!title) {
+			toast.error("请填写菜单名称");
+			return;
+		}
+		if (!/^https?:\/\//i.test(url)) {
+			toast.error("请填写以 http(s):// 开头的链接地址");
+			return;
+		}
+
+		const parentId = resolvePortalSectionId(treeMenus, "visualization");
+		const usedFullPaths = collectFullPaths(treeMenus);
+		const segment = buildUniqueSegment(title, usedFullPaths, parentId ? "/visualization" : "");
+		const meta = {
+			title,
+			externalLink: url,
+		};
+
+		setQuickAddBusy(true);
+		try {
+			const payload: PortalMenuItem = {
+				name: `custom.link.${segment}`,
+				path: segment,
+				parentId: parentId ?? null,
+				component: "/pages/sys/others/link/external-link",
+				icon: "solar:link-bold-duotone",
+				sortOrder: 999,
+				metadata: JSON.stringify(meta),
+				// Default to employee-visible; fine-tune with “配置角色”
+				allowedRoles: ["ROLE_EMPLOYEE"],
+			};
+			const result = await adminApi.createPortalMenu(payload);
+			if (result && typeof result === "object" && (result as any).menus) {
+				updateCache(result as PortalMenuCollection);
+			} else {
+				await refresh();
+			}
+			toast.success("菜单已提交新增审批（如启用审批流）");
+			setQuickAddOpen(false);
+			setQuickAddDraft({ title: "", url: "" });
+		} catch (error: any) {
+			toast.error(error?.message || "添加失败，请稍后重试");
+			await refresh();
+		} finally {
+			setQuickAddBusy(false);
+		}
+	};
+
 	return (
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<Text variant="body1" className="text-lg font-semibold">
 					菜单管理
 				</Text>
-				<Button variant="secondary" onClick={handleReset} disabled={resetting}>
-					{resetting ? "恢复中.." : "恢复默认菜单"}
-				</Button>
+				<div className="flex items-center gap-2">
+					<Button variant="secondary" onClick={() => setQuickAddOpen(true)}>
+						添加菜单
+					</Button>
+					<Button variant="secondary" onClick={handleReset} disabled={resetting}>
+						{resetting ? "恢复中.." : "恢复默认菜单"}
+					</Button>
+				</div>
 			</div>
 
 			<div className="grid gap-3 sm:grid-cols-3">
@@ -341,7 +399,71 @@ export default function PortalMenusView() {
 				resolveRoleLabel={resolveRoleLabel}
 				busy={disableBusy}
 			/>
+			<QuickAddMenuDialog
+				open={quickAddOpen}
+				onClose={() => (quickAddBusy ? null : setQuickAddOpen(false))}
+				title={quickAddDraft.title}
+				url={quickAddDraft.url}
+				onChangeTitle={(value) => setQuickAddDraft((prev) => ({ ...prev, title: value }))}
+				onChangeUrl={(value) => setQuickAddDraft((prev) => ({ ...prev, url: value }))}
+				onSubmit={handleSubmitQuickAdd}
+				busy={quickAddBusy}
+			/>
 		</div>
+	);
+}
+
+function QuickAddMenuDialog(props: {
+	open: boolean;
+	onClose: () => void;
+	title: string;
+	url: string;
+	onChangeTitle: (value: string) => void;
+	onChangeUrl: (value: string) => void;
+	onSubmit: () => void;
+	busy: boolean;
+}) {
+	return (
+		<Dialog open={props.open} onOpenChange={(next) => (next ? null : props.onClose())}>
+			<DialogContent className="sm:max-w-lg">
+				<DialogHeader>
+					<DialogTitle>添加菜单</DialogTitle>
+				</DialogHeader>
+				<div className="space-y-3">
+					<div className="space-y-1.5">
+						<Text variant="body3" className="text-muted-foreground">
+							菜单名称
+						</Text>
+						<Input
+							value={props.title}
+							onChange={(event) => props.onChangeTitle(event.target.value)}
+							placeholder="例如：河图驾驶舱"
+						/>
+					</div>
+					<div className="space-y-1.5">
+						<Text variant="body3" className="text-muted-foreground">
+							跳转链接（http(s)://）
+						</Text>
+						<Input
+							value={props.url}
+							onChange={(event) => props.onChangeUrl(event.target.value)}
+							placeholder="例如：https://bi.xxx.com/screen/share/index.html#/TJ..."
+						/>
+					</div>
+					<Text variant="body3" className="text-muted-foreground">
+						默认放入“数据可视化”分组；如需控制可见角色，可创建后点击“配置角色”调整。
+					</Text>
+				</div>
+				<DialogFooter>
+					<Button variant="outline" onClick={props.onClose} disabled={props.busy}>
+						取消
+					</Button>
+					<Button onClick={props.onSubmit} disabled={props.busy}>
+						{props.busy ? "提交中.." : "提交"}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -858,4 +980,71 @@ function collectFolderIds(items: PortalMenuItem[]): Set<number> {
 	};
 	walk(items ?? []);
 	return out;
+}
+
+function parseMetadata(raw?: string): Record<string, any> | null {
+	if (!raw) return null;
+	try {
+		return JSON.parse(raw) as Record<string, any>;
+	} catch {
+		return null;
+	}
+}
+
+function resolvePortalSectionId(items: PortalMenuItem[], sectionKey: string): number | null {
+	const normalized = sectionKey.trim().toLowerCase();
+	const stack = Array.isArray(items) ? [...items] : [];
+	while (stack.length) {
+		const node = stack.pop();
+		if (!node || node.id == null) continue;
+		const meta = parseMetadata(node.metadata);
+		const metaSection = typeof meta?.sectionKey === "string" ? meta.sectionKey.trim().toLowerCase() : "";
+		if (!node.parentId && metaSection === normalized) {
+			return node.id;
+		}
+		if (Array.isArray(node.children)) {
+			for (const child of node.children) {
+				stack.push(child);
+			}
+		}
+	}
+	return null;
+}
+
+function collectFullPaths(items: PortalMenuItem[]): Set<string> {
+	const out = new Set<string>();
+	const walk = (nodes: PortalMenuItem[], parentPath: string) => {
+		for (const node of nodes) {
+			if (!node) continue;
+			const segment = (node.path || "").toString().replace(/^\/+|\/+$/g, "");
+			const current = segment ? (parentPath ? `${parentPath}/${segment}` : `/${segment}`) : parentPath || "";
+			if (current) out.add(current);
+			if (Array.isArray(node.children) && node.children.length > 0) {
+				walk(node.children, current);
+			}
+		}
+	};
+	walk(items ?? [], "");
+	return out;
+}
+
+function slugifySegment(input: string): string {
+	const raw = (input || "").trim().toLowerCase();
+	const ascii = raw.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+	return ascii;
+}
+
+function buildUniqueSegment(title: string, usedFullPaths: Set<string>, parentPrefix: string): string {
+	const baseSlug = slugifySegment(title);
+	const base = baseSlug ? `link-${baseSlug}` : `link-${Date.now().toString(36)}`;
+	let candidate = base;
+	let i = 1;
+	while (true) {
+		const fullPath = `${parentPrefix}/${candidate}`.replace(/\/{2,}/g, "/");
+		if (!usedFullPaths.has(fullPath)) {
+			return candidate;
+		}
+		i += 1;
+		candidate = `${base}-${i}`;
+	}
 }

@@ -3,6 +3,7 @@ import { Navigate } from "react-router";
 import type { MenuMetaInfo, MenuTree } from "@/types/entity";
 import { PermissionType } from "@/types/enum";
 import { convertFlatToTree } from "@/utils/tree";
+import { parseMenuMetadata } from "@/utils/menuTree";
 import { Component } from "./utils";
 import { getMenus } from "@/store/menuStore";
 import { DynamicMenuResolver } from "./dynamic-resolver";
@@ -32,8 +33,15 @@ const getRoutePath = (menuPath?: string, parentPath?: string) => {
  */
 const generateProps = (metaInfo: MenuMetaInfo) => {
 	const props: any = {};
+	// Prefer explicit field, then fall back to metadata.externalLink
 	if (metaInfo.externalLink) {
-		props.src = metaInfo.externalLink?.toString() || "";
+		props.src = metaInfo.externalLink?.toString?.() || "";
+	}
+	if (!props.src && (metaInfo as any)?.metadata) {
+		const meta = parseMenuMetadata((metaInfo as any).metadata);
+		if (meta && typeof (meta as any).externalLink === "string") {
+			props.src = String((meta as any).externalLink);
+		}
 	}
 	return props;
 };
