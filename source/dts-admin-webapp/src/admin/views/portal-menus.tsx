@@ -241,6 +241,19 @@ export default function PortalMenusView() {
 
 		setQuickAddBusy(true);
 		try {
+			const defaultRoles = [
+				"ROLE_EMPLOYEE",
+				"ROLE_DEPT_DATA_VIEWER",
+				"ROLE_DEPT_DATA_DEV",
+				"ROLE_DEPT_DATA_OWNER",
+				"ROLE_DEPT_LEADER",
+				"ROLE_INST_DATA_VIEWER",
+				"ROLE_INST_DATA_DEV",
+				"ROLE_INST_DATA_OWNER",
+				"ROLE_INST_LEADER",
+				"ROLE_ADMIN",
+				"ROLE_OP_ADMIN",
+			];
 			const payload: PortalMenuItem = {
 				name: `custom.link.${segment}`,
 				path: segment,
@@ -249,8 +262,8 @@ export default function PortalMenusView() {
 				icon: "solar:link-bold-duotone",
 				sortOrder: 999,
 				metadata: JSON.stringify(meta),
-				// Default to employee-visible; fine-tune with “配置角色”
-				allowedRoles: ["ROLE_EMPLOYEE"],
+				// Default: align with “报表与大屏”可见角色；可在创建后用“配置角色”精确收敛
+				allowedRoles: defaultRoles,
 			};
 			const result = await adminApi.createPortalMenu(payload);
 			if (result && typeof result === "object" && (result as any).menus) {
