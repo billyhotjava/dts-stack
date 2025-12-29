@@ -1241,12 +1241,35 @@ public class PortalMenuService {
         if (isDisabledSectionKey(sectionKey)) {
             return true;
         }
+        // Fallback for legacy rows with missing/invalid metadata: detect by name/path tokens.
+        String name = menu != null ? menu.getName() : null;
+        String path = menu != null ? menu.getPath() : null;
+        String nameLower = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
+        String pathLower = path == null ? "" : path.trim().toLowerCase(Locale.ROOT);
+        if (
+            nameLower.contains("sys.nav.portal.ops") ||
+            nameLower.endsWith(".ops") ||
+            nameLower.contains(".ops.") ||
+            "ops".equals(pathLower)
+        ) {
+            return true;
+        }
         String entryKey = extractEntryKey(menu);
         if ("security".equalsIgnoreCase(sectionKey) && StringUtils.hasText(entryKey)) {
             String normalized = entryKey.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "");
             if ("threeadmins".equals(normalized)) {
                 return true;
             }
+        }
+        if (
+            nameLower.contains("threeadmins") ||
+            nameLower.contains("three_admins") ||
+            nameLower.contains("three-admins") ||
+            pathLower.contains("threeadmins") ||
+            pathLower.contains("three_admins") ||
+            pathLower.contains("three-admins")
+        ) {
+            return true;
         }
         return false;
     }
