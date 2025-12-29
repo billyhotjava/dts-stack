@@ -85,7 +85,18 @@ export const normalizeMenuPath = (path?: string | null): string => {
 };
 
 export const resolveMenuPath = (node: MenuTree, meta: MenuMetadata): string => {
-	const rawPath = node?.path ?? (typeof meta?.path === "string" ? meta.path : undefined);
+	// Prefer explicit external link in metadata so navigation can open the real URL directly (avoids popup blockers).
+	const external =
+		(meta as any)?.externalLink ??
+		(meta as any)?.external_link ??
+		(meta as any)?.url ??
+		(meta as any)?.href ??
+		(meta as any)?.link ??
+		(meta as any)?.src;
+	if (typeof external === "string" && external.trim()) {
+		return normalizeMenuPath(external);
+	}
+	const rawPath = node?.path ?? (typeof (meta as any)?.path === "string" ? (meta as any).path : undefined);
 	return normalizeMenuPath(rawPath);
 };
 

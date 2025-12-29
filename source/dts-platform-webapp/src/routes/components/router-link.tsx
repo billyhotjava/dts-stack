@@ -9,7 +9,11 @@ interface RouterLinkProps extends Omit<LinkProps, "to"> {
 export const RouterLink: React.FC<RouterLinkProps> = ({ href, children, className, onClick, ...props }) => {
 	const isExternal = /^https?:\/\//i.test(href);
 	// Some routes (e.g. reverse-proxied BI tools) must trigger a full page load.
-	const isProxyEscape = href.startsWith("/dashboards") || href.startsWith("/analytics") || href.startsWith("/metabase");
+	const isProxyEscape =
+		href.startsWith("/dashboards") ||
+		href.startsWith("/analytics") ||
+		href.startsWith("/metabase") ||
+		href.startsWith("/screen");
 
 	if (isExternal || isProxyEscape) {
 		return (
