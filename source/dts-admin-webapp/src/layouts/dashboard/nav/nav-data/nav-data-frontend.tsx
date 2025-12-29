@@ -54,6 +54,12 @@ export const frontendNavData: NavProps["data"] = [
 				],
 			},
 			{
+				title: "运维配置",
+				path: "/admin/ops",
+				icon: <Icon icon="solar:settings-bold-duotone" size={24} />,
+				auth: SYSADMIN_ROLES,
+			},
+			{
 				title: "任务审批",
 				path: "/admin/approval",
 				icon: <Icon icon="local:ic-approval" size={24} />,

@@ -28,6 +28,7 @@ const sysadminMenus: AdminMenuItem[] = [
 			},
 		],
 	},
+	{ key: "ops", label: "运维配置", path: "/admin/ops", icon: "solar:settings-bold-duotone" },
 ];
 
 const authadminMenus: AdminMenuItem[] = [

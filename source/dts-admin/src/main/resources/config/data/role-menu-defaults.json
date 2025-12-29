@@ -82,13 +82,5 @@
     "scopes": ["DEPT","INST"],
     "requiredRoles": ["OP_ADMIN","ADMIN"],
     "requiredMgmtRoles": []
-  },
-  {
-    "code": "sys.nav.portal.ops",
-    "title": "运维",
-    "route": "/ops",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": ["OP_ADMIN","ADMIN"],
-    "requiredMgmtRoles": []
   }
 ]

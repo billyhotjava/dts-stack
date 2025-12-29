@@ -183,16 +183,9 @@
 				"securityAccessMatrix": "访问权限矩阵",
 				"securityMasking": "脱敏策略中心",
 				"securityBaseline": "安全基线与加固",
-				"securityThreeAdmins": "三员管理与职责分离",
 				"securityAuthIntegration": "身份认证集成",
 				"securityBackupRecovery": "备份恢复与灾备",
-				"securityAudit": "日志审计与报表",
-				"ops": "运维",
-				"opsMonitoring": "系统监控",
-				"opsAlerting": "告警与通知",
-				"opsLogs": "运行日志",
-				"opsDeploy": "部署与脚本",
-				"opsSettings": "运维配置"
+				"securityAudit": "日志审计与报表"
 			},
 			"dashboard": "仪表板",
 			"others": "其他",

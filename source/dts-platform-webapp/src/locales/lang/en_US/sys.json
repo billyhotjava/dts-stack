@@ -190,16 +190,9 @@
     "securityAccessMatrix": "Access matrix",
     "securityMasking": "Masking policies",
     "securityBaseline": "Security baseline",
-    "securityThreeAdmins": "Three-admin separation",
     "securityAuthIntegration": "Identity integration",
     "securityBackupRecovery": "Backup & DR",
-    "securityAudit": "Audit logs & reports",
-    "ops": "Operations",
-    "opsMonitoring": "Monitoring",
-    "opsAlerting": "Alerting",
-    "opsLogs": "Runtime logs",
-    "opsDeploy": "Deployment scripts",
-    "opsSettings": "Ops settings"
+    "securityAudit": "Audit logs & reports"
    },
    "dashboard": "Dashboard",
    "others": "Others",

@@ -281,13 +281,6 @@
           "title": "安全基线与加固"
         },
         {
-          "key": "threeAdmins",
-          "path": "three-admins",
-          "icon": "solar:users-group-rounded-bold-duotone",
-          "titleKey": "sys.nav.portal.securityThreeAdmins",
-          "title": "三员管理与职责分离"
-        },
-        {
           "key": "authIntegration",
           "path": "auth-integration",
           "icon": "solar:usb-bold-duotone",
@@ -307,50 +300,6 @@
           "icon": "solar:document-text-bold-duotone",
           "titleKey": "sys.nav.portal.securityAudit",
           "title": "日志审计与报表"
-        }
-      ]
-    },
-    {
-      "key": "ops",
-      "path": "ops",
-      "icon": "solar:settings-bold-duotone",
-      "titleKey": "sys.nav.portal.ops",
-      "title": "运维",
-      "children": [
-        {
-          "key": "monitoring",
-          "path": "monitoring",
-          "icon": "solar:monitor-bold-duotone",
-          "titleKey": "sys.nav.portal.opsMonitoring",
-          "title": "系统监控"
-        },
-        {
-          "key": "alerting",
-          "path": "alerting",
-          "icon": "solar:bell-bing-bold-duotone",
-          "titleKey": "sys.nav.portal.opsAlerting",
-          "title": "告警与通知"
-        },
-        {
-          "key": "logs",
-          "path": "logs",
-          "icon": "solar:document-add-bold-duotone",
-          "titleKey": "sys.nav.portal.opsLogs",
-          "title": "运行日志"
-        },
-        {
-          "key": "deploy",
-          "path": "deploy",
-          "icon": "solar:server-square-bold-duotone",
-          "titleKey": "sys.nav.portal.opsDeploy",
-          "title": "部署与脚本"
-        },
-        {
-          "key": "settings",
-          "path": "settings",
-          "icon": "solar:tuning-2-bold-duotone",
-          "titleKey": "sys.nav.portal.opsSettings",
-          "title": "运维配置"
         }
       ]
     }

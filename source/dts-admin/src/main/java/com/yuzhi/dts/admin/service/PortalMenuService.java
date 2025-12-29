@@ -42,7 +42,8 @@ public class PortalMenuService {
     // Default roles that can see menus when no explicit visibility is defined.
     // Note: Do NOT include ROLE_USER here; otherwise all authenticated users would see all menus.
     private static final List<String> DEFAULT_MENU_ROLES = List.of("ROLE_OP_ADMIN");
-    private static final Set<String> DISABLED_SECTIONS = Set.of("services", "iam");
+    // NOTE: ops 菜单已迁移到 dts-admin 管理端，平台侧不再展示；security.threeAdmins 同理（已在管理端实现）。
+    private static final Set<String> DISABLED_SECTIONS = Set.of("services", "iam", "ops");
     private static final Set<String> BASE_READ_SECTIONS = Set.of("catalog", "explore", "visualization");
     private static final Set<String> WRITE_SECTIONS = Set.of("modeling", "governance");
     private static final Set<String> FOUNDATION_SECTIONS = Set.of("foundation");
@@ -1237,7 +1238,17 @@ public class PortalMenuService {
 
     private boolean isDisabledMenu(PortalMenu menu) {
         String sectionKey = extractSectionKey(menu);
-        return isDisabledSectionKey(sectionKey);
+        if (isDisabledSectionKey(sectionKey)) {
+            return true;
+        }
+        String entryKey = extractEntryKey(menu);
+        if ("security".equalsIgnoreCase(sectionKey) && StringUtils.hasText(entryKey)) {
+            String normalized = entryKey.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "");
+            if ("threeadmins".equals(normalized)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isDisabledSectionKey(String sectionKey) {
