@@ -52,6 +52,11 @@ export default function PortalMenusView() {
 	const [keyword, setKeyword] = useState("");
 	const [editTarget, setEditTarget] = useState<PortalMenuItem | null>(null);
 	const [disableTarget, setDisableTarget] = useState<{ menu: PortalMenuItem; roleCodes: string[] } | null>(null);
+	const [customEditTarget, setCustomEditTarget] = useState<PortalMenuItem | null>(null);
+	const [customEditDraft, setCustomEditDraft] = useState<{ title: string; url: string }>({ title: "", url: "" });
+	const [customEditBusy, setCustomEditBusy] = useState(false);
+	const [customDeleteTarget, setCustomDeleteTarget] = useState<PortalMenuItem | null>(null);
+	const [customDeleteBusy, setCustomDeleteBusy] = useState(false);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
 	const [quickAddDraft, setQuickAddDraft] = useState<{ title: string; url: string; parentId: string }>({
 		title: "",
@@ -129,6 +134,95 @@ export default function PortalMenusView() {
 			parentId: defaultQuickAddParentId != null ? String(defaultQuickAddParentId) : "",
 		});
 		setQuickAddOpen(true);
+	};
+
+	const handleOpenCustomEdit = (menu: PortalMenuItem) => {
+		if (!menu?.id) return;
+		if (!isCustomPortalMenu(menu)) {
+			toast.error("系统内置菜单不支持编辑");
+			return;
+		}
+		const meta = parseMetadata(menu.metadata) ?? {};
+		const title = String(meta?.title ?? menu.displayName ?? menu.name ?? "").trim();
+		const url = String(meta?.externalLink ?? meta?.url ?? "").trim();
+		setCustomEditTarget(menu);
+		setCustomEditDraft({ title, url });
+	};
+
+	const handleCloseCustomEdit = () => {
+		if (customEditBusy) return;
+		setCustomEditTarget(null);
+		setCustomEditDraft({ title: "", url: "" });
+	};
+
+	const isValidLink = (value: string) => /^https?:\/\//i.test(value) || value.startsWith("/");
+
+	const handleSubmitCustomEdit = async () => {
+		const menu = customEditTarget;
+		if (!menu?.id) return;
+		const title = customEditDraft.title.trim();
+		const url = customEditDraft.url.trim();
+		if (!title) {
+			toast.error("请填写菜单名称");
+			return;
+		}
+		if (!isValidLink(url)) {
+			toast.error("请填写以 http(s):// 或 / 开头的链接地址");
+			return;
+		}
+		setCustomEditBusy(true);
+		try {
+			const meta = parseMetadata(menu.metadata) ?? {};
+			const nextMeta = { ...meta, title, externalLink: url };
+			const result = await adminApi.updatePortalMenu(menu.id, { metadata: JSON.stringify(nextMeta) } as any);
+			if (result && typeof result === "object" && (result as any).menus) {
+				updateCache(result as PortalMenuCollection);
+			} else {
+				await refresh();
+			}
+			toast.success("菜单已更新");
+			handleCloseCustomEdit();
+		} catch (error: any) {
+			toast.error(error?.message || "更新失败，请稍后重试");
+			await refresh();
+		} finally {
+			setCustomEditBusy(false);
+		}
+	};
+
+	const handleOpenCustomDelete = (menu: PortalMenuItem) => {
+		if (!menu?.id) return;
+		if (!isCustomPortalMenu(menu)) {
+			toast.error("系统内置菜单不允许删除，只能禁用");
+			return;
+		}
+		setCustomDeleteTarget(menu);
+	};
+
+	const handleCancelCustomDelete = () => {
+		if (customDeleteBusy) return;
+		setCustomDeleteTarget(null);
+	};
+
+	const handleConfirmCustomDelete = async () => {
+		const menu = customDeleteTarget;
+		if (!menu?.id) return;
+		setCustomDeleteBusy(true);
+		try {
+			const result = await adminApi.deletePortalMenuHard(menu.id);
+			if (result && typeof result === "object" && (result as any).menus) {
+				updateCache(result as PortalMenuCollection);
+			} else {
+				await refresh();
+			}
+			toast.success("菜单删除请求已提交（如启用审批流）");
+		} catch (error: any) {
+			toast.error(error?.message || "删除失败，请稍后重试");
+			await refresh();
+		} finally {
+			setCustomDeleteBusy(false);
+			setCustomDeleteTarget(null);
+		}
 	};
 
 	const handleOpenRolesDialog = (menu: PortalMenuItem) => {
@@ -248,8 +342,8 @@ export default function PortalMenusView() {
 			toast.error("请填写菜单名称");
 			return;
 		}
-		if (!/^https?:\/\//i.test(url)) {
-			toast.error("请填写以 http(s):// 开头的链接地址");
+		if (!isValidLink(url)) {
+			toast.error("请填写以 http(s):// 或 / 开头的链接地址");
 			return;
 		}
 
@@ -422,6 +516,8 @@ export default function PortalMenusView() {
 											setExpanded={setExpanded}
 											pending={pending}
 											onToggle={handleToggle}
+											onEditCustom={handleOpenCustomEdit}
+											onDeleteCustom={handleOpenCustomDelete}
 											keyword={keyword}
 											onEditRoles={handleOpenRolesDialog}
 											resolveRoleLabel={resolveRoleLabel}
@@ -449,6 +545,22 @@ export default function PortalMenusView() {
 				onConfirm={handleConfirmDisable}
 				resolveRoleLabel={resolveRoleLabel}
 				busy={disableBusy}
+			/>
+			<CustomEditMenuDialog
+				menu={customEditTarget}
+				title={customEditDraft.title}
+				url={customEditDraft.url}
+				onChangeTitle={(value) => setCustomEditDraft((prev) => ({ ...prev, title: value }))}
+				onChangeUrl={(value) => setCustomEditDraft((prev) => ({ ...prev, url: value }))}
+				onClose={handleCloseCustomEdit}
+				onSubmit={handleSubmitCustomEdit}
+				busy={customEditBusy}
+			/>
+			<CustomDeleteMenuDialog
+				menu={customDeleteTarget}
+				onCancel={handleCancelCustomDelete}
+				onConfirm={handleConfirmCustomDelete}
+				busy={customDeleteBusy}
 			/>
 			<QuickAddMenuDialog
 				open={quickAddOpen}
@@ -516,12 +628,12 @@ function QuickAddMenuDialog(props: {
 					</div>
 					<div className="space-y-1.5">
 						<Text variant="body3" className="text-muted-foreground">
-							跳转链接（http(s)://）
+							跳转链接（http(s):// 或 /）
 						</Text>
 						<Input
 							value={props.url}
 							onChange={(event) => props.onChangeUrl(event.target.value)}
-							placeholder="例如：https://bi.xxx.com/screen/share/index.html#/TJ..."
+							placeholder="例如：/screen/share/index.html#/TJ... 或 https://bi.xxx.com/screen/share/index.html#/TJ..."
 						/>
 					</div>
 					<Text variant="body3" className="text-muted-foreground">
@@ -549,6 +661,8 @@ type MenuRowProps = {
 	setExpanded: (next: Set<number>) => void;
 	pending: Record<number, boolean>;
 	onToggle: (menu: PortalMenuItem) => void;
+	onEditCustom: (menu: PortalMenuItem) => void;
+	onDeleteCustom: (menu: PortalMenuItem) => void;
 	keyword: string;
 	onEditRoles: (menu: PortalMenuItem) => void;
 	resolveRoleLabel: (authority: string) => string;
@@ -563,6 +677,8 @@ function MenuRow({
 	setExpanded,
 	pending,
 	onToggle,
+	onEditCustom,
+	onDeleteCustom,
 	keyword,
 	onEditRoles,
 	resolveRoleLabel,
@@ -577,6 +693,7 @@ function MenuRow({
 	const isExpanded = isFolder && expanded.has(id);
 	const busy = pending[id];
 	const isDeleted = Boolean(item.deleted);
+	const isCustom = isCustomPortalMenu(item);
 	const allowedAuthorities = isFolder ? [] : normalizeAllowedRoles(item.allowedRoles);
 	const previewRoles = allowedAuthorities.slice(0, 4);
 	const remainingRoles = allowedAuthorities.length - previewRoles.length;
@@ -656,6 +773,16 @@ function MenuRow({
 							<Button size="sm" variant="outline" onClick={() => onEditRoles(item)} disabled={rolesLoading || busy}>
 								配置角色
 							</Button>
+							{isCustom ? (
+								<>
+									<Button size="sm" variant="outline" onClick={() => onEditCustom(item)} disabled={busy}>
+										编辑
+									</Button>
+									<Button size="sm" variant="destructive" onClick={() => onDeleteCustom(item)} disabled={busy}>
+										删除
+									</Button>
+								</>
+							) : null}
 						</div>
 					)}
 				</td>
@@ -672,6 +799,8 @@ function MenuRow({
 							setExpanded={setExpanded}
 							pending={pending}
 							onToggle={onToggle}
+							onEditCustom={onEditCustom}
+							onDeleteCustom={onDeleteCustom}
 							keyword={keyword}
 							onEditRoles={onEditRoles}
 							resolveRoleLabel={resolveRoleLabel}
@@ -680,6 +809,99 @@ function MenuRow({
 				  ))
 				: null}
 		</Fragment>
+	);
+}
+
+function CustomEditMenuDialog(props: {
+	menu: PortalMenuItem | null;
+	title: string;
+	url: string;
+	onChangeTitle: (value: string) => void;
+	onChangeUrl: (value: string) => void;
+	onClose: () => void;
+	onSubmit: () => void;
+	busy: boolean;
+}) {
+	const open = Boolean(props.menu);
+	const label = props.menu?.displayName || props.menu?.name || (props.menu?.id ? `菜单 #${props.menu.id}` : "菜单");
+	return (
+		<Dialog open={open} onOpenChange={(next) => (!next ? props.onClose() : null)}>
+			<DialogContent className="sm:max-w-lg">
+				<DialogHeader>
+					<DialogTitle>编辑菜单</DialogTitle>
+					<Text variant="body3" className="text-muted-foreground">
+						{label}
+					</Text>
+				</DialogHeader>
+				<div className="space-y-3">
+					<div className="space-y-1.5">
+						<Text variant="body3" className="text-muted-foreground">
+							菜单名称
+						</Text>
+						<Input
+							value={props.title}
+							onChange={(event) => props.onChangeTitle(event.target.value)}
+							placeholder="例如：河图驾驶舱"
+							disabled={props.busy}
+						/>
+					</div>
+					<div className="space-y-1.5">
+						<Text variant="body3" className="text-muted-foreground">
+							跳转链接（http(s):// 或 /）
+						</Text>
+						<Input
+							value={props.url}
+							onChange={(event) => props.onChangeUrl(event.target.value)}
+							placeholder="例如：/screen/share/index.html#/TJ... 或 https://bi.xxx.com/..."
+							disabled={props.busy}
+						/>
+					</div>
+				</div>
+				<DialogFooter>
+					<Button variant="outline" onClick={props.onClose} disabled={props.busy}>
+						取消
+					</Button>
+					<Button onClick={props.onSubmit} disabled={props.busy}>
+						{props.busy ? "保存中.." : "保存"}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+function CustomDeleteMenuDialog(props: {
+	menu: PortalMenuItem | null;
+	onCancel: () => void;
+	onConfirm: () => void;
+	busy: boolean;
+}) {
+	const open = Boolean(props.menu);
+	const label = props.menu?.displayName || props.menu?.name || (props.menu?.id ? `菜单 #${props.menu.id}` : "菜单");
+	return (
+		<Dialog open={open} onOpenChange={(next) => (!next ? props.onCancel() : null)}>
+			<DialogContent className="sm:max-w-lg">
+				<DialogHeader>
+					<DialogTitle>删除菜单</DialogTitle>
+				</DialogHeader>
+				<div className="space-y-2">
+					<Text variant="body3" className="text-muted-foreground">
+						将永久删除此菜单：{label}
+					</Text>
+					<Text variant="body3" color="warning">
+						提示：若启用审批流，该操作会提交删除审批；审批通过后才会真正删除。
+					</Text>
+				</div>
+				<DialogFooter>
+					<Button variant="outline" onClick={props.onCancel} disabled={props.busy}>
+						取消
+					</Button>
+					<Button variant="destructive" onClick={props.onConfirm} disabled={props.busy}>
+						{props.busy ? "删除中.." : "确认删除"}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -1063,6 +1285,12 @@ function parseMetadata(raw?: string): Record<string, any> | null {
 	} catch {
 		return null;
 	}
+}
+
+function isCustomPortalMenu(menu: PortalMenuItem | null | undefined): boolean {
+	if (!menu) return false;
+	const name = String(menu.name || "").trim().toLowerCase();
+	return name.startsWith("custom.");
 }
 
 type MenuIndexEntry = {

@@ -968,11 +968,27 @@ public class AdminApiResource {
     }
 
     @DeleteMapping("/portal/menus/{id}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteMenu(@PathVariable String id, HttpServletRequest request) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteMenu(
+        @PathVariable String id,
+        @org.springframework.web.bind.annotation.RequestParam(name = "hard", required = false, defaultValue = "false") boolean hard,
+        HttpServletRequest request
+    ) {
         Long menuId = Long.valueOf(id);
         PortalMenu entity = portalMenuRepo.findById(menuId).orElse(null);
         if (entity == null) {
             return ResponseEntity.status(404).body(ApiResponse.error("菜单不存在"));
+        }
+        if (hard) {
+            // Hard delete is only allowed for custom menus created by admins; built-in menus are disable-only.
+            if (!isCustomPortalMenu(entity)) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error("系统内置菜单不允许删除，只能禁用"));
+            }
+            List<PortalMenu> children = portalMenuRepo.findByParentIdOrderBySortOrderAscIdAsc(menuId);
+            if (children != null && !children.isEmpty()) {
+                return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.error("仅支持删除叶子菜单；请先删除其子菜单或改为禁用"));
+            }
         }
         Map<String, Object> before = toMenuAuditPayload(entity);
         String actor = SecurityUtils.getCurrentAuditableLogin();
@@ -983,9 +999,9 @@ public class AdminApiResource {
             try {
                 ChangeRequest cr = changeRequestService.draft(
                     "PORTAL_MENU",
-                    "DISABLE",
+                    hard ? "DELETE" : "DISABLE",
                     id,
-                    Map.of("id", menuId),
+                    hard ? Map.of("id", menuId, "hard", true) : Map.of("id", menuId),
                     before,
                     null
                 );
@@ -1007,11 +1023,14 @@ public class AdminApiResource {
                 Map<String, Object> approvalDetail = new LinkedHashMap<>(auditDetail);
                 approvalDetail.put("status", "APPROVAL_PENDING");
                 approvalDetail.put("changeRequestId", cr.getId());
-                String pendingSummary = "提交菜单禁用审批：" + menuLabel;
+                String pendingSummary = (hard ? "提交菜单删除审批：" : "提交菜单禁用审批：") + menuLabel;
                 approvalDetail.put("summary", pendingSummary);
                 approvalDetail.put("operationName", pendingSummary);
-                approvalDetail.put("operationType", AuditOperationType.DISABLE.getCode());
-                approvalDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+                approvalDetail.put("operationType", (hard ? AuditOperationType.DELETE : AuditOperationType.DISABLE).getCode());
+                approvalDetail.put(
+                    "operationTypeText",
+                    (hard ? AuditOperationType.DELETE : AuditOperationType.DISABLE).getDisplayName()
+                );
                 approvalDetail.put("menuId", menuId);
                 approvalDetail.put("menuCode", entity.getName());
                 approvalDetail.put("menuTitle", menuLabel);
@@ -1036,17 +1055,21 @@ public class AdminApiResource {
             } catch (IllegalStateException ex) {
                 Map<String, Object> failureDetail = new LinkedHashMap<>(auditDetail);
                 failureDetail.put("error", ex.getMessage());
-                failureDetail.put("summary", "禁用菜单失败：" + menuLabel);
-                failureDetail.put("operationName", "禁用菜单失败：" + menuLabel);
-                failureDetail.put("operationType", AuditOperationType.DISABLE.getCode());
-                failureDetail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+                String failureSummary = (hard ? "删除菜单失败：" : "禁用菜单失败：") + menuLabel;
+                failureDetail.put("summary", failureSummary);
+                failureDetail.put("operationName", failureSummary);
+                failureDetail.put("operationType", (hard ? AuditOperationType.DELETE : AuditOperationType.DISABLE).getCode());
+                failureDetail.put(
+                    "operationTypeText",
+                    (hard ? AuditOperationType.DELETE : AuditOperationType.DISABLE).getDisplayName()
+                );
                 failureDetail.put("menuId", menuId);
                 failureDetail.put("menuCode", entity.getName());
                 failureDetail.put("menuTitle", menuLabel);
                 failureDetail.put("menuPath", entity.getPath());
                 recordPortalMenuActionV2(
                     actor,
-                    MenuAuditContext.Operation.DISABLE,
+                    hard ? MenuAuditContext.Operation.DELETE : MenuAuditContext.Operation.DISABLE,
                     AuditResultStatus.FAILED,
                     menuId,
                     menuLabel,
@@ -1055,64 +1078,80 @@ public class AdminApiResource {
                     request,
                     "/api/admin/portal/menus/" + id,
                     "DELETE",
-                    "禁用菜单失败：" + menuLabel
+                    failureSummary
                 );
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
             }
         }
         try {
-            markMenuDeleted(entity);
-            portalMenuRepo.save(entity);
+            if (hard) {
+                portalMenuVisibilityRepo.deleteByMenuId(menuId);
+                portalMenuRepo.delete(entity);
+                portalMenuRepo.flush();
+            } else {
+                markMenuDeleted(entity);
+                portalMenuRepo.save(entity);
+            }
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
-            Map<String, Object> after = toMenuAuditPayload(entity);
-            detail.put("after", after);
-            List<String> removedRoles = formatRoleAuditList(extractMenuRoles(before));
-            if (!removedRoles.isEmpty()) {
-                detail.put("removedRoleBindings", removedRoles);
+            if (!hard) {
+                Map<String, Object> after = toMenuAuditPayload(entity);
+                detail.put("after", after);
+                List<String> removedRoles = formatRoleAuditList(extractMenuRoles(before));
+                if (!removedRoles.isEmpty()) {
+                    detail.put("removedRoleBindings", removedRoles);
+                }
+                appendChangeSummary(detail, "PORTAL_MENU", before, after);
             }
-            appendChangeSummary(detail, "PORTAL_MENU", before, after);
-            detail.put("summary", "禁用菜单：" + menuLabel);
-            detail.put("operationName", "禁用菜单：" + menuLabel);
-            detail.put("operationType", AuditOperationType.DISABLE.getCode());
-            detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
-            detail.put("menuId", entity.getId());
-            detail.put("menuCode", entity.getName());
+            String successSummary = (hard ? "删除菜单：" : "禁用菜单：") + menuLabel;
+            detail.put("summary", successSummary);
+            detail.put("operationName", successSummary);
+            detail.put("operationType", (hard ? AuditOperationType.DELETE : AuditOperationType.DISABLE).getCode());
+            detail.put(
+                "operationTypeText",
+                (hard ? AuditOperationType.DELETE : AuditOperationType.DISABLE).getDisplayName()
+            );
+            detail.put("menuId", menuId);
+            detail.put("menuCode", before.get("name"));
             detail.put("menuTitle", menuLabel);
-            detail.put("menuPath", entity.getPath());
+            detail.put("menuPath", before.get("path"));
             recordPortalMenuActionV2(
                 actor,
-                MenuAuditContext.Operation.DISABLE,
+                hard ? MenuAuditContext.Operation.DELETE : MenuAuditContext.Operation.DISABLE,
                 AuditResultStatus.SUCCESS,
-                entity.getId(),
+                menuId,
                 menuLabel,
                 null,
                 new LinkedHashMap<>(detail),
                 request,
                 "/api/admin/portal/menus/" + id,
                 "DELETE",
-                "禁用菜单：" + menuLabel
+                successSummary
             );
             try {
-                notifyClient.trySend("portal_menu_updated", Map.of("action", "disable", "id", String.valueOf(entity.getId())));
+                notifyClient.trySend("portal_menu_updated", Map.of("action", hard ? "delete" : "disable", "id", String.valueOf(menuId)));
             } catch (Exception ignored) {}
             return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
         } catch (Exception ex) {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("before", before);
             detail.put("error", ex.getMessage());
-            detail.put("summary", "禁用菜单失败：" + menuLabel);
-            detail.put("operationName", "禁用菜单失败：" + menuLabel);
-            detail.put("operationType", AuditOperationType.DISABLE.getCode());
-            detail.put("operationTypeText", AuditOperationType.DISABLE.getDisplayName());
+            String failureSummary = (hard ? "删除菜单失败：" : "禁用菜单失败：") + menuLabel;
+            detail.put("summary", failureSummary);
+            detail.put("operationName", failureSummary);
+            detail.put("operationType", (hard ? AuditOperationType.DELETE : AuditOperationType.DISABLE).getCode());
+            detail.put(
+                "operationTypeText",
+                (hard ? AuditOperationType.DELETE : AuditOperationType.DISABLE).getDisplayName()
+            );
             detail.put("menuId", menuId);
             detail.put("menuCode", entity.getName());
             detail.put("menuTitle", menuLabel);
             detail.put("menuPath", entity.getPath());
-            log.error("Failed to disable portal menu {}", id, ex);
+            log.error("Failed to {} portal menu {}", hard ? "delete" : "disable", id, ex);
             recordPortalMenuActionV2(
                 actor,
-                MenuAuditContext.Operation.DISABLE,
+                hard ? MenuAuditContext.Operation.DELETE : MenuAuditContext.Operation.DISABLE,
                 AuditResultStatus.FAILED,
                 menuId,
                 menuLabel,
@@ -1121,10 +1160,19 @@ public class AdminApiResource {
                 request,
                 "/api/admin/portal/menus/" + id,
                 "DELETE",
-                "禁用菜单失败：" + menuLabel
+                failureSummary
             );
-            return ResponseEntity.internalServerError().body(ApiResponse.error("禁用菜单失败: " + ex.getMessage()));
+            return ResponseEntity
+                .internalServerError()
+                .body(ApiResponse.error((hard ? "删除" : "禁用") + "菜单失败: " + ex.getMessage()));
         }
+    }
+
+    private boolean isCustomPortalMenu(PortalMenu menu) {
+        if (menu == null) return false;
+        String name = menu.getName();
+        if (!StringUtils.hasText(name)) return false;
+        return name.trim().toLowerCase(Locale.ROOT).startsWith("custom.");
     }
 
     @GetMapping("/orgs")
@@ -6198,12 +6246,35 @@ public class AdminApiResource {
                 });
         } else if ("DISABLE".equalsIgnoreCase(action) || "DELETE".equalsIgnoreCase(action)) {
             Long id = Long.valueOf(cr.getResourceId());
-            portalMenuRepo
-                .findById(id)
-                .ifPresent(target -> {
-                    markMenuDeleted(target);
-                    portalMenuRepo.save(target);
-                });
+            boolean hard = false;
+            if ("DELETE".equalsIgnoreCase(action)) {
+                Object flag = payload.get("hard");
+                if (flag instanceof Boolean b) {
+                    hard = b.booleanValue();
+                } else if (flag != null) {
+                    hard = "true".equalsIgnoreCase(flag.toString()) || "1".equals(flag.toString());
+                }
+            }
+            if (hard) {
+                List<PortalMenu> children = portalMenuRepo.findByParentIdOrderBySortOrderAscIdAsc(id);
+                if (children != null && !children.isEmpty()) {
+                    throw new IllegalStateException("仅支持删除叶子菜单；请先删除其子菜单或改为禁用");
+                }
+                portalMenuVisibilityRepo.deleteByMenuId(id);
+                portalMenuRepo
+                    .findById(id)
+                    .ifPresent(target -> {
+                        portalMenuRepo.delete(target);
+                        portalMenuRepo.flush();
+                    });
+            } else {
+                portalMenuRepo
+                    .findById(id)
+                    .ifPresent(target -> {
+                        markMenuDeleted(target);
+                        portalMenuRepo.save(target);
+                    });
+            }
         }
         cr.setStatus("APPLIED");
     }

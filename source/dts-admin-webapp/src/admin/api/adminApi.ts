@@ -138,6 +138,11 @@ export const adminApi = {
 		apiClient.delete<PortalMenuCollection>({
 			url: `/admin/portal/menus/${id}`,
 		}),
+	deletePortalMenuHard: (id: number) =>
+		apiClient.delete<PortalMenuCollection>({
+			url: `/admin/portal/menus/${id}`,
+			params: { hard: true },
+		}),
 
 	// 角色删除前预检
 	getRolePreDeleteCheck: (name: string) =>
