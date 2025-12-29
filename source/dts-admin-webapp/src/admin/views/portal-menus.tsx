@@ -11,6 +11,7 @@ import { Badge } from "@/ui/badge";
 import { Input } from "@/ui/input";
 import { Checkbox } from "@/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { toast } from "sonner";
 
 export default function PortalMenusView() {
@@ -52,7 +53,11 @@ export default function PortalMenusView() {
 	const [editTarget, setEditTarget] = useState<PortalMenuItem | null>(null);
 	const [disableTarget, setDisableTarget] = useState<{ menu: PortalMenuItem; roleCodes: string[] } | null>(null);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
-	const [quickAddDraft, setQuickAddDraft] = useState<{ title: string; url: string }>({ title: "", url: "" });
+	const [quickAddDraft, setQuickAddDraft] = useState<{ title: string; url: string; parentId: string }>({
+		title: "",
+		url: "",
+		parentId: "",
+	});
 	const [quickAddBusy, setQuickAddBusy] = useState(false);
 
 	const filteredTreeMenus = useMemo(() => {
@@ -109,6 +114,23 @@ export default function PortalMenusView() {
 	const updateCache = (next: PortalMenuCollection) => {
 		queryClient.setQueryData(["admin", "portal-menus"], next);
 	};
+
+	const menuIndex = useMemo(() => buildMenuIndex(treeMenus), [treeMenus]);
+	const parentOptions = useMemo(() => buildParentSelectOptions(treeMenus), [treeMenus]);
+	const defaultQuickAddParentId = useMemo(
+		() => resolvePortalSectionId(treeMenus, "visualization"),
+		[treeMenus],
+	);
+
+	const handleOpenQuickAdd = () => {
+		setQuickAddDraft({
+			title: "",
+			url: "",
+			parentId: defaultQuickAddParentId != null ? String(defaultQuickAddParentId) : "",
+		});
+		setQuickAddOpen(true);
+	};
+
 	const handleOpenRolesDialog = (menu: PortalMenuItem) => {
 		setEditTarget(menu);
 	};
@@ -231,13 +253,29 @@ export default function PortalMenusView() {
 			return;
 		}
 
-		const parentId = resolvePortalSectionId(treeMenus, "visualization");
+		const parentIdRaw = quickAddDraft.parentId.trim();
+		if (!parentIdRaw) {
+			toast.error("请选择父节点");
+			return;
+		}
+		const parentId = Number.parseInt(parentIdRaw, 10);
+		if (!Number.isFinite(parentId)) {
+			toast.error("父节点不合法，请重新选择");
+			return;
+		}
+		const parentNode = menuIndex.get(parentId);
+		if (!parentNode) {
+			toast.error("未找到父节点，请刷新后重试");
+			return;
+		}
+
 		const usedFullPaths = collectFullPaths(treeMenus);
-		const segment = buildUniqueSegment(title, usedFullPaths, parentId ? "/visualization" : "");
-		const meta = {
-			title,
-			externalLink: url,
-		};
+		const segment = buildUniqueSegment(title, usedFullPaths, parentNode.fullPath || "");
+		const meta: Record<string, any> = { title, externalLink: url };
+		if (parentNode.sectionKey) {
+			meta.sectionKey = parentNode.sectionKey;
+		}
+		const nameSuffix = `${Date.now().toString(36)}-${segment}`;
 
 		setQuickAddBusy(true);
 		try {
@@ -255,9 +293,9 @@ export default function PortalMenusView() {
 				"ROLE_OP_ADMIN",
 			];
 			const payload: PortalMenuItem = {
-				name: `custom.link.${segment}`,
+				name: `custom.link.${nameSuffix}`,
 				path: segment,
-				parentId: parentId ?? null,
+				parentId,
 				component: "/pages/sys/others/link/external-link",
 				icon: "solar:link-bold-duotone",
 				sortOrder: 999,
@@ -273,7 +311,7 @@ export default function PortalMenusView() {
 			}
 			toast.success("菜单已提交新增审批（如启用审批流）");
 			setQuickAddOpen(false);
-			setQuickAddDraft({ title: "", url: "" });
+			setQuickAddDraft({ title: "", url: "", parentId: "" });
 		} catch (error: any) {
 			toast.error(error?.message || "添加失败，请稍后重试");
 			await refresh();
@@ -289,7 +327,7 @@ export default function PortalMenusView() {
 					菜单管理
 				</Text>
 				<div className="flex items-center gap-2">
-					<Button variant="secondary" onClick={() => setQuickAddOpen(true)}>
+					<Button variant="secondary" onClick={handleOpenQuickAdd}>
 						添加菜单
 					</Button>
 					<Button variant="secondary" onClick={handleReset} disabled={resetting}>
@@ -417,8 +455,11 @@ export default function PortalMenusView() {
 				onClose={() => (quickAddBusy ? null : setQuickAddOpen(false))}
 				title={quickAddDraft.title}
 				url={quickAddDraft.url}
+				parentId={quickAddDraft.parentId}
+				parentOptions={parentOptions}
 				onChangeTitle={(value) => setQuickAddDraft((prev) => ({ ...prev, title: value }))}
 				onChangeUrl={(value) => setQuickAddDraft((prev) => ({ ...prev, url: value }))}
+				onChangeParentId={(value) => setQuickAddDraft((prev) => ({ ...prev, parentId: value }))}
 				onSubmit={handleSubmitQuickAdd}
 				busy={quickAddBusy}
 			/>
@@ -431,8 +472,11 @@ function QuickAddMenuDialog(props: {
 	onClose: () => void;
 	title: string;
 	url: string;
+	parentId: string;
+	parentOptions: { value: string; label: string; disabled?: boolean }[];
 	onChangeTitle: (value: string) => void;
 	onChangeUrl: (value: string) => void;
+	onChangeParentId: (value: string) => void;
 	onSubmit: () => void;
 	busy: boolean;
 }) {
@@ -443,6 +487,23 @@ function QuickAddMenuDialog(props: {
 					<DialogTitle>添加菜单</DialogTitle>
 				</DialogHeader>
 				<div className="space-y-3">
+					<div className="space-y-1.5">
+						<Text variant="body3" className="text-muted-foreground">
+							父节点
+						</Text>
+						<Select value={props.parentId} onValueChange={props.onChangeParentId}>
+							<SelectTrigger className="w-full">
+								<SelectValue placeholder="请选择父节点（用于分组）" />
+							</SelectTrigger>
+							<SelectContent>
+								{props.parentOptions.map((option) => (
+									<SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+										{option.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
 					<div className="space-y-1.5">
 						<Text variant="body3" className="text-muted-foreground">
 							菜单名称
@@ -464,7 +525,7 @@ function QuickAddMenuDialog(props: {
 						/>
 					</div>
 					<Text variant="body3" className="text-muted-foreground">
-						默认放入“数据可视化”分组；如需控制可见角色，可创建后点击“配置角色”调整。
+						说明：创建后可在列表中点击“配置角色”调整可见范围；如启用审批流，需要授权管理员审批后生效。
 					</Text>
 				</div>
 				<DialogFooter>
@@ -1002,6 +1063,62 @@ function parseMetadata(raw?: string): Record<string, any> | null {
 	} catch {
 		return null;
 	}
+}
+
+type MenuIndexEntry = {
+	id: number;
+	fullPath: string;
+	sectionKey: string | null;
+	deleted: boolean;
+};
+
+function buildMenuIndex(items: PortalMenuItem[]): Map<number, MenuIndexEntry> {
+	const out = new Map<number, MenuIndexEntry>();
+	const walk = (nodes: PortalMenuItem[], parentPath: string, inheritedSectionKey: string | null) => {
+		for (const node of nodes) {
+			if (!node || node.id == null) continue;
+			const segment = (node.path || "").toString().replace(/^\/+|\/+$/g, "");
+			const fullPath = segment ? (parentPath ? `${parentPath}/${segment}` : `/${segment}`) : parentPath || "";
+			const meta = parseMetadata(node.metadata);
+			const sectionKey =
+				typeof meta?.sectionKey === "string" && meta.sectionKey.trim() ? meta.sectionKey.trim() : inheritedSectionKey;
+
+			out.set(node.id as number, {
+				id: node.id as number,
+				fullPath,
+				sectionKey,
+				deleted: Boolean(node.deleted),
+			});
+
+			if (Array.isArray(node.children) && node.children.length > 0) {
+				walk(node.children, fullPath, sectionKey);
+			}
+		}
+	};
+	walk(items ?? [], "", null);
+	return out;
+}
+
+function buildParentSelectOptions(items: PortalMenuItem[]): { value: string; label: string; disabled?: boolean }[] {
+	const out: { value: string; label: string; disabled?: boolean }[] = [];
+	const walk = (nodes: PortalMenuItem[], depth: number) => {
+		for (const node of nodes) {
+			if (!node || node.id == null) continue;
+			const meta = parseMetadata(node.metadata);
+			const baseName = node.displayName ?? (meta?.title as string | undefined) ?? node.name ?? String(node.id);
+			const prefix = depth > 0 ? `${"—".repeat(Math.min(depth, 6))} ` : "";
+			out.push({
+				value: String(node.id),
+				label: `${prefix}${baseName}`,
+				disabled: Boolean(node.deleted),
+			});
+			if (Array.isArray(node.children) && node.children.length > 0) {
+				walk(node.children, depth + 1);
+			}
+		}
+	};
+	walk(items ?? [], 0);
+	return out;
 }
 
 function resolvePortalSectionId(items: PortalMenuItem[], sectionKey: string): number | null {
