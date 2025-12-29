@@ -123,6 +123,8 @@ export default defineConfig(({ mode }) => {
 			open: true,
 			host: true,
 			port: 3001,
+			// Accept requests from reverse proxy with custom Host header (e.g. https://biadmin.<base-domain>)
+			allowedHosts: true,
 			// Decouple from other workspaces; do not traverse outside project root
 			fs: { strict: true, allow: [rootDir] },
 			// Ignore any sibling mounts like /workspace/dts-platform-webapp/**

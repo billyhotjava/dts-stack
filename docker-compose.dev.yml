@@ -6,28 +6,72 @@ services:
   # Merged into `dts-proxy` from `docker-compose.yml`.
   dts-proxy:
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "host.docker.internal:${HOST_GATEWAY_IP:-172.17.0.1}"
     labels:
+      # NOTE: docker-compose merges `labels` as a list by replacement (not append);
+      # keep `traefik.enable=true` here or Traefik will ignore these routers.
+      - "traefik.enable=true"
       - "traefik.http.routers.hetu-dashboards.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboards`)"
       - "traefik.http.routers.hetu-dashboards.entrypoints=websecure"
       - "traefik.http.routers.hetu-dashboards.tls=true"
       - "traefik.http.routers.hetu-dashboards.priority=200"
       - "traefik.http.routers.hetu-dashboards.service=hetu@file"
       - "traefik.http.middlewares.hetu-strip-dashboards.stripprefixregex.regex=/dashboards"
-      - "traefik.http.routers.hetu-dashboards.middlewares=hetu-strip-dashboards@docker,security-headers@file"
+      - "traefik.http.middlewares.hetu-allow-anonymous.headers.customrequestheaders.tui-allow-anonymous=true"
+      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.Host=${HOST_GATEWAY_IP}:7778"
+      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Host=${HOST_GATEWAY_IP}:7778"
+      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Port=7778"
+      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Proto=http"
+      - "traefik.http.routers.hetu-dashboards.middlewares=hetu-strip-dashboards@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
       - "traefik.http.routers.hetu-dashboard-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboard/hetu`)"
       - "traefik.http.routers.hetu-dashboard-hetu.entrypoints=websecure"
       - "traefik.http.routers.hetu-dashboard-hetu.tls=true"
       - "traefik.http.routers.hetu-dashboard-hetu.priority=210"
       - "traefik.http.routers.hetu-dashboard-hetu.service=hetu@file"
       - "traefik.http.middlewares.hetu-strip-dashboard-hetu.stripprefixregex.regex=/dashboard/hetu"
-      - "traefik.http.routers.hetu-dashboard-hetu.middlewares=hetu-strip-dashboard-hetu@docker,security-headers@file"
+      - "traefik.http.routers.hetu-dashboard-hetu.middlewares=hetu-strip-dashboard-hetu@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
       - "traefik.http.routers.hetu-screen.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/screen`)"
       - "traefik.http.routers.hetu-screen.entrypoints=websecure"
       - "traefik.http.routers.hetu-screen.tls=true"
       - "traefik.http.routers.hetu-screen.priority=190"
       - "traefik.http.routers.hetu-screen.service=hetu@file"
-      - "traefik.http.routers.hetu-screen.middlewares=security-headers@file"
+      - "traefik.http.routers.hetu-screen.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
+      - "traefik.http.routers.hetu-system.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/system`)"
+      - "traefik.http.routers.hetu-system.entrypoints=websecure"
+      - "traefik.http.routers.hetu-system.tls=true"
+      - "traefik.http.routers.hetu-system.priority=185"
+      - "traefik.http.routers.hetu-system.service=hetu@file"
+      - "traefik.http.routers.hetu-system.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
+      - "traefik.http.routers.hetu-tdv.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/tdv`)"
+      - "traefik.http.routers.hetu-tdv.entrypoints=websecure"
+      - "traefik.http.routers.hetu-tdv.tls=true"
+      - "traefik.http.routers.hetu-tdv.priority=220"
+      - "traefik.http.routers.hetu-tdv.service=hetu@file"
+      - "traefik.http.routers.hetu-tdv.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
+      - "traefik.http.routers.hetu-account.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/account`)"
+      - "traefik.http.routers.hetu-account.entrypoints=websecure"
+      - "traefik.http.routers.hetu-account.tls=true"
+      - "traefik.http.routers.hetu-account.priority=186"
+      - "traefik.http.routers.hetu-account.service=hetu@file"
+      - "traefik.http.routers.hetu-account.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
+      - "traefik.http.routers.hetu-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/hetu`)"
+      - "traefik.http.routers.hetu-hetu.entrypoints=websecure"
+      - "traefik.http.routers.hetu-hetu.tls=true"
+      - "traefik.http.routers.hetu-hetu.priority=185"
+      - "traefik.http.routers.hetu-hetu.service=hetu@file"
+      - "traefik.http.routers.hetu-hetu.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
+      - "traefik.http.routers.hetu-static.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/static`)"
+      - "traefik.http.routers.hetu-static.entrypoints=websecure"
+      - "traefik.http.routers.hetu-static.tls=true"
+      - "traefik.http.routers.hetu-static.priority=195"
+      - "traefik.http.routers.hetu-static.service=hetu@file"
+      - "traefik.http.routers.hetu-static.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
+      - "traefik.http.routers.hetu-root-assets.rule=Host(`${HOST_PLATFORM_UI}`) && (PathPrefix(`/core`) || PathPrefix(`/screen-`) || PathPrefix(`/default~`) || PathPrefix(`/vendors~`) || PathPrefix(`/runtime~`))"
+      - "traefik.http.routers.hetu-root-assets.entrypoints=websecure"
+      - "traefik.http.routers.hetu-root-assets.tls=true"
+      - "traefik.http.routers.hetu-root-assets.priority=205"
+      - "traefik.http.routers.hetu-root-assets.service=hetu@file"
+      - "traefik.http.routers.hetu-root-assets.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
 
   # Java backend: dts-admin (Spring Boot)
   dts-admin:
@@ -287,6 +331,14 @@ services:
       - /workspace/node_modules
     networks:
       - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.admin-ui.rule=Host(`${HOST_ADMIN_UI}`)"
+      - "traefik.http.routers.admin-ui.entrypoints=websecure"
+      - "traefik.http.routers.admin-ui.tls=true"
+      - "traefik.http.services.admin-ui.loadbalancer.server.port=3001"
+      - "traefik.http.routers.admin-ui.middlewares=security-headers@file"
     healthcheck:
       test: ["CMD-SHELL","curl -fsS http://127.0.0.1:$${PORT:-3001} >/dev/null || wget -qO- http://127.0.0.1:$${PORT:-3001} >/dev/null"]
       interval: 10s

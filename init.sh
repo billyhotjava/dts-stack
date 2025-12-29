@@ -767,6 +767,26 @@ fi
 determine_enabled_services
 set_default_log_root
 generate_env_base
+# Patch Traefik file-provider Hetu upstream to the detected host IP.
+# Traefik file provider does not support env interpolation, but Hetu (or its nginx) can be strict on Host.
+# We keep the upstream URL aligned with HOST_GATEWAY_IP so Traefik can reach Hetu reliably.
+if [[ -n "${HOST_GATEWAY_IP:-}" && -f "services/dts-proxy/dynamic/traefik-dynamic.yml" ]]; then
+  tmp_file="$(mktemp)"
+  if awk -v ip="${HOST_GATEWAY_IP}" '
+    BEGIN { done=0 }
+    {
+      if (!done && $0 ~ /- url: "http:\/\// && $0 ~ /:7778"/) {
+        gsub(/- url: "http:\/\/[^"]+:7778"/, "- url: \"http://" ip ":7778\"")
+        done=1
+      }
+      print
+    }
+  ' services/dts-proxy/dynamic/traefik-dynamic.yml > "${tmp_file}"; then
+    mv "${tmp_file}" services/dts-proxy/dynamic/traefik-dynamic.yml
+  else
+    rm -f "${tmp_file}" || true
+  fi
+fi
 detect_docker_api_version
 ensure_env PG_MODE "${PG_MODE}"
 ensure_env PG_HOST "${PG_HOST}"
