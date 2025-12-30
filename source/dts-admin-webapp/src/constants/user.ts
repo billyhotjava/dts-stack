@@ -1,4 +1,4 @@
-export const PERSONNEL_SECURITY_LEVEL_OPTIONS = ["非密", "一般", "重要", "核心"] as const;
+export const PERSONNEL_SECURITY_LEVEL_OPTIONS = ["一般", "重要", "核心"] as const;
 
 export const DEPARTMENT_SUGGESTIONS = ["研究所", "财务", "二级部门A"] as const;
 

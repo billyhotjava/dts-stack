@@ -233,11 +233,11 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				user.attributes?.personnel_security_level?.[0] ||
 				user.attributes?.person_security_level?.[0] ||
 				user.attributes?.person_level?.[0] ||
-				"NON_SECRET"
+				"GENERAL"
 			).toUpperCase();
 			const resolvedLevel = PERSON_SECURITY_LEVELS.some((option) => option.value === candidateLevel)
 				? candidateLevel
-				: "NON_SECRET";
+				: "GENERAL";
 			let existingGroups = Array.isArray(user.groups)
 				? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
 				: [];
@@ -390,12 +390,6 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		// 部门必填：创建与编辑均需选择所属组织
 		if (groupPathsPayload.length === 0) {
 			setError("所属组织为必填项，请先选择所属组织");
-			return;
-		}
-
-		// 创建用户时人员密级不得为“非密”
-		if (personLevel?.toUpperCase?.() === "NON_SECRET") {
-			setError("人员密级不允许为‘非密’，请选取更高密级。");
 			return;
 		}
 
@@ -604,12 +598,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 										</SelectTrigger>
 										<SelectContent>
 											{PERSON_SECURITY_LEVELS.map((option) => (
-												<SelectItem
-													key={option.value}
-													value={option.value}
-													disabled={option.value === "NON_SECRET"}
-													className={option.value === "NON_SECRET" ? "hidden" : undefined}
-												>
+												<SelectItem key={option.value} value={option.value}>
 													{option.label}
 												</SelectItem>
 											))}

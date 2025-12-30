@@ -32,7 +32,7 @@ function toPersonnelLevelZh(raw?: string): string {
 	if (upper === "CORE") return "核心";
 	if (upper === "IMPORTANT") return "重要";
 	if (upper === "GENERAL") return "一般";
-	if (upper === "NON_SECRET") return "非密";
+	if (upper === "NON_SECRET" || upper === "NONE_SECRET") return "一般";
 	return v;
 }
 

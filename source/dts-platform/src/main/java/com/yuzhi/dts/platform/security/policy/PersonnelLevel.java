@@ -6,9 +6,17 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 
 public enum PersonnelLevel {
-    GENERAL(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET), "SECRET"),
-    IMPORTANT(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET, DataLevel.DATA_CONFIDENTIAL), "CONFIDENTIAL"),
-    CORE(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET, DataLevel.DATA_CONFIDENTIAL), "TOP_SECRET");
+    /**
+     * 人员密级（personnel_level/person_security_level）：GENERAL/IMPORTANT/CORE。
+     *
+     * <p>人员密级与数据密级（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）分离：
+     * GENERAL -> INTERNAL
+     * IMPORTANT -> SECRET
+     * CORE -> CONFIDENTIAL
+     */
+    GENERAL(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL), "INTERNAL"),
+    IMPORTANT(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET), "SECRET"),
+    CORE(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET, DataLevel.DATA_CONFIDENTIAL), "CONFIDENTIAL");
 
     private final List<DataLevel> allowedDataLevels;
     private final List<String> allowedClassifications;

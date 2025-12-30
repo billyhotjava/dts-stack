@@ -22,7 +22,7 @@ public class AdminRoleAssignment extends AbstractAuditingEntity<Long> implements
     private String displayName;
 
     @Column(name = "user_security_level", nullable = false)
-    private String userSecurityLevel; // NON_SECRET/GENERAL/IMPORTANT/CORE
+    private String userSecurityLevel; // GENERAL/IMPORTANT/CORE
 
     @Column(name = "scope_org_id")
     private Long scopeOrgId; // null => institute scope
@@ -52,4 +52,3 @@ public class AdminRoleAssignment extends AbstractAuditingEntity<Long> implements
     public String getOperationsCsv() { return operationsCsv; }
     public void setOperationsCsv(String operationsCsv) { this.operationsCsv = operationsCsv; }
 }
-

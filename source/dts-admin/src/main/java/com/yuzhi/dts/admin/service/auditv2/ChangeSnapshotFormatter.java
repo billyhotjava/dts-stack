@@ -103,20 +103,15 @@ public class ChangeSnapshotFormatter {
         map.put("sortOrder", FieldMeta.label("排序值"));
         map.put("metadata", FieldMeta.label("扩展配置"));
         map.put("securityLevel", FieldMeta.mapping("访问密级", Map.of(
-            "INTERNAL", "内部",
             "GENERAL", "一般",
             "IMPORTANT", "重要",
-            "CORE", "核心",
-            "PUBLIC", "公开",
-            "NON_SECRET", "非密"
+            "CORE", "核心"
         )));
         map.put("maxDataLevel", FieldMeta.mapping("最大数据密级", Map.of(
-            "INTERNAL", "内部",
-            "GENERAL", "一般",
-            "IMPORTANT", "重要",
-            "CORE", "核心",
             "PUBLIC", "公开",
-            "NON_SECRET", "非密"
+            "INTERNAL", "内部",
+            "SECRET", "秘密",
+            "CONFIDENTIAL", "机密"
         )));
         map.put("deleted", FieldMeta.mapping("是否禁用", Map.of(
             "true", "是",
@@ -142,8 +137,7 @@ public class ChangeSnapshotFormatter {
         map.put("personSecurityLevel", FieldMeta.mapping("人员密级", Map.of(
             "GENERAL", "一般",
             "IMPORTANT", "重要",
-            "CORE", "核心",
-            "NON_SECRET", "非密"
+            "CORE", "核心"
         )));
         map.put("enabled", FieldMeta.mapping("启用状态", Map.of(
             "true", "启用",
@@ -199,12 +193,8 @@ public class ChangeSnapshotFormatter {
         map.put("classification", FieldMeta.mapping("数据密级", Map.of(
             "PUBLIC", "公开",
             "INTERNAL", "内部",
-            "GENERAL", "一般",
-            "IMPORTANT", "重要",
             "SECRET", "秘密",
-            "CONFIDENTIAL", "机密",
-            "CORE", "核心",
-            "NON_SECRET", "非密"
+            "CONFIDENTIAL", "机密"
         )));
         map.put("tags", FieldMeta.label("标签"));
         map.put("domainId", FieldMeta.label("所属数据域ID"));

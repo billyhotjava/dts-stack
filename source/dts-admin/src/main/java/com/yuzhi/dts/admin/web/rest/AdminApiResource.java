@@ -258,23 +258,24 @@ public class AdminApiResource {
         "授权管理员"
     );
 
-    private static final Set<String> MENU_SECURITY_LEVELS = Set.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
+    // 人员密级：GENERAL/IMPORTANT/CORE（NON_SECRET 等旧值会在 normalizeMenuSecurityLevel 中收敛为 GENERAL）
+    private static final Set<String> MENU_SECURITY_LEVELS = Set.of("GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> VISIBILITY_DATA_LEVELS = Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
     private static final Map<String, String> MENU_DATA_LEVEL_ALIAS = Map.of(
-        "GENERAL", "INTERNAL",
+        // 旧值/口径兼容：将人员密级或历史数据密级收敛到数据密级枚举（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）
         "NON_SECRET", "PUBLIC",
-        "IMPORTANT", "CONFIDENTIAL",
-        "CORE", "CONFIDENTIAL"
+        "NONE_SECRET", "PUBLIC",
+        "GENERAL", "INTERNAL",
+        "IMPORTANT", "SECRET",
+        "CORE", "CONFIDENTIAL",
+        "TOP_SECRET", "CONFIDENTIAL",
+        "DATA_TOP_SECRET", "CONFIDENTIAL"
     );
     private static final Map<String, String> MENU_DATA_LEVEL_LABELS = Map.of(
         "PUBLIC", "公开",
-        "NON_SECRET", "非密",
-        "GENERAL", "一般",
         "INTERNAL", "内部",
-        "IMPORTANT", "重要",
         "SECRET", "秘密",
-        "CONFIDENTIAL", "机密",
-        "CORE", "核心"
+        "CONFIDENTIAL", "机密"
     );
     // Tighten default visibility: ROLE_USER is non-binding and should not be added by default
     private static final List<String> DEFAULT_PORTAL_ROLES = List.of(AuthoritiesConstants.OP_ADMIN);
@@ -3175,10 +3176,10 @@ public class AdminApiResource {
 
     private int dataLevelPriority(String level) {
         return switch (level == null ? "" : level.toUpperCase(Locale.ROOT)) {
-            case "PUBLIC", "NON_SECRET" -> 1;
+            case "PUBLIC", "NON_SECRET", "NONE_SECRET" -> 1;
             case "INTERNAL", "GENERAL" -> 2;
             case "SECRET", "IMPORTANT" -> 3;
-            case "CONFIDENTIAL", "CORE" -> 4;
+            case "CONFIDENTIAL", "CORE", "TOP_SECRET", "DATA_TOP_SECRET" -> 4;
             default -> 0;
         };
     }
@@ -6640,6 +6641,16 @@ public class AdminApiResource {
             return "GENERAL";
         }
         String normalized = text.toUpperCase(Locale.ROOT).replace('-', '_');
+        // 兼容旧值/误传：将历史人员密级/数据密级收敛到人员密级
+        if ("NON_SECRET".equals(normalized) || "NONE_SECRET".equals(normalized)) {
+            normalized = "GENERAL";
+        } else if ("PUBLIC".equals(normalized) || "INTERNAL".equals(normalized)) {
+            normalized = "GENERAL";
+        } else if ("SECRET".equals(normalized)) {
+            normalized = "IMPORTANT";
+        } else if ("CONFIDENTIAL".equals(normalized) || "TOP_SECRET".equals(normalized) || "DATA_TOP_SECRET".equals(normalized)) {
+            normalized = "CORE";
+        }
         if (!MENU_SECURITY_LEVELS.contains(normalized)) {
             throw new IllegalArgumentException("不支持的菜单密级: " + rawLevel);
         }
@@ -7434,7 +7445,16 @@ public class AdminApiResource {
     }
 
     private static Integer securityRank(String level) {
-        return switch (level) { case "NON_SECRET" -> 0; case "GENERAL" -> 1; case "IMPORTANT" -> 2; case "CORE" -> 3; default -> null; };
+        // Rank is mapped to the maximum allowed data level rank (PUBLIC=0, INTERNAL=1, SECRET=2, CONFIDENTIAL=3)
+        if (level == null) return null;
+        String normalized = level.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+        if ("NON_SECRET".equals(normalized) || "NONE_SECRET".equals(normalized)) normalized = "GENERAL";
+        return switch (normalized) {
+            case "GENERAL" -> 1;
+            case "IMPORTANT" -> 2;
+            case "CORE" -> 3;
+            default -> null;
+        };
     }
 
     private Set<String> allowedOpsForRole(String role) {

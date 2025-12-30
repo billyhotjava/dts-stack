@@ -360,7 +360,7 @@ export default {
  * ABAC 辅助接口
  */
 export class KeycloakAbacService {
-	static setPersonLevel(userId: string, personLevel: Exclude<SecurityLevel, "NON_SECRET">) {
+	static setPersonLevel(userId: string, personLevel: SecurityLevel) {
 		return apiClient.put<any>({
 			url: `/keycloak/users/${userId}/person-level`,
 			data: { person_level: personLevel },

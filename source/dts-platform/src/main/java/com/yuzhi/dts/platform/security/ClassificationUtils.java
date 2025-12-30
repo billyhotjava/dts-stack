@@ -21,7 +21,7 @@ public class ClassificationUtils {
         "INTERNAL", 2,
         "SECRET", 3,
         "CONFIDENTIAL", 4,
-        "TOP_SECRET", 5
+        "TOP_SECRET", 4
     );
 
     private final Environment env;
@@ -61,7 +61,7 @@ public class ClassificationUtils {
 
     /**
      * Map personnel_level (GENERAL/IMPORTANT/CORE) to maximum classification.
-     * GENERAL -> SECRET, IMPORTANT -> CONFIDENTIAL, CORE -> TOP_SECRET (compat; maps to CONFIDENTIAL data set)
+     * GENERAL -> INTERNAL, IMPORTANT -> SECRET, CORE -> CONFIDENTIAL
      */
     private String resolveMaxLevelFromPersonnelClaim() {
         try {

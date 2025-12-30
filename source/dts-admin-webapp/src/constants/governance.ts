@@ -1,14 +1,12 @@
 export const PERSON_SECURITY_LEVELS = [
-	{ value: "NON_SECRET", label: "非密" },
 	{ value: "GENERAL", label: "一般" },
 	{ value: "IMPORTANT", label: "重要" },
 	{ value: "CORE", label: "核心" },
 ];
 
 export const DATA_LEVELS_BY_PERSON_LEVEL: Record<string, string[]> = {
-	NON_SECRET: ["DATA_PUBLIC"],
-	GENERAL: ["DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET"],
-	IMPORTANT: ["DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_CONFIDENTIAL"],
+	GENERAL: ["DATA_PUBLIC", "DATA_INTERNAL"],
+	IMPORTANT: ["DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET"],
 	CORE: ["DATA_PUBLIC", "DATA_INTERNAL", "DATA_SECRET", "DATA_CONFIDENTIAL"],
 };
 
@@ -31,6 +29,9 @@ export const DATA_SECURITY_LEVEL_OPTIONS = (DATA_ROLE_NAMES as readonly string[]
 export function deriveDataLevels(level?: string | null): string[] {
 	if (!level) return [];
 	const normalized = level.trim().toUpperCase().replace(/[-\s]/g, "_");
+	if (normalized === "NON_SECRET" || normalized === "NONE_SECRET") {
+		return DATA_LEVELS_BY_PERSON_LEVEL.GENERAL;
+	}
 	return DATA_LEVELS_BY_PERSON_LEVEL[normalized] ?? DATA_LEVELS_BY_PERSON_LEVEL[level] ?? [];
 }
 

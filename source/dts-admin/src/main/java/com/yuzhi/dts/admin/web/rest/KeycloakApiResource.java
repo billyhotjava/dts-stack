@@ -695,7 +695,7 @@ public class KeycloakApiResource {
         String username = resolveUsername(id, null, adminAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         String level = String.valueOf(body.getOrDefault("person_level", "")).toUpperCase();
-        if (!List.of("NON_SECRET", "GENERAL", "IMPORTANT", "CORE").contains(level)) {
+        if (!List.of("GENERAL", "IMPORTANT", "CORE").contains(level)) {
             return ResponseEntity.badRequest().body(ApiResponse.error("无效的人员密级"));
         }
         String actor = currentUser();
@@ -757,7 +757,7 @@ public class KeycloakApiResource {
             );
             return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         }
-        String person = u.getAttributes().getOrDefault("person_level", List.of("NON_SECRET")).stream().findFirst().orElse("NON_SECRET");
+        String person = u.getAttributes().getOrDefault("person_level", List.of("GENERAL")).stream().findFirst().orElse("GENERAL");
         List<String> levels = List.of();
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("personLevel", person);

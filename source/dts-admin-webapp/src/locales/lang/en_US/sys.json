@@ -265,7 +265,7 @@
 				"DATA_INTERNAL": "Internal",
 				"DATA_SECRET": "Secret",
 				"DATA_CONFIDENTIAL": "Confidential",
-				"NON_SECRET": "Non-secret",
+				"NON_SECRET": "General",
 				"GENERAL": "General",
 				"IMPORTANT": "Important",
 				"CORE": "Core",

@@ -291,7 +291,7 @@
 				"DATA_INTERNAL": "内部",
 				"DATA_SECRET": "秘密",
 				"DATA_CONFIDENTIAL": "机密",
-				"NON_SECRET": "非密",
+				"NON_SECRET": "一般",
 				"GENERAL": "一般",
 				"IMPORTANT": "重要",
 				"CORE": "核心",

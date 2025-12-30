@@ -403,10 +403,10 @@ public class PortalMenuService {
 
     private int dataLevelPriority(String level) {
         return switch (level == null ? "" : level.toUpperCase(Locale.ROOT)) {
-            case "PUBLIC", "NON_SECRET" -> 1;
+            case "PUBLIC", "NON_SECRET", "NONE_SECRET" -> 1;
             case "INTERNAL", "GENERAL" -> 2;
             case "SECRET", "IMPORTANT" -> 3;
-            case "CONFIDENTIAL", "CORE", "CORE_SECRET" -> 4;
+            case "CONFIDENTIAL", "CORE", "TOP_SECRET", "DATA_TOP_SECRET", "CORE_SECRET" -> 4;
             default -> 0;
         };
     }

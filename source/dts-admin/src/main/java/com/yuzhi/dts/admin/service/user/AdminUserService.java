@@ -80,8 +80,9 @@ public class AdminUserService {
         "ADMIN_ROLE_CREATE"
     );
 
-    private static final Set<String> SUPPORTED_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET", "GENERAL", "IMPORTANT", "CORE");
-    private static final Set<String> FORBIDDEN_SECURITY_LEVELS = Set.of("NONE_SECRET", "NON_SECRET");
+    // 人员密级：GENERAL/IMPORTANT/CORE（NON_SECRET 等旧值会在 normalizeSecurityLevel 中收敛为 GENERAL）
+    private static final Set<String> SUPPORTED_SECURITY_LEVELS = Set.of("GENERAL", "IMPORTANT", "CORE");
+    private static final Set<String> FORBIDDEN_SECURITY_LEVELS = Set.of();
     private static final Set<String> KEYCLOAK_DEFAULT_REALM_ROLE_NAMES = Set.of("offline_access", "uma_authorization");
     private static final Map<String, String> SECURITY_LEVEL_ALIASES = Map.ofEntries(
         Map.entry("0", "GENERAL"), // 院方：0=一般
