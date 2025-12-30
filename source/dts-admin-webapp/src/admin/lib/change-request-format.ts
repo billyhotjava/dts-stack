@@ -236,7 +236,15 @@ export function formatChangeValue(
 	if (isPersonLevelKey(key)) {
 		return mapArray(value, (item) => {
 			const raw = String(item || "");
-			const mapped = PERSON_LEVEL_LABELS[raw.toUpperCase()];
+			const trimmed = raw.trim();
+			const normalized = /^\\d+$/.test(trimmed)
+				? trimmed === "0"
+					? "GENERAL"
+					: trimmed === "1"
+						? "IMPORTANT"
+						: "CORE"
+				: trimmed.toUpperCase();
+			const mapped = PERSON_LEVEL_LABELS[normalized];
 			return mapped || raw;
 		});
 	}

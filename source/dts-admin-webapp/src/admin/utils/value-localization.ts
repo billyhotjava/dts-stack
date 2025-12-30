@@ -1,5 +1,8 @@
 const FIELD_ENUM_MAP: Record<string, Record<string, string>> = {
 	personsecuritylevel: {
+		"0": "一般",
+		"1": "重要",
+		"2": "核心",
 		GENERAL: "一般",
 		IMPORTANT: "重要",
 		CORE: "核心",
@@ -11,6 +14,9 @@ const FIELD_ENUM_MAP: Record<string, Record<string, string>> = {
 		FALSE: "停用",
 	},
 	securitylevel: {
+		"0": "一般",
+		"1": "重要",
+		"2": "核心",
 		GENERAL: "一般",
 		IMPORTANT: "重要",
 		CORE: "核心",
@@ -24,6 +30,10 @@ const FIELD_ENUM_MAP: Record<string, Record<string, string>> = {
 		TOP_SECRET: "核心",
 	},
 	maxdatalevel: {
+		"0": "公开",
+		"1": "内部",
+		"2": "秘密",
+		"3": "机密",
 		// 数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL
 		PUBLIC: "公开",
 		INTERNAL: "内部",

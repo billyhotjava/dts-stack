@@ -32,6 +32,7 @@ import com.yuzhi.dts.admin.repository.PersonProfileRepository;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import com.yuzhi.dts.common.net.IpAddressUtils;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import com.yuzhi.dts.admin.domain.OrganizationNode;
 import com.yuzhi.dts.admin.domain.PersonProfile;
@@ -84,24 +85,6 @@ public class AdminUserService {
     private static final Set<String> SUPPORTED_SECURITY_LEVELS = Set.of("GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> FORBIDDEN_SECURITY_LEVELS = Set.of();
     private static final Set<String> KEYCLOAK_DEFAULT_REALM_ROLE_NAMES = Set.of("offline_access", "uma_authorization");
-    private static final Map<String, String> SECURITY_LEVEL_ALIASES = Map.ofEntries(
-        Map.entry("0", "GENERAL"), // 院方：0=一般
-        Map.entry("1", "IMPORTANT"), // 院方：1=重要
-        Map.entry("2", "CORE"), // 院方：2=核心
-        Map.entry("NONE_SECRET", "GENERAL"),
-        Map.entry("NON_SECRET", "GENERAL"),
-        Map.entry("NS", "GENERAL"),
-        Map.entry("GENERAL", "GENERAL"),
-        Map.entry("GN", "GENERAL"),
-        Map.entry("GE", "GENERAL"),
-        Map.entry("G", "GENERAL"),
-        Map.entry("IMPORTANT", "IMPORTANT"),
-        Map.entry("IM", "IMPORTANT"),
-        Map.entry("I", "IMPORTANT"),
-        Map.entry("CORE", "CORE"),
-        Map.entry("CO", "CORE"),
-        Map.entry("C", "CORE")
-    );
 
     private final AdminKeycloakUserRepository userRepository;
     private final AdminApprovalRequestRepository approvalRepository;
@@ -1841,11 +1824,8 @@ public class AdminUserService {
     }
 
     private String normalizeSecurityLevel(String level) {
-        if (level == null) {
-            return null;
-        }
-        String normalized = level.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
-        return SECURITY_LEVEL_ALIASES.getOrDefault(normalized, normalized);
+        SecurityLevelCatalog.PersonnelSecurityLevel parsed = SecurityLevelCatalog.PersonnelSecurityLevel.parse(level);
+        return parsed != null ? parsed.code() : null;
     }
 
     private AdminKeycloakUser ensureSnapshot(String username) {

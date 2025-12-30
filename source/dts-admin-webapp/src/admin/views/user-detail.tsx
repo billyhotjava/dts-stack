@@ -252,6 +252,12 @@ export default function UserDetailView() {
 		getSingleAttributeValue(user?.attributes, "person_level");
 	const personnelSecurityLevel = (() => {
 		const v = personnelSecurityLevelRaw || "";
+		if (/^\\d+$/.test(v.trim())) {
+			const n = v.trim();
+			if (n === "0") return "一般";
+			if (n === "1") return "重要";
+			return "核心";
+		}
 		const upper = v.toUpperCase();
 		if (upper === "CORE") return "核心";
 		if (upper === "IMPORTANT") return "重要";

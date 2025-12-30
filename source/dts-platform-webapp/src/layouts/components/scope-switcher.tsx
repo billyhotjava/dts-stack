@@ -54,7 +54,13 @@ export default function ScopeSwitcher() {
         : attrs.person_security_level
         ? [attrs.person_security_level]
         : [];
-      const raw = String((arr && arr[0]) || "").toUpperCase();
+      const raw0 = String((arr && arr[0]) || "").trim();
+      if (/^\d+$/.test(raw0)) {
+        if (raw0 === "0") return "GENERAL";
+        if (raw0 === "1") return "IMPORTANT";
+        return "CORE";
+      }
+      const raw = raw0.toUpperCase();
       if (["GENERAL", "IMPORTANT", "CORE"].includes(raw)) return raw as "GENERAL" | "IMPORTANT" | "CORE";
     } catch {
       // ignore parsing errors

@@ -61,7 +61,7 @@ public class ClassificationUtils {
 
     /**
      * Map personnel_level (GENERAL/IMPORTANT/CORE) to maximum classification.
-     * GENERAL -> INTERNAL, IMPORTANT -> SECRET, CORE -> CONFIDENTIAL
+     * GENERAL -> SECRET, IMPORTANT -> CONFIDENTIAL, CORE -> CONFIDENTIAL (system capped at CONFIDENTIAL)
      */
     private String resolveMaxLevelFromPersonnelClaim() {
         try {

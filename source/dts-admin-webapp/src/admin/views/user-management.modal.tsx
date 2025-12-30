@@ -106,6 +106,17 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [orgLoading, setOrgLoading] = useState(false);
 	const [selectedGroupPaths, setSelectedGroupPaths] = useState<string[]>([]);
 
+	const normalizePersonLevelToken = useCallback((raw: string) => {
+		const v = (raw || "").toString().trim();
+		if (!v) return "";
+		if (/^\\d+$/.test(v)) {
+			if (v === "0") return "GENERAL";
+			if (v === "1") return "IMPORTANT";
+			return "CORE";
+		}
+		return v.toUpperCase();
+	}, []);
+
 	const loadOrganizations = useCallback(async () => {
 		setOrgLoading(true);
 		try {
@@ -131,15 +142,10 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				}
 			});
 
-			const candidateLevel = (
-				level ||
-				cloned.personnel_security_level?.[0] ||
-				cloned.person_security_level?.[0] ||
-				cloned.person_level?.[0] ||
-				""
-			).toUpperCase();
-			const resolvedLevel = PERSON_SECURITY_LEVELS.some((option) => option.value === candidateLevel)
-				? candidateLevel
+			const candidateLevel = level || cloned.personnel_security_level?.[0] || cloned.person_security_level?.[0] || cloned.person_level?.[0] || "";
+			const normalizedCandidate = normalizePersonLevelToken(candidateLevel);
+			const resolvedLevel = PERSON_SECURITY_LEVELS.some((option) => option.value === normalizedCandidate)
+				? normalizedCandidate
 				: undefined;
 
 			if (resolvedLevel) {
@@ -171,7 +177,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 
 			return cloned;
 		},
-		[],
+		[normalizePersonLevelToken],
 	);
 
 	const buildAttributesPayload = useCallback((): Record<string, string[]> => {
@@ -234,9 +240,10 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				user.attributes?.person_security_level?.[0] ||
 				user.attributes?.person_level?.[0] ||
 				"GENERAL"
-			).toUpperCase();
-			const resolvedLevel = PERSON_SECURITY_LEVELS.some((option) => option.value === candidateLevel)
-				? candidateLevel
+			);
+			const normalizedCandidate = normalizePersonLevelToken(candidateLevel);
+			const resolvedLevel = PERSON_SECURITY_LEVELS.some((option) => option.value === normalizedCandidate)
+				? normalizedCandidate
 				: "GENERAL";
 			let existingGroups = Array.isArray(user.groups)
 				? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)

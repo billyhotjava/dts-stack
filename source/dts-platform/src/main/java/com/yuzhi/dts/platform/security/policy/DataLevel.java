@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.security.policy;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -67,6 +68,18 @@ public enum DataLevel {
         if (trimmed.isEmpty()) {
             return null;
         }
+
+        // Preferred: unify parsing (supports numeric 0/1/2/3 and Chinese labels)
+        SecurityLevelCatalog.DataSecurityLevel parsed = SecurityLevelCatalog.DataSecurityLevel.parse(trimmed);
+        if (parsed != null) {
+            return switch (parsed) {
+                case PUBLIC -> DATA_PUBLIC;
+                case INTERNAL -> DATA_INTERNAL;
+                case SECRET -> DATA_SECRET;
+                case CONFIDENTIAL -> DATA_CONFIDENTIAL;
+            };
+        }
+
         String canonical = trimmed.toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
         if (canonical.equals("TOP_SECRET") || canonical.equals("DATA_TOP_SECRET")) {
             return DATA_CONFIDENTIAL;

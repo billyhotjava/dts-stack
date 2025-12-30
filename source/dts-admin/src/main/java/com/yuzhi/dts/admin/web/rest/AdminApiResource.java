@@ -262,11 +262,17 @@ public class AdminApiResource {
     private static final Set<String> MENU_SECURITY_LEVELS = Set.of("GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> VISIBILITY_DATA_LEVELS = Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
     private static final Map<String, String> MENU_DATA_LEVEL_ALIAS = Map.of(
+        // numeric codes for data levels
+        "0", "PUBLIC",
+        "1", "INTERNAL",
+        "2", "SECRET",
+        "3", "CONFIDENTIAL",
         // 旧值/口径兼容：将人员密级或历史数据密级收敛到数据密级枚举（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）
         "NON_SECRET", "PUBLIC",
         "NONE_SECRET", "PUBLIC",
-        "GENERAL", "INTERNAL",
-        "IMPORTANT", "SECRET",
+        // personnel -> max data level (system capped at CONFIDENTIAL)
+        "GENERAL", "SECRET",
+        "IMPORTANT", "CONFIDENTIAL",
         "CORE", "CONFIDENTIAL",
         "TOP_SECRET", "CONFIDENTIAL",
         "DATA_TOP_SECRET", "CONFIDENTIAL"
@@ -6640,7 +6646,14 @@ public class AdminApiResource {
         if (text.isEmpty()) {
             return "GENERAL";
         }
-        String normalized = text.toUpperCase(Locale.ROOT).replace('-', '_');
+        String normalized = text.toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+        if (normalized.chars().allMatch(Character::isDigit)) {
+            normalized = switch (normalized) {
+                case "0" -> "GENERAL";
+                case "1" -> "IMPORTANT";
+                default -> "CORE";
+            };
+        }
         // 兼容旧值/误传：将历史人员密级/数据密级收敛到人员密级
         if ("NON_SECRET".equals(normalized) || "NONE_SECRET".equals(normalized)) {
             normalized = "GENERAL";

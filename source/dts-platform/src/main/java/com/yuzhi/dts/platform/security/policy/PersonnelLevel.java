@@ -1,21 +1,18 @@
 package com.yuzhi.dts.platform.security.policy;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
 public enum PersonnelLevel {
-    /**
-     * 人员密级（personnel_level/person_security_level）：GENERAL/IMPORTANT/CORE。
-     *
-     * <p>人员密级与数据密级（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）分离：
-     * GENERAL -> INTERNAL
-     * IMPORTANT -> SECRET
-     * CORE -> CONFIDENTIAL
-     */
-    GENERAL(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL), "INTERNAL"),
-    IMPORTANT(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET), "SECRET"),
+    // Rule (current system supports up to CONFIDENTIAL):
+    // GENERAL -> PUBLIC/INTERNAL/SECRET
+    // IMPORTANT -> PUBLIC/INTERNAL/SECRET/CONFIDENTIAL
+    // CORE -> capped at CONFIDENTIAL for now
+    GENERAL(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET), "SECRET"),
+    IMPORTANT(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET, DataLevel.DATA_CONFIDENTIAL), "CONFIDENTIAL"),
     CORE(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET, DataLevel.DATA_CONFIDENTIAL), "CONFIDENTIAL");
 
     private final List<DataLevel> allowedDataLevels;
@@ -55,25 +52,12 @@ public enum PersonnelLevel {
     }
 
     public static PersonnelLevel normalize(String value) {
-        if (value == null) return null;
-        String v = value.trim().toUpperCase(Locale.ROOT);
-        // Some integrations emit numeric clearance levels. Map them conservatively:
-        // 0 -> GENERAL, 1 -> IMPORTANT, >=2 -> CORE.
-        if (v.matches("^\\d+$")) {
-            try {
-                int n = Integer.parseInt(v);
-                if (n <= 0) return GENERAL;
-                if (n == 1) return IMPORTANT;
-                return CORE;
-            } catch (Exception ignored) {
-                return null;
-            }
-        }
-        return switch (v) {
-            case "GENERAL" -> GENERAL;
-            case "IMPORTANT", "IMPORTAN" -> IMPORTANT;
-            case "CORE" -> CORE;
-            default -> null;
+        SecurityLevelCatalog.PersonnelSecurityLevel parsed = SecurityLevelCatalog.PersonnelSecurityLevel.parse(value);
+        if (parsed == null) return null;
+        return switch (parsed) {
+            case GENERAL -> GENERAL;
+            case IMPORTANT -> IMPORTANT;
+            case CORE -> CORE;
         };
     }
 

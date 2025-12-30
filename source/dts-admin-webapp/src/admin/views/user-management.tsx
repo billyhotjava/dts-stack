@@ -28,6 +28,11 @@ function getSingleAttr(attrs: Record<string, string[]> | undefined, key: string)
 function toPersonnelLevelZh(raw?: string): string {
 	const v = (raw || "").toString().trim();
 	if (!v) return "";
+	if (/^\\d+$/.test(v)) {
+		if (v === "0") return "一般";
+		if (v === "1") return "重要";
+		return "核心";
+	}
 	const upper = v.toUpperCase();
 	if (upper === "CORE") return "核心";
 	if (upper === "IMPORTANT") return "重要";
