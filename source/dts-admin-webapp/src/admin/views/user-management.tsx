@@ -399,23 +399,6 @@ export default function UserManagementView() {
 				onCell: () => ({ style: { verticalAlign: "middle" } }),
 			},
 			{
-				title: "院级状态",
-				key: "mdmEnabled",
-				width: 120,
-				onCell: () => ({ style: { verticalAlign: "middle" } }),
-				render: (_, record) => {
-					const username = (record?.username || "").toString().trim();
-					const value = username ? mdmEnabledMap[username] : undefined;
-					if (value === 0) {
-						return <Badge variant="destructive">院级禁用</Badge>;
-					}
-					if (value === 1) {
-						return <Badge variant="secondary">院级启用</Badge>;
-					}
-					return <span className="text-muted-foreground">--</span>;
-				},
-			},
-			{
 				title: "姓名",
 				key: "fullName",
 				width: 160,
@@ -494,6 +477,23 @@ export default function UserManagementView() {
 						<span className={val ? "text-emerald-600" : "text-red-600"}>{val ? "已启用" : "已停用"}</span>
 					</div>
 				),
+			},
+			{
+				title: <span className="whitespace-nowrap">院级状态</span>,
+				key: "mdmEnabled",
+				width: 140,
+				onCell: () => ({ style: { verticalAlign: "middle" } }),
+				render: (_, record) => {
+					const username = (record?.username || "").toString().trim();
+					const value = username ? mdmEnabledMap[username] : undefined;
+					if (value === 0) {
+						return <Badge variant="destructive">院级禁用</Badge>;
+					}
+					if (value === 1) {
+						return <Badge variant="secondary">院级启用</Badge>;
+					}
+					return <span className="text-muted-foreground">--</span>;
+				},
 			},
 			{
 				title: "操作",
@@ -587,7 +587,7 @@ export default function UserManagementView() {
 							className="text-sm"
 							rowClassName={() => "text-sm"}
 							tableLayout="fixed"
-							scroll={{ x: 1400 }}
+							scroll={{ x: 1500 }}
 							expandable={{
 								expandedRowRender,
 								expandRowByClick: true,

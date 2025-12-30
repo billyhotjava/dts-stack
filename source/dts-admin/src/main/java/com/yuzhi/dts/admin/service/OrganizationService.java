@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.service;
 
 import com.yuzhi.dts.admin.domain.OrganizationNode;
+import com.yuzhi.dts.admin.repository.PersonProfileRepository;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.config.MdmGatewayProperties;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
@@ -32,6 +33,7 @@ public class OrganizationService {
     private static final Duration PROVISIONING_RETRY_BACKOFF = Duration.ofSeconds(30);
 
     private final OrganizationRepository repository;
+    private final PersonProfileRepository personProfileRepository;
     private final KeycloakAdminClient keycloakAdminClient;
     private final KeycloakAuthService keycloakAuthService;
     private final String managementClientId;
@@ -47,6 +49,7 @@ public class OrganizationService {
 
     public OrganizationService(
         OrganizationRepository repository,
+        PersonProfileRepository personProfileRepository,
         KeycloakAdminClient keycloakAdminClient,
         KeycloakAuthService keycloakAuthService,
         @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}") String managementClientId,
@@ -59,6 +62,7 @@ public class OrganizationService {
         MdmGatewayProperties mdmGatewayProperties
     ) {
         this.repository = repository;
+        this.personProfileRepository = personProfileRepository;
         this.keycloakAdminClient = keycloakAdminClient;
         this.keycloakAuthService = keycloakAuthService;
         this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
@@ -212,10 +216,6 @@ public class OrganizationService {
 
         if (!isRoot && parent != null) {
             entity.setParent(parent);
-            if (parent.getChildren() == null) {
-                parent.setChildren(new ArrayList<>());
-            }
-            parent.getChildren().add(entity);
         } else {
             entity.setParent(null);
         }
@@ -361,19 +361,7 @@ public class OrganizationService {
     }
 
     private void reassignParent(OrganizationNode node, OrganizationNode newParent) {
-        OrganizationNode currentParent = node.getParent();
         node.setParent(newParent);
-        if (currentParent != null && currentParent.getChildren() != null) {
-            currentParent.getChildren().removeIf(child -> Objects.equals(child.getId(), node.getId()));
-        }
-        if (newParent != null) {
-            if (newParent.getChildren() == null) {
-                newParent.setChildren(new ArrayList<>());
-            }
-            if (newParent.getChildren().stream().noneMatch(child -> Objects.equals(child.getId(), node.getId()))) {
-                newParent.getChildren().add(node);
-            }
-        }
     }
 
     private Long getId(OrganizationNode node) {
@@ -381,22 +369,31 @@ public class OrganizationService {
     }
 
     public void delete(Long id) {
-        repository
-            .findById(id)
-            .ifPresent(entity -> {
-                if (entity.isRoot()) {
-                    throw new IllegalArgumentException("ROOT 节点无法删除，请先调整为普通部门");
+        repository.findById(id).ifPresent(entity -> {
+            Long nodeId = entity.getId();
+            if (nodeId == null) {
+                return;
+            }
+            if (repository.existsByParent_Id(nodeId)) {
+                throw new IllegalArgumentException("该部门下仍有子部门，无法删除");
+            }
+            if (StringUtils.isNotBlank(entity.getDeptCode()) && personProfileRepository.existsByDeptCodeIgnoreCase(entity.getDeptCode())) {
+                throw new IllegalArgumentException("该部门下仍有关联用户（院端同步），请先调整用户所属部门后再删除");
+            }
+
+            String token = null;
+            if (isKeycloakSyncEnabled()) {
+                token = resolveManagementToken();
+                if (StringUtils.isNotBlank(entity.getKeycloakGroupId())) {
+                    boolean hasMembers = !keycloakAdminClient.listGroupMembers(entity.getKeycloakGroupId(), 0, 1, token).isEmpty();
+                    if (hasMembers) {
+                        throw new IllegalArgumentException("该部门下仍有关联用户，请先调整用户所属部门后再删除");
+                    }
                 }
-                if (isKeycloakSyncEnabled()) {
-                    String token = resolveManagementToken();
-                    deleteKeycloakGroupRecursive(entity, token);
-                }
-                OrganizationNode parent = entity.getParent();
-                if (parent != null && parent.getChildren() != null) {
-                    parent.getChildren().remove(entity);
-                }
-                repository.delete(entity);
-            });
+                deleteKeycloakGroupRecursive(entity, token);
+            }
+            repository.delete(entity);
+        });
     }
 
     private boolean isKeycloakSyncEnabled() {

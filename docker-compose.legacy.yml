@@ -487,7 +487,13 @@ services:
     environment:
       # Ensure the HTTP server is reachable from Traefik via container network.
       MB_JETTY_HOST: "0.0.0.0"
-      MB_DB_CONNECTION_URI: postgres://${PG_USER_METABASE:-metabase}:${PG_PWD_METABASE:-metabase}@${PG_HOST:-dts-pg}:${PG_PORT:-5432}/${PG_DB_METABASE:-metabase}
+      # Avoid MB_DB_CONNECTION_URI because passwords may contain characters like '@' and break URI parsing.
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: ${PG_DB_METABASE:-metabase}
+      MB_DB_PORT: ${PG_PORT:-5432}
+      MB_DB_USER: ${PG_USER_METABASE:-metabase}
+      MB_DB_PASS: ${PG_PWD_METABASE:-metabase}
+      MB_DB_HOST: ${PG_HOST:-dts-pg}
       MB_ENCRYPTION_SECRET_KEY: ${METABASE_ENCRYPTION_SECRET:-}
       MB_SITE_URL: "${METABASE_SITE_URL:-https://${HOST_PLATFORM_UI}/analytics}"
       MB_PLUGINS_DIR: /plugins

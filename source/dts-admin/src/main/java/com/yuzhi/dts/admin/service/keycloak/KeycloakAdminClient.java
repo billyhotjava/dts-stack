@@ -50,6 +50,11 @@ public interface KeycloakAdminClient {
     List<KeycloakGroupDTO> listUserGroups(String userId, String accessToken);
 
     /**
+     * List members of a group (direct members).
+     */
+    List<KeycloakUserDTO> listGroupMembers(String groupId, int first, int max, String accessToken);
+
+    /**
      * Add/remove user to/from a group.
      */
     void addUserToGroup(String userId, String groupId, String accessToken);

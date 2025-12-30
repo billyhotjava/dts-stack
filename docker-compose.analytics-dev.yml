@@ -23,7 +23,14 @@ services:
       # Bind on all interfaces inside the container.
       MB_JETTY_HOST: "0.0.0.0"
       MB_JETTY_PORT: "3000"
-      MB_DB_CONNECTION_URI: postgres://${PG_USER_METABASE:-metabase}:${PG_PWD_METABASE:-metabase}@${PG_HOST:-dts-pg}:${PG_PORT:-5432}/${PG_DB_METABASE:-metabase}
+      # IMPORTANT: Do not use MB_DB_CONNECTION_URI here because passwords may contain characters like '@'
+      # which must be URL-encoded; otherwise the JDBC/URI parser will treat it as a separator and break.
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: ${PG_DB_METABASE:-metabase}
+      MB_DB_PORT: ${PG_PORT:-5432}
+      MB_DB_USER: ${PG_USER_METABASE:-metabase}
+      MB_DB_PASS: ${PG_PWD_METABASE:-metabase}
+      MB_DB_HOST: ${PG_HOST:-dts-pg}
       MB_ENCRYPTION_SECRET_KEY: ${METABASE_ENCRYPTION_SECRET:-}
       MB_SITE_URL: "${METABASE_SITE_URL:-https://${HOST_PLATFORM_UI}/analytics}"
       MB_PLUGINS_DIR: /plugins
@@ -38,6 +45,8 @@ services:
       MB_TEST_CUSTOM_DOMAINS: "${HOST_PLATFORM_UI}"
 
       NODE_OPTIONS: "--max-old-space-size=8192"
+      HUSKY: "0"
+      HUSKY_SKIP_INSTALL: "1"
 
       # Pass through proxy envs when available (useful in restricted/offline environments).
       #
@@ -77,11 +86,23 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
 
+      # Redirect `/analytics` -> `/analytics/` to avoid empty path after StripPrefix.
+      - "traefik.http.routers.dts-analytics-dev-redirect.rule=Host(`${HOST_PLATFORM_UI}`) && Path(`/analytics`)"
+      - "traefik.http.routers.dts-analytics-dev-redirect.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-dev-redirect.tls=true"
+      - "traefik.http.routers.dts-analytics-dev-redirect.priority=700"
+      - "traefik.http.routers.dts-analytics-dev-redirect.service=noop@internal"
+      - "traefik.http.middlewares.analytics-dev-addslash.redirectregex.regex=^https?://([^/]+)/analytics$"
+      - "traefik.http.middlewares.analytics-dev-addslash.redirectregex.replacement=https://$${1}/analytics/"
+      - "traefik.http.middlewares.analytics-dev-addslash.redirectregex.permanent=true"
+      - "traefik.http.routers.dts-analytics-dev-redirect.middlewares=analytics-dev-addslash@docker,security-headers@file"
+
       # Same-domain mount: https://${HOST_PLATFORM_UI}/analytics -> backend (Jetty)
       - "traefik.http.routers.dts-analytics-dev-path.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`)"
       - "traefik.http.routers.dts-analytics-dev-path.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-dev-path.tls=true"
-      - "traefik.http.routers.dts-analytics-dev-path.priority=180"
+      # Keep higher than the non-dev analytics router (docker-compose.dev.yml sets 180).
+      - "traefik.http.routers.dts-analytics-dev-path.priority=500"
       - "traefik.http.routers.dts-analytics-dev-path.service=dts-analytics-dev"
       - "traefik.http.services.dts-analytics-dev.loadbalancer.server.port=3000"
       - "traefik.http.middlewares.analytics-dev-strip-analytics.stripprefixregex.regex=/analytics"
@@ -92,11 +113,12 @@ services:
       - "traefik.http.routers.dts-analytics-dev-assets.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics-dev-assets`)"
       - "traefik.http.routers.dts-analytics-dev-assets.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-dev-assets.tls=true"
-      - "traefik.http.routers.dts-analytics-dev-assets.priority=300"
+      - "traefik.http.routers.dts-analytics-dev-assets.priority=600"
       - "traefik.http.routers.dts-analytics-dev-assets.service=dts-analytics-dev-assets"
       - "traefik.http.services.dts-analytics-dev-assets.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.analytics-dev-strip-assets.stripprefixregex.regex=/analytics-dev-assets"
-      - "traefik.http.routers.dts-analytics-dev-assets.middlewares=analytics-dev-strip-assets@docker,security-headers@file"
+      # Do NOT strip the `/analytics-dev-assets` prefix: rspack dev server's `publicPath` is set to
+      # `${MB_FRONTEND_DEV_PUBLIC_URL}app/dist/`, so it expects requests to include this prefix.
+      - "traefik.http.routers.dts-analytics-dev-assets.middlewares=security-headers@file"
 
 volumes:
   analytics-dev-m2:

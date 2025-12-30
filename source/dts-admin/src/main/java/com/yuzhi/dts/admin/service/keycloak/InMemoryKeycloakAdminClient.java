@@ -230,6 +230,12 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
     }
 
     @Override
+    public List<KeycloakUserDTO> listGroupMembers(String groupId, int first, int max, String accessToken) {
+        // In-memory stub does not track membership; return empty list
+        return List.of();
+    }
+
+    @Override
     public void addUserToGroup(String userId, String groupId, String accessToken) {
         // no-op in memory
     }

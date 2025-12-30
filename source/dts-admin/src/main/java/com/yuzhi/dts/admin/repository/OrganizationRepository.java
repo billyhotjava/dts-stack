@@ -10,6 +10,8 @@ import org.springframework.stereotype.Repository;
 public interface OrganizationRepository extends JpaRepository<OrganizationNode, Long> {
     List<OrganizationNode> findByParentIsNullOrderByIdAsc();
 
+    boolean existsByParent_Id(Long parentId);
+
     Optional<OrganizationNode> findByKeycloakGroupId(String keycloakGroupId);
 
     Optional<OrganizationNode> findFirstByNameAndParentIsNull(String name);

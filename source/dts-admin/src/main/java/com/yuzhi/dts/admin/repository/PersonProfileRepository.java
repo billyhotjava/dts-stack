@@ -18,4 +18,6 @@ public interface PersonProfileRepository extends JpaRepository<PersonProfile, Lo
     Optional<PersonProfile> findByNationalId(String nationalId);
 
     Page<PersonProfile> findByDeptCodeIgnoreCase(String deptCode, Pageable pageable);
+
+    boolean existsByDeptCodeIgnoreCase(String deptCode);
 }

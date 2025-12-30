@@ -426,6 +426,47 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     }
 
     @Override
+    public List<KeycloakUserDTO> listGroupMembers(String groupId, int first, int max, String accessToken) {
+        if (!StringUtils.hasText(groupId)) return List.of();
+        int safeFirst = Math.max(0, first);
+        int safeMax = max <= 0 ? 10 : Math.min(max, 200);
+        URI uri = UriComponentsBuilder
+            .fromUri(groupUri(groupId, "members"))
+            .queryParam("first", safeFirst)
+            .queryParam("max", safeMax)
+            .queryParam("briefRepresentation", true)
+            .build()
+            .encode()
+            .toUri();
+        try {
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            int status = response.getStatusCode().value();
+            if (status == 404) {
+                return List.of();
+            }
+            if (status >= 400) {
+                throw toRuntime("查询 Keycloak 组成员失败", response);
+            }
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
+                return List.of();
+            }
+            List<Map<String, Object>> body = objectMapper.readValue(response.getBody(), LIST_OF_MAP);
+            List<KeycloakUserDTO> out = new ArrayList<>();
+            for (Map<String, Object> it : body) {
+                try {
+                    out.add(toUserDto(it));
+                } catch (Exception ignore) {}
+            }
+            return out;
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            LOG.warn("Failed to list members for group {}: {}", groupId, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
     public void addUserToGroup(String userId, String groupId, String accessToken) {
         if (!StringUtils.hasText(userId) || !StringUtils.hasText(groupId)) return;
         URI uri = userUri(userId, "groups", groupId);
