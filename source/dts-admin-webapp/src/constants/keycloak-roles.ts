@@ -1,8 +1,8 @@
 import type { KeycloakRole } from "#/keycloak";
 
 // Reserved business roles to hide from assignment UIs (canonical names only)
-const RESERVED_ROLE_PREFIXES = ["ROLE_SYS_ADMIN", "ROLE_AUTH_ADMIN", "ROLE_OP_ADMIN", "ROLE_SECURITY_AUDITOR"];
-const RESERVED_BUSINESS_ROLE_CODES = new Set(["SYSADMIN", "AUTHADMIN", "OPADMIN", "AUDITADMIN", "SECURITYAUDITOR"]);
+const RESERVED_ROLE_PREFIXES = ["ROLE_SYS_ADMIN", "ROLE_AUTH_ADMIN", "ROLE_OP_ADMIN", "ROLE_SECURITY_AUDITOR", "ROLE_ADMIN"];
+const RESERVED_BUSINESS_ROLE_CODES = new Set(["SYSADMIN", "AUTHADMIN", "OPADMIN", "AUDITADMIN", "SECURITYAUDITOR", "ADMIN"]);
 
 const normalizeReservedRole = (name: string | undefined | null): string => {
 	if (!name) return "";

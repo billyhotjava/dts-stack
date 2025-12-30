@@ -278,7 +278,7 @@ public class AdminApiResource {
     );
     // Tighten default visibility: ROLE_USER is non-binding and should not be added by default
     private static final List<String> DEFAULT_PORTAL_ROLES = List.of(AuthoritiesConstants.OP_ADMIN);
-    private static final Set<String> RESERVED_REALM_ROLES = Set.of("SYSADMIN", "OPADMIN", "AUTHADMIN", "AUDITADMIN", "SECURITYAUDITOR");
+    private static final Set<String> RESERVED_REALM_ROLES = Set.of("SYSADMIN", "OPADMIN", "AUTHADMIN", "AUDITADMIN", "SECURITYAUDITOR", "ADMIN");
 
     private static final Set<String> ROLE_SENSITIVE_FIELDS = Set.of();
     private static final String BUILTIN_ROLE_IMMUTABLE_MESSAGE = "系统内置角色仅支持调整成员，不可修改基本信息";

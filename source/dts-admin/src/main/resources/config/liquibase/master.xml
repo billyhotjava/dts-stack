@@ -50,6 +50,7 @@
 	    <include file="config/liquibase/changelog/20251224-01_portal_menu_reports.xml" relativeToChangelogFile="false"/>
 	    <include file="config/liquibase/changelog/20251224-02_portal_menu_visualization_reports_seed.xml" relativeToChangelogFile="false"/>
 	    <include file="config/liquibase/changelog/20251229-01_remove_portal_ops_security_menus.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251230-04_remove_portal_role_admin.xml" relativeToChangelogFile="false"/>
 	    <include file="config/liquibase/changelog/20251016-02_infra_data_source.xml" relativeToChangelogFile="false"/>
 	    <include file="config/liquibase/changelog/20251016-03_infra_data_source_audit_columns.xml" relativeToChangelogFile="false"/>
 	    <include file="config/liquibase/changelog/20251016-04_infra_data_source_secrets.xml" relativeToChangelogFile="false"/>

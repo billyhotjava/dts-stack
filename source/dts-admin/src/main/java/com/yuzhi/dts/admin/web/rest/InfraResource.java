@@ -73,7 +73,7 @@ public class InfraResource {
     }
 
     @PostMapping("/data-sources")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ResponseEntity<ApiResponse<InfraDataSourceDto>> createDataSource(
         @Valid @RequestBody UpsertInfraDataSourcePayload payload,
         HttpServletRequest servletRequest
@@ -92,7 +92,7 @@ public class InfraResource {
     }
 
     @PutMapping("/data-sources/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ResponseEntity<ApiResponse<InfraDataSourceDto>> updateDataSource(
         @PathVariable UUID id,
         @Valid @RequestBody UpsertInfraDataSourcePayload payload,
@@ -142,7 +142,7 @@ public class InfraResource {
     }
 
     @DeleteMapping("/data-sources/{id}")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ResponseEntity<ApiResponse<Boolean>> deleteDataSource(@PathVariable UUID id, HttpServletRequest servletRequest) {
         ActorResolution actor = resolveActor(servletRequest);
         InfraDataSourceDto removed = infraAdminService
@@ -165,7 +165,7 @@ public class InfraResource {
     }
 
     @PostMapping("/data-sources/test-connection")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ResponseEntity<ApiResponse<HiveConnectionTestResult>> testConnection(
         @Valid @RequestBody HiveConnectionTestRequest request,
         @RequestParam(value = "dataSourceId", required = false) UUID dataSourceId,
@@ -198,7 +198,7 @@ public class InfraResource {
     }
 
     @PostMapping("/data-sources/inceptor/publish")
-    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "')")
     public ResponseEntity<ApiResponse<InfraDataSourceDto>> publishInceptor(
         @Valid @RequestBody HiveConnectionPersistRequest request,
         HttpServletRequest servletRequest
@@ -243,7 +243,7 @@ public class InfraResource {
 
     @PostMapping("/data-sources/inceptor/refresh")
     @PreAuthorize(
-        "hasAnyAuthority('" + AuthoritiesConstants.ADMIN + "','" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "'," +
+        "hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "','" + AuthoritiesConstants.OP_ADMIN + "'," +
             "'" + AuthoritiesConstants.INST_DATA_OWNER + "','" + AuthoritiesConstants.INST_LEADER + "','" + AuthoritiesConstants.INST_DATA_DEV + "','" + AuthoritiesConstants.INST_DATA_VIEWER + "'," +
             "'" + AuthoritiesConstants.DEPT_DATA_OWNER + "','" + AuthoritiesConstants.DEPT_LEADER + "','" + AuthoritiesConstants.DEPT_DATA_DEV + "','" + AuthoritiesConstants.DEPT_DATA_VIEWER + "')"
     )

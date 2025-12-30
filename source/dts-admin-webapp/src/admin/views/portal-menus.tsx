@@ -383,7 +383,6 @@ export default function PortalMenusView() {
 				"ROLE_INST_DATA_DEV",
 				"ROLE_INST_DATA_OWNER",
 				"ROLE_INST_LEADER",
-				"ROLE_ADMIN",
 				"ROLE_OP_ADMIN",
 			];
 			const payload: PortalMenuItem = {
