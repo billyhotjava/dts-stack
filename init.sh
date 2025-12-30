@@ -88,6 +88,41 @@ detect_host_ipv4(){
   printf '%s' "172.17.0.1"
 }
 
+# Return possible architecture aliases for docker-compose binary naming.
+compose_arch_candidates(){
+  local arch
+  arch="$(uname -m 2>/dev/null || true)"
+  case "${arch}" in
+    x86_64) printf '%s\n' "x86_64" "amd64" ;;
+    aarch64) printf '%s\n' "aarch64" "arm64" ;;
+    arm64) printf '%s\n' "arm64" "aarch64" ;;
+    *) printf '%s\n' "${arch}" ;;
+  esac
+}
+
+find_bundled_docker_compose(){
+  local base_dir="$1"
+  local -a names
+  names=("docker-compose")
+  while IFS= read -r arch; do
+    [[ -n "${arch}" ]] || continue
+    names+=(
+      "docker-compose-${arch}"
+      "docker-compose-Linux-${arch}"
+      "docker-compose-linux-${arch}"
+    )
+  done < <(compose_arch_candidates)
+
+  local name
+  for name in "${names[@]}"; do
+    if [[ -x "${base_dir}/${name}" ]]; then
+      printf '%s' "${base_dir}/${name}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Determine which optional services are enabled based on imgversion.conf
 determine_enabled_services(){
   local conf="imgversion.conf"
@@ -833,74 +868,63 @@ if [[ "${LEGACY_STACK}" == "true" ]]; then
     compose_cli=(docker-compose)
   elif docker compose version >/dev/null 2>&1; then
     compose_cli=(docker compose)
-  # Offline-friendly: allow bundling docker-compose binary under builds/
-  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose" ]]; then
-    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose")
-  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-$(uname -m)")
-  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-Linux-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-Linux-$(uname -m)")
-  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-linux-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-linux-$(uname -m)")
-  # Offline-friendly (writable in repo): allow bundling under tools/
-  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose" ]]; then
-    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose")
-  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-$(uname -m)")
-  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-Linux-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-Linux-$(uname -m)")
-  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-linux-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-linux-$(uname -m)")
-  elif [[ -x /usr/local/bin/docker-compose ]]; then
-    compose_cli=(/usr/local/bin/docker-compose)
-  elif [[ -x /usr/bin/docker-compose ]]; then
-    compose_cli=(/usr/bin/docker-compose)
-  elif [[ -x /usr/libexec/docker/cli-plugins/docker-compose ]]; then
-    compose_cli=(/usr/libexec/docker/cli-plugins/docker-compose)
-  elif [[ -x /usr/lib/docker/cli-plugins/docker-compose ]]; then
-    compose_cli=(/usr/lib/docker/cli-plugins/docker-compose)
-  elif [[ -x "${HOME}/.docker/cli-plugins/docker-compose" ]]; then
-    compose_cli=("${HOME}/.docker/cli-plugins/docker-compose")
   else
-    cat <<'EOF' >&2
+    bundled=""
+    bundled="$(find_bundled_docker_compose "${SCRIPT_DIR}/tools/docker-compose" 2>/dev/null || true)"
+    if [[ -n "${bundled}" ]]; then
+      compose_cli=("${bundled}")
+    else
+      bundled="$(find_bundled_docker_compose "${SCRIPT_DIR}/builds/docker-compose" 2>/dev/null || true)"
+      if [[ -n "${bundled}" ]]; then
+        compose_cli=("${bundled}")
+      elif [[ -x /usr/local/bin/docker-compose ]]; then
+        compose_cli=(/usr/local/bin/docker-compose)
+      elif [[ -x /usr/bin/docker-compose ]]; then
+        compose_cli=(/usr/bin/docker-compose)
+      elif [[ -x /usr/libexec/docker/cli-plugins/docker-compose ]]; then
+        compose_cli=(/usr/libexec/docker/cli-plugins/docker-compose)
+      elif [[ -x /usr/lib/docker/cli-plugins/docker-compose ]]; then
+        compose_cli=(/usr/lib/docker/cli-plugins/docker-compose)
+      elif [[ -x "${HOME}/.docker/cli-plugins/docker-compose" ]]; then
+        compose_cli=("${HOME}/.docker/cli-plugins/docker-compose")
+      else
+        cat <<'EOF' >&2
 [init.sh] ERROR: Compose is not available.
 [init.sh] Legacy mode requires Docker Compose (v1 docker-compose or v2 docker compose plugin).
 [init.sh] Install one of:
 [init.sh]   - docker-compose (recommended for legacy hosts; v1.22+)
 [init.sh]   - docker compose plugin (v2)
 [init.sh] Offline option:
-[init.sh]   - put a docker-compose binary at ./builds/docker-compose/docker-compose (or docker-compose-$(uname -m))
-[init.sh]   - or put it at ./tools/docker-compose/docker-compose (or docker-compose-$(uname -m))
+[init.sh]   - put a docker-compose binary at:
+[init.sh]       ./tools/docker-compose/docker-compose
+[init.sh]       ./tools/docker-compose/docker-compose-Linux-aarch64  (or -Linux-arm64)
+[init.sh]       ./tools/docker-compose/docker-compose-Linux-x86_64   (or -Linux-amd64)
+[init.sh]     (also supports ./builds/docker-compose/ with same names)
 [init.sh] Then re-run: ./init.sh legacy ...
 EOF
-    exit 1
+        exit 1
+      fi
+    fi
   fi
 else
   if docker compose version >/dev/null 2>&1; then
     compose_cli=(docker compose)
   elif command -v docker-compose >/dev/null 2>&1; then
     compose_cli=(docker-compose)
-  # Offline-friendly: allow bundling docker-compose binary under builds/
-  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose" ]]; then
-    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose")
-  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-$(uname -m)")
-  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-Linux-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-Linux-$(uname -m)")
-  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-linux-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-linux-$(uname -m)")
-  # Offline-friendly (writable in repo): allow bundling under tools/
-  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose" ]]; then
-    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose")
-  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-$(uname -m)")
-  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-Linux-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-Linux-$(uname -m)")
-  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-linux-$(uname -m)" ]]; then
-    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-linux-$(uname -m)")
   else
-    echo "[init.sh] ERROR: docker compose not found." >&2
-    exit 1
+    bundled=""
+    bundled="$(find_bundled_docker_compose "${SCRIPT_DIR}/tools/docker-compose" 2>/dev/null || true)"
+    if [[ -n "${bundled}" ]]; then
+      compose_cli=("${bundled}")
+    else
+      bundled="$(find_bundled_docker_compose "${SCRIPT_DIR}/builds/docker-compose" 2>/dev/null || true)"
+      if [[ -n "${bundled}" ]]; then
+        compose_cli=("${bundled}")
+      else
+        echo "[init.sh] ERROR: docker compose not found." >&2
+        exit 1
+      fi
+    fi
   fi
 fi
 
