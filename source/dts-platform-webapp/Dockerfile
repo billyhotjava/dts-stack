@@ -11,7 +11,13 @@ ARG NPM_HTTP_PROXY
 ARG NPM_HTTPS_PROXY
 ARG NPM_REGISTRY
 
-# Install pnpm matching the repo's packageManager. Corepack bundled with Node 20.17 lacks the latest signing key,
+# Disable opening visualizer report during Docker build
+ENV VISUALIZER_OPEN=false
+
+# Copy lockfile and manifest first to leverage docker layer caching
+COPY pnpm-lock.yaml package.json ./
+
+# Install pnpm matching the repo's packageManager. Corepack bundled with Node 20.17 may lack the latest signing key,
 # so install via npm to avoid signature verification failures.
 RUN set -eux; \
     if [ -n "${NPM_REGISTRY:-}" ]; then \
@@ -23,14 +29,11 @@ RUN set -eux; \
         export npm_config_proxy="${http_proxy}"; \
         export npm_config_https_proxy="${https_proxy}"; \
     fi; \
-    npm install -g pnpm@10.24.0 && pnpm --version; \
+    PNPM_VERSION="$(node -p \"(require('./package.json').packageManager||'').toString()\" | sed -E 's/^pnpm@//')"; \
+    if [ -z \"${PNPM_VERSION}\" ]; then PNPM_VERSION=\"10.8.0\"; fi; \
+    npm install -g \"pnpm@${PNPM_VERSION}\"; \
+    pnpm --version; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
-
-# Disable opening visualizer report during Docker build
-ENV VISUALIZER_OPEN=false
-
-# Copy lockfile and manifest first to leverage docker layer caching
-COPY pnpm-lock.yaml package.json ./
 
 # Install dependencies without running lifecycle scripts (skip lefthook, etc.)
 RUN set -eux; \
