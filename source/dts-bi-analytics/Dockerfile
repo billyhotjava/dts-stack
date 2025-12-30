@@ -54,6 +54,13 @@ COPY . .
 # version is pulled from git, but git doesn't trust the directory due to different owners
 RUN git config --global --add safe.directory /home/node
 
+# Make git clones more reliable behind HTTP proxies (and avoid flaky HTTP/2 behavior with some proxies).
+RUN set -eux; \
+    if [ -n "${https_proxy:-}" ]; then git config --global http.proxy "${https_proxy}"; fi; \
+    if [ -n "${HTTPS_PROXY:-}" ] && [ -z "${https_proxy:-}" ]; then git config --global http.proxy "${HTTPS_PROXY}"; fi; \
+    git config --global http.version HTTP/1.1; \
+    git config --global http.postBuffer 524288000
+
 # install frontend dependencies
 RUN yarn --frozen-lockfile
 
