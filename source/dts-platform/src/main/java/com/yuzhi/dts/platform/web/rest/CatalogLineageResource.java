@@ -97,7 +97,7 @@ public class CatalogLineageResource {
 
         Optional<CatalogDatasetLineage> existing = lineageRepo.findFirstByUpstreamDatasetIdAndDownstreamDatasetId(body.upstreamDatasetId, body.downstreamDatasetId);
         if (existing.isPresent()) {
-            CatalogDatasetLineage link = existing.get();
+            CatalogDatasetLineage link = existing.orElseThrow();
             if (StringUtils.hasText(body.relationType)) {
                 link.setRelationType(body.relationType.trim());
             }
