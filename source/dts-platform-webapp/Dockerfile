@@ -10,6 +10,7 @@ WORKDIR /app
 ARG NPM_HTTP_PROXY
 ARG NPM_HTTPS_PROXY
 ARG NPM_REGISTRY
+ARG PNPM_VERSION=10.8.0
 
 # Disable opening visualizer report during Docker build
 ENV VISUALIZER_OPEN=false
@@ -29,9 +30,7 @@ RUN set -eux; \
         export npm_config_proxy="${http_proxy}"; \
         export npm_config_https_proxy="${https_proxy}"; \
     fi; \
-    PNPM_VERSION="$(node -p \"(require('./package.json').packageManager||'').toString()\" | sed -E 's/^pnpm@//')"; \
-    if [ -z \"${PNPM_VERSION}\" ]; then PNPM_VERSION=\"10.8.0\"; fi; \
-    npm install -g \"pnpm@${PNPM_VERSION}\"; \
+    npm install -g "pnpm@${PNPM_VERSION}"; \
     pnpm --version; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
