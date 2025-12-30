@@ -91,6 +91,19 @@ const extractRolesFromClaims = (claims: Record<string, unknown> | null | undefin
 	return Array.from(roles);
 };
 
+const isKeycloakBuiltinOrDefaultRoleName = (role: string): boolean => {
+	const trimmed = String(role || "").trim();
+	if (!trimmed) return true;
+	const lower = trimmed.toLowerCase();
+	const upper = trimmed.toUpperCase();
+	if (lower === "offline_access" || lower === "uma_authorization") return true;
+	if (lower.startsWith("default-roles-")) return true;
+	// Some realms may prefix realm roles into ROLE_* authorities.
+	if (upper === "ROLE_OFFLINE_ACCESS" || upper === "ROLE_UMA_AUTHORIZATION") return true;
+	if (upper.startsWith("ROLE_DEFAULT") || upper.startsWith("DEFAULT-ROLES")) return true;
+	return false;
+};
+
 type UserStore = {
 	userInfo: Partial<UserInfo>;
 	userToken: UserToken;
@@ -241,7 +254,9 @@ export const useSignIn = () => {
 			};
 
 			// Normalize user roles canonically for downstream guards/menu auth
-			adaptedUser.roles = canonicalizeRoles(Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : []);
+			adaptedUser.roles = canonicalizeRoles(Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : []).filter(
+				(role) => !isKeycloakBuiltinOrDefaultRoleName(role),
+			);
 
 			const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD || "false").toLowerCase() === "true";
 			if (FE_GUARD_ENABLED) {

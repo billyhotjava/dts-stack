@@ -14,8 +14,12 @@ import { Text } from "@/ui/typography";
 
 const ROLE_LABEL_MAP: Record<string, string> = {
 	SYSADMIN: "系统管理员",
+	SYS_ADMIN: "系统管理员",
 	AUTHADMIN: "授权管理员",
+	AUTH_ADMIN: "授权管理员",
 	AUDITADMIN: "安全审计员",
+	SECURITY_AUDITOR: "安全审计员",
+	OP_ADMIN: "业务运维管理员",
 	DEPT_DATA_OWNER: "部门数据管理员",
 	DEPT_DATA_DEV: "部门数据开发员",
 	INST_DATA_OWNER: "研究所数据管理员",
@@ -29,6 +33,25 @@ const ROLE_LABEL_MAP: Record<string, string> = {
 	INST_EDITOR: "研究所数据开发员",
 };
 
+const HIDDEN_ROLE_EXACT = new Set(["offline_access", "uma_authorization"]);
+
+function shouldHideRoleName(role: string): boolean {
+	const trimmed = role.trim();
+	if (!trimmed) return true;
+	const lower = trimmed.toLowerCase();
+	const upper = trimmed.toUpperCase();
+	if (HIDDEN_ROLE_EXACT.has(lower)) return true;
+	if (lower.startsWith("default-roles-")) return true;
+	// Keycloak / realm roles in token may come with ROLE_ prefix
+	if (upper.startsWith("ROLE_DEFAULT")) return true;
+	if (upper.startsWith("DEFAULT-ROLES")) return true;
+	if (upper === "ROLE_OFFLINE_ACCESS" || upper === "ROLE_UMA_AUTHORIZATION") return true;
+
+	// 用户反馈：个人信息里不要展示该角色（系统管理员身份已通过账号名/显示名体现）
+	if (upper === "ROLE_SYS_ADMIN") return true;
+	return false;
+}
+
 function resolveRoleLabels(roles: unknown): string[] {
 	if (!Array.isArray(roles) || roles.length === 0) {
 		return [];
@@ -37,14 +60,21 @@ function resolveRoleLabels(roles: unknown): string[] {
 	return roles
 		.map((role) => {
 			if (typeof role === "string") {
-				return ROLE_LABEL_MAP[role] ?? role;
+				const raw = role.trim();
+				if (!raw || shouldHideRoleName(raw)) return undefined;
+				const upper = raw.toUpperCase();
+				const normalized = upper.startsWith("ROLE_") ? upper.substring(5) : upper;
+				return ROLE_LABEL_MAP[upper] ?? ROLE_LABEL_MAP[normalized] ?? raw;
 			}
 
 			if (role && typeof role === "object") {
 				const maybeRole = role as { code?: string; name?: string };
-				const key = maybeRole.code || maybeRole.name;
+				const key = (maybeRole.code || maybeRole.name || "").trim();
 				if (key) {
-					return ROLE_LABEL_MAP[key] ?? key;
+					if (shouldHideRoleName(key)) return undefined;
+					const upper = key.toUpperCase();
+					const normalized = upper.startsWith("ROLE_") ? upper.substring(5) : upper;
+					return ROLE_LABEL_MAP[upper] ?? ROLE_LABEL_MAP[normalized] ?? key;
 				}
 			}
 
@@ -74,8 +104,12 @@ export default function ProfileTab({ detail, resolveAttributeValue }: ProfileTab
 		if (labels.length > 0) {
 			return Array.from(new Set(labels));
 		}
+		const fallback = USERNAME_FALLBACK_NAME[resolvedUsername?.toLowerCase() ?? ""];
+		if (fallback) {
+			return [fallback];
+		}
 		return [];
-	}, [detail?.realmRoles, roles]);
+	}, [detail?.realmRoles, roles, resolvedUsername]);
 	const accountStatus = detail?.enabled ?? enabled;
 	const accountId = detail?.id || id || "-";
 	const fallbackName = USERNAME_FALLBACK_NAME[resolvedUsername?.toLowerCase() ?? ""] || "";

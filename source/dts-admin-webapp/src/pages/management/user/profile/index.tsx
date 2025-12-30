@@ -12,8 +12,12 @@ import ProfileTab from "./profile-tab";
 
 const ROLE_LABEL_MAP: Record<string, string> = {
 	SYSADMIN: "系统管理员",
+	SYS_ADMIN: "系统管理员",
 	AUTHADMIN: "授权管理员",
+	AUTH_ADMIN: "授权管理员",
 	AUDITADMIN: "安全审计员",
+	SECURITY_AUDITOR: "安全审计员",
+	OP_ADMIN: "业务运维管理员",
 	DEPT_DATA_OWNER: "部门数据管理员",
 	DEPT_DATA_DEV: "部门数据开发员",
 	INST_DATA_OWNER: "研究所数据管理员",
@@ -29,7 +33,7 @@ const ROLE_LABEL_MAP: Record<string, string> = {
 };
 
 const HIDDEN_ROLE_PREFIXES = ["ROLE_DEFAULT", "DEFAULT-ROLES", "ROLE_UMA_AUTHORIZATION", "ROLE_OFFLINE_ACCESS"];
-const HIDDEN_ROLE_EXACT = new Set(["offline_access", "uma_authorization"]);
+const HIDDEN_ROLE_EXACT = new Set(["offline_access", "uma_authorization", "role_sys_admin"]);
 
 function resolveRoleLabels(roles: unknown): string[] {
 	if (!Array.isArray(roles) || roles.length === 0) {
@@ -45,6 +49,7 @@ function resolveRoleLabels(roles: unknown): string[] {
 				const lower = trimmed.toLowerCase();
 				if (HIDDEN_ROLE_PREFIXES.some((prefix) => upper.startsWith(prefix))) return undefined;
 				if (HIDDEN_ROLE_EXACT.has(lower)) return undefined;
+				if (upper === "ROLE_SYS_ADMIN") return undefined;
 				return ROLE_LABEL_MAP[upper] || ROLE_LABEL_MAP[upper.replace(/^ROLE_/, "")] || trimmed;
 			}
 
@@ -56,6 +61,7 @@ function resolveRoleLabels(roles: unknown): string[] {
 					const lower = key.toLowerCase();
 					if (HIDDEN_ROLE_PREFIXES.some((prefix) => upper.startsWith(prefix))) return undefined;
 					if (HIDDEN_ROLE_EXACT.has(lower)) return undefined;
+					if (upper === "ROLE_SYS_ADMIN") return undefined;
 					return ROLE_LABEL_MAP[upper] || ROLE_LABEL_MAP[upper.replace(/^ROLE_/, "")] || key;
 				}
 			}
