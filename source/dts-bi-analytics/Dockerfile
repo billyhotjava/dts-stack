@@ -64,7 +64,8 @@ RUN set -eux; \
 # install frontend dependencies
 RUN yarn --frozen-lockfile
 
-RUN INTERACTIVE=false CI=true MB_EDITION=$MB_EDITION bin/build.sh :version ${VERSION}
+# NOTE: clojure `-X` args must be valid EDN. Versions like `1.0.0` must be passed as a string.
+RUN INTERACTIVE=false CI=true MB_EDITION=$MB_EDITION bin/build.sh :version "\"${VERSION}\""
 
 # ###################
 # # STAGE 2: runner
