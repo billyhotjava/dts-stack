@@ -109,6 +109,7 @@ export default function UserManagementView() {
 		OPADMIN: "运维管理员",
 		AUDITADMIN: "安全审计员",
 	});
+	const [mdmEnabledMap, setMdmEnabledMap] = useState<Record<string, number>>({});
 	const [orgIndexById, setOrgIndexById] = useState<Record<string, OrganizationNode>>({});
 	const [modalState, setModalState] = useState<{
 		open: boolean;
@@ -124,6 +125,19 @@ export default function UserManagementView() {
 				? await KeycloakUserService.searchUsers(searchValue.trim())
 				: await KeycloakUserService.getAllUsers({ first: 0, max: 1000 });
 			setList(data || []);
+			const usernames = (data || [])
+				.map((u) => (u?.username || "").toString().trim())
+				.filter((u) => u.length > 0);
+			if (usernames.length) {
+				try {
+					const resolved = await adminApi.resolveUserMdmEnabled(usernames);
+					setMdmEnabledMap(resolved || {});
+				} catch {
+					setMdmEnabledMap({});
+				}
+			} else {
+				setMdmEnabledMap({});
+			}
 			setRolesMap({});
 		} catch (e: any) {
 			toast.error(e?.message || "加载用户失败");
@@ -385,6 +399,23 @@ export default function UserManagementView() {
 				onCell: () => ({ style: { verticalAlign: "middle" } }),
 			},
 			{
+				title: "院级状态",
+				key: "mdmEnabled",
+				width: 120,
+				onCell: () => ({ style: { verticalAlign: "middle" } }),
+				render: (_, record) => {
+					const username = (record?.username || "").toString().trim();
+					const value = username ? mdmEnabledMap[username] : undefined;
+					if (value === 0) {
+						return <Badge variant="destructive">院级禁用</Badge>;
+					}
+					if (value === 1) {
+						return <Badge variant="secondary">院级启用</Badge>;
+					}
+					return <span className="text-muted-foreground">--</span>;
+				},
+			},
+			{
 				title: "姓名",
 				key: "fullName",
 				width: 160,
@@ -495,7 +526,7 @@ export default function UserManagementView() {
 				),
 			},
 		],
-		[toggleEnabled, orgIndexById, getRoleInfo, renderRolePreview],
+		[toggleEnabled, orgIndexById, getRoleInfo, renderRolePreview, mdmEnabledMap],
 	);
 
 	return (

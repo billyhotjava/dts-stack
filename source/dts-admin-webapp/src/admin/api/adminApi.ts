@@ -230,6 +230,12 @@ export const adminApi = {
 			params: { usernames: usernames.join(",") },
 		}),
 
+	resolveUserMdmEnabled: (usernames: string[]) =>
+		apiClient.get<Record<string, number>>({
+			url: "/admin/users/mdm-enabled",
+			params: { usernames: usernames.join(",") },
+		}),
+
 	getAdminRoles: () =>
 		apiClient.get<AdminRoleDetail[]>({
 			url: "/admin/roles",

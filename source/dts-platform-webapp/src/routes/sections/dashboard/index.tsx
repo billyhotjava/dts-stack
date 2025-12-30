@@ -5,6 +5,7 @@ import LoginAuthGuard from "@/routes/components/login-auth-guard";
 import Workbench from "@/pages/dashboard/workbench";
 import BiScreensPage from "@/pages/dashboard/bi";
 import ReportsPage from "@/pages/visualization/ReportsPage";
+import AnalyticsPage from "@/pages/visualization/AnalyticsPage";
 import ReportsManagePage from "@/pages/visualization/ReportsManagePage";
 import PersonalProfilePage from "@/pages/settings/profile";
 import { DynamicMenuResolver } from "./dynamic-resolver";
@@ -37,6 +38,7 @@ export const dashboardRoutes: RouteObject[] = [
 				children: [
 					{ index: true, element: <Navigate to="reports" replace /> },
 					{ path: "reports", element: <ReportsPage /> },
+					{ path: "analytics", element: <AnalyticsPage /> },
 					{ path: "reports-manage", element: <ReportsManagePage /> },
 				],
 			},

@@ -43,7 +43,9 @@ const buildOrgOptions = (
 	ancestors: string[] = [],
 	index: Record<string, OrganizationNode>,
 ): OrgTreeOption[] => {
-	return nodes.map((node) => {
+	return nodes
+		.filter((node) => String(node?.status ?? "1") !== "0")
+		.map((node) => {
 		const segment = node.name ?? "";
 		const nextPath = segment ? [...ancestors, segment] : [...ancestors];
 		const groupPath = normalizeGroupPath(node.groupPath ?? `/${nextPath.join("/")}`);
@@ -105,6 +107,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [orgIndex, setOrgIndex] = useState<Record<string, OrganizationNode>>({});
 	const [orgLoading, setOrgLoading] = useState(false);
 	const [selectedGroupPaths, setSelectedGroupPaths] = useState<string[]>([]);
+	const [mdmEnabled, setMdmEnabled] = useState<number | null>(null);
 
 	const normalizePersonLevelToken = useCallback((raw: string) => {
 		const v = (raw || "").toString().trim();
@@ -360,6 +363,27 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 
 		loadOrganizations();
 	}, [open, loadOrganizations]);
+
+	useEffect(() => {
+		if (!open || mode !== "edit") {
+			setMdmEnabled(null);
+			return;
+		}
+		const username = (user?.username || "").toString().trim();
+		if (!username) {
+			setMdmEnabled(null);
+			return;
+		}
+		(async () => {
+			try {
+				const resolved = await adminApi.resolveUserMdmEnabled([username]);
+				const value = Object.entries(resolved || {}).find(([k]) => k.toLowerCase() === username.toLowerCase())?.[1];
+				setMdmEnabled(typeof value === "number" ? value : null);
+			} catch {
+				setMdmEnabled(null);
+			}
+		})();
+	}, [open, mode, user?.username]);
 
 	const hasUserInfoChanged = (normalizedAttributes?: Record<string, string[]>, groupPaths?: string[]): boolean => {
 		const { originalData, groupPaths: originalGroupPaths } = formState;
@@ -631,18 +655,15 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 									/>
 									<Label htmlFor="enabled">启用用户</Label>
 								</div>
-								<div className="flex items-center space-x-2 hidden">
-									<Switch
-										id="emailVerified"
-										checked={formData.emailVerified}
-										onCheckedChange={(checked) =>
-											setFormData((prev) => ({
-												...prev,
-												emailVerified: checked,
-											}))
-										}
-									/>
-									<Label htmlFor="emailVerified">邮箱已验证</Label>
+								<div className="flex items-center gap-2">
+									<span className="text-sm text-muted-foreground">院级状态</span>
+									{mdmEnabled === 0 ? (
+										<span className="text-sm text-red-600">院级禁用</span>
+									) : mdmEnabled === 1 ? (
+										<span className="text-sm text-emerald-600">院级启用</span>
+									) : (
+										<span className="text-sm text-muted-foreground">--</span>
+									)}
 								</div>
 							</div>
 						</CardContent>

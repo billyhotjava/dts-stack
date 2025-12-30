@@ -821,7 +821,9 @@ function buildOrgOptions(nodes: OrganizationNode[]): {
 	const result: OrgTreeOption[] = [];
 
 	const build = (tree: OrganizationNode[], prefix: string[]) => {
-		return tree.map((node) => {
+		return tree
+			.filter((node) => String(node?.status ?? "1") !== "0")
+			.map((node) => {
 			const segment = node.name ?? "";
 			const nextPath = [...prefix, segment].filter(Boolean);
 			const groupPath = node.groupPath ? normalizeGroupPath(node.groupPath) : normalizeGroupPath("/" + nextPath.join("/"));

@@ -111,6 +111,11 @@ public class BiReportLinkService {
         repo.save(link);
     }
 
+    public void purge(UUID id) {
+        BiReportLink link = repo.findById(id).orElseThrow(() -> new IllegalArgumentException("not_found"));
+        repo.delete(link);
+    }
+
     private void apply(BiReportLink target, BiReportLinkRequest req, boolean creating) {
         String code = normalizeCode(req.getCode());
         String title = trimToNull(req.getTitle());

@@ -178,8 +178,8 @@ prepare_data_dirs(){
   local -a data_dirs=(
     "services/certs"
     "services/dts-ranger"
-    "services/dts-metabase/data"
-    "services/dts-metabase/plugins"
+    "services/dts-analytics/data"
+    "services/dts-analytics/plugins"
   )
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     data_dirs+=("services/dts-minio/data")
@@ -274,6 +274,7 @@ generate_env_base(){
   : "${KC_HOSTNAME_STRICT:=true}"
   : "${KC_HOSTNAME_STRICT_HTTPS:=true}"
   : "${KC_HOSTNAME_URL:=https://${KC_HOSTNAME}}"
+  : "${KC_HOSTNAME_ADMIN_URL:=${KC_HOSTNAME_URL}}"
   : "${KC_DB_URL_PROPERTIES:=sslmode=disable}"
   : "${KC_REALM:=S10}"
 
@@ -286,11 +287,19 @@ generate_env_base(){
   HOST_RANGER="ranger.${BASE_DOMAIN}"
   HOST_ADMIN_UI="biadmin.${BASE_DOMAIN}"
   HOST_PLATFORM_UI="bi.${BASE_DOMAIN}"
-  HOST_METABASE="metabase.${BASE_DOMAIN}"
+  HOST_ANALYTICS="analytics.${BASE_DOMAIN}"
+  # Backward compatible alias (legacy variable name)
+  HOST_METABASE="${HOST_METABASE:-${HOST_ANALYTICS}}"
 
   # ---------- Host reachability for in-container calls to host services ----------
   # Allow operators to pin this via environment; otherwise auto-detect.
   : "${HOST_GATEWAY_IP:=$(detect_host_ipv4)}"
+  # Docker containers may need a stable way to reach host-side services like an HTTP proxy.
+  # Used by compose as the IP behind 'host.docker.internal' (works even on older Docker versions).
+  : "${DOCKER_HOST_GATEWAY_IP:=${HOST_GATEWAY_IP}}"
+  # ---------- Hetu upstream ----------
+  # Defaults to HOST_GATEWAY_IP (Hetu runs on the same host), but can be overridden for remote Hetu deployments.
+  : "${HETU_UPSTREAM_IP:=${HOST_GATEWAY_IP}}"
 
   # ---------- MinIO/S3 (placed before Airflow uses it) ----------
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
@@ -366,12 +375,19 @@ generate_env_base(){
   OIDC_ISSUER_URI="https://${HOST_SSO}/realms/${KC_REALM}"
 
   # ---------- BI 平台（Metabase） ----------
+  # Analytics image tag (prefer your self-built image in offline environments).
+  # Set IMAGE_DTS_ANALYTICS in imgversion.conf before running init.sh.
+  : "${IMAGE_DTS_ANALYTICS:=${IMAGE_DTS_ANALYTICS:-${IMAGE_METABASE:-metabase/metabase:v0.49.15}}}"
   : "${METABASE_ENCRYPTION_SECRET:=$(generate_fernet)}"
-  : "${METABASE_SITE_URL:=https://${HOST_METABASE}}"
+  # Prefer same-domain mount under platform UI to keep user-facing URLs consistent ("Analytics") and avoid extra DNS/ports.
+  : "${METABASE_SITE_URL:=https://${HOST_PLATFORM_UI}/analytics}"
   : "${METABASE_JAVA_TOOL_OPTIONS:=-Xms512m -Xmx1024m}"
   : "${METABASE_OIDC_CLIENT_ID:=metabase}"
   : "${METABASE_OIDC_CLIENT_SECRET:=${SECRET}}"
-  : "${METABASE_OIDC_REDIRECT_URI:=https://${HOST_METABASE}/auth/sso}"
+  # When mounted under /analytics behind Traefik, the redirect URI must include the prefix.
+  # Metabase mounted under platform path: https://${HOST_PLATFORM_UI}/analytics
+  # OIDC callback endpoint (Metabase): /auth/oidc/callback  -> full URL should include the /analytics prefix.
+  : "${METABASE_OIDC_REDIRECT_URI:=https://${HOST_PLATFORM_UI}/analytics/auth/oidc/callback}"
   : "${METABASE_OIDC_METADATA_URL:=https://${HOST_SSO}/realms/${KC_REALM}/.well-known/openid-configuration}"
 
   # ---------- MDM Gateway ----------
@@ -486,6 +502,10 @@ IMAGE_MAVEN=${IMAGE_MAVEN}
 KEYTOOL_IMAGE=${KEYTOOL_IMAGE}
 KEYTOOL_IMAGE_STRICT=${KEYTOOL_IMAGE_STRICT}
 
+# ====== Analytics Image ======
+IMAGE_DTS_ANALYTICS=${IMAGE_DTS_ANALYTICS}
+IMAGE_DTS_ANALYTICS_DEV=${IMAGE_DTS_ANALYTICS_DEV:-dts-analytics-dev:local}
+
 # ====== Hosts ======
 HOST_SSO=${HOST_SSO}
 HOST_TRINO=${HOST_TRINO}
@@ -493,8 +513,11 @@ HOST_API=${HOST_API}
 HOST_RANGER=${HOST_RANGER}
 HOST_ADMIN_UI=${HOST_ADMIN_UI}
 HOST_PLATFORM_UI=${HOST_PLATFORM_UI}
+HOST_ANALYTICS=${HOST_ANALYTICS}
 HOST_METABASE=${HOST_METABASE}
 HOST_GATEWAY_IP=${HOST_GATEWAY_IP}
+DOCKER_HOST_GATEWAY_IP=${DOCKER_HOST_GATEWAY_IP}
+HETU_UPSTREAM_IP=${HETU_UPSTREAM_IP}
 
 # ====== Keycloak ======
 KC_ADMIN=${KC_ADMIN}
@@ -503,6 +526,7 @@ KC_HTTP_ENABLED=${KC_HTTP_ENABLED}
 KC_HOSTNAME=${KC_HOSTNAME}
 KC_HOSTNAME_PORT=${KC_HOSTNAME_PORT}
 KC_HOSTNAME_URL=${KC_HOSTNAME_URL}
+KC_HOSTNAME_ADMIN_URL=${KC_HOSTNAME_ADMIN_URL}
 KC_HOSTNAME_STRICT=${KC_HOSTNAME_STRICT}
 KC_HOSTNAME_STRICT_HTTPS=${KC_HOSTNAME_STRICT_HTTPS}
 KC_DB_URL_PROPERTIES=${KC_DB_URL_PROPERTIES}
@@ -767,26 +791,6 @@ fi
 determine_enabled_services
 set_default_log_root
 generate_env_base
-# Patch Traefik file-provider Hetu upstream to the detected host IP.
-# Traefik file provider does not support env interpolation, but Hetu (or its nginx) can be strict on Host.
-# We keep the upstream URL aligned with HOST_GATEWAY_IP so Traefik can reach Hetu reliably.
-if [[ -n "${HOST_GATEWAY_IP:-}" && -f "services/dts-proxy/dynamic/traefik-dynamic.yml" ]]; then
-  tmp_file="$(mktemp)"
-  if awk -v ip="${HOST_GATEWAY_IP}" '
-    BEGIN { done=0 }
-    {
-      if (!done && $0 ~ /- url: "http:\/\// && $0 ~ /:7778"/) {
-        gsub(/- url: "http:\/\/[^"]+:7778"/, "- url: \"http://" ip ":7778\"")
-        done=1
-      }
-      print
-    }
-  ' services/dts-proxy/dynamic/traefik-dynamic.yml > "${tmp_file}"; then
-    mv "${tmp_file}" services/dts-proxy/dynamic/traefik-dynamic.yml
-  else
-    rm -f "${tmp_file}" || true
-  fi
-fi
 detect_docker_api_version
 ensure_env PG_MODE "${PG_MODE}"
 ensure_env PG_HOST "${PG_HOST}"
@@ -870,7 +874,7 @@ else
 fi
 
 # 输出可访问地址
-host_vars=(HOST_SSO HOST_TRINO HOST_RANGER HOST_API HOST_ADMIN_UI HOST_PLATFORM_UI HOST_METABASE)
+host_vars=(HOST_SSO HOST_TRINO HOST_RANGER HOST_API HOST_ADMIN_UI HOST_PLATFORM_UI HOST_ANALYTICS HOST_METABASE)
 if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then host_vars+=(HOST_MINIO); fi
 if [[ "${ENABLE_NESSIE:-false}" == "true" ]]; then host_vars+=(HOST_NESSIE); fi
 for host_var in "${host_vars[@]}"; do

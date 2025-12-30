@@ -2345,6 +2345,9 @@ public class AdminApiResource {
         m.put("phone", e.getPhone());
         m.put("description", e.getDescription());
         m.put("isRoot", e.isRoot());
+        if (StringUtils.hasText(e.getStatus())) {
+            m.put("status", e.getStatus());
+        }
         if (StringUtils.hasText(e.getKeycloakGroupId())) {
             m.put("keycloakGroupId", e.getKeycloakGroupId());
         }

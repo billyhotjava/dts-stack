@@ -41,6 +41,8 @@ services:
       # Let Traefik reach services on the Docker host (e.g. Hetu on :7778).
       # Avoid `host-gateway` so this also works on older Docker versions; init.sh writes HOST_GATEWAY_IP to .env.
       - "host.docker.internal:${HOST_GATEWAY_IP:-172.17.0.1}"
+      # Hetu upstream (defaults to HOST_GATEWAY_IP; can be overridden via HETU_UPSTREAM_IP in .env)
+      - "hetu.upstream:${HETU_UPSTREAM_IP:-172.17.0.1}"
     ports:
       - "80:80"
       - "${TLS_PORT}:443"
@@ -69,8 +71,8 @@ services:
       - "traefik.http.routers.hetu-dashboards.service=hetu@file"
       - "traefik.http.middlewares.hetu-strip-dashboards.stripprefixregex.regex=/dashboards"
       # Hetu upstream on the Docker host; some installs are strict on Host and return 404 if Host is unexpected.
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.Host=${HOST_GATEWAY_IP}:7778"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Host=${HOST_GATEWAY_IP}:7778"
+      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778"
+      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778"
       - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Port=7778"
       - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Proto=http"
       # Allow anonymous bootstrap calls (Hetu checks this flag on some endpoints like /system/version).
@@ -162,6 +164,10 @@ services:
       PG_DB_RANGER: ${PG_DB_RANGER}
       PG_USER_RANGER: ${PG_USER_RANGER}
       PG_PWD_RANGER: ${PG_PWD_RANGER}
+      # Metabase (Analytics)
+      PG_DB_METABASE: ${PG_DB_METABASE}
+      PG_USER_METABASE: ${PG_USER_METABASE}
+      PG_PWD_METABASE: ${PG_PWD_METABASE}
     volumes:
       - ./services/dts-pg/data:/var/lib/postgresql/data
       - ./services/dts-pg/init:/docker-entrypoint-initdb.d:ro

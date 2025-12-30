@@ -9,6 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import reportsService, { type ReportLink } from "@/api/services/reportsService";
 
+function engineLabel(engine: string | undefined | null): string {
+	const upper = String(engine || "").trim().toUpperCase();
+	if (upper === "METABASE") return "ANALYTICS";
+	return upper || "-";
+}
+
 function classificationLabel(level: string | undefined | null) {
 	const upper = String(level || "").trim().toUpperCase();
 	if (upper === "CONFIDENTIAL") return { label: "机密", variant: "destructive" as const };
@@ -123,6 +129,10 @@ export default function ReportsPage() {
 		window.open(url, "_blank", "noopener,noreferrer");
 	};
 
+	const openAnalytics = () => {
+		window.open("/analytics", "_blank", "noopener,noreferrer");
+	};
+
 	return (
 		<div className="space-y-4">
 			<Card>
@@ -168,6 +178,9 @@ export default function ReportsPage() {
 						<Button variant="outline" onClick={fetchReports} disabled={loading}>
 							<Icon icon="solar:refresh-bold" /> 刷新
 						</Button>
+						<Button onClick={openAnalytics}>
+							<Icon icon="solar:chart-2-bold-duotone" /> 分析
+						</Button>
 					</div>
 				</CardHeader>
 				<CardContent className="overflow-x-auto">
@@ -201,7 +214,7 @@ export default function ReportsPage() {
 											</button>
 										</div>
 									</td>
-									<td className="px-3 py-2">{r.engine}</td>
+									<td className="px-3 py-2">{engineLabel(r.engine)}</td>
 									<td className="px-3 py-2">{r.reportType || "-"}</td>
 									<td className="px-3 py-2">{formatDeptNames(r.deptCodes, deptDict)}</td>
 									<td className="px-3 py-2">

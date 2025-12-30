@@ -36,6 +36,7 @@ import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
 import com.yuzhi.dts.admin.domain.OrganizationNode;
 import com.yuzhi.dts.admin.domain.PersonProfile;
+import com.yuzhi.dts.admin.domain.enumeration.PersonLifecycleStatus;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import java.lang.reflect.Array;
 import java.time.Instant;
@@ -284,7 +285,7 @@ public class AdminUserService {
                         DEFAULT_PERSON_LEVEL
                     )
                 );
-                snapshot.setEnabled(true);
+                snapshot.setMdmEnabled(profile.getLifecycleStatus() == PersonLifecycleStatus.INACTIVE ? 0 : 1);
                 List<String> resolvedPaths = resolveGroupPathsFromProfile(profile);
                 if (!resolvedPaths.isEmpty()) {
                     snapshot.setGroupPaths(mergeGroupPaths(snapshot.getGroupPaths(), resolvedPaths));
@@ -375,6 +376,42 @@ public class AdminUserService {
             if (!result.containsKey(lower)) {
                 result.put(lower, display);
             }
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Integer> resolveMdmEnabled(Collection<String> usernames) {
+        LinkedHashMap<String, Integer> result = new LinkedHashMap<>();
+        if (usernames == null || usernames.isEmpty()) {
+            return result;
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (String raw : usernames) {
+            if (StringUtils.isBlank(raw)) {
+                continue;
+            }
+            String trimmed = raw.trim();
+            if (!trimmed.isEmpty()) {
+                normalized.add(trimmed);
+            }
+        }
+        if (normalized.isEmpty()) {
+            return result;
+        }
+        Set<String> lowerCase = normalized
+            .stream()
+            .map(name -> name.toLowerCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, Integer> cached = new HashMap<>();
+        if (!lowerCase.isEmpty()) {
+            userRepository
+                .findByUsernameInIgnoreCase(lowerCase)
+                .forEach(entity -> cached.put(entity.getUsername().toLowerCase(Locale.ROOT), entity.getMdmEnabled()));
+        }
+        for (String username : normalized) {
+            String key = username.toLowerCase(Locale.ROOT);
+            result.put(username, cached.getOrDefault(key, 1));
         }
         return result;
     }

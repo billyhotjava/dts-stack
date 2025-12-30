@@ -309,6 +309,7 @@ public class PersonnelImportService {
         if (!StringUtils.isNotBlank(username)) {
             return;
         }
+        int mdmEnabled = resolveMdmEnabled(payload);
         String token = resolveManagementToken();
         if (token == null) {
             OPS_LOG.warn("skip keycloak provisioning for user {}: management token unavailable", username);
@@ -332,7 +333,15 @@ public class PersonnelImportService {
                 if (dirty) {
                     keycloakAdminClient.updateUser(existing.getId(), existing, token);
                 }
-                upsertSnapshot(existing.getId(), username, payload.fullName(), desiredAttrs.get("person_security_level"), null);
+                upsertSnapshot(
+                    existing.getId(),
+                    username,
+                    payload.fullName(),
+                    desiredAttrs.get("person_security_level"),
+                    null,
+                    existing.getEnabled(),
+                    mdmEnabled
+                );
                 assignBaseRoles(existing.getId(), token);
                 assignDeptGroup(existing.getId(), payload, token);
                 return;
@@ -341,7 +350,7 @@ public class PersonnelImportService {
             dto.setUsername(username);
             dto.setFullName(payload.fullName());
             dto.setFirstName(payload.fullName());
-            dto.setEnabled(true);
+            dto.setEnabled(mdmEnabled != 0);
             dto.setEmailVerified(false);
             dto.setAttributes(toKcAttributes(payload));
             KeycloakUserDTO created = keycloakAdminClient.createUser(dto, token);
@@ -357,7 +366,15 @@ public class PersonnelImportService {
                     OPS_LOG.warn("set temp password failed for user {}: {}", username, ex.getMessage());
                 }
             }
-            upsertSnapshot(kcId, username, payload.fullName(), dto.getAttributes().get("person_security_level"), null);
+            upsertSnapshot(
+                kcId,
+                username,
+                payload.fullName(),
+                dto.getAttributes().get("person_security_level"),
+                null,
+                dto.getEnabled(),
+                mdmEnabled
+            );
             assignBaseRoles(kcId, token);
             assignDeptGroup(kcId, payload, token);
             // 若有部门组同步，可在此按 deptCode 挂组；依赖外层已开启组同步
@@ -419,7 +436,15 @@ public class PersonnelImportService {
         if (StringUtils.isBlank(keycloakUserId) || StringUtils.isBlank(normalized)) {
             return;
         }
-        upsertSnapshot(keycloakUserId, firstNonBlank(payload.account(), payload.personCode()), payload.fullName(), payload.attributes().get("person_security_level"), normalized);
+        upsertSnapshot(
+            keycloakUserId,
+            firstNonBlank(payload.account(), payload.personCode()),
+            payload.fullName(),
+            payload.attributes().get("person_security_level"),
+            normalized,
+            null,
+            null
+        );
     }
 
     private void upsertSnapshot(
@@ -427,7 +452,9 @@ public class PersonnelImportService {
         String username,
         String fullName,
         Object secLevelObj,
-        String groupPath
+        String groupPath,
+        Boolean keycloakEnabled,
+        Integer mdmEnabled
     ) {
         if (StringUtils.isBlank(keycloakUserId) || StringUtils.isBlank(username)) {
             return;
@@ -445,7 +472,12 @@ public class PersonnelImportService {
             snapshot.setFullName(fullName);
         }
         snapshot.setPersonSecurityLevel(level);
-        snapshot.setEnabled(true);
+        if (keycloakEnabled != null) {
+            snapshot.setEnabled(Boolean.TRUE.equals(keycloakEnabled));
+        }
+        if (mdmEnabled != null) {
+            snapshot.setMdmEnabled(mdmEnabled);
+        }
         if (StringUtils.isNotBlank(groupPath)) {
             String normalized = normalizeGroupPath(groupPath);
             if (StringUtils.isNotBlank(normalized)) {
@@ -459,6 +491,27 @@ public class PersonnelImportService {
         }
         snapshot.setLastSyncAt(Instant.now());
         adminKeycloakUserRepository.save(snapshot);
+    }
+
+    private int resolveMdmEnabled(PersonnelPayload payload) {
+        if (payload == null) {
+            return 1;
+        }
+        Object raw = payload.attributes() == null ? null : payload.attributes().get("status");
+        if (raw != null) {
+            String v = String.valueOf(raw).trim();
+            if ("0".equals(v)) {
+                return 0;
+            }
+            if ("1".equals(v)) {
+                return 1;
+            }
+        }
+        String lifecycle = payload.status() == null ? "" : payload.status().trim().toUpperCase(Locale.ROOT);
+        if ("INACTIVE".equals(lifecycle) || "DISABLED".equals(lifecycle)) {
+            return 0;
+        }
+        return 1;
     }
 
     private String normalizeGroupPath(String path) {

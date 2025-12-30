@@ -165,6 +165,7 @@ export interface OrganizationNode {
 	name: string;
 	parentId?: number | null;
 	isRoot?: boolean;
+	status?: string;
 	contact?: string;
 	phone?: string;
 	description?: string;
@@ -209,6 +210,7 @@ export interface AdminUser {
 	lastLoginAt?: string;
 	realmRoles?: string[];
 	enabled?: boolean;
+	mdmEnabled?: number;
 }
 
 export interface AdminRoleDetail {

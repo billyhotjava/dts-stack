@@ -95,9 +95,18 @@ function normalizeMetabaseUrl(rawUrl: string): string {
   }
 }
 
+function engineLabel(engine: string | undefined | null): string {
+  const upper = String(engine || "")
+    .trim()
+    .toUpperCase();
+  if (upper === "METABASE") return "ANALYTICS";
+  return upper || "-";
+}
+
 export default function ReportsManagePage() {
   const [items, setItems] = useState<ReportLink[]>([]);
   const [loading, setLoading] = useState(false);
+  const [actioningId, setActioningId] = useState<string | null>(null);
   const [keyword, setKeyword] = useState("");
   const [deptCode, setDeptCode] = useState<string>("all");
   const [reportType, setReportType] = useState<string>("all");
@@ -181,17 +190,21 @@ export default function ReportsManagePage() {
 
   const onDisable = async (r: ReportLink) => {
     try {
+      setActioningId(r.id);
       await reportsService.disable(r.id);
       toast.success("已禁用");
       await fetchList();
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "禁用失败");
+    } finally {
+      setActioningId((id) => (id === r.id ? null : id));
     }
   };
 
   const onEnable = async (r: ReportLink) => {
     try {
+      setActioningId(r.id);
       await reportsService.update(r.id, {
         code: r.code,
         title: r.title,
@@ -209,6 +222,37 @@ export default function ReportsManagePage() {
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "启用失败");
+    } finally {
+      setActioningId((id) => (id === r.id ? null : id));
+    }
+  };
+
+  const onPurge = async (r: ReportLink) => {
+    const ok = window.confirm(`确定删除链接「${r.title || r.code}」？\n此操作不可恢复。`);
+    if (!ok) return;
+    try {
+      setActioningId(r.id);
+      await reportsService.purge(r.id);
+      toast.success("已删除");
+      setItems((prev) => prev.filter((x) => x.id !== r.id));
+    } catch (e: any) {
+      console.error(e);
+      const status = e?.response?.status;
+      if (status === 404) {
+        try {
+          await reportsService.disable(r.id);
+          toast.success("已删除");
+          setItems((prev) => prev.filter((x) => x.id !== r.id));
+          return;
+        } catch (e2: any) {
+          console.error(e2);
+          toast.error(e2?.message || "删除失败");
+          return;
+        }
+      }
+      toast.error(e?.message || "删除失败");
+    } finally {
+      setActioningId((id) => (id === r.id ? null : id));
     }
   };
 
@@ -285,60 +329,82 @@ export default function ReportsManagePage() {
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-	          <table className="w-full min-w-[1100px] table-fixed border-collapse text-sm">
-	            <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-	              <tr>
-	                <th className="px-3 py-2 font-medium w-[180px]">编码</th>
-	                <th className="px-3 py-2 font-medium">标题</th>
-	                <th className="px-3 py-2 font-medium w-[110px]">引擎</th>
-	                <th className="px-3 py-2 font-medium w-[120px]">类型</th>
-	                <th className="px-3 py-2 font-medium w-[220px]">部门范围</th>
-	                <th className="px-3 py-2 font-medium w-[120px]">角色范围</th>
-	                <th className="px-3 py-2 font-medium w-[90px]">密级</th>
-	                <th className="px-3 py-2 font-medium w-[80px]">状态</th>
-	                <th className="px-3 py-2 font-medium w-[160px]">更新</th>
-	                <th className="px-3 py-2 font-medium w-[160px]">操作</th>
-	              </tr>
-	            </thead>
+          <table className="w-full min-w-[1320px] table-fixed border-collapse text-sm">
+            <thead className="bg-muted/40 text-left text-xs text-muted-foreground whitespace-nowrap tracking-wide">
+              <tr>
+                <th className="px-4 py-2 font-medium w-[180px]">编码</th>
+                <th className="px-4 py-2 font-medium w-[260px]">标题</th>
+                <th className="px-4 py-2 font-medium w-[90px]">引擎</th>
+                <th className="px-4 py-2 font-medium w-[120px]">类型</th>
+                <th className="px-4 py-2 font-medium w-[280px]">部门范围</th>
+                <th className="px-4 py-2 font-medium w-[240px]">角色范围</th>
+                <th className="px-4 py-2 font-medium w-[110px]">密级</th>
+                <th className="px-4 py-2 font-medium w-[80px]">状态</th>
+                <th className="px-4 py-2 font-medium w-[170px]">更新</th>
+                <th className="px-4 py-2 font-medium w-[190px]">操作</th>
+              </tr>
+            </thead>
             <tbody>
               {items.map((r) => (
                 <tr key={r.id} className="border-b last:border-b-0">
                   <td className="px-3 py-2 font-mono text-xs truncate" title={r.code}>
                     {r.code}
                   </td>
-                  <td className="px-3 py-2 font-medium truncate" title={r.title}>
-                    {r.title}
-                  </td>
-                  <td className="px-3 py-2">{r.engine}</td>
-                  <td className="px-3 py-2">{r.reportType || "-"}</td>
-                  <td className="px-3 py-2 text-xs">
+	                  <td className="px-3 py-2 font-medium truncate" title={r.title}>
+	                    {r.title}
+	                  </td>
+	                  <td className="px-3 py-2">{engineLabel(r.engine)}</td>
+	                  <td className="px-3 py-2">{r.reportType || "-"}</td>
+                  <td
+                    className="px-3 py-2 text-xs truncate"
+                    title={
+                      Array.isArray(r.deptCodes) && r.deptCodes.length ? r.deptCodes.map(deptName).join(", ") : "全部"
+                    }
+                  >
                     {Array.isArray(r.deptCodes) && r.deptCodes.length ? r.deptCodes.map(deptName).join(", ") : "全部"}
-	                  </td>
-	                  <td className="px-3 py-2 text-xs">
-	                    {Array.isArray(r.roleCodes) && r.roleCodes.length ? r.roleCodes.join(", ") : "全部"}
-	                  </td>
-	                  <td className="px-3 py-2">{r.classification}</td>
-	                  <td className="px-3 py-2">{typeof r.enabled === "boolean" ? (r.enabled ? "启用" : "禁用") : "-"}</td>
-	                  <td className="px-3 py-2 text-xs text-muted-foreground">
-	                    {r.updatedAt ? new Date(r.updatedAt).toLocaleString() : "-"}
-	                  </td>
-	                  <td className="px-3 py-2">
-	                    <Button variant="ghost" size="sm" onClick={() => onEdit(r)}>
-	                      编辑
-	                    </Button>
-	                    <Button variant="ghost" size="sm" onClick={() => (r.enabled ? onDisable(r) : onEnable(r))}>
-	                      {r.enabled ? "禁用" : "启用"}
-	                    </Button>
-	                  </td>
-	                </tr>
-	              ))}
-	              {!items.length && (
-	                <tr>
-	                  <td colSpan={10} className="px-3 py-8 text-center text-xs text-muted-foreground">
-	                    {loading ? "加载中…" : "暂无数据"}
-	                  </td>
-	                </tr>
-	              )}
+                  </td>
+                  <td
+                    className="px-3 py-2 text-xs truncate"
+                    title={Array.isArray(r.roleCodes) && r.roleCodes.length ? r.roleCodes.join(", ") : "全部"}
+                  >
+                    {Array.isArray(r.roleCodes) && r.roleCodes.length ? r.roleCodes.join(", ") : "全部"}
+                  </td>
+                  <td className="px-3 py-2">{r.classification}</td>
+                  <td className="px-3 py-2">{typeof r.enabled === "boolean" ? (r.enabled ? "启用" : "禁用") : "-"}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                    {r.updatedAt ? new Date(r.updatedAt).toLocaleString() : "-"}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <Button variant="ghost" size="sm" onClick={() => onEdit(r)} disabled={actioningId === r.id}>
+                      编辑
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => (r.enabled ? onDisable(r) : onEnable(r))}
+                      disabled={actioningId === r.id}
+                    >
+                      {r.enabled ? "禁用" : "启用"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => onPurge(r)}
+                      disabled={actioningId === r.id}
+                    >
+                      删除
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {!items.length && (
+                <tr>
+                  <td colSpan={10} className="px-3 py-8 text-center text-xs text-muted-foreground">
+                    {loading ? "加载中…" : "暂无数据"}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </CardContent>
@@ -367,7 +433,7 @@ export default function ReportsManagePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="HETU">HETU</SelectItem>
-                  <SelectItem value="METABASE">METABASE</SelectItem>
+                  <SelectItem value="METABASE">ANALYTICS</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -435,16 +501,16 @@ export default function ReportsManagePage() {
                     variant="outline"
                     size="sm"
                     onClick={() => setForm((f) => ({ ...f, url: normalizeMetabaseUrl(f.url) }))}
-                    title="将 https://metabase.xxx/... 转成 /analytics/...，统一挂载到平台域名下"
+                    title="将 https://analytics.xxx/... 转成 /analytics/...，统一挂载到平台域名下"
                   >
-                    规范化 Metabase 链接
+                    规范化 Analytics 链接
                   </Button>
                 ) : null}
               </div>
               <Textarea
                 value={form.url}
                 onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-                placeholder="例如：https://metabase.xxx/dashboard/1 或 http(s)://河图/share/..."
+                placeholder="例如：https://analytics.xxx/dashboard/1 或 http(s)://河图/share/..."
               />
               {String(form.engine || "").toUpperCase() === "HETU" ? (
                 <div className="text-xs text-muted-foreground">
@@ -452,7 +518,7 @@ export default function ReportsManagePage() {
                 </div>
               ) : String(form.engine || "").toUpperCase() === "METABASE" ? (
                 <div className="text-xs text-muted-foreground">
-                  建议：Metabase URL 保存为以 <code>/analytics</code> 开头的相对路径，便于统一走平台域名反代（同域名免跨域）。
+                  建议：Analytics URL 保存为以 <code>/analytics</code> 开头的相对路径，便于统一走平台域名反代（同域名免跨域）。
                 </div>
               ) : null}
             </div>

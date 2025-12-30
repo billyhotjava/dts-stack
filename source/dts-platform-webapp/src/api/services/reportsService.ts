@@ -52,4 +52,5 @@ export default {
 	update: (id: string, payload: ReportLinkUpsertRequest) =>
 		apiClient.put<ReportLink>({ url: `/reports/${id}`, data: payload }),
 	disable: (id: string) => apiClient.delete<{ ok: boolean }>({ url: `/reports/${id}` }),
+	purge: (id: string) => apiClient.delete<{ ok: boolean }>({ url: `/reports/${id}/purge` }),
 };

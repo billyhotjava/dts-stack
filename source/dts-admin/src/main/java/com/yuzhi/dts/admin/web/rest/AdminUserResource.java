@@ -68,6 +68,15 @@ public class AdminUserResource {
         return ResponseEntity.ok(ApiResponse.ok(resolved));
     }
 
+    @GetMapping("/mdm-enabled")
+    public ResponseEntity<ApiResponse<Map<String, Integer>>> resolveMdmEnabled(
+        @RequestParam MultiValueMap<String, String> query
+    ) {
+        List<String> inputs = normalizeUsernames(query);
+        Map<String, Integer> resolved = adminUserService.resolveMdmEnabled(inputs);
+        return ResponseEntity.ok(ApiResponse.ok(resolved));
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.SYS_ADMIN + "')")
     public ResponseEntity<ApiResponse<ApprovalDTOs.ApprovalRequestDetail>> createUser(
@@ -168,6 +177,7 @@ public class AdminUserResource {
         vm.setRealmRoles(adminUserService.aggregateRealmRoles(entity.getUsername(), entity.getRealmRoles()));
         vm.setGroupPaths(entity.getGroupPaths());
         vm.setEnabled(entity.isEnabled());
+        vm.setMdmEnabled(entity.getMdmEnabled());
         vm.setLastSyncAt(entity.getLastSyncAt());
         return vm;
     }

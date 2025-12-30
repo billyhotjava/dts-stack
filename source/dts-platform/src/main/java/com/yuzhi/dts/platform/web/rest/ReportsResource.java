@@ -107,6 +107,14 @@ public class ReportsResource {
         return ApiResponses.ok(Map.of("ok", true));
     }
 
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}/purge")
+    @PreAuthorize(REPORT_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> purge(@PathVariable UUID id) {
+        reports.purge(id);
+        audit.audit("PURGE", "vis.reports.manage.purge", id.toString());
+        return ApiResponses.ok(Map.of("ok", true));
+    }
+
     private String text(Object raw) {
         if (raw == null) return null;
         String s = String.valueOf(raw).trim();

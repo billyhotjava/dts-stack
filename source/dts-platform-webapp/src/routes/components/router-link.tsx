@@ -12,7 +12,6 @@ export const RouterLink: React.FC<RouterLinkProps> = ({ href, children, classNam
 	const isProxyEscape =
 		href.startsWith("/dashboards") ||
 		href.startsWith("/analytics") ||
-		href.startsWith("/metabase") ||
 		href.startsWith("/screen");
 
 	if (isExternal || isProxyEscape) {

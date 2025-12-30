@@ -345,12 +345,21 @@ if (shouldEnableHotRefresh) {
     throw new Error("webpack config is missing configuration");
   }
 
+  const DEV_PUBLIC_URL_RAW =
+    process.env.MB_FRONTEND_DEV_PUBLIC_URL ||
+    process.env.MB_FRONTEND_DEV_PUBLIC_BASE_URL ||
+    "";
+  const DEV_PUBLIC_URL = (() => {
+    const raw = String(DEV_PUBLIC_URL_RAW || "").trim();
+    if (!raw) return `http://localhost:${PORT}/`;
+    return raw.endsWith("/") ? raw : `${raw}/`;
+  })();
+
   // suffixing with ".hot" allows us to run both `yarn run build-hot` and `yarn run test` or `yarn run test-watch` simultaneously
   config.output.filename = "[name].hot.bundle.js";
 
   // point the publicPath (inlined in index.html by HtmlWebpackPlugin) to the hot-reloading server
-  config.output.publicPath =
-    `http://localhost:${PORT}/` + config.output.publicPath;
+  config.output.publicPath = DEV_PUBLIC_URL + config.output.publicPath;
 
   config.devServer = {
     port: PORT, // make the port explicit so it errors if it's already in use

@@ -65,6 +65,19 @@
     "requiredMgmtRoles": []
   },
   {
+    "code": "sys.nav.portal.visualizationAnalytics",
+    "title": "自助分析",
+    "route": "/visualization/analytics",
+    "scopes": ["DEPT","INST"],
+    "requiredRoles": [
+      "EMPLOYEE",
+      "DEPT_DATA_VIEWER","DEPT_DATA_DEV","DEPT_DATA_OWNER","DEPT_LEADER",
+      "INST_DATA_VIEWER","INST_DATA_DEV","INST_DATA_OWNER","INST_LEADER",
+      "ADMIN","OP_ADMIN"
+    ],
+    "requiredMgmtRoles": []
+  },
+  {
     "code": "sys.nav.portal.visualizationReportsManage",
     "title": "报表链接管理",
     "route": "/visualization/reports-manage",

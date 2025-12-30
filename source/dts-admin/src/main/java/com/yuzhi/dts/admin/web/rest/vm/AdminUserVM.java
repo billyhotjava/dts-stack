@@ -16,6 +16,7 @@ public class AdminUserVM {
     private List<String> realmRoles = new ArrayList<>();
     private List<String> groupPaths = new ArrayList<>();
     private boolean enabled;
+    private int mdmEnabled = 1;
     private Instant lastSyncAt;
 
     public Long getId() {
@@ -96,6 +97,14 @@ public class AdminUserVM {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public int getMdmEnabled() {
+        return mdmEnabled;
+    }
+
+    public void setMdmEnabled(int mdmEnabled) {
+        this.mdmEnabled = mdmEnabled;
     }
 
     public Instant getLastSyncAt() {

@@ -1,9 +1,10 @@
 version: "3.9"
 
 services:
-  dts-metabase:
-    image: ${IMAGE_METABASE:-metabase/metabase:v0.49.15}
-    container_name: dts-metabase
+  dts-analytics:
+    # Prefer the unified Analytics image var; fall back to legacy IMAGE_METABASE for backward compatibility.
+    image: ${IMAGE_DTS_ANALYTICS:-${IMAGE_METABASE:-metabase/metabase:v0.49.15}}
+    container_name: dts-analytics
     restart: unless-stopped
     depends_on:
       - dts-pg

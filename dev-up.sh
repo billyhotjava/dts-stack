@@ -7,9 +7,22 @@ ENV_BASE=".env"
 
 MODE="images"  # images | local
 WITH_WEBAPP_DEFAULT=1
+WITH_ANALYTICS_DEV=0
+WITH_ANALYTICS=0
 
 usage(){
-  echo "Usage: $0 [--mode images|local] [--no-webapp]"
+  echo "Usage: $0 [--mode images|local] [--no-webapp] [--analytics] [--analytics-dev]"
+}
+
+checksum_file() {
+  local p="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$p" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$p" | awk '{print $1}'
+  else
+    cksum "$p" | awk '{print $1}'
+  fi
 }
 
 # Load image versions from imgversion.conf into env (non-destructive)
@@ -92,6 +105,10 @@ while (($#)); do
       shift; MODE="${1:-images}";;
     --no-webapp)
       WITH_WEBAPP_DEFAULT=0;;
+    --analytics-dev)
+      WITH_ANALYTICS_DEV=1;;
+    --analytics)
+      WITH_ANALYTICS=1;;
     -h|--help)
       usage; exit 0;;
     *)
@@ -110,35 +127,43 @@ if [[ ! -f "$ENV_BASE" ]]; then
   exit 1
 fi
 
-# Guardrail: dev-up must never mutate the repo `.env`.
-# Do NOT chmod/flip permissions here (can cause false 'git modified' on some systems);
-# instead, snapshot contents and restore if anything changed during the run.
-ENV_BACKUP="$(mktemp -t dts-stack-env.XXXXXX)"
-cp "$ENV_BASE" "$ENV_BACKUP"
-
-cleanup_env_protection() {
-  if [[ -f "$ENV_BACKUP" ]]; then
-    if ! cmp -s "$ENV_BASE" "$ENV_BACKUP"; then
-      echo "[dev-up] WARNING: ${ENV_BASE} was modified during run; restoring original." >&2
-      cp "$ENV_BACKUP" "$ENV_BASE"
-    fi
-    rm -f "$ENV_BACKUP"
-  fi
-}
-trap cleanup_env_protection EXIT INT TERM HUP
-
 if docker compose version >/dev/null 2>&1; then
-  compose_cmd=(docker compose)
+  compose_base=(docker compose)
 elif command -v docker-compose >/dev/null 2>&1; then
-  compose_cmd=(docker-compose)
+  compose_base=(docker-compose)
 else
   echo "[dev-up] ERROR: docker compose not found" >&2
   exit 1
 fi
 
-# Load env file into current shell so compose gets complete variables
+# Guardrail: dev-up must never write to the repo `.env`.
+# Use a runtime copy for Compose to avoid any accidental writes by child processes.
+ENV_RUNTIME="$(mktemp -t dts-stack-env.runtime.XXXXXX)"
+cp "$ENV_BASE" "$ENV_RUNTIME"
+ENV_BASE_SHA="$(checksum_file "$ENV_BASE")"
+
+cleanup_env_runtime() {
+  rm -f "$ENV_RUNTIME" 2>/dev/null || true
+  if [[ -f "$ENV_BASE" ]]; then
+    local after_sha
+    after_sha="$(checksum_file "$ENV_BASE" || true)"
+    if [[ -n "$ENV_BASE_SHA" && -n "$after_sha" && "$after_sha" != "$ENV_BASE_SHA" ]]; then
+      echo "[dev-up] WARNING: ${ENV_BASE} changed during run (dev-up does not modify it). Check other processes that may write to ${ENV_BASE}." >&2
+    fi
+  fi
+}
+trap cleanup_env_runtime EXIT INT TERM HUP
+
+compose_cmd=("${compose_base[@]}")
+if "${compose_base[@]}" --help 2>/dev/null | grep -q -- '--env-file'; then
+  compose_cmd+=("--env-file" "$ENV_RUNTIME")
+else
+  echo "[dev-up] NOTE: compose does not support --env-file; falling back to default .env loading (still read-only)." >&2
+fi
+
+# Load env file into current shell so compose gets complete variables (read-only copy)
 set -a
-source "$ENV_BASE"
+source "$ENV_RUNTIME"
 set +a
 
 # Load optional image versions into current env (does not modify files)
@@ -156,6 +181,17 @@ set +a
 
 if [[ "$MODE" == "local" ]]; then
   compose_files=(-f docker-compose.yml -f docker-compose.dev.yml)
+  if [[ "${WITH_ANALYTICS}" == "1" && "${WITH_ANALYTICS_DEV}" == "1" ]]; then
+    echo "[dev-up] ERROR: --analytics and --analytics-dev are mutually exclusive" >&2
+    exit 1
+  fi
+  if [[ "${WITH_ANALYTICS_DEV}" == "1" ]]; then
+    if [[ -f "docker-compose.analytics-dev.yml" ]]; then
+      compose_files+=(-f docker-compose.analytics-dev.yml)
+    else
+      echo "[dev-up] WARNING: --analytics-dev requested but docker-compose.analytics-dev.yml not found" >&2
+    fi
+  fi
 else
   compose_files=(-f docker-compose.yml -f docker-compose-app.yml)
 fi
@@ -219,6 +255,13 @@ if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
   services+=(dts-admin-webapp dts-platform-webapp)
 else
   echo "[dev-up] Webapp containers skipped (start frontend via pnpm locally)."
+fi
+
+if [[ "${WITH_ANALYTICS}" == "1" ]]; then
+  services+=(dts-analytics)
+fi
+if [[ "${WITH_ANALYTICS_DEV}" == "1" ]]; then
+  services+=(dts-analytics-dev)
 fi
 
 if [[ "$MODE" == "local" ]]; then

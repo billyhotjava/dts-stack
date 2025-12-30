@@ -237,6 +237,13 @@
           "title": "报表与大屏"
         },
         {
+          "key": "analytics",
+          "path": "analytics",
+          "icon": "solar:chart-2-bold-duotone",
+          "titleKey": "sys.nav.portal.visualizationAnalytics",
+          "title": "自助分析"
+        },
+        {
           "key": "reportsManage",
           "path": "reports-manage",
           "icon": "solar:settings-bold-duotone",

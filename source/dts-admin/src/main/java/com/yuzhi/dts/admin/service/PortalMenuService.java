@@ -80,6 +80,7 @@ public class PortalMenuService {
         Map.entry("visualization.supplyChain", "/pages/visualization/SupplyChainSummaryPage"),
         Map.entry("visualization.hr", "/pages/visualization/HRSummaryPage"),
         Map.entry("visualization.reports", "/pages/visualization/ReportsPage"),
+        Map.entry("visualization.analytics", "/pages/visualization/AnalyticsPage"),
         Map.entry("visualization.reportsManage", "/pages/visualization/ReportsManagePage"),
         Map.entry("security.overview", "/pages/security/data-security"),
         Map.entry("security.accessMatrix", "/pages/security/AccessMatrixPage"),

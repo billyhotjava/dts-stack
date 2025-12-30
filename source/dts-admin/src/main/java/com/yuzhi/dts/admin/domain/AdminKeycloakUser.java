@@ -52,6 +52,9 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
 
+    @Column(name = "mdm_enabled", nullable = false)
+    private int mdmEnabled = 1;
+
     @Column(name = "last_sync_at")
     private Instant lastSyncAt;
 
@@ -134,6 +137,14 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public int getMdmEnabled() {
+        return mdmEnabled;
+    }
+
+    public void setMdmEnabled(int mdmEnabled) {
+        this.mdmEnabled = mdmEnabled;
     }
 
     public Instant getLastSyncAt() {
