@@ -40,6 +40,7 @@
 【说明】
 - 基础依赖（Traefik/Keycloak/Postgres/MinIO/Nessie/Trino）由 `docker-compose.yml` 管理；
   应用由 `docker-compose-app.yml` 管理；开发联调由 `docker-compose.dev.yml` 管理。
+- 当前版本默认使用河图（Hetu）；`dts-analytics` 作为可选组件已从默认栈移除（见 `docker-compose.analytics.yml`，下个版本再启用）。
 - 如需变更域名，修改 `.env` 的 `BASE_DOMAIN` 后可重跑 `./init.sh`。
 - 认证预留：Admin 侧已加入可配置的 PKI 登录占位入口（默认关闭，不影响现有用户名/密码登录）。详见 `docs/pki-auth.md`。
 - 审计记录真实客户端 IP：在 `.env` 中设置 `TRUSTED_PROXY_CIDRS`（例如 `192.168.8.200/32`），让 Traefik 仅信任指定反向代理来源并重写 `X-Forwarded-For`，后端会读取该值并过滤伪造请求头。
@@ -56,6 +57,11 @@
 - 查看容器状态：`docker compose ps`
 - Trino 探活：`docker compose exec dts-trino wget -qO- http://localhost:8080/v1/info`
 - SSO 探活：`curl -k https://sso.${BASE_DOMAIN}`
+
+### 离线环境（麒麟/鲲鹏 + legacy）
+如果目标环境离线且没有安装 `docker-compose`/`docker compose`，可以把 Docker Compose 二进制放到仓库里：
+- 放到 `tools/docker-compose/`（文件名例如 `docker-compose-Linux-aarch64`），并 `chmod +x`；
+- `./init.sh` 会自动探测并使用它（legacy 模式同样适用）。
 
 【openEuler 适配说明】
 - 已在 Compose 清单中为所有本地目录挂载添加了 SELinux 友好配置（z/Z 标签）。

@@ -213,17 +213,27 @@ ensure_pg_triplets(){
 }
 
 generate_fernet(){
+  # We generate a Fernet-compatible secret (URL-safe base64 for 32 random bytes).
+  # Do NOT depend on python 'cryptography' module, because many legacy hosts don't have it.
+  local key=""
+
   if command -v python >/dev/null 2>&1; then
-    python - <<'PY' || true
-from cryptography.fernet import Fernet
-print(Fernet.generate_key().decode())
+    key="$(python - <<'PY' 2>/dev/null || true
+import base64, os
+print(base64.urlsafe_b64encode(os.urandom(32)).decode("ascii"))
 PY
-  elif command -v openssl >/dev/null 2>&1; then
-    openssl rand -base64 32 || true
-  else
-    # 最后兜底：弱一些，但可用
-    head -c 32 /dev/urandom | base64 || true
+)"
   fi
+
+  if [[ -z "${key}" ]] && command -v openssl >/dev/null 2>&1; then
+    key="$(openssl rand -base64 32 2>/dev/null | tr -d '\n' | tr '+/' '-_' || true)"
+  fi
+
+  if [[ -z "${key}" ]]; then
+    key="$(head -c 32 /dev/urandom | base64 | tr -d '\n' | tr '+/' '-_' || true)"
+  fi
+
+  printf '%s' "${key}"
 }
 
 # URL-encode a single component for safe embedding in URIs
@@ -823,8 +833,46 @@ if [[ "${LEGACY_STACK}" == "true" ]]; then
     compose_cli=(docker-compose)
   elif docker compose version >/dev/null 2>&1; then
     compose_cli=(docker compose)
+  # Offline-friendly: allow bundling docker-compose binary under builds/
+  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose" ]]; then
+    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose")
+  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-$(uname -m)")
+  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-Linux-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-Linux-$(uname -m)")
+  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-linux-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-linux-$(uname -m)")
+  # Offline-friendly (writable in repo): allow bundling under tools/
+  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose" ]]; then
+    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose")
+  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-$(uname -m)")
+  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-Linux-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-Linux-$(uname -m)")
+  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-linux-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-linux-$(uname -m)")
+  elif [[ -x /usr/local/bin/docker-compose ]]; then
+    compose_cli=(/usr/local/bin/docker-compose)
+  elif [[ -x /usr/bin/docker-compose ]]; then
+    compose_cli=(/usr/bin/docker-compose)
+  elif [[ -x /usr/libexec/docker/cli-plugins/docker-compose ]]; then
+    compose_cli=(/usr/libexec/docker/cli-plugins/docker-compose)
+  elif [[ -x /usr/lib/docker/cli-plugins/docker-compose ]]; then
+    compose_cli=(/usr/lib/docker/cli-plugins/docker-compose)
+  elif [[ -x "${HOME}/.docker/cli-plugins/docker-compose" ]]; then
+    compose_cli=("${HOME}/.docker/cli-plugins/docker-compose")
   else
-    echo "[init.sh] ERROR: neither docker-compose nor docker compose is available; legacy mode requires docker-compose 1.22.x." >&2
+    cat <<'EOF' >&2
+[init.sh] ERROR: Compose is not available.
+[init.sh] Legacy mode requires Docker Compose (v1 docker-compose or v2 docker compose plugin).
+[init.sh] Install one of:
+[init.sh]   - docker-compose (recommended for legacy hosts; v1.22+)
+[init.sh]   - docker compose plugin (v2)
+[init.sh] Offline option:
+[init.sh]   - put a docker-compose binary at ./builds/docker-compose/docker-compose (or docker-compose-$(uname -m))
+[init.sh]   - or put it at ./tools/docker-compose/docker-compose (or docker-compose-$(uname -m))
+[init.sh] Then re-run: ./init.sh legacy ...
+EOF
     exit 1
   fi
 else
@@ -832,6 +880,24 @@ else
     compose_cli=(docker compose)
   elif command -v docker-compose >/dev/null 2>&1; then
     compose_cli=(docker-compose)
+  # Offline-friendly: allow bundling docker-compose binary under builds/
+  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose" ]]; then
+    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose")
+  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-$(uname -m)")
+  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-Linux-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-Linux-$(uname -m)")
+  elif [[ -x "${SCRIPT_DIR}/builds/docker-compose/docker-compose-linux-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/builds/docker-compose/docker-compose-linux-$(uname -m)")
+  # Offline-friendly (writable in repo): allow bundling under tools/
+  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose" ]]; then
+    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose")
+  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-$(uname -m)")
+  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-Linux-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-Linux-$(uname -m)")
+  elif [[ -x "${SCRIPT_DIR}/tools/docker-compose/docker-compose-linux-$(uname -m)" ]]; then
+    compose_cli=("${SCRIPT_DIR}/tools/docker-compose/docker-compose-linux-$(uname -m)")
   else
     echo "[init.sh] ERROR: docker compose not found." >&2
     exit 1
