@@ -261,21 +261,21 @@ public class AdminApiResource {
     // 人员密级：GENERAL/IMPORTANT/CORE（NON_SECRET 等旧值会在 normalizeMenuSecurityLevel 中收敛为 GENERAL）
     private static final Set<String> MENU_SECURITY_LEVELS = Set.of("GENERAL", "IMPORTANT", "CORE");
     private static final Set<String> VISIBILITY_DATA_LEVELS = Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
-    private static final Map<String, String> MENU_DATA_LEVEL_ALIAS = Map.of(
+    private static final Map<String, String> MENU_DATA_LEVEL_ALIAS = Map.ofEntries(
         // numeric codes for data levels
-        "0", "PUBLIC",
-        "1", "INTERNAL",
-        "2", "SECRET",
-        "3", "CONFIDENTIAL",
+        Map.entry("0", "PUBLIC"),
+        Map.entry("1", "INTERNAL"),
+        Map.entry("2", "SECRET"),
+        Map.entry("3", "CONFIDENTIAL"),
         // 旧值/口径兼容：将人员密级或历史数据密级收敛到数据密级枚举（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）
-        "NON_SECRET", "PUBLIC",
-        "NONE_SECRET", "PUBLIC",
+        Map.entry("NON_SECRET", "PUBLIC"),
+        Map.entry("NONE_SECRET", "PUBLIC"),
         // personnel -> max data level (system capped at CONFIDENTIAL)
-        "GENERAL", "SECRET",
-        "IMPORTANT", "CONFIDENTIAL",
-        "CORE", "CONFIDENTIAL",
-        "TOP_SECRET", "CONFIDENTIAL",
-        "DATA_TOP_SECRET", "CONFIDENTIAL"
+        Map.entry("GENERAL", "SECRET"),
+        Map.entry("IMPORTANT", "CONFIDENTIAL"),
+        Map.entry("CORE", "CONFIDENTIAL"),
+        Map.entry("TOP_SECRET", "CONFIDENTIAL"),
+        Map.entry("DATA_TOP_SECRET", "CONFIDENTIAL")
     );
     private static final Map<String, String> MENU_DATA_LEVEL_LABELS = Map.of(
         "PUBLIC", "公开",
