@@ -1,7 +1,12 @@
+######################################################################
+# Proxy build args (declare inside stages for max Docker compatibility)
+######################################################################
 
-######################################################################
-# Env ARG
-######################################################################
+##################
+# STAGE 1: builder
+###################
+
+FROM node:22-bullseye AS builder
 
 ARG http_proxy
 ARG https_proxy
@@ -16,13 +21,6 @@ ENV http_proxy=$http_proxy \
     HTTP_PROXY=$HTTP_PROXY \
     HTTPS_PROXY=$HTTPS_PROXY \
     NO_PROXY=$NO_PROXY
-
-
-##################
-# STAGE 1: builder
-###################
-
-FROM node:22-bullseye AS builder
 
 ARG MB_EDITION=oss
 ARG VERSION
@@ -56,6 +54,20 @@ RUN INTERACTIVE=false CI=true MB_EDITION=$MB_EDITION bin/build.sh :version ${VER
 ## jar from the previous stage rather than the local build
 
 FROM eclipse-temurin:21-jre-alpine AS runner
+
+ARG http_proxy
+ARG https_proxy
+ARG no_proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+ENV http_proxy=$http_proxy \
+    https_proxy=$https_proxy \
+    no_proxy=$no_proxy \
+    HTTP_PROXY=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY
 
 ENV FC_LANG=en-US LC_CTYPE=en_US.UTF-8
 
