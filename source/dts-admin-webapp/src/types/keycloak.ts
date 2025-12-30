@@ -180,6 +180,7 @@ export interface UserQueryParams {
 	first?: number;
 	max?: number;
 	username?: string;
+	includeGroups?: boolean;
 }
 
 /**

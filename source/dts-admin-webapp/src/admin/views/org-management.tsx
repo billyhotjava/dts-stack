@@ -124,7 +124,7 @@ export default function OrgManagementView() {
 				// Load all users once to enrich with full names
 				let allUsers: KeycloakUser[] = [];
 				try {
-					allUsers = await KeycloakUserService.getAllUsers({ first: 0, max: 1000 });
+					allUsers = await KeycloakUserService.getAllUsers({ first: 0, max: 1000, includeGroups: true });
 				} catch (e) {
 					console.warn("load all users failed", e);
 				}

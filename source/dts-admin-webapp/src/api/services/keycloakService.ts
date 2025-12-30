@@ -33,6 +33,7 @@ export class KeycloakUserService {
 			params: {
 				first: params.first || 0,
 				max: params.max || 1000,
+				includeGroups: params.includeGroups ?? false,
 			},
 		});
 	}
@@ -40,10 +41,10 @@ export class KeycloakUserService {
 	/**
 	 * 根据用户名搜索用户
 	 */
-	static searchUsers(username: string): Promise<KeycloakUser[]> {
+	static searchUsers(username: string, options?: { includeGroups?: boolean }): Promise<KeycloakUser[]> {
 		return apiClient.get<KeycloakUser[]>({
 			url: `${KeycloakUserService.BASE_URL}/search`,
-			params: { username },
+			params: { username, includeGroups: options?.includeGroups ?? false },
 		});
 	}
 

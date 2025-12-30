@@ -122,22 +122,10 @@ export default function UserManagementView() {
 		setLoading(true);
 		try {
 			const data = searchValue.trim()
-				? await KeycloakUserService.searchUsers(searchValue.trim())
-				: await KeycloakUserService.getAllUsers({ first: 0, max: 1000 });
+				? await KeycloakUserService.searchUsers(searchValue.trim(), { includeGroups: false })
+				: await KeycloakUserService.getAllUsers({ first: 0, max: 1000, includeGroups: false });
 			setList(data || []);
-			const usernames = (data || [])
-				.map((u) => (u?.username || "").toString().trim())
-				.filter((u) => u.length > 0);
-			if (usernames.length) {
-				try {
-					const resolved = await adminApi.resolveUserMdmEnabled(usernames);
-					setMdmEnabledMap(resolved || {});
-				} catch {
-					setMdmEnabledMap({});
-				}
-			} else {
-				setMdmEnabledMap({});
-			}
+			setMdmEnabledMap({});
 			setRolesMap({});
 		} catch (e: any) {
 			toast.error(e?.message || "加载用户失败");
@@ -349,10 +337,42 @@ export default function UserManagementView() {
 		})();
 	}, []);
 
-	// Background fetch for user roles to fill the roles column
+	const visibleEntries = useMemo(() => {
+		const entries = list || [];
+		const start = Math.max(0, (pagination.current - 1) * pagination.pageSize);
+		return entries.slice(start, start + pagination.pageSize);
+	}, [list, pagination.current, pagination.pageSize]);
+
+	const visibleUsernames = useMemo(() => {
+		return visibleEntries
+			.map((u) => (u?.username || "").toString().trim())
+			.filter((u) => u.length > 0);
+	}, [visibleEntries]);
+
+	// Background fetch MDM enabled for visible rows only (avoid long query & heavy payload)
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			const missing = visibleUsernames.filter((u) => !hasOwn.call(mdmEnabledMap, u));
+			if (!missing.length) return;
+			try {
+				const resolved = await adminApi.resolveUserMdmEnabled(missing);
+				if (!cancelled) {
+					setMdmEnabledMap((prev) => ({ ...prev, ...(resolved || {}) }));
+				}
+			} catch {
+				/* ignore */
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [visibleUsernames]);
+
+	// Background fetch for user roles: only for visible rows (avoid N+1 across all users)
 	useEffect(() => {
 		(async () => {
-			const entries = list || [];
+			const entries = visibleEntries || [];
 			if (!entries.length) return;
 			const limit = 5; // simple concurrency cap
 			let i = 0;
@@ -386,7 +406,7 @@ export default function UserManagementView() {
 			}
 			await Promise.all(Array.from({ length: Math.min(limit, entries.length) }, () => worker()));
 		})();
-	}, [list]);
+	}, [visibleEntries]);
 
 	const columns: ColumnsType<KeycloakUser> = useMemo(
 		() => [

@@ -13,7 +13,7 @@ export default function ConnectionsTab() {
 	const { data, isLoading, isError, error } = useQuery({
 		queryKey: ["服务端", "recent-users"],
 		queryFn: async () => {
-			const users = await KeycloakUserService.getAllUsers({ max: 30 });
+			const users = await KeycloakUserService.getAllUsers({ max: 30, includeGroups: true });
 			return users;
 		},
 	});

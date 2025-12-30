@@ -101,6 +101,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [formData, setFormData] = useState<FormData>(() => createEmptyFormData());
 	const [formState, setFormState] = useState<FormState>(() => createEmptyFormState());
 	const [loading, setLoading] = useState(false);
+	const [userLoading, setUserLoading] = useState(false);
 	const [error, setError] = useState<string>("");
 	const [personLevel, setPersonLevel] = useState<string>("GENERAL");
 	const [orgOptions, setOrgOptions] = useState<OrgTreeOption[]>([]);
@@ -108,6 +109,36 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 	const [orgLoading, setOrgLoading] = useState(false);
 	const [selectedGroupPaths, setSelectedGroupPaths] = useState<string[]>([]);
 	const [mdmEnabled, setMdmEnabled] = useState<number | null>(null);
+	const [resolvedUser, setResolvedUser] = useState<KeycloakUser | null>(null);
+	const activeUser = resolvedUser ?? user;
+
+	useEffect(() => {
+		let cancelled = false;
+		async function loadUser() {
+			if (!open || mode !== "edit") {
+				setResolvedUser(null);
+				return;
+			}
+			const userId = (user?.id || "").toString().trim();
+			if (!userId) {
+				setResolvedUser(null);
+				return;
+			}
+			setUserLoading(true);
+			try {
+				const fetched = await KeycloakUserService.getUserById(userId);
+				if (!cancelled) setResolvedUser(fetched ?? null);
+			} catch {
+				if (!cancelled) setResolvedUser(null);
+			} finally {
+				if (!cancelled) setUserLoading(false);
+			}
+		}
+		loadUser();
+		return () => {
+			cancelled = true;
+		};
+	}, [open, mode, user?.id]);
 
 	const normalizePersonLevelToken = useCallback((raw: string) => {
 		const v = (raw || "").toString().trim();
@@ -237,23 +268,23 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			return;
 		}
 
-		if (mode === "edit" && user) {
+		if (mode === "edit" && activeUser) {
 			const candidateLevel = (
-				user.attributes?.personnel_security_level?.[0] ||
-				user.attributes?.person_security_level?.[0] ||
-				user.attributes?.person_level?.[0] ||
+				activeUser.attributes?.personnel_security_level?.[0] ||
+				activeUser.attributes?.person_security_level?.[0] ||
+				activeUser.attributes?.person_level?.[0] ||
 				"GENERAL"
 			);
 			const normalizedCandidate = normalizePersonLevelToken(candidateLevel);
 			const resolvedLevel = PERSON_SECURITY_LEVELS.some((option) => option.value === normalizedCandidate)
 				? normalizedCandidate
 				: "GENERAL";
-			let existingGroups = Array.isArray(user.groups)
-				? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
+			let existingGroups = Array.isArray(activeUser.groups)
+				? activeUser.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
 				: [];
 			// Fallback: if no groups returned but dept_code attribute exists, match by organization id (dts_org_id)
 			if (existingGroups.length === 0) {
-				const deptCode = (user.attributes?.dept_code?.[0] || "").trim();
+				const deptCode = (activeUser.attributes?.dept_code?.[0] || "").trim();
 				if (deptCode && Object.keys(orgIndex).length > 0) {
 					let matchedPath: string | undefined;
 					for (const [path, node] of Object.entries(orgIndex)) {
@@ -273,13 +304,13 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 					}
 				}
 			}
-			const normalizedAttributes = normalizeAttributesForState(user.attributes || {}, resolvedLevel);
+			const normalizedAttributes = normalizeAttributesForState(activeUser.attributes || {}, resolvedLevel);
 			const initialFormData: FormData = {
-				username: user.username || "",
-				fullName: (user.fullName || user.firstName || user.lastName || user.attributes?.fullName?.[0] || "").trim(),
-				email: user.email || "",
-				enabled: user.enabled ?? true,
-				emailVerified: user.emailVerified ?? false,
+				username: activeUser.username || "",
+				fullName: (activeUser.fullName || activeUser.firstName || activeUser.lastName || activeUser.attributes?.fullName?.[0] || "").trim(),
+				email: activeUser.email || "",
+				enabled: activeUser.enabled ?? true,
+				emailVerified: activeUser.emailVerified ?? false,
 				attributes: normalizedAttributes,
 			};
 
@@ -319,15 +350,15 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 
 		setError("");
-	}, [open, mode, user, normalizeAttributesForState]);
+	}, [open, mode, activeUser, normalizeAttributesForState]);
 
 	// Ensure organization selection is pre-filled after org tree loads
 	useEffect(() => {
-		if (!open || mode !== "edit" || !user) return;
+		if (!open || mode !== "edit" || !activeUser) return;
 		if (selectedGroupPaths.length > 0) return;
 		// Prefer groups from user payload
-		let existingGroups = Array.isArray(user.groups)
-			? user.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
+		let existingGroups = Array.isArray(activeUser.groups)
+			? activeUser.groups.map((item: string) => normalizeGroupPath(item)).filter((item: string) => item)
 			: [];
 		if (existingGroups.length > 0) {
 			setSelectedGroupPaths(existingGroups);
@@ -335,7 +366,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 		}
 		// Fallback: map by dept_code -> dts_org_id once orgIndex has data
 		if (Object.keys(orgIndex).length > 0) {
-			const deptCode = (user.attributes?.dept_code?.[0] || "").trim();
+			const deptCode = (activeUser.attributes?.dept_code?.[0] || "").trim();
 			if (deptCode) {
 				let matchedPath: string | undefined;
 				for (const [path, node] of Object.entries(orgIndex)) {
@@ -354,7 +385,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				}
 			}
 		}
-	}, [open, mode, user, orgIndex, selectedGroupPaths.length]);
+	}, [open, mode, activeUser, orgIndex, selectedGroupPaths.length]);
 
 	useEffect(() => {
 		if (!open) {
@@ -369,7 +400,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 			setMdmEnabled(null);
 			return;
 		}
-		const username = (user?.username || "").toString().trim();
+		const username = (activeUser?.username || "").toString().trim();
 		if (!username) {
 			setMdmEnabled(null);
 			return;
@@ -383,7 +414,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				setMdmEnabled(null);
 			}
 		})();
-	}, [open, mode, user?.username]);
+	}, [open, mode, activeUser?.username]);
 
 	const hasUserInfoChanged = (normalizedAttributes?: Record<string, string[]>, groupPaths?: string[]): boolean => {
 		const { originalData, groupPaths: originalGroupPaths } = formState;
@@ -460,12 +491,12 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				} else {
 					toast.success("用户创建请求已提交，等待审批");
 				}
-			} else if (mode === "edit" && user?.id) {
+			} else if (mode === "edit" && activeUser?.id) {
 				const emailPayload = email || (formState.originalData.email ? "" : undefined);
 
 				if (hasUserInfoChanges) {
 					const updateData: UpdateUserRequest = {
-						id: user.id,
+						id: activeUser.id,
 						username,
 						email: emailPayload,
 						firstName: fullName,
@@ -481,7 +512,7 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 						})(),
 					};
 
-					const response = await KeycloakUserService.updateUser(user.id, updateData);
+					const response = await KeycloakUserService.updateUser(activeUser.id, updateData);
 					if (response?.message) {
 						toast.success(`用户信息更新请求提交成功: ${response.message}`);
 					} else {
@@ -674,8 +705,8 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 					<Button variant="outline" onClick={onCancel}>
 						取消
 					</Button>
-					<Button onClick={handleSubmit} disabled={loading}>
-						{loading ? "处理中..." : "确定"}
+					<Button onClick={handleSubmit} disabled={loading || userLoading}>
+						{userLoading ? "加载中..." : loading ? "处理中..." : "确定"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

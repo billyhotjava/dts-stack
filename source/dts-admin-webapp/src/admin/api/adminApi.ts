@@ -231,9 +231,9 @@ export const adminApi = {
 		}),
 
 	resolveUserMdmEnabled: (usernames: string[]) =>
-		apiClient.get<Record<string, number>>({
+		apiClient.post<Record<string, number>>({
 			url: "/admin/users/mdm-enabled",
-			params: { usernames: usernames.join(",") },
+			data: { usernames },
 		}),
 
 	getAdminRoles: () =>

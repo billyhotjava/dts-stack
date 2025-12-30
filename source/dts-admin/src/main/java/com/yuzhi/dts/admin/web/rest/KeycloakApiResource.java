@@ -156,6 +156,7 @@ public class KeycloakApiResource {
     public ResponseEntity<List<KeycloakUserDTO>> listUsers(
         @RequestParam(defaultValue = "0") int first,
         @RequestParam(defaultValue = "1000") int max,
+        @RequestParam(defaultValue = "false") boolean includeGroups,
         HttpServletRequest request
     ) {
         String token = adminAccessToken();
@@ -165,7 +166,9 @@ public class KeycloakApiResource {
         if (!excludedIdsByRole.isEmpty() && list != null && !list.isEmpty()) {
             list = list.stream().filter(u -> u.getId() == null || !excludedIdsByRole.contains(u.getId())).toList();
         }
-        populateGroups(list, token);
+        if (includeGroups) {
+            populateGroups(list, token);
+        }
         boolean fromCache = false;
         if (!list.isEmpty()) {
             list.forEach(this::cacheUser);
@@ -199,6 +202,7 @@ public class KeycloakApiResource {
         auditDetail.put("count", list.size());
         auditDetail.put("source", fromCache ? "cache" : "keycloak");
         auditDetail.put("excludedByRoleCount", excludedIdsByRole.size());
+        auditDetail.put("includeGroups", includeGroups);
         String actor = currentUser();
         if (!isAuditSuppressed()) {
             recordUserActionV2(
@@ -244,7 +248,11 @@ public class KeycloakApiResource {
     }
 
     @GetMapping("/keycloak/users/search")
-    public ResponseEntity<List<KeycloakUserDTO>> searchUsers(@RequestParam String username, HttpServletRequest request) {
+    public ResponseEntity<List<KeycloakUserDTO>> searchUsers(
+        @RequestParam String username,
+        @RequestParam(defaultValue = "false") boolean includeGroups,
+        HttpServletRequest request
+    ) {
         String q = username == null ? "" : username.trim();
         String qLower = q.toLowerCase();
         String token = adminAccessToken();
@@ -252,13 +260,17 @@ public class KeycloakApiResource {
 
         if (StringUtils.hasText(q)) {
             list = filterProtectedUsers(keycloakAdminClient.searchUsers(q, token));
-            populateGroups(list, token);
+            if (includeGroups) {
+                populateGroups(list, token);
+            }
         }
         if (list.isEmpty() && StringUtils.hasText(q)) {
             list = filterProtectedUsers(
                 keycloakAdminClient.findByUsername(q, adminAccessToken()).map(List::of).orElseGet(List::of)
             );
-            populateGroups(list, token);
+            if (includeGroups) {
+                populateGroups(list, token);
+            }
         }
         if (list.isEmpty()) {
             list = filterProtectedUsers(stores

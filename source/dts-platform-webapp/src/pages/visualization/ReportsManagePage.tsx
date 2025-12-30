@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/ui/button";
+import { Badge } from "@/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/ui/command";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
 import { Textarea } from "@/ui/textarea";
+import directoryService, { type DirectoryRole } from "@/api/services/directoryService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import reportsService, { type ReportLink, type ReportLinkUpsertRequest } from "@/api/services/reportsService";
+import { classificationToLabelZh, normalizeClassification, type ClassificationLevel } from "@/utils/classification";
+import { cn } from "@/utils";
 
 type FormState = {
   code: string;
@@ -17,9 +24,9 @@ type FormState = {
   url: string;
   engine: string;
   reportType: string;
-  deptCodesCsv: string;
-  roleCodesCsv: string;
-  classification: string;
+  deptCodes: string[];
+  roleCodes: string[];
+  classification: ClassificationLevel;
   enabled: boolean;
   sortOrder: number;
 };
@@ -30,32 +37,37 @@ const DEFAULT_FORM: FormState = {
   url: "",
   engine: "HETU",
   reportType: "",
-  deptCodesCsv: "",
-  roleCodesCsv: "",
+  deptCodes: [],
+  roleCodes: [],
   classification: "INTERNAL",
   enabled: true,
   sortOrder: 0,
 };
 
-function splitCsv(raw: string): string[] {
-  const s = String(raw || "").trim();
-  if (!s) return [];
-  return s
-    .split(/[,，]/)
-    .map((x) => x.trim())
-    .filter(Boolean);
+function normalizeRoleCode(raw: string): string {
+  const token = String(raw || "").trim();
+  if (!token) return "";
+  const cleaned = token.replace(/[\s-]+/g, "_");
+  const upper = cleaned.toUpperCase();
+  return upper.startsWith("ROLE_") ? upper : `ROLE_${upper}`;
 }
 
 function toUpsertPayload(form: FormState): ReportLinkUpsertRequest {
+  const normalizedClassification = normalizeClassification(form.classification, "INTERNAL");
   return {
     code: form.code.trim(),
     title: form.title.trim(),
     url: form.url.trim(),
     engine: form.engine?.trim() || "HETU",
     reportType: form.reportType?.trim() || undefined,
-    deptCodes: splitCsv(form.deptCodesCsv),
-    roleCodes: splitCsv(form.roleCodesCsv),
-    classification: form.classification?.trim() || "INTERNAL",
+    deptCodes: Array.isArray(form.deptCodes) ? form.deptCodes.filter(Boolean).slice(0, 1) : [],
+    roleCodes: Array.isArray(form.roleCodes)
+      ? form.roleCodes
+          .map(normalizeRoleCode)
+          .filter(Boolean)
+          .slice(0, 200)
+      : [],
+    classification: normalizedClassification,
     enabled: Boolean(form.enabled),
     sortOrder: Number.isFinite(Number(form.sortOrder)) ? Number(form.sortOrder) : 0,
   };
@@ -112,17 +124,94 @@ export default function ReportsManagePage() {
   const [reportType, setReportType] = useState<string>("all");
   const [enabledOnly, setEnabledOnly] = useState(false);
   const [departments, setDepartments] = useState<DeptDto[]>([]);
+  const [roles, setRoles] = useState<DirectoryRole[]>([]);
 
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [editing, setEditing] = useState<ReportLink | null>(null);
   const [form, setForm] = useState<FormState>({ ...DEFAULT_FORM });
+  const [deptPickerOpen, setDeptPickerOpen] = useState(false);
+  const [deptSearch, setDeptSearch] = useState("");
+  const [rolePickerOpen, setRolePickerOpen] = useState(false);
+  const [roleSearch, setRoleSearch] = useState("");
 
   const deptDict = useMemo(() => {
     const m = new Map<string, DeptDto>();
     for (const d of departments) m.set(String(d.code), d);
     return m;
   }, [departments]);
+
+  const deptItems = useMemo(() => {
+    const computeDepth = (dept: DeptDto) => {
+      let depth = 0;
+      let cur: DeptDto | undefined = dept;
+      const seen = new Set<string>();
+      while (cur && typeof cur.parentId === "number") {
+        const pid = String(cur.parentId);
+        if (seen.has(pid)) break;
+        seen.add(pid);
+        const parent = deptDict.get(pid);
+        if (!parent) break;
+        depth += 1;
+        cur = parent;
+        if (depth > 20) break;
+      }
+      return depth;
+    };
+
+    const computePath = (dept: DeptDto) => {
+      const parts: string[] = [];
+      let cur: DeptDto | undefined = dept;
+      const seen = new Set<string>();
+      while (cur) {
+        const code = String(cur.code);
+        if (seen.has(code)) break;
+        seen.add(code);
+        parts.unshift(cur.nameZh || cur.nameEn || code);
+        if (typeof cur.parentId !== "number") break;
+        cur = deptDict.get(String(cur.parentId));
+      }
+      return parts.join(" / ");
+    };
+
+    return departments.map((d) => ({
+      code: String(d.code),
+      label: d.nameZh || d.nameEn || String(d.code),
+      path: computePath(d),
+      depth: computeDepth(d),
+      isRoot: Boolean(d.isRoot) || d.parentId == null,
+    }));
+  }, [departments, deptDict]);
+
+  const visibleDeptItems = useMemo(() => {
+    const q = deptSearch.trim().toLowerCase();
+    if (!q) return deptItems;
+    return deptItems
+      .filter(
+        (d) =>
+          d.code.toLowerCase().includes(q) ||
+          d.label.toLowerCase().includes(q) ||
+          d.path.toLowerCase().includes(q),
+      )
+      .slice(0, 200);
+  }, [deptItems, deptSearch]);
+
+  const roleItems = useMemo(() => {
+    const q = roleSearch.trim().toLowerCase();
+    const base = Array.isArray(roles) ? roles : [];
+    const list = q
+      ? base.filter(
+          (r) =>
+            String(r.name || "")
+              .toLowerCase()
+              .includes(q) ||
+            String(r.description || "")
+              .toLowerCase()
+              .includes(q),
+        )
+      : base;
+    return list.slice(0, 300);
+  }, [roles, roleSearch]);
 
   const reportTypes = useMemo(() => {
     const set = new Set<string>();
@@ -163,14 +252,26 @@ export default function ReportsManagePage() {
       .catch(() => setDepartments([]));
   }, []);
 
+  useEffect(() => {
+    directoryService
+      .listRoles()
+      .then((list) => setRoles(Array.isArray(list) ? list : []))
+      .catch(() => setRoles([]));
+  }, []);
+
   const onCreate = () => {
     setMode("create");
     setEditing(null);
     setForm({ ...DEFAULT_FORM });
+    setDeptSearch("");
+    setRoleSearch("");
+    setDeptPickerOpen(false);
+    setRolePickerOpen(false);
     setOpen(true);
   };
 
   const onEdit = (r: ReportLink) => {
+    const normalizedClassification = normalizeClassification(r.classification, "INTERNAL");
     setMode("edit");
     setEditing(r);
     setForm({
@@ -179,12 +280,16 @@ export default function ReportsManagePage() {
       url: r.url || "",
       engine: r.engine || "HETU",
       reportType: (r.reportType as any) || "",
-      deptCodesCsv: Array.isArray(r.deptCodes) ? r.deptCodes.join(",") : "",
-      roleCodesCsv: Array.isArray(r.roleCodes) ? r.roleCodes.join(",") : "",
-      classification: r.classification || "INTERNAL",
+      deptCodes: Array.isArray(r.deptCodes) ? r.deptCodes.filter(Boolean).slice(0, 1) : [],
+      roleCodes: Array.isArray(r.roleCodes) ? r.roleCodes.filter(Boolean).map(normalizeRoleCode) : [],
+      classification: normalizedClassification,
       enabled: typeof r.enabled === "boolean" ? r.enabled : true,
       sortOrder: Number.isFinite(Number(r.sortOrder)) ? Number(r.sortOrder) : 0,
     });
+    setDeptSearch("");
+    setRoleSearch("");
+    setDeptPickerOpen(false);
+    setRolePickerOpen(false);
     setOpen(true);
   };
 
@@ -278,6 +383,9 @@ export default function ReportsManagePage() {
   };
 
   const deptName = (code: string) => deptDict.get(String(code))?.nameZh || deptDict.get(String(code))?.nameEn || code;
+  const selectedDeptCode = form.deptCodes?.[0] || "";
+  const selectedDeptLabel = selectedDeptCode ? deptName(selectedDeptCode) : "全部部门";
+  const selectedRoleCount = Array.isArray(form.roleCodes) ? form.roleCodes.length : 0;
 
   return (
     <div className="space-y-4">
@@ -350,11 +458,11 @@ export default function ReportsManagePage() {
                   <td className="px-3 py-2 font-mono text-xs truncate" title={r.code}>
                     {r.code}
                   </td>
-	                  <td className="px-3 py-2 font-medium truncate" title={r.title}>
-	                    {r.title}
-	                  </td>
-	                  <td className="px-3 py-2">{engineLabel(r.engine)}</td>
-	                  <td className="px-3 py-2">{r.reportType || "-"}</td>
+                  <td className="px-3 py-2 font-medium truncate" title={r.title}>
+                    {r.title}
+                  </td>
+                  <td className="px-3 py-2">{engineLabel(r.engine)}</td>
+                  <td className="px-3 py-2">{r.reportType || "-"}</td>
                   <td
                     className="px-3 py-2 text-xs truncate"
                     title={
@@ -369,7 +477,9 @@ export default function ReportsManagePage() {
                   >
                     {Array.isArray(r.roleCodes) && r.roleCodes.length ? r.roleCodes.join(", ") : "全部"}
                   </td>
-                  <td className="px-3 py-2">{r.classification}</td>
+                  <td className="px-3 py-2" title={String(r.classification || "")}>
+                    {classificationToLabelZh(r.classification)}
+                  </td>
                   <td className="px-3 py-2">{typeof r.enabled === "boolean" ? (r.enabled ? "启用" : "禁用") : "-"}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">
                     {r.updatedAt ? new Date(r.updatedAt).toLocaleString() : "-"}
@@ -443,33 +553,156 @@ export default function ReportsManagePage() {
             </div>
 
             <div className="grid gap-2">
-              <Label>部门范围（逗号分隔；为空=全部）</Label>
-              <Input
-                value={form.deptCodesCsv}
-                onChange={(e) => setForm((f) => ({ ...f, deptCodesCsv: e.target.value }))}
-                placeholder="如：1001,1002"
-              />
+              <Label>部门范围（单选；为空=全部）</Label>
+              <Popover open={deptPickerOpen} onOpenChange={setDeptPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={deptPickerOpen}
+                    className={cn("justify-between", selectedDeptCode ? "" : "text-muted-foreground")}
+                  >
+                    {selectedDeptLabel}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[360px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="搜索部门..." value={deptSearch} onValueChange={setDeptSearch} />
+                    <CommandList>
+                      <CommandEmpty>未找到匹配部门</CommandEmpty>
+                      <CommandGroup heading="部门">
+                        <CommandItem
+                          value="__ALL__"
+                          onSelect={() => {
+                            setForm((f) => ({ ...f, deptCodes: [] }));
+                            setDeptPickerOpen(false);
+                          }}
+                        >
+                          <span className="font-medium">全部部门</span>
+                          <Check className={cn("ml-2 h-4 w-4", !selectedDeptCode ? "opacity-100" : "opacity-0")} />
+                        </CommandItem>
+                        {visibleDeptItems.map((d) => (
+                          <CommandItem
+                            key={d.code}
+                            value={`${d.code} ${d.label} ${d.path}`}
+                            onSelect={() => {
+                              setForm((f) => ({ ...f, deptCodes: [d.code] }));
+                              setDeptPickerOpen(false);
+                            }}
+                          >
+                            <span
+                              className={cn("truncate", d.isRoot ? "font-medium" : "text-sm")}
+                              title={d.path}
+                              style={{ paddingLeft: `${8 + d.depth * 14}px` }}
+                            >
+                              {d.label}
+                            </span>
+                            <Check
+                              className={cn("ml-auto h-4 w-4", selectedDeptCode === d.code ? "opacity-100" : "opacity-0")}
+                            />
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="grid gap-2">
-              <Label>角色范围（逗号分隔；为空=全部）</Label>
-              <Input
-                value={form.roleCodesCsv}
-                onChange={(e) => setForm((f) => ({ ...f, roleCodesCsv: e.target.value }))}
-                placeholder="如：ROLE_EMPLOYEE,ROLE_DEPT_DATA_VIEWER"
-              />
+              <Label>角色范围（多选；为空=全部）</Label>
+              <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={rolePickerOpen}
+                    className={cn("justify-between", selectedRoleCount ? "" : "text-muted-foreground")}
+                  >
+                    {selectedRoleCount ? `已选 ${selectedRoleCount} 个角色` : "全部角色"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[360px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="搜索角色..." value={roleSearch} onValueChange={setRoleSearch} />
+                    <CommandList>
+                      <CommandEmpty>未找到匹配角色</CommandEmpty>
+                      <CommandGroup heading="角色">
+                        <CommandItem
+                          value="__ALL__"
+                          onSelect={() => {
+                            setForm((f) => ({ ...f, roleCodes: [] }));
+                          }}
+                        >
+                          <span className="font-medium">全部角色</span>
+                          <Check className={cn("ml-2 h-4 w-4", selectedRoleCount === 0 ? "opacity-100" : "opacity-0")} />
+                        </CommandItem>
+                        {roleItems.map((r) => {
+                          const code = normalizeRoleCode(r.name);
+                          const selected = (form.roleCodes || []).includes(code);
+                          return (
+                            <CommandItem
+                              key={String(r.id || r.name)}
+                              value={`${code} ${r.description || ""}`}
+                              onSelect={() => {
+                                setForm((f) => {
+                                  const prev = Array.isArray(f.roleCodes) ? f.roleCodes : [];
+                                  const set = new Set(prev.map(normalizeRoleCode).filter(Boolean));
+                                  if (set.has(code)) set.delete(code);
+                                  else set.add(code);
+                                  return { ...f, roleCodes: Array.from(set) };
+                                });
+                              }}
+                            >
+                              <div className="flex flex-col overflow-hidden">
+                                <span className="truncate font-medium">{code}</span>
+                                {r.description ? (
+                                  <span className="truncate text-xs text-muted-foreground">{r.description}</span>
+                                ) : null}
+                              </div>
+                              <Check className={cn("ml-auto h-4 w-4", selected ? "opacity-100" : "opacity-0")} />
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                  {selectedRoleCount ? (
+                    <div className="border-t p-2">
+                      <div className="flex flex-wrap gap-1">
+                        {(form.roleCodes || []).slice(0, 12).map((rc) => (
+                          <Badge key={rc} variant="secondary" className="max-w-[320px] truncate">
+                            {rc}
+                          </Badge>
+                        ))}
+                        {selectedRoleCount > 12 ? <Badge variant="outline">+{selectedRoleCount - 12}</Badge> : null}
+                      </div>
+                      <div className="mt-2 flex justify-end">
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setForm((f) => ({ ...f, roleCodes: [] }))}>
+                          清空
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="grid gap-2">
               <Label>密级 *</Label>
-              <Select value={form.classification} onValueChange={(v) => setForm((f) => ({ ...f, classification: v }))}>
+              <Select
+                value={form.classification}
+                onValueChange={(v) => setForm((f) => ({ ...f, classification: v as ClassificationLevel }))}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="PUBLIC">PUBLIC</SelectItem>
-                  <SelectItem value="INTERNAL">INTERNAL</SelectItem>
-                  <SelectItem value="SECRET">SECRET</SelectItem>
-                  <SelectItem value="CONFIDENTIAL">CONFIDENTIAL</SelectItem>
+                  <SelectItem value="PUBLIC">公开（PUBLIC）</SelectItem>
+                  <SelectItem value="INTERNAL">内部（INTERNAL）</SelectItem>
+                  <SelectItem value="SECRET">秘密（SECRET）</SelectItem>
+                  <SelectItem value="CONFIDENTIAL">机密（CONFIDENTIAL）</SelectItem>
                 </SelectContent>
               </Select>
             </div>

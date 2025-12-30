@@ -77,6 +77,15 @@ public class AdminUserResource {
         return ResponseEntity.ok(ApiResponse.ok(resolved));
     }
 
+    @PostMapping("/mdm-enabled")
+    public ResponseEntity<ApiResponse<Map<String, Integer>>> resolveMdmEnabledPost(
+        @RequestBody(required = false) UsernamesRequestVM request
+    ) {
+        List<String> inputs = normalizeUsernames(request == null ? null : request.usernames);
+        Map<String, Integer> resolved = adminUserService.resolveMdmEnabled(inputs);
+        return ResponseEntity.ok(ApiResponse.ok(resolved));
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.SYS_ADMIN + "')")
     public ResponseEntity<ApiResponse<ApprovalDTOs.ApprovalRequestDetail>> createUser(
@@ -117,6 +126,27 @@ public class AdminUserResource {
     ) {
         String message = "用户删除功能已禁用，请改用停用操作";
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(message));
+    }
+
+    public static final class UsernamesRequestVM {
+        public List<String> usernames;
+    }
+
+    private static List<String> normalizeUsernames(List<String> usernames) {
+        if (usernames == null || usernames.isEmpty()) {
+            return List.of();
+        }
+        List<String> inputs = new ArrayList<>(usernames.size());
+        for (String raw : usernames) {
+            if (!StringUtils.isNotBlank(raw)) {
+                continue;
+            }
+            String normalized = raw.trim();
+            if (!normalized.isEmpty()) {
+                inputs.add(normalized);
+            }
+        }
+        return inputs;
     }
 
     private List<String> normalizeUsernames(MultiValueMap<String, String> query) {
