@@ -868,6 +868,9 @@ if [[ "${LEGACY_STACK}" == "true" ]]; then
     compose_cli=(docker-compose)
   elif docker compose version >/dev/null 2>&1; then
     compose_cli=(docker compose)
+  # Legacy/offline helper package (see tools/compose/*/upgrade.txt)
+  elif [[ -x /opt/dcenv/bin/docker-compose ]]; then
+    compose_cli=(/opt/dcenv/bin/docker-compose)
   else
     bundled=""
     bundled="$(find_bundled_docker_compose "${SCRIPT_DIR}/tools/docker-compose" 2>/dev/null || true)"
@@ -900,6 +903,8 @@ if [[ "${LEGACY_STACK}" == "true" ]]; then
 [init.sh]       ./tools/docker-compose/docker-compose-Linux-aarch64  (or -Linux-arm64)
 [init.sh]       ./tools/docker-compose/docker-compose-Linux-x86_64   (or -Linux-amd64)
 [init.sh]     (also supports ./builds/docker-compose/ with same names)
+[init.sh]   - or use the bundled venv binary if you have it:
+[init.sh]       /opt/dcenv/bin/docker-compose
 [init.sh] Then re-run: ./init.sh legacy ...
 EOF
         exit 1
@@ -911,6 +916,8 @@ else
     compose_cli=(docker compose)
   elif command -v docker-compose >/dev/null 2>&1; then
     compose_cli=(docker-compose)
+  elif [[ -x /opt/dcenv/bin/docker-compose ]]; then
+    compose_cli=(/opt/dcenv/bin/docker-compose)
   else
     bundled=""
     bundled="$(find_bundled_docker_compose "${SCRIPT_DIR}/tools/docker-compose" 2>/dev/null || true)"
