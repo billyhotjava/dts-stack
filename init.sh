@@ -288,8 +288,6 @@ generate_env_base(){
   HOST_ADMIN_UI="biadmin.${BASE_DOMAIN}"
   HOST_PLATFORM_UI="bi.${BASE_DOMAIN}"
   HOST_ANALYTICS="analytics.${BASE_DOMAIN}"
-  # Backward compatible alias (legacy variable name)
-  HOST_METABASE="${HOST_METABASE:-${HOST_ANALYTICS}}"
 
   # ---------- Host reachability for in-container calls to host services ----------
   # Allow operators to pin this via environment; otherwise auto-detect.
@@ -343,10 +341,10 @@ generate_env_base(){
   : "${PG_USER_DTCOMMON:=dts_common}"
   : "${PG_PWD_DTCOMMON:=${SECRET}}"
 
-  # Metabase metadata
-  : "${PG_DB_METABASE:=metabase}"
-  : "${PG_USER_METABASE:=metabase}"
-  : "${PG_PWD_METABASE:=${SECRET}}"
+  # Analytics metadata
+  : "${PG_DB_ANALYTICS:=dts_analytics}"
+  : "${PG_USER_ANALYTICS:=dts_analytics}"
+  : "${PG_PWD_ANALYTICS:=${SECRET}}"
 
   # ---------- Ranger（Admin） ----------
   : "${PG_DB_RANGER:=dts_ranger}"
@@ -374,21 +372,18 @@ generate_env_base(){
   : "${OAUTH2_PLATFORM_CLIENT_SECRET:=${SECRET}}"
   OIDC_ISSUER_URI="https://${HOST_SSO}/realms/${KC_REALM}"
 
-  # ---------- BI 平台（Metabase） ----------
-  # Analytics image tag (prefer your self-built image in offline environments).
-  # Set IMAGE_DTS_ANALYTICS in imgversion.conf before running init.sh.
-  : "${IMAGE_DTS_ANALYTICS:=${IMAGE_DTS_ANALYTICS:-${IMAGE_METABASE:-metabase/metabase:v0.49.15}}}"
-  : "${METABASE_ENCRYPTION_SECRET:=$(generate_fernet)}"
-  # Prefer same-domain mount under platform UI to keep user-facing URLs consistent ("Analytics") and avoid extra DNS/ports.
-  : "${METABASE_SITE_URL:=https://${HOST_PLATFORM_UI}/analytics}"
-  : "${METABASE_JAVA_TOOL_OPTIONS:=-Xms512m -Xmx1024m}"
-  : "${METABASE_OIDC_CLIENT_ID:=metabase}"
-  : "${METABASE_OIDC_CLIENT_SECRET:=${SECRET}}"
+  # ---------- Analytics ----------
+  # Prefer your self-built image (offline/air-gapped friendly). Default aligns with other DTS app images.
+  : "${IMAGE_DTS_ANALYTICS:=dts-analytics:1.0.0}"
+  : "${ANALYTICS_ENCRYPTION_SECRET:=$(generate_fernet)}"
+  # Prefer same-domain mount under platform UI to keep user-facing URLs consistent and avoid extra DNS/ports.
+  : "${ANALYTICS_SITE_URL:=https://${HOST_PLATFORM_UI}/analytics}"
+  : "${ANALYTICS_JAVA_TOOL_OPTIONS:=-Xms512m -Xmx1024m}"
+  : "${ANALYTICS_OIDC_CLIENT_ID:=analytics}"
+  : "${ANALYTICS_OIDC_CLIENT_SECRET:=${SECRET}}"
   # When mounted under /analytics behind Traefik, the redirect URI must include the prefix.
-  # Metabase mounted under platform path: https://${HOST_PLATFORM_UI}/analytics
-  # OIDC callback endpoint (Metabase): /auth/oidc/callback  -> full URL should include the /analytics prefix.
-  : "${METABASE_OIDC_REDIRECT_URI:=https://${HOST_PLATFORM_UI}/analytics/auth/oidc/callback}"
-  : "${METABASE_OIDC_METADATA_URL:=https://${HOST_SSO}/realms/${KC_REALM}/.well-known/openid-configuration}"
+  : "${ANALYTICS_OIDC_REDIRECT_URI:=https://${HOST_PLATFORM_UI}/analytics/auth/oidc/callback}"
+  : "${ANALYTICS_OIDC_METADATA_URL:=https://${HOST_SSO}/realms/${KC_REALM}/.well-known/openid-configuration}"
 
   # ---------- MDM Gateway ----------
   : "${DTS_MDM_GATEWAY_ENABLED:=true}"
@@ -514,7 +509,6 @@ HOST_RANGER=${HOST_RANGER}
 HOST_ADMIN_UI=${HOST_ADMIN_UI}
 HOST_PLATFORM_UI=${HOST_PLATFORM_UI}
 HOST_ANALYTICS=${HOST_ANALYTICS}
-HOST_METABASE=${HOST_METABASE}
 HOST_GATEWAY_IP=${HOST_GATEWAY_IP}
 DOCKER_HOST_GATEWAY_IP=${DOCKER_HOST_GATEWAY_IP}
 HETU_UPSTREAM_IP=${HETU_UPSTREAM_IP}
@@ -568,10 +562,10 @@ PG_DB_DTCOMMON=${PG_DB_DTCOMMON}
 PG_USER_DTCOMMON=${PG_USER_DTCOMMON}
 PG_PWD_DTCOMMON=${PG_PWD_DTCOMMON}
 
-# --- Metabase metadata ---
-PG_DB_METABASE=${PG_DB_METABASE}
-PG_USER_METABASE=${PG_USER_METABASE}
-PG_PWD_METABASE=${PG_PWD_METABASE}
+# --- Analytics metadata ---
+PG_DB_ANALYTICS=${PG_DB_ANALYTICS}
+PG_USER_ANALYTICS=${PG_USER_ANALYTICS}
+PG_PWD_ANALYTICS=${PG_PWD_ANALYTICS}
 
 
 # ====== OIDC Clients ======
@@ -614,14 +608,14 @@ ADMIN_VITE_HIDE_PASSWORD_LOGIN=${ADMIN_VITE_HIDE_PASSWORD_LOGIN}
 PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED=${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED}
 PLATFORM_VITE_HIDE_PASSWORD_LOGIN=${PLATFORM_VITE_HIDE_PASSWORD_LOGIN}
 
-# ====== Metabase ======
-METABASE_ENCRYPTION_SECRET=${METABASE_ENCRYPTION_SECRET}
-METABASE_SITE_URL=${METABASE_SITE_URL}
-METABASE_JAVA_TOOL_OPTIONS="${METABASE_JAVA_TOOL_OPTIONS}"
-METABASE_OIDC_CLIENT_ID=${METABASE_OIDC_CLIENT_ID}
-METABASE_OIDC_CLIENT_SECRET=${METABASE_OIDC_CLIENT_SECRET}
-METABASE_OIDC_REDIRECT_URI=${METABASE_OIDC_REDIRECT_URI}
-METABASE_OIDC_METADATA_URL=${METABASE_OIDC_METADATA_URL}
+# ====== Analytics ======
+ANALYTICS_ENCRYPTION_SECRET=${ANALYTICS_ENCRYPTION_SECRET}
+ANALYTICS_SITE_URL=${ANALYTICS_SITE_URL}
+ANALYTICS_JAVA_TOOL_OPTIONS="${ANALYTICS_JAVA_TOOL_OPTIONS}"
+ANALYTICS_OIDC_CLIENT_ID=${ANALYTICS_OIDC_CLIENT_ID}
+ANALYTICS_OIDC_CLIENT_SECRET=${ANALYTICS_OIDC_CLIENT_SECRET}
+ANALYTICS_OIDC_REDIRECT_URI=${ANALYTICS_OIDC_REDIRECT_URI}
+ANALYTICS_OIDC_METADATA_URL=${ANALYTICS_OIDC_METADATA_URL}
 
 # ====== MDM Gateway (new keys) ======
 DTS_MDM_GATEWAY_ENABLED=${DTS_MDM_GATEWAY_ENABLED}
@@ -874,7 +868,7 @@ else
 fi
 
 # 输出可访问地址
-host_vars=(HOST_SSO HOST_TRINO HOST_RANGER HOST_API HOST_ADMIN_UI HOST_PLATFORM_UI HOST_ANALYTICS HOST_METABASE)
+host_vars=(HOST_SSO HOST_TRINO HOST_RANGER HOST_API HOST_ADMIN_UI HOST_PLATFORM_UI HOST_ANALYTICS)
 if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then host_vars+=(HOST_MINIO); fi
 if [[ "${ENABLE_NESSIE:-false}" == "true" ]]; then host_vars+=(HOST_NESSIE); fi
 for host_var in "${host_vars[@]}"; do

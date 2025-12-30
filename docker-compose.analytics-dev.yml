@@ -1,4 +1,4 @@
-## Dev overlay: Analytics (Metabase) from source with UI hot reload.
+## Dev overlay: Analytics from source with UI hot reload.
 ##
 ## Usage (local dev mode):
 ##   ./dev-up.sh --mode local --analytics-dev
@@ -26,19 +26,19 @@ services:
       # IMPORTANT: Do not use MB_DB_CONNECTION_URI here because passwords may contain characters like '@'
       # which must be URL-encoded; otherwise the JDBC/URI parser will treat it as a separator and break.
       MB_DB_TYPE: postgres
-      MB_DB_DBNAME: ${PG_DB_METABASE:-metabase}
+      MB_DB_DBNAME: ${PG_DB_ANALYTICS:-dts_analytics}
       MB_DB_PORT: ${PG_PORT:-5432}
-      MB_DB_USER: ${PG_USER_METABASE:-metabase}
-      MB_DB_PASS: ${PG_PWD_METABASE:-metabase}
+      MB_DB_USER: ${PG_USER_ANALYTICS:-dts_analytics}
+      MB_DB_PASS: ${PG_PWD_ANALYTICS:-dts_analytics}
       MB_DB_HOST: ${PG_HOST:-dts-pg}
-      MB_ENCRYPTION_SECRET_KEY: ${METABASE_ENCRYPTION_SECRET:-}
-      MB_SITE_URL: "${METABASE_SITE_URL:-https://${HOST_PLATFORM_UI}/analytics}"
+      MB_ENCRYPTION_SECRET_KEY: ${ANALYTICS_ENCRYPTION_SECRET:-}
+      MB_SITE_URL: "${ANALYTICS_SITE_URL:-https://${HOST_PLATFORM_UI}/analytics}"
       MB_PLUGINS_DIR: /plugins
       MB_LOG_FILE: /var/log/metabase/metabase.log
-      MB_OIDC_CLIENT_ID: ${METABASE_OIDC_CLIENT_ID:-}
-      MB_OIDC_CLIENT_SECRET: ${METABASE_OIDC_CLIENT_SECRET:-}
-      MB_OIDC_REDIRECT_URI: ${METABASE_OIDC_REDIRECT_URI:-}
-      MB_OIDC_METADATA_URL: ${METABASE_OIDC_METADATA_URL:-}
+      MB_OIDC_CLIENT_ID: ${ANALYTICS_OIDC_CLIENT_ID:-}
+      MB_OIDC_CLIENT_SECRET: ${ANALYTICS_OIDC_CLIENT_SECRET:-}
+      MB_OIDC_REDIRECT_URI: ${ANALYTICS_OIDC_REDIRECT_URI:-}
+      MB_OIDC_METADATA_URL: ${ANALYTICS_OIDC_METADATA_URL:-}
 
       MB_FRONTEND_DEV_PORT: "8080"
       MB_FRONTEND_DEV_PUBLIC_URL: "https://${HOST_PLATFORM_UI}/analytics-dev-assets/"

@@ -164,10 +164,10 @@ services:
       PG_DB_RANGER: ${PG_DB_RANGER}
       PG_USER_RANGER: ${PG_USER_RANGER}
       PG_PWD_RANGER: ${PG_PWD_RANGER}
-      # Metabase (Analytics)
-      PG_DB_METABASE: ${PG_DB_METABASE}
-      PG_USER_METABASE: ${PG_USER_METABASE}
-      PG_PWD_METABASE: ${PG_PWD_METABASE}
+      # Analytics
+      PG_DB_ANALYTICS: ${PG_DB_ANALYTICS}
+      PG_USER_ANALYTICS: ${PG_USER_ANALYTICS}
+      PG_PWD_ANALYTICS: ${PG_PWD_ANALYTICS}
     volumes:
       - ./services/dts-pg/data:/var/lib/postgresql/data
       - ./services/dts-pg/init:/docker-entrypoint-initdb.d:ro

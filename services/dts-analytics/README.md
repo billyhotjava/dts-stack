@@ -1,7 +1,7 @@
 # Metabase 部署说明（草案）
 
-- 镜像：由 `IMAGE_METABASE` 决定（默认 `metabase/metabase:v0.49.15`），可替换自构建镜像。
-- 元数据库：PostgreSQL，环境变量 `MB_DB_CONNECTION_URI=postgres://metabase:pass@dts-pg:5432/metabase`.
+- 镜像：由 `IMAGE_DTS_ANALYTICS` 决定（默认 `dts-analytics:1.0.0`），可替换自构建镜像。
+- 元数据库：PostgreSQL，环境变量建议使用 `MB_DB_*`（避免 URI 解析问题），例如 `MB_DB_DBNAME=dts_analytics MB_DB_USER=dts_analytics`.
 - 认证：禁用匿名与自助注册，开启 OIDC/SAML（Keycloak），在 env 中配置 `MB_OIDC_*`。组/角色与 dept_code/person_security_level 可通过 claim 映射到 Metabase 组。
 - 插件/驱动：DM JDBC 驱动、Inceptor/Hive 驱动放在 `services/dts-analytics/plugins/`；容器用 `MB_PLUGINS_DIR=/plugins`.
 - 日志：挂载到宿主机，按 100MB 轮转（logrotate）。

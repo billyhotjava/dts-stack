@@ -406,12 +406,12 @@ services:
       retries: 30
       start_period: 60s
 
-  # Analytics (Metabase) - dev stack default.
+  # Analytics - dev stack default.
   # - Mounted under platform domain path: https://${HOST_PLATFORM_UI}/analytics
   # - Use `docker-compose.analytics-dev.yml` when you need UI hot reload.
   dts-analytics:
-    # Prefer the unified Analytics image var; fall back to legacy IMAGE_METABASE for backward compatibility.
-    image: ${IMAGE_DTS_ANALYTICS:-${IMAGE_METABASE:?Set IMAGE_DTS_ANALYTICS (preferred) or IMAGE_METABASE in imgversion.conf or .env}}
+    # NOTE: keep interpolation simple for legacy docker-compose compatibility (avoid nested ${...${...}}).
+    image: ${IMAGE_DTS_ANALYTICS:-dts-analytics:1.0.0}
     depends_on:
       dts-pg:
         condition: service_healthy
@@ -420,20 +420,20 @@ services:
       MB_JETTY_HOST: "0.0.0.0"
       # Avoid MB_DB_CONNECTION_URI because passwords may contain characters like '@' and break URI parsing.
       MB_DB_TYPE: postgres
-      MB_DB_DBNAME: ${PG_DB_METABASE:-metabase}
+      MB_DB_DBNAME: ${PG_DB_ANALYTICS:-dts_analytics}
       MB_DB_PORT: ${PG_PORT:-5432}
-      MB_DB_USER: ${PG_USER_METABASE:-metabase}
-      MB_DB_PASS: ${PG_PWD_METABASE:-metabase}
+      MB_DB_USER: ${PG_USER_ANALYTICS:-dts_analytics}
+      MB_DB_PASS: ${PG_PWD_ANALYTICS:-dts_analytics}
       MB_DB_HOST: ${PG_HOST:-dts-pg}
-      MB_ENCRYPTION_SECRET_KEY: ${METABASE_ENCRYPTION_SECRET:-}
-      MB_SITE_URL: "${METABASE_SITE_URL:-https://${HOST_PLATFORM_UI}/analytics}"
+      MB_ENCRYPTION_SECRET_KEY: ${ANALYTICS_ENCRYPTION_SECRET:-}
+      MB_SITE_URL: ${ANALYTICS_SITE_URL}
       MB_PLUGINS_DIR: /plugins
       MB_LOG_FILE: /var/log/metabase/metabase.log
-      MB_OIDC_CLIENT_ID: ${METABASE_OIDC_CLIENT_ID:-}
-      MB_OIDC_CLIENT_SECRET: ${METABASE_OIDC_CLIENT_SECRET:-}
-      MB_OIDC_REDIRECT_URI: ${METABASE_OIDC_REDIRECT_URI:-}
-      MB_OIDC_METADATA_URL: ${METABASE_OIDC_METADATA_URL:-}
-      JAVA_TOOL_OPTIONS: ${METABASE_JAVA_TOOL_OPTIONS:-}
+      MB_OIDC_CLIENT_ID: ${ANALYTICS_OIDC_CLIENT_ID:-}
+      MB_OIDC_CLIENT_SECRET: ${ANALYTICS_OIDC_CLIENT_SECRET:-}
+      MB_OIDC_REDIRECT_URI: ${ANALYTICS_OIDC_REDIRECT_URI:-}
+      MB_OIDC_METADATA_URL: ${ANALYTICS_OIDC_METADATA_URL:-}
+      JAVA_TOOL_OPTIONS: ${ANALYTICS_JAVA_TOOL_OPTIONS:-}
     volumes:
       - ./services/dts-analytics/plugins:/plugins:Z
       - ./services/dts-analytics/data:/metabase-data:Z
@@ -451,12 +451,12 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
       # Optional dedicated domain
-      - "traefik.http.routers.dts-analytics.rule=Host(`${HOST_ANALYTICS:-${HOST_METABASE}}`)"
+      - "traefik.http.routers.dts-analytics.rule=Host(`${HOST_ANALYTICS}`)"
       - "traefik.http.routers.dts-analytics.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics.tls=true"
       - "traefik.http.routers.dts-analytics.middlewares=security-headers@file"
       - "traefik.http.services.dts-analytics.loadbalancer.server.port=3000"
-      # Same-domain mount: https://${HOST_PLATFORM_UI}/analytics -> Metabase
+      # Same-domain mount: https://${HOST_PLATFORM_UI}/analytics
       - "traefik.http.routers.dts-analytics-path.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`)"
       - "traefik.http.routers.dts-analytics-path.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-path.tls=true"
