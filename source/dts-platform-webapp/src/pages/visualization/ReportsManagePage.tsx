@@ -53,7 +53,7 @@ function normalizeRoleCode(raw: string): string {
 }
 
 function toUpsertPayload(form: FormState): ReportLinkUpsertRequest {
-  const normalizedClassification = normalizeClassification(form.classification, "INTERNAL");
+  const normalizedClassification = normalizeClassification(form.classification);
   return {
     code: form.code.trim(),
     title: form.title.trim(),
@@ -271,7 +271,7 @@ export default function ReportsManagePage() {
   };
 
   const onEdit = (r: ReportLink) => {
-    const normalizedClassification = normalizeClassification(r.classification, "INTERNAL");
+    const normalizedClassification = normalizeClassification(r.classification);
     setMode("edit");
     setEditing(r);
     setForm({
