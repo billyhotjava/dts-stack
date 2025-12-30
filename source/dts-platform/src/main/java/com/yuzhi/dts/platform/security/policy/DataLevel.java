@@ -11,10 +11,10 @@ import java.util.stream.Collectors;
 public enum DataLevel {
     // 数据密级（classification/data_level）：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL
     // 备注：仍保留部分旧值/中文口径作为兼容别名（如 NON_SECRET/GENERAL/IMPORTANT/CORE/TOP_SECRET）。
-    DATA_PUBLIC(List.of("PUBLIC", "NON_SECRET", "公开", "非密", "公开级")),
-    DATA_INTERNAL(List.of("INTERNAL", "GENERAL", "内部", "一般", "内部级")),
-    DATA_SECRET(List.of("SECRET", "IMPORTANT", "秘密", "重要", "秘密级")),
-    DATA_CONFIDENTIAL(List.of("CONFIDENTIAL", "TOP_SECRET", "DATA_TOP_SECRET", "机密", "核心", "机密级"));
+    DATA_PUBLIC(List.of("0", "PUBLIC", "NON_SECRET", "公开", "非密", "公开级")),
+    DATA_INTERNAL(List.of("1", "INTERNAL", "GENERAL", "内部", "一般", "内部级")),
+    DATA_SECRET(List.of("2", "SECRET", "IMPORTANT", "秘密", "重要", "秘密级")),
+    DATA_CONFIDENTIAL(List.of("3", "CONFIDENTIAL", "TOP_SECRET", "DATA_TOP_SECRET", "机密", "核心", "机密级"));
 
     private final List<String> normalizedSynonyms;
     private final List<String> literalSynonyms;
