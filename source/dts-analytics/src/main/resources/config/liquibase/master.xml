@@ -9,4 +9,5 @@
     <include file="config/liquibase/changelog/0002_users_sessions.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0003_databases.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0004_collections_cards.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0005_dashboards.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

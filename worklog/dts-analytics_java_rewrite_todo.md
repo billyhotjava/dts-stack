@@ -12,9 +12,11 @@
 - 构建阶段内置 UI 资源：由于 `downloads.metabase.com` 未提供 `v0.45.6/metabase.jar`，当前以 `v0.45.4.3` 的 UI 资源包作为基线嵌入（后端仍按 v0.45.6 目标对齐契约，后续可替换资源包）。
 
 ## 当前已完成（基于 `source/dts-analytics`）
-- Batch 1 骨架：Spring Boot 启动、基础配置、`/api/health`、`/api/info`。
-- Batch 2 雏形：RequestId/RequestContext/Logging filter、基础错误模型（`ApiError`）、MockMvc 集成测试。
-- 安全占位：Basic Auth + 内存用户（最终需替换为 Keycloak/OIDC/会话）。
+- 后端基础：Spring Boot 启动、基础配置、`/api/health`、`/api/info`、诊断接口与基础错误模型、MockMvc 集成测试。
+- UI 集成：构建阶段从 `metabase.jar` 抽取 UI 静态资源并随 jar 交付；支持 `/analytics` basePath（`X-Forwarded-Prefix`）与 SPA fallback。
+- 初始化/登录态：`/api/setup` 初始化管理员；`/api/session` 登录/退出；`/api/user/current` 当前用户；站点 settings 的最小读写。
+- 数据源与查询：`/api/database` CRUD（最小集）；`/api/dataset` 支持 `type=native` 的 SQL 执行并返回 Metabase-like shape。
+- 内容组织：collection（含 personal collection）、card（CRUD + query/pivot query）、dashboard（CRUD + dashcard query/copy/save 等最小可用）、`/api/collection/:id/items` 与 `/api/search` 基础可用。
 
 ---
 

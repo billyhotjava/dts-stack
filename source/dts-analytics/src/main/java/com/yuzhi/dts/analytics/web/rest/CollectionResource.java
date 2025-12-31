@@ -3,7 +3,9 @@ package com.yuzhi.dts.analytics.web.rest;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.yuzhi.dts.analytics.domain.AnalyticsCollection;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
+import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsCollectionRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsDashboardRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.CollectionService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
@@ -47,16 +49,22 @@ public class CollectionResource {
 
     private final AnalyticsSessionService sessionService;
     private final AnalyticsCollectionRepository collectionRepository;
+    private final AnalyticsCardRepository cardRepository;
+    private final AnalyticsDashboardRepository dashboardRepository;
     private final CollectionService collectionService;
     private final EntityIdGenerator entityIdGenerator;
 
     public CollectionResource(
             AnalyticsSessionService sessionService,
             AnalyticsCollectionRepository collectionRepository,
+            AnalyticsCardRepository cardRepository,
+            AnalyticsDashboardRepository dashboardRepository,
             CollectionService collectionService,
             EntityIdGenerator entityIdGenerator) {
         this.sessionService = sessionService;
         this.collectionRepository = collectionRepository;
+        this.cardRepository = cardRepository;
+        this.dashboardRepository = dashboardRepository;
         this.collectionService = collectionService;
         this.entityIdGenerator = entityIdGenerator;
     }
@@ -125,7 +133,57 @@ public class CollectionResource {
         if (auth.isPresent()) {
             return auth.get();
         }
-        return ResponseEntity.ok(List.of());
+        Long id = "root".equals(collectionId) ? null : parseLong(collectionId);
+        if (!"root".equals(collectionId) && id == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        result.addAll((id == null
+                        ? dashboardRepository.findAllByArchivedFalseAndCollectionIdIsNullOrderByIdAsc()
+                        : dashboardRepository.findAllByArchivedFalseAndCollectionIdOrderByIdAsc(id))
+                .stream()
+                .map(dashboard -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("id", dashboard.getId());
+                    map.put("entity_id", dashboard.getEntityId());
+                    map.put("model", "dashboard");
+                    map.put("name", dashboard.getName());
+                    map.put("description", dashboard.getDescription());
+                    map.put("archived", dashboard.isArchived());
+                    map.put("collection_id", dashboard.getCollectionId());
+                    map.put("creator_id", dashboard.getCreatorId());
+                    map.put("created_at", dashboard.getCreatedAt());
+                    map.put("updated_at", dashboard.getUpdatedAt());
+                    map.put("can_write", true);
+                    map.put("favorite", false);
+                    return map;
+                })
+                .toList());
+
+        result.addAll((id == null ? cardRepository.findAllByArchivedFalseAndCollectionIdIsNullOrderByIdAsc() : cardRepository.findAllByArchivedFalseAndCollectionIdOrderByIdAsc(id))
+                .stream()
+                .map(card -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("id", card.getId());
+                    map.put("entity_id", card.getEntityId());
+                    map.put("model", "card");
+                    map.put("name", card.getName());
+                    map.put("description", card.getDescription());
+                    map.put("archived", card.isArchived());
+                    map.put("collection_id", card.getCollectionId());
+                    map.put("database_id", card.getDatabaseId());
+                    map.put("display", card.getDisplay());
+                    map.put("creator_id", card.getCreatorId());
+                    map.put("created_at", card.getCreatedAt());
+                    map.put("updated_at", card.getUpdatedAt());
+                    map.put("can_write", true);
+                    map.put("favorite", false);
+                    return map;
+                })
+                .toList());
+
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping(path = "/{collectionId}/timelines", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -218,4 +276,3 @@ public class CollectionResource {
             @JsonProperty("namespace") String namespace,
             @JsonProperty("parent_id") Long parentId) {}
 }
-
