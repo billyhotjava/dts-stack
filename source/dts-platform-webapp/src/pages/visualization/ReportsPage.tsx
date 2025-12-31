@@ -8,6 +8,7 @@ import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import reportsService, { type ReportLink } from "@/api/services/reportsService";
+import { toast } from "sonner";
 
 function engineLabel(engine: string | undefined | null): string {
 	const upper = String(engine || "").trim().toUpperCase();
@@ -68,15 +69,16 @@ export default function ReportsPage() {
 	const [deptCode, setDeptCode] = useState<string>("all");
 	const [reportType, setReportType] = useState<string>("all");
 	const [departments, setDepartments] = useState<DeptDto[]>([]);
+	const safeReports = Array.isArray(reports) ? reports : [];
 
 	const reportTypes = useMemo(() => {
 		const set = new Set<string>();
-		for (const r of reports) {
+		for (const r of safeReports) {
 			const t = String(r.reportType || "").trim();
 			if (t) set.add(t);
 		}
 		return Array.from(set);
-	}, [reports]);
+	}, [safeReports]);
 
 	const deptDict = useMemo(() => {
 		const m = new Map<string, DeptDto>();
@@ -94,7 +96,11 @@ export default function ReportsPage() {
 				deptCode: deptCode === "all" ? undefined : deptCode,
 				type: reportType === "all" ? undefined : reportType,
 			});
-			setReports(data);
+			setReports(Array.isArray(data) ? data : []);
+		} catch (e: any) {
+			console.error(e);
+			setReports([]);
+			toast.error(e?.message || "加载报表失败");
 		} finally {
 			setLoading(false);
 		}
@@ -198,7 +204,7 @@ export default function ReportsPage() {
 							</tr>
 						</thead>
 						<tbody>
-							{reports.map((r, idx) => (
+							{safeReports.map((r, idx) => (
 								<tr key={r.id} className="border-b last:border-b-0">
 									<td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
 									<td className="px-3 py-2 font-medium">
@@ -241,7 +247,7 @@ export default function ReportsPage() {
 									</td>
 								</tr>
 							))}
-							{!reports.length && (
+							{!safeReports.length && (
 								<tr>
 									<td colSpan={8} className="px-3 py-8 text-center text-xs text-muted-foreground">
 										{loading ? "加载中…" : "暂无符合条件的报表"}
