@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: dts-analytics
+  main:
+    banner-mode: "off"
+  profiles:
+    active: dev
+  security:
+    user:
+      name: admin
+      password: admin
+      roles: ADMIN
+    additional-user:
+      name: user
+      password: user
+      roles: USER
+
+server:
+  port: 8082
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript,text/javascript
+    min-response-size: 1024
+
+application:
+  service:
+    name: dts-analytics
+    version: 2.1.0-SNAPSHOT
+    environment: dev
