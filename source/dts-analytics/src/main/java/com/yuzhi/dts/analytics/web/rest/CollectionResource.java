@@ -1,0 +1,221 @@
+package com.yuzhi.dts.analytics.web.rest;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.yuzhi.dts.analytics.domain.AnalyticsCollection;
+import com.yuzhi.dts.analytics.domain.AnalyticsUser;
+import com.yuzhi.dts.analytics.repository.AnalyticsCollectionRepository;
+import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.CollectionService;
+import com.yuzhi.dts.analytics.service.EntityIdGenerator;
+import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/collection")
+@Transactional
+public class CollectionResource {
+
+    private static final Map<String, Object> ROOT_COLLECTION = Map.of(
+            "authority_level",
+            null,
+            "name",
+            "Our analytics",
+            "id",
+            "root",
+            "parent_id",
+            null,
+            "effective_location",
+            null,
+            "effective_ancestors",
+            List.of(),
+            "can_write",
+            true);
+
+    private final AnalyticsSessionService sessionService;
+    private final AnalyticsCollectionRepository collectionRepository;
+    private final CollectionService collectionService;
+    private final EntityIdGenerator entityIdGenerator;
+
+    public CollectionResource(
+            AnalyticsSessionService sessionService,
+            AnalyticsCollectionRepository collectionRepository,
+            CollectionService collectionService,
+            EntityIdGenerator entityIdGenerator) {
+        this.sessionService = sessionService;
+        this.collectionRepository = collectionRepository;
+        this.collectionService = collectionService;
+        this.entityIdGenerator = entityIdGenerator;
+    }
+
+    @GetMapping(path = "/root", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> root(HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        return ResponseEntity.ok(ROOT_COLLECTION);
+    }
+
+    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> list(HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
+        }
+
+        AnalyticsCollection personal = collectionService.ensurePersonalCollection(user.get());
+        List<Map<String, Object>> result = List.of(ROOT_COLLECTION, toListItem(personal, true));
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping(path = "/tree", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> tree(HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
+        }
+
+        AnalyticsCollection personal = collectionService.ensurePersonalCollection(user.get());
+        Map<String, Object> item = toTreeItem(personal);
+        return ResponseEntity.ok(List.of(item));
+    }
+
+    @GetMapping(path = "/graph", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> graph(HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        return ResponseEntity.ok(Map.of("revision", 0, "groups", Map.of("1", Map.of("root", "write"), "2", Map.of("root", "write"))));
+    }
+
+    @GetMapping(path = "/{collectionId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> get(@PathVariable("collectionId") String collectionId, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        if ("root".equals(collectionId)) {
+            return ResponseEntity.ok(ROOT_COLLECTION);
+        }
+        Long id = parseLong(collectionId);
+        if (id == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return collectionRepository.findById(id).map(collection -> ResponseEntity.ok(toListItem(collection, true))).orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping(path = "/{collectionId}/items", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> items(@PathVariable("collectionId") String collectionId, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        return ResponseEntity.ok(List.of());
+    }
+
+    @GetMapping(path = "/{collectionId}/timelines", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> timelines(@PathVariable("collectionId") String collectionId, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        return ResponseEntity.ok(List.of());
+    }
+
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> create(@RequestBody CollectionRequest requestBody, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+
+        String name = requestBody == null ? null : trimToNull(requestBody.name());
+        if (name == null) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("name", "value must be a non-blank string.")));
+        }
+
+        AnalyticsCollection collection = new AnalyticsCollection();
+        collection.setEntityId(entityIdGenerator.newEntityId());
+        collection.setName(name);
+        collection.setDescription(requestBody.description());
+        collection.setColor(Optional.ofNullable(trimToNull(requestBody.color())).orElse("#31698A"));
+        collection.setNamespace(requestBody.namespace());
+        collection.setLocation("/");
+        collection.setParentId(requestBody.parentId());
+        collection.setArchived(false);
+        collection.setSlug(buildSlug(name));
+        collection = collectionRepository.save(collection);
+
+        return ResponseEntity.ok(toListItem(collection, true));
+    }
+
+    private static Map<String, Object> toListItem(AnalyticsCollection collection, boolean canWrite) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("authority_level", null);
+        map.put("description", collection.getDescription());
+        map.put("archived", collection.isArchived());
+        map.put("slug", collection.getSlug());
+        map.put("color", collection.getColor());
+        map.put("can_write", canWrite);
+        map.put("name", collection.getName());
+        map.put("personal_owner_id", collection.getPersonalOwnerId());
+        map.put("id", collection.getId());
+        map.put("entity_id", collection.getEntityId());
+        map.put("location", collection.getLocation());
+        map.put("namespace", collection.getNamespace());
+        map.put("created_at", collection.getCreatedAt());
+        return map;
+    }
+
+    private static Map<String, Object> toTreeItem(AnalyticsCollection collection) {
+        Map<String, Object> map = toListItem(collection, true);
+        map.remove("can_write");
+        map.put("children", List.of());
+        return map;
+    }
+
+    private static Long parseLong(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private static String buildSlug(String name) {
+        String slug = name.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "_");
+        slug = slug.replaceAll("^_+|_+$", "");
+        return slug.isBlank() ? null : slug;
+    }
+
+    public record CollectionRequest(
+            @JsonProperty("name") String name,
+            @JsonProperty("description") String description,
+            @JsonProperty("color") String color,
+            @JsonProperty("namespace") String namespace,
+            @JsonProperty("parent_id") Long parentId) {}
+}
+

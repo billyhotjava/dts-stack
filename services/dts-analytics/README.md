@@ -1,11 +1,13 @@
-# Metabase 部署说明（草案）
+# dts-analytics（Java 重写）部署说明（草案）
 
-- 镜像：由 `IMAGE_DTS_ANALYTICS` 决定（默认 `dts-analytics:1.0.0`），可替换自构建镜像。
-- 元数据库：PostgreSQL，环境变量建议使用 `MB_DB_*`（避免 URI 解析问题），例如 `MB_DB_DBNAME=dts_analytics MB_DB_USER=dts_analytics`.
-- 认证：禁用匿名与自助注册，开启 OIDC/SAML（Keycloak），在 env 中配置 `MB_OIDC_*`。组/角色与 dept_code/person_security_level 可通过 claim 映射到 Metabase 组。
-- 插件/驱动：DM JDBC 驱动、Inceptor/Hive 驱动放在 `services/dts-analytics/plugins/`；容器用 `MB_PLUGINS_DIR=/plugins`.
-- 日志：挂载到宿主机，按 100MB 轮转（logrotate）。
-- HTTPS/证书：反代层处理，证书与信任链统一放在 `services/certs/`，通过 compose 挂载到容器 `/certs`（如需客户端校验）。
+本目录用于承载 **dts-analytics Java 服务** 的运行时挂载（plugins/data/logs/certs）与镜像构建（`Dockerfile`）。
+
+- 镜像：`services/dts-analytics/Dockerfile`（默认监听 **3000**，便于复用原 Traefik/Compose 约定）。
+- UI：内置 Metabase UI（当前以 v0.45.x 资源包作为基线，目标对齐 v0.45.6 + Chrome 98）。
+- 元数据库：将使用 PostgreSQL（后续会用 Flyway/Liquibase 建表，不保留历史数据）。
+- 认证：最终走 Keycloak/OIDC/会话（当前仍是开发阶段占位实现）。
+- 插件/驱动：后续将复用 `services/dts-analytics/plugins/` 目录作为 JDBC 驱动/插件加载入口。
+- 日志/证书：按现有目录约定挂载（`logs/`、`../certs`）。
 
 ## RLS / 数据权限示例
 - OIDC claims：`roles`（过滤掉 `offline_access`、`uma_authorization`、`default-roles-*`）、`dept_code`、`person_security_level`。
@@ -13,3 +15,5 @@
 - 用户属性：在 “Admin → People → Attributes” 中新增 `dept_code` 和 `person_security_level`，并绑定到相应的 OIDC claim，以便在数据分段/字段权限/RLS 参数中使用。
 - 查询/段过滤：在自定义段或字段权限条件中引用用户属性，例如 `{{user.attributes.dept_code}}` 或使用参数化查询把密级比较逻辑下推到数据库视图/SQL。
 - DM 数据源：将 DM JDBC 驱动（如 `DmJdbcDriver18.jar`）放入 `services/dts-analytics/plugins/`，URL 示例 `jdbc:dm://HOST:PORT/DB`，驱动类 `dm.jdbc.driver.DmDriver`。为 Inceptor/Hive 同理放置对应 JDBC。
+
+> 说明：`services/dts-analytics/metabase.env` 是旧 Metabase 容器时代的样例配置，后续会迁移/映射到 Java 的配置体系后再收敛。

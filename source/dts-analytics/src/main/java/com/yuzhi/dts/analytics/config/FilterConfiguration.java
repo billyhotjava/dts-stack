@@ -3,6 +3,8 @@ package com.yuzhi.dts.analytics.config;
 import com.yuzhi.dts.analytics.web.filter.RequestContextFilter;
 import com.yuzhi.dts.analytics.web.filter.RequestIdFilter;
 import com.yuzhi.dts.analytics.web.filter.RequestLoggingFilter;
+import com.yuzhi.dts.analytics.web.ui.MetabaseSpaFallbackFilter;
+import com.yuzhi.dts.analytics.web.ui.MetabaseUiTemplateRenderer;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,6 +52,17 @@ public class FilterConfiguration {
         registration.setOrder(3);
         registration.addUrlPatterns("/*");
         registration.setName("requestLoggingFilter");
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<MetabaseSpaFallbackFilter> metabaseSpaFallbackFilterRegistration(
+            MetabaseUiTemplateRenderer renderer) {
+        FilterRegistrationBean<MetabaseSpaFallbackFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new MetabaseSpaFallbackFilter(renderer));
+        registration.setOrder(4);
+        registration.addUrlPatterns("/*");
+        registration.setName("metabaseSpaFallbackFilter");
         return registration;
     }
 }

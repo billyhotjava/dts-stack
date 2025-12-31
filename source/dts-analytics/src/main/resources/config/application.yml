@@ -4,7 +4,7 @@ spring:
   main:
     banner-mode: "off"
   profiles:
-    active: dev
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   security:
     user:
       name: admin
@@ -14,9 +14,25 @@ spring:
       name: user
       password: user
       roles: USER
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DTS_ANALYTICS_DB_HOST:dts-pg}:${DTS_ANALYTICS_DB_PORT:5432}/${DTS_ANALYTICS_DB_NAME:dts_analytics}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DTS_ANALYTICS_DB_USER:dts_analytics}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DTS_ANALYTICS_DB_PASSWORD:dts_analytics}}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate.jdbc.time_zone: UTC
+      hibernate.connection.provider_disables_autocommit: true
+      hibernate.id.new_generator_mappings: true
+      hibernate.naming.physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+      hibernate.naming.implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+  liquibase:
+    change-log: classpath:config/liquibase/master.xml
 
 server:
-  port: 8082
+  port: 3000
   compression:
     enabled: true
     mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript,text/javascript
@@ -27,3 +43,8 @@ application:
     name: dts-analytics
     version: 2.1.0-SNAPSHOT
     environment: dev
+
+metabase:
+  ui:
+    target-version: "0.45.6"
+    bundle-version: "0.45.4.3"

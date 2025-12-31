@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+    <property name="now" value="current_timestamp"/>
+
+    <include file="config/liquibase/changelog/0001_initial.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0002_users_sessions.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0003_databases.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0004_collections_cards.xml" relativeToChangelogFile="false"/>
+</databaseChangeLog>

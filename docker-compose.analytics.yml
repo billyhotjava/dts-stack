@@ -7,32 +7,21 @@
 
 services:
   dts-analytics:
+    # Java rewrite image (see services/dts-analytics/Dockerfile).
     # NOTE: keep interpolation simple for legacy docker-compose compatibility (avoid nested ${...${...}}).
-    image: ${IMAGE_DTS_ANALYTICS:-dts-analytics:1.0.0}
+    image: ${IMAGE_DTS_ANALYTICS:-dts-analytics:local}
     depends_on:
       dts-pg:
         condition: service_healthy
     environment:
-      MB_JETTY_HOST: "0.0.0.0"
-      MB_DB_TYPE: postgres
-      MB_DB_DBNAME: ${PG_DB_ANALYTICS:-dts_analytics}
-      MB_DB_PORT: ${PG_PORT:-5432}
-      MB_DB_USER: ${PG_USER_ANALYTICS:-dts_analytics}
-      MB_DB_PASS: ${PG_PWD_ANALYTICS:-dts_analytics}
-      MB_DB_HOST: ${PG_HOST:-dts-pg}
-      MB_ENCRYPTION_SECRET_KEY: ${ANALYTICS_ENCRYPTION_SECRET:-}
-      MB_SITE_URL: ${ANALYTICS_SITE_URL:-}
-      MB_PLUGINS_DIR: /plugins
-      MB_LOG_FILE: /var/log/metabase/metabase.log
-      MB_OIDC_CLIENT_ID: ${ANALYTICS_OIDC_CLIENT_ID:-}
-      MB_OIDC_CLIENT_SECRET: ${ANALYTICS_OIDC_CLIENT_SECRET:-}
-      MB_OIDC_REDIRECT_URI: ${ANALYTICS_OIDC_REDIRECT_URI:-}
-      MB_OIDC_METADATA_URL: ${ANALYTICS_OIDC_METADATA_URL:-}
       JAVA_TOOL_OPTIONS: ${ANALYTICS_JAVA_TOOL_OPTIONS:-}
+      SPRING_DATASOURCE_URL: ${ANALYTICS_DB_URL:-jdbc:postgresql://dts-pg:5432/dts_analytics}
+      SPRING_DATASOURCE_USERNAME: ${ANALYTICS_DB_USER:-dts_analytics}
+      SPRING_DATASOURCE_PASSWORD: ${ANALYTICS_DB_PASSWORD:-dts_analytics}
     volumes:
       - ./services/dts-analytics/plugins:/plugins:Z
-      - ./services/dts-analytics/data:/metabase-data:Z
-      - ./services/dts-analytics/logs:/var/log/metabase:Z
+      - ./services/dts-analytics/data:/data:Z
+      - ./services/dts-analytics/logs:/var/log/dts-analytics:Z
       - ./services/certs:/certs:ro,z
     restart: unless-stopped
     networks:
@@ -58,4 +47,3 @@ services:
       - "traefik.http.middlewares.analytics-strip-analytics.stripprefixregex.regex=/analytics"
       - "traefik.http.middlewares.analytics-prefix.headers.customrequestheaders.X-Forwarded-Prefix=/analytics"
       - "traefik.http.routers.dts-analytics-path.middlewares=analytics-strip-analytics@docker,analytics-prefix@docker,security-headers@file"
-

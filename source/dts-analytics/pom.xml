@@ -23,6 +23,14 @@
         <jhipster-framework.version>8.11.0</jhipster-framework.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <spring-cloud.version>2024.0.1</spring-cloud.version>
+        <!--
+          Metabase UI assets are embedded into the Spring Boot jar at build time.
+
+          NOTE: upstream does not publish a v0.45.6 artifact on downloads.metabase.com.
+          We use the latest available v0.45.x patch bundle as a compatibility baseline.
+        -->
+        <metabase.ui.bundle.version>0.45.4.3</metabase.ui.bundle.version>
+        <metabase.ui.bundle.url>https://downloads.metabase.com/v${metabase.ui.bundle.version}/metabase.jar</metabase.ui.bundle.url>
     </properties>
 
     <dependencyManagement>
@@ -56,6 +64,15 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.liquibase</groupId>
+            <artifactId>liquibase-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
@@ -85,6 +102,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
@@ -97,10 +119,55 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.build.directory}/generated-resources</directory>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>embed-metabase-ui</id>
+                        <phase>generate-resources</phase>
+                        <configuration>
+                            <target>
+                                <mkdir dir="${project.build.directory}/metabase-ui"/>
+                                <mkdir dir="${project.build.directory}/generated-resources/static"/>
+
+                                <get src="${metabase.ui.bundle.url}"
+                                     dest="${project.build.directory}/metabase-ui/metabase.jar"
+                                     skipexisting="true"
+                                     verbose="true"/>
+
+                                <unzip src="${project.build.directory}/metabase-ui/metabase.jar"
+                                       dest="${project.build.directory}/metabase-ui/unpacked">
+                                    <patternset>
+                                        <include name="frontend_client/**"/>
+                                    </patternset>
+                                </unzip>
+
+                                <!-- Flatten frontend_client/* into Spring Boot's classpath:/static/ -->
+                                <copy todir="${project.build.directory}/generated-resources/static">
+                                    <fileset dir="${project.build.directory}/metabase-ui/unpacked/frontend_client"/>
+                                </copy>
+                            </target>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
