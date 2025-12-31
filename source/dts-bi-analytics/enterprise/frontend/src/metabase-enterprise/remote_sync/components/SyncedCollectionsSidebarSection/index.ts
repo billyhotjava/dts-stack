@@ -1,1 +1,0 @@
-export { SyncedCollectionsSidebarSection } from "./SyncedCollectionsSidebarSection";

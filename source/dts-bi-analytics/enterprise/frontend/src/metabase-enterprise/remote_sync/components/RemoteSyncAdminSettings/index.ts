@@ -1,1 +1,0 @@
-export { RemoteSyncAdminSettings } from "./RemoteSyncAdminSettings";

@@ -1,4 +1,4 @@
-# dts-analytics：Metabase 后端 Java 重写 ToDo（更新于 2025-12-31）
+# dts-analytics：Metabase 后端 Java 重写 ToDo（更新于 2026-01-01）
 
 ## 目标与约束（已确认）
 - **最终目标**：完全替换原 Metabase（后端 Clojure）为 **Java（Spring Boot/JHipster 风格）重写实现**，最终仓库内 **没有一行 Clojure 代码**。
@@ -15,8 +15,26 @@
 - 后端基础：Spring Boot 启动、基础配置、`/api/health`、`/api/info`、诊断接口与基础错误模型、MockMvc 集成测试。
 - UI 集成：构建阶段从 `metabase.jar` 抽取 UI 静态资源并随 jar 交付；支持 `/analytics` basePath（`X-Forwarded-Prefix`）与 SPA fallback。
 - 初始化/登录态：`/api/setup` 初始化管理员；`/api/session` 登录/退出；`/api/user/current` 当前用户；站点 settings 的最小读写。
-- 数据源与查询：`/api/database` CRUD（最小集）；`/api/dataset` 支持 `type=native` 的 SQL 执行并返回 Metabase-like shape。
+- 数据源与元数据：`/api/database` CRUD（最小集）+ `POST /api/database/:id/sync_schema`（JDBC 元数据同步）；`/api/database/:id/metadata|schemas|schema/:schema|fields`、`/api/table`、`/api/table/:id`、`/api/table/:id/query_metadata`、`/api/field/:id` 最小可用。
+- 连接校验与辅助：`POST /api/database/validate` 支持真实 JDBC 连通性校验；`GET /api/table/:id/fks` 返回外部库外键映射；`GET /api/field/:id/values` 返回 distinct values（含 `has_more_values`）。
+- Dataset 兼容路径：补齐 `POST /api/dataset/native|pivot|duration`（与 UI bundle 预期路径一致）。
+- 查询：`/api/dataset` 支持 `type=native` 与最小 `type=query`（MBQL：`source-table` + `fields` + `order-by` + `limit/page`）；card/dashboard query 路径同步支持 `type=query`。
 - 内容组织：collection（含 personal collection）、card（CRUD + query/pivot query）、dashboard（CRUD + dashcard query/copy/save 等最小可用）、`/api/collection/:id/items` 与 `/api/search` 基础可用。
+- 收藏（Bookmark/Favorite）：补齐 `POST/DELETE /api/bookmark/{card|dashboard|collection}/:id`、`PUT /api/bookmark/ordering`、`GET /api/bookmark`；card/dashboard 列表与 collection items 返回 `favorite` 状态；dashboard 的 `/favorite` 路径对接到同一收藏逻辑。
+- 活动（Activity）：新增持久化 `analytics_activity`，补齐 `GET /api/activity`、`GET /api/activity/recent_views`、`GET /api/activity/popular_items`；在 `GET /api/card/:id`、`GET /api/dashboard/:id`、`GET /api/collection/:id` 自动记录 view，`recent_views` 返回带 `model_object` 的结构以满足 UI 展示。
+- 订阅/告警（Pulse/Alert）：新增持久化 `analytics_pulse`/`analytics_alert`（含 subscription 表），补齐 `GET/POST/PUT /api/pulse`、`GET /api/pulse/:id`、`GET /api/pulse/form_input`、`GET /api/pulse/preview_card_info/:id`、`POST /api/pulse/test`、`DELETE /api/pulse/:id/subscription`；补齐 `GET/POST/PUT /api/alert`、`GET /api/alert/question/:questionId`、`GET /api/alert/:id`、`DELETE /api/alert/:id/subscription`（发送目前为 no-op，但 UI 可完成创建/编辑/取消订阅流程）。
+- Segment/Metric：新增持久化 `analytics_segment`/`analytics_metric`，补齐 `GET/POST/PUT/DELETE /api/segment` 与 `GET/POST/PUT/DELETE /api/metric`（最小持久化 + archived 逻辑，供 Query Builder/管理页调用）。
+- 用户/人员管理（People）：补齐 `GET/POST/PUT/DELETE /api/user`、`GET /api/user/:id`、`PUT /api/user/:id/password`、`PUT /api/user/:id/reactivate`、`POST /api/user/:id/send_invite`、`PUT /api/user/:id/modal/qbnewb`（最小可用，满足管理页流程）。
+- 组与权限（Groups/Permissions）：新增持久化 `analytics_group`、`analytics_group_membership`、`analytics_permissions_graph`，补齐 `GET/POST/PUT/DELETE /api/permissions/group`、`GET/POST/PUT/DELETE /api/permissions/membership`、`GET/PUT /api/permissions/graph`（最小可用，满足管理页流程）。
+- OIDC（Keycloak）入口（可选）：新增 `/auth/oidc/login` + `/auth/oidc/callback`（通过 code flow 换 token，创建 `metabase.SESSION` 会话并跳回 `/analytics/`；由 `dts.analytics.oidc.enabled` 控制）。
+- 管理端集成配置（Email/Slack/Google/LDAP）：补齐 `GET/PUT /api/email`、`POST /api/email/test`、`GET/PUT /api/slack/settings`、`GET /api/slack/manifest`、`GET/PUT /api/google/settings`、`GET/PUT /api/ldap/settings`（最小持久化用 `analytics_setting`，供管理页加载/保存）。
+- Public 分享（Public sharing）：新增 `analytics_public_link`；补齐 `POST/DELETE /api/card/:id/public_link`、`POST/DELETE /api/dashboard/:id/public_link`、`GET/POST /api/public/card/:uuid`、`GET/POST /api/public/dashboard/:uuid`、dashcard query 路径（public view 可完整访问与查询）。
+- Dashboard 分享字段：dashboard 列表/详情返回 `public_uuid`；`GET /api/dashboard/public` 返回已开启 public 分享的 dashboards。
+- Embedding（嵌入）：新增 `/api/embed`（enabled/secret_key/embedding_params）、`/api/preview_embed`（生成 preview token）；实现 HS256 JWT 校验；补齐 `/api/embed/card/:token`、`/api/embed/dashboard/:token` 及对应 query 路径。
+- Revisions（版本历史/回滚）：新增 `analytics_revision`；补齐 `/api/revision`、`/api/revision/:id`、`POST /api/revision/revert`；在 card/dashboard create/update/save/delete 记录 revision。
+- 测试：新增 `PublicSharingEmbeddingAndRevisionResourceIT` 覆盖 public share / embed / revision 的关键路径；`mvn -f source/dts-analytics/pom.xml test` 通过。
+- 密码重置（最小流程）：补齐 `POST /api/session/forgot_password`、`GET/POST /api/session/password_reset_token_valid`、`POST /api/session/reset_password`（token 存储 `analytics_password_reset_token`，邮件发送暂不实现）。
+- 登录历史（最小可用）：补齐 `GET /api/login-history/current`，并在 `POST /api/session` 登录成功时记录 `analytics_login_history`。
 
 ---
 
@@ -185,6 +203,6 @@
 ---
 
 ## 12. 去 Clojure（最终收尾，确保“没有一行 Clojure”）
-1. 移除 `source/dts-bi-analytics`（或移至外部独立仓库，仅保留前端构建产物流程）。
+1. 移除 `source/dts-bi-analytics`（或移至外部独立仓库，仅保留前端构建产物流程）。✅（已将 `source/dts-bi-analytics` 从 git 跟踪中移除；工作区残留目录为未跟踪并已加入 `.gitignore`）
 2. 移除 `services/dts-analytics-dev` 及所有 clojure/dev 脚本依赖（node-only 构建若仍需要则保留，但不得包含 clj 代码）。
-3. 清理 compose/dev-up 里的 analytics-dev 路径与说明，确保主流程只依赖 Java。
+3. 清理 compose/dev-up 里的 analytics-dev 路径与说明，确保主流程只依赖 Java。✅（已移除 `docker-compose.analytics-dev.yml` 并让 `dev-up.sh --analytics-dev` 在缺失时自动降级）

@@ -4,17 +4,28 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.analytics.domain.AnalyticsDatabase;
+import com.yuzhi.dts.analytics.domain.AnalyticsField;
+import com.yuzhi.dts.analytics.domain.AnalyticsTable;
 import com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsFieldRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.JdbcDetailsResolver;
+import com.yuzhi.dts.analytics.service.MetadataSyncService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,12 +48,26 @@ public class DatabaseResource {
 
     private final AnalyticsSessionService sessionService;
     private final AnalyticsDatabaseRepository databaseRepository;
+    private final AnalyticsTableRepository tableRepository;
+    private final AnalyticsFieldRepository fieldRepository;
+    private final MetadataSyncService metadataSyncService;
+    private final JdbcDetailsResolver jdbcDetailsResolver;
     private final ObjectMapper objectMapper;
 
     public DatabaseResource(
-            AnalyticsSessionService sessionService, AnalyticsDatabaseRepository databaseRepository, ObjectMapper objectMapper) {
+            AnalyticsSessionService sessionService,
+            AnalyticsDatabaseRepository databaseRepository,
+            AnalyticsTableRepository tableRepository,
+            AnalyticsFieldRepository fieldRepository,
+            MetadataSyncService metadataSyncService,
+            JdbcDetailsResolver jdbcDetailsResolver,
+            ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.databaseRepository = databaseRepository;
+        this.tableRepository = tableRepository;
+        this.fieldRepository = fieldRepository;
+        this.metadataSyncService = metadataSyncService;
+        this.jdbcDetailsResolver = jdbcDetailsResolver;
         this.objectMapper = objectMapper;
     }
 
@@ -117,7 +142,7 @@ public class DatabaseResource {
         return databaseRepository.findById(dbId)
                 .<ResponseEntity<?>>map(db -> {
                     Map<String, Object> response = new LinkedHashMap<>(toDatabaseGet(db, true));
-                    response.put("tables", List.of());
+                    response.put("tables", listTablesForDatabase(db.getId(), true));
                     return ResponseEntity.ok(response);
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -132,7 +157,13 @@ public class DatabaseResource {
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(List.of());
+        List<String> schemas = tableRepository.findAllByDatabaseIdOrderBySchemaNameAscNameAsc(dbId).stream()
+                .filter(AnalyticsTable::isActive)
+                .map(AnalyticsTable::getSchemaName)
+                .filter(schema -> schema != null && !schema.isBlank())
+                .distinct()
+                .toList();
+        return ResponseEntity.ok(schemas);
     }
 
     @GetMapping(path = "/{dbId}/schema/{schemaName}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -145,7 +176,11 @@ public class DatabaseResource {
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(List.of());
+        List<Map<String, Object>> tables = tableRepository.findAllByDatabaseIdAndSchemaNameOrderByNameAsc(dbId, schemaName).stream()
+                .filter(AnalyticsTable::isActive)
+                .map(table -> toTable(table, true))
+                .toList();
+        return ResponseEntity.ok(tables);
     }
 
     @GetMapping(path = "/{dbId}/fields", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -157,7 +192,11 @@ public class DatabaseResource {
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(List.of());
+        List<Map<String, Object>> fields = fieldRepository.findAllByDatabaseIdOrderByTableIdAscPositionAscIdAsc(dbId).stream()
+                .filter(AnalyticsField::isActive)
+                .map(this::toField)
+                .toList();
+        return ResponseEntity.ok(fields);
     }
 
     @GetMapping(path = "/{dbId}/idfields", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -169,7 +208,20 @@ public class DatabaseResource {
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(List.of());
+        List<Map<String, Object>> result = fieldRepository.findAllByDatabaseIdOrderByTableIdAscPositionAscIdAsc(dbId).stream()
+                .filter(AnalyticsField::isActive)
+                .filter(field -> {
+                    String name = field.getName();
+                    if (name == null) {
+                        return false;
+                    }
+                    String lower = name.toLowerCase(java.util.Locale.ROOT);
+                    return lower.equals("id") || lower.endsWith("_id");
+                })
+                .limit(200)
+                .map(this::toField)
+                .toList();
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping(path = "/{dbId}/autocomplete_suggestions", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -209,7 +261,29 @@ public class DatabaseResource {
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(Map.of());
+        try {
+            MetadataSyncService.SyncSummary summary = metadataSyncService.syncDatabaseSchema(dbId);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "database_id",
+                            summary.databaseId(),
+                            "created_tables",
+                            summary.createdTables(),
+                            "updated_tables",
+                            summary.updatedTables(),
+                            "disabled_tables",
+                            summary.disabledTables(),
+                            "created_fields",
+                            summary.createdFields(),
+                            "updated_fields",
+                            summary.updatedFields(),
+                            "disabled_fields",
+                            summary.disabledFields()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("database", e.getMessage())));
+        } catch (SQLException e) {
+            return ResponseEntity.accepted().body(Map.of("error", "Error syncing schema: " + e.getMessage()));
+        }
     }
 
     @PostMapping(path = "/{dbId}/dismiss_spinner", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -376,7 +450,34 @@ public class DatabaseResource {
             return ResponseEntity.badRequest().body(Map.of("errors", errors));
         }
 
-        return ResponseEntity.ok(Map.of());
+        try {
+            JdbcDetailsResolver.JdbcDetails jdbcDetails = jdbcDetailsResolver.resolve(engine, details);
+            HikariConfig config = new HikariConfig();
+            config.setJdbcUrl(jdbcDetails.jdbcUrl());
+            if (jdbcDetails.username() != null) {
+                config.setUsername(jdbcDetails.username());
+            }
+            if (jdbcDetails.password() != null) {
+                config.setPassword(jdbcDetails.password());
+            }
+            config.setPoolName("analytics-validate");
+            config.setMaximumPoolSize(1);
+            config.setMinimumIdle(0);
+            config.setConnectionTimeout(5_000);
+            config.setValidationTimeout(3_000);
+            config.setInitializationFailTimeout(-1);
+
+            try (HikariDataSource dataSource = new HikariDataSource(config);
+                    Connection connection = dataSource.getConnection()) {
+                connection.isValid(2);
+            }
+
+            return ResponseEntity.ok(Map.of());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("details", e.getMessage())));
+        } catch (SQLException e) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("details", "Connection failed: " + e.getMessage())));
+        }
     }
 
     private Map<String, Object> toDatabaseListItem(AnalyticsDatabase db) {
@@ -431,6 +532,100 @@ public class DatabaseResource {
             return null;
         }
         return METABASE_TIMESTAMP.format(instant.atZone(ZoneId.systemDefault()).toLocalDateTime());
+    }
+
+    private List<Map<String, Object>> listTablesForDatabase(Long databaseId, boolean includeFields) {
+        if (databaseId == null) {
+            return List.of();
+        }
+        List<AnalyticsTable> tables = tableRepository.findAllByDatabaseIdOrderBySchemaNameAscNameAsc(databaseId).stream()
+                .filter(AnalyticsTable::isActive)
+                .toList();
+        if (!includeFields) {
+            return tables.stream().map(table -> toTable(table, false)).toList();
+        }
+
+        List<Long> tableIds = tables.stream().map(AnalyticsTable::getId).filter(Objects::nonNull).toList();
+        Map<Long, List<AnalyticsField>> fieldsByTable = new LinkedHashMap<>();
+        for (Long tableId : tableIds) {
+            fieldsByTable.put(
+                    tableId,
+                    fieldRepository.findAllByTableIdOrderByPositionAscIdAsc(tableId).stream()
+                            .filter(AnalyticsField::isActive)
+                            .toList());
+        }
+
+        return tables.stream()
+                .map(table -> toTable(table, includeFields ? fieldsByTable.getOrDefault(table.getId(), List.of()) : List.of()))
+                .toList();
+    }
+
+    private Map<String, Object> toTable(AnalyticsTable table, boolean includeFields) {
+        return toTable(table, includeFields ? fieldRepository.findAllByTableIdOrderByPositionAscIdAsc(table.getId()).stream()
+                        .filter(AnalyticsField::isActive)
+                        .toList()
+                : List.of());
+    }
+
+    private Map<String, Object> toTable(AnalyticsTable table, List<AnalyticsField> fields) {
+        Map<String, Object> json = new LinkedHashMap<>();
+        json.put("id", table.getId());
+        json.put("db_id", table.getDatabaseId());
+        json.put("schema", emptyToNull(table.getSchemaName()));
+        json.put("name", table.getName());
+        json.put("display_name", Optional.ofNullable(table.getDisplayName()).orElse(table.getName()));
+        json.put("description", table.getDescription());
+        json.put("active", table.isActive());
+        json.put("visibility_type", Optional.ofNullable(table.getVisibilityType()).orElse("normal"));
+        json.put("entity_type", null);
+        json.put("field_order", "database");
+        json.put("is_upload", false);
+        json.put("created_at", formatTimestamp(table.getCreatedAt()));
+        json.put("updated_at", formatTimestamp(table.getUpdatedAt()));
+        json.put("points_of_interest", null);
+        json.put("caveats", null);
+        json.put("fields", fields.stream().map(this::toField).toList());
+        return json;
+    }
+
+    private Map<String, Object> toField(AnalyticsField field) {
+        Map<String, Object> json = new LinkedHashMap<>();
+        json.put("id", field.getId());
+        json.put("name", field.getName());
+        json.put("display_name", Optional.ofNullable(field.getDisplayName()).orElse(field.getName()));
+        json.put("description", null);
+        json.put("table_id", field.getTableId());
+        json.put("db_id", field.getDatabaseId());
+        json.put("base_type", field.getBaseType());
+        json.put("effective_type", Optional.ofNullable(field.getEffectiveType()).orElse(field.getBaseType()));
+        json.put("semantic_type", field.getSemanticType());
+        json.put("has_field_values", "list");
+        json.put("active", field.isActive());
+        json.put("position", field.getPosition());
+        json.put("visibility_type", Optional.ofNullable(field.getVisibilityType()).orElse("normal"));
+        json.put("fingerprint", parseFingerprint(field.getFingerprintJson()));
+        json.put("created_at", formatTimestamp(field.getCreatedAt()));
+        json.put("updated_at", formatTimestamp(field.getUpdatedAt()));
+        return json;
+    }
+
+    private Object parseFingerprint(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(json);
+        } catch (IOException ignored) {
+            return null;
+        }
+    }
+
+    private static String emptyToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private static String trimToNull(String value) {

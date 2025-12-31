@@ -185,13 +185,14 @@ if [[ "$MODE" == "local" ]]; then
     echo "[dev-up] ERROR: --analytics and --analytics-dev are mutually exclusive" >&2
     exit 1
   fi
-  if [[ "${WITH_ANALYTICS_DEV}" == "1" ]]; then
-    if [[ -f "docker-compose.analytics-dev.yml" ]]; then
-      compose_files+=(-f docker-compose.analytics-dev.yml)
-    else
-      echo "[dev-up] WARNING: --analytics-dev requested but docker-compose.analytics-dev.yml not found" >&2
-    fi
-  fi
+	  if [[ "${WITH_ANALYTICS_DEV}" == "1" ]]; then
+	    if [[ -f "docker-compose.analytics-dev.yml" ]]; then
+	      compose_files+=(-f docker-compose.analytics-dev.yml)
+	    else
+	      echo "[dev-up] WARNING: --analytics-dev requested but docker-compose.analytics-dev.yml not found" >&2
+	      WITH_ANALYTICS_DEV="0"
+	    fi
+	  fi
 else
   compose_files=(-f docker-compose.yml -f docker-compose-app.yml)
 fi

@@ -35,6 +35,7 @@ public class SecurityConfiguration {
                                 "/api/health",
                                 "/api/info",
                                 "/api/session/properties",
+                                "/auth/oidc/**",
                                 "/actuator/health",
                                 "/actuator/info",
                                 "/app/**",

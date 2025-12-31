@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0007-01" author="codex">
+        <createTable tableName="analytics_bookmark">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ordering" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_bookmark"
+            baseColumnNames="user_id"
+            referencedTableName="analytics_user"
+            referencedColumnNames="id"
+            constraintName="fk_bookmark_user"/>
+
+        <addUniqueConstraint
+            tableName="analytics_bookmark"
+            columnNames="user_id,model,model_id"
+            constraintName="uk_bookmark_user_model"/>
+
+        <createIndex tableName="analytics_bookmark" indexName="idx_bookmark_user_ordering">
+            <column name="user_id"/>
+            <column name="ordering"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

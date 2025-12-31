@@ -3,6 +3,7 @@ package com.yuzhi.dts.analytics.web.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
+import com.yuzhi.dts.analytics.service.MbqlToSqlService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
@@ -26,10 +27,13 @@ public class DatasetResource {
 
     private final AnalyticsSessionService sessionService;
     private final DatasetQueryService datasetQueryService;
+    private final MbqlToSqlService mbqlToSqlService;
 
-    public DatasetResource(AnalyticsSessionService sessionService, DatasetQueryService datasetQueryService) {
+    public DatasetResource(
+            AnalyticsSessionService sessionService, DatasetQueryService datasetQueryService, MbqlToSqlService mbqlToSqlService) {
         this.sessionService = sessionService;
         this.datasetQueryService = datasetQueryService;
+        this.mbqlToSqlService = mbqlToSqlService;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -45,17 +49,16 @@ public class DatasetResource {
 
         long databaseId = body.path("database").asLong(0);
         String type = body.path("type").asText(null);
-        JsonNode nativeQuery = body.path("native");
-        String sql = nativeQuery.path("query").asText(null);
+        if (type == null || type.isBlank()) {
+            if (body.has("native")) {
+                type = "native";
+            } else if (body.has("query")) {
+                type = "query";
+            }
+        }
 
         if (databaseId <= 0) {
             return ResponseEntity.badRequest().body(Map.of("errors", Map.of("database", "database is required")));
-        }
-        if (!"native".equalsIgnoreCase(type)) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("type", "Only native queries are supported")));
-        }
-        if (sql == null || sql.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("query", "native.query is required")));
         }
 
         DatasetQueryService.DatasetConstraints constraints = parseConstraints(body);
@@ -63,6 +66,34 @@ public class DatasetResource {
         long startedMillis = System.currentTimeMillis();
 
         try {
+            String sql;
+            Map<String, Object> jsonQuery = new LinkedHashMap<>();
+            jsonQuery.put("database", databaseId);
+            jsonQuery.put(
+                    "middleware",
+                    Map.of(
+                            "js-int-to-string?", true,
+                            "add-default-userland-constraints?", true));
+
+            if ("native".equalsIgnoreCase(type)) {
+                JsonNode nativeQuery = body.path("native");
+                sql = nativeQuery.path("query").asText(null);
+                if (sql == null || sql.isBlank()) {
+                    return ResponseEntity.badRequest().body(Map.of("errors", Map.of("query", "native.query is required")));
+                }
+                jsonQuery.put("type", "native");
+                jsonQuery.put("native", Map.of("query", sql));
+            } else if ("query".equalsIgnoreCase(type)) {
+                JsonNode mbql = body.get("query");
+                MbqlToSqlService.TranslationResult translated = mbqlToSqlService.translateSelect(databaseId, mbql, constraints);
+                sql = translated.sql();
+                jsonQuery.put("type", "query");
+                jsonQuery.put("query", mbql);
+            } else {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("errors", Map.of("type", "Only native and query (MBQL) dataset types are supported")));
+            }
+
             DatasetQueryService.DatasetResult result = datasetQueryService.runNative(databaseId, sql, constraints);
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
@@ -73,16 +104,6 @@ public class DatasetResource {
             data.put("results_timezone", result.resultsTimezone());
             data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
             data.put("insights", null);
-
-            Map<String, Object> jsonQuery = new LinkedHashMap<>();
-            jsonQuery.put("database", databaseId);
-            jsonQuery.put("type", "native");
-            jsonQuery.put("native", Map.of("query", sql));
-            jsonQuery.put(
-                    "middleware",
-                    Map.of(
-                            "js-int-to-string?", true,
-                            "add-default-userland-constraints?", true));
 
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("data", data);
@@ -97,7 +118,7 @@ public class DatasetResource {
 
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("database", e.getMessage())));
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("query", e.getMessage())));
         } catch (SQLException e) {
             Map<String, Object> via = new LinkedHashMap<>();
             via.put("status", "failed");
@@ -120,6 +141,21 @@ public class DatasetResource {
 
             return ResponseEntity.accepted().body(response);
         }
+    }
+
+    @PostMapping(path = "/native", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> nativeQuery(@RequestBody JsonNode body, HttpServletRequest request) {
+        return run(body, request);
+    }
+
+    @PostMapping(path = "/pivot", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> pivot(@RequestBody JsonNode body, HttpServletRequest request) {
+        return run(body, request);
+    }
+
+    @PostMapping(path = "/duration", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> duration(@RequestBody JsonNode body, HttpServletRequest request) {
+        return run(body, request);
     }
 
     private static DatasetQueryService.DatasetConstraints parseConstraints(JsonNode body) {
@@ -155,4 +191,3 @@ public class DatasetResource {
         return new DatasetQueryService.DatasetConstraints(maxResults, timeoutSeconds, timezone);
     }
 }
-

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0015-analytics-revision" author="codex">
+        <createTable tableName="analytics_revision">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="model" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="bigint"/>
+            <column name="is_reversion" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="object_json" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analytics_revision" indexName="idx_revision_model_modelid_id">
+            <column name="model"/>
+            <column name="model_id"/>
+            <column name="id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

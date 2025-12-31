@@ -54,7 +54,10 @@ export const STATUS_LABELS: Record<DataStandardStatus, string> = {
 
 export const STATUS_OPTIONS: { value: DataStandardStatus; label: string }[] = [
     { value: "DRAFT", label: STATUS_LABELS.DRAFT },
+    { value: "IN_REVIEW", label: STATUS_LABELS.IN_REVIEW },
     { value: "ACTIVE", label: STATUS_LABELS.ACTIVE },
+    { value: "DEPRECATED", label: STATUS_LABELS.DEPRECATED },
+    { value: "RETIRED", label: STATUS_LABELS.RETIRED },
     { value: "ARCHIVED", label: STATUS_LABELS.ARCHIVED },
 ];
 

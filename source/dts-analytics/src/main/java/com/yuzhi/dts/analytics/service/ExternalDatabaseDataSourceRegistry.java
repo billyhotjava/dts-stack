@@ -9,7 +9,6 @@ import com.zaxxer.hikari.HikariDataSource;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,12 +18,15 @@ public class ExternalDatabaseDataSourceRegistry {
 
     private final AnalyticsDatabaseRepository databaseRepository;
     private final ObjectMapper objectMapper;
+    private final JdbcDetailsResolver jdbcDetailsResolver;
 
     private final Map<Long, DataSourceEntry> dataSources = new ConcurrentHashMap<>();
 
-    public ExternalDatabaseDataSourceRegistry(AnalyticsDatabaseRepository databaseRepository, ObjectMapper objectMapper) {
+    public ExternalDatabaseDataSourceRegistry(
+            AnalyticsDatabaseRepository databaseRepository, ObjectMapper objectMapper, JdbcDetailsResolver jdbcDetailsResolver) {
         this.databaseRepository = databaseRepository;
         this.objectMapper = objectMapper;
+        this.jdbcDetailsResolver = jdbcDetailsResolver;
     }
 
     @Transactional(readOnly = true)
@@ -39,7 +41,7 @@ public class ExternalDatabaseDataSourceRegistry {
             return cached.dataSource();
         }
 
-        JdbcDetails jdbcDetails = parseJdbcDetails(database);
+        JdbcDetailsResolver.JdbcDetails jdbcDetails = parseJdbcDetails(database);
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(jdbcDetails.jdbcUrl());
         if (jdbcDetails.username() != null) {
@@ -67,73 +69,14 @@ public class ExternalDatabaseDataSourceRegistry {
         return created;
     }
 
-    private JdbcDetails parseJdbcDetails(AnalyticsDatabase database) {
+    private JdbcDetailsResolver.JdbcDetails parseJdbcDetails(AnalyticsDatabase database) {
         JsonNode details;
         try {
             details = objectMapper.readTree(database.getDetailsJson());
         } catch (IOException e) {
             throw new IllegalArgumentException("Invalid database details_json for db " + database.getId(), e);
         }
-
-        String jdbcUrl = firstText(details, "jdbc-url", "jdbc_url", "jdbcUrl", "url");
-        String username = firstText(details, "user", "username");
-        String password = firstText(details, "password");
-
-        if (jdbcUrl == null && "postgres".equalsIgnoreCase(database.getEngine())) {
-            String host = firstText(details, "host");
-            Integer port = firstInt(details, "port").orElse(5432);
-            String dbName = firstText(details, "dbname", "db", "database");
-            if (host == null || dbName == null) {
-                throw new IllegalArgumentException("Postgres database requires details.host and details.dbname");
-            }
-            jdbcUrl = "jdbc:postgresql://%s:%d/%s".formatted(host, port, dbName);
-        }
-
-        if (jdbcUrl == null) {
-            throw new IllegalArgumentException(
-                    "Unsupported database engine or missing details.jdbc-url for engine=" + database.getEngine());
-        }
-
-        return new JdbcDetails(jdbcUrl, username, password);
-    }
-
-    private static String firstText(JsonNode node, String... fieldNames) {
-        if (node == null || !node.isObject()) {
-            return null;
-        }
-        for (String name : fieldNames) {
-            JsonNode value = node.get(name);
-            if (value != null && value.isTextual()) {
-                String text = value.asText();
-                if (text != null && !text.isBlank()) {
-                    return text;
-                }
-            }
-        }
-        return null;
-    }
-
-    private static Optional<Integer> firstInt(JsonNode node, String... fieldNames) {
-        if (node == null || !node.isObject()) {
-            return Optional.empty();
-        }
-        for (String name : fieldNames) {
-            JsonNode value = node.get(name);
-            if (value == null) {
-                continue;
-            }
-            if (value.canConvertToInt()) {
-                return Optional.of(value.asInt());
-            }
-            if (value.isTextual()) {
-                try {
-                    return Optional.of(Integer.parseInt(value.asText()));
-                } catch (NumberFormatException ignore) {
-                    // ignore
-                }
-            }
-        }
-        return Optional.empty();
+        return jdbcDetailsResolver.resolve(database.getEngine(), details);
     }
 
     @PreDestroy
@@ -144,8 +87,5 @@ public class ExternalDatabaseDataSourceRegistry {
         dataSources.clear();
     }
 
-    private record JdbcDetails(String jdbcUrl, String username, String password) {}
-
     private record DataSourceEntry(String fingerprint, HikariDataSource dataSource) {}
 }
-

@@ -2,20 +2,25 @@ package com.yuzhi.dts.analytics.web.rest;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.yuzhi.dts.analytics.domain.AnalyticsCollection;
+import com.yuzhi.dts.analytics.domain.AnalyticsBookmark;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
+import com.yuzhi.dts.analytics.repository.AnalyticsBookmarkRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsCollectionRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardRepository;
+import com.yuzhi.dts.analytics.service.ActivityService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.CollectionService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,22 +56,28 @@ public class CollectionResource {
     private final AnalyticsCollectionRepository collectionRepository;
     private final AnalyticsCardRepository cardRepository;
     private final AnalyticsDashboardRepository dashboardRepository;
+    private final AnalyticsBookmarkRepository bookmarkRepository;
     private final CollectionService collectionService;
     private final EntityIdGenerator entityIdGenerator;
+    private final ActivityService activityService;
 
     public CollectionResource(
             AnalyticsSessionService sessionService,
             AnalyticsCollectionRepository collectionRepository,
             AnalyticsCardRepository cardRepository,
             AnalyticsDashboardRepository dashboardRepository,
+            AnalyticsBookmarkRepository bookmarkRepository,
             CollectionService collectionService,
-            EntityIdGenerator entityIdGenerator) {
+            EntityIdGenerator entityIdGenerator,
+            ActivityService activityService) {
         this.sessionService = sessionService;
         this.collectionRepository = collectionRepository;
         this.cardRepository = cardRepository;
         this.dashboardRepository = dashboardRepository;
+        this.bookmarkRepository = bookmarkRepository;
         this.collectionService = collectionService;
         this.entityIdGenerator = entityIdGenerator;
+        this.activityService = activityService;
     }
 
     @GetMapping(path = "/root", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -113,9 +124,9 @@ public class CollectionResource {
 
     @GetMapping(path = "/{collectionId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> get(@PathVariable("collectionId") String collectionId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
         if ("root".equals(collectionId)) {
             return ResponseEntity.ok(ROOT_COLLECTION);
@@ -124,18 +135,36 @@ public class CollectionResource {
         if (id == null) {
             return ResponseEntity.notFound().build();
         }
-        return collectionRepository.findById(id).map(collection -> ResponseEntity.ok(toListItem(collection, true))).orElseGet(() -> ResponseEntity.notFound().build());
+        return collectionRepository.findById(id)
+                .map(collection -> {
+                    activityService.recordView(user.get().getId(), "collection", id);
+                    return ResponseEntity.ok(toListItem(collection, true));
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @GetMapping(path = "/{collectionId}/items", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> items(@PathVariable("collectionId") String collectionId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
         Long id = "root".equals(collectionId) ? null : parseLong(collectionId);
         if (!"root".equals(collectionId) && id == null) {
             return ResponseEntity.notFound().build();
+        }
+
+        Set<Long> favoriteDashboardIds = new HashSet<>();
+        for (AnalyticsBookmark b : bookmarkRepository.findAllByUserIdAndModel(user.get().getId(), "dashboard")) {
+            if (b.getModelId() != null) {
+                favoriteDashboardIds.add(b.getModelId());
+            }
+        }
+        Set<Long> favoriteCardIds = new HashSet<>();
+        for (AnalyticsBookmark b : bookmarkRepository.findAllByUserIdAndModel(user.get().getId(), "card")) {
+            if (b.getModelId() != null) {
+                favoriteCardIds.add(b.getModelId());
+            }
         }
 
         List<Map<String, Object>> result = new java.util.ArrayList<>();
@@ -156,7 +185,7 @@ public class CollectionResource {
                     map.put("created_at", dashboard.getCreatedAt());
                     map.put("updated_at", dashboard.getUpdatedAt());
                     map.put("can_write", true);
-                    map.put("favorite", false);
+                    map.put("favorite", favoriteDashboardIds.contains(dashboard.getId()));
                     return map;
                 })
                 .toList());
@@ -178,7 +207,7 @@ public class CollectionResource {
                     map.put("created_at", card.getCreatedAt());
                     map.put("updated_at", card.getUpdatedAt());
                     map.put("can_write", true);
-                    map.put("favorite", false);
+                    map.put("favorite", favoriteCardIds.contains(card.getId()));
                     return map;
                 })
                 .toList());

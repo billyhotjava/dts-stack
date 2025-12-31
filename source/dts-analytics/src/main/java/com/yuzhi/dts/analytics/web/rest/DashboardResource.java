@@ -3,18 +3,25 @@ package com.yuzhi.dts.analytics.web.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.analytics.domain.AnalyticsCard;
+import com.yuzhi.dts.analytics.domain.AnalyticsBookmark;
 import com.yuzhi.dts.analytics.domain.AnalyticsDashboard;
 import com.yuzhi.dts.analytics.domain.AnalyticsDashboardCard;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
+import com.yuzhi.dts.analytics.repository.AnalyticsBookmarkRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardRepository;
+import com.yuzhi.dts.analytics.service.ActivityService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
+import com.yuzhi.dts.analytics.service.MbqlToSqlService;
+import com.yuzhi.dts.analytics.service.PublicLinkService;
+import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,36 +48,59 @@ public class DashboardResource {
     private final AnalyticsSessionService sessionService;
     private final AnalyticsDashboardRepository dashboardRepository;
     private final AnalyticsDashboardCardRepository dashboardCardRepository;
+    private final AnalyticsBookmarkRepository bookmarkRepository;
     private final AnalyticsCardRepository cardRepository;
+    private final ActivityService activityService;
     private final DatasetQueryService datasetQueryService;
+    private final MbqlToSqlService mbqlToSqlService;
     private final EntityIdGenerator entityIdGenerator;
+    private final PublicLinkService publicLinkService;
+    private final RevisionService revisionService;
     private final ObjectMapper objectMapper;
 
     public DashboardResource(
             AnalyticsSessionService sessionService,
             AnalyticsDashboardRepository dashboardRepository,
             AnalyticsDashboardCardRepository dashboardCardRepository,
+            AnalyticsBookmarkRepository bookmarkRepository,
             AnalyticsCardRepository cardRepository,
+            ActivityService activityService,
             DatasetQueryService datasetQueryService,
+            MbqlToSqlService mbqlToSqlService,
             EntityIdGenerator entityIdGenerator,
+            PublicLinkService publicLinkService,
+            RevisionService revisionService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.dashboardRepository = dashboardRepository;
         this.dashboardCardRepository = dashboardCardRepository;
+        this.bookmarkRepository = bookmarkRepository;
         this.cardRepository = cardRepository;
+        this.activityService = activityService;
         this.datasetQueryService = datasetQueryService;
+        this.mbqlToSqlService = mbqlToSqlService;
         this.entityIdGenerator = entityIdGenerator;
+        this.publicLinkService = publicLinkService;
+        this.revisionService = revisionService;
         this.objectMapper = objectMapper;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> list(HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
+
+        Set<Long> favoriteDashboardIds = new HashSet<>();
+        for (AnalyticsBookmark b : bookmarkRepository.findAllByUserIdAndModel(user.get().getId(), "dashboard")) {
+            if (b.getModelId() != null) {
+                favoriteDashboardIds.add(b.getModelId());
+            }
+        }
+
         return ResponseEntity.ok(dashboardRepository.findAllByArchivedFalseOrderByIdAsc().stream()
-                .map(this::toDashboardListItem)
+                .map(dashboard -> toDashboardListItem(dashboard, favoriteDashboardIds.contains(dashboard.getId())))
                 .toList());
     }
 
@@ -98,28 +128,31 @@ public class DashboardResource {
         }
 
         dashboard = dashboardRepository.save(dashboard);
-        return ResponseEntity.ok(toDashboardDetail(dashboard, List.of()));
+        revisionService.recordDashboardRevision(dashboard, List.of(), user.get().getId(), false);
+        return ResponseEntity.ok(toDashboardDetail(dashboard, List.of(), false));
     }
 
     @GetMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> get(@PathVariable("id") long id, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
         AnalyticsDashboard dashboard = dashboardRepository.findById(id).orElse(null);
         if (dashboard == null) {
             return ResponseEntity.notFound().build();
         }
+        boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "dashboard", id).isPresent();
         List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(id);
-        return ResponseEntity.ok(toDashboardDetail(dashboard, dashcards));
+        activityService.recordView(user.get().getId(), "dashboard", id);
+        return ResponseEntity.ok(toDashboardDetail(dashboard, dashcards, favorite));
     }
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> update(@PathVariable("id") long id, @RequestBody JsonNode body, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
 
         AnalyticsDashboard dashboard = dashboardRepository.findById(id).orElse(null);
@@ -148,8 +181,10 @@ public class DashboardResource {
         }
 
         dashboardRepository.save(dashboard);
+        boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "dashboard", id).isPresent();
         List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(id);
-        return ResponseEntity.ok(toDashboardDetail(dashboard, dashcards));
+        revisionService.recordDashboardRevision(dashboard, dashcards, user.get().getId(), false);
+        return ResponseEntity.ok(toDashboardDetail(dashboard, dashcards, favorite));
     }
 
     @DeleteMapping(path = "/{id}")
@@ -164,14 +199,16 @@ public class DashboardResource {
         }
         dashboard.setArchived(true);
         dashboardRepository.save(dashboard);
+        List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(id);
+        MetabaseAuth.currentUser(sessionService, request).ifPresent(u -> revisionService.recordDashboardRevision(dashboard, dashcards, u.getId(), false));
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping(path = "/save", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> save(@RequestBody JsonNode body, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
 
         JsonNode dashboardNode = body != null && body.has("dashboard") ? body.path("dashboard") : body;
@@ -273,24 +310,39 @@ public class DashboardResource {
         }
 
         List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(dashboardId);
-        return ResponseEntity.ok(toDashboardDetail(dashboard, dashcards));
+        boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "dashboard", dashboardId).isPresent();
+        revisionService.recordDashboardRevision(dashboard, dashcards, user.get().getId(), false);
+        return ResponseEntity.ok(toDashboardDetail(dashboard, dashcards, favorite));
     }
 
     @PostMapping(path = "/{dashboardId}/favorite")
     public ResponseEntity<?> favorite(@PathVariable("dashboardId") long dashboardId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
+        if (!dashboardRepository.existsById(dashboardId)) {
+            return ResponseEntity.notFound().build();
+        }
+        bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "dashboard", dashboardId).orElseGet(() -> {
+            int maxOrdering = bookmarkRepository.findMaxOrderingByUserId(user.get().getId());
+            AnalyticsBookmark bookmark = new AnalyticsBookmark();
+            bookmark.setUserId(user.get().getId());
+            bookmark.setModel("dashboard");
+            bookmark.setModelId(dashboardId);
+            bookmark.setOrdering(maxOrdering + 1);
+            return bookmarkRepository.save(bookmark);
+        });
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping(path = "/{dashboardId}/favorite")
     public ResponseEntity<?> unfavorite(@PathVariable("dashboardId") long dashboardId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
+        bookmarkRepository.deleteByUserIdAndModelAndModelId(user.get().getId(), "dashboard", dashboardId);
         return ResponseEntity.noContent().build();
     }
 
@@ -331,7 +383,7 @@ public class DashboardResource {
         }
 
         List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(copy.getId());
-        return ResponseEntity.ok(toDashboardDetail(copy, dashcards));
+        return ResponseEntity.ok(toDashboardDetail(copy, dashcards, false));
     }
 
     @GetMapping(path = "/{dashboardId}/cards", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -480,7 +532,20 @@ public class DashboardResource {
         if (auth.isPresent()) {
             return auth.get();
         }
-        return ResponseEntity.ok(List.of());
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        Set<Long> favoriteDashboardIds = new HashSet<>();
+        if (user.isPresent()) {
+            for (AnalyticsBookmark b : bookmarkRepository.findAllByUserIdAndModel(user.get().getId(), "dashboard")) {
+                if (b.getModelId() != null) {
+                    favoriteDashboardIds.add(b.getModelId());
+                }
+            }
+        }
+
+        return ResponseEntity.ok(dashboardRepository.findAllByArchivedFalseOrderByIdAsc().stream()
+                .map(dashboard -> toDashboardListItem(dashboard, favoriteDashboardIds.contains(dashboard.getId())))
+                .filter(item -> item.get("public_uuid") != null)
+                .toList());
     }
 
     @GetMapping(path = "/embeddable", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -494,25 +559,27 @@ public class DashboardResource {
 
     @PostMapping(path = "/{id}/public_link", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> createPublicLink(@PathVariable("id") long dashboardId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
         if (!dashboardRepository.existsById(dashboardId)) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(Map.of("uuid", entityIdGenerator.newEntityId()));
+        String uuid = publicLinkService.getOrCreate(PublicLinkService.MODEL_DASHBOARD, dashboardId, user.get().getId());
+        return ResponseEntity.ok(Map.of("uuid", uuid));
     }
 
     @DeleteMapping(path = "/{id}/public_link", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> deletePublicLink(@PathVariable("id") long dashboardId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
         if (!dashboardRepository.existsById(dashboardId)) {
             return ResponseEntity.notFound().build();
         }
+        publicLinkService.delete(PublicLinkService.MODEL_DASHBOARD, dashboardId);
         return ResponseEntity.noContent().build();
     }
 
@@ -539,15 +606,36 @@ public class DashboardResource {
             return ResponseEntity.status(500).body(Map.of("error", "Invalid saved dataset_query"));
         }
 
-        String sql = datasetQuery.path("native").path("query").asText(null);
         String type = datasetQuery.path("type").asText(null);
         long databaseId = datasetQuery.path("database").asLong(0);
-        if (!"native".equalsIgnoreCase(type) || sql == null || sql.isBlank() || databaseId <= 0) {
-            return ResponseEntity.status(400).body(Map.of("error", "Only native queries are supported"));
+        if (databaseId <= 0) {
+            return ResponseEntity.status(400).body(Map.of("error", "dataset_query.database is required"));
         }
 
         long startedMillis = System.currentTimeMillis();
         try {
+            String sql;
+            Map<String, Object> jsonQuery = new LinkedHashMap<>();
+            jsonQuery.put("database", databaseId);
+
+            if ("native".equalsIgnoreCase(type)) {
+                sql = datasetQuery.path("native").path("query").asText(null);
+                if (sql == null || sql.isBlank()) {
+                    return ResponseEntity.status(400).body(Map.of("error", "dataset_query.native.query is required"));
+                }
+                jsonQuery.put("type", "native");
+                jsonQuery.put("native", Map.of("query", sql));
+            } else if ("query".equalsIgnoreCase(type)) {
+                JsonNode mbql = datasetQuery.get("query");
+                MbqlToSqlService.TranslationResult translated =
+                        mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
+                sql = translated.sql();
+                jsonQuery.put("type", "query");
+                jsonQuery.put("query", mbql);
+            } else {
+                return ResponseEntity.status(400).body(Map.of("error", "Only native and query (MBQL) queries are supported"));
+            }
+
             DatasetQueryService.DatasetResult result =
                     datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults());
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
@@ -564,7 +652,7 @@ public class DashboardResource {
             response.put("data", data);
             response.put("database_id", databaseId);
             response.put("started_at", java.time.OffsetDateTime.now());
-            response.put("json_query", Map.of("type", "native", "native", Map.of("query", sql), "database", databaseId));
+            response.put("json_query", jsonQuery);
             response.put("status", "completed");
             response.put("context", "question");
             response.put("row_count", result.rows().size());
@@ -572,6 +660,8 @@ public class DashboardResource {
             response.put("error", null);
 
             return ResponseEntity.accepted().body(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             Map<String, Object> error = new LinkedHashMap<>();
             error.put("status", "failed");
@@ -587,7 +677,7 @@ public class DashboardResource {
         }
     }
 
-    private Map<String, Object> toDashboardListItem(AnalyticsDashboard dashboard) {
+    private Map<String, Object> toDashboardListItem(AnalyticsDashboard dashboard, boolean favorite) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", dashboard.getId());
         map.put("entity_id", dashboard.getEntityId());
@@ -599,11 +689,13 @@ public class DashboardResource {
         map.put("created_at", dashboard.getCreatedAt());
         map.put("updated_at", dashboard.getUpdatedAt());
         map.put("can_write", true);
+        map.put("public_uuid", publicLinkService.publicUuidFor(PublicLinkService.MODEL_DASHBOARD, dashboard.getId()).orElse(null));
+        map.put("favorite", favorite);
         return map;
     }
 
-    private Map<String, Object> toDashboardDetail(AnalyticsDashboard dashboard, List<AnalyticsDashboardCard> dashcards) {
-        Map<String, Object> map = toDashboardListItem(dashboard);
+    private Map<String, Object> toDashboardDetail(AnalyticsDashboard dashboard, List<AnalyticsDashboardCard> dashcards, boolean favorite) {
+        Map<String, Object> map = toDashboardListItem(dashboard, favorite);
         map.put("parameters", parseJsonArray(dashboard.getParametersJson()));
         map.put("dashcards", dashcards.stream().map(dc -> toDashcardResponse(dc, false)).toList());
         map.put("ordered_cards", dashcards.stream().map(dc -> toDashcardResponse(dc, true)).toList());

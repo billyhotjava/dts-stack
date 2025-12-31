@@ -5,6 +5,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.CollectionService;
+import com.yuzhi.dts.analytics.service.GroupService;
 import com.yuzhi.dts.analytics.service.SetupStateService;
 import com.yuzhi.dts.analytics.web.support.MetabaseCookies;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,18 +38,21 @@ public class SetupResource {
     private final AnalyticsSessionService sessionService;
     private final CollectionService collectionService;
     private final PasswordEncoder passwordEncoder;
+    private final GroupService groupService;
 
     public SetupResource(
             SetupStateService setupStateService,
             AnalyticsUserRepository userRepository,
             AnalyticsSessionService sessionService,
             CollectionService collectionService,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            GroupService groupService) {
         this.setupStateService = setupStateService;
         this.userRepository = userRepository;
         this.sessionService = sessionService;
         this.collectionService = collectionService;
         this.passwordEncoder = passwordEncoder;
+        this.groupService = groupService;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -111,6 +115,7 @@ public class SetupResource {
         admin.setPasswordHash(passwordEncoder.encode(password));
         admin.setSuperuser(true);
         admin = userRepository.save(admin);
+        groupService.ensureUserInDefaultGroups(admin);
         collectionService.ensurePersonalCollection(admin);
 
         setupStateService.setSiteName(siteName);

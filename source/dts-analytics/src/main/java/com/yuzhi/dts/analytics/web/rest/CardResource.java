@@ -3,20 +3,28 @@ package com.yuzhi.dts.analytics.web.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.analytics.domain.AnalyticsCard;
+import com.yuzhi.dts.analytics.domain.AnalyticsBookmark;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
+import com.yuzhi.dts.analytics.repository.AnalyticsBookmarkRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
+import com.yuzhi.dts.analytics.service.ActivityService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
+import com.yuzhi.dts.analytics.service.MbqlToSqlService;
+import com.yuzhi.dts.analytics.service.PublicLinkService;
+import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,33 +44,59 @@ public class CardResource {
 
     private final AnalyticsSessionService sessionService;
     private final AnalyticsCardRepository cardRepository;
+    private final AnalyticsBookmarkRepository bookmarkRepository;
     private final AnalyticsUserRepository userRepository;
+    private final ActivityService activityService;
     private final DatasetQueryService datasetQueryService;
+    private final MbqlToSqlService mbqlToSqlService;
     private final EntityIdGenerator entityIdGenerator;
+    private final PublicLinkService publicLinkService;
+    private final RevisionService revisionService;
     private final ObjectMapper objectMapper;
 
     public CardResource(
             AnalyticsSessionService sessionService,
             AnalyticsCardRepository cardRepository,
+            AnalyticsBookmarkRepository bookmarkRepository,
             AnalyticsUserRepository userRepository,
+            ActivityService activityService,
             DatasetQueryService datasetQueryService,
+            MbqlToSqlService mbqlToSqlService,
             EntityIdGenerator entityIdGenerator,
+            PublicLinkService publicLinkService,
+            RevisionService revisionService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.cardRepository = cardRepository;
+        this.bookmarkRepository = bookmarkRepository;
         this.userRepository = userRepository;
+        this.activityService = activityService;
         this.datasetQueryService = datasetQueryService;
+        this.mbqlToSqlService = mbqlToSqlService;
         this.entityIdGenerator = entityIdGenerator;
+        this.publicLinkService = publicLinkService;
+        this.revisionService = revisionService;
         this.objectMapper = objectMapper;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> list(HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
-        return ResponseEntity.ok(cardRepository.findAll().stream().filter(card -> !card.isArchived()).map(card -> toCardResponse(card, null)).toList());
+
+        Set<Long> favoriteCardIds = new HashSet<>();
+        for (AnalyticsBookmark b : bookmarkRepository.findAllByUserIdAndModel(user.get().getId(), "card")) {
+            if (b.getModelId() != null) {
+                favoriteCardIds.add(b.getModelId());
+            }
+        }
+
+        return ResponseEntity.ok(cardRepository.findAll().stream()
+                .filter(card -> !card.isArchived())
+                .map(card -> toCardResponse(card, null, favoriteCardIds.contains(card.getId())))
+                .toList());
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -100,18 +134,23 @@ public class CardResource {
         card.setCreatorId(user.get().getId());
 
         card = cardRepository.save(card);
+        revisionService.recordCardRevision(card, user.get().getId(), false);
 
         List<Map<String, Object>> resultMetadata = computeResultMetadata(card);
-        return ResponseEntity.ok(toCardResponse(card, resultMetadata));
+        return ResponseEntity.ok(toCardResponse(card, resultMetadata, false));
     }
 
     @GetMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> get(@PathVariable("id") long id, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
-        return cardRepository.findById(id).map(card -> ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card))))
+        boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "card", id).isPresent();
+        return cardRepository.findById(id).map(card -> {
+                    activityService.recordView(user.get().getId(), "card", id);
+                    return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card), favorite));
+                })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -161,8 +200,10 @@ public class CardResource {
             card.setDatasetQueryJson(datasetQuery.toString());
         }
         cardRepository.save(card);
+        revisionService.recordCardRevision(card, user.get().getId(), false);
 
-        return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card)));
+        boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "card", id).isPresent();
+        return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card), favorite));
     }
 
     @DeleteMapping(path = "/{id}")
@@ -199,18 +240,44 @@ public class CardResource {
             return ResponseEntity.status(500).body(Map.of("error", "Invalid saved dataset_query"));
         }
 
-        String sql = datasetQuery.path("native").path("query").asText(null);
         String type = datasetQuery.path("type").asText(null);
         long databaseId = datasetQuery.path("database").asLong(0);
-        if (!"native".equalsIgnoreCase(type) || sql == null || sql.isBlank() || databaseId <= 0) {
-            return ResponseEntity.status(400).body(Map.of("error", "Only native queries are supported"));
+        if (databaseId <= 0) {
+            return ResponseEntity.status(400).body(Map.of("error", "dataset_query.database is required"));
         }
 
         OffsetDateTime startedAt = OffsetDateTime.now();
         long startedMillis = System.currentTimeMillis();
 
         try {
-            DatasetQueryService.DatasetResult result = datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults());
+            String sql;
+            Map<String, Object> jsonQuery = new LinkedHashMap<>();
+            jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
+            jsonQuery.put("middleware", Map.of("js-int-to-string?", true, "ignore-cached-results?", false, "process-viz-settings?", false));
+            jsonQuery.put("database", databaseId);
+            jsonQuery.put("async?", true);
+            jsonQuery.put("cache-ttl", null);
+
+            if ("native".equalsIgnoreCase(type)) {
+                sql = datasetQuery.path("native").path("query").asText(null);
+                if (sql == null || sql.isBlank()) {
+                    return ResponseEntity.status(400).body(Map.of("error", "dataset_query.native.query is required"));
+                }
+                jsonQuery.put("type", "native");
+                jsonQuery.put("native", Map.of("query", sql));
+            } else if ("query".equalsIgnoreCase(type)) {
+                JsonNode mbql = datasetQuery.get("query");
+                MbqlToSqlService.TranslationResult translated =
+                        mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
+                sql = translated.sql();
+                jsonQuery.put("type", "query");
+                jsonQuery.put("query", mbql);
+            } else {
+                return ResponseEntity.status(400).body(Map.of("error", "Only native and query (MBQL) queries are supported"));
+            }
+
+            DatasetQueryService.DatasetResult result =
+                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults());
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
             Map<String, Object> data = new LinkedHashMap<>();
@@ -220,15 +287,6 @@ public class CardResource {
             data.put("results_timezone", result.resultsTimezone());
             data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
             data.put("insights", null);
-
-            Map<String, Object> jsonQuery = new LinkedHashMap<>();
-            jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
-            jsonQuery.put("type", "native");
-            jsonQuery.put("middleware", Map.of("js-int-to-string?", true, "ignore-cached-results?", false, "process-viz-settings?", false));
-            jsonQuery.put("native", Map.of("query", sql));
-            jsonQuery.put("database", databaseId);
-            jsonQuery.put("async?", true);
-            jsonQuery.put("cache-ttl", null);
 
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("data", data);
@@ -242,6 +300,8 @@ public class CardResource {
             response.put("running_time", runningTimeMs);
 
             return ResponseEntity.accepted().body(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
         } catch (SQLException e) {
             return ResponseEntity.accepted()
                     .body(Map.of("database_id", databaseId, "started_at", startedAt, "error", e.getMessage(), "data", Map.of("rows", List.of(), "cols", List.of())));
@@ -289,6 +349,33 @@ public class CardResource {
         return ResponseEntity.ok(List.of());
     }
 
+    @PostMapping(path = "/{id}/public_link", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> createPublicLink(@PathVariable("id") long cardId, HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
+        }
+        AnalyticsCard card = cardRepository.findById(cardId).orElse(null);
+        if (card == null || card.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+        String uuid = publicLinkService.getOrCreate(PublicLinkService.MODEL_CARD, cardId, user.get().getId());
+        return ResponseEntity.ok(Map.of("uuid", uuid));
+    }
+
+    @DeleteMapping(path = "/{id}/public_link", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> deletePublicLink(@PathVariable("id") long cardId, HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
+        }
+        if (!cardRepository.existsById(cardId)) {
+            return ResponseEntity.notFound().build();
+        }
+        publicLinkService.delete(PublicLinkService.MODEL_CARD, cardId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping(path = "/embeddable", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> embeddable(HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
@@ -316,7 +403,7 @@ public class CardResource {
         return ResponseEntity.ok(List.of());
     }
 
-    private Map<String, Object> toCardResponse(AnalyticsCard card, List<Map<String, Object>> resultMetadataColumns) {
+    private Map<String, Object> toCardResponse(AnalyticsCard card, List<Map<String, Object>> resultMetadataColumns, boolean favorite) {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("description", card.getDescription());
         response.put("archived", card.isArchived());
@@ -325,6 +412,7 @@ public class CardResource {
         response.put("result_metadata", resultMetadataColumns == null ? List.of() : resultMetadataColumns);
         response.put("creator", card.getCreatorId() == null ? null : minimalCreator(card.getCreatorId()));
         response.put("can_write", true);
+        response.put("favorite", favorite);
         response.put("database_id", card.getDatabaseId());
         response.put("enable_embedding", false);
         response.put("collection_id", card.getCollectionId());
@@ -337,6 +425,7 @@ public class CardResource {
         response.put("moderation_reviews", List.of());
         response.put("updated_at", card.getUpdatedAt());
         response.put("made_public_by_id", null);
+        response.put("public_uuid", publicLinkService.publicUuidFor(PublicLinkService.MODEL_CARD, card.getId()).orElse(null));
         response.put("embedding_params", null);
         response.put("cache_ttl", null);
         response.put("dataset_query", safeJson(card.getDatasetQueryJson()));
@@ -371,14 +460,26 @@ public class CardResource {
     private List<Map<String, Object>> computeResultMetadata(AnalyticsCard card) {
         try {
             JsonNode query = objectMapper.readTree(card.getDatasetQueryJson());
-            if (!"native".equalsIgnoreCase(query.path("type").asText())) {
-                return List.of();
-            }
             long databaseId = query.path("database").asLong(0);
-            String sql = query.path("native").path("query").asText(null);
-            if (databaseId <= 0 || sql == null || sql.isBlank()) {
+            if (databaseId <= 0) {
                 return List.of();
             }
+
+            String sql;
+            String type = query.path("type").asText("native");
+            if ("native".equalsIgnoreCase(type)) {
+                sql = query.path("native").path("query").asText(null);
+                if (sql == null || sql.isBlank()) {
+                    return List.of();
+                }
+            } else if ("query".equalsIgnoreCase(type)) {
+                MbqlToSqlService.TranslationResult translated =
+                        mbqlToSqlService.translateSelect(databaseId, query.get("query"), DatasetQueryService.DatasetConstraints.defaults());
+                sql = translated.sql();
+            } else {
+                return List.of();
+            }
+
             DatasetQueryService.DatasetResult result =
                     datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults());
             return result.resultsMetadataColumns();
@@ -398,8 +499,17 @@ public class CardResource {
         }
     }
 
-    private static String deriveQueryType(AnalyticsCard card) {
-        return "native";
+    private String deriveQueryType(AnalyticsCard card) {
+        try {
+            JsonNode query = objectMapper.readTree(card.getDatasetQueryJson());
+            String type = query.path("type").asText("native");
+            if ("query".equalsIgnoreCase(type)) {
+                return "query";
+            }
+            return "native";
+        } catch (Exception e) {
+            return "native";
+        }
     }
 
     private static String trimToNull(String value) {

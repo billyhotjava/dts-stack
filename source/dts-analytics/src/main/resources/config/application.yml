@@ -48,3 +48,12 @@ metabase:
   ui:
     target-version: "0.45.6"
     bundle-version: "0.45.4.3"
+
+dts:
+  analytics:
+    oidc:
+      enabled: ${DTS_ANALYTICS_OIDC_ENABLED:false}
+      issuer-uri: ${DTS_ANALYTICS_OIDC_ISSUER_URI:}
+      client-id: ${DTS_ANALYTICS_OIDC_CLIENT_ID:}
+      client-secret: ${DTS_ANALYTICS_OIDC_CLIENT_SECRET:}
+      admin-role: ${DTS_ANALYTICS_OIDC_ADMIN_ROLE:analytics-admin}

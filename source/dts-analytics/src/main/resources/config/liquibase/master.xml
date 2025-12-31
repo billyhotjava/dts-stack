@@ -10,4 +10,14 @@
     <include file="config/liquibase/changelog/0003_databases.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0004_collections_cards.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0005_dashboards.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0006_metadata_tables_fields.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0007_bookmarks.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0008_activity.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0009_pulses_alerts.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0010_segments_metrics.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0011_groups_permissions.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0012_password_reset.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0013_login_history.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0014_sharing_public_links.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0015_revisions.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

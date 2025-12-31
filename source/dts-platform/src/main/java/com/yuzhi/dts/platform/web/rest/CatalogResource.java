@@ -234,11 +234,11 @@ public class CatalogResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
         @RequestParam(value = "auditPurpose", required = false) String auditPurpose
     ) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdDate").descending());
-        Page<CatalogDataset> p = datasetRepo.findAll(pageable);
         String effDept = activeDept != null ? activeDept : claim("dept_code");
-        List<Map<String, Object>> filtered = p
-            .getContent()
+        // For small/medium deployments, prefer in-memory paging AFTER applying ABAC/RBAC gates so totals are accurate
+        // (i.e. total reflects datasets visible to current user).
+        List<CatalogDataset> all = datasetRepo.findAll(Sort.by("createdDate").descending());
+        List<CatalogDataset> filtered = all
             .stream()
             .filter(ds -> domainId == null || (ds.getDomain() != null && domainId.equals(ds.getDomain().getId())))
             .filter(ds -> keyword == null || keyword.isBlank() ||
@@ -256,16 +256,19 @@ public class CatalogResource {
             .filter(accessChecker::canRead)
             // Department gate using active context (headers injected by frontend)
             .filter(ds -> accessChecker.departmentAllowed(ds, effDept))
-            .map(this::toDatasetDto)
             .toList();
-        // Align with other list endpoints: total reflects the filtered list size
-        long totalElements = p.getTotalElements();
+        long totalElements = filtered.size();
+        int offset = Math.max(0, page) * Math.max(1, size);
+        int end = Math.min(filtered.size(), offset + Math.max(1, size));
+        List<Map<String, Object>> content = offset >= filtered.size()
+            ? List.of()
+            : filtered.subList(offset, end).stream().map(this::toDatasetDto).toList();
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("content", filtered);
+        data.put("content", content);
         data.put("total", totalElements);
-        data.put("page", p.getNumber());
-        data.put("size", p.getSize());
-        data.put("returned", filtered.size());
+        data.put("page", page);
+        data.put("size", size);
+        data.put("returned", content.size());
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         String purpose = trimToNull(auditPurpose);
         String summary;
@@ -273,17 +276,17 @@ public class CatalogResource {
         if ("explore.workbench".equalsIgnoreCase(purpose)) {
             summary = "进入SQL查询工作台";
             actionCode = "EXPLORE_SQL_OPEN";
-            auditPayload.put("datasetCount", filtered.size());
+            auditPayload.put("datasetCount", content.size());
         } else if ("explore.preview".equalsIgnoreCase(purpose)) {
             summary = "进入查询结果预览";
             actionCode = "EXPLORE_RESULTSET_VIEW";
-            auditPayload.put("datasetCount", filtered.size());
+            auditPayload.put("datasetCount", content.size());
         } else {
             summary = "查看数据资产列表";
             actionCode = "CATALOG_ASSET_LIST";
             auditPayload.put("page", page);
             auditPayload.put("size", size);
-            auditPayload.put("returned", filtered.size());
+            auditPayload.put("returned", content.size());
         }
         auditPayload.put("summary", summary);
         if (purpose != null) {

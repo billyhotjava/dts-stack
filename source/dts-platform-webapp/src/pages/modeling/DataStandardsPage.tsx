@@ -83,6 +83,21 @@ const DEFAULT_FORM: FormState = {
     description: "",
 };
 
+const buildUpdatePayload = (standard: DataStandardDto, patch: Record<string, unknown>) => ({
+    code: standard.code,
+    name: standard.name,
+    domain: standard.domain || undefined,
+    scope: standard.scope || undefined,
+    owner: standard.owner || undefined,
+    tags: Array.isArray(standard.tags) ? standard.tags : [],
+    status: standard.status,
+    version: standard.currentVersion ?? "v1",
+    versionNotes: standard.versionNotes || undefined,
+    changeSummary: undefined,
+    description: standard.description || undefined,
+    ...patch,
+});
+
 const DataStandardsPage = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
@@ -95,7 +110,7 @@ const DataStandardsPage = () => {
     const [createOpen, setCreateOpen] = useState(false);
     const [formState, setFormState] = useState<FormState>(DEFAULT_FORM);
     const [creating, setCreating] = useState(false);
-    const [publishingId, setPublishingId] = useState<string | null>(null);
+    const [standardAction, setStandardAction] = useState<{ id: string; action: "publish" | "review" | "deprecate" | "retire" } | null>(null);
     const [archivingId, setArchivingId] = useState<string | null>(null);
     const userInfo = useUserInfo() as any;
     const roles = useMemo(() => {
@@ -309,21 +324,11 @@ const DataStandardsPage = () => {
         if (!window.confirm("确认发布该数据标准？")) {
             return;
         }
-        setPublishingId(standard.id);
-        const payload = {
-            code: standard.code,
-            name: standard.name,
-            domain: standard.domain || undefined,
-            scope: standard.scope || undefined,
-            owner: standard.owner || undefined,
-            tags: Array.isArray(standard.tags) ? standard.tags : [],
+        setStandardAction({ id: standard.id, action: "publish" });
+        const payload = buildUpdatePayload(standard, {
             status: "ACTIVE" as DataStandardStatus,
-            version: standard.currentVersion ?? "v1",
-            versionNotes: standard.versionNotes || undefined,
-            changeSummary: undefined,
-            description: standard.description || undefined,
             versionStatus: "PUBLISHED" as const,
-        };
+        });
         try {
             await updateStandard(standard.id, payload);
             toast.success("数据标准已发布");
@@ -332,7 +337,95 @@ const DataStandardsPage = () => {
             console.error(error);
             toast.error(error?.message ?? "发布失败");
         } finally {
-            setPublishingId(null);
+            setStandardAction(null);
+        }
+    };
+
+    const handleSubmitReview = async (standard: DataStandardDto) => {
+        if (standard.status === "IN_REVIEW") {
+            toast.success("该数据标准已处于评审中");
+            return;
+        }
+        if (standard.status === "ARCHIVED") {
+            toast.error("已归档的数据标准不可提交评审");
+            return;
+        }
+        if (!window.confirm("确认提交评审？")) {
+            return;
+        }
+        setStandardAction({ id: standard.id, action: "review" });
+        const payload = buildUpdatePayload(standard, {
+            status: "IN_REVIEW" as DataStandardStatus,
+            versionStatus: "IN_REVIEW" as const,
+            changeSummary: "提交评审",
+        });
+        try {
+            await updateStandard(standard.id, payload);
+            toast.success("已提交评审");
+            await loadStandards();
+        } catch (error: any) {
+            console.error(error);
+            toast.error(error?.message ?? "提交评审失败");
+        } finally {
+            setStandardAction(null);
+        }
+    };
+
+    const handleDeprecate = async (standard: DataStandardDto) => {
+        if (standard.status === "DEPRECATED") {
+            toast.success("该数据标准已停用");
+            return;
+        }
+        if (standard.status !== "ACTIVE") {
+            toast.error("仅启用中的标准可停用");
+            return;
+        }
+        if (!window.confirm("确认停用该数据标准？")) {
+            return;
+        }
+        setStandardAction({ id: standard.id, action: "deprecate" });
+        const payload = buildUpdatePayload(standard, {
+            status: "DEPRECATED" as DataStandardStatus,
+            changeSummary: "停用标准",
+        });
+        try {
+            await updateStandard(standard.id, payload);
+            toast.success("数据标准已停用");
+            await loadStandards();
+        } catch (error: any) {
+            console.error(error);
+            toast.error(error?.message ?? "停用失败");
+        } finally {
+            setStandardAction(null);
+        }
+    };
+
+    const handleRetire = async (standard: DataStandardDto) => {
+        if (standard.status === "RETIRED") {
+            toast.success("该数据标准已退役");
+            return;
+        }
+        if (standard.status !== "DEPRECATED") {
+            toast.error("仅停用状态的标准可退役");
+            return;
+        }
+        if (!window.confirm("确认退役该数据标准？")) {
+            return;
+        }
+        setStandardAction({ id: standard.id, action: "retire" });
+        const payload = buildUpdatePayload(standard, {
+            status: "RETIRED" as DataStandardStatus,
+            changeSummary: "退役标准",
+        });
+        try {
+            await updateStandard(standard.id, payload);
+            toast.success("数据标准已退役");
+            await loadStandards();
+        } catch (error: any) {
+            console.error(error);
+            toast.error(error?.message ?? "退役失败");
+        } finally {
+            setStandardAction(null);
         }
     };
 
@@ -512,7 +605,7 @@ const DataStandardsPage = () => {
                                             <td className="px-3 py-3">{standard.currentVersion ?? "-"}</td>
                                             <td className="px-3 py-3">{formatDate(standard.lastModifiedDate ?? standard.createdDate)}</td>
                                             <td className="px-3 py-3 text-right">
-                                                <div className="flex justify-end gap-2">
+                                                <div className="flex flex-wrap justify-end gap-2">
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
@@ -527,9 +620,33 @@ const DataStandardsPage = () => {
                                                     <Button
                                                         size="sm"
                                                         onClick={() => handlePublish(standard)}
-                                                        disabled={publishingId === standard.id || standard.status === "ARCHIVED"}
+                                                        disabled={standardAction?.id === standard.id || standard.status === "ARCHIVED"}
                                                     >
-                                                        {publishingId === standard.id ? "发布中..." : "发布"}
+                                                        {standardAction?.id === standard.id && standardAction.action === "publish" ? "发布中..." : "发布"}
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleSubmitReview(standard)}
+                                                        disabled={standardAction?.id === standard.id || standard.status === "ARCHIVED"}
+                                                    >
+                                                        {standardAction?.id === standard.id && standardAction.action === "review" ? "提交中..." : "提交评审"}
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleDeprecate(standard)}
+                                                        disabled={standardAction?.id === standard.id || standard.status !== "ACTIVE"}
+                                                    >
+                                                        {standardAction?.id === standard.id && standardAction.action === "deprecate" ? "停用中..." : "停用"}
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleRetire(standard)}
+                                                        disabled={standardAction?.id === standard.id || standard.status !== "DEPRECATED"}
+                                                    >
+                                                        {standardAction?.id === standard.id && standardAction.action === "retire" ? "退役中..." : "退役"}
                                                     </Button>
                                                     {standard.status !== "ARCHIVED" ? (
                                                         <Button
