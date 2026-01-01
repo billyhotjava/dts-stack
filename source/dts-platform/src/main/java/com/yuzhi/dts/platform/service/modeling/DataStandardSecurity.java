@@ -2,11 +2,9 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
-import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import jakarta.persistence.EntityNotFoundException;
 import java.lang.reflect.Array;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
@@ -16,7 +14,7 @@ import org.springframework.util.StringUtils;
 
 /**
  * Shared security helpers for Data Standard operations.
- * Centralizes department-scoped visibility logic between services/controllers.
+ * Centralizes role checks for Data Standard operations.
  */
 @Component
 public class DataStandardSecurity {
@@ -80,17 +78,6 @@ public class DataStandardSecurity {
         if (standard == null) {
             throw new EntityNotFoundException("数据标准不存在");
         }
-        if (hasInstituteScope()) {
-            return;
-        }
-        String domain = trimToNull(standard.getDomain());
-        if (!StringUtils.hasText(domain)) {
-            return;
-        }
-        String activeDept = resolveActiveDept(activeDeptHeader);
-        if (!StringUtils.hasText(activeDept) || !DepartmentUtils.matches(domain, activeDept)) {
-            throw new AccessDeniedException("当前账号无权访问该数据标准");
-        }
     }
 
     public void ensureWritable(DataStandard standard, String activeDeptHeader) {
@@ -98,20 +85,13 @@ public class DataStandardSecurity {
     }
 
     /**
-     * Determine the domain value to persist for create/update operations, enforcing department scope.
+     * Determine the domain value to persist for create/update operations.
+     *
+     * <p>Note: Data Standard {@code domain} is used as a "主题域" (e.g. 财务/库存/项目),
+     * and is no longer bound to login department.
      */
     public String enforceUpsertDomain(String requestedDomain, String activeDeptHeader) {
-        if (hasInstituteScope()) {
-            return trimToNull(requestedDomain);
-        }
-        String activeDept = resolveActiveDept(activeDeptHeader);
-        if (!StringUtils.hasText(activeDept)) {
-            throw new AccessDeniedException("当前账号未配置所属部门，无法执行该操作");
-        }
-        if (StringUtils.hasText(requestedDomain) && !DepartmentUtils.matches(requestedDomain, activeDept)) {
-            throw new AccessDeniedException("数据标准仅可归属当前登录部门");
-        }
-        return activeDept.trim();
+        return trimToNull(requestedDomain);
     }
 
     private String extractDept(Object raw) {

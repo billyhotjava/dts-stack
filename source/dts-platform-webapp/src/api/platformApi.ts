@@ -44,6 +44,11 @@ export const importClassificationMapping = (data: any[]) =>
 	api.post({ url: "/catalog/classification-mapping/import", data });
 export const exportClassificationMapping = () => api.get({ url: "/catalog/classification-mapping/export" });
 
+export const getDatasetSecurityMapping = (datasetId: string) =>
+    api.get({ url: `/catalog/datasets/${datasetId}/security-mapping` });
+export const upsertDatasetSecurityMapping = (datasetId: string, data: any) =>
+    api.put({ url: `/catalog/datasets/${datasetId}/security-mapping`, data });
+
 // Infra external links (ETL entry)
 export const listExternalLinks = () => api.get({ url: "/infra/external-links" });
 export const getExternalLink = (entryKey: string) => api.get({ url: `/infra/external-links/${entryKey}` });
@@ -63,6 +68,8 @@ export const deleteStandard = (id: string) => api.delete({ url: `/modeling/stand
 export const archiveStandard = (id: string) => api.post({ url: `/modeling/standards/${id}/archive` });
 export const listStandardVersions = (id: string) => api.get({ url: `/modeling/standards/${id}/versions` });
 export const listStandardAttachments = (id: string) => api.get({ url: `/modeling/standards/${id}/attachments` });
+export const importStandards = (formData: FormData) =>
+    api.post({ url: "/modeling/standards/import", data: formData });
 export const uploadStandardAttachment = (id: string, formData: FormData) =>
     api.post({
         url: `/modeling/standards/${id}/attachments`,

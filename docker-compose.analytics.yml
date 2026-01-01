@@ -44,7 +44,8 @@ services:
       - "traefik.http.routers.dts-analytics-path.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`)"
       - "traefik.http.routers.dts-analytics-path.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-path.tls=true"
-      - "traefik.http.routers.dts-analytics-path.priority=180"
+      # Make sure /analytics wins over the platform Host-only SPA router.
+      - "traefik.http.routers.dts-analytics-path.priority=10000"
       - "traefik.http.routers.dts-analytics-path.service=dts-analytics"
       - "traefik.http.middlewares.analytics-strip-analytics.stripprefixregex.regex=/analytics"
       - "traefik.http.middlewares.analytics-prefix.headers.customrequestheaders.X-Forwarded-Prefix=/analytics"

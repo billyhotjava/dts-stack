@@ -18,6 +18,8 @@ import {
 	listDatasetGrants,
 	createDatasetGrant,
 	deleteDatasetGrant,
+	getDatasetSecurityMapping,
+	upsertDatasetSecurityMapping,
 } from "@/api/platformApi";
 import type { DatasetAsset, DatasetGrant, TableSchema } from "@/types/catalog";
 import deptService, { type DeptDto } from "@/api/services/deptService";
@@ -185,6 +187,13 @@ export default function DatasetDetailPage() {
 		displayName: "",
 		deptCode: "",
 	});
+
+	const [securityMapping, setSecurityMapping] = useState<{ dataLevelField: string; deptField: string }>({
+		dataLevelField: "",
+		deptField: "",
+	});
+	const [securityMappingLoading, setSecurityMappingLoading] = useState(false);
+	const [securityMappingSaving, setSecurityMappingSaving] = useState(false);
 
 	const editable = useMemo(() => {
 		if (dataset && "editable" in dataset) {
@@ -509,6 +518,31 @@ export default function DatasetDetailPage() {
 	}, [id]);
 
 	useEffect(() => {
+		if (!id || !hasDataMaintainerRole) {
+			return;
+		}
+		let mounted = true;
+		setSecurityMappingLoading(true);
+		(getDatasetSecurityMapping(id) as any)
+			.then((res: any) => {
+				if (!mounted) return;
+				setSecurityMapping({
+					dataLevelField: String(res?.dataLevelField ?? "").trim(),
+					deptField: String(res?.deptField ?? "").trim(),
+				});
+			})
+			.catch((e: any) => {
+				console.error(e);
+			})
+			.finally(() => {
+				if (mounted) setSecurityMappingLoading(false);
+			});
+		return () => {
+			mounted = false;
+		};
+	}, [id, hasDataMaintainerRole]);
+
+	useEffect(() => {
 		setActiveTab("overview");
 		setSampleData(null);
 		setSampleInitialized(false);
@@ -580,7 +614,7 @@ export default function DatasetDetailPage() {
 	}, [grantDialogOpen, userSearch, loadUsers]);
 
 
-    const onSave = async () => {
+	    const onSave = async () => {
 	if (!dataset) return;
 	if (!editable) {
 		toast.error("当前用户无权保存该数据集");
@@ -614,9 +648,30 @@ export default function DatasetDetailPage() {
 	} finally {
 		setSaving(false);
 	}
-    };
+	    };
 
-    // Legacy classification UI removed; only DATA_* is used going forward
+	const saveSecurityMapping = useCallback(async () => {
+		if (!id) return;
+		if (!hasDataMaintainerRole) {
+			toast.error("当前用户无权配置字段映射");
+			return;
+		}
+		setSecurityMappingSaving(true);
+		try {
+			await upsertDatasetSecurityMapping(id, {
+				dataLevelField: securityMapping.dataLevelField?.trim() || null,
+				deptField: securityMapping.deptField?.trim() || null,
+			});
+			toast.success("已保存字段映射");
+		} catch (e: any) {
+			console.error(e);
+			toast.error(e?.message ?? "保存字段映射失败");
+		} finally {
+			setSecurityMappingSaving(false);
+		}
+	}, [hasDataMaintainerRole, id, securityMapping.dataLevelField, securityMapping.deptField]);
+
+	    // Legacy classification UI removed; only DATA_* is used going forward
 
     const hasHive = useMemo(() => {
         const t = String((dataset as any)?.type || "").trim().toUpperCase();
@@ -647,6 +702,60 @@ export default function DatasetDetailPage() {
 		}
 		return map;
 	}, [tables]);
+
+	const allColumnNames = useMemo(() => {
+		const set = new Set<string>();
+		for (const table of tables) {
+			for (const column of Array.isArray(table?.columns) ? table.columns : []) {
+				const name = String(column?.name ?? "").trim();
+				if (name) set.add(name);
+			}
+		}
+		return Array.from(set).sort((a, b) => a.localeCompare(b));
+	}, [tables]);
+
+	const guessedDataLevelField = useMemo(() => {
+		const candidates = [
+			"data_level",
+			"data_security_level",
+			"data_secret_level",
+			"security_level",
+			"secret_level",
+			"classification_level",
+			"class_level",
+			"protect_level",
+			"data_protect_level",
+			"level",
+		];
+		const lower = new Map(allColumnNames.map((name) => [name.toLowerCase(), name]));
+		for (const c of candidates) {
+			const hit = lower.get(c);
+			if (hit) return hit;
+		}
+		return "";
+	}, [allColumnNames]);
+
+	const guessedDeptField = useMemo(() => {
+		const candidates = [
+			"dept_code",
+			"department_code",
+			"dept",
+			"department",
+			"dept_id",
+			"department_id",
+			"org_code",
+			"org",
+			"org_id",
+			"organization_code",
+			"organization_id",
+		];
+		const lower = new Map(allColumnNames.map((name) => [name.toLowerCase(), name]));
+		for (const c of candidates) {
+			const hit = lower.get(c);
+			if (hit) return hit;
+		}
+		return "";
+	}, [allColumnNames]);
 
 	if (loading) return <div className="text-sm text-muted-foreground">加载中…</div>;
 if (!dataset) return <div className="text-sm text-muted-foreground">未找到该数据集</div>;
@@ -811,9 +920,92 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 											/>
 										</div>
 									</>
-								)}
-							</div>
-						</TabsContent>
+									)}
+								</div>
+								{hasDataMaintainerRole ? (
+									<Card className="mt-4">
+										<CardHeader>
+											<CardTitle className="text-base">行级安全字段映射</CardTitle>
+											<p className="text-sm text-muted-foreground">
+												用于“数据密级 + 部门”行过滤；不配置则按字段名自动识别。
+											</p>
+										</CardHeader>
+										<CardContent className="space-y-4">
+											<div className="grid gap-4 md:grid-cols-2">
+												<div className="grid gap-2">
+													<Label>数据密级字段</Label>
+													<Select
+														value={securityMapping.dataLevelField ? securityMapping.dataLevelField : "__AUTO__"}
+														disabled={securityMappingLoading || securityMappingSaving}
+														onValueChange={(v) =>
+															setSecurityMapping((prev) => ({
+																...prev,
+																dataLevelField: v === "__AUTO__" ? "" : v,
+															}))
+														}
+													>
+														<SelectTrigger>
+															<SelectValue placeholder="自动识别" />
+														</SelectTrigger>
+														<SelectContent>
+															<SelectItem value="__AUTO__">自动识别</SelectItem>
+															{allColumnNames.map((name) => (
+																<SelectItem key={name} value={name}>
+																	{name}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+													{!securityMapping.dataLevelField && (
+														<div className="text-xs text-muted-foreground">
+															自动识别：{guessedDataLevelField || "未识别"}
+														</div>
+													)}
+												</div>
+												<div className="grid gap-2">
+													<Label>部门字段</Label>
+													<Select
+														value={securityMapping.deptField ? securityMapping.deptField : "__AUTO__"}
+														disabled={securityMappingLoading || securityMappingSaving}
+														onValueChange={(v) =>
+															setSecurityMapping((prev) => ({
+																...prev,
+																deptField: v === "__AUTO__" ? "" : v,
+															}))
+														}
+													>
+														<SelectTrigger>
+															<SelectValue placeholder="自动识别" />
+														</SelectTrigger>
+														<SelectContent>
+															<SelectItem value="__AUTO__">自动识别</SelectItem>
+															{allColumnNames.map((name) => (
+																<SelectItem key={name} value={name}>
+																	{name}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+													{!securityMapping.deptField && (
+														<div className="text-xs text-muted-foreground">
+															自动识别：{guessedDeptField || "未识别"}
+														</div>
+													)}
+												</div>
+											</div>
+											<div className="flex justify-end">
+												<Button
+													variant="outline"
+													onClick={() => void saveSecurityMapping()}
+													disabled={securityMappingLoading || securityMappingSaving}
+												>
+													{securityMappingSaving ? "保存中…" : "保存映射"}
+												</Button>
+											</div>
+										</CardContent>
+									</Card>
+								) : null}
+							</TabsContent>
 						<TabsContent value="columns">
 							<div className="space-y-4">
 								{tables.length ? (

@@ -169,13 +169,10 @@ public class JdbcCatalogSyncService {
 
                     CatalogTableSchema tableSchema = tableRepository
                         .findFirstByDatasetAndNameIgnoreCase(savedDataset, tableName)
-                        .orElseGet(() -> {
-                            CatalogTableSchema schemaEntity = new CatalogTableSchema();
-                            schemaEntity.setDataset(savedDataset);
-                            schemaEntity.setName(tableName);
-                            return schemaEntity;
-                        });
+                        .orElseGet(CatalogTableSchema::new);
                     boolean isNewTable = tableSchema.getId() == null;
+                    tableSchema.setDataset(savedDataset);
+                    tableSchema.setName(tableName);
                     tableSchema.setOwner(defaultIfBlank(tableSchema.getOwner(), savedDataset.getOwner()));
                     tableSchema.setClassification(defaultIfBlank(tableSchema.getClassification(), savedDataset.getClassification()));
                     tableSchema = tableRepository.save(tableSchema);

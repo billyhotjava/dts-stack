@@ -6,11 +6,13 @@ import com.yuzhi.dts.platform.domain.modeling.DataStandardStatus;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardAttachmentService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardFilter;
+import com.yuzhi.dts.platform.service.modeling.DataStandardImportService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardUpsertRequest;
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardAttachmentContent;
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardAttachmentDto;
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardDto;
+import com.yuzhi.dts.platform.service.modeling.dto.DataStandardImportResultDto;
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardVersionDto;
 import jakarta.validation.Valid;
 import java.net.URLEncoder;
@@ -53,11 +55,18 @@ public class ModelingResource {
 
     private final DataStandardService standards;
     private final DataStandardAttachmentService attachments;
+    private final DataStandardImportService standardImport;
     private final AuditService audit;
 
-    public ModelingResource(DataStandardService standards, DataStandardAttachmentService attachments, AuditService audit) {
+    public ModelingResource(
+        DataStandardService standards,
+        DataStandardAttachmentService attachments,
+        DataStandardImportService standardImport,
+        AuditService audit
+    ) {
         this.standards = standards;
         this.attachments = attachments;
+        this.standardImport = standardImport;
         this.audit = audit;
     }
 
@@ -105,8 +114,39 @@ public class ModelingResource {
         if (StringUtils.hasText(keyword)) {
             auditPayload.put("keyword", keyword.trim());
         }
-        audit.auditAction("MODELING_STANDARD_VIEW", AuditStage.SUCCESS, "page=" + page, auditPayload);
+        audit.auditAction("MODELING_STANDARD_LIST", AuditStage.SUCCESS, "page=" + page, auditPayload);
         return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/standards/import-template")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<byte[]> downloadStandardsImportTemplate() {
+        byte[] content = standardImport.buildTemplateCsv();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv"));
+        headers.setContentDisposition(ContentDisposition.attachment().filename("数据标准导入模板.csv", StandardCharsets.UTF_8).build());
+        audit.auditAction(
+            "MODELING_STANDARD_IMPORT",
+            AuditStage.SUCCESS,
+            "template",
+            Map.of("summary", "下载数据标准导入模板")
+        );
+        return ResponseEntity.ok().headers(headers).body(content);
+    }
+
+    @PostMapping(value = "/standards/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<DataStandardImportResultDto> importStandards(@RequestPart("file") MultipartFile file) {
+        DataStandardImportResultDto result = standardImport.importCsv(file);
+        Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
+        auditPayload.put("summary", "导入数据标准");
+        auditPayload.put("totalRows", result.getTotalRows());
+        auditPayload.put("created", result.getCreated());
+        auditPayload.put("updated", result.getUpdated());
+        auditPayload.put("skipped", result.getSkipped());
+        auditPayload.put("errorCount", result.getErrors() != null ? result.getErrors().size() : 0);
+        audit.auditAction("MODELING_STANDARD_IMPORT", AuditStage.SUCCESS, "import", auditPayload);
+        return ApiResponses.ok(result);
     }
 
     @GetMapping("/standards/{id}")

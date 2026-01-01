@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
 /**
  * 辅助生成基于数据密级的 SQL 条件，供各模块统一调用。
  */
-public final class DataLevelSqlHelper {
+ public final class DataLevelSqlHelper {
 
     private DataLevelSqlHelper() {}
 
@@ -20,11 +20,34 @@ public final class DataLevelSqlHelper {
      * 同时包含 DATA_* 与裸密级取值，兼容历史数据。
      */
     public static String buildPredicate(String columnExpression, Collection<DataLevel> allowedLevels) {
+        return buildPredicate(columnExpression, allowedLevels, false);
+    }
+
+    /**
+     * 支持数值型密级字段：
+     * <ul>
+     *   <li>字符串列：使用 IN (...)，兼容 PUBLIC/内部/0 等混写</li>
+     *   <li>数值列：使用 {@code columnExpression <= maxRank}（0~3）</li>
+     * </ul>
+     */
+    public static String buildPredicate(String columnExpression, Collection<DataLevel> allowedLevels, boolean numericColumn) {
         if (columnExpression == null || columnExpression.isBlank()) {
             return null;
         }
         if (allowedLevels == null || allowedLevels.isEmpty()) {
             return null;
+        }
+        if (numericColumn) {
+            int maxRank = allowedLevels
+                .stream()
+                .filter(Objects::nonNull)
+                .mapToInt(DataLevel::rank)
+                .max()
+                .orElse(-1);
+            if (maxRank < 0) {
+                return null;
+            }
+            return columnExpression + " <= " + maxRank;
         }
         Set<String> tokens = new LinkedHashSet<>();
         for (DataLevel level : allowedLevels) {

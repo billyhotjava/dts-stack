@@ -44,6 +44,7 @@ public class CatalogResource {
     private final com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository tableRepo;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository columnRepo;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository rowFilterRepo;
+    private final CatalogDatasetSecurityMappingRepository datasetSecurityMappingRepo;
     private final CatalogDatasetGrantRepository grantRepo;
     private final InfraDataSourceRepository infraDataSourceRepository;
     private final CatalogFeatureProperties catalogFeatures;
@@ -59,6 +60,7 @@ public class CatalogResource {
         com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository tableRepo,
         com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository columnRepo,
         com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository rowFilterRepo,
+        CatalogDatasetSecurityMappingRepository datasetSecurityMappingRepo,
         CatalogDatasetGrantRepository grantRepo,
         InfraDataSourceRepository infraDataSourceRepository,
         CatalogFeatureProperties catalogFeatures
@@ -73,6 +75,7 @@ public class CatalogResource {
         this.tableRepo = tableRepo;
         this.columnRepo = columnRepo;
         this.rowFilterRepo = rowFilterRepo;
+        this.datasetSecurityMappingRepo = datasetSecurityMappingRepo;
         this.grantRepo = grantRepo;
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.catalogFeatures = catalogFeatures;
@@ -324,6 +327,103 @@ public class CatalogResource {
         putIfHasText(auditPayload, "owner", safeText(ds.get("owner")));
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
         return ApiResponses.ok(ds);
+    }
+
+    @GetMapping("/datasets/{id}/security-mapping")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> getDatasetSecurityMapping(@PathVariable UUID id) {
+        datasetRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在"));
+        CatalogDatasetSecurityMapping mapping = datasetSecurityMappingRepo.findById(id).orElse(null);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("datasetId", id.toString());
+        payload.put("dataLevelField", mapping != null ? mapping.getDataLevelField() : null);
+        payload.put("deptField", mapping != null ? mapping.getDeptField() : null);
+        audit.auditAction(
+            "CATALOG_SECURITY_MAPPING_VIEW",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "查看行级安全字段映射", "datasetId", id.toString())
+        );
+        return ApiResponses.ok(payload);
+    }
+
+    @PutMapping("/datasets/{id}/security-mapping")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> upsertDatasetSecurityMapping(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+        CatalogDataset dataset = datasetRepo
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在"));
+        ensureDatasetEditPermission(dataset);
+
+        List<CatalogTableSchema> tables = tableRepo.findByDataset(dataset);
+        if (tables == null || tables.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "数据集尚未采集 Schema，无法配置字段映射");
+        }
+        Set<String> columnsLower = new HashSet<>();
+        for (CatalogTableSchema table : tables) {
+            for (CatalogColumnSchema column : columnRepo.findByTable(table)) {
+                if (column != null && StringUtils.hasText(column.getName())) {
+                    columnsLower.add(column.getName().trim().toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        if (columnsLower.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "数据集尚未采集字段信息，无法配置字段映射");
+        }
+
+        String dataLevelField = trimToNull(safeText(body.get("dataLevelField")));
+        String deptField = trimToNull(safeText(body.get("deptField")));
+        if (dataLevelField != null && !columnsLower.contains(dataLevelField.toLowerCase(Locale.ROOT))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "数据密级字段不存在：" + dataLevelField);
+        }
+        if (deptField != null && !columnsLower.contains(deptField.toLowerCase(Locale.ROOT))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "部门字段不存在：" + deptField);
+        }
+
+        CatalogDatasetSecurityMapping mapping = datasetSecurityMappingRepo.findById(id).orElse(null);
+        Map<String, Object> before = new LinkedHashMap<>();
+        if (mapping != null) {
+            before.put("dataLevelField", mapping.getDataLevelField());
+            before.put("deptField", mapping.getDeptField());
+        }
+
+        if (dataLevelField == null && deptField == null) {
+            if (mapping != null) {
+                datasetSecurityMappingRepo.delete(mapping);
+            }
+            audit.auditAction(
+                "CATALOG_SECURITY_MAPPING_EDIT",
+                AuditStage.SUCCESS,
+                id.toString(),
+                Map.of("summary", "清除行级安全字段映射", "datasetId", id.toString(), "before", before, "after", Map.of())
+            );
+            return ApiResponses.ok(Map.of("datasetId", id.toString(), "dataLevelField", null, "deptField", null));
+        }
+
+        if (mapping == null) {
+            mapping = new CatalogDatasetSecurityMapping();
+            mapping.setDatasetId(id);
+        }
+        mapping.setDataLevelField(dataLevelField);
+        mapping.setDeptField(deptField);
+        CatalogDatasetSecurityMapping saved = datasetSecurityMappingRepo.save(mapping);
+
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("dataLevelField", saved.getDataLevelField());
+        after.put("deptField", saved.getDeptField());
+
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "配置行级安全字段映射");
+        auditPayload.put("datasetId", id.toString());
+        auditPayload.put("before", before);
+        auditPayload.put("after", after);
+        audit.auditAction("CATALOG_SECURITY_MAPPING_EDIT", AuditStage.SUCCESS, id.toString(), auditPayload);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("datasetId", id.toString());
+        payload.put("dataLevelField", saved.getDataLevelField());
+        payload.put("deptField", saved.getDeptField());
+        return ApiResponses.ok(payload);
     }
     private Map<String, Object> toDatasetDto(CatalogDataset d) {
         return toDatasetDto(d, false);

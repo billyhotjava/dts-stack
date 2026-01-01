@@ -135,11 +135,12 @@ public class DatasetSqlBuilder {
         if (allowedLevels == null || allowedLevels.isEmpty()) {
             return Optional.empty();
         }
-        Optional<String> columnOpt = metadataResolver.findDataLevelColumn(dataset);
-        if (columnOpt.isEmpty()) {
+        Optional<DatasetSecurityMetadataResolver.ResolvedColumn> columnOpt = metadataResolver.findDataLevelColumnInfo(dataset);
+        if (columnOpt.isEmpty() || !StringUtils.hasText(columnOpt.orElseThrow().name())) {
             return Optional.empty();
         }
-        String columnName = columnOpt.orElseThrow();
+        DatasetSecurityMetadataResolver.ResolvedColumn columnInfo = columnOpt.orElseThrow();
+        String columnName = columnInfo.name();
         String quoted = quoteIdentifier(columnName, dialect);
         String columnExpression;
         if (StringUtils.hasText(tableAlias)) {
@@ -147,7 +148,7 @@ public class DatasetSqlBuilder {
         } else {
             columnExpression = quoted;
         }
-        return Optional.ofNullable(DataLevelSqlHelper.buildPredicate(columnExpression, allowedLevels));
+        return Optional.ofNullable(DataLevelSqlHelper.buildPredicate(columnExpression, allowedLevels, columnInfo.numeric()));
     }
 
     private String qualifyHive(String database, String table) {

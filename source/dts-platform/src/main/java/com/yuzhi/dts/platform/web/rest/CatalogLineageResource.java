@@ -94,11 +94,9 @@ public class CatalogLineageResource {
         datasetRepo.findById(body.upstreamDatasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "upstream dataset not found"));
         datasetRepo.findById(body.downstreamDatasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "downstream dataset not found"));
 
-        CatalogDatasetLineage existingLink = lineageRepo
-            .findFirstByUpstreamDatasetIdAndDownstreamDatasetId(body.upstreamDatasetId, body.downstreamDatasetId)
-            .orElse(null);
-        if (existingLink != null) {
-            CatalogDatasetLineage link = existingLink;
+        var existingLinkOpt = lineageRepo.findFirstByUpstreamDatasetIdAndDownstreamDatasetId(body.upstreamDatasetId, body.downstreamDatasetId);
+        if (existingLinkOpt.isPresent()) {
+            CatalogDatasetLineage link = existingLinkOpt.orElseThrow();
             if (StringUtils.hasText(body.relationType)) {
                 link.setRelationType(body.relationType.trim());
             }

@@ -472,7 +472,8 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`)"
+      # Avoid swallowing analytics mount path (/analytics) which is served by dts-analytics.
+      - "traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/analytics`)"
       - "traefik.http.routers.dts-platform-ui.entrypoints=websecure"
       - "traefik.http.routers.dts-platform-ui.tls=true"
       - "traefik.http.services.dts-platform-ui.loadbalancer.server.port=80"

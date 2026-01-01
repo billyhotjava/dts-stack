@@ -53,13 +53,6 @@ public class DataStandardService {
 
     public Page<DataStandardDto> list(DataStandardFilter filter, Pageable pageable, String activeDeptHeader) {
         DataStandardFilter effectiveFilter = filter != null ? filter : new DataStandardFilter();
-        if (!security.hasInstituteScope()) {
-            String activeDept = security.resolveActiveDept(activeDeptHeader);
-            if (!StringUtils.hasText(activeDept)) {
-                return Page.empty(pageable);
-            }
-            effectiveFilter.setDomain(activeDept);
-        }
         Specification<DataStandard> spec = buildSpecification(effectiveFilter);
         return repository.findAll(spec, pageable).map(DataStandardMapper::toDto);
     }

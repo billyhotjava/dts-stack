@@ -11,7 +11,6 @@ import {
     deleteStandard,
     updateStandard,
 } from "@/api/platformApi";
-import deptService, { type DeptDto } from "@/api/services/deptService";
 import { Icon } from "@/components/icon";
 import { GLOBAL_CONFIG } from "@/global-config";
 import userStore from "@/store/userStore";
@@ -51,17 +50,7 @@ const parseStringList = (value: unknown): string[] => {
     return [];
 };
 
-const FALLBACK_DEPT_OPTIONS: DeptDto[] = [
-    { code: "INFO", nameZh: "信息管理部" },
-    { code: "PROJECT", nameZh: "科研项目部" },
-    { code: "PLANNING", nameZh: "规划发展部" },
-    { code: "FINANCE", nameZh: "财务管理部" },
-    { code: "SECURITY", nameZh: "安全保密部" },
-    { code: "GENERAL", nameZh: "综合管理部" },
-];
-
 const attachmentExtensions = ["docx", "wps", "pdf", "xlsx", "xls", "md", "txt"];
-const DOMAIN_UNSET_VALUE = "__UNSET__";
 
 type EditFormState = {
     code: string;
@@ -106,8 +95,6 @@ const DataStandardDetailPage = () => {
     const [isEditing, setIsEditing] = useState(searchParams.get("edit") === "true");
     const [activeModule, setActiveModule] = useState(searchParams.get("module") ?? "basic");
     const [editForm, setEditForm] = useState<EditFormState | null>(null);
-    const [deptOptions, setDeptOptions] = useState<DeptDto[]>(FALLBACK_DEPT_OPTIONS);
-    const [deptLoading, setDeptLoading] = useState(false);
     const userInfo = useUserInfo() as any;
     const roles = useMemo(() => {
         const raw = userInfo?.roles;
@@ -115,44 +102,27 @@ const DataStandardDetailPage = () => {
         return raw.map((role: any) => String(role ?? "").toUpperCase()).filter(Boolean);
     }, [userInfo]);
     const roleSet = useMemo(() => new Set(roles), [roles]);
-    const canSelectAnyDept = useMemo(
-        () =>
-            roleSet.has("INST_DATA_OWNER") ||
-            roleSet.has("ROLE_INST_DATA_OWNER") ||
-            roleSet.has("INST_DATA_DEV") ||
-            roleSet.has("ROLE_INST_DATA_DEV"),
-        [roleSet],
-    );
-    const userDeptCode = useMemo(() => {
-        const attrs = ((userInfo as any)?.attributes || {}) as Record<string, unknown>;
-        const pickDept = (value: unknown): string | undefined => {
-            const tokens = parseStringList(value);
-            if (tokens.length > 0) {
-                const first = tokens[0]?.trim();
-                return first ? first : undefined;
-            }
-            if (typeof value === "string") {
-                const trimmed = value.trim();
-                return trimmed || undefined;
-            }
-            return undefined;
-        };
-        return (
-            pickDept(attrs.dept_code) ||
-            pickDept(attrs.deptCode) ||
-            pickDept(attrs.department) ||
-            pickDept((userInfo as any)?.dept_code) ||
-            pickDept((userInfo as any)?.deptCode) ||
-            pickDept((userInfo as any)?.department)
-        );
-    }, [userInfo]);
-    const enforcedDeptCode = useMemo(() => {
-        if (canSelectAnyDept) {
-            return undefined;
-        }
-        return userDeptCode || undefined;
-    }, [canSelectAnyDept, userDeptCode]);
-    const detailDeptCode = detail?.domain ? String(detail.domain) : undefined;
+    const canMaintain = useMemo(() => {
+        const candidates = [
+            "ROLE_OP_ADMIN",
+            "OP_ADMIN",
+            "ROLE_ADMIN",
+            "ADMIN",
+            "ROLE_INST_DATA_OWNER",
+            "INST_DATA_OWNER",
+            "ROLE_INST_DATA_DEV",
+            "INST_DATA_DEV",
+            "ROLE_DEPT_DATA_OWNER",
+            "DEPT_DATA_OWNER",
+            "ROLE_DEPT_DATA_DEV",
+            "DEPT_DATA_DEV",
+            "ROLE_INST_LEADER",
+            "INST_LEADER",
+            "ROLE_DEPT_LEADER",
+            "DEPT_LEADER",
+        ];
+        return candidates.some((r) => roleSet.has(r));
+    }, [roleSet]);
 
     const basicInfoRef = useRef<HTMLDivElement | null>(null);
     const versionsRef = useRef<HTMLDivElement | null>(null);
@@ -198,49 +168,7 @@ const DataStandardDetailPage = () => {
         })();
     }, []);
 
-    useEffect(() => {
-        let mounted = true;
-        setDeptLoading(true);
-        deptService
-            .listDepartments()
-            .then((list) => {
-                if (!mounted) return;
-                if (Array.isArray(list) && list.length) {
-                    const normalized = list.map((item) => ({
-                        code: String(item.code),
-                        nameZh: item.nameZh,
-                        nameEn: item.nameEn,
-                        parentId: item.parentId ?? null,
-                    }));
-                    setDeptOptions(normalized);
-                }
-            })
-            .catch((error) => {
-                console.error("加载部门信息失败", error);
-            })
-            .finally(() => {
-                if (mounted) {
-                    setDeptLoading(false);
-                }
-            });
-        return () => {
-            mounted = false;
-        };
-    }, []);
-
-    useEffect(() => {
-        const ensureOption = (code?: string) => {
-            if (!code) return;
-            setDeptOptions((prev) => {
-                if (prev.some((option) => String(option.code) === code)) {
-                    return prev;
-                }
-                return [...prev, { code, nameZh: code, nameEn: code, parentId: null }];
-            });
-        };
-        ensureOption(enforcedDeptCode);
-        ensureOption(detailDeptCode);
-    }, [enforcedDeptCode, detailDeptCode]);
+    // Data Standard domain is a "主题域" (财务/库存/项目...), no longer bound to login department.
 
     useEffect(() => {
         setIsEditing(searchParams.get("edit") === "true");
@@ -252,77 +180,20 @@ const DataStandardDetailPage = () => {
 
     useEffect(() => {
         if (detail) {
-            const base = buildEditFormState(detail);
-            if (!canSelectAnyDept && enforcedDeptCode) {
-                base.domain = enforcedDeptCode;
-            }
-            setEditForm(base);
+            setEditForm(buildEditFormState(detail));
         } else {
             setEditForm(null);
         }
-    }, [detail, canSelectAnyDept, enforcedDeptCode]);
-
-    useEffect(() => {
-        if (canSelectAnyDept) {
-            return;
-        }
-        const enforced = enforcedDeptCode || "";
-        setEditForm((prev) => {
-            if (!prev) {
-                return prev;
-            }
-            if (prev.domain === enforced) {
-                return prev;
-            }
-            return { ...prev, domain: enforced };
-        });
-    }, [canSelectAnyDept, enforcedDeptCode]);
-
-    const deptLabelMap = useMemo(() => {
-        const map = new Map<string, string>();
-        deptOptions.forEach((item) => {
-            const code = String(item.code);
-            const label = item.nameZh || item.nameEn || code;
-            map.set(code, label);
-        });
-        return map;
-    }, [deptOptions]);
-
-    const deptOptionsForSelect = useMemo(() => {
-        if (canSelectAnyDept) {
-            return deptOptions;
-        }
-        if (!enforcedDeptCode) {
-            return deptOptions;
-        }
-        const matched = deptOptions.find((option) => String(option.code) === enforcedDeptCode);
-        if (matched) {
-            return [matched];
-        }
-        return [{ code: enforcedDeptCode, nameZh: enforcedDeptCode, nameEn: enforcedDeptCode, parentId: null }];
-    }, [canSelectAnyDept, deptOptions, enforcedDeptCode]);
-
-    const resolveDepartmentLabel = useCallback(
-        (value: string | null | undefined) => {
-            if (!value) return "-";
-            const key = String(value);
-            return deptLabelMap.get(key) ?? key;
-        },
-        [deptLabelMap],
-    );
+    }, [detail]);
 
     useEffect(() => {
         if (!isEditing) {
             return;
         }
         if (detail) {
-            const base = buildEditFormState(detail);
-            if (!canSelectAnyDept && enforcedDeptCode) {
-                base.domain = enforcedDeptCode;
-            }
-            setEditForm(base);
+            setEditForm(buildEditFormState(detail));
         }
-    }, [isEditing, detail, canSelectAnyDept, enforcedDeptCode]);
+    }, [isEditing, detail]);
 
     useEffect(() => {
         const target =
@@ -351,21 +222,13 @@ const DataStandardDetailPage = () => {
         if (!detail) return;
         setActiveModule(module);
         setIsEditing(true);
-        const base = buildEditFormState(detail);
-        if (!canSelectAnyDept && enforcedDeptCode) {
-            base.domain = enforcedDeptCode;
-        }
-        setEditForm(base);
+        setEditForm(buildEditFormState(detail));
         updateSearchParams(module, true);
     };
 
     const handleEditCancel = () => {
         if (detail) {
-            const base = buildEditFormState(detail);
-            if (!canSelectAnyDept && enforcedDeptCode) {
-                base.domain = enforcedDeptCode;
-            }
-            setEditForm(base);
+            setEditForm(buildEditFormState(detail));
         }
         setIsEditing(false);
         setSaving(false);
@@ -379,16 +242,11 @@ const DataStandardDetailPage = () => {
             return;
         }
         setSaving(true);
-        const enforcedDomain = canSelectAnyDept ? editForm.domain.trim() : enforcedDeptCode || "";
-        if (!canSelectAnyDept && !enforcedDomain) {
-            toast.error("当前账号未配置所属部门，无法保存");
-            setSaving(false);
-            return;
-        }
+        const domain = editForm.domain.trim();
         const payload = {
             code: editForm.code.trim(),
             name: editForm.name.trim(),
-            domain: enforcedDomain || undefined,
+            domain: domain || undefined,
             scope: editForm.scope || undefined,
             owner: editForm.owner || undefined,
             tags: toTagList(editForm.tagsText),
@@ -585,23 +443,27 @@ const DataStandardDetailPage = () => {
                     >
                         {statusLabel(detail.status)}
                     </Badge>
-                    {isEditing ? (
-                        <>
-                            <Button variant="outline" onClick={handleEditCancel} disabled={saving}>
-                                取消
+                    {canMaintain ? (
+                        isEditing ? (
+                            <>
+                                <Button variant="outline" onClick={handleEditCancel} disabled={saving}>
+                                    取消
+                                </Button>
+                                <Button onClick={handleSave} disabled={saving}>
+                                    {saving ? "保存中..." : "保存"}
+                                </Button>
+                            </>
+                        ) : (
+                            <Button variant="outline" onClick={() => startEdit(activeModule || "basic")}>
+                                编辑
                             </Button>
-                            <Button onClick={handleSave} disabled={saving}>
-                                {saving ? "保存中..." : "保存"}
-                            </Button>
-                        </>
-                    ) : (
-                        <Button variant="outline" onClick={() => startEdit(activeModule || "basic")}>
-                            编辑
+                        )
+                    ) : null}
+                    {canMaintain ? (
+                        <Button variant="destructive" onClick={handleDelete} disabled={saving}>
+                            删除
                         </Button>
-                    )}
-                    <Button variant="destructive" onClick={handleDelete} disabled={saving}>
-                        删除
-                    </Button>
+                    ) : null}
                 </div>
             </div>
             <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
@@ -653,46 +515,17 @@ const DataStandardDetailPage = () => {
                                             }
                                             placeholder="请输入负责人"
                                         />
-                                    </div>
-                                    <div>
-                                        <Label className="text-sm">所属部门</Label>
-                                        <Select
-                                            value={effectiveForm.domain ? effectiveForm.domain : DOMAIN_UNSET_VALUE}
-                                            onValueChange={(value) =>
-                                                setEditForm((prev) =>
-                                                    prev
-                                                        ? {
-                                                              ...prev,
-                                                              domain: value === DOMAIN_UNSET_VALUE ? "" : value,
-                                                          }
-                                                        : prev
-                                                )
-                                            }
-                                            disabled={!canSelectAnyDept || (deptLoading && deptOptions.length === 0)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder={deptLoading ? "加载中…" : "请选择所属部门"} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {canSelectAnyDept && <SelectItem value={DOMAIN_UNSET_VALUE}>未指定</SelectItem>}
-                                                {effectiveForm.domain &&
-                                                !deptLabelMap.has(effectiveForm.domain) ? (
-                                                    <SelectItem value={effectiveForm.domain}>
-                                                        {effectiveForm.domain}
-                                                    </SelectItem>
-                                                ) : null}
-                                                {deptOptionsForSelect.map((option) => {
-                                                    const code = String(option.code);
-                                                    const label = option.nameZh || option.nameEn || code;
-                                                    return (
-                                                        <SelectItem key={code} value={code}>
-                                                            {label}
-                                                        </SelectItem>
-                                                    );
-                                                })}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+	                                    </div>
+	                                    <div>
+	                                        <Label className="text-sm">主题域</Label>
+	                                        <Input
+	                                            value={effectiveForm.domain}
+	                                            onChange={(event) =>
+	                                                setEditForm((prev) => (prev ? { ...prev, domain: event.target.value } : prev))
+	                                            }
+	                                            placeholder="如：财务 / 库存 / 项目"
+	                                        />
+	                                    </div>
                                     <div>
                                         <Label className="text-sm">状态</Label>
                                         <Select
@@ -793,11 +626,11 @@ const DataStandardDetailPage = () => {
                             </div>
                         ) : (
                             <>
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="space-y-2">
-                                        <div className="text-sm text-muted-foreground">所属部门</div>
-                                        <div>{resolveDepartmentLabel(detail.domain)}</div>
-                                    </div>
+	                                <div className="grid gap-4 md:grid-cols-2">
+	                                    <div className="space-y-2">
+	                                        <div className="text-sm text-muted-foreground">主题域</div>
+	                                        <div>{detail.domain || "-"}</div>
+	                                    </div>
                                     <div className="space-y-2">
                                         <div className="text-sm text-muted-foreground">负责人</div>
                                         <div>{detail.owner ?? "-"}</div>
