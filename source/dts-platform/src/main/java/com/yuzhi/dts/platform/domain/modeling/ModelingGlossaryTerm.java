@@ -36,6 +36,12 @@ public class ModelingGlossaryTerm extends AbstractAuditingEntity<UUID> implement
     @Column(name = "status", length = 32)
     private String status;
 
+    @Column(name = "version", length = 32)
+    private String version;
+
+    @Column(name = "version_notes", length = 512)
+    private String versionNotes;
+
     @Column(name = "owner", length = 64)
     private String owner;
 
@@ -102,6 +108,22 @@ public class ModelingGlossaryTerm extends AbstractAuditingEntity<UUID> implement
         this.status = status;
     }
 
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    public String getVersionNotes() {
+        return versionNotes;
+    }
+
+    public void setVersionNotes(String versionNotes) {
+        this.versionNotes = versionNotes;
+    }
+
     public String getOwner() {
         return owner;
     }
@@ -126,4 +148,3 @@ public class ModelingGlossaryTerm extends AbstractAuditingEntity<UUID> implement
         this.tags = tags;
     }
 }
-

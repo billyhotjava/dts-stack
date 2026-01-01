@@ -27,6 +27,12 @@ public class ModelingTemplate extends AbstractAuditingEntity<UUID> implements Se
     @Column(name = "status", length = 32)
     private String status;
 
+    @Column(name = "version", length = 32)
+    private String version;
+
+    @Column(name = "version_notes", length = 512)
+    private String versionNotes;
+
     @Column(name = "naming_rule")
     private String namingRule;
 
@@ -69,6 +75,22 @@ public class ModelingTemplate extends AbstractAuditingEntity<UUID> implements Se
         this.status = status;
     }
 
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    public String getVersionNotes() {
+        return versionNotes;
+    }
+
+    public void setVersionNotes(String versionNotes) {
+        this.versionNotes = versionNotes;
+    }
+
     public String getNamingRule() {
         return namingRule;
     }
@@ -93,4 +115,3 @@ public class ModelingTemplate extends AbstractAuditingEntity<UUID> implements Se
         this.reviewChecklist = reviewChecklist;
     }
 }
-

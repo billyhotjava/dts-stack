@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_08_modeling_glossary_version_review" author="platform">
+        <addColumn tableName="modeling_glossary_term">
+            <column name="version" type="varchar(32)"/>
+            <column name="version_notes" type="varchar(512)"/>
+        </addColumn>
+
+        <createTable tableName="modeling_glossary_term_version">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="term_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="change_summary" type="varchar(1024)"/>
+            <column name="snapshot_json" type="text"/>
+            <column name="released_at" type="timestamptz"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamptz"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamptz"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_glossary_term_version"
+            baseColumnNames="term_id"
+            referencedTableName="modeling_glossary_term"
+            referencedColumnNames="id"
+            constraintName="fk_modeling_glossary_term_version_term"/>
+
+        <addUniqueConstraint
+            tableName="modeling_glossary_term_version"
+            columnNames="term_id,version"
+            constraintName="uk_modeling_glossary_term_version"/>
+
+        <createIndex tableName="modeling_glossary_term_version" indexName="idx_modeling_glossary_term_version_term">
+            <column name="term_id"/>
+        </createIndex>
+        <createIndex tableName="modeling_glossary_term_version" indexName="idx_modeling_glossary_term_version_status">
+            <column name="status"/>
+        </createIndex>
+
+        <createTable tableName="modeling_glossary_term_review">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="term_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="varchar(32)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reviewer" type="varchar(64)"/>
+            <column name="review_notes" type="text"/>
+            <column name="reviewed_at" type="timestamptz"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamptz"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamptz"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_glossary_term_review"
+            baseColumnNames="term_id"
+            referencedTableName="modeling_glossary_term"
+            referencedColumnNames="id"
+            constraintName="fk_modeling_glossary_term_review_term"/>
+
+        <createIndex tableName="modeling_glossary_term_review" indexName="idx_modeling_glossary_term_review_term">
+            <column name="term_id"/>
+        </createIndex>
+        <createIndex tableName="modeling_glossary_term_review" indexName="idx_modeling_glossary_term_review_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+

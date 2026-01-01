@@ -53,7 +53,50 @@
             { "code": "MODELING_STANDARD_VIEW", "display": "查看数据标准", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "MODELING_STANDARD_EDIT", "display": "维护数据标准", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "MODELING_STANDARD_VERSION_PUBLISH", "display": "发布标准版本", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "MODELING_STANDARD_IMPORT", "display": "导入数据标准", "phases": ["SUCCESS"], "supportsFlow": false }
+            { "code": "MODELING_STANDARD_IMPORT", "display": "导入数据标准", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_STANDARD_BINDING_VIEW", "display": "查看标准落地绑定", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_STANDARD_BINDING_EDIT", "display": "维护标准落地绑定", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_STANDARD_IMPACT_VIEW", "display": "查看标准影响分析", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
+        },
+        {
+          "key": "modeling.plans",
+          "title": "数据规划管理",
+          "actions": [
+            { "code": "MODELING_PLAN_VIEW", "display": "查看数据规划", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_PLAN_EDIT", "display": "维护数据规划", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_PLAN_DELETE", "display": "删除数据规划", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_PLAN_VERSION_VIEW", "display": "查看数据规划版本", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_PLAN_PUBLISH", "display": "发布数据规划", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_PLAN_REVIEW_VIEW", "display": "查看数据规划评审记录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_PLAN_REVIEW_SUBMIT", "display": "提交数据规划评审", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_PLAN_REVIEW_DECIDE", "display": "审批数据规划评审", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "modeling.glossary",
+          "title": "指标口径与术语库",
+          "actions": [
+            { "code": "MODELING_GLOSSARY_VIEW", "display": "查看术语库", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_GLOSSARY_EDIT", "display": "维护术语", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_GLOSSARY_DELETE", "display": "删除术语", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_GLOSSARY_VERSION_VIEW", "display": "查看术语版本", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_GLOSSARY_PUBLISH", "display": "发布术语", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_GLOSSARY_REVIEW_VIEW", "display": "查看术语评审记录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_GLOSSARY_REVIEW_SUBMIT", "display": "提交术语评审", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_GLOSSARY_REVIEW_DECIDE", "display": "审批术语评审", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_GLOSSARY_REFERENCE_VIEW", "display": "查看术语引用关系", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
+        },
+        {
+          "key": "modeling.templates",
+          "title": "数据模型规范与模板",
+          "actions": [
+            { "code": "MODELING_TEMPLATE_VIEW", "display": "查看模型模板", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_TEMPLATE_EDIT", "display": "维护模型模板", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_TEMPLATE_DELETE", "display": "删除模型模板", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "MODELING_TEMPLATE_VERSION_VIEW", "display": "查看模型模板版本", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_TEMPLATE_PUBLISH", "display": "发布模型模板", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         }
       ]
@@ -67,7 +110,9 @@
           "title": "指标管理",
           "actions": [
             { "code": "GOV_INDICATOR_VERSION_LIST", "display": "查看指标版本历史", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "GOV_INDICATOR_VERSION_VIEW", "display": "查看指标版本快照", "phases": ["SUCCESS"], "supportsFlow": false }
+            { "code": "GOV_INDICATOR_VERSION_VIEW", "display": "查看指标版本快照", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_INDICATOR_REFERENCE_VIEW", "display": "查看指标引用关系", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_INDICATOR_PUBLISH_PREVIEW", "display": "指标发布一致性预检", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
         },
         {
