@@ -44,6 +44,16 @@ export const importClassificationMapping = (data: any[]) =>
 	api.post({ url: "/catalog/classification-mapping/import", data });
 export const exportClassificationMapping = () => api.get({ url: "/catalog/classification-mapping/export" });
 
+// Infra external links (ETL entry)
+export const listExternalLinks = () => api.get({ url: "/infra/external-links" });
+export const getExternalLink = (entryKey: string) => api.get({ url: `/infra/external-links/${entryKey}` });
+export const upsertExternalLink = (entryKey: string, data: any) => api.put({ url: `/infra/external-links/${entryKey}`, data });
+export const deleteExternalLink = (entryKey: string) => api.delete({ url: `/infra/external-links/${entryKey}` });
+
+// Security audit logs (proxy to dts-admin)
+export const listAuditLogs = (params: any = {}) => api.get({ url: "/security/audit-logs", params });
+export const getAuditLog = (id: string) => api.get({ url: `/security/audit-logs/${id}` });
+
 // Modeling
 export const listStandards = (params: any = {}) => api.get({ url: "/modeling/standards", params });
 export const getStandard = (id: string) => api.get({ url: `/modeling/standards/${id}` });
@@ -64,6 +74,23 @@ export const getStandardSettings = () => api.get({ url: "/modeling/standards/set
 export const updateStandardSettings = (data: any) => api.put({ url: "/modeling/standards/settings", data });
 export const getStandardHealth = () => api.get({ url: "/modeling/standards/health" });
 
+// Modeling (planning / glossary / templates)
+export const listModelingPlans = (params: any = {}) => api.get({ url: "/modeling/plans", params });
+export const getModelingPlan = (id: string) => api.get({ url: `/modeling/plans/${id}` });
+export const createModelingPlan = (data: any) => api.post({ url: "/modeling/plans", data });
+export const updateModelingPlan = (id: string, data: any) => api.put({ url: `/modeling/plans/${id}`, data });
+export const deleteModelingPlan = (id: string) => api.delete({ url: `/modeling/plans/${id}` });
+
+export const listGlossaryTerms = (params: any = {}) => api.get({ url: "/modeling/glossary/terms", params });
+export const createGlossaryTerm = (data: any) => api.post({ url: "/modeling/glossary/terms", data });
+export const updateGlossaryTerm = (id: string, data: any) => api.put({ url: `/modeling/glossary/terms/${id}`, data });
+export const deleteGlossaryTerm = (id: string) => api.delete({ url: `/modeling/glossary/terms/${id}` });
+
+export const listModelTemplates = () => api.get({ url: "/modeling/templates" });
+export const createModelTemplate = (data: any) => api.post({ url: "/modeling/templates", data });
+export const updateModelTemplate = (id: string, data: any) => api.put({ url: `/modeling/templates/${id}`, data });
+export const deleteModelTemplate = (id: string) => api.delete({ url: `/modeling/templates/${id}` });
+
 // Governance
 export const listQualityRules = () => api.get({ url: "/governance/quality/rules" });
 export const createQualityRule = (data: any) => api.post({ url: "/governance/quality/rules", data });
@@ -75,6 +102,15 @@ export const toggleQualityRule = (id: string, enabled: boolean) =>
 export const triggerQualityRun = (data: any) => api.post({ url: "/governance/quality/runs", data });
 export const listQualityRuns = (params: any = {}) => api.get({ url: "/governance/quality/runs", params });
 export const getQualityRun = (id: string) => api.get({ url: `/governance/quality/runs/${id}` });
+
+// Quality tasks (巡检计划)
+export const listQualityTasks = () => api.get({ url: "/governance/quality/tasks" });
+export const createQualityTask = (data: any) => api.post({ url: "/governance/quality/tasks", data });
+export const updateQualityTask = (id: string, data: any) => api.put({ url: `/governance/quality/tasks/${id}`, data });
+export const toggleQualityTask = (id: string, enabled: boolean) =>
+	api.post({ url: `/governance/quality/tasks/${id}/toggle`, data: { enabled } });
+export const triggerQualityTask = (id: string) => api.post({ url: `/governance/quality/tasks/${id}/trigger` });
+export const deleteQualityTask = (id: string) => api.delete({ url: `/governance/quality/tasks/${id}` });
 
 export const createComplianceBatch = (data: any) => api.post({ url: "/governance/compliance/batches", data });
 export const listComplianceBatches = (params: any = {}) => api.get({ url: "/governance/compliance/batches", params });

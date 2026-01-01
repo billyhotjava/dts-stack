@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260101_01_infra_external_link" author="platform">
+        <createTable tableName="infra_external_link">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="entry_key" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(128)"/>
+            <column name="url" type="varchar(2048)"/>
+            <column name="description" type="varchar(512)"/>
+            <column name="enabled" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="infra_external_link"
+            columnNames="entry_key"
+            constraintName="uk_infra_external_link_entry_key"/>
+        <createIndex tableName="infra_external_link" indexName="idx_infra_external_link_enabled">
+            <column name="enabled"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

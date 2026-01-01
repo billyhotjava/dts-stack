@@ -97,7 +97,7 @@ public class QualityRunService {
         }
         GovRule rule = resolveRule(request.getRuleId());
         GovRuleVersion version = resolveVersion(rule);
-        List<GovRuleBinding> bindings = resolveBindings(version, request.getBindingId());
+        List<GovRuleBinding> bindings = resolveBindings(version, request.getBindingId(), request.getDatasetId());
         if (bindings.isEmpty()) {
             throw new IllegalArgumentException("该规则尚未绑定数据集");
         }
@@ -393,16 +393,23 @@ public class QualityRunService {
         return version;
     }
 
-    private List<GovRuleBinding> resolveBindings(GovRuleVersion version, UUID bindingId) {
+    private List<GovRuleBinding> resolveBindings(GovRuleVersion version, UUID bindingId, UUID datasetId) {
         if (bindingId != null) {
             Optional<GovRuleBinding> binding = bindingRepository.findById(bindingId);
             GovRuleBinding entity = binding.orElseThrow(() -> new IllegalArgumentException("未找到绑定"));
             if (entity.getRuleVersion() == null || !entity.getRuleVersion().getId().equals(version.getId())) {
                 throw new IllegalArgumentException("绑定与规则版本不匹配");
             }
+            if (datasetId != null && entity.getDatasetId() != null && !datasetId.equals(entity.getDatasetId())) {
+                throw new IllegalArgumentException("绑定与数据集不匹配");
+            }
             return List.of(entity);
         }
-        return new ArrayList<>(version.getBindings());
+        List<GovRuleBinding> bindings = new ArrayList<>(version.getBindings());
+        if (datasetId == null) {
+            return bindings;
+        }
+        return bindings.stream().filter(binding -> datasetId.equals(binding.getDatasetId())).collect(Collectors.toList());
     }
 
     private Map<String, String> resolveStatements(GovRuleVersion version) {

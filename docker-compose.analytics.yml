@@ -23,6 +23,8 @@ services:
       - ./services/dts-analytics/data:/data:Z
       - ./services/dts-analytics/logs:/var/log/dts-analytics:Z
       - ./services/certs:/certs:ro,z
+    ports:
+      - "127.0.0.1:${ANALYTICS_HOST_PORT:-3000}:3000"
     restart: unless-stopped
     networks:
       - dts-core

@@ -53,6 +53,31 @@ public class DatasetSqlBuilder {
         return resolveDataLevelPredicate(dataset, tableAlias, dialect);
     }
 
+    public Optional<String> resolveDeptPredicate(CatalogDataset dataset, String tableAlias, String deptCode) {
+        if (!StringUtils.hasText(deptCode)) {
+            return Optional.empty();
+        }
+        QuoteDialect dialect = resolveDialect(dataset);
+        Optional<String> columnOpt = metadataResolver.findDeptColumn(dataset);
+        if (columnOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        String columnName = columnOpt.orElseThrow();
+        String quoted = quoteIdentifier(columnName, dialect);
+        String columnExpression;
+        if (StringUtils.hasText(tableAlias)) {
+            columnExpression = tableAlias + "." + quoted;
+        } else {
+            columnExpression = quoted;
+        }
+        String normalizedDept = deptCode.trim();
+        if (normalizedDept.isEmpty()) {
+            return Optional.empty();
+        }
+        String escaped = normalizedDept.replace("'", "''").toUpperCase(Locale.ROOT);
+        return Optional.of("UPPER(TRIM(" + columnExpression + ")) = '" + escaped + "'");
+    }
+
     public String quoteColumn(CatalogDataset dataset, String columnName) {
         if (!StringUtils.hasText(columnName)) {
             return columnName;

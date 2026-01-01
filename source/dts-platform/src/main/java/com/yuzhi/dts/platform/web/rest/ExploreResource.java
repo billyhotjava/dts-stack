@@ -140,7 +140,7 @@ public class ExploreResource {
             }
         }
         try {
-            Map<String, Object> payload = generateResult(dataset, extractSql(body), false);
+            Map<String, Object> payload = generateResult(dataset, extractSql(body), false, activeDept);
             recordAudit(
                 "EXECUTE",
                 "explore.preview",
@@ -226,7 +226,7 @@ public class ExploreResource {
             }
         }
         try {
-            Map<String, Object> payload = generateResult(dataset, extractSql(body), true);
+            Map<String, Object> payload = generateResult(dataset, extractSql(body), true, activeDept);
             recordAudit(
                 "EXECUTE",
                 "explore.execute",
@@ -945,7 +945,8 @@ public class ExploreResource {
             Map<String, Object> payload = generateResult(
                 dataset,
                 Optional.ofNullable(q.getSqlText()).orElse(""),
-                true
+                true,
+                activeDept
             );
             recordAudit(
                 "EXECUTE",
@@ -1033,9 +1034,9 @@ public class ExploreResource {
         }
     }
 
-    private Map<String, Object> generateResult(CatalogDataset dataset, String sqlText, boolean persist) {
+    private Map<String, Object> generateResult(CatalogDataset dataset, String sqlText, boolean persist, String activeDeptHeader) {
         String effectiveSql = prepareSql(sqlText, dataset);
-        effectiveSql = securitySqlRewriter.guard(effectiveSql, dataset);
+        effectiveSql = securitySqlRewriter.guard(effectiveSql, dataset, activeDeptHeader);
         Map<String, Object> queryResult = queryGateway.execute(effectiveSql);
 
         List<String> headers = extractHeaders(queryResult);
@@ -1048,6 +1049,7 @@ public class ExploreResource {
         }
 
         applyDataLevelRowFilter(dataset, headers, rows);
+        applyDeptRowFilter(dataset, headers, rows, activeDeptHeader);
 
         Map<String, Object> masking = buildMasking(headers);
         long connectMillis = numberOrDefault(queryResult.get("connectMillis"), -1L);
@@ -1168,6 +1170,53 @@ public class ExploreResource {
         int headerIndex = resolveHeaderIndex(headers, dataLevelColumn);
 
         rows.removeIf(row -> !isRowLevelAllowed(row, headers, headerIndex, dataLevelColumn, allowedLevels, allowedTokens));
+    }
+
+    private void applyDeptRowFilter(CatalogDataset dataset, List<String> headers, List<Map<String, Object>> rows, String activeDeptHeader) {
+        if (dataset == null || rows == null || rows.isEmpty()) {
+            return;
+        }
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
+            return;
+        }
+        String activeDept = resolveActiveDeptContext(activeDeptHeader);
+        if (!StringUtils.hasText(activeDept)) {
+            rows.clear();
+            return;
+        }
+        Optional<String> columnOpt = metadataResolver.findDeptColumn(dataset);
+        if (columnOpt.isEmpty()) {
+            rows.clear();
+            return;
+        }
+        String deptColumn = columnOpt.orElseThrow();
+        int headerIndex = resolveHeaderIndex(headers, deptColumn);
+        String expected = activeDept.trim();
+        rows.removeIf(row -> !isDeptRowAllowed(row, headers, headerIndex, deptColumn, expected));
+    }
+
+    private boolean isDeptRowAllowed(
+        Map<String, Object> row,
+        List<String> headers,
+        int headerIndex,
+        String columnName,
+        String expected
+    ) {
+        if (row == null || row.isEmpty()) {
+            return false;
+        }
+        Object rawValue = lookupValue(row, columnName);
+        if (rawValue == null && headerIndex >= 0 && headers != null && headerIndex < headers.size()) {
+            rawValue = lookupValue(row, headers.get(headerIndex));
+        }
+        if (rawValue == null) {
+            return false;
+        }
+        String actual = String.valueOf(rawValue).trim();
+        if (actual.isEmpty()) {
+            return false;
+        }
+        return actual.equalsIgnoreCase(expected);
     }
 
     private int resolveHeaderIndex(List<String> headers, String columnName) {

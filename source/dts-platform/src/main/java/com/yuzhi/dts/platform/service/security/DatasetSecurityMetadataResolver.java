@@ -33,6 +33,20 @@ public class DatasetSecurityMetadataResolver {
         "level"
     );
 
+    private static final List<String> DEPT_CODE_CANDIDATES = List.of(
+        "dept_code",
+        "department_code",
+        "dept",
+        "department",
+        "dept_id",
+        "department_id",
+        "org_code",
+        "org",
+        "org_id",
+        "organization_code",
+        "organization_id"
+    );
+
     private final CatalogTableSchemaRepository tableRepository;
     private final CatalogColumnSchemaRepository columnRepository;
 
@@ -74,10 +88,45 @@ public class DatasetSecurityMetadataResolver {
         return Optional.empty();
     }
 
+    public Optional<String> findDeptColumn(CatalogDataset dataset) {
+        if (dataset == null) return Optional.empty();
+        String preferred = resolveText(dataset.getHiveTable());
+        if (preferred != null) {
+            Optional<String> column = findDeptColumn(dataset, preferred);
+            if (column.isPresent()) {
+                return column;
+            }
+        }
+        String fallback = resolveText(dataset.getName());
+        if (fallback != null && !fallback.equalsIgnoreCase(preferred)) {
+            Optional<String> column = findDeptColumn(dataset, fallback);
+            if (column.isPresent()) {
+                return column;
+            }
+        }
+        List<CatalogTableSchema> tables = tableRepository.findByDataset(dataset);
+        if (!CollectionUtils.isEmpty(tables)) {
+            for (CatalogTableSchema table : tables) {
+                Map<String, String> map = buildColumnNameMap(columnRepository.findByTable(table));
+                Optional<String> column = resolveDeptFromColumns(map);
+                if (column.isPresent()) {
+                    return column;
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
     private Optional<String> findDataLevelColumn(CatalogDataset dataset, String tableName) {
         return tableRepository
             .findFirstByDatasetAndNameIgnoreCase(dataset, tableName)
             .flatMap(table -> resolveFromColumns(buildColumnNameMap(columnRepository.findByTable(table))));
+    }
+
+    private Optional<String> findDeptColumn(CatalogDataset dataset, String tableName) {
+        return tableRepository
+            .findFirstByDatasetAndNameIgnoreCase(dataset, tableName)
+            .flatMap(table -> resolveDeptFromColumns(buildColumnNameMap(columnRepository.findByTable(table))));
     }
 
     private Map<String, String> buildColumnNameMap(List<CatalogColumnSchema> columns) {
@@ -108,6 +157,19 @@ public class DatasetSecurityMetadataResolver {
             return Optional.empty();
         }
         for (String candidate : DATA_LEVEL_CANDIDATES) {
+            String match = columnMap.get(candidate.toLowerCase(Locale.ROOT));
+            if (match != null) {
+                return Optional.of(match);
+            }
+        }
+        return Optional.empty();
+    }
+
+    public static Optional<String> resolveDeptFromColumns(Map<String, String> columnMap) {
+        if (columnMap == null || columnMap.isEmpty()) {
+            return Optional.empty();
+        }
+        for (String candidate : DEPT_CODE_CANDIDATES) {
             String match = columnMap.get(candidate.toLowerCase(Locale.ROOT));
             if (match != null) {
                 return Optional.of(match);

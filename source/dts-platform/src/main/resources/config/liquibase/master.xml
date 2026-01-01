@@ -59,4 +59,7 @@
     <include file="config/liquibase/changelog/20251225_03_catalog_dataset_lifecycle.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251225_04_catalog_dataset_lineage.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251225_05_catalog_dataset_source_id.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260101_01_infra_external_link.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260101_02_governance_quality_task.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260101_03_modeling_aux_tables.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

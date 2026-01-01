@@ -164,7 +164,7 @@ public class IndicatorService {
         String limitedSql = wrapWithLimit(rawSql, 1);
         String effectiveSql;
         try {
-            effectiveSql = securitySqlRewriter.guard(limitedSql, dataset);
+            effectiveSql = securitySqlRewriter.guard(limitedSql, dataset, activeDept);
         } catch (SecurityGuardException ex) {
             return persistValidation(entity, now, signature, result, "FAILED", ex.getMessage(), null);
         } catch (IllegalStateException ex) {

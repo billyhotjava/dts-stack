@@ -12,7 +12,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -95,9 +94,11 @@ public class CatalogLineageResource {
         datasetRepo.findById(body.upstreamDatasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "upstream dataset not found"));
         datasetRepo.findById(body.downstreamDatasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "downstream dataset not found"));
 
-        Optional<CatalogDatasetLineage> existing = lineageRepo.findFirstByUpstreamDatasetIdAndDownstreamDatasetId(body.upstreamDatasetId, body.downstreamDatasetId);
-        if (existing.isPresent()) {
-            CatalogDatasetLineage link = existing.orElseThrow();
+        CatalogDatasetLineage existingLink = lineageRepo
+            .findFirstByUpstreamDatasetIdAndDownstreamDatasetId(body.upstreamDatasetId, body.downstreamDatasetId)
+            .orElse(null);
+        if (existingLink != null) {
+            CatalogDatasetLineage link = existingLink;
             if (StringUtils.hasText(body.relationType)) {
                 link.setRelationType(body.relationType.trim());
             }

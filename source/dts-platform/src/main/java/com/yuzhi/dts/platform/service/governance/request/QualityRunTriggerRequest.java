@@ -7,6 +7,7 @@ public class QualityRunTriggerRequest {
 
     private UUID ruleId;
     private UUID bindingId;
+    private UUID datasetId;
     private String triggerType = "MANUAL";
     private Map<String, Object> parameters;
 
@@ -26,6 +27,14 @@ public class QualityRunTriggerRequest {
         this.bindingId = bindingId;
     }
 
+    public UUID getDatasetId() {
+        return datasetId;
+    }
+
+    public void setDatasetId(UUID datasetId) {
+        this.datasetId = datasetId;
+    }
+
     public String getTriggerType() {
         return triggerType;
     }
@@ -42,4 +51,3 @@ public class QualityRunTriggerRequest {
         this.parameters = parameters;
     }
 }
-

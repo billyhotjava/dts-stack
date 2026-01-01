@@ -198,9 +198,40 @@ public class AuditService {
         registerLegacy("infra.schedule", "UPDATE", legacyMapping("FOUNDATION_SCHEDULE_DEPLOY", "更新调度任务", "更新调度任务失败", null, "UPDATE", false, AuditStage.SUCCESS));
         registerLegacy("infra.schedule", "DELETE", legacyMapping("FOUNDATION_SCHEDULE_DISABLE", "删除调度任务", "删除调度任务失败", null, "DELETE", false, AuditStage.SUCCESS));
 
+        // Infra external links (ETL 对接入口)
+        registerLegacy("infra.externalLink", "READ", legacyMapping("INFRA_EXTERNAL_LINK_VIEW", "查看外部链接", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("infra.externalLink", "UPDATE", legacyMapping("INFRA_EXTERNAL_LINK_EDIT", "更新外部链接", "更新外部链接失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("infra.externalLink", "DELETE", legacyMapping("INFRA_EXTERNAL_LINK_DELETE", "删除外部链接", "删除外部链接失败", null, "DELETE", false, AuditStage.SUCCESS));
+
         // Modeling settings
         registerLegacy("modeling.standard.settings", "READ", legacyMapping("MODELING_STANDARD_VIEW", "查看数据标准设置", null, null, "READ", true, AuditStage.SUCCESS));
         registerLegacy("modeling.standard.settings", "UPDATE", legacyMapping("MODELING_STANDARD_EDIT", "更新数据标准设置", "更新数据标准设置失败", null, "UPDATE", false, AuditStage.SUCCESS));
+
+        // Modeling - plans / glossary / templates
+        registerLegacy("modeling.plan", "READ", legacyMapping("MODELING_PLAN_VIEW", "查看数据规划", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("modeling.plan", "CREATE", legacyMapping("MODELING_PLAN_EDIT", "创建数据规划", "创建数据规划失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("modeling.plan", "UPDATE", legacyMapping("MODELING_PLAN_EDIT", "更新数据规划", "更新数据规划失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("modeling.plan", "DELETE", legacyMapping("MODELING_PLAN_DELETE", "删除数据规划", "删除数据规划失败", null, "DELETE", false, AuditStage.SUCCESS));
+
+        registerLegacy("modeling.glossary", "READ", legacyMapping("MODELING_GLOSSARY_VIEW", "查看术语库", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("modeling.glossary", "CREATE", legacyMapping("MODELING_GLOSSARY_EDIT", "创建术语", "创建术语失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("modeling.glossary", "UPDATE", legacyMapping("MODELING_GLOSSARY_EDIT", "更新术语", "更新术语失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("modeling.glossary", "DELETE", legacyMapping("MODELING_GLOSSARY_DELETE", "删除术语", "删除术语失败", null, "DELETE", false, AuditStage.SUCCESS));
+
+        registerLegacy("modeling.template", "READ", legacyMapping("MODELING_TEMPLATE_VIEW", "查看模型模板", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("modeling.template", "CREATE", legacyMapping("MODELING_TEMPLATE_EDIT", "创建模型模板", "创建模型模板失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("modeling.template", "UPDATE", legacyMapping("MODELING_TEMPLATE_EDIT", "更新模型模板", "更新模型模板失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("modeling.template", "DELETE", legacyMapping("MODELING_TEMPLATE_DELETE", "删除模型模板", "删除模型模板失败", null, "DELETE", false, AuditStage.SUCCESS));
+
+        // Governance - quality tasks
+        registerLegacy("governance.quality.task", "READ", legacyMapping("GOV_QUALITY_TASK_VIEW", "查看质量巡检计划", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("governance.quality.task", "CREATE", legacyMapping("GOV_QUALITY_TASK_EDIT", "创建质量巡检计划", "创建质量巡检计划失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("governance.quality.task", "UPDATE", legacyMapping("GOV_QUALITY_TASK_EDIT", "更新质量巡检计划", "更新质量巡检计划失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("governance.quality.task", "EXECUTE", legacyMapping("GOV_QUALITY_TASK_RUN", "触发质量巡检计划", "触发质量巡检计划失败", null, "EXECUTE", false, AuditStage.SUCCESS));
+        registerLegacy("governance.quality.task", "DELETE", legacyMapping("GOV_QUALITY_TASK_DELETE", "删除质量巡检计划", "删除质量巡检计划失败", null, "DELETE", false, AuditStage.SUCCESS));
+
+        // Security - audit logs query (proxy)
+        registerLegacy("security.auditLogs", "READ", legacyMapping("SECURITY_AUDIT_VIEW", "查看日志审计", null, null, "READ", true, AuditStage.SUCCESS));
 
         // SQL query fallback
         registerLegacy("sql.query", "EXECUTE", legacyMapping("EXPLORE_WORKBENCH_QUERY", "执行 SQL 查询", "执行 SQL 查询失败", null, "EXECUTE", false, AuditStage.SUCCESS));

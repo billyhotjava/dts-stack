@@ -5,6 +5,7 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetJob;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.DatasetSecurityMetadataResolver;
@@ -165,7 +166,7 @@ public class AssetResource {
         String sql;
         try {
             sql = buildPreviewSql(dataset, safeRows);
-            sql = securitySqlRewriter.guard(sql, dataset);
+            sql = securitySqlRewriter.guard(sql, dataset, effDept);
         } catch (SecurityGuardException ex) {
             Map<String, Object> auditDetail = datasetAuditPayload(dataset);
             auditDetail.put("reason", ex.getMessage());
@@ -184,6 +185,7 @@ public class AssetResource {
             List<Map<String, Object>> rowsData = extractRows(queryResult.get("rows"), headers);
             if (!rowsData.isEmpty()) {
                 applyDataLevelFilter(dataset, headers, rowsData);
+                applyDeptFilter(dataset, headers, rowsData, effDept);
             }
             Map<String, String> maskingMap = new HashMap<>();
             maskingRepo
@@ -357,6 +359,52 @@ public class AssetResource {
         String columnName = columnOpt.orElseThrow();
         int headerIndex = resolveHeaderIndex(headers, columnName);
         rows.removeIf(row -> !isRowAllowed(row, headers, headerIndex, columnName, allowedLevels, allowedTokens));
+    }
+
+    private void applyDeptFilter(CatalogDataset dataset, List<String> headers, List<Map<String, Object>> rows, String activeDept) {
+        if (dataset == null || rows == null || rows.isEmpty()) {
+            return;
+        }
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
+            return;
+        }
+        if (!org.springframework.util.StringUtils.hasText(activeDept)) {
+            rows.clear();
+            return;
+        }
+        Optional<String> columnOpt = metadataResolver.findDeptColumn(dataset);
+        if (columnOpt.isEmpty()) {
+            rows.clear();
+            return;
+        }
+        String deptColumn = columnOpt.orElseThrow();
+        int headerIndex = resolveHeaderIndex(headers, deptColumn);
+        String expected = activeDept.trim();
+        rows.removeIf(row -> !isDeptRowAllowed(row, headers, headerIndex, deptColumn, expected));
+    }
+
+    private boolean isDeptRowAllowed(
+        Map<String, Object> row,
+        List<String> headers,
+        int headerIndex,
+        String columnName,
+        String expected
+    ) {
+        if (row == null || row.isEmpty()) {
+            return false;
+        }
+        Object rawValue = lookupValue(row, columnName);
+        if (rawValue == null && headerIndex >= 0 && headers != null && headerIndex < headers.size()) {
+            rawValue = lookupValue(row, headers.get(headerIndex));
+        }
+        if (rawValue == null) {
+            return false;
+        }
+        String actual = String.valueOf(rawValue).trim();
+        if (actual.isEmpty()) {
+            return false;
+        }
+        return actual.equalsIgnoreCase(expected);
     }
 
     private int resolveHeaderIndex(List<String> headers, String columnName) {

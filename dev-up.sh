@@ -177,6 +177,9 @@ set -a
 : "${PG_DB_DTADMIN:=dts_admin}"
 : "${PG_USER_DTADMIN:=dts_admin}"
 : "${PG_PWD_DTADMIN:=dts_admin}"
+: "${PG_DB_ANALYTICS:=dts_analytics}"
+: "${PG_USER_ANALYTICS:=dts_analytics}"
+: "${PG_PWD_ANALYTICS:=dts_analytics}"
 set +a
 
 if [[ "$MODE" == "local" ]]; then

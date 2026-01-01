@@ -140,18 +140,19 @@ public class JdbcCatalogSyncService {
                 Set<String> processedTablesLower = new LinkedHashSet<>();
                 List<TableMeta> tables = listTables(connection, resolvedCatalog, normalizedSchema, tablePattern);
                 for (TableMeta table : tables) {
-                    processedTablesLower.add(table.tableName().toLowerCase(Locale.ROOT));
+                    String tableName = table.tableName();
+                    processedTablesLower.add(tableName.toLowerCase(Locale.ROOT));
 
                     CatalogDataset dataset = datasetRepository
-                        .findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(source.getId(), normalizedSchema, table.tableName())
+                        .findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(source.getId(), normalizedSchema, tableName)
                         .orElseGet(CatalogDataset::new);
                     boolean isNewDataset = dataset.getId() == null;
 
                     dataset.setSourceId(source.getId());
                     dataset.setHiveDatabase(normalizedSchema);
-                    dataset.setHiveTable(table.tableName());
+                    dataset.setHiveTable(tableName);
                     dataset.setType(StringUtils.hasText(source.getType()) ? source.getType().trim().toUpperCase(Locale.ROOT) : "JDBC");
-                    dataset.setName(defaultIfBlank(dataset.getName(), table.tableName()));
+                    dataset.setName(defaultIfBlank(dataset.getName(), tableName));
                     dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));
                     dataset.setOwner(defaultIfBlank(dataset.getOwner(), defaultOwner(source)));
                     dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
@@ -167,11 +168,11 @@ public class JdbcCatalogSyncService {
                     }
 
                     CatalogTableSchema tableSchema = tableRepository
-                        .findFirstByDatasetAndNameIgnoreCase(savedDataset, table.tableName())
+                        .findFirstByDatasetAndNameIgnoreCase(savedDataset, tableName)
                         .orElseGet(() -> {
                             CatalogTableSchema schemaEntity = new CatalogTableSchema();
                             schemaEntity.setDataset(savedDataset);
-                            schemaEntity.setName(table.tableName());
+                            schemaEntity.setName(tableName);
                             return schemaEntity;
                         });
                     boolean isNewTable = tableSchema.getId() == null;
@@ -200,7 +201,7 @@ public class JdbcCatalogSyncService {
                             )
                         );
 
-                    List<ColumnMeta> columns = listColumns(connection, resolvedCatalog, normalizedSchema, table.tableName());
+                    List<ColumnMeta> columns = listColumns(connection, resolvedCatalog, normalizedSchema, tableName);
                     columnRepository.deleteByTable(tableSchema);
                     if (!columns.isEmpty()) {
                         List<CatalogColumnSchema> columnEntities = new ArrayList<>(columns.size());

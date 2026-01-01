@@ -1,11 +1,15 @@
 package com.yuzhi.dts.platform.service.security;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
+import java.lang.reflect.Array;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -47,6 +51,10 @@ public class SecuritySqlRewriter {
      * @throws SecurityGuardException 当无法安全执行 SQL 时抛出，例如缺失密级字段或账号未配置密级
      */
     public String guard(String rawSql, CatalogDataset dataset) {
+        return guard(rawSql, dataset, null);
+    }
+
+    public String guard(String rawSql, CatalogDataset dataset, String activeDeptHeader) {
         if (!StringUtils.hasText(rawSql)) {
             return rawSql;
         }
@@ -58,18 +66,23 @@ public class SecuritySqlRewriter {
         if (allowedLevels == null || allowedLevels.isEmpty()) {
             throw new SecurityGuardException("当前账号未配置可访问的数据密级，无法执行查询");
         }
+
+        boolean enforceDeptFilter = !SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        if (enforceDeptFilter && !StringUtils.hasText(activeDept)) {
+            throw new SecurityGuardException("当前账号未配置所属部门，无法执行查询");
+        }
+
         String sanitizedSql = stripTrailingSemicolon(rawSql);
         Optional<String> guardColumnOpt = metadataResolver.findDataLevelColumn(dataset);
         if (guardColumnOpt.isEmpty()) {
-            LOG.debug("Dataset {} missing data-level column, skip guard rewrite", dataset.getId());
-            return sanitizedSql;
+            throw new SecurityGuardException("数据集缺少数据密级字段，无法执行查询");
         }
 
         String alias = resolveAlias(dataset);
         Optional<String> predicateOpt = datasetSqlBuilder.resolveDataLevelPredicate(dataset, alias);
         if (predicateOpt.isEmpty()) {
-            LOG.warn("Unable to build data-level predicate for dataset {}, skip guard rewrite", dataset.getId());
-            return sanitizedSql;
+            throw new SecurityGuardException("无法生成数据密级过滤条件，无法执行查询");
         }
 
         String guardColumn = guardColumnOpt.orElseThrow();
@@ -78,7 +91,25 @@ public class SecuritySqlRewriter {
         if (adjustment.columnAdded()) {
             sanitizedSql = ensureGroupByContainsGuard(sanitizedSql, guardColumn, dataset);
         }
+
+        Optional<String> deptColumnOpt = metadataResolver.findDeptColumn(dataset);
+        String deptColumn = null;
+        if (enforceDeptFilter) {
+            deptColumn = deptColumnOpt.orElseThrow(() -> new SecurityGuardException("数据集缺少部门字段，无法执行查询"));
+            ProjectionAdjustment deptAdjust = ensureGuardColumnProjection(sanitizedSql, deptColumn, dataset);
+            sanitizedSql = deptAdjust.sql();
+            if (deptAdjust.columnAdded()) {
+                sanitizedSql = ensureGroupByContainsGuard(sanitizedSql, deptColumn, dataset);
+            }
+        }
+
         String predicate = predicateOpt.orElseThrow();
+        if (enforceDeptFilter) {
+            String deptPredicate = datasetSqlBuilder
+                .resolveDeptPredicate(dataset, alias, activeDept)
+                .orElseThrow(() -> new SecurityGuardException("无法生成部门过滤条件，无法执行查询"));
+            predicate = predicate + " AND " + deptPredicate;
+        }
         return "SELECT * FROM (" + sanitizedSql + ") " + alias + " WHERE " + predicate;
     }
 
@@ -209,4 +240,54 @@ public class SecuritySqlRewriter {
     }
 
     private record ProjectionAdjustment(String sql, boolean columnAdded) {}
+
+    private String resolveActiveDept(String activeDeptHeader) {
+        if (StringUtils.hasText(activeDeptHeader)) {
+            String trimmed = activeDeptHeader.trim();
+            if (!trimmed.isEmpty()) {
+                return trimmed;
+            }
+        }
+        return claim("dept_code");
+    }
+
+    private String claim(String name) {
+        try {
+            org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
+                Object v = token.getToken().getClaims().get(name);
+                return stringifyClaim(v);
+            }
+            if (auth != null && auth.getPrincipal() instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal principal) {
+                Object v = principal.getAttribute(name);
+                return stringifyClaim(v);
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private String stringifyClaim(Object raw) {
+        Object flattened = flattenClaim(raw);
+        if (flattened == null) return null;
+        String text = flattened.toString();
+        if (text == null) return null;
+        String trimmed = text.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Object flattenClaim(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof Collection<?> collection) {
+            return collection.stream().filter(java.util.Objects::nonNull).findFirst().orElse(null);
+        }
+        if (raw.getClass().isArray()) {
+            int length = Array.getLength(raw);
+            if (length > 0) {
+                Object first = Array.get(raw, 0);
+                if (first != null) return first;
+            }
+        }
+        return raw;
+    }
 }
