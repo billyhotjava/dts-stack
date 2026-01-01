@@ -78,4 +78,6 @@
     <include file="config/liquibase/changelog/20260102_33_catalog_dataset_warehouse_layer.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_34_catalog_dataset_enabled.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_35_catalog_metadata_change_log.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260102_36_governance_indicator_reference.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260102_37_governance_dimension_item.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

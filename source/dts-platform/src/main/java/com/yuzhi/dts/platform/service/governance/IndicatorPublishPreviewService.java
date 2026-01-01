@@ -1,0 +1,318 @@
+package com.yuzhi.dts.platform.service.governance;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
+import com.yuzhi.dts.platform.domain.governance.GovIndicatorReference;
+import com.yuzhi.dts.platform.domain.governance.GovIndicatorVersion;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.governance.GovDimensionDictionaryRepository;
+import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
+import com.yuzhi.dts.platform.repository.governance.GovIndicatorReferenceRepository;
+import com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository;
+import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
+import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+@Service
+@Transactional
+public class IndicatorPublishPreviewService {
+
+    private final GovIndicatorDefinitionRepository indicatorRepository;
+    private final GovIndicatorVersionRepository versionRepository;
+    private final GovIndicatorReferenceRepository referenceRepository;
+    private final CatalogDatasetRepository datasetRepository;
+    private final GovDimensionDictionaryRepository dimensionRepository;
+    private final IndicatorService indicatorService;
+    private final ObjectMapper objectMapper;
+
+    public IndicatorPublishPreviewService(
+        GovIndicatorDefinitionRepository indicatorRepository,
+        GovIndicatorVersionRepository versionRepository,
+        GovIndicatorReferenceRepository referenceRepository,
+        CatalogDatasetRepository datasetRepository,
+        GovDimensionDictionaryRepository dimensionRepository,
+        IndicatorService indicatorService,
+        ObjectMapper objectMapper
+    ) {
+        this.indicatorRepository = indicatorRepository;
+        this.versionRepository = versionRepository;
+        this.referenceRepository = referenceRepository;
+        this.datasetRepository = datasetRepository;
+        this.dimensionRepository = dimensionRepository;
+        this.indicatorService = indicatorService;
+        this.objectMapper = objectMapper;
+    }
+
+    public Map<String, Object> preview(UUID indicatorId, String activeDept) {
+        IndicatorDto indicatorDto = indicatorService.get(indicatorId, activeDept);
+        GovIndicatorDefinition indicator = indicatorRepository.findById(indicatorId).orElseThrow();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("indicator", indicatorDto);
+        payload.put("activeDept", normalizeText(activeDept));
+        payload.put("currentSignature", computeSignature(indicator));
+
+        // Basic config checks
+        List<String> issues = new ArrayList<>();
+        boolean ready = true;
+        String datasetIdRaw = normalizeText(indicator.getDatasetId());
+        UUID datasetId = parseUuid(datasetIdRaw);
+        payload.put("datasetIdValid", datasetId != null);
+        if (datasetId == null) {
+            ready = false;
+            issues.add("数据集ID格式错误或未配置");
+        }
+        if (!StringUtils.hasText(indicator.getExpressionSql())) {
+            ready = false;
+            issues.add("未配置计算SQL");
+        }
+
+        CatalogDataset dataset = datasetId != null ? datasetRepository.findById(datasetId).orElse(null) : null;
+        if (datasetId != null && dataset == null) {
+            ready = false;
+            issues.add("绑定的数据集不存在");
+        }
+        if (dataset != null) {
+            payload.put(
+                "dataset",
+                Map.of(
+                    "id",
+                    dataset.getId() != null ? dataset.getId().toString() : null,
+                    "name",
+                    dataset.getName(),
+                    "ownerDept",
+                    dataset.getOwnerDept(),
+                    "classification",
+                    dataset.getClassification(),
+                    "type",
+                    dataset.getType(),
+                    "hiveDatabase",
+                    dataset.getHiveDatabase(),
+                    "hiveTable",
+                    dataset.getHiveTable()
+                )
+            );
+        }
+
+        // Validation: reuse existing compute validation (includes security guard + query gateway)
+        IndicatorValidationResultDto validation = indicatorService.validateComputeRule(indicatorId, activeDept);
+        payload.put("validation", validation);
+        if (validation == null || !"SUCCESS".equalsIgnoreCase(validation.getStatus())) {
+            ready = false;
+            issues.add("校验未通过：" + safeText(validation != null ? validation.getMessage() : null, "UNKNOWN"));
+        }
+
+        // Manual references
+        List<GovIndicatorReference> refs = referenceRepository
+            .findByIndicatorOrderByCreatedDateAsc(indicator)
+            .toList();
+        List<Map<String, Object>> references = refs.stream().map(this::toReferenceDto).toList();
+        payload.put("references", references);
+        payload.put("referenceCheck", checkReferences(refs));
+
+        // Last published snapshot diff
+        GovIndicatorVersion lastPublished = versionRepository
+            .findFirstByIndicatorAndStatusIgnoreCaseOrderByReleasedAtDescCreatedDateDesc(indicator, "PUBLISHED")
+            .orElse(null);
+        if (lastPublished != null) {
+            payload.put("lastPublished", toVersionDto(lastPublished));
+            Map<String, Object> lastSnapshot = parseJson(lastPublished.getSnapshotJson());
+            payload.put("lastPublishedSnapshot", lastSnapshot);
+            payload.put("changesSinceLastPublish", diffIndicator(indicatorDto, lastSnapshot));
+        } else {
+            payload.put("lastPublished", null);
+            payload.put("lastPublishedSnapshot", null);
+            payload.put("changesSinceLastPublish", List.of());
+        }
+
+        payload.put("readyToPublish", ready);
+        if (!issues.isEmpty()) {
+            payload.put("issues", issues);
+        }
+        return payload;
+    }
+
+    private List<Map<String, Object>> checkReferences(List<GovIndicatorReference> refs) {
+        if (refs == null || refs.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> checks = new ArrayList<>();
+        for (GovIndicatorReference ref : refs) {
+            if (ref == null) {
+                continue;
+            }
+            String refType = normalizeType(ref.getRefType());
+            String target = normalizeText(ref.getRefTarget());
+            if (!StringUtils.hasText(refType) || !StringUtils.hasText(target)) {
+                checks.add(Map.of("refType", refType, "refTarget", target, "status", "UNKNOWN", "message", "引用信息不完整"));
+                continue;
+            }
+            if ("INDICATOR".equals(refType)) {
+                checks.add(checkIndicatorRef(target));
+                continue;
+            }
+            if ("DIMENSION".equals(refType)) {
+                checks.add(checkDimensionRef(target));
+                continue;
+            }
+            if ("DATASET".equals(refType)) {
+                checks.add(checkDatasetRef(target));
+                continue;
+            }
+            checks.add(Map.of("refType", refType, "refTarget", target, "status", "SKIPPED"));
+        }
+        return checks;
+    }
+
+    private Map<String, Object> checkIndicatorRef(String target) {
+        UUID id = parseUuid(target);
+        if (id != null) {
+            boolean exists = indicatorRepository.existsById(id);
+            return Map.of("refType", "INDICATOR", "refTarget", target, "status", exists ? "OK" : "MISSING");
+        }
+        boolean exists = indicatorRepository.findFirstByCodeIgnoreCase(target).isPresent();
+        return Map.of("refType", "INDICATOR", "refTarget", target, "status", exists ? "OK" : "MISSING");
+    }
+
+    private Map<String, Object> checkDimensionRef(String target) {
+        UUID id = parseUuid(target);
+        if (id != null) {
+            boolean exists = dimensionRepository.existsById(id);
+            return Map.of("refType", "DIMENSION", "refTarget", target, "status", exists ? "OK" : "MISSING");
+        }
+        boolean exists = dimensionRepository.findFirstByCodeIgnoreCase(target).isPresent();
+        return Map.of("refType", "DIMENSION", "refTarget", target, "status", exists ? "OK" : "MISSING");
+    }
+
+    private Map<String, Object> checkDatasetRef(String target) {
+        UUID id = parseUuid(target);
+        if (id == null) {
+            return Map.of("refType", "DATASET", "refTarget", target, "status", "UNKNOWN", "message", "数据集引用应使用 UUID");
+        }
+        boolean exists = datasetRepository.existsById(id);
+        return Map.of("refType", "DATASET", "refTarget", target, "status", exists ? "OK" : "MISSING");
+    }
+
+    private String normalizeType(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.toUpperCase(Locale.ROOT);
+    }
+
+    private Map<String, Object> toReferenceDto(GovIndicatorReference ref) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        if (ref == null) return dto;
+        if (ref.getId() != null) dto.put("id", ref.getId().toString());
+        dto.put("refType", ref.getRefType());
+        dto.put("refTarget", ref.getRefTarget());
+        dto.put("refName", ref.getRefName());
+        dto.put("notes", ref.getNotes());
+        dto.put("createdBy", ref.getCreatedBy());
+        dto.put("createdDate", ref.getCreatedDate());
+        return dto;
+    }
+
+    private Map<String, Object> toVersionDto(GovIndicatorVersion v) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        if (v == null) return dto;
+        if (v.getId() != null) dto.put("id", v.getId().toString());
+        dto.put("version", v.getVersion());
+        dto.put("status", v.getStatus());
+        dto.put("changeSummary", v.getChangeSummary());
+        dto.put("releasedAt", v.getReleasedAt());
+        dto.put("createdDate", v.getCreatedDate());
+        return dto;
+    }
+
+    private List<Map<String, Object>> diffIndicator(IndicatorDto current, Map<String, Object> lastSnapshot) {
+        if (current == null || lastSnapshot == null || lastSnapshot.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> diffs = new ArrayList<>();
+        diffField(diffs, "name", current.getName(), safeText(lastSnapshot.get("name"), null));
+        diffField(diffs, "code", current.getCode(), safeText(lastSnapshot.get("code"), null));
+        diffField(diffs, "category", current.getCategory(), safeText(lastSnapshot.get("category"), null));
+        diffField(diffs, "definition", current.getDefinition(), safeText(lastSnapshot.get("definition"), null));
+        diffField(diffs, "datasetId", current.getDatasetId(), safeText(lastSnapshot.get("datasetId"), null));
+        diffField(diffs, "expressionSql", current.getExpressionSql(), safeText(lastSnapshot.get("expressionSql"), null));
+        diffField(diffs, "dataLevel", current.getDataLevel(), safeText(lastSnapshot.get("dataLevel"), null));
+        diffField(diffs, "tags", current.getTags(), safeText(lastSnapshot.get("tags"), null));
+        return diffs;
+    }
+
+    private void diffField(List<Map<String, Object>> diffs, String field, String current, String last) {
+        String a = normalizeText(current);
+        String b = normalizeText(last);
+        if (Objects.equals(a, b)) {
+            return;
+        }
+        diffs.add(Map.of("field", field, "before", b, "after", a));
+    }
+
+    private Map<String, Object> parseJson(String json) {
+        if (!StringUtils.hasText(json)) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception ex) {
+            return Map.of("raw", json);
+        }
+    }
+
+    private String computeSignature(GovIndicatorDefinition entity) {
+        if (entity == null) return null;
+        String datasetId = String.valueOf(entity.getDatasetId() == null ? "" : entity.getDatasetId()).trim();
+        String sql = String.valueOf(entity.getExpressionSql() == null ? "" : entity.getExpressionSql()).trim();
+        String input = datasetId + "\n" + sql;
+        return DigestUtils.sha256Hex(input);
+    }
+
+    private UUID parseUuid(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value.trim());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String safeText(Object value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String text = String.valueOf(value);
+        if (!StringUtils.hasText(text)) {
+            return fallback;
+        }
+        String trimmed = text.trim();
+        return trimmed.isEmpty() ? fallback : trimmed;
+    }
+
+    private String normalizeText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+}

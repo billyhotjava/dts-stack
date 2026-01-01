@@ -4,6 +4,8 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.DimensionService;
 import com.yuzhi.dts.platform.service.governance.IndicatorService;
+import com.yuzhi.dts.platform.service.governance.IndicatorPublishPreviewService;
+import com.yuzhi.dts.platform.service.governance.IndicatorReferenceService;
 import com.yuzhi.dts.platform.service.governance.dto.DimensionDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
@@ -43,11 +45,21 @@ public class GovernanceIndicatorResource {
 
     private final IndicatorService indicators;
     private final DimensionService dimensions;
+    private final IndicatorReferenceService indicatorReferences;
+    private final IndicatorPublishPreviewService indicatorPublishPreviewService;
     private final AuditService audit;
 
-    public GovernanceIndicatorResource(IndicatorService indicators, DimensionService dimensions, AuditService audit) {
+    public GovernanceIndicatorResource(
+        IndicatorService indicators,
+        DimensionService dimensions,
+        IndicatorReferenceService indicatorReferences,
+        IndicatorPublishPreviewService indicatorPublishPreviewService,
+        AuditService audit
+    ) {
         this.indicators = indicators;
         this.dimensions = dimensions;
+        this.indicatorReferences = indicatorReferences;
+        this.indicatorPublishPreviewService = indicatorPublishPreviewService;
         this.audit = audit;
     }
 
@@ -131,6 +143,94 @@ public class GovernanceIndicatorResource {
         return ApiResponses.ok(snapshot);
     }
 
+    @GetMapping("/indicators/{id}/references")
+    public ApiResponse<List<Map<String, Object>>> listIndicatorReferences(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<Map<String, Object>> list = indicatorReferences.list(id, activeDept);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看指标引用关系");
+        auditPayload.put("indicatorId", id.toString());
+        auditPayload.put("count", list.size());
+        audit.auditAction("GOV_INDICATOR_REFERENCE_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
+        return ApiResponses.ok(list);
+    }
+
+    @PostMapping("/indicators/{id}/references")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> createIndicatorReference(
+        @PathVariable UUID id,
+        @RequestBody IndicatorReferenceService.ReferenceUpsertRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        Map<String, Object> saved = indicatorReferences.create(id, activeDept, request);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "新增指标引用关系");
+        auditPayload.put("indicatorId", id.toString());
+        if (request != null) {
+            if (StringUtils.hasText(request.refType())) auditPayload.put("refType", request.refType().trim());
+            if (StringUtils.hasText(request.refTarget())) auditPayload.put("refTarget", request.refTarget().trim());
+        }
+        audit.recordAs(currentUser(), "WRITE", "governance.indicator.reference", "governance.indicator", id.toString(), "SUCCESS", auditPayload, null);
+        return ApiResponses.ok(saved);
+    }
+
+    @PutMapping("/indicators/{id}/references/{refId}")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> updateIndicatorReference(
+        @PathVariable UUID id,
+        @PathVariable UUID refId,
+        @RequestBody IndicatorReferenceService.ReferenceUpsertRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        Map<String, Object> saved = indicatorReferences.update(id, refId, activeDept, request);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "更新指标引用关系");
+        auditPayload.put("indicatorId", id.toString());
+        auditPayload.put("referenceId", refId.toString());
+        audit.recordAs(currentUser(), "WRITE", "governance.indicator.reference", "governance.indicator", id.toString(), "SUCCESS", auditPayload, null);
+        return ApiResponses.ok(saved);
+    }
+
+    @DeleteMapping("/indicators/{id}/references/{refId}")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Boolean> deleteIndicatorReference(
+        @PathVariable UUID id,
+        @PathVariable UUID refId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        indicatorReferences.delete(id, refId, activeDept);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "删除指标引用关系");
+        auditPayload.put("indicatorId", id.toString());
+        auditPayload.put("referenceId", refId.toString());
+        audit.recordAs(currentUser(), "WRITE", "governance.indicator.reference", "governance.indicator", id.toString(), "SUCCESS", auditPayload, null);
+        return ApiResponses.ok(Boolean.TRUE);
+    }
+
+    @PostMapping("/indicators/{id}/publish-preview")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> publishPreview(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        Map<String, Object> result = indicatorPublishPreviewService.preview(id, activeDept);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "指标发布一致性预检");
+        auditPayload.put("indicatorId", id.toString());
+        if (result != null) {
+            Object ready = result.get("readyToPublish");
+            if (ready != null) auditPayload.put("readyToPublish", ready);
+            Object issues = result.get("issues");
+            if (issues instanceof List<?> list) {
+                auditPayload.put("issueCount", list.size());
+            }
+        }
+        audit.auditAction("GOV_INDICATOR_PUBLISH_PREVIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
+        return ApiResponses.ok(result);
+    }
+
     @PostMapping("/indicators")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<IndicatorDto> createIndicator(
@@ -209,6 +309,27 @@ public class GovernanceIndicatorResource {
             }
         }
         audit.recordAs(currentUser(), "WRITE", "governance.indicator.validation", "governance.indicator", id.toString(), "SUCCESS", detail, null);
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/indicators/{id}/preview")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> previewIndicatorComputeRule(
+        @PathVariable UUID id,
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        int safeLimit = Math.max(1, Math.min(limit, 200));
+        Map<String, Object> result = indicators.previewComputeRule(id, safeLimit, activeDept);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "预览指标计算结果");
+        auditPayload.put("indicatorId", id.toString());
+        auditPayload.put("limit", safeLimit);
+        if (result != null) {
+            Object status = result.get("status");
+            if (status != null) auditPayload.put("status", status);
+        }
+        audit.recordAs(currentUser(), "WRITE", "governance.indicator.compute", "governance.indicator", id.toString(), "SUCCESS", auditPayload, null);
         return ApiResponses.ok(result);
     }
 

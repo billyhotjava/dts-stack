@@ -203,6 +203,86 @@ public class IndicatorService {
         }
     }
 
+    /**
+     * 预览指标计算结果（不会写入 last_validation_* 字段）。
+     * - 仅用于配置人员调试 SQL；真正发布仍需走 validate + publish。
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> previewComputeRule(UUID id, int limit, String activeDept) {
+        GovIndicatorDefinition entity = repository.findById(id).orElseThrow();
+        if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
+        }
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("indicatorId", id.toString());
+        result.put("code", entity.getCode());
+        result.put("name", entity.getName());
+
+        if (!StringUtils.hasText(entity.getDatasetId())) {
+            result.put("status", "FAILED");
+            result.put("message", "请先配置数据集");
+            return result;
+        }
+        UUID datasetId;
+        try {
+            datasetId = UUID.fromString(entity.getDatasetId().trim());
+        } catch (IllegalArgumentException ex) {
+            result.put("status", "FAILED");
+            result.put("message", "数据集ID格式错误");
+            return result;
+        }
+        CatalogDataset dataset = datasetRepository.findById(datasetId).orElse(null);
+        if (dataset == null) {
+            result.put("status", "FAILED");
+            result.put("message", "绑定的数据集不存在");
+            return result;
+        }
+        String effDept = resolveActiveDeptContext(activeDept);
+        boolean read = accessChecker.canRead(dataset);
+        boolean deptOk = accessChecker.departmentAllowed(dataset, effDept);
+        if (!read || !deptOk) {
+            result.put("status", "FAILED");
+            result.put("message", !deptOk ? "当前部门上下文不可访问该数据集" : "无权限访问该数据集");
+            return result;
+        }
+        if (!StringUtils.hasText(entity.getExpressionSql())) {
+            result.put("status", "FAILED");
+            result.put("message", "请先配置计算SQL");
+            return result;
+        }
+
+        String rawSql = entity.getExpressionSql().trim();
+        String limitedSql = wrapWithLimit(rawSql, Math.max(1, Math.min(limit, 200)));
+        String effectiveSql;
+        try {
+            effectiveSql = securitySqlRewriter.guard(limitedSql, dataset, activeDept);
+        } catch (SecurityGuardException ex) {
+            result.put("status", "FAILED");
+            result.put("message", ex.getMessage());
+            return result;
+        } catch (Exception ex) {
+            result.put("status", "FAILED");
+            result.put("message", "SQL安全校验失败：" + ex.getMessage());
+            return result;
+        }
+        result.put("effectiveSql", effectiveSql);
+
+        try {
+            Map<String, Object> payload = queryGateway.execute(effectiveSql);
+            result.put("status", "SUCCESS");
+            result.put("message", "OK");
+            result.put("headers", extractHeaders(payload));
+            result.put("rows", payload.get("rows"));
+            result.put("rowCount", payload.get("rowCount"));
+            result.put("durationMs", payload.get("durationMs"));
+            return result;
+        } catch (Exception ex) {
+            result.put("status", "FAILED");
+            result.put("message", "执行失败：" + safeMessage(ex.getMessage()));
+            return result;
+        }
+    }
+
     public IndicatorDto archive(UUID id, String activeDept) {
         GovIndicatorDefinition entity = repository.findById(id).orElseThrow();
         if (!deptAllowed(entity, activeDept)) {

@@ -12,5 +12,9 @@ import org.springframework.stereotype.Repository;
 public interface GovIndicatorVersionRepository extends JpaRepository<GovIndicatorVersion, UUID> {
     List<GovIndicatorVersion> findByIndicatorOrderByCreatedDateDesc(GovIndicatorDefinition indicator);
     Optional<GovIndicatorVersion> findByIndicatorAndVersion(GovIndicatorDefinition indicator, String version);
-}
 
+    Optional<GovIndicatorVersion> findFirstByIndicatorAndStatusIgnoreCaseOrderByReleasedAtDescCreatedDateDesc(
+        GovIndicatorDefinition indicator,
+        String status
+    );
+}

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_37_governance_dimension_item" author="platform">
+        <comment>Governance dimensions: dictionary items with hierarchy</comment>
+        <createTable tableName="gov_dimension_item">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="dimension_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="parent_id" type="uuid"/>
+            <column name="code" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sort_order" type="int4"/>
+            <column name="attributes_json" type="text"/>
+            <column name="notes" type="text"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamptz"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamptz"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="gov_dimension_item"
+            baseColumnNames="dimension_id"
+            referencedTableName="gov_dimension_dictionary"
+            referencedColumnNames="id"
+            constraintName="fk_gov_dimension_item_dimension"/>
+
+        <addForeignKeyConstraint
+            baseTableName="gov_dimension_item"
+            baseColumnNames="parent_id"
+            referencedTableName="gov_dimension_item"
+            referencedColumnNames="id"
+            constraintName="fk_gov_dimension_item_parent"/>
+
+        <createIndex tableName="gov_dimension_item" indexName="idx_gov_dimension_item_dimension">
+            <column name="dimension_id"/>
+        </createIndex>
+        <createIndex tableName="gov_dimension_item" indexName="idx_gov_dimension_item_parent">
+            <column name="parent_id"/>
+        </createIndex>
+        <createIndex tableName="gov_dimension_item" indexName="idx_gov_dimension_item_status">
+            <column name="status"/>
+        </createIndex>
+        <addUniqueConstraint
+            tableName="gov_dimension_item"
+            columnNames="dimension_id,code"
+            constraintName="uk_gov_dimension_item_unique"/>
+    </changeSet>
+
+</databaseChangeLog>
+
