@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_33_catalog_dataset_warehouse_layer" author="platform">
+        <addColumn tableName="catalog_dataset">
+            <column name="warehouse_layer" type="varchar(16)"/>
+        </addColumn>
+        <createIndex tableName="catalog_dataset" indexName="idx_catalog_dataset_warehouse_layer">
+            <column name="warehouse_layer"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

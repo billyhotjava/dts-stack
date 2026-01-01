@@ -228,6 +228,7 @@ public class CatalogResource {
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String classification,
         @RequestParam(required = false) String ownerDept,
+        @RequestParam(required = false) String warehouseLayer,
         @RequestParam(required = false) String type,
         @RequestParam(required = false) String exposedBy,
         @RequestParam(required = false) String owner,
@@ -252,6 +253,7 @@ public class CatalogResource {
             .filter(ds -> classification == null || (ds.getClassification() != null && ds.getClassification().equalsIgnoreCase(classification)))
             .filter(ds -> type == null || (ds.getType() != null && ds.getType().equalsIgnoreCase(type)))
             .filter(ds -> ownerDept == null || (ds.getOwnerDept() != null && ds.getOwnerDept().equalsIgnoreCase(ownerDept)))
+            .filter(ds -> warehouseLayer == null || (ds.getWarehouseLayer() != null && ds.getWarehouseLayer().equalsIgnoreCase(warehouseLayer)))
             .filter(ds -> exposedBy == null || (ds.getExposedBy() != null && ds.getExposedBy().equalsIgnoreCase(exposedBy)))
             .filter(ds -> owner == null || (ds.getOwner() != null && ds.getOwner().toLowerCase().contains(owner.toLowerCase())))
             .filter(ds -> tag == null || (ds.getTags() != null && ds.getTags().toLowerCase().contains(tag.toLowerCase())))
@@ -445,6 +447,7 @@ public class CatalogResource {
         m.put("hiveTable", d.getHiveTable());
         m.put("trinoCatalog", d.getTrinoCatalog());
         m.put("tags", d.getTags());
+        m.put("warehouseLayer", d.getWarehouseLayer());
         m.put("exposedBy", d.getExposedBy());
         m.put("lifecycleStatus", d.getLifecycleStatus());
         m.put("retentionDays", d.getRetentionDays());

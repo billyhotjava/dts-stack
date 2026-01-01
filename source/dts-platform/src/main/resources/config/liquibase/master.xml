@@ -75,4 +75,5 @@
     <include file="config/liquibase/changelog/20260102_30_infra_external_artifact.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_31_infra_external_exchange_file.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_32_infra_external_run_log.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260102_33_catalog_dataset_warehouse_layer.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>
