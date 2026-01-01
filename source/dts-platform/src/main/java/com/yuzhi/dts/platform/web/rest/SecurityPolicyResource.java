@@ -2,7 +2,15 @@ package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetGrant;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetSecurityMapping;
+import com.yuzhi.dts.platform.domain.catalog.CatalogMaskingRule;
+import com.yuzhi.dts.platform.domain.catalog.CatalogRowFilterRule;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetGrantRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetSecurityMappingRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
@@ -17,8 +25,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,6 +47,10 @@ import org.springframework.web.server.ResponseStatusException;
 public class SecurityPolicyResource {
 
     private final CatalogDatasetRepository datasetRepository;
+    private final CatalogDatasetSecurityMappingRepository datasetSecurityMappingRepository;
+    private final CatalogDatasetGrantRepository datasetGrantRepository;
+    private final CatalogRowFilterRuleRepository rowFilterRuleRepository;
+    private final CatalogMaskingRuleRepository maskingRuleRepository;
     private final AccessChecker accessChecker;
     private final DatasetSecurityMetadataResolver metadataResolver;
     private final DatasetSqlBuilder datasetSqlBuilder;
@@ -41,12 +58,20 @@ public class SecurityPolicyResource {
 
     public SecurityPolicyResource(
         CatalogDatasetRepository datasetRepository,
+        CatalogDatasetSecurityMappingRepository datasetSecurityMappingRepository,
+        CatalogDatasetGrantRepository datasetGrantRepository,
+        CatalogRowFilterRuleRepository rowFilterRuleRepository,
+        CatalogMaskingRuleRepository maskingRuleRepository,
         AccessChecker accessChecker,
         DatasetSecurityMetadataResolver metadataResolver,
         DatasetSqlBuilder datasetSqlBuilder,
         AuditService auditService
     ) {
         this.datasetRepository = datasetRepository;
+        this.datasetSecurityMappingRepository = datasetSecurityMappingRepository;
+        this.datasetGrantRepository = datasetGrantRepository;
+        this.rowFilterRuleRepository = rowFilterRuleRepository;
+        this.maskingRuleRepository = maskingRuleRepository;
         this.accessChecker = accessChecker;
         this.metadataResolver = metadataResolver;
         this.datasetSqlBuilder = datasetSqlBuilder;
@@ -130,6 +155,37 @@ public class SecurityPolicyResource {
         result.put("datasetClassification", dataset.getClassification());
         result.put("datasetVisible", datasetVisible);
         result.put("policy", policy);
+        result.put("securityMapping", toSecurityMappingDto(datasetSecurityMappingRepository.findById(id).orElse(null)));
+
+        // Grants / row-filter / masking: used for permission-matrix explanation.
+        boolean canViewFullPolicy = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DATA_MAINTAINER_ROLES);
+        String userId = SecurityUtils.getCurrentUserId().orElse(null);
+        String username = SecurityUtils.getCurrentUserLogin().orElse(null);
+        boolean explicitlyGranted = datasetGrantRepository.existsForDatasetAndUser(id, userId, username);
+        result.put("explicitlyGrantedToCurrentUser", explicitlyGranted);
+        if (canViewFullPolicy) {
+            List<Map<String, Object>> grants = datasetGrantRepository
+                .findByDatasetIdOrderByCreatedDateAsc(id)
+                .stream()
+                .map(this::toGrantDto)
+                .toList();
+            result.put("grants", grants);
+        }
+
+        Set<String> currentAuthorities = currentAuthorities();
+        List<Map<String, Object>> rowFilters = rowFilterRuleRepository
+            .findByDataset(dataset)
+            .stream()
+            .map(rule -> toRowFilterDto(rule, currentAuthorities))
+            .toList();
+        result.put("rowFilterRules", rowFilters);
+
+        List<Map<String, Object>> maskingRules = maskingRuleRepository
+            .findByDataset(dataset)
+            .stream()
+            .map(this::toMaskingDto)
+            .toList();
+        result.put("maskingRules", maskingRules);
 
         boolean allowed = datasetVisible;
         java.util.ArrayList<String> reasons = new java.util.ArrayList<>();
@@ -180,8 +236,109 @@ public class SecurityPolicyResource {
         auditPayload.put("datasetVisible", datasetVisible);
         auditPayload.put("allowed", allowed);
         auditPayload.put("activeDept", effDept);
+        auditPayload.put("explicitlyGrantedToCurrentUser", explicitlyGranted);
+        auditPayload.put("rowFilterRuleCount", rowFilters.size());
+        auditPayload.put("maskingRuleCount", maskingRules.size());
         auditService.auditAction("SECURITY_POLICY_EXPLAIN_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
         return ApiResponses.ok(result);
+    }
+
+    private Map<String, Object> toSecurityMappingDto(CatalogDatasetSecurityMapping mapping) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        if (mapping == null) {
+            return dto;
+        }
+        if (mapping.getDatasetId() != null) {
+            dto.put("datasetId", mapping.getDatasetId().toString());
+        }
+        dto.put("dataLevelField", mapping.getDataLevelField());
+        dto.put("deptField", mapping.getDeptField());
+        return dto;
+    }
+
+    private Map<String, Object> toGrantDto(CatalogDatasetGrant grant) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        if (grant == null) {
+            return dto;
+        }
+        if (grant.getId() != null) {
+            dto.put("id", grant.getId().toString());
+        }
+        dto.put("granteeId", grant.getGranteeId());
+        dto.put("granteeUsername", grant.getGranteeUsername());
+        dto.put("granteeName", grant.getGranteeName());
+        dto.put("granteeDept", grant.getGranteeDept());
+        dto.put("createdBy", grant.getCreatedBy());
+        dto.put("createdDate", grant.getCreatedDate());
+        return dto;
+    }
+
+    private Map<String, Object> toRowFilterDto(CatalogRowFilterRule rule, Set<String> currentAuthorities) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        if (rule == null) {
+            return dto;
+        }
+        if (rule.getId() != null) {
+            dto.put("id", rule.getId().toString());
+        }
+        dto.put("roles", rule.getRoles());
+        dto.put("expression", rule.getExpression());
+        dto.put("appliesToCurrentUser", rolesMatch(rule.getRoles(), currentAuthorities));
+        return dto;
+    }
+
+    private boolean rolesMatch(String rolesCsv, Set<String> currentAuthorities) {
+        if (!StringUtils.hasText(rolesCsv)) {
+            return true;
+        }
+        if (currentAuthorities == null || currentAuthorities.isEmpty()) {
+            return false;
+        }
+        String[] parts = rolesCsv.split(",");
+        for (String part : parts) {
+            if (!StringUtils.hasText(part)) {
+                continue;
+            }
+            String normalized = part.trim().toUpperCase(Locale.ROOT);
+            if (!normalized.startsWith("ROLE_")) {
+                normalized = "ROLE_" + normalized;
+            }
+            if (currentAuthorities.contains(normalized)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Map<String, Object> toMaskingDto(CatalogMaskingRule rule) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        if (rule == null) {
+            return dto;
+        }
+        if (rule.getId() != null) {
+            dto.put("id", rule.getId().toString());
+        }
+        dto.put("column", rule.getColumn());
+        dto.put("function", rule.getFunction());
+        dto.put("args", rule.getArgs());
+        dto.put("createdBy", rule.getCreatedBy());
+        dto.put("createdDate", rule.getCreatedDate());
+        return dto;
+    }
+
+    private Set<String> currentAuthorities() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return Set.of();
+        }
+        return authentication
+            .getAuthorities()
+            .stream()
+            .map(GrantedAuthority::getAuthority)
+            .filter(StringUtils::hasText)
+            .map(String::trim)
+            .map(s -> s.toUpperCase(Locale.ROOT))
+            .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
     private String resolveActiveDept(String activeDeptHeader) {
