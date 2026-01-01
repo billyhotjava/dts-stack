@@ -19,6 +19,7 @@ builds/offline/
 # Local Maven cache used by dts-admin dev container
 source/dts-admin/.m2/
 source/dts-analytics/target/
+source/dts-analytics/target.rootowned*/
 source/dts-bi-analytics/
 .m2/
 .env.bak

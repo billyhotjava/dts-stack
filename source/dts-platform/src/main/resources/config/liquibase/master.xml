@@ -72,4 +72,5 @@
     <include file="config/liquibase/changelog/20260102_09_modeling_template_version_seed.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_10_infra_external_link_seed.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_20_infra_external_link_status_api.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260102_30_infra_external_artifact.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>
