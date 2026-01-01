@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleVersionRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import com.yuzhi.dts.platform.service.security.HiveStatementExecutor;
@@ -58,6 +59,7 @@ public class QualityRunService {
     private final Executor taskExecutor;
     private final HiveStatementExecutor hiveExecutor;
     private final AuditService auditService;
+    private final IssueTicketService issueTicketService;
     private final ObjectMapper objectMapper;
     private final GovernanceProperties properties;
     private final TransactionTemplate runTransactionTemplate;
@@ -71,6 +73,7 @@ public class QualityRunService {
         @Qualifier("taskExecutor") Executor taskExecutor,
         HiveStatementExecutor hiveExecutor,
         AuditService auditService,
+        IssueTicketService issueTicketService,
         ObjectMapper objectMapper,
         GovernanceProperties properties,
         PlatformTransactionManager transactionManager
@@ -83,6 +86,7 @@ public class QualityRunService {
         this.taskExecutor = taskExecutor;
         this.hiveExecutor = hiveExecutor;
         this.auditService = auditService;
+        this.issueTicketService = issueTicketService;
         this.objectMapper = objectMapper;
         this.properties = properties;
         TransactionTemplate template = new TransactionTemplate(transactionManager);
@@ -241,6 +245,7 @@ public class QualityRunService {
                     payload,
                     buildRunAuditTags(run)
                 );
+                createIssueForFailedRun(run, results, resolveRunActor(run));
             } else {
                 Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
                 payload.put("status", run.getStatus());
@@ -277,6 +282,43 @@ public class QualityRunService {
                 payload,
                 buildRunAuditTags(run)
             );
+            createIssueForFailedRun(run, null, resolveRunActor(run));
+        }
+    }
+
+    private void createIssueForFailedRun(GovQualityRun run, List<StatementExecutionResult> results, String actor) {
+        if (run == null || run.getId() == null) {
+            return;
+        }
+        try {
+            IssueTicketUpsertRequest req = new IssueTicketUpsertRequest();
+            String ruleName = resolveRunRuleName(run);
+            req.setTitle("质量检测失败：" + ruleName);
+            StringBuilder summary = new StringBuilder();
+            summary.append("规则：").append(ruleName);
+            if (run.getDatasetId() != null) {
+                summary.append("\n数据集：").append(run.getDatasetId());
+            }
+            if (StringUtils.isNotBlank(run.getMessage())) {
+                summary.append("\n原因：").append(run.getMessage());
+            }
+            if (results != null && !results.isEmpty()) {
+                long failed = results.stream().filter(r -> r != null && r.status() == StatementExecutionResult.Status.FAILED).count();
+                summary.append("\n失败项数：").append(failed);
+            }
+            req.setSummary(summary.toString());
+            req.setSeverity(run.getSeverity());
+            req.setDataLevel(run.getDataLevel());
+            req.setOwner(run.getRule() != null ? run.getRule().getOwner() : null);
+            req.setTags(List.of(
+                "QUALITY_RUN",
+                "trigger=" + String.valueOf(run.getTriggerType()),
+                "datasetId=" + String.valueOf(run.getDatasetId())
+            ));
+            String effectiveActor = StringUtils.isNotBlank(actor) ? actor : "system";
+            issueTicketService.createOrTouch("QUALITY_RUN", run.getId(), req, effectiveActor, "系统自动生成：质量检测失败");
+        } catch (Exception ex) {
+            log.debug("Failed to create issue ticket for run {}: {}", run.getId(), ex.getMessage());
         }
     }
 

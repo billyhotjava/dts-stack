@@ -1,15 +1,18 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.DimensionService;
 import com.yuzhi.dts.platform.service.governance.IndicatorService;
 import com.yuzhi.dts.platform.service.governance.dto.DimensionDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
+import com.yuzhi.dts.platform.service.governance.dto.IndicatorVersionDto;
 import com.yuzhi.dts.platform.service.governance.request.DimensionUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -95,6 +98,37 @@ public class GovernanceIndicatorResource {
         }
         audit.recordAuxiliary("READ", "governance.indicator", "governance.indicator", id.toString(), "SUCCESS", detail);
         return ApiResponses.ok(dto);
+    }
+
+    @GetMapping("/indicators/{id}/versions")
+    public ApiResponse<List<IndicatorVersionDto>> listIndicatorVersions(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<IndicatorVersionDto> versions = indicators.listVersions(id, activeDept);
+        audit.auditAction(
+            "GOV_INDICATOR_VERSION_LIST",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "查看指标版本历史", "versionCount", versions != null ? versions.size() : 0)
+        );
+        return ApiResponses.ok(versions);
+    }
+
+    @GetMapping("/indicators/{id}/versions/{version}")
+    public ApiResponse<IndicatorVersionDto> getIndicatorVersion(
+        @PathVariable UUID id,
+        @PathVariable String version,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        IndicatorVersionDto snapshot = indicators.getVersion(id, version, activeDept);
+        audit.auditAction(
+            "GOV_INDICATOR_VERSION_VIEW",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "查看指标版本快照", "version", version)
+        );
+        return ApiResponses.ok(snapshot);
     }
 
     @PostMapping("/indicators")

@@ -239,7 +239,12 @@ final class GovernanceMapper {
         IssueTicketDto dto = new IssueTicketDto();
         dto.setId(entity.getId());
         dto.setSourceType(entity.getSourceType());
-        dto.setSourceId(Optional.ofNullable(entity.getComplianceBatch()).map(GovComplianceBatch::getId).orElse(null));
+        dto.setSourceId(
+            Optional
+                .ofNullable(entity.getSourceRefId())
+                .or(() -> Optional.ofNullable(entity.getComplianceBatch()).map(GovComplianceBatch::getId))
+                .orElse(null)
+        );
         dto.setTitle(entity.getTitle());
         dto.setSummary(entity.getSummary());
         dto.setStatus(entity.getStatus());

@@ -18,4 +18,10 @@ public interface GovIssueTicketRepository extends JpaRepository<GovIssueTicket, 
         String sourceType,
         UUID complianceBatchId
     );
+
+    Optional<GovIssueTicket> findFirstBySourceTypeIgnoreCaseAndSourceRefIdAndStatusInOrderByCreatedDateDesc(
+        String sourceType,
+        UUID sourceRefId,
+        List<String> statuses
+    );
 }

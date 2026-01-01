@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_03_governance_indicator_version" author="platform">
+        <createTable tableName="gov_indicator_version">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="indicator_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="change_summary" type="varchar(1024)"/>
+            <column name="snapshot_json" type="text"/>
+            <column name="released_at" type="timestamptz"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamptz"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamptz"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="gov_indicator_version"
+            baseColumnNames="indicator_id"
+            referencedTableName="gov_indicator_definition"
+            referencedColumnNames="id"
+            constraintName="fk_gov_indicator_version_indicator"/>
+
+        <addUniqueConstraint
+            tableName="gov_indicator_version"
+            columnNames="indicator_id,version"
+            constraintName="uk_gov_indicator_version"/>
+
+        <createIndex tableName="gov_indicator_version" indexName="idx_gov_indicator_version_indicator">
+            <column name="indicator_id"/>
+        </createIndex>
+        <createIndex tableName="gov_indicator_version" indexName="idx_gov_indicator_version_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+

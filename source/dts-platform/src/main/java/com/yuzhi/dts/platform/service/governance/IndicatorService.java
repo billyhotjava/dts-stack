@@ -1,15 +1,20 @@
 package com.yuzhi.dts.platform.service.governance;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
+import com.yuzhi.dts.platform.domain.governance.GovIndicatorVersion;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
+import com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
+import com.yuzhi.dts.platform.service.governance.dto.IndicatorVersionDto;
 import com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
@@ -37,26 +42,32 @@ import org.springframework.util.StringUtils;
 public class IndicatorService {
 
     private final GovIndicatorDefinitionRepository repository;
+    private final GovIndicatorVersionRepository versionRepository;
     private final CatalogDatasetRepository datasetRepository;
     private final AccessChecker accessChecker;
     private final OrganizationVisibilityService organizationVisibilityService;
     private final QueryGateway queryGateway;
     private final SecuritySqlRewriter securitySqlRewriter;
+    private final ObjectMapper objectMapper;
 
     public IndicatorService(
         GovIndicatorDefinitionRepository repository,
+        GovIndicatorVersionRepository versionRepository,
         CatalogDatasetRepository datasetRepository,
         AccessChecker accessChecker,
         OrganizationVisibilityService organizationVisibilityService,
         QueryGateway queryGateway,
-        SecuritySqlRewriter securitySqlRewriter
+        SecuritySqlRewriter securitySqlRewriter,
+        ObjectMapper objectMapper
     ) {
         this.repository = repository;
+        this.versionRepository = versionRepository;
         this.datasetRepository = datasetRepository;
         this.accessChecker = accessChecker;
         this.organizationVisibilityService = organizationVisibilityService;
         this.queryGateway = queryGateway;
         this.securitySqlRewriter = securitySqlRewriter;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -101,15 +112,20 @@ public class IndicatorService {
         applyDefaults(entity, activeDept);
         validateUpsert(entity, null, activeDept);
         GovIndicatorDefinition saved = repository.save(entity);
+        snapshot(saved, saved.getVersion(), "DRAFT", saved.getVersionNotes(), null);
         return IndicatorMapper.toDto(saved);
     }
 
     public IndicatorDto update(UUID id, IndicatorUpsertRequest request, String activeDept) {
         GovIndicatorDefinition entity = repository.findById(id).orElseThrow();
+        if (!deptAllowed(entity, activeDept)) {
+            throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
+        }
         IndicatorMapper.apply(entity, request);
         applyDefaults(entity, activeDept);
         validateUpsert(entity, id, activeDept);
         GovIndicatorDefinition saved = repository.save(entity);
+        snapshot(saved, saved.getVersion(), StringUtils.hasText(saved.getStatus()) ? saved.getStatus() : "DRAFT", saved.getVersionNotes(), null);
         return IndicatorMapper.toDto(saved);
     }
 
@@ -121,7 +137,9 @@ public class IndicatorService {
         ensurePublishReady(entity, activeDept);
         entity.setStatus("PUBLISHED");
         applyDefaults(entity, activeDept);
-        return IndicatorMapper.toDto(repository.save(entity));
+        GovIndicatorDefinition saved = repository.save(entity);
+        snapshot(saved, saved.getVersion(), "PUBLISHED", saved.getVersionNotes(), Instant.now());
+        return IndicatorMapper.toDto(saved);
     }
 
     public IndicatorValidationResultDto validateComputeRule(UUID id, String activeDept) {
@@ -192,7 +210,9 @@ public class IndicatorService {
         }
         entity.setStatus("DEPRECATED");
         applyDefaults(entity, activeDept);
-        return IndicatorMapper.toDto(repository.save(entity));
+        GovIndicatorDefinition saved = repository.save(entity);
+        snapshot(saved, saved.getVersion(), "DEPRECATED", saved.getVersionNotes(), null);
+        return IndicatorMapper.toDto(saved);
     }
 
     public void delete(UUID id, String activeDept) {
@@ -201,6 +221,59 @@ public class IndicatorService {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
         repository.delete(entity);
+    }
+
+    @Transactional(readOnly = true)
+    public List<IndicatorVersionDto> listVersions(UUID indicatorId, String activeDept) {
+        GovIndicatorDefinition entity = repository.findById(indicatorId).orElseThrow();
+        if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
+        }
+        return versionRepository
+            .findByIndicatorOrderByCreatedDateDesc(entity)
+            .stream()
+            .map(IndicatorMapper::toDto)
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public IndicatorVersionDto getVersion(UUID indicatorId, String version, String activeDept) {
+        GovIndicatorDefinition entity = repository.findById(indicatorId).orElseThrow();
+        if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
+        }
+        GovIndicatorVersion snap = versionRepository
+            .findByIndicatorAndVersion(entity, version)
+            .orElseThrow(() -> new IllegalArgumentException("指标版本不存在"));
+        return IndicatorMapper.toDto(snap);
+    }
+
+    private void snapshot(GovIndicatorDefinition indicator, String version, String status, String changeSummary, Instant releasedAt) {
+        if (indicator == null || indicator.getId() == null || !StringUtils.hasText(version)) {
+            return;
+        }
+        try {
+            String normalizedVersion = version.trim();
+            GovIndicatorVersion snapshot = versionRepository
+                .findByIndicatorAndVersion(indicator, normalizedVersion)
+                .orElseGet(GovIndicatorVersion::new);
+            snapshot.setIndicator(indicator);
+            snapshot.setVersion(normalizedVersion);
+            snapshot.setStatus(StringUtils.hasText(status) ? status.trim() : "DRAFT");
+            snapshot.setChangeSummary(StringUtils.hasText(changeSummary) ? changeSummary.trim() : null);
+            snapshot.setReleasedAt(releasedAt);
+            snapshot.setSnapshotJson(serializeSnapshot(indicator));
+            versionRepository.save(snapshot);
+        } catch (Exception ignored) {}
+    }
+
+    private String serializeSnapshot(GovIndicatorDefinition indicator) {
+        try {
+            IndicatorDto dto = IndicatorMapper.toDto(indicator);
+            return objectMapper.writeValueAsString(dto);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize indicator snapshot", e);
+        }
     }
 
     private void ensurePublishReady(GovIndicatorDefinition entity, String activeDept) {

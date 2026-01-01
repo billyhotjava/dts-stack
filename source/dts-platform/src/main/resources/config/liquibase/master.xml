@@ -63,4 +63,7 @@
     <include file="config/liquibase/changelog/20260101_02_governance_quality_task.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260101_03_modeling_aux_tables.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260101_04_catalog_dataset_security_mapping.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260102_01_infra_catalog_sync_run.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260102_02_governance_issue_source_ref.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260102_03_governance_indicator_version.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

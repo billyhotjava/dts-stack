@@ -17,6 +17,15 @@
             { "code": "CATALOG_SECURITY_MAPPING_VIEW", "display": "查看行级安全字段映射", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "CATALOG_SECURITY_MAPPING_EDIT", "display": "维护行级安全字段映射", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
+        },
+        {
+          "key": "catalog.metadata",
+          "title": "元数据采集与维护",
+          "actions": [
+            { "code": "CATALOG_SYNC_TRIGGER", "display": "触发元数据采集", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "CATALOG_SYNC_STATUS_VIEW", "display": "查看采集状态", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "CATALOG_SYNC_RUN_LIST", "display": "查看采集运行历史", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
         }
       ]
     },
@@ -42,6 +51,14 @@
       "title": "治理与质量",
       "entries": [
         {
+          "key": "governance.indicators",
+          "title": "指标管理",
+          "actions": [
+            { "code": "GOV_INDICATOR_VERSION_LIST", "display": "查看指标版本历史", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_INDICATOR_VERSION_VIEW", "display": "查看指标版本快照", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
+        },
+        {
           "key": "governance.rules",
           "title": "质量规则",
           "actions": [
@@ -56,6 +73,20 @@
             { "code": "GOV_COMPLIANCE_PLAN", "display": "编排合规检查", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "GOV_COMPLIANCE_RUN", "display": "发起合规检查", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "GOV_COMPLIANCE_REVIEW", "display": "审核合规结果", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "security",
+      "title": "安全合规",
+      "entries": [
+        {
+          "key": "security.policies",
+          "title": "安全策略中心",
+          "actions": [
+            { "code": "SECURITY_POLICY_OVERVIEW_VIEW", "display": "查看安全策略概览", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SECURITY_POLICY_EXPLAIN_VIEW", "display": "查看数据集安全策略解释", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
         }
       ]

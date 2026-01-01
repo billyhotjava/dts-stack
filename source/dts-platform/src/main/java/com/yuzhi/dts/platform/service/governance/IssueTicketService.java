@@ -15,6 +15,7 @@ import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertReques
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
@@ -24,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class IssueTicketService {
+
+    private static final List<String> OPEN_STATUSES = List.of("NEW", "IN_PROGRESS", "PENDING");
 
     private final GovIssueTicketRepository ticketRepository;
     private final GovIssueActionRepository actionRepository;
@@ -73,6 +76,46 @@ public class IssueTicketService {
         ticketRepository.save(ticket);
         auditService.audit("CREATE", "governance.issue", ticket.getId().toString());
         return GovernanceMapper.toDto(ticket);
+    }
+
+    public IssueTicketDto createOrTouch(
+        String sourceType,
+        UUID sourceRefId,
+        IssueTicketUpsertRequest request,
+        String actor,
+        String note
+    ) {
+        String normalizedType = StringUtils.trimToNull(sourceType);
+        if (normalizedType != null) {
+            normalizedType = normalizedType.trim().toUpperCase(Locale.ROOT);
+        }
+
+        if (normalizedType != null && sourceRefId != null) {
+            GovIssueTicket existing = ticketRepository
+                .findFirstBySourceTypeIgnoreCaseAndSourceRefIdAndStatusInOrderByCreatedDateDesc(normalizedType, sourceRefId, OPEN_STATUSES)
+                .orElse(null);
+            if (existing != null) {
+                if (StringUtils.isNotBlank(note)) {
+                    IssueActionRequest action = new IssueActionRequest();
+                    action.setActionType("AUTO_NOTE");
+                    action.setNotes(note);
+                    appendAction(existing.getId(), action, actor);
+                }
+                return GovernanceMapper.toDto(existing);
+            }
+        }
+
+        IssueTicketUpsertRequest effective = request != null ? request : new IssueTicketUpsertRequest();
+        effective.setSourceType(normalizedType);
+        effective.setSourceId(sourceRefId);
+        IssueTicketDto created = create(effective, actor);
+        if (created != null && created.getId() != null && StringUtils.isNotBlank(note)) {
+            IssueActionRequest action = new IssueActionRequest();
+            action.setActionType("AUTO_NOTE");
+            action.setNotes(note);
+            appendAction(created.getId(), action, actor);
+        }
+        return created;
     }
 
     public IssueTicketDto update(UUID id, IssueTicketUpsertRequest request) {
@@ -126,13 +169,19 @@ public class IssueTicketService {
     }
 
     private void setSource(GovIssueTicket ticket, String sourceType, UUID sourceId) {
-        if (StringUtils.isBlank(sourceType) || sourceId == null) {
+        if (StringUtils.isBlank(sourceType)) {
+            ticket.setSourceType(null);
+            ticket.setSourceRefId(null);
             ticket.setComplianceBatch(null);
             return;
         }
-        if ("COMPLIANCE".equalsIgnoreCase(sourceType)) {
+        ticket.setSourceType(sourceType.trim());
+        ticket.setSourceRefId(sourceId);
+        if ("COMPLIANCE".equalsIgnoreCase(sourceType) && sourceId != null) {
             GovComplianceBatch batch = batchRepository.findById(sourceId).orElseThrow(EntityNotFoundException::new);
             ticket.setComplianceBatch(batch);
+        } else {
+            ticket.setComplianceBatch(null);
         }
     }
 }

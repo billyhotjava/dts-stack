@@ -110,7 +110,7 @@ public class PostgresCatalogSyncService {
 
         if (metadata.isEmpty()) {
             LOG.info("PostgreSQL catalog sync completed: schema={} has no tables", schema);
-            return new CatalogSyncResult(schema, 0, 0, 0, 0, List.of(), null);
+            return new CatalogSyncResult(schema, 0, 0, 0, 0, 0, 0, List.of(), null);
         }
 
         int datasetsCreated = 0;
@@ -239,6 +239,8 @@ public class PostgresCatalogSyncService {
             schema,
             metadata.size(),
             datasetsCreated,
+            datasetsUpdated,
+            0,
             tablesCreated,
             columnsImported,
             processedTables,

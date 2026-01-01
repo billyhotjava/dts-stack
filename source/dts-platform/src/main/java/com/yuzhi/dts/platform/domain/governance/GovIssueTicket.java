@@ -30,6 +30,9 @@ public class GovIssueTicket extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "source_type", length = 32)
     private String sourceType;
 
+    @Column(name = "source_ref_id", columnDefinition = "uuid")
+    private UUID sourceRefId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "source_id")
     @JsonIgnoreProperties(value = { "items" }, allowSetters = true)
@@ -93,6 +96,14 @@ public class GovIssueTicket extends AbstractAuditingEntity<UUID> implements Seri
 
     public void setSourceType(String sourceType) {
         this.sourceType = sourceType;
+    }
+
+    public UUID getSourceRefId() {
+        return sourceRefId;
+    }
+
+    public void setSourceRefId(UUID sourceRefId) {
+        this.sourceRefId = sourceRefId;
     }
 
     public GovComplianceBatch getComplianceBatch() {
@@ -215,4 +226,3 @@ public class GovIssueTicket extends AbstractAuditingEntity<UUID> implements Seri
         this.actions = actions;
     }
 }
-

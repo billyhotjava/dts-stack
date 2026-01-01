@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.repository.governance.GovQualityTaskRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
@@ -37,6 +38,7 @@ public class QualityTaskService {
     private final CatalogDatasetRepository datasetRepository;
     private final QualityRunService qualityRunService;
     private final AuditService auditService;
+    private final IssueTicketService issueTicketService;
     private final DataStandardSecurity security;
     private final OrganizationVisibilityService organizationVisibilityService;
     private final AccessChecker accessChecker;
@@ -47,6 +49,7 @@ public class QualityTaskService {
         CatalogDatasetRepository datasetRepository,
         QualityRunService qualityRunService,
         AuditService auditService,
+        IssueTicketService issueTicketService,
         DataStandardSecurity security,
         OrganizationVisibilityService organizationVisibilityService,
         AccessChecker accessChecker
@@ -56,6 +59,7 @@ public class QualityTaskService {
         this.datasetRepository = datasetRepository;
         this.qualityRunService = qualityRunService;
         this.auditService = auditService;
+        this.issueTicketService = issueTicketService;
         this.security = security;
         this.organizationVisibilityService = organizationVisibilityService;
         this.accessChecker = accessChecker;
@@ -180,8 +184,31 @@ public class QualityTaskService {
                 payload.put("taskName", task.getName());
                 payload.put("message", ex.getMessage());
                 auditService.recordAs("system", "ERROR", "governance.quality.task", "governance.quality.task", String.valueOf(task.getId()), "FAIL", payload, null);
+                createIssueForTaskFailure(task, ex.getMessage());
             }
         }
+    }
+
+    private void createIssueForTaskFailure(GovQualityTask task, String message) {
+        if (task == null || task.getId() == null) {
+            return;
+        }
+        try {
+            IssueTicketUpsertRequest req = new IssueTicketUpsertRequest();
+            req.setTitle("质量巡检计划执行失败");
+            StringBuilder summary = new StringBuilder();
+            summary.append("计划：").append(task.getName() != null ? task.getName() : task.getId().toString());
+            if (task.getDatasetId() != null) {
+                summary.append("\n数据集：").append(task.getDatasetId());
+            }
+            if (StringUtils.isNotBlank(message)) {
+                summary.append("\n原因：").append(message);
+            }
+            req.setSummary(summary.toString());
+            req.setSeverity("HIGH");
+            req.setTags(List.of("QUALITY_TASK", "datasetId=" + String.valueOf(task.getDatasetId())));
+            issueTicketService.createOrTouch("QUALITY_TASK", task.getId(), req, "system", "系统自动生成：巡检计划执行失败");
+        } catch (Exception ignored) {}
     }
 
     private List<Map<String, Object>> triggerInternal(GovQualityTask task, String actor, String triggerType) {

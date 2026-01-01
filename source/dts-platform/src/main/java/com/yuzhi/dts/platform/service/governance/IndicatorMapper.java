@@ -2,8 +2,10 @@ package com.yuzhi.dts.platform.service.governance;
 
 import com.yuzhi.dts.platform.domain.governance.GovDimensionDictionary;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
+import com.yuzhi.dts.platform.domain.governance.GovIndicatorVersion;
 import com.yuzhi.dts.platform.service.governance.dto.DimensionDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
+import com.yuzhi.dts.platform.service.governance.dto.IndicatorVersionDto;
 import com.yuzhi.dts.platform.service.governance.request.DimensionUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest;
 import org.springframework.util.StringUtils;
@@ -37,6 +39,21 @@ final class IndicatorMapper {
         dto.setCreatedDate(entity.getCreatedDate());
         dto.setLastModifiedBy(entity.getLastModifiedBy());
         dto.setLastModifiedDate(entity.getLastModifiedDate());
+        return dto;
+    }
+
+    static IndicatorVersionDto toDto(GovIndicatorVersion entity) {
+        if (entity == null) return null;
+        IndicatorVersionDto dto = new IndicatorVersionDto();
+        dto.setId(entity.getId());
+        dto.setIndicatorId(entity.getIndicator() != null ? entity.getIndicator().getId() : null);
+        dto.setVersion(entity.getVersion());
+        dto.setStatus(entity.getStatus());
+        dto.setChangeSummary(entity.getChangeSummary());
+        dto.setReleasedAt(entity.getReleasedAt());
+        dto.setCreatedDate(entity.getCreatedDate());
+        dto.setCreatedBy(entity.getCreatedBy());
+        dto.setSnapshotJson(entity.getSnapshotJson());
         return dto;
     }
 

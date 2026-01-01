@@ -1,6 +1,9 @@
 package com.yuzhi.dts.platform.service.infra;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.domain.infra.InfraCatalogSyncRun;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.infra.InfraCatalogSyncRunRepository;
 import com.yuzhi.dts.platform.service.infra.InceptorCatalogSyncService.CatalogSyncResult;
 import com.yuzhi.dts.platform.service.infra.event.InceptorDataSourcePublishedEvent;
 import java.time.Instant;
@@ -27,23 +30,38 @@ public class InceptorIntegrationCoordinator {
     private final CacheManager cacheManager;
     private final CatalogDatasetRepository datasetRepository;
     private final InceptorCatalogSyncService catalogSyncService;
+    private final InfraCatalogSyncRunRepository syncRunRepository;
+    private final ObjectMapper objectMapper;
     private final AtomicReference<IntegrationStatus> lastStatus = new AtomicReference<>(IntegrationStatus.empty());
     private final AtomicBoolean syncing = new AtomicBoolean(false);
 
     public InceptorIntegrationCoordinator(
         @Nullable CacheManager cacheManager,
         CatalogDatasetRepository datasetRepository,
-        InceptorCatalogSyncService catalogSyncService
+        InceptorCatalogSyncService catalogSyncService,
+        InfraCatalogSyncRunRepository syncRunRepository,
+        ObjectMapper objectMapper
     ) {
         this.cacheManager = cacheManager;
         this.datasetRepository = datasetRepository;
         this.catalogSyncService = catalogSyncService;
+        this.syncRunRepository = syncRunRepository;
+        this.objectMapper = objectMapper;
     }
 
     public IntegrationStatus synchronize(String reason) {
         if (!syncing.compareAndSet(false, true)) {
             return lastStatus.get();
         }
+        InfraCatalogSyncRun run = new InfraCatalogSyncRun();
+        run.setIntegration("INCEPTOR");
+        run.setReason(reason);
+        run.setStatus("RUNNING");
+        run.setStartedAt(Instant.now());
+        run.setCatalogDatasetCountBefore(safeDatasetCount());
+        try {
+            syncRunRepository.save(run);
+        } catch (Exception ignored) {}
         List<String> actions = new ArrayList<>();
         CatalogSyncResult syncResult = null;
         String error = null;
@@ -86,12 +104,30 @@ public class InceptorIntegrationCoordinator {
                 syncResult != null ? syncResult.database() : null,
                 syncResult != null ? syncResult.tablesDiscovered() : 0,
                 syncResult != null ? syncResult.datasetsCreated() : 0,
+                syncResult != null ? syncResult.datasetsUpdated() : 0,
+                syncResult != null ? syncResult.datasetsRemoved() : 0,
                 syncResult != null ? syncResult.tablesCreated() : 0,
                 syncResult != null ? syncResult.columnsImported() : 0,
                 syncResult != null && syncResult.error() != null ? syncResult.error() : error
             );
             lastStatus.set(status);
             LOG.info("Inceptor integration synchronized. reason={}, actions={}, datasets={}", reason, actions, datasetCount);
+            try {
+                run.setFinishedAt(Instant.now());
+                run.setCatalogDatasetCountAfter(datasetCount);
+                run.setTablesDiscovered(syncResult != null ? syncResult.tablesDiscovered() : null);
+                run.setDatasetsCreated(syncResult != null ? syncResult.datasetsCreated() : null);
+                run.setDatasetsUpdated(syncResult != null ? syncResult.datasetsUpdated() : null);
+                run.setDatasetsRemoved(syncResult != null ? syncResult.datasetsRemoved() : null);
+                run.setTablesCreated(syncResult != null ? syncResult.tablesCreated() : null);
+                run.setColumnsImported(syncResult != null ? syncResult.columnsImported() : null);
+                run.setError(status.error());
+                run.setStatus(status.error() != null ? "FAILED" : "SUCCESS");
+                run.setDetailsJson(objectMapper.writeValueAsString(status));
+                syncRunRepository.save(run);
+            } catch (Exception ex) {
+                LOG.debug("Failed to persist inceptor sync run: {}", ex.getMessage());
+            }
             syncing.set(false);
         }
         return lastStatus.get();
@@ -153,12 +189,14 @@ public class InceptorIntegrationCoordinator {
         String database,
         int tablesDiscovered,
         int datasetsCreated,
+        int datasetsUpdated,
+        int datasetsRemoved,
         int tablesCreated,
         int columnsImported,
         String error
     ) {
         public static IntegrationStatus empty() {
-            return new IntegrationStatus(null, null, Collections.emptyList(), 0L, null, 0, 0, 0, 0, null);
+            return new IntegrationStatus(null, null, Collections.emptyList(), 0L, null, 0, 0, 0, 0, 0, 0, null);
         }
     }
 }

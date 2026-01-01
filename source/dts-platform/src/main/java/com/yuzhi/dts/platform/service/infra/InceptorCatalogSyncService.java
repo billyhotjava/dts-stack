@@ -146,7 +146,7 @@ public class InceptorCatalogSyncService {
                 LOG.info("Delegating to PostgreSQL catalog sync because Inceptor returned zero tables");
                 return postgresCatalogSyncService.synchronize();
             }
-            return new CatalogSyncResult(database, 0, 0, 0, 0, Collections.emptyList(), null);
+            return new CatalogSyncResult(database, 0, 0, 0, datasetsRemoved, 0, 0, Collections.emptyList(), null);
         }
 
         int datasetsCreated = 0;
@@ -277,6 +277,8 @@ public class InceptorCatalogSyncService {
             database,
             metadata.size(),
             datasetsCreated,
+            datasetsUpdated,
+            datasetsRemoved,
             tablesCreated,
             columnsImported,
             processedTables,
@@ -553,17 +555,19 @@ public class InceptorCatalogSyncService {
         String database,
         int tablesDiscovered,
         int datasetsCreated,
+        int datasetsUpdated,
+        int datasetsRemoved,
         int tablesCreated,
         int columnsImported,
         List<String> tableNames,
         String error
     ) {
         public static CatalogSyncResult inactive() {
-            return new CatalogSyncResult(null, 0, 0, 0, 0, Collections.emptyList(), null);
+            return new CatalogSyncResult(null, 0, 0, 0, 0, 0, 0, Collections.emptyList(), null);
         }
 
         public static CatalogSyncResult failed(String error) {
-            return new CatalogSyncResult(null, 0, 0, 0, 0, Collections.emptyList(), error);
+            return new CatalogSyncResult(null, 0, 0, 0, 0, 0, 0, Collections.emptyList(), error);
         }
     }
 }
