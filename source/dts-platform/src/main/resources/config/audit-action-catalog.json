@@ -13,8 +13,10 @@
             { "code": "CATALOG_ASSET_LIST", "display": "查看数据资产列表", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "CATALOG_ASSET_CREATE", "display": "新增数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "CATALOG_ASSET_VIEW", "display": "查看数据资产", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "CATALOG_ASSET_USAGE_VIEW", "display": "查看数据资产使用统计", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "CATALOG_ASSET_EDIT", "display": "编辑数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "CATALOG_ASSET_PUBLISH", "display": "发布数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "CATALOG_ASSET_OFFLINE", "display": "下线数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "CATALOG_ASSET_DELETE", "display": "删除数据资产", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "CATALOG_SECURITY_MAPPING_VIEW", "display": "查看行级安全字段映射", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "CATALOG_SECURITY_MAPPING_EDIT", "display": "维护行级安全字段映射", "phases": ["SUCCESS"], "supportsFlow": false }

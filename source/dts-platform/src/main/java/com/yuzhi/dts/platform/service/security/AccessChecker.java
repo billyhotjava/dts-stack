@@ -45,6 +45,10 @@ public class AccessChecker {
 
     public boolean canRead(CatalogDataset dataset) {
         if (dataset == null) return false;
+        // Disabled datasets are considered offline; only super admins can see them.
+        if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue() && !isSuperAdmin()) {
+            return false;
+        }
         // Special handling: OP_ADMIN (and ADMIN) can access all datasets without restriction
         if (isSuperAdmin()) return true;
         // Level check (ABAC: personnel_level vs dataset classification)，缺失时回退旧密级逻辑

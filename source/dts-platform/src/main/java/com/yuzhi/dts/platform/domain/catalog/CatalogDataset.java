@@ -52,6 +52,9 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "warehouse_layer", length = 16)
     private String warehouseLayer;
 
+    @Column(name = "enabled", nullable = false)
+    private Boolean enabled = Boolean.TRUE;
+
     // VIEW | RANGER | API (how the dataset is exposed/consumed)
     @Column(name = "exposed_by", length = 16)
     private String exposedBy;
@@ -164,6 +167,14 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
 
     public void setWarehouseLayer(String warehouseLayer) {
         this.warehouseLayer = warehouseLayer;
+    }
+
+    public Boolean getEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(Boolean enabled) {
+        this.enabled = enabled;
     }
 
     public String getExposedBy() {

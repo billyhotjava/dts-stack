@@ -229,6 +229,7 @@ public class CatalogResource {
         @RequestParam(required = false) String classification,
         @RequestParam(required = false) String ownerDept,
         @RequestParam(required = false) String warehouseLayer,
+        @RequestParam(required = false, defaultValue = "true") boolean enabledOnly,
         @RequestParam(required = false) String type,
         @RequestParam(required = false) String exposedBy,
         @RequestParam(required = false) String owner,
@@ -257,6 +258,7 @@ public class CatalogResource {
             .filter(ds -> exposedBy == null || (ds.getExposedBy() != null && ds.getExposedBy().equalsIgnoreCase(exposedBy)))
             .filter(ds -> owner == null || (ds.getOwner() != null && ds.getOwner().toLowerCase().contains(owner.toLowerCase())))
             .filter(ds -> tag == null || (ds.getTags() != null && ds.getTags().toLowerCase().contains(tag.toLowerCase())))
+            .filter(ds -> !enabledOnly || (ds.getEnabled() == null || ds.getEnabled().booleanValue()))
             // RBAC/level gate
             .filter(accessChecker::canRead)
             // Department gate using active context (headers injected by frontend)
@@ -303,6 +305,8 @@ public class CatalogResource {
         putIfHasText(auditPayload, "keyword", keyword);
         putIfHasText(auditPayload, "classification", classification);
         putIfHasText(auditPayload, "ownerDept", ownerDept);
+        putIfHasText(auditPayload, "warehouseLayer", warehouseLayer);
+        auditPayload.put("enabledOnly", enabledOnly);
         putIfHasText(auditPayload, "type", type);
         putIfHasText(auditPayload, "exposedBy", exposedBy);
         putIfHasText(auditPayload, "owner", owner);
@@ -313,17 +317,22 @@ public class CatalogResource {
     }
 
     @GetMapping("/datasets/{id}")
-    public ApiResponse<Map<String, Object>> getDataset(@PathVariable UUID id) {
-        Map<String, Object> ds = datasetRepo
-            .findById(id)
-            .filter(accessChecker::canRead)
-            .map(dataset -> toDatasetDto(dataset, true))
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问"));
+    public ApiResponse<Map<String, Object>> getDataset(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CatalogDataset dataset = datasetRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问"));
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, effDept)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
+        }
+        Map<String, Object> ds = toDatasetDto(dataset, true);
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         String datasetName = safeText(ds.get("name"));
         auditPayload.put("summary", datasetName == null ? "查看数据资产详情" : "查看数据资产：" + datasetName);
         putIfHasText(auditPayload, "targetName", datasetName);
         auditPayload.put("datasetId", id.toString());
+        putIfHasText(auditPayload, "activeDept", effDept);
         putIfHasText(auditPayload, "classification", safeText(ds.get("classification")));
         putIfHasText(auditPayload, "ownerDept", safeText(ds.get("ownerDept")));
         putIfHasText(auditPayload, "owner", safeText(ds.get("owner")));
@@ -448,6 +457,7 @@ public class CatalogResource {
         m.put("trinoCatalog", d.getTrinoCatalog());
         m.put("tags", d.getTags());
         m.put("warehouseLayer", d.getWarehouseLayer());
+        m.put("enabled", d.getEnabled());
         m.put("exposedBy", d.getExposedBy());
         m.put("lifecycleStatus", d.getLifecycleStatus());
         m.put("retentionDays", d.getRetentionDays());
@@ -498,6 +508,8 @@ public class CatalogResource {
     public ApiResponse<CatalogDataset> createDataset(@Valid @RequestBody CatalogDataset dataset) {
         applySourcePolicy(dataset);
         normalizeClassification(dataset);
+        normalizeWarehouseLayer(dataset);
+        dataset.setEnabled(dataset.getEnabled() != null ? Boolean.TRUE.equals(dataset.getEnabled()) : Boolean.TRUE);
         applyOwnerDepartmentPolicy(dataset, null, false);
         ensurePrimarySourceIfRequired(dataset);
         ensureDatasetEditPermission(dataset);
@@ -533,6 +545,8 @@ public class CatalogResource {
         for (CatalogDataset item : items) {
             applySourcePolicy(item);
             normalizeClassification(item);
+            normalizeWarehouseLayer(item);
+            item.setEnabled(item.getEnabled() != null ? Boolean.TRUE.equals(item.getEnabled()) : Boolean.TRUE);
             applyOwnerDepartmentPolicy(item, null, false);
             ensurePrimarySourceIfRequired(item);
             ensureDatasetEditPermission(item);
@@ -568,6 +582,11 @@ public class CatalogResource {
             existing.setHiveTable(patch.getHiveTable());
             existing.setTrinoCatalog(patch.getTrinoCatalog());
             existing.setTags(patch.getTags());
+            existing.setWarehouseLayer(trimToNull(patch.getWarehouseLayer()));
+            normalizeWarehouseLayer(existing);
+            if (patch.getEnabled() != null) {
+                existing.setEnabled(Boolean.TRUE.equals(patch.getEnabled()));
+            }
             existing.setExposedBy(patch.getExposedBy());
             existing.setLifecycleStatus(trimToNull(patch.getLifecycleStatus()));
             existing.setRetentionDays(patch.getRetentionDays());
@@ -590,6 +609,42 @@ public class CatalogResource {
             );
             throw ex;
         }
+    }
+
+    @PostMapping("/datasets/{id}/publish")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> publishDataset(@PathVariable UUID id) {
+        CatalogDataset dataset = datasetRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在"));
+        ensureDatasetEditPermission(dataset);
+        Map<String, Object> before = datasetSnapshot(dataset);
+        dataset.setEnabled(Boolean.TRUE);
+        CatalogDataset saved = datasetRepo.save(dataset);
+        Map<String, Object> after = datasetSnapshot(saved);
+        audit.auditAction(
+            "CATALOG_ASSET_PUBLISH",
+            AuditStage.SUCCESS,
+            id.toString(),
+            datasetChangePayload("发布数据资产：" + displayName(saved), before, after)
+        );
+        return ApiResponses.ok(Map.of("id", id.toString(), "enabled", Boolean.TRUE));
+    }
+
+    @PostMapping("/datasets/{id}/offline")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> offlineDataset(@PathVariable UUID id) {
+        CatalogDataset dataset = datasetRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在"));
+        ensureDatasetEditPermission(dataset);
+        Map<String, Object> before = datasetSnapshot(dataset);
+        dataset.setEnabled(Boolean.FALSE);
+        CatalogDataset saved = datasetRepo.save(dataset);
+        Map<String, Object> after = datasetSnapshot(saved);
+        audit.auditAction(
+            "CATALOG_ASSET_OFFLINE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            datasetChangePayload("下线数据资产：" + displayName(saved), before, after)
+        );
+        return ApiResponses.ok(Map.of("id", id.toString(), "enabled", Boolean.FALSE));
     }
 
     private Map<String, Object> datasetChangePayload(String summary, Map<String, Object> before, Map<String, Object> after) {
@@ -666,6 +721,12 @@ public class CatalogResource {
         }
         if (StringUtils.hasText(dataset.getTags())) {
             snapshot.put("tags", dataset.getTags());
+        }
+        if (StringUtils.hasText(dataset.getWarehouseLayer())) {
+            snapshot.put("warehouseLayer", dataset.getWarehouseLayer());
+        }
+        if (dataset.getEnabled() != null) {
+            snapshot.put("enabled", dataset.getEnabled());
         }
         if (StringUtils.hasText(dataset.getExposedBy())) {
             snapshot.put("exposedBy", dataset.getExposedBy());
@@ -770,6 +831,16 @@ public class CatalogResource {
         } else {
             dataset.setClassification("INTERNAL");
         }
+    }
+
+    private void normalizeWarehouseLayer(CatalogDataset dataset) {
+        String value = trimToNull(dataset.getWarehouseLayer());
+        if (value == null) {
+            dataset.setWarehouseLayer(null);
+            return;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        dataset.setWarehouseLayer(normalized);
     }
 
     private void ensurePrimarySourceIfRequired(CatalogDataset dataset) {
