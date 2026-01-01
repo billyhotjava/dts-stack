@@ -300,41 +300,53 @@ public class ExploreResource {
         @PathVariable UUID executionId,
         @RequestBody(required = false) Map<String, Object> body
     ) {
-        return resultSetRepo
-            .findById(executionId)
-            .map(record -> {
-                int ttlDays = 7;
-                if (body != null && body.get("ttlDays") != null) {
-                    try {
-                        ttlDays = Math.max(1, Integer.parseInt(String.valueOf(body.get("ttlDays"))));
-                    } catch (NumberFormatException ignored) {}
-                }
-                String requestedName = body != null ? trimToLength(asText(body.get("name")), 128) : null;
-                if (requestedName != null && !requestedName.isBlank()) {
-                    record.setName(requestedName);
-                } else if (record.getName() == null || record.getName().isBlank()) {
-                    record.setName("临时结果集");
-                }
-                Instant now = Instant.now();
-                record.setTtlDays(ttlDays);
-                record.setExpiresAt(now.plus(ttlDays, ChronoUnit.DAYS));
-                record.setStorageUri("oss://datalake/explore/" + executionId + ".parquet");
-                resultSetRepo.save(record);
-                recordAudit(
-                    "UPDATE",
-                    "explore.saveResult",
-                    executionId.toString(),
-                    "保存查询结果集：" + safeLabel(record.getName()),
-                    record.getName()
-                );
-                Map<String, Object> resp = new LinkedHashMap<>();
-                resp.put("id", executionId);
-                resp.put("name", record.getName());
-                resp.put("expiresAt", Optional.ofNullable(record.getExpiresAt()).map(Instant::toString).orElse(null));
-                resp.put("storageUri", record.getStorageUri());
-                return ApiResponses.ok(resp);
-            })
-            .orElseGet(() -> ApiResponses.error("Result set not found"));
+        QueryExecution execution = executionRepo.findById(executionId).orElse(null);
+        if (execution == null) {
+            return ApiResponses.error("Execution not found");
+        }
+        UUID resultSetId = execution.getResultSetId();
+        if (resultSetId == null) {
+            return ApiResponses.error("Execution has no result set");
+        }
+        ResultSet record = resultSetRepo.findById(resultSetId).orElse(null);
+        if (record == null) {
+            return ApiResponses.error("Result set not found");
+        }
+        if (!canManageAllResultSets()) {
+            assertResultSetAccess(record);
+        }
+
+        int ttlDays = 7;
+        if (body != null && body.get("ttlDays") != null) {
+            try {
+                ttlDays = Math.max(1, Integer.parseInt(String.valueOf(body.get("ttlDays"))));
+            } catch (NumberFormatException ignored) {}
+        }
+        String requestedName = body != null ? trimToLength(asText(body.get("name")), 128) : null;
+        if (requestedName != null && !requestedName.isBlank()) {
+            record.setName(requestedName);
+        } else if (record.getName() == null || record.getName().isBlank()) {
+            record.setName("临时结果集");
+        }
+        Instant now = Instant.now();
+        record.setTtlDays(ttlDays);
+        record.setExpiresAt(now.plus(ttlDays, ChronoUnit.DAYS));
+        record.setStorageUri("oss://datalake/explore/" + record.getId() + ".parquet");
+        resultSetRepo.save(record);
+        recordAudit(
+            "UPDATE",
+            "explore.saveResult",
+            executionId.toString(),
+            "保存查询结果集：" + safeLabel(record.getName()),
+            record.getName()
+        );
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("executionId", executionId);
+        resp.put("resultSetId", record.getId());
+        resp.put("name", record.getName());
+        resp.put("expiresAt", Optional.ofNullable(record.getExpiresAt()).map(Instant::toString).orElse(null));
+        resp.put("storageUri", record.getStorageUri());
+        return ApiResponses.ok(resp);
     }
 
     @GetMapping("/query-executions")

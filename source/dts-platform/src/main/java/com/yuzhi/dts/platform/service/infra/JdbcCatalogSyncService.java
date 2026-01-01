@@ -5,14 +5,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
+import com.yuzhi.dts.platform.domain.catalog.CatalogSchemaDriftEvent;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogSchemaDriftEventRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import jakarta.transaction.Transactional;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -56,6 +59,8 @@ public class JdbcCatalogSyncService {
     private final CatalogTableSchemaRepository tableRepository;
     private final CatalogColumnSchemaRepository columnRepository;
     private final CatalogAutoLineageService autoLineageService;
+    private final CatalogSchemaDriftEventRepository schemaDriftEventRepository;
+    private final SchemaDriftDetector schemaDriftDetector;
 
     public JdbcCatalogSyncService(
         InfraDataSourceRepository infraDataSourceRepository,
@@ -65,7 +70,9 @@ public class JdbcCatalogSyncService {
         CatalogDatasetRepository datasetRepository,
         CatalogTableSchemaRepository tableRepository,
         CatalogColumnSchemaRepository columnRepository,
-        CatalogAutoLineageService autoLineageService
+        CatalogAutoLineageService autoLineageService,
+        CatalogSchemaDriftEventRepository schemaDriftEventRepository,
+        SchemaDriftDetector schemaDriftDetector
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.secretService = secretService;
@@ -75,9 +82,15 @@ public class JdbcCatalogSyncService {
         this.tableRepository = tableRepository;
         this.columnRepository = columnRepository;
         this.autoLineageService = autoLineageService;
+        this.schemaDriftEventRepository = schemaDriftEventRepository;
+        this.schemaDriftDetector = schemaDriftDetector;
     }
 
     public List<JdbcSyncResult> synchronizeAllActive() {
+        return synchronizeAllActive(null);
+    }
+
+    public List<JdbcSyncResult> synchronizeAllActive(UUID runId) {
         List<InfraDataSource> sources = infraDataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
         if (sources.isEmpty()) {
             return List.of();
@@ -87,12 +100,16 @@ public class JdbcCatalogSyncService {
             if (!isJdbcCatalogCandidate(source)) {
                 continue;
             }
-            results.add(synchronize(source));
+            results.add(synchronize(source, runId));
         }
         return results;
     }
 
     public JdbcSyncResult synchronize(InfraDataSource source) {
+        return synchronize(source, null);
+    }
+
+    public JdbcSyncResult synchronize(InfraDataSource source, UUID runId) {
         if (source == null || source.getId() == null) {
             return JdbcSyncResult.failed(null, "invalid-source");
         }
@@ -180,8 +197,8 @@ public class JdbcCatalogSyncService {
                         tablesCreated++;
                     }
 
-                    Map<String, LegacyColumnValues> legacyColumns = columnRepository
-                        .findByTable(tableSchema)
+                    List<CatalogColumnSchema> existingColumns = columnRepository.findByTable(tableSchema);
+                    Map<String, LegacyColumnValues> legacyColumns = existingColumns
                         .stream()
                         .filter(existing -> existing.getName() != null)
                         .collect(
@@ -197,6 +214,7 @@ public class JdbcCatalogSyncService {
                                 LinkedHashMap::new
                             )
                         );
+                    Map<String, SchemaDriftDetector.ColumnSnapshot> beforeSnapshot = schemaDriftDetector.snapshotExisting(existingColumns);
 
                     List<ColumnMeta> columns = listColumns(connection, resolvedCatalog, normalizedSchema, tableName);
                     columnRepository.deleteByTable(tableSchema);
@@ -223,6 +241,17 @@ public class JdbcCatalogSyncService {
                         }
                         columnRepository.saveAll(columnEntities);
                         columnsImported += columnEntities.size();
+                    }
+
+                    if (!beforeSnapshot.isEmpty() || !columns.isEmpty()) {
+                        List<SchemaDriftDetector.ColumnSnapshot> afterSnapshot = columns
+                            .stream()
+                            .map(col -> new SchemaDriftDetector.ColumnSnapshot(col.name(), col.dataType(), col.nullable()))
+                            .toList();
+                        SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(beforeSnapshot, afterSnapshot);
+                        if (drift.added() > 0 || drift.removed() > 0 || drift.changed() > 0) {
+                            recordSchemaDrift(runId, "JDBC", savedDataset, normalizedSchema, tableName, drift);
+                        }
                     }
 
                     if (table.isView()) {
@@ -287,6 +316,33 @@ public class JdbcCatalogSyncService {
                 datasetsRemoved
             );
         }
+    }
+
+    private void recordSchemaDrift(
+        UUID runId,
+        String integration,
+        CatalogDataset dataset,
+        String hiveDatabase,
+        String hiveTable,
+        SchemaDriftDetector.DriftSummary drift
+    ) {
+        if (dataset == null || dataset.getId() == null || drift == null) {
+            return;
+        }
+        if (schemaDriftEventRepository == null) {
+            return;
+        }
+        CatalogSchemaDriftEvent event = new CatalogSchemaDriftEvent();
+        event.setRunId(runId);
+        event.setIntegration(integration);
+        event.setDatasetId(dataset.getId());
+        event.setHiveDatabase(hiveDatabase);
+        event.setHiveTable(hiveTable);
+        event.setAddedCount(drift.added());
+        event.setRemovedCount(drift.removed());
+        event.setChangedCount(drift.changed());
+        event.setDetailsJson(drift.detailsJson());
+        schemaDriftEventRepository.save(event);
     }
 
     private boolean isJdbcCatalogCandidate(InfraDataSource source) {

@@ -4,14 +4,17 @@ import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
+import com.yuzhi.dts.platform.domain.catalog.CatalogSchemaDriftEvent;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogSchemaDriftEventRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.infra.InceptorCatalogSyncService.CatalogSyncResult;
 import jakarta.transaction.Transactional;
 import java.sql.Connection;
@@ -50,6 +53,8 @@ public class PostgresCatalogSyncService {
     private final DataSource dataSource;
     private final CatalogDomainRepository domainRepository;
     private final CatalogAutoLineageService autoLineageService;
+    private final CatalogSchemaDriftEventRepository schemaDriftEventRepository;
+    private final SchemaDriftDetector schemaDriftDetector;
 
     public PostgresCatalogSyncService(
         InfraDataSourceRepository infraDataSourceRepository,
@@ -59,7 +64,9 @@ public class PostgresCatalogSyncService {
         CatalogFeatureProperties catalogFeatureProperties,
         DataSource dataSource,
         CatalogDomainRepository domainRepository,
-        CatalogAutoLineageService autoLineageService
+        CatalogAutoLineageService autoLineageService,
+        CatalogSchemaDriftEventRepository schemaDriftEventRepository,
+        SchemaDriftDetector schemaDriftDetector
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.datasetRepository = datasetRepository;
@@ -69,6 +76,8 @@ public class PostgresCatalogSyncService {
         this.dataSource = dataSource;
         this.domainRepository = domainRepository;
         this.autoLineageService = autoLineageService;
+        this.schemaDriftEventRepository = schemaDriftEventRepository;
+        this.schemaDriftDetector = schemaDriftDetector;
     }
 
     public boolean isFallbackActive() {
@@ -89,6 +98,10 @@ public class PostgresCatalogSyncService {
     }
 
     public CatalogSyncResult synchronize() {
+        return synchronize(null);
+    }
+
+    public CatalogSyncResult synchronize(UUID runId) {
         if (!isFallbackActive()) {
             LOG.debug("Skipping PostgreSQL catalog sync: fallback not active");
             return CatalogSyncResult.inactive();
@@ -169,8 +182,8 @@ public class PostgresCatalogSyncService {
                 tablesCreated++;
             }
 
-            Map<String, LegacyColumnValues> legacyColumns = columnRepository
-                .findByTable(tableSchema)
+            List<CatalogColumnSchema> existingColumns = columnRepository.findByTable(tableSchema);
+            Map<String, LegacyColumnValues> legacyColumns = existingColumns
                 .stream()
                 .filter(existing -> existing.getName() != null)
                 .collect(
@@ -186,6 +199,7 @@ public class PostgresCatalogSyncService {
                         java.util.LinkedHashMap::new
                     )
                 );
+            Map<String, SchemaDriftDetector.ColumnSnapshot> beforeSnapshot = schemaDriftDetector.snapshotExisting(existingColumns);
 
             columnRepository.deleteByTable(tableSchema);
             if (!columns.isEmpty()) {
@@ -211,6 +225,17 @@ public class PostgresCatalogSyncService {
                 }
                 columnRepository.saveAll(columnEntities);
                 columnsImported += columnEntities.size();
+            }
+
+            if (!beforeSnapshot.isEmpty() || !columns.isEmpty()) {
+                List<SchemaDriftDetector.ColumnSnapshot> afterSnapshot = columns
+                    .stream()
+                    .map(col -> new SchemaDriftDetector.ColumnSnapshot(col.name(), col.dataType(), col.nullable()))
+                    .toList();
+                SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(beforeSnapshot, afterSnapshot);
+                if (drift.added() > 0 || drift.removed() > 0 || drift.changed() > 0) {
+                    recordSchemaDrift(runId, TYPE_POSTGRES, dataset, schema, tableName, drift);
+                }
             }
             if (databaseDomain != null && dataset.getDomain() == null) {
                 dataset.setDomain(databaseDomain);
@@ -246,6 +271,33 @@ public class PostgresCatalogSyncService {
             processedTables,
             null
         );
+    }
+
+    private void recordSchemaDrift(
+        UUID runId,
+        String integration,
+        CatalogDataset dataset,
+        String hiveDatabase,
+        String hiveTable,
+        SchemaDriftDetector.DriftSummary drift
+    ) {
+        if (dataset == null || dataset.getId() == null || drift == null) {
+            return;
+        }
+        if (schemaDriftEventRepository == null) {
+            return;
+        }
+        CatalogSchemaDriftEvent event = new CatalogSchemaDriftEvent();
+        event.setRunId(runId);
+        event.setIntegration(integration);
+        event.setDatasetId(dataset.getId());
+        event.setHiveDatabase(hiveDatabase);
+        event.setHiveTable(hiveTable);
+        event.setAddedCount(drift.added());
+        event.setRemovedCount(drift.removed());
+        event.setChangedCount(drift.changed());
+        event.setDetailsJson(drift.detailsJson());
+        schemaDriftEventRepository.save(event);
     }
 
     private String resolveSchema() {

@@ -66,4 +66,5 @@
     <include file="config/liquibase/changelog/20260102_01_infra_catalog_sync_run.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_02_governance_issue_source_ref.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_03_governance_indicator_version.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260102_04_catalog_schema_drift_event.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

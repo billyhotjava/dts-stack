@@ -74,7 +74,7 @@ public class InceptorIntegrationCoordinator {
                 }
             }
 
-            syncResult = catalogSyncService.synchronize();
+            syncResult = catalogSyncService.synchronize(run.getId());
             if (syncResult.error() != null) {
                 actions.add("Sync error: " + syncResult.error());
             } else if (syncResult.tablesDiscovered() > 0) {

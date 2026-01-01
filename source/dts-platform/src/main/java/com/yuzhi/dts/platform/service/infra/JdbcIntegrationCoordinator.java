@@ -63,7 +63,7 @@ public class JdbcIntegrationCoordinator {
             syncRunRepository.save(run);
         } catch (Exception ignored) {}
         try {
-            List<JdbcSyncResult> results = syncService.synchronizeAllActive();
+            List<JdbcSyncResult> results = syncService.synchronizeAllActive(run.getId());
             JdbcIntegrationStatus status = new JdbcIntegrationStatus(Instant.now(), reason, results, null);
             lastStatus.set(status);
             persistRun(run, status);
