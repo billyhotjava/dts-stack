@@ -3,13 +3,24 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.platform.domain.service.InfraExternalLink;
 import com.yuzhi.dts.platform.repository.service.InfraExternalLinkRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import com.yuzhi.dts.common.audit.AuditStage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -20,21 +31,27 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 
 @RestController
 @RequestMapping("/api/infra/external-links")
 @Transactional
 public class InfraExternalLinkResource {
 
+    private static final Logger log = LoggerFactory.getLogger(InfraExternalLinkResource.class);
+
     private static final String INFRA_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
 
     private final InfraExternalLinkRepository repo;
     private final AuditService auditService;
+    private final RestTemplate restTemplate;
 
-    public InfraExternalLinkResource(InfraExternalLinkRepository repo, AuditService auditService) {
+    public InfraExternalLinkResource(InfraExternalLinkRepository repo, AuditService auditService, RestTemplateBuilder builder) {
         this.repo = repo;
         this.auditService = auditService;
+        this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(3)).setReadTimeout(Duration.ofSeconds(5)).build();
     }
 
     @GetMapping
@@ -59,6 +76,75 @@ public class InfraExternalLinkResource {
         payload.put("url", link != null ? link.getUrl() : null);
         auditService.auditAction("INFRA_EXTERNAL_LINK_VIEW", AuditStage.SUCCESS, normalizedKey, payload);
         return ApiResponses.ok(link);
+    }
+
+    @GetMapping("/{entryKey}/check")
+    public ApiResponse<Map<String, Object>> check(@PathVariable String entryKey, HttpServletResponse response) {
+        String normalizedKey = StringUtils.hasText(entryKey) ? entryKey.trim() : "";
+        InfraExternalLink link = repo.findByEntryKeyIgnoreCase(normalizedKey).orElse(null);
+        String url = link != null && StringUtils.hasText(link.getUrl()) ? link.getUrl().trim() : null;
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryKey", normalizedKey);
+        payload.put("url", url);
+
+        if (!StringUtils.hasText(url)) {
+            payload.put("reachable", false);
+            payload.put("status", "NOT_CONFIGURED");
+            payload.put("summary", "检查外部平台连通性：未配置URL");
+            auditService.auditAction("INFRA_EXTERNAL_LINK_CHECK", AuditStage.SUCCESS, normalizedKey, payload);
+            return ApiResponses.ok(payload);
+        }
+
+        if (!isHttpUrl(url)) {
+            payload.put("reachable", false);
+            payload.put("status", "INVALID_URL");
+            payload.put("summary", "检查外部平台连通性：URL不合法");
+            auditService.auditAction("INFRA_EXTERNAL_LINK_CHECK", AuditStage.SUCCESS, normalizedKey, payload);
+            return ApiResponses.ok(payload);
+        }
+
+        Instant start = Instant.now();
+        Integer statusCode = null;
+        boolean reachable = false;
+        String error = null;
+
+        try {
+            URI uri = URI.create(url);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.ACCEPT, "*/*");
+            headers.set(HttpHeaders.RANGE, "bytes=0-0");
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<byte[]> resp = restTemplate.exchange(uri, HttpMethod.GET, entity, byte[].class);
+            statusCode = resp.getStatusCode().value();
+            reachable = statusCode >= 200 && statusCode < 400;
+            if (!reachable && (statusCode == 401 || statusCode == 403)) {
+                // reachable but requires auth
+                reachable = true;
+            }
+        } catch (IllegalArgumentException ex) {
+            error = "URL不合法：" + ex.getMessage();
+        } catch (RestClientException ex) {
+            error = ex.getMessage();
+            log.debug("External link check failed: key={}, url={}, error={}", normalizedKey, url, error);
+        }
+
+        long durationMs = java.time.Duration.between(start, Instant.now()).toMillis();
+        payload.put("reachable", reachable);
+        payload.put("durationMs", durationMs);
+        if (statusCode != null) {
+            payload.put("httpStatus", statusCode);
+        }
+        if (error != null) {
+            payload.put("error", error);
+        }
+        payload.put("status", reachable ? "OK" : "FAILED");
+        payload.put("summary", reachable ? "检查外部平台连通性：可访问" : "检查外部平台连通性：不可访问");
+        auditService.auditAction("INFRA_EXTERNAL_LINK_CHECK", AuditStage.SUCCESS, normalizedKey, payload);
+
+        // no-cache
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+        return ApiResponses.ok(payload);
     }
 
     @PutMapping("/{entryKey}")
@@ -98,5 +184,11 @@ public class InfraExternalLinkResource {
             );
         }
         return ApiResponses.ok(Boolean.TRUE);
+    }
+
+    private boolean isHttpUrl(String url) {
+        if (!StringUtils.hasText(url)) return false;
+        String lower = url.trim().toLowerCase(Locale.ROOT);
+        return lower.startsWith("http://") || lower.startsWith("https://");
     }
 }

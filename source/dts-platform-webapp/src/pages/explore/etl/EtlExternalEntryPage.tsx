@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { getExternalLink, upsertExternalLink } from "@/api/platformApi";
+import { checkExternalLink, getExternalLink, upsertExternalLink } from "@/api/platformApi";
 import { useUserInfo } from "@/store/userStore";
+import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
@@ -14,6 +15,16 @@ type ExternalLink = {
 	url?: string | null;
 	description?: string | null;
 	enabled?: boolean | null;
+};
+
+type LinkCheckResult = {
+	entryKey: string;
+	url?: string | null;
+	reachable?: boolean;
+	status?: string | null;
+	httpStatus?: number | null;
+	durationMs?: number | null;
+	error?: string | null;
 };
 
 export default function EtlExternalEntryPage(props: { entryKey: string; title: string; description?: string }) {
@@ -34,6 +45,8 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [link, setLink] = useState<ExternalLink | null>(null);
+	const [checking, setChecking] = useState(false);
+	const [checkResult, setCheckResult] = useState<LinkCheckResult | null>(null);
 
 	const [name, setName] = useState("");
 	const [url, setUrl] = useState("");
@@ -58,6 +71,7 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 			setUrl(String(l?.url ?? ""));
 			setEnabled(Boolean(l?.enabled ?? true));
 			setNotes(String(l?.description ?? ""));
+			setCheckResult(null);
 		} catch (e: any) {
 			toast.error(e?.message || "加载入口配置失败");
 		} finally {
@@ -77,6 +91,31 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 		}
 		window.open(target, "_blank", "noopener,noreferrer");
 	};
+
+	const check = useCallback(async () => {
+		const target = (link?.url || url || "").trim();
+		if (!target) {
+			toast.error("未配置入口URL");
+			return;
+		}
+		setChecking(true);
+		try {
+			const resp: any = await checkExternalLink(entryKey);
+			setCheckResult({
+				entryKey: String(resp?.entryKey ?? entryKey),
+				url: resp?.url ?? null,
+				reachable: Boolean(resp?.reachable ?? false),
+				status: resp?.status ?? null,
+				httpStatus: typeof resp?.httpStatus === "number" ? resp.httpStatus : null,
+				durationMs: typeof resp?.durationMs === "number" ? resp.durationMs : null,
+				error: resp?.error ?? null,
+			});
+		} catch (e: any) {
+			toast.error(e?.message || "检查失败");
+		} finally {
+			setChecking(false);
+		}
+	}, [entryKey, link?.url, url]);
 
 	const save = useCallback(async () => {
 		if (!canEdit) return;
@@ -104,6 +143,13 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 
 	const effectiveUrl = (link?.url || url || "").trim();
 	const effectiveEnabled = Boolean(link?.enabled ?? enabled);
+	const statusBadge = checkResult ? (
+		checkResult.reachable ? (
+			<Badge variant="secondary">可访问</Badge>
+		) : (
+			<Badge variant="outline">不可访问</Badge>
+		)
+	) : null;
 
 	return (
 		<div className="space-y-4">
@@ -119,8 +165,19 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 						<Button variant="secondary" disabled={loading || !effectiveUrl || !effectiveEnabled} onClick={openUrl}>
 							打开外部平台
 						</Button>
+						<Button variant="outline" disabled={loading || checking || !effectiveUrl} onClick={() => void check()}>
+							连通性检查
+						</Button>
 						<div className="text-xs text-muted-foreground break-all">{effectiveUrl || "未配置入口URL"}</div>
 					</div>
+					{checkResult ? (
+						<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+							{statusBadge}
+							{typeof checkResult.httpStatus === "number" ? <span>HTTP {checkResult.httpStatus}</span> : null}
+							{typeof checkResult.durationMs === "number" ? <span>{checkResult.durationMs}ms</span> : null}
+							{checkResult.error ? <span className="break-all">错误：{checkResult.error}</span> : null}
+						</div>
+					) : null}
 				</CardContent>
 			</Card>
 
@@ -163,4 +220,3 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 		</div>
 	);
 }
-
