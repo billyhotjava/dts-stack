@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_10_infra_external_link_seed" author="platform">
+        <!-- Seed StarRing (TDH) entrypoints for ETL-related placeholders -->
+        <sql>
+            INSERT INTO infra_external_link (
+                id, entry_key, name, url, description, enabled,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                'c5f57c0e-8f18-4b3e-9e32-163c8e410001',
+                'EXPLORE_ETL_ADAPTERS',
+                '多源集成适配器',
+                NULL,
+                '多源接入由外部平台（星环）实施，本系统提供统一入口与审计兜底。',
+                FALSE,
+                'system', now(), 'system', now()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM infra_external_link WHERE upper(entry_key) = 'EXPLORE_ETL_ADAPTERS'
+            );
+
+            INSERT INTO infra_external_link (
+                id, entry_key, name, url, description, enabled,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                'c5f57c0e-8f18-4b3e-9e32-163c8e410002',
+                'EXPLORE_ETL_FILE_EXCHANGE',
+                '数据交换与文件接入',
+                NULL,
+                '文件接入/交换流程由外部平台（星环）实施，本系统提供统一入口与审计兜底。',
+                FALSE,
+                'system', now(), 'system', now()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM infra_external_link WHERE upper(entry_key) = 'EXPLORE_ETL_FILE_EXCHANGE'
+            );
+
+            INSERT INTO infra_external_link (
+                id, entry_key, name, url, description, enabled,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                'c5f57c0e-8f18-4b3e-9e32-163c8e410003',
+                'EXPLORE_ETL_TRANSFORM',
+                '数据加工与转换',
+                NULL,
+                '加工算子/脚本执行由外部平台（星环）实施，本系统提供统一入口与审计兜底。',
+                FALSE,
+                'system', now(), 'system', now()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM infra_external_link WHERE upper(entry_key) = 'EXPLORE_ETL_TRANSFORM'
+            );
+
+            INSERT INTO infra_external_link (
+                id, entry_key, name, url, description, enabled,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                'c5f57c0e-8f18-4b3e-9e32-163c8e410004',
+                'EXPLORE_ETL_ORCHESTRATION',
+                'ETL流程编排与作业管理',
+                NULL,
+                '作业编排/调度由外部平台（星环）实施，本系统提供统一入口与审计兜底。',
+                FALSE,
+                'system', now(), 'system', now()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM infra_external_link WHERE upper(entry_key) = 'EXPLORE_ETL_ORCHESTRATION'
+            );
+
+            INSERT INTO infra_external_link (
+                id, entry_key, name, url, description, enabled,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                'c5f57c0e-8f18-4b3e-9e32-163c8e410005',
+                'EXPLORE_ETL_WAREHOUSE_LAYERS',
+                '数据仓储分层管理',
+                NULL,
+                '数仓分层规划与表清单由外部平台（星环）实施，本系统提供统一入口与审计兜底。',
+                FALSE,
+                'system', now(), 'system', now()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM infra_external_link WHERE upper(entry_key) = 'EXPLORE_ETL_WAREHOUSE_LAYERS'
+            );
+
+            INSERT INTO infra_external_link (
+                id, entry_key, name, url, description, enabled,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                'c5f57c0e-8f18-4b3e-9e32-163c8e410006',
+                'EXPLORE_ETL_RECONCILIATION',
+                '数据装载与对账校验',
+                NULL,
+                '装载对账校验由外部平台（星环）实施，本系统提供统一入口与审计兜底。',
+                FALSE,
+                'system', now(), 'system', now()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM infra_external_link WHERE upper(entry_key) = 'EXPLORE_ETL_RECONCILIATION'
+            );
+        </sql>
+    </changeSet>
+</databaseChangeLog>
+

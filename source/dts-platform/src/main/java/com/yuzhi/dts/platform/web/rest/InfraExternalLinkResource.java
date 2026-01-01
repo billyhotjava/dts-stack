@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import com.yuzhi.dts.common.audit.AuditStage;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -43,17 +44,20 @@ public class InfraExternalLinkResource {
             .stream()
             .sorted(Comparator.comparing(link -> String.valueOf(link.getEntryKey()).toUpperCase(Locale.ROOT)))
             .toList();
-        auditService.audit("READ", "infra.externalLink", "list");
+        auditService.auditAction("INFRA_EXTERNAL_LINK_VIEW", AuditStage.SUCCESS, "list", Map.of("summary", "查看外部平台入口配置列表"));
         return ApiResponses.ok(list);
     }
 
     @GetMapping("/{entryKey}")
     public ApiResponse<InfraExternalLink> get(@PathVariable String entryKey) {
-        InfraExternalLink link = repo.findByEntryKeyIgnoreCase(entryKey).orElse(null);
+        String normalizedKey = StringUtils.hasText(entryKey) ? entryKey.trim() : "";
+        InfraExternalLink link = repo.findByEntryKeyIgnoreCase(normalizedKey).orElse(null);
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("summary", "查看外部链接配置");
-        payload.put("entryKey", entryKey);
-        auditService.recordAuxiliary("READ", "infra.externalLink", "infra.externalLink", entryKey, payload);
+        payload.put("summary", "查看外部平台入口配置");
+        payload.put("entryKey", normalizedKey);
+        payload.put("enabled", link != null ? link.getEnabled() : null);
+        payload.put("url", link != null ? link.getUrl() : null);
+        auditService.auditAction("INFRA_EXTERNAL_LINK_VIEW", AuditStage.SUCCESS, normalizedKey, payload);
         return ApiResponses.ok(link);
     }
 
@@ -71,7 +75,12 @@ public class InfraExternalLinkResource {
         link.setDescription(StringUtils.hasText(patch.getDescription()) ? patch.getDescription().trim() : null);
         link.setEnabled(patch.getEnabled() != null ? patch.getEnabled() : Boolean.TRUE);
         InfraExternalLink saved = repo.save(link);
-        auditService.audit("UPDATE", "infra.externalLink", normalizedKey);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "更新外部平台入口配置");
+        payload.put("entryKey", normalizedKey);
+        payload.put("enabled", saved.getEnabled());
+        payload.put("url", saved.getUrl());
+        auditService.auditAction("INFRA_EXTERNAL_LINK_EDIT", AuditStage.SUCCESS, normalizedKey, payload);
         return ApiResponses.ok(saved);
     }
 
@@ -81,9 +90,13 @@ public class InfraExternalLinkResource {
         String normalizedKey = StringUtils.hasText(entryKey) ? entryKey.trim() : "";
         if (!normalizedKey.isEmpty()) {
             repo.findByEntryKeyIgnoreCase(normalizedKey).ifPresent(repo::delete);
-            auditService.audit("DELETE", "infra.externalLink", normalizedKey);
+            auditService.auditAction(
+                "INFRA_EXTERNAL_LINK_DELETE",
+                AuditStage.SUCCESS,
+                normalizedKey,
+                Map.of("summary", "删除外部平台入口配置", "entryKey", normalizedKey)
+            );
         }
         return ApiResponses.ok(Boolean.TRUE);
     }
 }
-

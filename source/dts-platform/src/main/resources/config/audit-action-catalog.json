@@ -174,6 +174,21 @@
       ]
     },
     {
+      "module": "infra",
+      "title": "基础设施",
+      "entries": [
+        {
+          "key": "infra.externalLinks",
+          "title": "外部平台入口",
+          "actions": [
+            { "code": "INFRA_EXTERNAL_LINK_VIEW", "display": "查看外部平台入口配置", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "INFRA_EXTERNAL_LINK_EDIT", "display": "维护外部平台入口配置", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "INFRA_EXTERNAL_LINK_DELETE", "display": "删除外部平台入口配置", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
       "module": "admin",
       "title": "系统管理",
       "entries": [
