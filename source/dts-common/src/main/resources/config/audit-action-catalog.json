@@ -28,6 +28,16 @@
             { "code": "CATALOG_SCHEMA_DRIFT_LIST", "display": "查看 Schema 漂移记录", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "CATALOG_SCHEMA_DRIFT_VIEW", "display": "查看 Schema 漂移详情", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
+        },
+        {
+          "key": "catalog.lineage",
+          "title": "血缘与影响分析",
+          "actions": [
+            { "code": "CATALOG_LINEAGE_VIEW", "display": "查看血缘关系", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "CATALOG_LINEAGE_IMPACT_VIEW", "display": "查看影响分析", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "CATALOG_LINEAGE_EDIT", "display": "维护血缘关系", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "CATALOG_LINEAGE_DELETE", "display": "删除血缘关系", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
         }
       ]
     },

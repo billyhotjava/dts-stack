@@ -9,9 +9,11 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -81,6 +83,105 @@ public class CatalogLineageResource {
         return ApiResponses.ok(payload);
     }
 
+    /**
+     * 影响分析（多跳血缘）：返回指定深度内的节点与边。
+     * - depth=1 等价于只查看一跳关系
+     */
+    @GetMapping("/impact")
+    public ApiResponse<Map<String, Object>> impact(
+        @RequestParam UUID datasetId,
+        @RequestParam(name = "direction", required = false, defaultValue = "BOTH") String direction,
+        @RequestParam(name = "depth", required = false, defaultValue = "3") int depth,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CatalogDataset root = datasetRepo.findById(datasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "dataset not found"));
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        if (!accessChecker.canRead(root) || !accessChecker.departmentAllowed(root, effDept)) {
+            return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
+        }
+
+        int safeDepth = Math.max(1, Math.min(depth, 10));
+        String dir = org.springframework.util.StringUtils.hasText(direction) ? direction.trim().toUpperCase(java.util.Locale.ROOT) : "BOTH";
+        boolean upstreamEnabled = "UPSTREAM".equals(dir) || "BOTH".equals(dir);
+        boolean downstreamEnabled = "DOWNSTREAM".equals(dir) || "BOTH".equals(dir);
+
+        Set<UUID> visited = new LinkedHashSet<>();
+        Set<CatalogDatasetLineage> edges = new LinkedHashSet<>();
+        Set<UUID> frontier = new LinkedHashSet<>();
+        visited.add(datasetId);
+        frontier.add(datasetId);
+
+        for (int level = 0; level < safeDepth; level++) {
+            if (frontier.isEmpty()) {
+                break;
+            }
+            Set<UUID> next = new LinkedHashSet<>();
+            for (UUID current : frontier) {
+                List<CatalogDatasetLineage> direct = lineageRepo.findByEitherSide(current);
+                for (CatalogDatasetLineage edge : direct) {
+                    if (edge == null) {
+                        continue;
+                    }
+                    UUID up = edge.getUpstreamDatasetId();
+                    UUID down = edge.getDownstreamDatasetId();
+                    boolean include = false;
+                    if (upstreamEnabled && current.equals(down)) {
+                        include = true;
+                    }
+                    if (downstreamEnabled && current.equals(up)) {
+                        include = true;
+                    }
+                    if (!include) {
+                        continue;
+                    }
+                    edges.add(edge);
+                    if (up != null && !visited.contains(up)) {
+                        visited.add(up);
+                        next.add(up);
+                    }
+                    if (down != null && !visited.contains(down)) {
+                        visited.add(down);
+                        next.add(down);
+                    }
+                }
+            }
+            frontier = next;
+        }
+
+        Map<UUID, CatalogDataset> nodes = new LinkedHashMap<>();
+        for (UUID id : visited) {
+            datasetRepo.findById(id).ifPresent(ds -> {
+                if (accessChecker.canRead(ds) && accessChecker.departmentAllowed(ds, effDept)) {
+                    nodes.putIfAbsent(id, ds);
+                }
+            });
+        }
+
+        List<Map<String, Object>> edgeDtos = edges.stream().map(edge -> toEdgeDto(edge, effDept)).filter(Objects::nonNull).toList();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("datasetId", datasetId.toString());
+        payload.put("direction", dir);
+        payload.put("depth", safeDepth);
+        payload.put("nodeCount", nodes.size());
+        payload.put("edgeCount", edgeDtos.size());
+        payload.put(
+            "nodes",
+            nodes
+                .values()
+                .stream()
+                .map(ds -> Map.of("id", ds.getId().toString(), "name", ds.getName(), "db", ds.getHiveDatabase(), "table", ds.getHiveTable(), "type", ds.getType()))
+                .toList()
+        );
+        payload.put("edges", edgeDtos);
+        audit.auditAction(
+            "CATALOG_LINEAGE_IMPACT_VIEW",
+            AuditStage.SUCCESS,
+            datasetId.toString(),
+            Map.of("summary", "查看影响分析", "direction", dir, "depth", safeDepth)
+        );
+        return ApiResponses.ok(payload);
+    }
+
     @PostMapping
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> create(@Valid @RequestBody LineageCreateRequest body) {
@@ -104,7 +205,7 @@ public class CatalogLineageResource {
                 link.setNotes(body.notes.trim());
             }
             CatalogDatasetLineage saved = lineageRepo.save(link);
-            audit.audit("UPDATE", "catalog.lineage", saved.getId().toString());
+            audit.auditAction("CATALOG_LINEAGE_EDIT", AuditStage.SUCCESS, saved.getId().toString(), Map.of("summary", "更新血缘关系"));
             return ApiResponses.ok(Map.of("id", saved.getId().toString(), "updated", true));
         }
 
@@ -115,7 +216,7 @@ public class CatalogLineageResource {
         link.setRelationType(relationType != null ? relationType : "MANUAL");
         link.setNotes(trimToNull(body.notes));
         CatalogDatasetLineage saved = lineageRepo.save(link);
-        audit.audit("CREATE", "catalog.lineage", saved.getId().toString());
+        audit.auditAction("CATALOG_LINEAGE_EDIT", AuditStage.SUCCESS, saved.getId().toString(), Map.of("summary", "新增血缘关系"));
         return ApiResponses.ok(Map.of("id", saved.getId().toString(), "created", true));
     }
 
@@ -130,7 +231,7 @@ public class CatalogLineageResource {
             );
         }
         lineageRepo.delete(link);
-        audit.audit("DELETE", "catalog.lineage", id.toString() + (force ? ":force" : ""));
+        audit.auditAction("CATALOG_LINEAGE_DELETE", AuditStage.SUCCESS, id.toString(), Map.of("summary", force ? "强制删除血缘关系" : "删除血缘关系"));
         return ApiResponses.ok(Boolean.TRUE);
     }
 
