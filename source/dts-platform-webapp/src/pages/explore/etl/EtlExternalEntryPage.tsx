@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { checkExternalLink, getExternalLink, getExternalLinkStatus, upsertExternalLink } from "@/api/platformApi";
+import { checkExternalLink, getExternalLink, getExternalLinkStatus, upsertExternalLink, visitExternalLink } from "@/api/platformApi";
 import { useUserInfo } from "@/store/userStore";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -111,6 +111,7 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 			toast.error("未配置入口URL");
 			return;
 		}
+		void visitExternalLink(entryKey, { title, url: target }).catch(() => {});
 		window.open(target, "_blank", "noopener,noreferrer");
 	};
 
