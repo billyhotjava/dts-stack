@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_35_catalog_metadata_change_log" author="platform">
+        <comment>Catalog metadata: change log for manual edits (table/column)</comment>
+        <createTable tableName="catalog_metadata_change_log">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="object_type" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="object_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dataset_id" type="uuid"/>
+            <column name="table_id" type="uuid"/>
+            <column name="field_name" type="varchar(64)"/>
+            <column name="before_value" type="text"/>
+            <column name="after_value" type="text"/>
+            <column name="change_summary" type="varchar(256)"/>
+            <column name="actor_dept" type="varchar(64)"/>
+            <column name="source" type="varchar(32)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex tableName="catalog_metadata_change_log" indexName="idx_catalog_meta_chg_obj">
+            <column name="object_type"/>
+            <column name="object_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_metadata_change_log" indexName="idx_catalog_meta_chg_dataset">
+            <column name="dataset_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

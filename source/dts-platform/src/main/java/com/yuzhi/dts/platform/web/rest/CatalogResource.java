@@ -44,6 +44,7 @@ public class CatalogResource {
     private final com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository tableRepo;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository columnRepo;
     private final com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository rowFilterRepo;
+    private final CatalogMetadataChangeLogRepository metadataChangeLogRepo;
     private final CatalogDatasetSecurityMappingRepository datasetSecurityMappingRepo;
     private final CatalogDatasetGrantRepository grantRepo;
     private final InfraDataSourceRepository infraDataSourceRepository;
@@ -60,6 +61,7 @@ public class CatalogResource {
         com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository tableRepo,
         com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository columnRepo,
         com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository rowFilterRepo,
+        CatalogMetadataChangeLogRepository metadataChangeLogRepo,
         CatalogDatasetSecurityMappingRepository datasetSecurityMappingRepo,
         CatalogDatasetGrantRepository grantRepo,
         InfraDataSourceRepository infraDataSourceRepository,
@@ -75,6 +77,7 @@ public class CatalogResource {
         this.tableRepo = tableRepo;
         this.columnRepo = columnRepo;
         this.rowFilterRepo = rowFilterRepo;
+        this.metadataChangeLogRepo = metadataChangeLogRepo;
         this.datasetSecurityMappingRepo = datasetSecurityMappingRepo;
         this.grantRepo = grantRepo;
         this.infraDataSourceRepository = infraDataSourceRepository;
@@ -1104,14 +1107,50 @@ public class CatalogResource {
         @Valid @RequestBody com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema patch
     ) {
         var existing = tableRepo.findById(id).orElseThrow();
+        Map<String, Object> before = snapshotTable(existing);
         existing.setName(patch.getName());
         existing.setOwner(patch.getOwner());
         existing.setClassification(patch.getClassification());
         existing.setBizDomain(patch.getBizDomain());
         existing.setTags(patch.getTags());
         var saved = tableRepo.save(existing);
-        audit.audit("UPDATE", "catalog.table", id.toString());
+        recordTableMetadataChanges(saved, before, "MANUAL");
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "更新数据表元数据");
+        auditPayload.put("tableId", id.toString());
+        UUID datasetId = saved.getDataset() != null ? saved.getDataset().getId() : null;
+        if (datasetId != null) {
+            auditPayload.put("datasetId", datasetId.toString());
+        }
+        audit.auditAction(
+            "CATALOG_METADATA_TABLE_EDIT",
+            AuditStage.SUCCESS,
+            id.toString(),
+            auditPayload
+        );
         return ApiResponses.ok(saved);
+    }
+
+    @GetMapping("/tables/{id}/changes")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> listTableChanges(
+        @PathVariable UUID id,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size
+    ) {
+        tableRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据表不存在"));
+        Page<CatalogMetadataChangeLog> p = metadataChangeLogRepo.findByObjectTypeIgnoreCaseAndObjectId(
+            "TABLE",
+            id,
+            PageRequest.of(Math.max(0, page), Math.min(200, Math.max(1, size)), Sort.by(Sort.Direction.DESC, "createdDate"))
+        );
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("content", p.getContent());
+        payload.put("page", page);
+        payload.put("size", size);
+        payload.put("total", p.getTotalElements());
+        audit.auditAction("CATALOG_METADATA_CHANGELOG_VIEW", AuditStage.SUCCESS, id.toString(), Map.of("summary", "查看数据表元数据变更历史", "tableId", id.toString()));
+        return ApiResponses.ok(payload);
     }
 
     @DeleteMapping("/tables/{id}")
@@ -1218,6 +1257,7 @@ public class CatalogResource {
         @Valid @RequestBody com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema patch
     ) {
         var existing = columnRepo.findById(id).orElseThrow();
+        Map<String, Object> before = snapshotColumn(existing);
         existing.setName(patch.getName());
         existing.setDataType(patch.getDataType());
         existing.setNullable(patch.getNullable());
@@ -1225,8 +1265,48 @@ public class CatalogResource {
         existing.setComment(patch.getComment());
         existing.setSensitiveTags(patch.getSensitiveTags());
         var saved = columnRepo.save(existing);
-        audit.audit("UPDATE", "catalog.column", id.toString());
+        recordColumnMetadataChanges(saved, before, "MANUAL");
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "更新数据字段元数据");
+        auditPayload.put("columnId", id.toString());
+        UUID tableId = saved.getTable() != null ? saved.getTable().getId() : null;
+        if (tableId != null) {
+            auditPayload.put("tableId", tableId.toString());
+        }
+        audit.auditAction(
+            "CATALOG_METADATA_COLUMN_EDIT",
+            AuditStage.SUCCESS,
+            id.toString(),
+            auditPayload
+        );
         return ApiResponses.ok(saved);
+    }
+
+    @GetMapping("/columns/{id}/changes")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> listColumnChanges(
+        @PathVariable UUID id,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size
+    ) {
+        columnRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据字段不存在"));
+        Page<CatalogMetadataChangeLog> p = metadataChangeLogRepo.findByObjectTypeIgnoreCaseAndObjectId(
+            "COLUMN",
+            id,
+            PageRequest.of(Math.max(0, page), Math.min(200, Math.max(1, size)), Sort.by(Sort.Direction.DESC, "createdDate"))
+        );
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("content", p.getContent());
+        payload.put("page", page);
+        payload.put("size", size);
+        payload.put("total", p.getTotalElements());
+        audit.auditAction(
+            "CATALOG_METADATA_CHANGELOG_VIEW",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "查看数据字段元数据变更历史", "columnId", id.toString())
+        );
+        return ApiResponses.ok(payload);
     }
 
     @DeleteMapping("/columns/{id}")
@@ -1292,6 +1372,125 @@ public class CatalogResource {
             return;
         }
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "当前用户无权编辑该数据集");
+    }
+
+    private void recordTableMetadataChanges(CatalogTableSchema saved, Map<String, Object> before, String source) {
+        if (saved == null || saved.getId() == null) {
+            return;
+        }
+        UUID tableId = saved.getId();
+        UUID datasetId = saved.getDataset() != null ? saved.getDataset().getId() : null;
+        String actorDept = claim("dept_code");
+        List<CatalogMetadataChangeLog> changes = new ArrayList<>();
+
+        addMetadataChange(changes, "TABLE", tableId, datasetId, null, "name", safeText(before.get("name")), saved.getName(), "更新数据表元数据", actorDept, source);
+        addMetadataChange(changes, "TABLE", tableId, datasetId, null, "owner", safeText(before.get("owner")), saved.getOwner(), "更新数据表元数据", actorDept, source);
+        addMetadataChange(changes, "TABLE", tableId, datasetId, null, "classification", safeText(before.get("classification")), saved.getClassification(), "更新数据表元数据", actorDept, source);
+        addMetadataChange(changes, "TABLE", tableId, datasetId, null, "bizDomain", safeText(before.get("bizDomain")), saved.getBizDomain(), "更新数据表元数据", actorDept, source);
+        addMetadataChange(changes, "TABLE", tableId, datasetId, null, "tags", safeText(before.get("tags")), saved.getTags(), "更新数据表元数据", actorDept, source);
+
+        if (!changes.isEmpty()) {
+            metadataChangeLogRepo.saveAll(changes);
+        }
+    }
+
+    private void recordColumnMetadataChanges(CatalogColumnSchema saved, Map<String, Object> before, String source) {
+        if (saved == null || saved.getId() == null) {
+            return;
+        }
+        UUID columnId = saved.getId();
+        UUID tableId = saved.getTable() != null ? saved.getTable().getId() : null;
+        UUID datasetId = null;
+        if (saved.getTable() != null && saved.getTable().getDataset() != null) {
+            datasetId = saved.getTable().getDataset().getId();
+        }
+        String actorDept = claim("dept_code");
+        List<CatalogMetadataChangeLog> changes = new ArrayList<>();
+
+        addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "name", safeText(before.get("name")), saved.getName(), "更新数据字段元数据", actorDept, source);
+        addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "dataType", safeText(before.get("dataType")), saved.getDataType(), "更新数据字段元数据", actorDept, source);
+        addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "nullable", safeText(before.get("nullable")), safeBool(saved.getNullable()), "更新数据字段元数据", actorDept, source);
+        addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "tags", safeText(before.get("tags")), saved.getTags(), "更新数据字段元数据", actorDept, source);
+        addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "sensitiveTags", safeText(before.get("sensitiveTags")), saved.getSensitiveTags(), "更新数据字段元数据", actorDept, source);
+        addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "comment", safeText(before.get("comment")), saved.getComment(), "更新数据字段元数据", actorDept, source);
+
+        if (!changes.isEmpty()) {
+            metadataChangeLogRepo.saveAll(changes);
+        }
+    }
+
+    private void addMetadataChange(
+        List<CatalogMetadataChangeLog> out,
+        String objectType,
+        UUID objectId,
+        UUID datasetId,
+        UUID tableId,
+        String fieldName,
+        String beforeValue,
+        String afterValue,
+        String summary,
+        String actorDept,
+        String source
+    ) {
+        String before = normalizeText(beforeValue);
+        String after = normalizeText(afterValue);
+        if (Objects.equals(before, after)) {
+            return;
+        }
+        CatalogMetadataChangeLog log = new CatalogMetadataChangeLog();
+        log.setObjectType(objectType);
+        log.setObjectId(objectId);
+        log.setDatasetId(datasetId);
+        log.setTableId(tableId);
+        log.setFieldName(fieldName);
+        log.setBeforeValue(before);
+        log.setAfterValue(after);
+        log.setChangeSummary(summary);
+        log.setActorDept(normalizeText(actorDept));
+        log.setSource(normalizeText(source));
+        out.add(log);
+    }
+
+    private Map<String, Object> snapshotTable(CatalogTableSchema table) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        if (table == null) {
+            return m;
+        }
+        m.put("name", trimToNull(table.getName()));
+        m.put("owner", trimToNull(table.getOwner()));
+        m.put("classification", trimToNull(table.getClassification()));
+        m.put("bizDomain", trimToNull(table.getBizDomain()));
+        m.put("tags", trimToNull(table.getTags()));
+        return m;
+    }
+
+    private Map<String, Object> snapshotColumn(CatalogColumnSchema column) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        if (column == null) {
+            return m;
+        }
+        m.put("name", trimToNull(column.getName()));
+        m.put("dataType", trimToNull(column.getDataType()));
+        m.put("nullable", column.getNullable());
+        m.put("tags", trimToNull(column.getTags()));
+        m.put("sensitiveTags", trimToNull(column.getSensitiveTags()));
+        m.put("comment", trimToNull(column.getComment()));
+        return m;
+    }
+
+    private String safeBool(Boolean value) {
+        if (value == null) {
+            return null;
+        }
+        return Boolean.TRUE.equals(value) ? "true" : "false";
+    }
+
+    private String normalizeText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private boolean canEditDataset(CatalogDataset dataset) {
