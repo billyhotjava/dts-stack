@@ -214,7 +214,10 @@
             { "code": "INFRA_EXTERNAL_ARTIFACT_VIEW", "display": "查看外部平台作业/任务登记", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "INFRA_EXTERNAL_ARTIFACT_EDIT", "display": "维护外部平台作业/任务登记", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "INFRA_EXTERNAL_ARTIFACT_DELETE", "display": "禁用外部平台作业/任务登记", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "INFRA_EXTERNAL_ARTIFACT_PURGE", "display": "删除外部平台作业/任务登记", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+            { "code": "INFRA_EXTERNAL_ARTIFACT_PURGE", "display": "删除外部平台作业/任务登记", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "INFRA_EXTERNAL_EXCHANGE_FILE_VIEW", "display": "查看数据交换文件台账", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "INFRA_EXTERNAL_EXCHANGE_FILE_EDIT", "display": "维护数据交换文件台账", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "INFRA_EXTERNAL_EXCHANGE_FILE_DELETE", "display": "禁用数据交换文件台账", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
         ]
         }
       ]
