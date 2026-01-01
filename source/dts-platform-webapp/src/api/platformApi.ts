@@ -53,6 +53,7 @@ export const upsertDatasetSecurityMapping = (datasetId: string, data: any) =>
 export const listExternalLinks = () => api.get({ url: "/infra/external-links" });
 export const getExternalLink = (entryKey: string) => api.get({ url: `/infra/external-links/${entryKey}` });
 export const checkExternalLink = (entryKey: string) => api.get({ url: `/infra/external-links/${entryKey}/check` });
+export const getExternalLinkStatus = (entryKey: string) => api.get({ url: `/infra/external-links/${entryKey}/status` });
 export const upsertExternalLink = (entryKey: string, data: any) => api.put({ url: `/infra/external-links/${entryKey}`, data });
 export const deleteExternalLink = (entryKey: string) => api.delete({ url: `/infra/external-links/${entryKey}` });
 

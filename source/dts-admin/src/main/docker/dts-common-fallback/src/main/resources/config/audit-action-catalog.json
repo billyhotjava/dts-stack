@@ -207,6 +207,7 @@
           "actions": [
             { "code": "INFRA_EXTERNAL_LINK_VIEW", "display": "查看外部平台入口配置", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "INFRA_EXTERNAL_LINK_CHECK", "display": "检查外部平台连通性", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "INFRA_EXTERNAL_LINK_STATUS_VIEW", "display": "查看外部平台状态", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "INFRA_EXTERNAL_LINK_EDIT", "display": "维护外部平台入口配置", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "INFRA_EXTERNAL_LINK_DELETE", "display": "删除外部平台入口配置", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]

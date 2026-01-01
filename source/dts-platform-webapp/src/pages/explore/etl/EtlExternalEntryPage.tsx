@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { checkExternalLink, getExternalLink, upsertExternalLink } from "@/api/platformApi";
+import { checkExternalLink, getExternalLink, getExternalLinkStatus, upsertExternalLink } from "@/api/platformApi";
 import { useUserInfo } from "@/store/userStore";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -15,6 +15,8 @@ type ExternalLink = {
 	url?: string | null;
 	description?: string | null;
 	enabled?: boolean | null;
+	statusApiEnabled?: boolean | null;
+	statusApiUrl?: string | null;
 };
 
 type LinkCheckResult = {
@@ -25,6 +27,17 @@ type LinkCheckResult = {
 	httpStatus?: number | null;
 	durationMs?: number | null;
 	error?: string | null;
+};
+
+type LinkStatusResult = {
+	entryKey: string;
+	statusApiUrl?: string | null;
+	reachable?: boolean;
+	status?: string | null;
+	httpStatus?: number | null;
+	durationMs?: number | null;
+	error?: string | null;
+	data?: any;
 };
 
 export default function EtlExternalEntryPage(props: { entryKey: string; title: string; description?: string }) {
@@ -47,11 +60,15 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 	const [link, setLink] = useState<ExternalLink | null>(null);
 	const [checking, setChecking] = useState(false);
 	const [checkResult, setCheckResult] = useState<LinkCheckResult | null>(null);
+	const [fetchingStatus, setFetchingStatus] = useState(false);
+	const [statusResult, setStatusResult] = useState<LinkStatusResult | null>(null);
 
 	const [name, setName] = useState("");
 	const [url, setUrl] = useState("");
 	const [enabled, setEnabled] = useState(true);
 	const [notes, setNotes] = useState("");
+	const [statusApiEnabled, setStatusApiEnabled] = useState(false);
+	const [statusApiUrl, setStatusApiUrl] = useState("");
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -64,6 +81,8 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 						url: resp?.url ?? null,
 						description: resp?.description ?? null,
 						enabled: resp?.enabled ?? true,
+						statusApiEnabled: resp?.statusApiEnabled ?? false,
+						statusApiUrl: resp?.statusApiUrl ?? null,
 					}
 				: null;
 			setLink(l);
@@ -71,7 +90,10 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 			setUrl(String(l?.url ?? ""));
 			setEnabled(Boolean(l?.enabled ?? true));
 			setNotes(String(l?.description ?? ""));
+			setStatusApiEnabled(Boolean(l?.statusApiEnabled ?? false));
+			setStatusApiUrl(String(l?.statusApiUrl ?? ""));
 			setCheckResult(null);
+			setStatusResult(null);
 		} catch (e: any) {
 			toast.error(e?.message || "加载入口配置失败");
 		} finally {
@@ -117,6 +139,27 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 		}
 	}, [entryKey, link?.url, url]);
 
+	const fetchStatus = useCallback(async () => {
+		setFetchingStatus(true);
+		try {
+			const resp: any = await getExternalLinkStatus(entryKey);
+			setStatusResult({
+				entryKey: String(resp?.entryKey ?? entryKey),
+				statusApiUrl: resp?.statusApiUrl ?? null,
+				reachable: Boolean(resp?.reachable ?? false),
+				status: resp?.status ?? null,
+				httpStatus: typeof resp?.httpStatus === "number" ? resp.httpStatus : null,
+				durationMs: typeof resp?.durationMs === "number" ? resp.durationMs : null,
+				error: resp?.error ?? null,
+				data: resp?.data ?? null,
+			});
+		} catch (e: any) {
+			toast.error(e?.message || "获取状态失败");
+		} finally {
+			setFetchingStatus(false);
+		}
+	}, [entryKey]);
+
 	const save = useCallback(async () => {
 		if (!canEdit) return;
 		if (!url.trim()) {
@@ -130,6 +173,8 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 				url: url.trim(),
 				enabled,
 				description: notes.trim() || null,
+				statusApiEnabled,
+				statusApiUrl: statusApiUrl.trim() || null,
 			};
 			await upsertExternalLink(entryKey, payload);
 			toast.success("已保存");
@@ -143,11 +188,21 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 
 	const effectiveUrl = (link?.url || url || "").trim();
 	const effectiveEnabled = Boolean(link?.enabled ?? enabled);
+	const effectiveStatusApiEnabled = Boolean(link?.statusApiEnabled ?? statusApiEnabled);
+	const effectiveStatusApiUrl = (link?.statusApiUrl || statusApiUrl || "").trim();
 	const statusBadge = checkResult ? (
 		checkResult.reachable ? (
 			<Badge variant="secondary">可访问</Badge>
 		) : (
 			<Badge variant="outline">不可访问</Badge>
+		)
+	) : null;
+
+	const statusViewBadge = statusResult ? (
+		statusResult.reachable ? (
+			<Badge variant="secondary">已获取</Badge>
+		) : (
+			<Badge variant="outline">失败</Badge>
 		)
 	) : null;
 
@@ -168,6 +223,9 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 						<Button variant="outline" disabled={loading || checking || !effectiveUrl} onClick={() => void check()}>
 							连通性检查
 						</Button>
+						<Button variant="outline" disabled={loading || fetchingStatus || !effectiveStatusApiEnabled || !effectiveStatusApiUrl} onClick={() => void fetchStatus()}>
+							查看状态
+						</Button>
 						<div className="text-xs text-muted-foreground break-all">{effectiveUrl || "未配置入口URL"}</div>
 					</div>
 					{checkResult ? (
@@ -176,6 +234,21 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 							{typeof checkResult.httpStatus === "number" ? <span>HTTP {checkResult.httpStatus}</span> : null}
 							{typeof checkResult.durationMs === "number" ? <span>{checkResult.durationMs}ms</span> : null}
 							{checkResult.error ? <span className="break-all">错误：{checkResult.error}</span> : null}
+						</div>
+					) : null}
+					{statusResult ? (
+						<div className="space-y-2">
+							<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+								{statusViewBadge}
+								{typeof statusResult.httpStatus === "number" ? <span>HTTP {statusResult.httpStatus}</span> : null}
+								{typeof statusResult.durationMs === "number" ? <span>{statusResult.durationMs}ms</span> : null}
+								{statusResult.error ? <span className="break-all">错误：{statusResult.error}</span> : null}
+							</div>
+							{statusResult.data ? (
+								<pre className="max-h-80 overflow-auto rounded bg-muted p-3 text-xs">{JSON.stringify(statusResult.data, null, 2)}</pre>
+							) : (
+								<div className="text-xs text-muted-foreground">状态接口未返回JSON数据</div>
+							)}
 						</div>
 					) : null}
 				</CardContent>
@@ -205,6 +278,25 @@ export default function EtlExternalEntryPage(props: { entryKey: string; title: s
 								<div className="text-xs text-muted-foreground">停用后仅保留配置，不对外开放入口</div>
 							</div>
 							<Switch checked={enabled} onCheckedChange={(checked) => setEnabled(checked)} />
+						</div>
+						<div className="rounded border p-3 space-y-3">
+							<div className="flex items-center justify-between">
+								<div className="space-y-1">
+									<Label>状态回显</Label>
+									<div className="text-xs text-muted-foreground">可选：配置一个轻量JSON接口，用于回显外部平台运行态</div>
+								</div>
+								<Switch checked={statusApiEnabled} onCheckedChange={(checked) => setStatusApiEnabled(checked)} />
+							</div>
+							<div className="space-y-2">
+								<Label>状态接口URL</Label>
+								<Input
+									value={statusApiUrl}
+									onChange={(e) => setStatusApiUrl(e.target.value)}
+									placeholder="例如：https://tdh.xxx.com/api/status"
+									disabled={!statusApiEnabled}
+								/>
+								<div className="text-xs text-muted-foreground">安全限制：默认要求与入口URL同域（host一致）</div>
+							</div>
 						</div>
 						<div className="flex gap-2">
 							<Button variant="secondary" disabled={loading} onClick={() => void load()}>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_20_infra_external_link_status_api" author="platform">
+        <addColumn tableName="infra_external_link">
+            <column name="status_api_enabled" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status_api_url" type="varchar(2048)"/>
+        </addColumn>
+
+        <createIndex tableName="infra_external_link" indexName="idx_infra_external_link_status_api_enabled">
+            <column name="status_api_enabled"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

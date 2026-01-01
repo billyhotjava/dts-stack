@@ -33,6 +33,12 @@ public class InfraExternalLink extends AbstractAuditingEntity<UUID> implements S
     @Column(name = "enabled", nullable = false)
     private Boolean enabled = Boolean.TRUE;
 
+    @Column(name = "status_api_enabled", nullable = false)
+    private Boolean statusApiEnabled = Boolean.FALSE;
+
+    @Column(name = "status_api_url", length = 2048)
+    private String statusApiUrl;
+
     @Override
     public UUID getId() {
         return id;
@@ -81,5 +87,20 @@ public class InfraExternalLink extends AbstractAuditingEntity<UUID> implements S
     public void setEnabled(Boolean enabled) {
         this.enabled = enabled;
     }
-}
 
+    public Boolean getStatusApiEnabled() {
+        return statusApiEnabled;
+    }
+
+    public void setStatusApiEnabled(Boolean statusApiEnabled) {
+        this.statusApiEnabled = statusApiEnabled;
+    }
+
+    public String getStatusApiUrl() {
+        return statusApiUrl;
+    }
+
+    public void setStatusApiUrl(String statusApiUrl) {
+        this.statusApiUrl = statusApiUrl;
+    }
+}
