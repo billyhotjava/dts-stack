@@ -206,6 +206,30 @@
             { "code": "SECURITY_MASKING_TEMPLATE_LIST", "display": "查看脱敏模板", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "SECURITY_MASKING_TEMPLATE_PREVIEW", "display": "预览脱敏效果", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
+        },
+        {
+          "key": "security.audit",
+          "title": "安全审计",
+          "actions": [
+            { "code": "SECURITY_AUDIT_LOG_LIST", "display": "查看审计日志", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SECURITY_AUDIT_LOG_VIEW", "display": "查看审计日志详情", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SECURITY_AUDIT_LOG_EXPORT", "display": "导出审计日志", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
+        },
+        {
+          "key": "security.backup",
+          "title": "备份恢复与灾备演练",
+          "actions": [
+            { "code": "SECURITY_BACKUP_PLAN_LIST", "display": "查看备份策略清单", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SECURITY_BACKUP_PLAN_CREATE", "display": "新增备份策略", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SECURITY_BACKUP_PLAN_UPDATE", "display": "更新备份策略", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SECURITY_BACKUP_PLAN_DELETE", "display": "删除备份策略", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SECURITY_BACKUP_RUN_LIST", "display": "查看备份运行记录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SECURITY_BACKUP_RUN_RECORD", "display": "记录备份运行结果", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SECURITY_DR_DRILL_LIST", "display": "查看灾备演练记录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SECURITY_DR_DRILL_RECORD", "display": "新增灾备演练记录", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SECURITY_BACKUP_REPORT_VIEW", "display": "导出备份与灾备报告", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
         }
       ]
     },
