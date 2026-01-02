@@ -91,7 +91,35 @@ public class KeycloakAuthResource {
             String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
 
             // Issue a portal session (opaque tokens) for platform API access
-            boolean takeover = sessionRegistry.hasActiveSession(username);
+            boolean takeover;
+            try {
+                takeover = sessionRegistry.hasActiveSession(username);
+            } catch (RuntimeException ex) {
+                if (isRelationMissing(ex, "portal_sessions")) {
+                    String msg = "平台数据库未初始化或升级未完成（缺少 portal_sessions 表），请先执行初始化/升级脚本后重试";
+                    log.error("[login] portal session store not ready username={}", username);
+                    String auditActor = sanitizeActor(username);
+                    if (shouldRecordPortalLoginAudit() && auditActor != null) {
+                        Map<String, Object> failurePayload = authAuditPayload(auditActor);
+                        applyIdentityMetadata(failurePayload, displayName, auditActor);
+                        failurePayload.put("summary", buildSummary("业务端登录失败", displayName, auditActor));
+                        failurePayload.put("operationType", "LOGIN");
+                        failurePayload.put("error", "PORTAL_SESSION_STORE_NOT_READY");
+                        audit.recordAs(
+                            auditActor,
+                            "AUTH LOGIN",
+                            "platform",
+                            "portal_user",
+                            auditActor,
+                            "FAILED",
+                            failurePayload,
+                            Map.of("audience", "platform")
+                        );
+                    }
+                    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiResponses.error(msg));
+                }
+                throw ex;
+            }
             if (takeover && !sessionRegistry.isTakeoverAllowed()) {
                 log.warn("[login] denied username={} reason=active-session", username);
                 String auditActor = sanitizeActor(username);
@@ -131,6 +159,31 @@ public class KeycloakAuthResource {
                 return ResponseEntity
                     .status(HttpStatus.CONFLICT)
                     .body(ApiResponses.error("该账号已在其他浏览器登录，请先退出后再尝试"));
+            } catch (RuntimeException ex) {
+                if (isRelationMissing(ex, "portal_sessions")) {
+                    String msg = "平台数据库未初始化或升级未完成（缺少 portal_sessions 表），请先执行初始化/升级脚本后重试";
+                    log.error("[login] portal session store not ready (create) username={}", username);
+                    String auditActor = sanitizeActor(username);
+                    if (shouldRecordPortalLoginAudit() && auditActor != null) {
+                        Map<String, Object> failurePayload = authAuditPayload(auditActor);
+                        applyIdentityMetadata(failurePayload, displayName, auditActor);
+                        failurePayload.put("summary", buildSummary("业务端登录失败", displayName, auditActor));
+                        failurePayload.put("operationType", "LOGIN");
+                        failurePayload.put("error", "PORTAL_SESSION_STORE_NOT_READY");
+                        audit.recordAs(
+                            auditActor,
+                            "AUTH LOGIN",
+                            "platform",
+                            "portal_user",
+                            auditActor,
+                            "FAILED",
+                            failurePayload,
+                            Map.of("audience", "platform")
+                        );
+                    }
+                    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiResponses.error(msg));
+                }
+                throw ex;
             }
 
             // Build user payload (override roles/permissions with mapped ones)
@@ -243,7 +296,15 @@ public class KeycloakAuthResource {
             }
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error(ex.getMessage()));
         } catch (Exception ex) {
-            String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
+            String msg;
+            HttpStatus status;
+            if (isRelationMissing(ex, "portal_sessions")) {
+                status = HttpStatus.SERVICE_UNAVAILABLE;
+                msg = "平台数据库未初始化或升级未完成（缺少 portal_sessions 表），请先执行初始化/升级脚本后重试";
+            } else {
+                status = HttpStatus.INTERNAL_SERVER_ERROR;
+                msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
+            }
             log.error("[login] error username={} msg={}", username, msg);
             String auditActor = sanitizeActor(username);
             if (shouldRecordPortalLoginAudit() && auditActor != null) {
@@ -263,8 +324,25 @@ public class KeycloakAuthResource {
                     Map.of("audience", "platform")
                 );
             }
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
+            return ResponseEntity.status(status).body(ApiResponses.error(msg));
         }
+    }
+
+    private boolean isRelationMissing(Throwable ex, String relation) {
+        if (ex == null || !StringUtils.hasText(relation)) {
+            return false;
+        }
+        String needle = "relation \"" + relation + "\" does not exist";
+        Throwable cur = ex;
+        int depth = 0;
+        while (cur != null && depth++ < 15) {
+            String msg = cur.getMessage();
+            if (msg != null && msg.toLowerCase(java.util.Locale.ROOT).contains(needle.toLowerCase(java.util.Locale.ROOT))) {
+                return true;
+            }
+            cur = cur.getCause();
+        }
+        return false;
     }
 
     @PostMapping("/logout")
