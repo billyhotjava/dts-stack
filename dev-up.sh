@@ -117,6 +117,11 @@ while (($#)); do
   shift
 done
 
+# Local dev default: start all self-owned apps (incl. analytics) unless explicitly disabled.
+if [[ "$MODE" == "local" && "${WITH_ANALYTICS}" == "0" && "${WITH_ANALYTICS_DEV}" == "0" ]]; then
+  WITH_ANALYTICS=1
+fi
+
 # Default behavior: skip webapp build in images mode (use local mode or --no-webapp)
 if [[ "$MODE" == "images" && -z "${WITH_WEBAPP+x}" ]]; then
   WITH_WEBAPP_DEFAULT=0
