@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.analytics.config.ApplicationProperties;
-import com.yuzhi.dts.analytics.config.MetabaseUiProperties;
 import com.yuzhi.dts.analytics.service.SetupStateService;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,7 +18,6 @@ public class MetabaseBootstrapService {
 
     private final ObjectMapper mapper;
     private final ApplicationProperties applicationProperties;
-    private final MetabaseUiProperties uiProperties;
     private final SetupStateService setupStateService;
 
     private volatile ObjectNode bootstrapTemplate;
@@ -29,23 +27,20 @@ public class MetabaseBootstrapService {
     public MetabaseBootstrapService(
             ObjectMapper mapper,
             ApplicationProperties applicationProperties,
-            MetabaseUiProperties uiProperties,
             SetupStateService setupStateService) {
         this.mapper = mapper;
         this.applicationProperties = applicationProperties;
-        this.uiProperties = uiProperties;
         this.setupStateService = setupStateService;
     }
 
     @PostConstruct
     void loadTemplates() throws IOException {
-        String bundleVersion = uiProperties.bundleVersion();
         bootstrapTemplate = (ObjectNode)
-                mapper.readTree(readClasspathText("metabase/ui/v%s/bootstrap-default.json".formatted(bundleVersion)));
+                mapper.readTree(readClasspathText("metabase/bootstrap/bootstrap-default.json"));
         userLocalizationTemplate =
-                mapper.readTree(readClasspathText("metabase/ui/v%s/user-localization-default.json".formatted(bundleVersion)));
+                mapper.readTree(readClasspathText("metabase/bootstrap/user-localization-default.json"));
         siteLocalizationTemplate =
-                mapper.readTree(readClasspathText("metabase/ui/v%s/site-localization-default.json".formatted(bundleVersion)));
+                mapper.readTree(readClasspathText("metabase/bootstrap/site-localization-default.json"));
     }
 
     public ObjectNode buildBootstrap(HttpServletRequest request) {
@@ -71,7 +66,8 @@ public class MetabaseBootstrapService {
 
         if (root.has("version") && root.get("version").isObject()) {
             ObjectNode version = (ObjectNode) root.get("version");
-            version.put("tag", "v" + uiProperties.targetVersion());
+            String appVersion = applicationProperties.service().version();
+            version.put("tag", appVersion == null ? "v0.0.0" : "v" + appVersion);
         }
         return root;
     }

@@ -20,6 +20,11 @@ builds/offline/
 source/dts-admin/.m2/
 source/dts-analytics/target/
 source/dts-analytics/target.rootowned*/
+source/dts-analytics-webapp/metabase.jar
+source/dts-analytics-webapp/node_modules/
+source/dts-analytics-webapp/.pnpm/
+source/dts-analytics-webapp/.vite/
+source/dts-analytics-webapp/dist/
 source/dts-bi-analytics/
 .m2/
 .env.bak

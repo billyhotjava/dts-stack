@@ -1,0 +1,22 @@
+## Dev overlay for analytics: run dts-analytics from source via bind mounts and live reload.
+## Used by: ./dev-up.sh --mode local --analytics-dev
+
+services:
+  dts-analytics:
+    image: ${IMAGE_MAVEN}
+    working_dir: /workspace-src/dts-analytics
+    command:
+      - bash
+      - -lc
+      - |
+        mvn -q -DskipTests package || true
+        mvn -q -DskipTests spring-boot:run \
+          -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
+    volumes:
+      - ./source:/workspace-src:z
+      - ./services/dts-analytics/plugins:/plugins:Z
+      - ./services/dts-analytics/data:/data:Z
+      - ./services/dts-analytics/logs:/var/log/dts-analytics:Z
+      - ./services/certs:/certs:ro,z
+      - maven-cache:/root/.m2
+

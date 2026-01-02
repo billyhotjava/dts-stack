@@ -23,14 +23,6 @@
         <jhipster-framework.version>8.11.0</jhipster-framework.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <spring-cloud.version>2024.0.1</spring-cloud.version>
-        <!--
-          Metabase UI assets are embedded into the Spring Boot jar at build time.
-
-          NOTE: upstream does not publish a v0.45.6 artifact on downloads.metabase.com.
-          We use the latest available v0.45.x patch bundle as a compatibility baseline.
-        -->
-        <metabase.ui.bundle.version>0.45.4.3</metabase.ui.bundle.version>
-        <metabase.ui.bundle.url>https://downloads.metabase.com/v${metabase.ui.bundle.version}/metabase.jar</metabase.ui.bundle.url>
     </properties>
 
     <dependencyManagement>
@@ -123,9 +115,6 @@
             <resource>
                 <directory>src/main/resources</directory>
             </resource>
-            <resource>
-                <directory>${project.build.directory}/generated-resources</directory>
-            </resource>
         </resources>
         <plugins>
             <plugin>
@@ -138,29 +127,13 @@
                 <version>3.1.0</version>
                 <executions>
                     <execution>
-                        <id>embed-metabase-ui</id>
-                        <phase>generate-resources</phase>
+                        <id>purge-stale-classes</id>
+                        <phase>process-classes</phase>
                         <configuration>
                             <target>
-                                <mkdir dir="${project.build.directory}/metabase-ui"/>
-                                <mkdir dir="${project.build.directory}/generated-resources/static"/>
-
-                                <get src="${metabase.ui.bundle.url}"
-                                     dest="${project.build.directory}/metabase-ui/metabase.jar"
-                                     skipexisting="true"
-                                     verbose="true"/>
-
-                                <unzip src="${project.build.directory}/metabase-ui/metabase.jar"
-                                       dest="${project.build.directory}/metabase-ui/unpacked">
-                                    <patternset>
-                                        <include name="frontend_client/**"/>
-                                    </patternset>
-                                </unzip>
-
-                                <!-- Flatten frontend_client/* into Spring Boot's classpath:/static/ -->
-                                <copy todir="${project.build.directory}/generated-resources/static">
-                                    <fileset dir="${project.build.directory}/metabase-ui/unpacked/frontend_client"/>
-                                </copy>
+                                <!-- Avoid stale class files when users build without `mvn clean` -->
+                                <delete quiet="true"
+                                        file="${project.build.directory}/classes/com/yuzhi/dts/analytics/web/filter/RequestContextFilter.class"/>
                             </target>
                         </configuration>
                         <goals>

@@ -14,6 +14,7 @@ import com.yuzhi.dts.analytics.service.CollectionService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,21 +37,19 @@ import org.springframework.web.bind.annotation.RestController;
 @Transactional
 public class CollectionResource {
 
-    private static final Map<String, Object> ROOT_COLLECTION = Map.of(
-            "authority_level",
-            null,
-            "name",
-            "Our analytics",
-            "id",
-            "root",
-            "parent_id",
-            null,
-            "effective_location",
-            null,
-            "effective_ancestors",
-            List.of(),
-            "can_write",
-            true);
+    private static final Map<String, Object> ROOT_COLLECTION;
+
+    static {
+        Map<String, Object> root = new LinkedHashMap<>();
+        root.put("authority_level", null);
+        root.put("name", "Our analytics");
+        root.put("id", "root");
+        root.put("parent_id", null);
+        root.put("effective_location", null);
+        root.put("effective_ancestors", List.of());
+        root.put("can_write", true);
+        ROOT_COLLECTION = Collections.unmodifiableMap(root);
+    }
 
     private final AnalyticsSessionService sessionService;
     private final AnalyticsCollectionRepository collectionRepository;

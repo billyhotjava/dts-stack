@@ -12,8 +12,12 @@ public record OidcProperties(
         List<String> scopes,
         String adminRole) {
 
-    public OidcProperties() {
-        this(false, null, null, null, List.of("openid", "profile", "email"), "analytics-admin");
+    public OidcProperties {
+        if (scopes == null || scopes.isEmpty()) {
+            scopes = List.of("openid", "profile", "email");
+        }
+        if (adminRole == null || adminRole.isBlank()) {
+            adminRole = "analytics-admin";
+        }
     }
 }
-

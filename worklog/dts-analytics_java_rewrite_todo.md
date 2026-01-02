@@ -9,11 +9,11 @@
 > 重要澄清：**继续使用 Metabase UI 等价于必须满足 UI 对后端 API 的“契约”**（不一定与开源 Metabase 的实现一致，但行为/字段/错误码/鉴权流程必须让 UI 正常工作）。
 
 ## 当前实现约束（技术落地）
-- 构建阶段内置 UI 资源：由于 `downloads.metabase.com` 未提供 `v0.45.6/metabase.jar`，当前以 `v0.45.4.3` 的 UI 资源包作为基线嵌入（后端仍按 v0.45.6 目标对齐契约，后续可替换资源包）。
+- UI 作为独立模块维护：`source/dts-analytics-webapp` 一次性解压 `metabase.jar` 得到 legacy UI（用于扫描/对齐），后续逐步迁移到 React 19；`dts-analytics` 后端不再内嵌/渲染 UI 静态资源。
 
 ## 当前已完成（基于 `source/dts-analytics`）
 - 后端基础：Spring Boot 启动、基础配置、`/api/health`、`/api/info`、诊断接口与基础错误模型、MockMvc 集成测试。
-- UI 集成：构建阶段从 `metabase.jar` 抽取 UI 静态资源并随 jar 交付；支持 `/analytics` basePath（`X-Forwarded-Prefix`）与 SPA fallback。
+- UI 解耦：移除后端构建阶段的 UI 抽取与 SPA fallback；前端静态资源由 `source/dts-analytics-webapp` 独立交付。
 - 初始化/登录态：`/api/setup` 初始化管理员；`/api/session` 登录/退出；`/api/user/current` 当前用户；站点 settings 的最小读写。
 - 数据源与元数据：`/api/database` CRUD（最小集）+ `POST /api/database/:id/sync_schema`（JDBC 元数据同步）；`/api/database/:id/metadata|schemas|schema/:schema|fields`、`/api/table`、`/api/table/:id`、`/api/table/:id/query_metadata`、`/api/field/:id` 最小可用。
 - 连接校验与辅助：`POST /api/database/validate` 支持真实 JDBC 连通性校验；`GET /api/table/:id/fks` 返回外部库外键映射；`GET /api/field/:id/values` 返回 distinct values（含 `has_more_values`）。
@@ -62,7 +62,7 @@
    - 用 Java 服务替换 `docker-compose.analytics.yml` 的 `dts-analytics`（端口、healthcheck、volumes、labels、env）。
    - 保留现有挂载约定：`/plugins`、`/var/log/...`、`/certs`。
 4. **运行时配置体系**
-   - 建立与现有 `services/dts-analytics/metabase.env` 的兼容层：将 `MB_*` 映射到 Java 配置（或提供等价的 `DTS_ANALYTICS_*`，并给出迁移说明）。
+   - 统一 `DTS_ANALYTICS_*`/`SPRING_*` 配置，避免沿用旧 Metabase 的 `MB_*` 环境变量体系。
 
 ---
 
@@ -87,13 +87,14 @@
 
 ## 3. 前端集成（Metabase UI 静态交付 + Chrome 98）
 1. **UI 交付方式**
-   - 从 Metabase UI 构建产物（静态文件）出发，形成可重复构建的“前端工件”（建议独立 CI job，产物复制进 Java 镜像）。
+   - 先把 legacy UI（从 `metabase.jar` 解压）冻结到 `source/dts-analytics-webapp/legacy/` 用于契约对齐与接口扫描。
+   - 后续前端独立构建（React 19 + Vite），以 `dts-admin-webapp` 的方式交付（独立镜像/静态托管），并通过反代只与后端 API 交互。
 2. **Chrome 98 兼容**
    - 调整前端构建目标（browserslist/webpack/babel/polyfills），并建立“Chrome 98 冒烟测试”用例（至少覆盖登录、进入首页、打开问题/看板）。
-3. **Java 静态资源托管**
-   - Spring MVC 静态资源映射 + SPA fallback；
-   - Cache-Control/ETag/gzip；
-   - 安全头（CSP、X-Frame-Options、Referrer-Policy）按产品需求定版。
+3. **路由与反代（/analytics）**
+   - legacy UI 的请求路径包含绝对 `/api/**`，需要在反代层明确路由策略（避免与其他应用冲突）。
+   - 目标形态：`/analytics` → webapp；API → `dts-analytics`（仅 HTTP；不引入文件级耦合）。
+
 
 ---
 

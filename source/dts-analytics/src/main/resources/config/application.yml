@@ -24,7 +24,6 @@ spring:
       ddl-auto: none
     properties:
       hibernate.jdbc.time_zone: UTC
-      hibernate.connection.provider_disables_autocommit: true
       hibernate.id.new_generator_mappings: true
       hibernate.naming.physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
       hibernate.naming.implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
@@ -43,11 +42,6 @@ application:
     name: dts-analytics
     version: 2.1.0-SNAPSHOT
     environment: dev
-
-metabase:
-  ui:
-    target-version: "0.45.6"
-    bundle-version: "0.45.4.3"
 
 dts:
   analytics:

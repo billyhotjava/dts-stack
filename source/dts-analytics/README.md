@@ -6,8 +6,7 @@ This module bootstraps a JHipster-style Spring Boot stack (mirroring `source/dts
 - Spring Boot 3.4.x + JHipster framework 8.x
 - Java 21, Maven build (`pom.xml`)
 - Package root: `com.yuzhi.dts.analytics`
-- Metabase UI target: **v0.45.6** (Chrome 98 compatible baseline)
-- UI asset bundle (build-time embedded): **v0.45.4.3** (latest available v0.45.x bundle on `downloads.metabase.com`)
+- UI delivered by sibling module: `source/dts-analytics-webapp` (backend is API-only; no embedded UI assets)
 - Starter REST endpoints: `GET /api/health`, `GET /api/info`
 - Request ID middleware + structured error responses
 - MockMvc integration tests validating request ID propagation, error translation, and service metadata exposure
