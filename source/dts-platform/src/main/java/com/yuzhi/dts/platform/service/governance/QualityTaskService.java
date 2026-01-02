@@ -25,6 +25,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class QualityTaskService {
+
+    private static final Logger log = LoggerFactory.getLogger(QualityTaskService.class);
+    private static final java.util.concurrent.atomic.AtomicBoolean TABLE_NOT_READY_WARNED = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private final GovQualityTaskRepository taskRepository;
     private final GovRuleBindingRepository bindingRepository;
@@ -153,7 +158,21 @@ public class QualityTaskService {
     }
 
     public void runDueTasks() {
-        List<GovQualityTask> tasks = taskRepository.findByEnabledTrue();
+        List<GovQualityTask> tasks;
+        try {
+            tasks = taskRepository.findByEnabledTrue();
+        } catch (RuntimeException ex) {
+            // Liquibase may be running asynchronously; avoid spamming scheduling logs until tables are ready.
+            if (TABLE_NOT_READY_WARNED.compareAndSet(false, true)) {
+                log.warn(
+                    "质量巡检调度跳过（表未就绪？）：{}。请确认平台数据库已完成 Liquibase 迁移（含 changelog 20260101_02_governance_quality_task.xml）。",
+                    ex.getMessage()
+                );
+            } else {
+                log.debug("质量巡检调度跳过（表未就绪？）：{}", ex.getMessage());
+            }
+            return;
+        }
         if (tasks == null || tasks.isEmpty()) {
             return;
         }
