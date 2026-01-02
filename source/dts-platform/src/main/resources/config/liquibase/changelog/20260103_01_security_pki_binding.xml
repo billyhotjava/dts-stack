@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260103_01_security_pki_binding" author="platform">
+        <createTable tableName="security_pki_binding">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="user_id" type="varchar(128)"/>
+            <column name="username" type="varchar(128)"/>
+            <column name="cert_serial" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject_dn" type="varchar(512)"/>
+            <column name="issuer_dn" type="varchar(512)"/>
+            <column name="not_before" type="timestamp"/>
+            <column name="not_after" type="timestamp"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_seen_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="security_pki_binding" indexName="idx_security_pki_binding_user">
+            <column name="user_id"/>
+        </createIndex>
+        <createIndex tableName="security_pki_binding" indexName="idx_security_pki_binding_username">
+            <column name="username"/>
+        </createIndex>
+        <createIndex tableName="security_pki_binding" indexName="uidx_security_pki_binding_serial" unique="true">
+            <column name="cert_serial"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

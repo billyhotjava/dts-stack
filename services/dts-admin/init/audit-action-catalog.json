@@ -187,6 +187,15 @@
           ]
         },
         {
+          "key": "security.identity",
+          "title": "身份认证（PKI/USBKey）",
+          "actions": [
+            { "code": "SECURITY_PKI_STATUS_VIEW", "display": "查看证书认证状态", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SECURITY_PKI_BIND", "display": "绑定证书登录", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SECURITY_PKI_UNBIND", "display": "解除证书绑定", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
           "key": "security.policies",
           "title": "安全策略中心",
           "actions": [

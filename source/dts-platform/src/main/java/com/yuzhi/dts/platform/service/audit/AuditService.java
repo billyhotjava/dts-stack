@@ -579,6 +579,7 @@ public class AuditService {
                 event.clientAgent = req.getHeader("User-Agent");
                 event.requestUri = req.getRequestURI();
                 event.httpMethod = req.getMethod();
+                enrichWithPkiContext(req, payloadMap, effectiveExtraTags);
             }
         } catch (Exception ignore) {}
         markDomainAuditSafe();
@@ -963,6 +964,40 @@ public class AuditService {
             request.getRemoteAddr()
         );
     }
+
+    private void enrichWithPkiContext(HttpServletRequest request, Map<String, Object> payload, Map<String, Object> extraTags) {
+        if (request == null) {
+            return;
+        }
+        try {
+            com.yuzhi.dts.platform.service.security.pki.PkiClientCert cert =
+                com.yuzhi.dts.platform.service.security.pki.PkiClientCert.fromRequest(request);
+            if (!cert.present()) {
+                return;
+            }
+            payload.putIfAbsent("pkiCertPresent", true);
+            payload.putIfAbsent("pkiCertVerified", cert.verified());
+            if (StringUtils.hasText(cert.serial())) {
+                payload.putIfAbsent("pkiCertSerial", cert.serial());
+            }
+            if (StringUtils.hasText(cert.subjectDn())) {
+                payload.putIfAbsent("pkiCertSubjectDn", cert.subjectDn());
+            }
+            if (StringUtils.hasText(cert.issuerDn())) {
+                payload.putIfAbsent("pkiCertIssuerDn", cert.issuerDn());
+            }
+            if (cert.notAfter() != null) {
+                payload.putIfAbsent("pkiCertNotAfter", cert.notAfter().toString());
+            }
+            if (extraTags != null) {
+                extraTags.putIfAbsent("pkiCertVerified", cert.verified());
+                if (StringUtils.hasText(cert.serial())) {
+                    extraTags.putIfAbsent("pkiCertSerial", cert.serial());
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
 
     private String serializeTags(Map<String, Object> tags) {
         if (tags == null || tags.isEmpty()) {

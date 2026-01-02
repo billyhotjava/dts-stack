@@ -83,4 +83,5 @@
     <include file="config/liquibase/changelog/20260102_38_governance_issue_dataset_dept.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_39_catalog_lifecycle_request.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_40_security_baseline_remediation.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260103_01_security_pki_binding.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>
