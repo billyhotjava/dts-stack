@@ -68,6 +68,7 @@
           "actions": [
             { "code": "MODELING_STANDARD_LIST", "display": "查看数据标准列表", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "MODELING_STANDARD_VIEW", "display": "查看数据标准", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "MODELING_STANDARD_VERSION_LIST", "display": "查看数据标准版本列表", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "MODELING_STANDARD_EDIT", "display": "维护数据标准", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "MODELING_STANDARD_VERSION_PUBLISH", "display": "发布标准版本", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "MODELING_STANDARD_IMPORT", "display": "导入数据标准", "phases": ["SUCCESS"], "supportsFlow": false },
@@ -126,10 +127,41 @@
           "key": "governance.indicators",
           "title": "指标管理",
           "actions": [
+            { "code": "GOV_INDICATOR_LIST", "display": "查看指标字典列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_INDICATOR_VIEW", "display": "查看指标详情", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_INDICATOR_EDIT", "display": "维护指标", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_INDICATOR_PUBLISH", "display": "发布指标", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_INDICATOR_ARCHIVE", "display": "废止指标", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_INDICATOR_DELETE", "display": "删除指标", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_INDICATOR_VALIDATE", "display": "校验指标计算规则", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_INDICATOR_COMPUTE_PREVIEW", "display": "预览指标计算结果", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "GOV_INDICATOR_VERSION_LIST", "display": "查看指标版本历史", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "GOV_INDICATOR_VERSION_VIEW", "display": "查看指标版本快照", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "GOV_INDICATOR_REFERENCE_VIEW", "display": "查看指标引用关系", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_INDICATOR_REFERENCE_EDIT", "display": "维护指标引用关系", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "GOV_INDICATOR_PUBLISH_PREVIEW", "display": "指标发布一致性预检", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
+        },
+        {
+          "key": "governance.dimensions",
+          "title": "维度体系与字典管理",
+          "actions": [
+            { "code": "GOV_DIMENSION_LIST", "display": "查看维度字典列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_DIMENSION_VIEW", "display": "查看维度详情", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_DIMENSION_EDIT", "display": "维护维度字典", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_DIMENSION_PUBLISH", "display": "发布维度", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_DIMENSION_ARCHIVE", "display": "废止维度", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_DIMENSION_DELETE", "display": "删除维度", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "governance.dimensionItems",
+          "title": "维度字典项",
+          "actions": [
+            { "code": "GOV_DIMENSION_ITEM_LIST", "display": "查看维度字典项列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_DIMENSION_ITEM_TREE", "display": "查看维度字典层级树", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_DIMENSION_ITEM_EDIT", "display": "维护维度字典项", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_DIMENSION_ITEM_DELETE", "display": "删除维度字典项", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         },
         {

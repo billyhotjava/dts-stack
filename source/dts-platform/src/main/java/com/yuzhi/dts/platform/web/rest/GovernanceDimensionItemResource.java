@@ -1,6 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.DimensionItemService;
 import java.util.LinkedHashMap;
@@ -49,7 +49,7 @@ public class GovernanceDimensionItemResource {
         auditPayload.put("dimensionId", dimensionId.toString());
         auditPayload.put("count", list.size());
         if (StringUtils.hasText(keyword)) auditPayload.put("keyword", keyword.trim());
-        audit.recordAuxiliary("READ", "governance.dimension.item", "governance.dimension.item", "LIST", "SUCCESS", auditPayload);
+        audit.auditAction("GOV_DIMENSION_ITEM_LIST", AuditStage.SUCCESS, "LIST", auditPayload);
         return ApiResponses.ok(list);
     }
 
@@ -62,7 +62,7 @@ public class GovernanceDimensionItemResource {
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "查看维度字典层级树");
         auditPayload.put("dimensionId", dimensionId.toString());
-        audit.recordAuxiliary("READ", "governance.dimension.item", "governance.dimension.item", "TREE", "SUCCESS", auditPayload);
+        audit.auditAction("GOV_DIMENSION_ITEM_TREE", AuditStage.SUCCESS, "TREE", auditPayload);
         return ApiResponses.ok(tree);
     }
 
@@ -77,7 +77,7 @@ public class GovernanceDimensionItemResource {
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "新增维度字典项");
         auditPayload.put("dimensionId", dimensionId.toString());
-        audit.recordAs(currentUser(), "WRITE", "governance.dimension.item", "governance.dimension.item", "CREATE", "SUCCESS", auditPayload, null);
+        audit.auditAction("GOV_DIMENSION_ITEM_EDIT", AuditStage.SUCCESS, "CREATE", auditPayload);
         return ApiResponses.ok(saved);
     }
 
@@ -94,7 +94,7 @@ public class GovernanceDimensionItemResource {
         auditPayload.put("summary", "更新维度字典项");
         auditPayload.put("dimensionId", dimensionId.toString());
         auditPayload.put("itemId", itemId.toString());
-        audit.recordAs(currentUser(), "WRITE", "governance.dimension.item", "governance.dimension.item", itemId.toString(), "SUCCESS", auditPayload, null);
+        audit.auditAction("GOV_DIMENSION_ITEM_EDIT", AuditStage.SUCCESS, itemId.toString(), auditPayload);
         return ApiResponses.ok(saved);
     }
 
@@ -110,11 +110,7 @@ public class GovernanceDimensionItemResource {
         auditPayload.put("summary", "删除维度字典项");
         auditPayload.put("dimensionId", dimensionId.toString());
         auditPayload.put("itemId", itemId.toString());
-        audit.recordAs(currentUser(), "WRITE", "governance.dimension.item", "governance.dimension.item", itemId.toString(), "SUCCESS", auditPayload, null);
+        audit.auditAction("GOV_DIMENSION_ITEM_DELETE", AuditStage.SUCCESS, itemId.toString(), auditPayload);
         return ApiResponses.ok(Boolean.TRUE);
-    }
-
-    private String currentUser() {
-        return SecurityUtils.getCurrentUserLogin().orElse("system");
     }
 }

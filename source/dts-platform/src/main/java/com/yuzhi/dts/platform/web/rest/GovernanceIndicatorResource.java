@@ -12,7 +12,6 @@ import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDt
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorVersionDto;
 import com.yuzhi.dts.platform.service.governance.request.DimensionUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest;
-import com.yuzhi.dts.platform.security.SecurityUtils;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,7 +91,7 @@ public class GovernanceIndicatorResource {
         if (StringUtils.hasText(status)) auditPayload.put("status", status.trim());
         if (StringUtils.hasText(keyword)) auditPayload.put("keyword", keyword.trim());
         if (StringUtils.hasText(activeDept)) auditPayload.put("activeDept", activeDept.trim());
-        audit.recordAuxiliary("READ", "governance.indicator", "governance.indicator", "LIST", "SUCCESS", auditPayload);
+        audit.auditAction("GOV_INDICATOR_LIST", AuditStage.SUCCESS, "LIST", auditPayload);
         return ApiResponses.ok(payload);
     }
 
@@ -108,7 +107,7 @@ public class GovernanceIndicatorResource {
         if (dto != null && StringUtils.hasText(dto.getName())) {
             detail.put("targetName", dto.getName());
         }
-        audit.recordAuxiliary("READ", "governance.indicator", "governance.indicator", id.toString(), "SUCCESS", detail);
+        audit.auditAction("GOV_INDICATOR_VIEW", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(dto);
     }
 
@@ -172,7 +171,7 @@ public class GovernanceIndicatorResource {
             if (StringUtils.hasText(request.refType())) auditPayload.put("refType", request.refType().trim());
             if (StringUtils.hasText(request.refTarget())) auditPayload.put("refTarget", request.refTarget().trim());
         }
-        audit.recordAs(currentUser(), "WRITE", "governance.indicator.reference", "governance.indicator", id.toString(), "SUCCESS", auditPayload, null);
+        audit.auditAction("GOV_INDICATOR_REFERENCE_EDIT", AuditStage.SUCCESS, id.toString(), auditPayload);
         return ApiResponses.ok(saved);
     }
 
@@ -189,7 +188,7 @@ public class GovernanceIndicatorResource {
         auditPayload.put("summary", "更新指标引用关系");
         auditPayload.put("indicatorId", id.toString());
         auditPayload.put("referenceId", refId.toString());
-        audit.recordAs(currentUser(), "WRITE", "governance.indicator.reference", "governance.indicator", id.toString(), "SUCCESS", auditPayload, null);
+        audit.auditAction("GOV_INDICATOR_REFERENCE_EDIT", AuditStage.SUCCESS, id.toString(), auditPayload);
         return ApiResponses.ok(saved);
     }
 
@@ -205,7 +204,7 @@ public class GovernanceIndicatorResource {
         auditPayload.put("summary", "删除指标引用关系");
         auditPayload.put("indicatorId", id.toString());
         auditPayload.put("referenceId", refId.toString());
-        audit.recordAs(currentUser(), "WRITE", "governance.indicator.reference", "governance.indicator", id.toString(), "SUCCESS", auditPayload, null);
+        audit.auditAction("GOV_INDICATOR_REFERENCE_EDIT", AuditStage.SUCCESS, id.toString(), auditPayload);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -242,7 +241,7 @@ public class GovernanceIndicatorResource {
         detail.put("targetId", saved.getId() != null ? saved.getId().toString() : "");
         detail.put("targetName", saved.getName());
         detail.put("summary", "创建指标：" + saved.getName());
-        audit.recordAs(currentUser(), "WRITE", "governance.indicator", "governance.indicator", "CREATE", "SUCCESS", detail, null);
+        audit.auditAction("GOV_INDICATOR_EDIT", AuditStage.SUCCESS, saved.getId() != null ? saved.getId().toString() : "CREATE", detail);
         return ApiResponses.ok(saved);
     }
 
@@ -258,7 +257,7 @@ public class GovernanceIndicatorResource {
         detail.put("targetId", id.toString());
         detail.put("targetName", saved.getName());
         detail.put("summary", "更新指标：" + saved.getName());
-        audit.recordAs(currentUser(), "WRITE", "governance.indicator", "governance.indicator", id.toString(), "SUCCESS", detail, null);
+        audit.auditAction("GOV_INDICATOR_EDIT", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(saved);
     }
 
@@ -273,7 +272,7 @@ public class GovernanceIndicatorResource {
         detail.put("targetId", id.toString());
         detail.put("targetName", saved.getName());
         detail.put("summary", "发布指标：" + saved.getName());
-        audit.recordAs(currentUser(), "WRITE", "governance.indicator", "governance.indicator", id.toString(), "SUCCESS", detail, null);
+        audit.auditAction("GOV_INDICATOR_PUBLISH", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(saved);
     }
 
@@ -288,7 +287,7 @@ public class GovernanceIndicatorResource {
         detail.put("targetId", id.toString());
         detail.put("targetName", saved.getName());
         detail.put("summary", "废止指标：" + saved.getName());
-        audit.recordAs(currentUser(), "WRITE", "governance.indicator", "governance.indicator", id.toString(), "SUCCESS", detail, null);
+        audit.auditAction("GOV_INDICATOR_ARCHIVE", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(saved);
     }
 
@@ -308,7 +307,7 @@ public class GovernanceIndicatorResource {
                 detail.put("message", result.getMessage());
             }
         }
-        audit.recordAs(currentUser(), "WRITE", "governance.indicator.validation", "governance.indicator", id.toString(), "SUCCESS", detail, null);
+        audit.auditAction("GOV_INDICATOR_VALIDATE", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(result);
     }
 
@@ -329,7 +328,7 @@ public class GovernanceIndicatorResource {
             Object status = result.get("status");
             if (status != null) auditPayload.put("status", status);
         }
-        audit.recordAs(currentUser(), "WRITE", "governance.indicator.compute", "governance.indicator", id.toString(), "SUCCESS", auditPayload, null);
+        audit.auditAction("GOV_INDICATOR_COMPUTE_PREVIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
         return ApiResponses.ok(result);
     }
 
@@ -343,7 +342,7 @@ public class GovernanceIndicatorResource {
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("targetId", id.toString());
         detail.put("summary", "删除指标");
-        audit.recordAs(currentUser(), "WRITE", "governance.indicator", "governance.indicator", id.toString(), "SUCCESS", detail, null);
+        audit.auditAction("GOV_INDICATOR_DELETE", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -376,7 +375,7 @@ public class GovernanceIndicatorResource {
         if (StringUtils.hasText(status)) auditPayload.put("status", status.trim());
         if (StringUtils.hasText(keyword)) auditPayload.put("keyword", keyword.trim());
         if (StringUtils.hasText(activeDept)) auditPayload.put("activeDept", activeDept.trim());
-        audit.recordAuxiliary("READ", "governance.dimension", "governance.dimension", "LIST", "SUCCESS", auditPayload);
+        audit.auditAction("GOV_DIMENSION_LIST", AuditStage.SUCCESS, "LIST", auditPayload);
         return ApiResponses.ok(payload);
     }
 
@@ -392,7 +391,7 @@ public class GovernanceIndicatorResource {
         if (dto != null && StringUtils.hasText(dto.getName())) {
             detail.put("targetName", dto.getName());
         }
-        audit.recordAuxiliary("READ", "governance.dimension", "governance.dimension", id.toString(), "SUCCESS", detail);
+        audit.auditAction("GOV_DIMENSION_VIEW", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(dto);
     }
 
@@ -407,7 +406,7 @@ public class GovernanceIndicatorResource {
         detail.put("targetId", saved.getId() != null ? saved.getId().toString() : "");
         detail.put("targetName", saved.getName());
         detail.put("summary", "创建维度：" + saved.getName());
-        audit.recordAs(currentUser(), "WRITE", "governance.dimension", "governance.dimension", "CREATE", "SUCCESS", detail, null);
+        audit.auditAction("GOV_DIMENSION_EDIT", AuditStage.SUCCESS, saved.getId() != null ? saved.getId().toString() : "CREATE", detail);
         return ApiResponses.ok(saved);
     }
 
@@ -423,7 +422,7 @@ public class GovernanceIndicatorResource {
         detail.put("targetId", id.toString());
         detail.put("targetName", saved.getName());
         detail.put("summary", "更新维度：" + saved.getName());
-        audit.recordAs(currentUser(), "WRITE", "governance.dimension", "governance.dimension", id.toString(), "SUCCESS", detail, null);
+        audit.auditAction("GOV_DIMENSION_EDIT", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(saved);
     }
 
@@ -438,7 +437,7 @@ public class GovernanceIndicatorResource {
         detail.put("targetId", id.toString());
         detail.put("targetName", saved.getName());
         detail.put("summary", "发布维度：" + saved.getName());
-        audit.recordAs(currentUser(), "WRITE", "governance.dimension", "governance.dimension", id.toString(), "SUCCESS", detail, null);
+        audit.auditAction("GOV_DIMENSION_PUBLISH", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(saved);
     }
 
@@ -453,7 +452,7 @@ public class GovernanceIndicatorResource {
         detail.put("targetId", id.toString());
         detail.put("targetName", saved.getName());
         detail.put("summary", "废止维度：" + saved.getName());
-        audit.recordAs(currentUser(), "WRITE", "governance.dimension", "governance.dimension", id.toString(), "SUCCESS", detail, null);
+        audit.auditAction("GOV_DIMENSION_ARCHIVE", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(saved);
     }
 
@@ -467,11 +466,7 @@ public class GovernanceIndicatorResource {
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("targetId", id.toString());
         detail.put("summary", "删除维度");
-        audit.recordAs(currentUser(), "WRITE", "governance.dimension", "governance.dimension", id.toString(), "SUCCESS", detail, null);
+        audit.auditAction("GOV_DIMENSION_DELETE", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(Boolean.TRUE);
-    }
-
-    private String currentUser() {
-        return SecurityUtils.getCurrentUserLogin().orElse("system");
     }
 }

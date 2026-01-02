@@ -258,14 +258,7 @@ public class ModelingResource {
         Map<String, Object> detail = new java.util.LinkedHashMap<>();
         detail.put("targetId", id.toString());
         detail.put("summary", "查看数据标准版本列表");
-        audit.recordAuxiliary(
-            "READ",
-            "modeling.standard.version",
-            "modeling.standard.version",
-            id.toString(),
-            "SUCCESS",
-            detail
-        );
+        audit.auditAction("MODELING_STANDARD_VERSION_LIST", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(versions);
     }
 
