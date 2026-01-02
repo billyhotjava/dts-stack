@@ -56,6 +56,12 @@ public class GovIssueTicket extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "data_level", length = 32)
     private String dataLevel;
 
+    @Column(name = "dataset_id", columnDefinition = "uuid")
+    private UUID datasetId;
+
+    @Column(name = "owner_dept", length = 128)
+    private String ownerDept;
+
     @Column(name = "assigned_to", length = 64)
     private String assignedTo;
 
@@ -160,6 +166,22 @@ public class GovIssueTicket extends AbstractAuditingEntity<UUID> implements Seri
 
     public void setDataLevel(String dataLevel) {
         this.dataLevel = dataLevel;
+    }
+
+    public UUID getDatasetId() {
+        return datasetId;
+    }
+
+    public void setDatasetId(UUID datasetId) {
+        this.datasetId = datasetId;
+    }
+
+    public String getOwnerDept() {
+        return ownerDept;
+    }
+
+    public void setOwnerDept(String ownerDept) {
+        this.ownerDept = ownerDept;
     }
 
     public String getAssignedTo() {

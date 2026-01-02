@@ -309,6 +309,7 @@ public class QualityRunService {
             req.setSummary(summary.toString());
             req.setSeverity(run.getSeverity());
             req.setDataLevel(run.getDataLevel());
+            req.setDatasetId(run.getDatasetId());
             req.setOwner(run.getRule() != null ? run.getRule().getOwner() : null);
             req.setTags(List.of(
                 "QUALITY_RUN",

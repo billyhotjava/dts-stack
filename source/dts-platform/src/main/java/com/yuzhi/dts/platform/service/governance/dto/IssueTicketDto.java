@@ -9,12 +9,14 @@ public class IssueTicketDto {
     private UUID id;
     private String sourceType;
     private UUID sourceId;
+    private UUID datasetId;
     private String title;
     private String summary;
     private String status;
     private String severity;
     private String priority;
     private String dataLevel;
+    private String ownerDept;
     private String assignedTo;
     private Instant assignedAt;
     private Instant dueAt;
@@ -50,6 +52,14 @@ public class IssueTicketDto {
 
     public void setSourceId(UUID sourceId) {
         this.sourceId = sourceId;
+    }
+
+    public UUID getDatasetId() {
+        return datasetId;
+    }
+
+    public void setDatasetId(UUID datasetId) {
+        this.datasetId = datasetId;
     }
 
     public String getTitle() {
@@ -98,6 +108,14 @@ public class IssueTicketDto {
 
     public void setDataLevel(String dataLevel) {
         this.dataLevel = dataLevel;
+    }
+
+    public String getOwnerDept() {
+        return ownerDept;
+    }
+
+    public void setOwnerDept(String ownerDept) {
+        this.ownerDept = ownerDept;
     }
 
     public String getAssignedTo() {
@@ -196,4 +214,3 @@ public class IssueTicketDto {
         this.actions = actions;
     }
 }
-

@@ -206,6 +206,7 @@ public class QualityTaskService {
             }
             req.setSummary(summary.toString());
             req.setSeverity("HIGH");
+            req.setDatasetId(task.getDatasetId());
             req.setTags(List.of("QUALITY_TASK", "datasetId=" + String.valueOf(task.getDatasetId())));
             issueTicketService.createOrTouch("QUALITY_TASK", task.getId(), req, "system", "系统自动生成：巡检计划执行失败");
         } catch (Exception ignored) {}

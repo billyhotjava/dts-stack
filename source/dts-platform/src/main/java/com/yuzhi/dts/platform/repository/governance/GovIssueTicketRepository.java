@@ -6,10 +6,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface GovIssueTicketRepository extends JpaRepository<GovIssueTicket, UUID> {
+public interface GovIssueTicketRepository extends JpaRepository<GovIssueTicket, UUID>, JpaSpecificationExecutor<GovIssueTicket> {
     List<GovIssueTicket> findByStatusInOrderByCreatedDateDesc(List<String> statuses);
     List<GovIssueTicket> findByAssignedTo(String assignedTo);
     long countByStatus(String status);

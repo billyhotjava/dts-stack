@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.governance;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
 import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
@@ -318,14 +319,7 @@ public class QualityRuleService {
         auditPayload.put("targetId", persisted.getId().toString());
         auditPayload.put("targetName", persisted.getName());
         auditPayload.put("summary", "新增质量规则：" + persisted.getName());
-        auditService.record(
-            "CREATE",
-            "governance.rule",
-            "governance.rule",
-            persisted.getId().toString(),
-            "SUCCESS",
-            auditPayload
-        );
+        auditService.auditAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, persisted.getId().toString(), auditPayload);
         return GovernanceMapper.toDto(persisted);
     }
 
@@ -370,14 +364,7 @@ public class QualityRuleService {
         auditPayload.put("targetId", id.toString());
         auditPayload.put("targetName", persisted.getName());
         auditPayload.put("summary", "修改质量规则：" + persisted.getName());
-        auditService.record(
-            "UPDATE",
-            "governance.rule",
-            "governance.rule",
-            id.toString(),
-            "SUCCESS",
-            auditPayload
-        );
+        auditService.auditAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, id.toString(), auditPayload);
         return GovernanceMapper.toDto(persisted);
     }
 
@@ -396,14 +383,7 @@ public class QualityRuleService {
         auditPayload.put("targetId", id.toString());
         auditPayload.put("targetName", rule.getName());
         auditPayload.put("summary", "删除质量规则：" + rule.getName());
-        auditService.record(
-            "DELETE",
-            "governance.rule",
-            "governance.rule",
-            id.toString(),
-            "SUCCESS",
-            auditPayload
-        );
+        auditService.auditAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, id.toString(), auditPayload);
     }
 
     public QualityRuleDto toggleRule(UUID id, boolean enabled) {
@@ -423,14 +403,7 @@ public class QualityRuleService {
         auditPayload.put("targetId", id.toString());
         auditPayload.put("targetName", rule.getName());
         auditPayload.put("summary", (enabled ? "启用" : "禁用") + "质量规则：" + rule.getName());
-        auditService.record(
-            "UPDATE",
-            "governance.rule.toggle",
-            "governance.rule",
-            id.toString(),
-            "SUCCESS",
-            auditPayload
-        );
+        auditService.auditAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, id.toString(), auditPayload);
         return GovernanceMapper.toDto(rule);
     }
 

@@ -251,6 +251,8 @@ final class GovernanceMapper {
         dto.setSeverity(entity.getSeverity());
         dto.setPriority(entity.getPriority());
         dto.setDataLevel(entity.getDataLevel());
+        dto.setDatasetId(entity.getDatasetId());
+        dto.setOwnerDept(entity.getOwnerDept());
         dto.setAssignedTo(entity.getAssignedTo());
         dto.setAssignedAt(entity.getAssignedAt());
         dto.setDueAt(entity.getDueAt());

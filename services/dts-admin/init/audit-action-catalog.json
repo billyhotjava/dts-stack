@@ -131,8 +131,30 @@
           "key": "governance.rules",
           "title": "质量规则",
           "actions": [
+            { "code": "GOV_RULE_LIST", "display": "查看质量规则列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_RULE_VIEW", "display": "查看质量规则", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "GOV_RULE_MANAGE", "display": "维护质量规则", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "GOV_RULE_EXECUTE", "display": "执行质量检测", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "governance.qualityRuns",
+          "title": "质量运行",
+          "actions": [
+            { "code": "GOV_QUALITY_RUN_LIST", "display": "查看质量运行记录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_QUALITY_RUN_VIEW", "display": "查看质量运行详情", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
+        },
+        {
+          "key": "governance.issues",
+          "title": "问题单",
+          "actions": [
+            { "code": "GOV_ISSUE_LIST", "display": "查看问题单列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_ISSUE_VIEW", "display": "查看问题单详情", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "GOV_ISSUE_CREATE", "display": "新建问题单", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_ISSUE_UPDATE", "display": "更新问题单", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_ISSUE_CLOSE", "display": "关闭问题单", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "GOV_ISSUE_ACTION_APPEND", "display": "追加问题单处理记录", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         },
         {

@@ -7,6 +7,7 @@ public class IssueTicketUpsertRequest {
 
     private String sourceType;
     private UUID sourceId;
+    private UUID datasetId;
     private String title;
     private String summary;
     private String status;
@@ -31,6 +32,14 @@ public class IssueTicketUpsertRequest {
 
     public void setSourceId(UUID sourceId) {
         this.sourceId = sourceId;
+    }
+
+    public UUID getDatasetId() {
+        return datasetId;
+    }
+
+    public void setDatasetId(UUID datasetId) {
+        this.datasetId = datasetId;
     }
 
     public String getTitle() {
