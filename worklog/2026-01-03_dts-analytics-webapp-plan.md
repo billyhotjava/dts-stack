@@ -15,7 +15,7 @@
 1. 明确线上域名与路由约束：`https://bi.iae.caep/analytics` 是否必须保留（确认与其他 `/api` 路径是否冲突）。
 2. Traefik/网关规则：
    - `/analytics/**` → `dts-analytics-webapp`
-   - `/api/**`（仅对 `bi.iae.caep` 生效）→ `dts-analytics`（或转发到 webapp 由其反向代理到后端）
+   - `/analytics/api/**` → `dts-analytics`（StripPrefix `/analytics`，后端仍提供 `/api/**`）
 3. 统一 `X-Forwarded-*`/`X-Forwarded-Prefix=/analytics` 的注入策略，确保后端生成 `site-url`、跳转与 cookie path 正确。
 4. 增加最小健康检查：
    - webapp：返回 `200`（index.html）

@@ -22,6 +22,30 @@ bash source/dts-analytics-webapp/scripts/extract-metabase-ui.sh
 
 `metabase.jar` 不提交到 Git（已在 `.gitignore` 忽略）。
 
+## 启动（本地 / dev）
+
+legacy UI 的 `index.html/public.html/embed.html` 是模板文件（包含 `{{{baseHref}}}`、`{{{bootstrapJSON}}}` 等占位符），因此需要一个轻量 web server 来渲染它们（见 `source/dts-analytics-webapp/server.mjs`）。
+
+在仓库根目录直接启动（需要 Node.js ≥ 18）：
+
+```bash
+node source/dts-analytics-webapp/server.mjs
+```
+
+可用环境变量：
+- `PORT`：默认 `3001`
+- `DTS_ANALYTICS_API_BASE`：默认 `http://dts-analytics:3000`
+
+## 启动（容器）
+
+构建镜像（一次）：
+
+```bash
+docker build -t dts-analytics-webapp:local -f services/dts-analytics-webapp/Dockerfile .
+```
+
+然后使用 `docker-compose.analytics.yml` 启动（`./dev-up.sh --mode local --analytics` 会带起 `dts-analytics-webapp`）。
+
 ## UI 技术栈识别（扫描结论）
 
 Metabase 0.45.x 的前端产物中包含明显的 ClojureScript 运行时代码特征（例如 `cljs` 协议/命名空间相关符号），并使用 React 生态（bundle 中包含 React 相关符号与运行逻辑）。这也是后续需要完整迁移到 **React 19** 的原因：保持 UI/交互一致的同时，彻底移除 Clojure 相关构建链路与运行时痕迹。
@@ -30,4 +54,3 @@ Metabase 0.45.x 的前端产物中包含明显的 ClojureScript 运行时代码�
 
 - `dts-analytics`（后端）仅提供 HTTP API（例如 `/api/**`），不再内嵌/渲染前端资源。
 - `dts-analytics-webapp`（前端）独立维护，未来逐步替换 legacy 产物为 React 19 项目结构（参考 `dts-admin-webapp` 的架构与技术栈）。
-

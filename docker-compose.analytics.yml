@@ -6,6 +6,30 @@
 ##   docker-compose -f docker-compose.legacy.yml -f docker-compose.analytics.yml up -d dts-analytics
 
 services:
+  dts-analytics-webapp:
+    image: ${IMAGE_DTS_ANALYTICS_WEBAPP:-dts-analytics-webapp:local}
+    depends_on:
+      dts-analytics:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - dts-core
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/ >/dev/null 2>&1 || curl -fsS http://127.0.0.1:3001/ >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`)"
+      - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-ui.tls=true"
+      - "traefik.http.routers.dts-analytics-ui.priority=10000"
+      - "traefik.http.services.dts-analytics-webapp.loadbalancer.server.port=3001"
+      - "traefik.http.middlewares.analytics-prefix.headers.customrequestheaders.X-Forwarded-Prefix=/analytics"
+      - "traefik.http.routers.dts-analytics-ui.middlewares=analytics-prefix@docker,security-headers@file"
+
   dts-analytics:
     # Java rewrite image (see services/dts-analytics/Dockerfile).
     # NOTE: keep interpolation simple for legacy docker-compose compatibility (avoid nested ${...${...}}).
@@ -41,12 +65,11 @@ services:
       - "traefik.http.routers.dts-analytics.tls=true"
       - "traefik.http.routers.dts-analytics.middlewares=security-headers@file"
       - "traefik.http.services.dts-analytics.loadbalancer.server.port=3000"
-      - "traefik.http.routers.dts-analytics-path.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`)"
-      - "traefik.http.routers.dts-analytics-path.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-path.tls=true"
-      # Make sure /analytics wins over the platform Host-only SPA router.
-      - "traefik.http.routers.dts-analytics-path.priority=10000"
-      - "traefik.http.routers.dts-analytics-path.service=dts-analytics"
+      - "traefik.http.routers.dts-analytics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`)"
+      - "traefik.http.routers.dts-analytics-api.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-api.tls=true"
+      - "traefik.http.routers.dts-analytics-api.priority=11000"
+      - "traefik.http.routers.dts-analytics-api.service=dts-analytics"
       - "traefik.http.middlewares.analytics-strip-analytics.stripprefixregex.regex=/analytics"
       - "traefik.http.middlewares.analytics-prefix.headers.customrequestheaders.X-Forwarded-Prefix=/analytics"
-      - "traefik.http.routers.dts-analytics-path.middlewares=analytics-strip-analytics@docker,analytics-prefix@docker,security-headers@file"
+      - "traefik.http.routers.dts-analytics-api.middlewares=analytics-strip-analytics@docker,analytics-prefix@docker,cors-allow@file,security-headers@file"
