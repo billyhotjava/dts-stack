@@ -119,7 +119,13 @@ done
 
 # Local dev default: start all self-owned apps (incl. analytics) unless explicitly disabled.
 if [[ "$MODE" == "local" && "${WITH_ANALYTICS}" == "0" && "${WITH_ANALYTICS_DEV}" == "0" ]]; then
-  WITH_ANALYTICS=1
+  WITH_ANALYTICS_DEV=1
+fi
+
+# In local mode we always run analytics from source (like dts-admin/dts-platform).
+if [[ "$MODE" == "local" && "${WITH_ANALYTICS}" == "1" ]]; then
+  WITH_ANALYTICS="0"
+  WITH_ANALYTICS_DEV="1"
 fi
 
 # Default behavior: skip webapp build in images mode (use local mode or --no-webapp)
@@ -189,21 +195,14 @@ set +a
 
 if [[ "$MODE" == "local" ]]; then
   compose_files=(-f docker-compose.yml -f docker-compose.dev.yml)
-  if [[ "${WITH_ANALYTICS}" == "1" && "${WITH_ANALYTICS_DEV}" == "1" ]]; then
-    echo "[dev-up] ERROR: --analytics and --analytics-dev are mutually exclusive" >&2
-    exit 1
+  if [[ "${WITH_ANALYTICS_DEV}" == "1" ]]; then
+    if [[ -f "docker-compose.analytics-dev.yml" ]]; then
+      compose_files+=(-f docker-compose.analytics-dev.yml)
+    else
+      echo "[dev-up] WARNING: analytics requested but docker-compose.analytics-dev.yml not found; skipping analytics" >&2
+      WITH_ANALYTICS_DEV="0"
+    fi
   fi
-  if [[ "${WITH_ANALYTICS}" == "1" || "${WITH_ANALYTICS_DEV}" == "1" ]]; then
-    compose_files+=(-f docker-compose.analytics.yml)
-  fi
-		  if [[ "${WITH_ANALYTICS_DEV}" == "1" ]]; then
-		    if [[ -f "docker-compose.analytics-dev.yml" ]]; then
-		      compose_files+=(-f docker-compose.analytics-dev.yml)
-		    else
-		      echo "[dev-up] WARNING: --analytics-dev requested but docker-compose.analytics-dev.yml not found" >&2
-		      WITH_ANALYTICS_DEV="0"
-		    fi
-		  fi
 else
   compose_files=(-f docker-compose.yml -f docker-compose-app.yml)
   if [[ "${WITH_ANALYTICS}" == "1" ]]; then
