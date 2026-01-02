@@ -1,6 +1,6 @@
 package com.yuzhi.dts.analytics.config;
 
-import com.yuzhi.dts.analytics.web.filter.DtsRequestContextFilter;
+import com.yuzhi.dts.analytics.web.filter.RequestContextFilter;
 import com.yuzhi.dts.analytics.web.filter.RequestIdFilter;
 import com.yuzhi.dts.analytics.web.filter.RequestLoggingFilter;
 import com.yuzhi.dts.analytics.web.ui.MetabaseSpaFallbackFilter;
@@ -34,13 +34,13 @@ public class FilterConfiguration {
     }
 
     @Bean
-    public FilterRegistrationBean<DtsRequestContextFilter> dtsRequestContextFilterRegistration(
-            DtsRequestContextFilter filter) {
-        FilterRegistrationBean<DtsRequestContextFilter> registration = new FilterRegistrationBean<>();
+    public FilterRegistrationBean<RequestContextFilter> requestContextFilterRegistration(
+            RequestContextFilter filter) {
+        FilterRegistrationBean<RequestContextFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(filter);
         registration.setOrder(2);
         registration.addUrlPatterns("/*");
-        registration.setName("dtsRequestContextFilter");
+        registration.setName("requestContextFilter");
         return registration;
     }
 

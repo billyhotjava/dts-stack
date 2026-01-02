@@ -14,22 +14,23 @@ import java.util.TimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.context.i18n.LocaleContextHolder;
 
 @Component
-public class DtsRequestContextFilter extends OncePerRequestFilter {
+public class RequestContextFilter extends OncePerRequestFilter {
 
-    private static final Logger log = LoggerFactory.getLogger(DtsRequestContextFilter.class);
+    private static final Logger log = LoggerFactory.getLogger(RequestContextFilter.class);
     private static final String FORWARDED_FOR = "X-Forwarded-For";
     private static final String USER_AGENT = "User-Agent";
     private static final String TIMEZONE_HEADER = "X-Timezone";
 
     private final LocaleResolver localeResolver;
 
-    public DtsRequestContextFilter(LocaleResolver localeResolver) {
+    public RequestContextFilter(LocaleResolver localeResolver) {
         this.localeResolver = localeResolver;
     }
 
@@ -41,16 +42,15 @@ public class DtsRequestContextFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         Locale locale = resolveLocale(request);
         String timeZoneId = resolveTimezone(request);
-        RequestContext context =
-                new RequestContext(
-                        resolveRequestId(request),
-                        resolveClientIp(request),
-                        request.getHeader(USER_AGENT),
-                        resolveScheme(request),
-                        resolveHost(request),
-                        request.getRequestURI(),
-                        locale.toLanguageTag(),
-                        timeZoneId);
+        RequestContext context = new RequestContext(
+                resolveRequestId(request),
+                resolveClientIp(request),
+                request.getHeader(USER_AGENT),
+                resolveScheme(request),
+                resolveHost(request),
+                request.getRequestURI(),
+                locale.toLanguageTag(),
+                timeZoneId);
         LocaleContextHolder.setLocale(locale);
         LocaleContextHolder.setTimeZone(TimeZone.getTimeZone(timeZoneId));
         RequestContextHolder.set(context);
