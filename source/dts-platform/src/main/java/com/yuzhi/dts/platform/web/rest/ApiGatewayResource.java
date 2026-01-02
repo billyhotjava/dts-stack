@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import com.yuzhi.dts.common.audit.AuditStage;
 
 /**
  * Data Service public APIs mapping to tasks: test/publish/execute.
@@ -31,7 +32,7 @@ public class ApiGatewayResource {
     @PostMapping("/{id}/test")
     public ApiResponse<ApiTryInvokeResponseDto> test(@PathVariable UUID id, @RequestBody(required = false) ApiTryInvokeRequestDto input) {
         ApiTryInvokeResponseDto resp = apiCatalogService.tryInvoke(id, input);
-        audit.audit("EXECUTE", "api.test", id.toString());
+        audit.auditAction("SERVICE_API_TEST", AuditStage.SUCCESS, id.toString(), Map.of("summary", "测试API服务", "targetId", id.toString()));
         return ApiResponses.ok(resp);
     }
 
@@ -43,7 +44,7 @@ public class ApiGatewayResource {
         }
         String user = SecurityUtils.getCurrentUserLogin().orElse("system");
         var detail = apiCatalogService.publish(id, version, user);
-        audit.audit("PUBLISH", "api.publish", id.toString());
+        audit.auditAction("SERVICE_API_PUBLISH", AuditStage.SUCCESS, id.toString(), Map.of("summary", "发布API服务", "targetId", id.toString(), "version", detail.latestVersion()));
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("id", id);
         resp.put("version", detail.latestVersion());
@@ -55,7 +56,7 @@ public class ApiGatewayResource {
     @PostMapping("/{id}/execute")
     public ApiResponse<ApiTryInvokeResponseDto> execute(@PathVariable UUID id, @RequestBody(required = false) ApiTryInvokeRequestDto input) {
         ApiTryInvokeResponseDto resp = apiCatalogService.execute(id, input);
-        audit.audit("EXECUTE", "api.execute", id.toString());
+        audit.auditAction("SERVICE_API_EXECUTE", AuditStage.SUCCESS, id.toString(), Map.of("summary", "调用API服务", "targetId", id.toString()));
         return ApiResponses.ok(resp);
     }
 }

@@ -55,6 +55,7 @@ public final class AuthoritiesConstants {
     public static final String[] GOVERNANCE_MAINTAINERS = DATA_MAINTAINER_ROLES;
     public static final String[] IAM_MAINTAINERS = DATA_MAINTAINER_ROLES;
     public static final String[] INFRA_MAINTAINERS = DATA_MAINTAINER_ROLES;
+    public static final String[] SERVICE_MAINTAINERS = DATA_MAINTAINER_ROLES;
 
     private AuthoritiesConstants() {}
 }

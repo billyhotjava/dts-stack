@@ -352,9 +352,16 @@
           "key": "services.api",
           "title": "API 服务",
           "actions": [
+            { "code": "SERVICE_API_LIST", "display": "查看API服务列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SERVICE_API_VIEW", "display": "查看API服务详情", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "SERVICE_API_REGISTER", "display": "登记 API 服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_EDIT", "display": "维护API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_TEST", "display": "测试API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_EXECUTE", "display": "调用API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_BATCH_EXECUTE", "display": "批量调用API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "SERVICE_API_PUBLISH", "display": "发布 API 服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "SERVICE_API_DISABLE", "display": "下线 API 服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+            { "code": "SERVICE_API_DISABLE", "display": "下线 API 服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_METRICS_VIEW", "display": "查看API调用统计", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
         },
         {

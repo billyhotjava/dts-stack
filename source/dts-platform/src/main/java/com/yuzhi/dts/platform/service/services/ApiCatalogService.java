@@ -3,8 +3,10 @@ package com.yuzhi.dts.platform.service.services;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.service.SvcApi;
 import com.yuzhi.dts.platform.domain.service.SvcApiMetricHourly;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.service.SvcApiMetricHourlyRepository;
 import com.yuzhi.dts.platform.repository.service.SvcApiRepository;
 import com.yuzhi.dts.platform.service.services.dto.*;
@@ -35,11 +37,18 @@ public class ApiCatalogService {
 
     private final SvcApiRepository apiRepository;
     private final SvcApiMetricHourlyRepository metricRepository;
+    private final CatalogDatasetRepository datasetRepository;
     private final ObjectMapper objectMapper;
 
-    public ApiCatalogService(SvcApiRepository apiRepository, SvcApiMetricHourlyRepository metricRepository, ObjectMapper objectMapper) {
+    public ApiCatalogService(
+        SvcApiRepository apiRepository,
+        SvcApiMetricHourlyRepository metricRepository,
+        CatalogDatasetRepository datasetRepository,
+        ObjectMapper objectMapper
+    ) {
         this.apiRepository = apiRepository;
         this.metricRepository = metricRepository;
+        this.datasetRepository = datasetRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -133,6 +142,105 @@ public class ApiCatalogService {
 
     public ApiTryInvokeResponseDto execute(UUID id, ApiTryInvokeRequestDto request) {
         return tryInvoke(id, request);
+    }
+
+    @Transactional
+    public ApiServiceDetailDto create(ApiServiceUpsertRequest request, String username) {
+        if (request == null) {
+            throw new IllegalArgumentException("请求不能为空");
+        }
+        String code = StringUtils.trimToNull(request.code());
+        if (!StringUtils.hasText(code)) {
+            throw new IllegalArgumentException("API编码不能为空");
+        }
+        apiRepository.findByCode(code).ifPresent(existing -> {
+            throw new IllegalArgumentException("API编码已存在");
+        });
+        SvcApi api = new SvcApi();
+        applyUpsert(api, request, username);
+        api.setStatus("DRAFT");
+        apiRepository.save(api);
+        return toDetail(api, Instant.now().minus(24, ChronoUnit.HOURS));
+    }
+
+    @Transactional
+    public ApiServiceDetailDto update(UUID id, ApiServiceUpsertRequest request, String username) {
+        if (id == null) {
+            throw new IllegalArgumentException("ID不能为空");
+        }
+        if (request == null) {
+            throw new IllegalArgumentException("请求不能为空");
+        }
+        SvcApi api = apiRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("API not found"));
+        String code = StringUtils.trimToNull(request.code());
+        if (StringUtils.hasText(code) && !code.equalsIgnoreCase(api.getCode())) {
+            apiRepository.findByCode(code).ifPresent(existing -> {
+                throw new IllegalArgumentException("API编码已存在");
+            });
+        }
+        applyUpsert(api, request, username);
+        apiRepository.save(api);
+        return toDetail(api, Instant.now().minus(24, ChronoUnit.HOURS));
+    }
+
+    @Transactional
+    public ApiServiceDetailDto disable(UUID id, String username) {
+        SvcApi api = apiRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("API not found"));
+        api.setStatus("DISABLED");
+        api.setLastModifiedBy(username);
+        apiRepository.save(api);
+        return toDetail(api, Instant.now().minus(24, ChronoUnit.HOURS));
+    }
+
+    private void applyUpsert(SvcApi api, ApiServiceUpsertRequest request, String username) {
+        if (StringUtils.hasText(request.code())) {
+            api.setCode(request.code().trim());
+        }
+        if (StringUtils.hasText(request.name())) {
+            api.setName(request.name().trim());
+        }
+        api.setMethod(StringUtils.hasText(request.method()) ? request.method().trim().toUpperCase(Locale.ROOT) : "POST");
+        api.setPath(StringUtils.hasText(request.path()) ? request.path().trim() : ("/openapi/" + api.getCode()));
+        api.setQpsLimit(request.qpsLimit());
+        api.setDailyLimit(request.dailyLimit());
+        api.setDescription(StringUtils.hasText(request.description()) ? request.description().trim() : null);
+        api.setTags(StringUtils.hasText(request.tags()) ? request.tags().trim() : null);
+        api.setClassification(StringUtils.hasText(request.classification()) ? request.classification().trim().toUpperCase(Locale.ROOT) : api.getClassification());
+
+        UUID datasetId = request.datasetId();
+        if (datasetId != null) {
+            api.setDatasetId(datasetId);
+            CatalogDataset dataset = datasetRepository.findById(datasetId).orElse(null);
+            if (dataset != null) {
+                api.setDatasetName(dataset.getName());
+                if (!StringUtils.hasText(api.getClassification()) && StringUtils.hasText(dataset.getClassification())) {
+                    api.setClassification(dataset.getClassification());
+                }
+            }
+        } else {
+            api.setDatasetId(null);
+            api.setDatasetName(null);
+        }
+
+        api.setPolicyJson(serializeNullable(request.policy()));
+        api.setRequestSchemaJson(serializeNullable(request.requestSchema()));
+        api.setResponseSchemaJson(serializeNullable(request.responseSchema()));
+
+        if (!StringUtils.hasText(api.getCreatedBy())) {
+            api.setCreatedBy(username);
+        }
+        api.setLastModifiedBy(username);
+    }
+
+    private String serializeNullable(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("JSON序列化失败：" + e.getMessage(), e);
+        }
     }
 
     private boolean matchesKeyword(SvcApi api, String kw) {

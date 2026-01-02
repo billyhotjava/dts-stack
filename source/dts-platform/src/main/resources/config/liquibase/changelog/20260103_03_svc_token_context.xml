@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.16.xsd"
+>
+    <changeSet id="20260103-03-svc-token-context" author="platform">
+        <comment>Services: persist token subject context (dept + personnel security level) for public API calls.</comment>
+        <addColumn tableName="svc_token">
+            <column name="subject_dept_code" type="varchar(64)"/>
+            <column name="subject_personnel_level" type="int"/>
+        </addColumn>
+        <createIndex indexName="idx_svc_token_subject_dept" tableName="svc_token">
+            <column name="subject_dept_code"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+

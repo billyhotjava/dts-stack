@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.repository.service;
 import com.yuzhi.dts.platform.domain.service.SvcApiMetricHourly;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface SvcApiMetricHourlyRepository extends JpaRepository<SvcApiMetricHourly, UUID> {
     List<SvcApiMetricHourly> findTop48ByApiIdOrderByBucketStartDesc(UUID apiId);
+    Optional<SvcApiMetricHourly> findByApiIdAndBucketStart(UUID apiId, Instant bucketStart);
 
     @Query("select coalesce(sum(m.callCount),0) from SvcApiMetricHourly m where m.apiId = :apiId and m.bucketStart >= :since")
     long sumCallsSince(UUID apiId, Instant since);

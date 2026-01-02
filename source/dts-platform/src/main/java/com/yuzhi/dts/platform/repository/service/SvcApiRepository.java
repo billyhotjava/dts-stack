@@ -10,5 +10,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface SvcApiRepository extends JpaRepository<SvcApi, UUID> {
     Optional<SvcApi> findByCode(String code);
+    Optional<SvcApi> findFirstByCodeIgnoreCase(String code);
     List<SvcApi> findByStatusIgnoreCase(String status);
 }

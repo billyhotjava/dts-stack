@@ -27,6 +27,12 @@ public class SvcToken extends AbstractAuditingEntity<UUID> implements Serializab
     @Column(name = "token_hint", length = 32)
     private String tokenHint;
 
+    @Column(name = "subject_dept_code", length = 64)
+    private String subjectDeptCode;
+
+    @Column(name = "subject_personnel_level")
+    private Integer subjectPersonnelLevel;
+
     @Override
     public UUID getId() {
         return id;
@@ -66,5 +72,21 @@ public class SvcToken extends AbstractAuditingEntity<UUID> implements Serializab
 
     public void setTokenHint(String tokenHint) {
         this.tokenHint = tokenHint;
+    }
+
+    public String getSubjectDeptCode() {
+        return subjectDeptCode;
+    }
+
+    public void setSubjectDeptCode(String subjectDeptCode) {
+        this.subjectDeptCode = subjectDeptCode;
+    }
+
+    public Integer getSubjectPersonnelLevel() {
+        return subjectPersonnelLevel;
+    }
+
+    public void setSubjectPersonnelLevel(Integer subjectPersonnelLevel) {
+        this.subjectPersonnelLevel = subjectPersonnelLevel;
     }
 }
