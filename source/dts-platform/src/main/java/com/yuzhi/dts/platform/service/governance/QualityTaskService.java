@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -157,6 +158,7 @@ public class QualityTaskService {
         return runs;
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void runDueTasks() {
         List<GovQualityTask> tasks;
         try {
