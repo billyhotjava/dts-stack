@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260103-02-security-backup-dr" author="codex">
+        <createTable tableName="security_backup_plan">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="target_key" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(512)"/>
+            <column name="schedule" type="varchar(128)"/>
+            <column name="retention_days" type="int"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_run_at" type="timestamptz"/>
+            <column name="last_result" type="varchar(32)"/>
+            <column name="notes" type="varchar(2048)"/>
+            <column name="created_by" type="varchar(128)"/>
+            <column name="created_date" type="timestamptz" defaultValueDate="CURRENT_TIMESTAMP"/>
+            <column name="last_modified_by" type="varchar(128)"/>
+            <column name="last_modified_date" type="timestamptz" defaultValueDate="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <createIndex indexName="idx_sec_backup_plan_target" tableName="security_backup_plan">
+            <column name="target_key"/>
+        </createIndex>
+        <createIndex indexName="idx_sec_backup_plan_enabled" tableName="security_backup_plan">
+            <column name="enabled"/>
+        </createIndex>
+
+        <createTable tableName="security_backup_run">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="plan_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="timestamptz"/>
+            <column name="finished_at" type="timestamptz"/>
+            <column name="result" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="summary" type="varchar(1024)"/>
+            <column name="artifact_uri" type="varchar(512)"/>
+            <column name="details_json" type="jsonb"/>
+            <column name="created_by" type="varchar(128)"/>
+            <column name="created_date" type="timestamptz" defaultValueDate="CURRENT_TIMESTAMP"/>
+            <column name="last_modified_by" type="varchar(128)"/>
+            <column name="last_modified_date" type="timestamptz" defaultValueDate="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="security_backup_run"
+            baseColumnNames="plan_id"
+            referencedTableName="security_backup_plan"
+            referencedColumnNames="id"
+            constraintName="fk_security_backup_run_plan"/>
+
+        <createIndex indexName="idx_sec_backup_run_plan_time" tableName="security_backup_run">
+            <column name="plan_id"/>
+            <column name="started_at"/>
+        </createIndex>
+        <createIndex indexName="idx_sec_backup_run_result" tableName="security_backup_run">
+            <column name="result"/>
+        </createIndex>
+
+        <createTable tableName="security_dr_drill">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="drill_date" type="date">
+                <constraints nullable="false"/>
+            </column>
+            <column name="scenario" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_key" type="varchar(64)"/>
+            <column name="result" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rpo_minutes" type="int"/>
+            <column name="rto_minutes" type="int"/>
+            <column name="summary" type="varchar(1024)"/>
+            <column name="evidence_uri" type="varchar(512)"/>
+            <column name="details_json" type="jsonb"/>
+            <column name="created_by" type="varchar(128)"/>
+            <column name="created_date" type="timestamptz" defaultValueDate="CURRENT_TIMESTAMP"/>
+            <column name="last_modified_by" type="varchar(128)"/>
+            <column name="last_modified_date" type="timestamptz" defaultValueDate="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <createIndex indexName="idx_sec_dr_drill_date" tableName="security_dr_drill">
+            <column name="drill_date"/>
+        </createIndex>
+        <createIndex indexName="idx_sec_dr_drill_target" tableName="security_dr_drill">
+            <column name="target_key"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

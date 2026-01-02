@@ -84,4 +84,5 @@
     <include file="config/liquibase/changelog/20260102_39_catalog_lifecycle_request.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_40_security_baseline_remediation.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260103_01_security_pki_binding.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260103_02_security_backup_dr.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>
