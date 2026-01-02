@@ -202,7 +202,9 @@
           "title": "安全策略中心",
           "actions": [
             { "code": "SECURITY_POLICY_OVERVIEW_VIEW", "display": "查看安全策略概览", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "SECURITY_POLICY_EXPLAIN_VIEW", "display": "查看数据集安全策略解释", "phases": ["SUCCESS"], "supportsFlow": false }
+            { "code": "SECURITY_POLICY_EXPLAIN_VIEW", "display": "查看数据集安全策略解释", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SECURITY_PERMISSION_MATRIX_VIEW", "display": "查看访问权限矩阵", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SECURITY_PERMISSION_IMPACT_VIEW", "display": "查看权限变更影响", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
         }
       ]

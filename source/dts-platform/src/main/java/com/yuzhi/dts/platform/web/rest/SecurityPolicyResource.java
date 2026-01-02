@@ -28,6 +28,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -45,6 +46,9 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/security")
 @Transactional(readOnly = true)
 public class SecurityPolicyResource {
+
+    private static final String SECURITY_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).DATA_MAINTAINER_ROLES)";
 
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogDatasetSecurityMappingRepository datasetSecurityMappingRepository;
@@ -243,6 +247,96 @@ public class SecurityPolicyResource {
         return ApiResponses.ok(result);
     }
 
+    /**
+     * 访问权限矩阵（行/列级权限汇总视图）：
+     * - 行级：数据密级 + 部门门禁 + 行过滤规则（可选）
+     * - 列级：脱敏规则
+     * - 显式授权：dataset grants
+     */
+    @GetMapping("/matrix")
+    @PreAuthorize(SECURITY_MAINTAINER_EXPRESSION)
+    public ApiResponse<List<Map<String, Object>>> matrix(
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "limit", defaultValue = "50") int limit,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String effDept = resolveActiveDept(activeDept);
+        boolean enforceDeptFilter = !SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
+        String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.trim().toLowerCase(Locale.ROOT) : null;
+        int safeLimit = Math.max(1, Math.min(limit, 200));
+
+        List<CatalogDataset> candidates = datasetRepository
+            .findAll()
+            .stream()
+            .filter(ds -> normalizedKeyword == null || matchesDatasetKeyword(ds, normalizedKeyword))
+            .filter(accessChecker::canRead)
+            .filter(ds -> !enforceDeptFilter || accessChecker.departmentAllowed(ds, effDept))
+            .limit(safeLimit)
+            .toList();
+
+        List<Map<String, Object>> items = candidates.stream().map(ds -> toMatrixRow(ds)).toList();
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看访问权限矩阵");
+        auditPayload.put("count", items.size());
+        auditPayload.put("limit", safeLimit);
+        if (normalizedKeyword != null) {
+            auditPayload.put("keyword", keyword.trim());
+        }
+        auditPayload.put("activeDept", effDept);
+        auditService.auditAction("SECURITY_PERMISSION_MATRIX_VIEW", AuditStage.SUCCESS, "matrix", auditPayload);
+        return ApiResponses.ok(items);
+    }
+
+    @GetMapping("/datasets/{id}/permission-impact")
+    @PreAuthorize(SECURITY_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> permissionImpact(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CatalogDataset dataset = datasetRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在"));
+        String effDept = resolveActiveDept(activeDept);
+        boolean allowed = accessChecker.canRead(dataset) && accessChecker.departmentAllowed(dataset, effDept);
+        if (!allowed && !SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权查看该数据集");
+        }
+
+        CatalogDatasetSecurityMapping mapping = datasetSecurityMappingRepository.findById(id).orElse(null);
+        List<CatalogDatasetGrant> grants = datasetGrantRepository.findByDatasetIdOrderByCreatedDateAsc(id);
+        List<CatalogRowFilterRule> rowFilters = rowFilterRuleRepository.findByDataset(dataset);
+        List<CatalogMaskingRule> maskingRules = maskingRuleRepository.findByDataset(dataset);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("datasetId", id.toString());
+        result.put("datasetName", dataset.getName());
+        result.put("ownerDept", dataset.getOwnerDept());
+        result.put("classification", dataset.getClassification());
+        result.put("enabled", dataset.getEnabled());
+        result.put("securityMapping", toSecurityMappingDto(mapping));
+        result.put("explicitGrants", grants.stream().map(this::toGrantDto).toList());
+        result.put("rowFilters", rowFilters.stream().map(rule -> toRowFilterDto(rule, currentAuthorities())).toList());
+        result.put("maskingRules", maskingRules.stream().map(this::toMaskingDto).toList());
+
+        Map<String, Object> hint = new LinkedHashMap<>();
+        hint.put("summary", "权限变更影响提示（轻量）");
+        hint.put("grantCount", grants.size());
+        hint.put("rowFilterCount", rowFilters.size());
+        hint.put("maskingRuleCount", maskingRules.size());
+        hint.put("departmentGate", dataset.getOwnerDept());
+        hint.put("dataLevel", DataLevel.normalize(dataset.getClassification()).classification());
+        result.put("impact", hint);
+
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看权限变更影响");
+        auditPayload.put("datasetId", id.toString());
+        auditPayload.put("datasetName", dataset.getName());
+        auditPayload.put("grantCount", grants.size());
+        auditPayload.put("rowFilterCount", rowFilters.size());
+        auditPayload.put("maskingRuleCount", maskingRules.size());
+        auditPayload.put("activeDept", effDept);
+        auditService.auditAction("SECURITY_PERMISSION_IMPACT_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
+        return ApiResponses.ok(result);
+    }
+
     private Map<String, Object> toSecurityMappingDto(CatalogDatasetSecurityMapping mapping) {
         Map<String, Object> dto = new LinkedHashMap<>();
         if (mapping == null) {
@@ -323,6 +417,49 @@ public class SecurityPolicyResource {
         dto.put("args", rule.getArgs());
         dto.put("createdBy", rule.getCreatedBy());
         dto.put("createdDate", rule.getCreatedDate());
+        return dto;
+    }
+
+    private boolean matchesDatasetKeyword(CatalogDataset dataset, String keyword) {
+        if (dataset == null || !StringUtils.hasText(keyword)) {
+            return true;
+        }
+        String key = keyword.trim().toLowerCase(Locale.ROOT);
+        if (dataset.getId() != null && dataset.getId().toString().toLowerCase(Locale.ROOT).contains(key)) {
+            return true;
+        }
+        if (StringUtils.hasText(dataset.getName()) && dataset.getName().toLowerCase(Locale.ROOT).contains(key)) {
+            return true;
+        }
+        if (StringUtils.hasText(dataset.getHiveDatabase()) && dataset.getHiveDatabase().toLowerCase(Locale.ROOT).contains(key)) {
+            return true;
+        }
+        if (StringUtils.hasText(dataset.getHiveTable()) && dataset.getHiveTable().toLowerCase(Locale.ROOT).contains(key)) {
+            return true;
+        }
+        return false;
+    }
+
+    private Map<String, Object> toMatrixRow(CatalogDataset dataset) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        if (dataset == null) {
+            return dto;
+        }
+        dto.put("datasetId", dataset.getId() != null ? dataset.getId().toString() : null);
+        dto.put("datasetName", dataset.getName());
+        dto.put("ownerDept", dataset.getOwnerDept());
+        dto.put("classification", dataset.getClassification());
+        dto.put("enabled", dataset.getEnabled());
+        dto.put("hiveDatabase", dataset.getHiveDatabase());
+        dto.put("hiveTable", dataset.getHiveTable());
+        CatalogDatasetSecurityMapping mapping = dataset.getId() != null ? datasetSecurityMappingRepository.findById(dataset.getId()).orElse(null) : null;
+        dto.put("securityMapping", toSecurityMappingDto(mapping));
+        int grants = dataset.getId() != null ? datasetGrantRepository.findByDatasetIdOrderByCreatedDateAsc(dataset.getId()).size() : 0;
+        int rowFilters = rowFilterRuleRepository.findByDataset(dataset).size();
+        int maskingRules = maskingRuleRepository.findByDataset(dataset).size();
+        dto.put("grantCount", grants);
+        dto.put("rowFilterCount", rowFilters);
+        dto.put("maskingRuleCount", maskingRules);
         return dto;
     }
 
