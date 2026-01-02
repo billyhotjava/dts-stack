@@ -38,7 +38,12 @@
           "key": "catalog.lifecycle",
           "title": "生命周期管理",
           "actions": [
-            { "code": "CATALOG_LIFECYCLE_EXPIRING_LIST", "display": "查看数据资产到期提醒列表", "phases": ["SUCCESS"], "supportsFlow": false }
+            { "code": "CATALOG_LIFECYCLE_EXPIRING_LIST", "display": "查看数据资产到期提醒列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "CATALOG_LIFECYCLE_REQUEST_LIST", "display": "查看生命周期申请列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "CATALOG_LIFECYCLE_REQUEST_VIEW", "display": "查看生命周期申请详情", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "CATALOG_LIFECYCLE_REQUEST_SUBMIT", "display": "提交生命周期申请", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "CATALOG_LIFECYCLE_REQUEST_DECIDE", "display": "审批生命周期申请", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "CATALOG_LIFECYCLE_REQUEST_CANCEL", "display": "撤销生命周期申请", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         },
         {

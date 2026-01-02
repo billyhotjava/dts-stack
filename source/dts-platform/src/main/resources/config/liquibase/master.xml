@@ -81,4 +81,5 @@
     <include file="config/liquibase/changelog/20260102_36_governance_indicator_reference.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_37_governance_dimension_item.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260102_38_governance_issue_dataset_dept.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260102_39_catalog_lifecycle_request.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>
