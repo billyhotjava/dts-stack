@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.catalog.DatasetJobService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import com.yuzhi.dts.platform.service.security.CatalogMaskingService;
 import com.yuzhi.dts.platform.service.security.DatasetSqlBuilder;
 import com.yuzhi.dts.platform.service.security.SecurityGuardException;
 import com.yuzhi.dts.platform.service.security.SecuritySqlRewriter;
@@ -46,6 +47,7 @@ public class AssetResource {
     private final DatasetSqlBuilder datasetSqlBuilder;
     private final DatasetSecurityMetadataResolver metadataResolver;
     private final SecuritySqlRewriter securitySqlRewriter;
+    private final CatalogMaskingService catalogMaskingService;
 
     public AssetResource(
         CatalogDatasetRepository datasetRepo,
@@ -57,7 +59,8 @@ public class AssetResource {
         QueryGateway queryGateway,
         DatasetSqlBuilder datasetSqlBuilder,
         DatasetSecurityMetadataResolver metadataResolver,
-        SecuritySqlRewriter securitySqlRewriter
+        SecuritySqlRewriter securitySqlRewriter,
+        CatalogMaskingService catalogMaskingService
     ) {
         this.datasetRepo = datasetRepo;
         this.rowFilterRepo = rowFilterRepo;
@@ -69,6 +72,7 @@ public class AssetResource {
         this.datasetSqlBuilder = datasetSqlBuilder;
         this.metadataResolver = metadataResolver;
         this.securitySqlRewriter = securitySqlRewriter;
+        this.catalogMaskingService = catalogMaskingService;
     }
 
     /**
@@ -187,26 +191,14 @@ public class AssetResource {
                 applyDataLevelFilter(dataset, headers, rowsData);
                 applyDeptFilter(dataset, headers, rowsData, effDept);
             }
-            Map<String, String> maskingMap = new HashMap<>();
-            maskingRepo
-                .findByDataset(dataset)
-                .forEach(rule -> maskingMap.put(rule.getColumn(), rule.getFunction()));
-            if (!maskingMap.isEmpty()) {
-                for (Map<String, Object> row : rowsData) {
-                    for (String header : headers) {
-                        String fn = maskingMap.get(header);
-                        if (fn != null && row.containsKey(header)) {
-                            Object original = row.get(header);
-                            row.put(header, applyMask(fn, original != null ? String.valueOf(original) : null));
-                        }
-                    }
-                }
-            }
+            CatalogMaskingService.Context maskingContext = catalogMaskingService.resolveContext(dataset, headers);
+            catalogMaskingService.applyMasking(maskingContext, headers, rowsData);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("headers", headers);
             result.put("rows", rowsData);
             result.put("rowCount", rowsData.size());
             result.put("sql", sql);
+            result.put("masking", catalogMaskingService.toMaskingMetadata(maskingContext));
             if (queryResult.containsKey("connectMillis")) {
                 result.put("connectMillis", queryResult.get("connectMillis"));
             }
@@ -226,19 +218,6 @@ public class AssetResource {
             audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.FAIL, id.toString(), auditDetail);
             return ApiResponses.error("数据预览失败: " + message);
         }
-    }
-
-    private Object applyMask(String function, String value) {
-        if (value == null) {
-            return null;
-        }
-        return switch (function == null ? "" : function.toLowerCase()) {
-            case "hash" -> Integer.toHexString(Objects.hashCode(value));
-            case "mask_email" -> value.replaceAll("(^.).*(@.*$)", "$1***$2");
-            case "mask_phone" -> value.replaceAll("(\\\\d{3})\\\\d{4}(\\\\d{4})", "$1****$2");
-            case "partial" -> value.length() <= 2 ? "*".repeat(value.length()) : value.charAt(0) + "***" + value.charAt(value.length() - 1);
-            default -> value;
-        };
     }
 
     private String sanitize(String message) {

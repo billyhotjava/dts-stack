@@ -28,6 +28,9 @@ public final class MaskingFunctions {
         }
         String text = stringify(value);
         return switch (mode) {
+            case "NULL" -> null;
+            case "REDACT", "FIXED" -> "***";
+            case "MASK", "MASK_EMAIL", "MASK_PHONE" -> maskPartial(text);
             case "PARTIAL" -> maskPartial(text);
             case "HASH" -> hash(text);
             case "TOKENIZE" -> tokenize(text);
@@ -86,4 +89,3 @@ public final class MaskingFunctions {
         return "TK-" + token.toString().replace("-", "").substring(0, 16);
     }
 }
-

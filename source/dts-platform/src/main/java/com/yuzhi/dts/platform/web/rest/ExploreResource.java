@@ -18,6 +18,7 @@ import com.yuzhi.dts.platform.service.explore.dto.CreateSavedQueryRequest;
 import com.yuzhi.dts.platform.service.explore.dto.UpdateSavedQueryRequest;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import com.yuzhi.dts.platform.service.security.CatalogMaskingService;
 import com.yuzhi.dts.platform.service.security.DatasetSqlBuilder;
 import com.yuzhi.dts.platform.service.security.DatasetSecurityMetadataResolver;
 import com.yuzhi.dts.platform.service.security.SecurityGuardException;
@@ -75,6 +76,7 @@ public class ExploreResource {
     private final DatasetSqlBuilder datasetSqlBuilder;
     private final DatasetSecurityMetadataResolver metadataResolver;
     private final SecuritySqlRewriter securitySqlRewriter;
+    private final CatalogMaskingService catalogMaskingService;
 
     public ExploreResource(
         ExploreSavedQueryRepository savedRepo,
@@ -87,7 +89,8 @@ public class ExploreResource {
         QueryGateway queryGateway,
         DatasetSqlBuilder datasetSqlBuilder,
         DatasetSecurityMetadataResolver metadataResolver,
-        SecuritySqlRewriter securitySqlRewriter
+        SecuritySqlRewriter securitySqlRewriter,
+        CatalogMaskingService catalogMaskingService
     ) {
         this.savedRepo = savedRepo;
         this.executionRepo = executionRepo;
@@ -100,6 +103,7 @@ public class ExploreResource {
         this.datasetSqlBuilder = datasetSqlBuilder;
         this.metadataResolver = metadataResolver;
         this.securitySqlRewriter = securitySqlRewriter;
+        this.catalogMaskingService = catalogMaskingService;
     }
 
     @PostMapping("/query/preview")
@@ -1063,7 +1067,9 @@ public class ExploreResource {
         applyDataLevelRowFilter(dataset, headers, rows);
         applyDeptRowFilter(dataset, headers, rows, activeDeptHeader);
 
-        Map<String, Object> masking = buildMasking(headers);
+        CatalogMaskingService.Context maskingContext = catalogMaskingService.resolveContext(dataset, headers);
+        catalogMaskingService.applyMasking(maskingContext, headers, rows);
+        Map<String, Object> masking = catalogMaskingService.toMaskingMetadata(maskingContext);
         long connectMillis = numberOrDefault(queryResult.get("connectMillis"), -1L);
         long queryMillis = numberOrDefault(queryResult.get("queryMillis"), -1L);
         long durationMs = numberOrDefault(queryResult.get("durationMs"), -1L);
@@ -1533,17 +1539,6 @@ public class ExploreResource {
             candidate = claim("department");
         }
         return StringUtils.hasText(candidate) ? candidate.trim() : null;
-    }
-
-    private Map<String, Object> buildMasking(List<String> headers) {
-        List<String> masked = headers
-            .stream()
-            .filter(h -> {
-                String lower = h.toLowerCase(Locale.ROOT);
-                return lower.contains("name") || lower.contains("id") || lower.contains("phone");
-            })
-            .collect(Collectors.toList());
-        return Map.of("maskedColumns", masked);
     }
 
     private List<String> parseColumns(String columnsRaw) {

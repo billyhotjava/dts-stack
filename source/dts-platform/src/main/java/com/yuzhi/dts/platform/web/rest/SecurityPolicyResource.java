@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import com.yuzhi.dts.platform.service.security.CatalogMaskingService;
 import com.yuzhi.dts.platform.service.security.DatasetSecurityMetadataResolver;
 import com.yuzhi.dts.platform.service.security.DatasetSqlBuilder;
 import com.yuzhi.dts.platform.service.security.SecurityGuardException;
@@ -37,8 +38,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -59,6 +63,7 @@ public class SecurityPolicyResource {
     private final DatasetSecurityMetadataResolver metadataResolver;
     private final DatasetSqlBuilder datasetSqlBuilder;
     private final AuditService auditService;
+    private final CatalogMaskingService catalogMaskingService;
 
     public SecurityPolicyResource(
         CatalogDatasetRepository datasetRepository,
@@ -69,7 +74,8 @@ public class SecurityPolicyResource {
         AccessChecker accessChecker,
         DatasetSecurityMetadataResolver metadataResolver,
         DatasetSqlBuilder datasetSqlBuilder,
-        AuditService auditService
+        AuditService auditService,
+        CatalogMaskingService catalogMaskingService
     ) {
         this.datasetRepository = datasetRepository;
         this.datasetSecurityMappingRepository = datasetSecurityMappingRepository;
@@ -80,6 +86,7 @@ public class SecurityPolicyResource {
         this.metadataResolver = metadataResolver;
         this.datasetSqlBuilder = datasetSqlBuilder;
         this.auditService = auditService;
+        this.catalogMaskingService = catalogMaskingService;
     }
 
     @GetMapping("/overview")
@@ -126,6 +133,35 @@ public class SecurityPolicyResource {
         auditPayload.put("missingDeptColumnCount", missingDept);
         auditService.auditAction("SECURITY_POLICY_OVERVIEW_VIEW", AuditStage.SUCCESS, "overview", auditPayload);
         return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/masking/templates")
+    @PreAuthorize(SECURITY_MAINTAINER_EXPRESSION)
+    public ApiResponse<List<Map<String, Object>>> maskingTemplates() {
+        List<Map<String, Object>> items = catalogMaskingService.listTemplates();
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看脱敏模板");
+        auditPayload.put("count", items.size());
+        auditService.auditAction("SECURITY_MASKING_TEMPLATE_LIST", AuditStage.SUCCESS, "masking.templates", auditPayload);
+        return ApiResponses.ok(items);
+    }
+
+    @PostMapping("/masking/preview")
+    @PreAuthorize(SECURITY_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> previewMasking(
+        @RequestParam(value = "strategy", required = false) String strategy,
+        @RequestBody(required = false) Map<String, Object> body
+    ) {
+        String resolvedStrategy = StringUtils.hasText(strategy)
+            ? strategy.trim()
+            : (body != null ? Objects.toString(body.get("strategy"), "") : "");
+        Object input = body != null ? body.get("value") : null;
+        Map<String, Object> resp = catalogMaskingService.preview(resolvedStrategy, input);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "预览脱敏效果");
+        auditPayload.put("strategy", resp.get("strategy"));
+        auditService.auditAction("SECURITY_MASKING_TEMPLATE_PREVIEW", AuditStage.SUCCESS, "masking.preview", auditPayload);
+        return ApiResponses.ok(resp);
     }
 
     @GetMapping("/datasets/{id}/policy-explain")
