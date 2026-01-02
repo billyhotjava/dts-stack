@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.repository.infra;
 
 import com.yuzhi.dts.platform.domain.infra.InfraExternalRunLog;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface InfraExternalRunLogRepository extends JpaRepository<InfraExternalRunLog, UUID> {
+    List<InfraExternalRunLog> findByFinishedAtGreaterThanEqualAndFinishedAtLessThan(Instant fromInclusive, Instant toExclusive);
 
     @Query(
         """
@@ -35,4 +37,3 @@ public interface InfraExternalRunLogRepository extends JpaRepository<InfraExtern
         @Param("enabledOnly") boolean enabledOnly
     );
 }
-

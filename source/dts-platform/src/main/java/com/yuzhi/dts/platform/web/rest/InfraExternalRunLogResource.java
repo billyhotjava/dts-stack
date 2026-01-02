@@ -7,8 +7,12 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.infra.ExternalRunReconciliationService;
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -41,11 +45,18 @@ public class InfraExternalRunLogResource {
     private final InfraExternalRunLogRepository repo;
     private final ClassificationUtils classificationUtils;
     private final AuditService audit;
+    private final ExternalRunReconciliationService reconciliationService;
 
-    public InfraExternalRunLogResource(InfraExternalRunLogRepository repo, ClassificationUtils classificationUtils, AuditService audit) {
+    public InfraExternalRunLogResource(
+        InfraExternalRunLogRepository repo,
+        ClassificationUtils classificationUtils,
+        AuditService audit,
+        ExternalRunReconciliationService reconciliationService
+    ) {
         this.repo = repo;
         this.classificationUtils = classificationUtils;
         this.audit = audit;
+        this.reconciliationService = reconciliationService;
     }
 
     @GetMapping
@@ -90,6 +101,72 @@ public class InfraExternalRunLogResource {
         }
         audit.auditAction("INFRA_EXTERNAL_RUN_VIEW", AuditStage.SUCCESS, id.toString(), Map.of("summary", "查看外部平台作业运行详情", "id", id.toString()));
         return ApiResponses.ok(entity);
+    }
+
+    public record ExternalRunReconcileRequest(Integer rowCountTolerance, BigDecimal amountTolerance) {}
+
+    @PostMapping("/{id}/reconcile")
+    public ApiResponse<Map<String, Object>> reconcile(@PathVariable UUID id, @RequestBody(required = false) ExternalRunReconcileRequest request) {
+        InfraExternalRunLog entity = repo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "not found"));
+        if (!canRead(entity)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "forbidden");
+        }
+        int rowTol = request != null && request.rowCountTolerance() != null ? request.rowCountTolerance() : 0;
+        BigDecimal amountTol = request != null ? request.amountTolerance() : null;
+        Map<String, Object> result = reconciliationService.evaluate(entity, rowTol, amountTol);
+        audit.auditAction(
+            "INFRA_EXTERNAL_RUN_RECONCILE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "执行装载对账校验", "id", id.toString(), "overallStatus", result.get("overallStatus"))
+        );
+        return ApiResponses.ok(result);
+    }
+
+    @GetMapping("/reconcile/daily")
+    public ApiResponse<Map<String, Object>> reconcileDaily(
+        @RequestParam(required = false) String date,
+        @RequestParam(required = false) String entryKey,
+        @RequestParam(required = false, defaultValue = "500") int limit
+    ) {
+        LocalDate day = null;
+        try {
+            if (StringUtils.hasText(date)) {
+                day = LocalDate.parse(date.trim());
+            }
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid date");
+        }
+        if (day == null) {
+            day = LocalDate.now(ZoneOffset.UTC);
+        }
+        Instant from = ExternalRunReconciliationService.dayStartUtc(day);
+        Instant to = ExternalRunReconciliationService.dayEndUtc(day);
+        int safeLimit = Math.max(1, Math.min(limit, 2000));
+        String key = trimToNull(entryKey);
+
+        List<InfraExternalRunLog> runs = repo
+            .findByFinishedAtGreaterThanEqualAndFinishedAtLessThan(from, to)
+            .stream()
+            .filter(this::canRead)
+            .filter(r -> key == null || (r.getEntryKey() != null && r.getEntryKey().equalsIgnoreCase(key)))
+            .limit(safeLimit)
+            .toList();
+        ExternalRunReconciliationService.DailyReport report = reconciliationService.dailyReport(runs, day);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("date", report.date().toString());
+        payload.put("total", report.total());
+        payload.put("okCount", report.okCount());
+        payload.put("failedCount", report.failedCount());
+        payload.put("unknownCount", report.unknownCount());
+        payload.put("failedSamples", report.failedSamples());
+        audit.auditAction(
+            "INFRA_EXTERNAL_RUN_DAILY_REPORT",
+            AuditStage.SUCCESS,
+            day.toString(),
+            Map.of("summary", "查看装载对账日报", "date", day.toString(), "entryKey", key, "total", report.total(), "failedCount", report.failedCount())
+        );
+        return ApiResponses.ok(payload);
     }
 
     @PostMapping
@@ -244,4 +321,3 @@ public class InfraExternalRunLogResource {
         return t.isEmpty() ? null : t;
     }
 }
-

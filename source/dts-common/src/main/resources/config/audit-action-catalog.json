@@ -478,7 +478,9 @@
             { "code": "INFRA_EXTERNAL_EXCHANGE_FILE_DELETE", "display": "禁用数据交换文件台账", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "INFRA_EXTERNAL_RUN_VIEW", "display": "查看外部平台作业运行台账", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "INFRA_EXTERNAL_RUN_EDIT", "display": "维护外部平台作业运行台账", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "INFRA_EXTERNAL_RUN_DELETE", "display": "禁用外部平台作业运行台账", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+            { "code": "INFRA_EXTERNAL_RUN_DELETE", "display": "禁用外部平台作业运行台账", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "INFRA_EXTERNAL_RUN_RECONCILE", "display": "执行装载对账校验", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "INFRA_EXTERNAL_RUN_DAILY_REPORT", "display": "查看装载对账日报", "phases": ["SUCCESS"], "supportsFlow": false }
         ]
         }
       ]
