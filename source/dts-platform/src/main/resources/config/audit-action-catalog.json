@@ -180,6 +180,15 @@
       "title": "安全合规",
       "entries": [
         {
+          "key": "security.baseline",
+          "title": "安全基线",
+          "actions": [
+            { "code": "SECURITY_BASELINE_CHECK_LIST", "display": "查看安全基线检查项", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SECURITY_BASELINE_REMEDIATION_UPDATE", "display": "更新安全基线整改记录", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SECURITY_BASELINE_REPORT_VIEW", "display": "导出安全基线报告", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
+        },
+        {
           "key": "security.policies",
           "title": "安全策略中心",
           "actions": [
