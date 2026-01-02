@@ -195,28 +195,28 @@ public class CatalogLineageResource {
         datasetRepo.findById(body.upstreamDatasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "upstream dataset not found"));
         datasetRepo.findById(body.downstreamDatasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "downstream dataset not found"));
 
-        CatalogDatasetLineage link = lineageRepo
+        CatalogDatasetLineage existingLink = lineageRepo
             .findFirstByUpstreamDatasetIdAndDownstreamDatasetId(body.upstreamDatasetId, body.downstreamDatasetId)
             .orElse(null);
-        if (link != null) {
+        if (existingLink != null) {
             if (StringUtils.hasText(body.relationType)) {
-                link.setRelationType(body.relationType.trim());
+                existingLink.setRelationType(body.relationType.trim());
             }
             if (StringUtils.hasText(body.notes)) {
-                link.setNotes(body.notes.trim());
+                existingLink.setNotes(body.notes.trim());
             }
-            CatalogDatasetLineage saved = lineageRepo.save(link);
+            CatalogDatasetLineage saved = lineageRepo.save(existingLink);
             audit.auditAction("CATALOG_LINEAGE_EDIT", AuditStage.SUCCESS, saved.getId().toString(), Map.of("summary", "更新血缘关系"));
             return ApiResponses.ok(Map.of("id", saved.getId().toString(), "updated", true));
         }
 
-        CatalogDatasetLineage link = new CatalogDatasetLineage();
-        link.setUpstreamDatasetId(body.upstreamDatasetId);
-        link.setDownstreamDatasetId(body.downstreamDatasetId);
+        CatalogDatasetLineage createdLink = new CatalogDatasetLineage();
+        createdLink.setUpstreamDatasetId(body.upstreamDatasetId);
+        createdLink.setDownstreamDatasetId(body.downstreamDatasetId);
         String relationType = trimToNull(body.relationType);
-        link.setRelationType(relationType != null ? relationType : "MANUAL");
-        link.setNotes(trimToNull(body.notes));
-        CatalogDatasetLineage saved = lineageRepo.save(link);
+        createdLink.setRelationType(relationType != null ? relationType : "MANUAL");
+        createdLink.setNotes(trimToNull(body.notes));
+        CatalogDatasetLineage saved = lineageRepo.save(createdLink);
         audit.auditAction("CATALOG_LINEAGE_EDIT", AuditStage.SUCCESS, saved.getId().toString(), Map.of("summary", "新增血缘关系"));
         return ApiResponses.ok(Map.of("id", saved.getId().toString(), "created", true));
     }

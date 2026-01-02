@@ -117,7 +117,7 @@ public class IndicatorPublishPreviewService {
         // Manual references
         List<GovIndicatorReference> refs = referenceRepository
             .findByIndicatorOrderByCreatedDateAsc(indicator)
-            .toList();
+            ;
         List<Map<String, Object>> references = refs.stream().map(this::toReferenceDto).toList();
         payload.put("references", references);
         payload.put("referenceCheck", checkReferences(refs));

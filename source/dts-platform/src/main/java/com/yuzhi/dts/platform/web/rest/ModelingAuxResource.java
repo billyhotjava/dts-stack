@@ -586,7 +586,14 @@ public class ModelingAuxResource {
             .stream()
             .filter(s -> matchTermRef(s, kw))
             .limit(50)
-            .map(s -> Map.of("type", "DATA_STANDARD", "id", s.getId().toString(), "code", s.getCode(), "name", s.getName()))
+            .map(s -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("type", "DATA_STANDARD");
+                row.put("id", s.getId() != null ? s.getId().toString() : null);
+                row.put("code", s.getCode());
+                row.put("name", s.getName());
+                return row;
+            })
             .toList();
 
         List<Map<String, Object>> indicators = indicatorRepository
@@ -594,7 +601,14 @@ public class ModelingAuxResource {
             .stream()
             .filter(i -> matchTermRef(i, kw))
             .limit(50)
-            .map(i -> Map.of("type", "INDICATOR", "id", i.getId().toString(), "code", i.getCode(), "name", i.getName()))
+            .map(i -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("type", "INDICATOR");
+                row.put("id", i.getId() != null ? i.getId().toString() : null);
+                row.put("code", i.getCode());
+                row.put("name", i.getName());
+                return row;
+            })
             .toList();
 
         Map<String, Object> payload = new LinkedHashMap<>();

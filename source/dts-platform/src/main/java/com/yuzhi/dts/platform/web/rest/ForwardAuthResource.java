@@ -53,15 +53,17 @@ public class ForwardAuthResource {
                 .flatMap(principal -> optionalStringList(principal.getAttributes().get("permissions")))
                 .ifPresent(perms -> headers.add("X-DTS-Permissions", String.join(",", perms)));
 
-        extractPrincipal(authentication)
-                .map(p -> p.getAttribute("dept_code"))
-                .filter(StringUtils::hasText)
-                .ifPresent(v -> headers.add("X-DTS-Dept-Code", v));
+        Optional<OAuth2AuthenticatedPrincipal> principalOpt = extractPrincipal(authentication);
+        principalOpt
+            .flatMap(p -> optionalString(p.getAttribute("dept_code")))
+            .or(() -> principalOpt.flatMap(p -> optionalString(p.getAttribute("deptCode"))))
+            .ifPresent(v -> headers.add("X-DTS-Dept-Code", v));
 
-        extractPrincipal(authentication)
-                .map(p -> p.getAttribute("personnel_level"))
-                .filter(StringUtils::hasText)
-                .ifPresent(v -> headers.add("X-DTS-Personnel-Level", v));
+        principalOpt
+            .flatMap(p -> optionalString(p.getAttribute("person_security_level")))
+            .or(() -> principalOpt.flatMap(p -> optionalString(p.getAttribute("personnel_level"))))
+            .or(() -> principalOpt.flatMap(p -> optionalString(p.getAttribute("personnelLevel"))))
+            .ifPresent(v -> headers.add("X-DTS-Personnel-Level", v));
 
         return ResponseEntity.noContent().headers(headers).build();
     }
@@ -119,5 +121,29 @@ public class ForwardAuthResource {
         }
         return Optional.of(List.of(text));
     }
-}
 
+    private static Optional<String> optionalString(Object value) {
+        if (value == null) {
+            return Optional.empty();
+        }
+        if (value instanceof String s) {
+            String text = s.trim();
+            return text.isEmpty() ? Optional.empty() : Optional.of(text);
+        }
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                Optional<String> v = optionalString(item);
+                if (v.isPresent()) return v;
+            }
+            return Optional.empty();
+        }
+        if (value instanceof Map<?, ?> map) {
+            Object candidate = map.get("value");
+            if (candidate == null) candidate = map.get("code");
+            if (candidate == null) candidate = map.get("id");
+            return optionalString(candidate);
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? Optional.empty() : Optional.of(text);
+    }
+}

@@ -149,7 +149,7 @@ public class ApiCatalogService {
         if (request == null) {
             throw new IllegalArgumentException("请求不能为空");
         }
-        String code = StringUtils.trimToNull(request.code());
+        String code = org.apache.commons.lang3.StringUtils.trimToNull(request.code());
         if (!StringUtils.hasText(code)) {
             throw new IllegalArgumentException("API编码不能为空");
         }
@@ -172,7 +172,7 @@ public class ApiCatalogService {
             throw new IllegalArgumentException("请求不能为空");
         }
         SvcApi api = apiRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("API not found"));
-        String code = StringUtils.trimToNull(request.code());
+        String code = org.apache.commons.lang3.StringUtils.trimToNull(request.code());
         if (StringUtils.hasText(code) && !code.equalsIgnoreCase(api.getCode())) {
             apiRepository.findByCode(code).ifPresent(existing -> {
                 throw new IllegalArgumentException("API编码已存在");

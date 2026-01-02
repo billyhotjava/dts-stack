@@ -207,7 +207,7 @@ public class SvcApiQueryService {
 
         List<String> projections = new ArrayList<>();
         for (ApiFieldDto f : fields) {
-            String name = f != null ? StringUtils.trimToNull(f.name()) : null;
+            String name = f != null ? org.apache.commons.lang3.StringUtils.trimToNull(f.name()) : null;
             if (!StringUtils.hasText(name)) continue;
             ensureSafeIdentifier(name);
             projections.add(alias + "." + datasetSqlBuilder.quoteColumn(dataset, name));
@@ -240,7 +240,7 @@ public class SvcApiQueryService {
 
         // User filters
         for (Map.Entry<String, Object> entry : params.entrySet()) {
-            String key = StringUtils.trimToNull(entry.getKey());
+            String key = org.apache.commons.lang3.StringUtils.trimToNull(entry.getKey());
             if (!StringUtils.hasText(key)) continue;
             if (!allowedColumns.contains(key)) {
                 continue;
@@ -278,7 +278,7 @@ public class SvcApiQueryService {
             Object field = m.get("field");
             if (field == null) field = m.get("fieldName");
             if (field == null) field = m.get("column");
-            String name = field != null ? StringUtils.trimToNull(String.valueOf(field)) : null;
+            String name = field != null ? org.apache.commons.lang3.StringUtils.trimToNull(String.valueOf(field)) : null;
             if (!StringUtils.hasText(name) || !allowedColumns.contains(name)) continue;
             ensureSafeIdentifier(name);
             String dir = m.get("direction") != null ? String.valueOf(m.get("direction")) : (m.get("order") != null ? String.valueOf(m.get("order")) : "ASC");
