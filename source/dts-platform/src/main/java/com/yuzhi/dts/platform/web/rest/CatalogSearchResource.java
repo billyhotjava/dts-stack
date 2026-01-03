@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,6 +18,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -57,7 +62,7 @@ public class CatalogSearchResource {
         @RequestParam(name = "limit", required = false, defaultValue = "50") int limit,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String k = StringUtils.trimToNull(keyword);
+        String k = trimToNull(keyword);
         if (k == null) {
             return ApiResponses.ok(Map.of("datasets", List.of(), "tables", List.of(), "columns", List.of()));
         }
@@ -68,7 +73,7 @@ public class CatalogSearchResource {
         boolean includeTables = typeSet.isEmpty() || typeSet.contains("TABLE");
         boolean includeColumns = typeSet.isEmpty() || typeSet.contains("COLUMN");
 
-        String effDept = activeDept != null ? activeDept : accessChecker.currentDeptCode().orElse(null);
+        String effDept = resolveActiveDept(activeDept);
         String needle = k.toLowerCase(Locale.ROOT);
 
         Map<UUID, Map<String, Object>> visibleDatasetDtoById = new LinkedHashMap<>();
@@ -145,6 +150,72 @@ public class CatalogSearchResource {
         audit.auditAction("CATALOG_SEARCH", AuditStage.SUCCESS, "search", auditPayload);
 
         return ApiResponses.ok(payload);
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String resolveActiveDept(String activeDeptHeader) {
+        String candidate = trimToNull(activeDeptHeader);
+        if (candidate != null) {
+            return candidate;
+        }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        try {
+            if (authentication instanceof JwtAuthenticationToken token) {
+                candidate = extractDeptClaim(token.getToken().getClaims().get("dept_code"));
+                if (candidate != null) return candidate;
+                candidate = extractDeptClaim(token.getToken().getClaims().get("deptCode"));
+                if (candidate != null) return candidate;
+                return extractDeptClaim(token.getToken().getClaims().get("department"));
+            }
+            if (authentication != null && authentication.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
+                candidate = extractDeptClaim(principal.getAttribute("dept_code"));
+                if (candidate != null) return candidate;
+                candidate = extractDeptClaim(principal.getAttribute("deptCode"));
+                if (candidate != null) return candidate;
+                return extractDeptClaim(principal.getAttribute("department"));
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private String extractDeptClaim(Object raw) {
+        Object flattened = flattenValue(raw);
+        if (flattened == null) {
+            return null;
+        }
+        return trimToNull(flattened.toString());
+    }
+
+    private Object flattenValue(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Iterable<?> iterable) {
+            for (Object element : iterable) {
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        if (raw.getClass().isArray()) {
+            int length = Array.getLength(raw);
+            for (int i = 0; i < length; i++) {
+                Object element = Array.get(raw, i);
+                if (element != null) {
+                    return element;
+                }
+            }
+            return null;
+        }
+        return raw;
     }
 
     private Set<String> parseTypeSet(String raw) {
@@ -249,4 +320,3 @@ public class CatalogSearchResource {
         return dto;
     }
 }
-
