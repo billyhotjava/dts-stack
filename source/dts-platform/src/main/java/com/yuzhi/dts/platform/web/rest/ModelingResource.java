@@ -149,6 +149,27 @@ public class ModelingResource {
         return ApiResponses.ok(result);
     }
 
+    @GetMapping("/standards/template")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<byte[]> downloadTemplate() {
+        // Excel-friendly: prefix UTF-8 BOM so that Chinese headers and sample values render correctly.
+        byte[] csv = standardImport.buildTemplateCsv();
+        byte[] bom = "\uFEFF".getBytes(StandardCharsets.UTF_8);
+        byte[] out = new byte[bom.length + csv.length];
+        System.arraycopy(bom, 0, out, 0, bom.length);
+        System.arraycopy(csv, 0, out, bom.length, csv.length);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(new MediaType("text", "csv", StandardCharsets.UTF_8));
+        headers.setContentDisposition(
+            ContentDisposition.attachment()
+                .filename(URLEncoder.encode("data-standards-template.csv", StandardCharsets.UTF_8), StandardCharsets.UTF_8)
+                .build()
+        );
+        audit.auditAction("MODELING_STANDARD_TEMPLATE_DOWNLOAD", AuditStage.SUCCESS, "template", Map.of("summary", "下载数据标准导入模板"));
+        return ResponseEntity.ok().headers(headers).body(out);
+    }
+
     @GetMapping("/standards/{id}")
     public ApiResponse<DataStandardDto> get(
         @PathVariable UUID id,

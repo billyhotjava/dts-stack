@@ -48,6 +48,9 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "tags", length = 1024)
     private String tags;
 
+    @Column(name = "description", length = 2048)
+    private String description;
+
     // ODS/DWD/DWS/ADS (optional)
     @Column(name = "warehouse_layer", length = 16)
     private String warehouseLayer;
@@ -159,6 +162,14 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
 
     public void setTags(String tags) {
         this.tags = tags;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public String getWarehouseLayer() {

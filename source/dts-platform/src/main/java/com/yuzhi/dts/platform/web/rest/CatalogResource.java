@@ -128,7 +128,16 @@ public class CatalogResource {
         @RequestParam(required = false) String keyword
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdDate").descending());
-        Page<CatalogDomain> p = domainRepo.findAll(pageable);
+        String k = keyword != null && !keyword.isBlank() ? keyword.trim() : null;
+        Page<CatalogDomain> p = k == null
+            ? domainRepo.findAll(pageable)
+            : domainRepo.findByNameContainingIgnoreCaseOrCodeContainingIgnoreCaseOrOwnerContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
+                k,
+                k,
+                k,
+                k,
+                pageable
+            );
         Map<String, Object> data = Map.of("content", p.getContent(), "total", p.getTotalElements());
         audit.audit("READ", "catalog.domain", "page=" + page);
         return ApiResponses.ok(data);
@@ -459,6 +468,7 @@ public class CatalogResource {
         m.put("hiveTable", d.getHiveTable());
         m.put("trinoCatalog", d.getTrinoCatalog());
         m.put("tags", d.getTags());
+        m.put("description", d.getDescription());
         m.put("warehouseLayer", d.getWarehouseLayer());
         m.put("enabled", d.getEnabled());
         m.put("exposedBy", d.getExposedBy());
@@ -585,6 +595,7 @@ public class CatalogResource {
             existing.setHiveTable(patch.getHiveTable());
             existing.setTrinoCatalog(patch.getTrinoCatalog());
             existing.setTags(patch.getTags());
+            existing.setDescription(trimToNull(patch.getDescription()));
             existing.setWarehouseLayer(trimToNull(patch.getWarehouseLayer()));
             normalizeWarehouseLayer(existing);
             if (patch.getEnabled() != null) {
@@ -721,6 +732,9 @@ public class CatalogResource {
         }
         if (StringUtils.hasText(dataset.getHiveTable())) {
             snapshot.put("hiveTable", dataset.getHiveTable());
+        }
+        if (StringUtils.hasText(dataset.getDescription())) {
+            snapshot.put("description", dataset.getDescription());
         }
         if (StringUtils.hasText(dataset.getTags())) {
             snapshot.put("tags", dataset.getTags());
