@@ -177,6 +177,9 @@ set -a
 source "$ENV_RUNTIME"
 set +a
 
+# Ensure local bind-mount directories exist (avoid Docker creating them as root).
+mkdir -p logs/dts-admin logs/dts-platform logs/dts-analytics
+
 # Load optional image versions into current env (does not modify files)
 load_img_versions_dev
 
@@ -195,19 +198,8 @@ set +a
 
 if [[ "$MODE" == "local" ]]; then
   compose_files=(-f docker-compose.yml -f docker-compose.dev.yml)
-  if [[ "${WITH_ANALYTICS_DEV}" == "1" ]]; then
-    if [[ -f "docker-compose.analytics-dev.yml" ]]; then
-      compose_files+=(-f docker-compose.analytics-dev.yml)
-    else
-      echo "[dev-up] WARNING: analytics requested but docker-compose.analytics-dev.yml not found; skipping analytics" >&2
-      WITH_ANALYTICS_DEV="0"
-    fi
-  fi
 else
   compose_files=(-f docker-compose.yml -f docker-compose-app.yml)
-  if [[ "${WITH_ANALYTICS}" == "1" ]]; then
-    compose_files+=(-f docker-compose.analytics.yml)
-  fi
 fi
 
 # Ensure required builder image defaults for local dev
@@ -271,14 +263,11 @@ else
   echo "[dev-up] Webapp containers skipped (start frontend via pnpm locally)."
 fi
 
-if [[ "${WITH_ANALYTICS}" == "1" ]]; then
-  services+=(dts-analytics)
-fi
-if [[ "${WITH_ANALYTICS_DEV}" == "1" ]]; then
-  services+=(dts-analytics)
-fi
 if [[ "${WITH_ANALYTICS}" == "1" || "${WITH_ANALYTICS_DEV}" == "1" ]]; then
-  services+=(dts-analytics-webapp)
+  services+=(dts-analytics)
+  if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
+    services+=(dts-analytics-webapp)
+  fi
 fi
 
 if [[ "$MODE" == "local" ]]; then

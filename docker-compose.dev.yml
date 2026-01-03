@@ -299,6 +299,91 @@ services:
       - "traefik.http.routers.dts-platform.middlewares=dts-strip-platform@docker,cors-allow@file,security-headers@file"
 
 
+  # Java backend: dts-analytics (Spring Boot)
+  dts-analytics:
+    image: ${IMAGE_MAVEN}
+    working_dir: /workspace-src/dts-analytics
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_ANALYTICS:-dts_analytics}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_ANALYTICS:-dts_analytics}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_ANALYTICS:-dts_analytics}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
+      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
+      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
+      LOG_ROOT: "${LOG_ROOT:-/workspace/logs}"
+      JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:-} ${ANALYTICS_JAVA_TOOL_OPTIONS:-}"
+    command:
+      - bash
+      - -lc
+      - |
+        mvn -q -DskipTests package
+        mvn -q -DskipTests spring-boot:run \
+          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007" \
+          -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "5007:5007"
+    volumes:
+      - ./source:/workspace-src:z
+      - maven-cache:/root/.m2
+      - ./logs/dts-analytics:/workspace/logs/dts-analytics:z
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:3000/api/health >/dev/null || wget -qO- http://127.0.0.1:3000/api/health >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 120s
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      # /analytics/api/* -> dts-analytics /api/*
+      - "traefik.http.routers.dts-analytics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`)"
+      - "traefik.http.routers.dts-analytics-api.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-api.tls=true"
+      - "traefik.http.routers.dts-analytics-api.priority=240"
+      - "traefik.http.services.dts-analytics-api.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.dts-strip-analytics.stripprefix.prefixes=/analytics"
+      - "traefik.http.routers.dts-analytics-api.middlewares=dts-strip-analytics@docker,cors-allow@file,security-headers@file"
+
+  # Webapp: dts-analytics-webapp (legacy Metabase UI served by a small Node server)
+  dts-analytics-webapp:
+    image: node:22-bookworm-slim
+    working_dir: /workspace
+    depends_on:
+      - dts-analytics
+    environment:
+      PORT: "3001"
+      DTS_ANALYTICS_API_BASE: "http://dts-analytics:3000"
+    command: ["sh","-lc","node server.mjs"]
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - ./source/dts-analytics-webapp:/workspace:z
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      # /analytics/* (except /analytics/api/*) -> webapp, with prefix stripped (adds X-Forwarded-Prefix)
+      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`)"
+      - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-ui.tls=true"
+      - "traefik.http.routers.dts-analytics-ui.priority=230"
+      - "traefik.http.services.dts-analytics-ui.loadbalancer.server.port=3001"
+      - "traefik.http.routers.dts-analytics-ui.middlewares=dts-strip-analytics@docker,security-headers@file"
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:3001/ >/dev/null || wget -qO- http://127.0.0.1:3001/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
   # Frontend: dts-admin-webapp (optional dev server)
   # If your project uses Vite/React/Angular dev server, adjust command/port below.
   dts-admin-webapp:

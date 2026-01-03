@@ -58,8 +58,8 @@
 2. **Docker 镜像**
    - 编写 `services/dts-analytics/Dockerfile`（多阶段：mvn build → jre runtime）。
    - 约定镜像 tag 与 `imgversion.conf`/`IMAGE_DTS_ANALYTICS` 的联动。
-3. **compose 替换**
-   - 用 Java 服务替换 `docker-compose.analytics.yml` 的 `dts-analytics`（端口、healthcheck、volumes、labels、env）。
+3. **compose 集成**
+   - 将 `dts-analytics` 与 `dts-analytics-webapp` 合并到 `docker-compose.dev.yml` / `docker-compose-app.yml` / `docker-compose.legacy.yml`（端口、healthcheck、labels、env）。
    - 保留现有挂载约定：`/plugins`、`/var/log/...`、`/certs`。
 4. **运行时配置体系**
    - 统一 `DTS_ANALYTICS_*`/`SPRING_*` 配置，避免沿用旧 Metabase 的 `MB_*` 环境变量体系。
@@ -206,4 +206,4 @@
 ## 12. 去 Clojure（最终收尾，确保“没有一行 Clojure”）
 1. 移除 `source/dts-bi-analytics`（或移至外部独立仓库，仅保留前端构建产物流程）。✅（已将 `source/dts-bi-analytics` 从 git 跟踪中移除；工作区残留目录为未跟踪并已加入 `.gitignore`）
 2. 移除 `services/dts-analytics-dev` 及所有 clojure/dev 脚本依赖（node-only 构建若仍需要则保留，但不得包含 clj 代码）。
-3. 清理 compose/dev-up 里的 analytics-dev 路径与说明，确保主流程只依赖 Java。✅（已移除 `docker-compose.analytics-dev.yml` 并让 `dev-up.sh --analytics-dev` 在缺失时自动降级）
+3. 清理 compose/dev-up 里的 analytics 独立 overlay 路径与说明，确保主流程只依赖 Java + webapp。✅（已合并到 `docker-compose.dev.yml`/`docker-compose-app.yml`/`docker-compose.legacy.yml`，`dev-up.sh` 不再引用 `docker-compose.analytics*.yml`）

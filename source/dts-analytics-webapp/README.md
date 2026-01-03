@@ -41,10 +41,14 @@ node source/dts-analytics-webapp/server.mjs
 构建镜像（一次）：
 
 ```bash
-docker build -t dts-analytics-webapp:local -f services/dts-analytics-webapp/Dockerfile .
+docker build -t dts-analytics-webapp:local -f source/dts-analytics-webapp/Dockerfile source/dts-analytics-webapp
 ```
 
-然后使用 `docker-compose.analytics.yml` 启动（`./dev-up.sh --mode local --analytics` 会带起 `dts-analytics-webapp`）。
+然后启动（开发模式）：
+
+```bash
+./dev-up.sh --mode local
+```
 
 ## UI 技术栈识别（扫描结论）
 

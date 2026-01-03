@@ -15,9 +15,9 @@ spring:
       password: user
       roles: USER
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DTS_ANALYTICS_DB_HOST:dts-pg}:${DTS_ANALYTICS_DB_PORT:5432}/${DTS_ANALYTICS_DB_NAME:dts_analytics}}
-    username: ${SPRING_DATASOURCE_USERNAME:${DTS_ANALYTICS_DB_USER:dts_analytics}}
-    password: ${SPRING_DATASOURCE_PASSWORD:${DTS_ANALYTICS_DB_PASSWORD:dts_analytics}}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${PG_HOST:dts-pg}:${PG_PORT:5432}/${PG_DB_ANALYTICS:dts_analytics}}
+    username: ${SPRING_DATASOURCE_USERNAME:${PG_USER_ANALYTICS:dts_analytics}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${PG_PWD_ANALYTICS:dts_analytics}}
   jpa:
     open-in-view: false
     hibernate:

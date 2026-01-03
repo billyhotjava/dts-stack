@@ -420,6 +420,7 @@ generate_env_base(){
   # ---------- Analytics ----------
   # Prefer your self-built image (offline/air-gapped friendly). Default aligns with other DTS app images.
   : "${IMAGE_DTS_ANALYTICS:=dts-analytics:1.0.0}"
+  : "${IMAGE_DTS_ANALYTICS_WEBAPP:=dts-analytics-webapp:1.0.0}"
   : "${ANALYTICS_ENCRYPTION_SECRET:=$(generate_fernet)}"
   # Prefer same-domain mount under platform UI to keep user-facing URLs consistent and avoid extra DNS/ports.
   : "${ANALYTICS_SITE_URL:=https://${HOST_PLATFORM_UI}/analytics}"
@@ -480,7 +481,7 @@ generate_env_base(){
   : "${DTS_PKI_GATEWAY_ENDPOINT:=/wglogin}"
 
   # ---------- Admin password-login IP allowlist (triad only; PKI unaffected) ----------
-  : "${DTS_SECURITY_IP_ALLOWLIST_ENABLED:=true}"
+  : "${DTS_SECURITY_IP_ALLOWLIST_ENABLED:=false}"
   : "${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:=sysadmin,authadmin,auditadmin}"
   : "${DTS_PKI_DIGEST:=SHA1}"
   : "${DTS_PKI_VENDOR_JAR:=/opt/dts/vendor}"
@@ -502,8 +503,8 @@ generate_env_base(){
   # 默认均为通过 PKI 登录（隐藏密码登录表单）
   : "${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:=true}"
   : "${ADMIN_VITE_HIDE_PASSWORD_LOGIN:=false}"
-  : "${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:=}"
-  : "${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:=true}"
+  : "${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:=true}"
+  : "${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:=false}"
 
   # ---------- 管理端来源 IP 白名单（按单/多 IP，/32 形式由脚本生成） ----------
   # 输入：纯 IP，逗号分隔；应急后门 IP 同样逗号分隔。留空时默认放开 0.0.0.0/0（便于离线/内网环境调试）。
@@ -544,6 +545,7 @@ KEYTOOL_IMAGE_STRICT=${KEYTOOL_IMAGE_STRICT}
 
 # ====== Analytics Image ======
 IMAGE_DTS_ANALYTICS=${IMAGE_DTS_ANALYTICS}
+IMAGE_DTS_ANALYTICS_WEBAPP=${IMAGE_DTS_ANALYTICS_WEBAPP}
 IMAGE_DTS_ANALYTICS_DEV=${IMAGE_DTS_ANALYTICS_DEV:-dts-analytics-dev:local}
 
 # ====== Hosts ======

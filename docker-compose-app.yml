@@ -233,6 +233,57 @@ services:
       - "traefik.http.routers.dts-platform-uiapi.service=dts-platform"
       - "traefik.http.routers.dts-platform-uiapi.middlewares=cors-allow@file,security-headers@file"
 
+  dts-analytics:
+    image: ${IMAGE_DTS_ANALYTICS:?Set IMAGE_DTS_ANALYTICS in imgversion.conf or .env}
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_ANALYTICS:-dts_analytics}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_ANALYTICS:-dts_analytics}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_ANALYTICS:-dts_analytics}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      EUREKA_CLIENT_ENABLED: "false"
+      JAVA_TOOL_OPTIONS: "${ANALYTICS_JAVA_TOOL_OPTIONS:-}"
+      LOG_ROOT: "${LOG_ROOT:-/logs}"
+    ports: []
+    volumes:
+      - ./logs/dts-analytics:/logs/dts-analytics:z
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.middlewares.dts-strip-analytics.stripprefix.prefixes=/analytics"
+      - "traefik.http.routers.dts-analytics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`)"
+      - "traefik.http.routers.dts-analytics-api.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-api.tls=true"
+      - "traefik.http.routers.dts-analytics-api.priority=240"
+      - "traefik.http.services.dts-analytics-api.loadbalancer.server.port=3000"
+      - "traefik.http.routers.dts-analytics-api.middlewares=dts-strip-analytics@docker,cors-allow@file,security-headers@file"
+
+  dts-analytics-webapp:
+    image: ${IMAGE_DTS_ANALYTICS_WEBAPP:?Set IMAGE_DTS_ANALYTICS_WEBAPP in imgversion.conf or .env}
+    depends_on:
+      - dts-analytics
+    environment:
+      PORT: "3001"
+      DTS_ANALYTICS_API_BASE: "http://dts-analytics:3000"
+    ports: []
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`)"
+      - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-ui.tls=true"
+      - "traefik.http.routers.dts-analytics-ui.priority=230"
+      - "traefik.http.services.dts-analytics-ui.loadbalancer.server.port=3001"
+      - "traefik.http.routers.dts-analytics-ui.middlewares=dts-strip-analytics@docker,security-headers@file"
+
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}
     entrypoint: ["sh", "/docker-entrypoint.sh"]

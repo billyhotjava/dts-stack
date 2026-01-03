@@ -33,9 +33,12 @@ set -a
 : "${PG_DB_DTADMIN:=dts_admin}"
 : "${PG_USER_DTADMIN:=dts_admin}"
 : "${PG_PWD_DTADMIN:=dts_admin}"
+: "${PG_DB_ANALYTICS:=dts_analytics}"
+: "${PG_USER_ANALYTICS:=dts_analytics}"
+: "${PG_PWD_ANALYTICS:=dts_analytics}"
 set +a
 
-services=(dts-admin dts-platform dts-admin-webapp dts-platform-webapp)
+services=(dts-admin dts-platform dts-analytics dts-admin-webapp dts-platform-webapp dts-analytics-webapp)
 
 if [[ "$MODE" == "local" ]]; then
   echo "[dev-stop] Stopping local-dev services (core stack stays running) ..."
