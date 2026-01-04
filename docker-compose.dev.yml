@@ -370,6 +370,8 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
+      # Define middleware here as well to avoid router creation failure if backend is unhealthy/restarting.
+      - "traefik.http.middlewares.dts-strip-analytics.stripprefix.prefixes=/analytics"
       # /analytics/* (except /analytics/api/*) -> webapp, with prefix stripped (adds X-Forwarded-Prefix)
       - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`)"
       - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
@@ -479,8 +481,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
-      # Avoid swallowing analytics mount path (/analytics) which is served by dts-analytics.
-      - "traefik.http.routers.platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/analytics`)"
+      # Avoid swallowing analytics mount path (/analytics) which is served by dts-analytics,
+      # and avoid taking over Hetu reverse-proxy prefixes (screen/dashboards/system/tdv/...).
+      - "traefik.http.routers.platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/analytics`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)"
+      # Ensure Hetu reverse-proxy routers (/screen,/dashboards,/system,/tdv,...) win over the SPA catch-all.
+      - "traefik.http.routers.platform-ui.priority=100"
       - "traefik.http.routers.platform-ui.entrypoints=websecure"
       - "traefik.http.routers.platform-ui.tls=true"
       - "traefik.http.services.platform-ui.loadbalancer.server.port=${PORT:-3001}"
