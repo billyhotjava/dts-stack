@@ -26,6 +26,15 @@ This module bootstraps a JHipster-style Spring Boot stack (mirroring `source/dts
      maven:3.9.9-eclipse-temurin-21 \
      mvn -B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl dts-analytics -am package
    ```
+   If you hit `Compiling 9 source files` + lots of `cannot find symbol`, delete the module target before building (stale incremental compiler state):
+   ```bash
+   docker run --rm --security-opt seccomp=unconfined -it \
+     -v "$PWD/source:/workspace" \
+     -v "/root/.m2:/root/.m2" \
+     -w /workspace \
+     maven:3.9.9-eclipse-temurin-21 \
+     bash -lc 'rm -rf dts-analytics/target && mvn -B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl dts-analytics -am package'
+   ```
    If you see errors like `package com.yuzhi.dts.analytics.domain does not exist` or missing filters, it means the container did not see the full `source/` tree (wrong `$PWD`, wrong `-v` mount, or building from a different checkout). Use the script above: it performs a preflight check and prints the Java source file count inside the container.
 
 2. Copy the artifact into the offline build context:

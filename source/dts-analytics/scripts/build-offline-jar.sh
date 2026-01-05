@@ -53,6 +53,8 @@ docker run --rm --security-opt seccomp=unconfined -it \
     test -f /workspace/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/filter/DtsRequestContextFilter.java; \
     test -f /workspace/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/support/MetabaseCookies.java; \
     echo '[dts-analytics] container source files:' \"\$(find /workspace/dts-analytics/src/main/java -name '*.java' | wc -l)\"; \
+    # Defensive: incremental compiler + stale/partial target/ can lead to 'Compiling 9 source files' and missing symbols. \
+    rm -rf /workspace/dts-analytics/target; \
     mvn -B -e -DskipTests -s \"${MVN_SETTINGS}\" -f /workspace/pom.xml -pl dts-analytics -am package"
 
 JAR_PATH="$(ls -1t "${REPO_ROOT}/source/dts-analytics/target/dts-analytics-"*.jar 2>/dev/null | grep -v '\\.original$' | head -n 1 || true)"
