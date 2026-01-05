@@ -126,9 +126,11 @@ export function getBackendDashboardRoutes() {
         path: "dashboard",
         children: [
             { index: true, element: <Navigate to="workbench" replace /> },
-            { path: "workbench", element: Component("/pages/dashboard/workbench") },
+            { path: "workbench", element: <Navigate to="/workbench" replace /> },
         ],
     });
+    // Keep /workbench available even before menus load
+    backendDashboardRoutes.unshift({ path: "workbench", element: Component("/pages/workbench") });
     // Add dynamic fallbacks for other sections so routes resolve even before menus are loaded
     backendDashboardRoutes.push(...buildDynamicFallbackRoutes());
     return backendDashboardRoutes;

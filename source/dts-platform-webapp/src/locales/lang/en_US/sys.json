@@ -178,6 +178,7 @@
     "exploreEtlOrchestration": "Workflow orchestration",
     "exploreEtlWarehouseLayers": "Warehouse layers",
     "exploreEtlReconciliation": "Load reconciliation",
+    "workbench": "Workbench",
     "governanceIndicators": "Indicators",
     "governanceIndicatorsDictionary": "Indicator dictionary",
     "governanceIndicatorsDimensions": "Dimensions & dictionaries",

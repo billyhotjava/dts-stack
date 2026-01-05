@@ -1,6 +1,13 @@
 {
   "portalNavSections": [
     {
+      "key": "workbench",
+      "path": "workbench",
+      "icon": "solar:widget-3-bold-duotone",
+      "titleKey": "sys.nav.portal.workbench",
+      "title": "工作台"
+    },
+    {
       "key": "catalog",
       "path": "catalog",
       "icon": "solar:book-bold-duotone",

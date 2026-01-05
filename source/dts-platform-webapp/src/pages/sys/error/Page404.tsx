@@ -14,7 +14,7 @@ export default function Page404() {
 	// If user is authenticated, auto-redirect to the unified home
 	useEffect(() => {
 		if (accessToken) {
-			navigate("/dashboard/workbench", { replace: true });
+			navigate("/workbench", { replace: true });
 		}
 	}, [accessToken, navigate]);
 	const svg = (
@@ -76,7 +76,7 @@ export default function Page404() {
 			helmetTitle={t("sys.errorPage.404.helmetTitle")}
 			desc={t("sys.errorPage.404.description")}
 			svg={svg}
-			homePath="/dashboard/workbench"
+			homePath="/workbench"
 		/>
 	);
 }

@@ -178,7 +178,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			}
 			// 统一进入欢迎页（工作台）。注意：Router 已配置 basename=publicPath，
 			// 这里必须传入“路由内路径”，不要再拼 publicPath，否则会出现 404。
-			navigate("/dashboard/workbench", { replace: true });
+			navigate("/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});
@@ -362,7 +362,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				// ignore
 			}
 
-			navigate("/dashboard/workbench", { replace: true });
+			navigate("/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), { closeButton: true });
 
 			await client.logout();

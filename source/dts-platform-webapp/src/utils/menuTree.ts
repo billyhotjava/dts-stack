@@ -65,7 +65,19 @@ export const parseMenuMetadata = (metadata: unknown): MenuMetadata => {
 	return null;
 };
 
-export const isExternalPath = (path: string): boolean => /^(https?:|mailto:|tel:)/i.test(path);
+export const isExternalPath = (path: string): boolean => {
+	const value = String(path || "").trim();
+	if (!value) return false;
+	if (/^(https?:|mailto:|tel:)/i.test(value)) return true;
+	// Reverse-proxied tools should be treated like external navigation (full page load).
+	const lower = value.toLowerCase();
+	return (
+		lower.startsWith("/dashboards") ||
+		lower.startsWith("/analytics") ||
+		lower.startsWith("/screen") ||
+		lower.startsWith("/dashboard/hetu")
+	);
+};
 
 export const normalizeMenuPath = (path?: string | null): string => {
 	if (!path) return "";

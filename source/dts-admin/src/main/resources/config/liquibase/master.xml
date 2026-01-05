@@ -45,6 +45,8 @@
     <include file="config/liquibase/changelog/20251230-03_refine_catalog_explore_audit_rules.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251230-06_admin_keycloak_user_mdm_enabled.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260105-01_audit_operation_mapping_platform_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260105-02_portal_menu_workbench_first.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260105-03_remove_visualization_workbench_menu.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-01_audit_operation_mapping_restore.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-02_organization_node_restore.xml" relativeToChangelogFile="false"/>
 	    <include file="config/liquibase/changelog/20251015-03_remove_visualization_foundation_menus.xml" relativeToChangelogFile="false"/>

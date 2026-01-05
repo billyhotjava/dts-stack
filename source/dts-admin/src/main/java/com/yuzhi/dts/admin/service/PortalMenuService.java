@@ -49,6 +49,7 @@ public class PortalMenuService {
     private static final Set<String> FOUNDATION_SECTIONS = Set.of("foundation");
     private static final Set<String> IAM_SECTIONS = Set.of();
     private static final Map<String, String> MENU_COMPONENTS = Map.ofEntries(
+        Map.entry("workbench", "/pages/workbench"),
         Map.entry("catalog.assets", "/pages/catalog/DatasetsPage"),
         Map.entry("catalog.metadata", "/pages/catalog/MetadataPage"),
         Map.entry("catalog.lineage", "/pages/catalog/LineagePage"),
@@ -568,6 +569,9 @@ public class PortalMenuService {
         }
         if (StringUtils.hasText(node.icon())) {
             metadata.put("icon", node.icon());
+        }
+        if (StringUtils.hasText(node.externalLink())) {
+            metadata.put("externalLink", node.externalLink());
         }
         if (metadata.isEmpty()) {
             return null;
@@ -1336,5 +1340,13 @@ public class PortalMenuService {
 
     private record MenuSeed(List<MenuNode> portalNavSections) {}
 
-    private record MenuNode(String key, String path, String icon, String titleKey, String title, List<MenuNode> children) {}
+    private record MenuNode(
+        String key,
+        String path,
+        String icon,
+        String titleKey,
+        String title,
+        String externalLink,
+        List<MenuNode> children
+    ) {}
 }

@@ -2,6 +2,7 @@ package com.yuzhi.dts.analytics.web.ui;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.analytics.config.ApplicationProperties;
 import com.yuzhi.dts.analytics.service.SetupStateService;
@@ -59,10 +60,20 @@ public class MetabaseBootstrapService {
         root.put("site-name", siteName);
         root.put("application-name", siteName);
         root.put("anon-tracking-enabled", false);
-        root.put("setup-token", setupStateService.getOrCreateSetupToken());
-        root.put("has-user-setup", setupStateService.isSetupCompleted());
+        boolean setupCompleted = setupStateService.isSetupCompleted();
+        root.put("has-user-setup", setupCompleted);
+        if (setupCompleted) {
+            root.putNull("setup-token");
+        } else {
+            root.put("setup-token", setupStateService.getOrCreateSetupToken());
+        }
         root.put("startup-time-millis", 0.0);
         root.put("startup-time", OffsetDateTime.now().toString());
+
+        ArrayNode availableLocales = mapper.createArrayNode();
+        availableLocales.add(mapper.createArrayNode().add("zh").add("Chinese"));
+        availableLocales.add(mapper.createArrayNode().add("en").add("English"));
+        root.set("available-locales", availableLocales);
 
         if (root.has("version") && root.get("version").isObject()) {
             ObjectNode version = (ObjectNode) root.get("version");

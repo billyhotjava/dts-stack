@@ -5,6 +5,7 @@ import { URL } from "node:url";
 
 const PORT = Number.parseInt(process.env.PORT ?? "3001", 10);
 const API_BASE = process.env.DTS_ANALYTICS_API_BASE ?? "http://dts-analytics:3000";
+const DEFAULT_LOCALE = (process.env.DTS_ANALYTICS_DEFAULT_LOCALE ?? "zh").toLowerCase();
 const LEGACY_DIR =
   process.env.DTS_ANALYTICS_WEBAPP_LEGACY_DIR ??
   new URL("./legacy/frontend_client/", import.meta.url).pathname;
@@ -27,6 +28,32 @@ const MIME_TYPES = new Map([
 function header(req, name) {
   const v = req.headers[name.toLowerCase()];
   return Array.isArray(v) ? v[0] : v ?? "";
+}
+
+function parseCookie(headerValue) {
+  const out = new Map();
+  if (!headerValue) return out;
+  for (const part of headerValue.split(";")) {
+    const [k, ...rest] = part.trim().split("=");
+    if (!k) continue;
+    out.set(k, rest.join("="));
+  }
+  return out;
+}
+
+function resolveLocale(req) {
+  const url = new URL(req.url ?? "/", "http://local");
+  const fromQuery = (url.searchParams.get("lang") ?? "").toLowerCase();
+  if (fromQuery === "en" || fromQuery === "zh") return fromQuery;
+
+  const cookie = parseCookie(header(req, "cookie"));
+  const fromCookie = (cookie.get("dts_lang") ?? "").toLowerCase();
+  if (fromCookie === "en" || fromCookie === "zh") return fromCookie;
+
+  const accept = (header(req, "accept-language") ?? "").toLowerCase();
+  if (accept.includes("en")) return "en";
+
+  return DEFAULT_LOCALE === "en" ? "en" : "zh";
 }
 
 function normalizePrefix(prefix) {
@@ -52,6 +79,50 @@ function stripPrefix(pathname, prefix) {
 
 async function readText(path) {
   return await fs.readFile(path, "utf-8");
+}
+
+function safeJsonForHtmlText(jsonText) {
+  // Avoid closing the <script> tag and keep JSON valid.
+  return jsonText.replaceAll("<", "\\u003c");
+}
+
+function defaultEnLocalization() {
+  return {
+    headers: {
+      language: "en",
+      "plural-forms": "nplurals=2; plural=(n != 1);",
+    },
+    translations: {
+      "": { Metabase: { msgid: "Metabase", msgstr: ["Metabase"] } },
+    },
+  };
+}
+
+const localizationCache = new Map();
+
+async function loadLocalization(locale) {
+  const key = locale === "en" ? "en" : "zh";
+  if (localizationCache.has(key)) return localizationCache.get(key);
+
+  if (key === "en") {
+    const text = safeJsonForHtmlText(JSON.stringify(defaultEnLocalization()));
+    localizationCache.set(key, text);
+    return text;
+  }
+
+  const raw = await readText(join(LEGACY_DIR, "app/locales/zh.json"));
+  let obj;
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    obj = defaultEnLocalization();
+  }
+  if (!obj.headers) obj.headers = {};
+  // Normalize to the locale codes Metabase expects ("zh" / "en") for switching/moment mapping.
+  obj.headers.language = "zh";
+  const text = safeJsonForHtmlText(JSON.stringify(obj));
+  localizationCache.set(key, text);
+  return text;
 }
 
 function renderTemplate(template, view) {
@@ -130,6 +201,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Keep health checks cheap and deterministic (avoid coupling to backend availability).
+    if (assetPathname === "/api/health" || assetPathname === "/health") {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+
     if (isStaticAsset(assetPathname)) {
       const rel =
         assetPathname === "/favicon.ico" ? "/app/assets/img/favicon.ico" : assetPathname;
@@ -153,16 +232,20 @@ const server = http.createServer(async (req, res) => {
     const baseHref = baseHrefFromPrefix(forwardedPrefix);
     const uri = stripPrefix(pathname, forwardedPrefix);
 
+    const locale = resolveLocale(req);
+    const localizationJSON = await loadLocalization(locale);
+
     const view = {
-      language: "zh",
+      language: locale,
       favicon: "app/assets/img/favicon.ico",
       baseHref,
       uri,
       embedCode: "",
       applicationName: "DTS Analytics",
       bootstrapJSON,
-      userLocalizationJSON: "{}",
-      siteLocalizationJSON: "{}",
+      // Metabase expects objects with {headers:{language,...}, translations:{...}}; empty objects crash i18n init.
+      userLocalizationJSON: localizationJSON,
+      siteLocalizationJSON: localizationJSON,
       bootstrapJS: bootstrapJs,
       enableAnonTracking: false,
       googleAnalyticsJS: "",
@@ -185,4 +268,3 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`[webapp] legacy=${LEGACY_DIR}`);
   console.log(`[webapp] api=${API_BASE}`);
 });
-

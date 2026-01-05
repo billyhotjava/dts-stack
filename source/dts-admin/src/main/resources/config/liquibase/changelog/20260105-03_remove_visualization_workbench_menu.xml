@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260105-03-remove-visualization-workbench-menu" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+        </preConditions>
+
+        <sql>
+            WITH visualization_root AS (
+                SELECT id
+                FROM portal_menu
+                WHERE deleted = false
+                  AND parent_id IS NULL
+                  AND (
+                    name = 'sys.nav.portal.visualization'
+                    OR path = 'visualization'
+                    OR metadata ILIKE '%"sectionKey":"visualization"%'
+                  )
+                ORDER BY sort_order ASC, id ASC
+                LIMIT 1
+            ),
+            targets AS (
+                SELECT m.id
+                FROM portal_menu m
+                JOIN visualization_root r ON m.parent_id = r.id
+                WHERE m.deleted = false
+                  AND (
+                    m.name = 'sys.nav.portal.visualizationWorkbench'
+                    OR m.path = 'workbench'
+                    OR m.metadata ILIKE '%"entryKey":"workbench"%'
+                    OR m.metadata ILIKE '%"titleKey":"sys.nav.portal.visualizationWorkbench"%'
+                  )
+            )
+            UPDATE portal_menu
+            SET deleted = true
+            WHERE id IN (SELECT id FROM targets);
+
+            DELETE FROM portal_menu_visibility v
+            WHERE v.menu_id IN (
+                SELECT m.id
+                FROM portal_menu m
+                JOIN portal_menu p ON m.parent_id = p.id
+                WHERE p.parent_id IS NULL
+                  AND (
+                    p.name = 'sys.nav.portal.visualization'
+                    OR p.path = 'visualization'
+                    OR p.metadata ILIKE '%"sectionKey":"visualization"%'
+                  )
+                  AND (
+                    m.name = 'sys.nav.portal.visualizationWorkbench'
+                    OR m.path = 'workbench'
+                    OR m.metadata ILIKE '%"entryKey":"workbench"%'
+                    OR m.metadata ILIKE '%"titleKey":"sys.nav.portal.visualizationWorkbench"%'
+                  )
+            );
+        </sql>
+    </changeSet>
+</databaseChangeLog>
+
