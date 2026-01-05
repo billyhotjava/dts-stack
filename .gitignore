@@ -25,6 +25,7 @@ source/dts-analytics-webapp/node_modules/
 source/dts-analytics-webapp/.pnpm/
 source/dts-analytics-webapp/.vite/
 source/dts-analytics-webapp/dist/
+source/builds/*.jar
 source/dts-bi-analytics/
 .m2/
 .env.bak

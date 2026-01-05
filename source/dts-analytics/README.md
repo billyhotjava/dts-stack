@@ -11,6 +11,27 @@ This module bootstraps a JHipster-style Spring Boot stack (mirroring `source/dts
 - Request ID middleware + structured error responses
 - MockMvc integration tests validating request ID propagation, error translation, and service metadata exposure
 
+## Offline Docker build (same pattern as dts-admin)
+1. Build the JAR using Maven inside Docker:
+   ```bash
+   docker run --rm --security-opt seccomp=unconfined -it \
+     -v "$PWD/source:/workspace" \
+     -v "/root/.m2:/root/.m2" \
+     -w /workspace \
+     maven:3.9.9-eclipse-temurin-21 \
+     mvn -B -e -DskipTests -s /root/.m2/settings.xml -f dts-analytics/pom.xml package
+   ```
+
+2. Copy the artifact into the offline build context:
+   ```bash
+   cp ./source/dts-analytics/target/dts-analytics-2.1.0-SNAPSHOT.jar ./source/builds/dts-analytics.jar
+   ```
+
+3. Build the runtime image (offline Dockerfile):
+   ```bash
+   docker build --no-cache -t dts-analytics:1.0.0 -f source/dts-analytics/Dockerfile.offline source
+   ```
+
 ## Migration Guide
 1. **Module grouping (Clojure source tree)**  
    High-level namespaces to migrate from `source/dts-bi-analytics/src` include:

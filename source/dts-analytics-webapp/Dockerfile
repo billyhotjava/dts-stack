@@ -1,11 +1,29 @@
-ARG BASE_IMAGE_NODE=node:22-bookworm-slim
-FROM ${BASE_IMAGE_NODE}
+#
+# dts-analytics-webapp
+# - Serves Metabase legacy UI assets via a small Node.js server that injects bootstrap JSON and auth bridge.
+# - Keep it minimal (no package installs / no apt).
+#
+
+# Allow overriding Node base from internal mirror
+ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
+
+FROM ${BASE_IMAGE_NODE} AS build
 
 WORKDIR /app
 
 # Copy runtime server and legacy UI assets extracted from metabase.jar
 COPY server.mjs ./server.mjs
 COPY legacy ./legacy
+
+# Fail fast if the server script has syntax errors
+RUN node --check /app/server.mjs
+
+FROM ${BASE_IMAGE_NODE} AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/server.mjs ./server.mjs
+COPY --from=build /app/legacy ./legacy
 
 ENV NODE_ENV=production
 ENV PORT=3001

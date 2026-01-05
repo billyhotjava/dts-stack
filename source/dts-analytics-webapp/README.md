@@ -41,7 +41,7 @@ node source/dts-analytics-webapp/server.mjs
 构建镜像（一次）：
 
 ```bash
-docker build -t dts-analytics-webapp:local -f source/dts-analytics-webapp/Dockerfile source/dts-analytics-webapp
+docker build --no-cache -t dts-analytics-webapp:1.0.0 -f source/dts-analytics-webapp/Dockerfile source/dts-analytics-webapp
 ```
 
 然后启动（开发模式）：

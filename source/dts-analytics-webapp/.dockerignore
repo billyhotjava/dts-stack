@@ -1,0 +1,9 @@
+node_modules
+dist
+.pnpm-store
+.pnpm
+.vite
+metabase.jar
+.git
+.gitignore
+*.log
