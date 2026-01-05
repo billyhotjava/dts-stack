@@ -1,4 +1,4 @@
-# DTS Analytics Java Rewrite (2.1.0)
+# DTS Analytics Java Rewrite
 
 This module bootstraps a JHipster-style Spring Boot stack (mirroring `source/dts-admin`) to host the Java rewrite of the existing Clojure analytics service (currently under `source/dts-bi-analytics`). The goal is to migrate the runtime code first, then supporting tooling/tests.
 
