@@ -424,7 +424,8 @@ services:
       - "traefik.http.routers.dts-platform-uiapi.tls=true"
       - "traefik.http.routers.dts-platform-uiapi.service=dts-platform"
       # Legacy bundle compatibility: map /api/keycloak/auth/platform/login -> /api/keycloak/auth/login
-      - "traefik.http.middlewares.dts-platform-login-alias.replacepathregex.regex=^/api/keycloak/auth/platform/login/?$"
+      # docker-compose v1 treats "$" as interpolation; escape it as "$$" to keep regex end-of-line anchor.
+      - "traefik.http.middlewares.dts-platform-login-alias.replacepathregex.regex=^/api/keycloak/auth/platform/login/?$$"
       - "traefik.http.middlewares.dts-platform-login-alias.replacepathregex.replacement=/api/keycloak/auth/login"
       - "traefik.http.routers.dts-platform-uiapi.middlewares=dts-platform-login-alias@docker,cors-allow@file,security-headers@file"
 
