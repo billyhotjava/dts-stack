@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { Icon } from "@/components/icon";
-import type { NavItemDataProps, NavProps } from "@/components/nav/types";
 import type { MenuTree } from "#/entity";
 import { PermissionType } from "#/enum";
+import { Icon } from "@/components/icon";
+import type { NavItemDataProps, NavProps } from "@/components/nav/types";
 import { useMenuStore } from "@/store/menuStore";
 import { useUserPermissions, useUserRoles } from "@/store/userStore";
 import { checkAny } from "@/utils";
@@ -39,8 +39,8 @@ const MENU_ICON_OVERRIDES: Record<string, string> = {
 	"explore.workbench": "local:ic-workbench",
 	"explore.savedqueries": "local:ic-savedqueries",
 	"explore.saved.queries": "local:ic-savedqueries",
-	"savesavedqueries": "local:ic-savedqueries",
-	"savedqueries": "local:ic-savedqueries",
+	savesavedqueries: "local:ic-savedqueries",
+	savedqueries: "local:ic-savedqueries",
 };
 
 const normalizeAuthCode = (value: unknown): string => {
@@ -187,6 +187,29 @@ const buildNavItems = (nodes: MenuTree[]): NavItemDataProps[] => {
 	return buildNavItemsInternal(nodes, undefined, new Set<string>());
 };
 
+const resolveOrderValue = (node: MenuTree, meta: Record<string, any> | null): number => {
+	const candidates = [
+		(node as any)?.order,
+		meta?.order,
+		(meta as any)?.sortOrder,
+		(meta as any)?.sort,
+		(meta as any)?.orderNum,
+	];
+	for (const value of candidates) {
+		if (typeof value === "number" && Number.isFinite(value)) return value;
+		if (typeof value === "string") {
+			const parsed = Number.parseFloat(value);
+			if (Number.isFinite(parsed)) return parsed;
+		}
+	}
+	return Number.POSITIVE_INFINITY;
+};
+
+const isRootWorkbench = (node: MenuTree, meta: Record<string, any> | null): boolean => {
+	const path = resolveMenuPath(node, meta);
+	return path === "/workbench" || path === "/dashboard/workbench";
+};
+
 const buildNavItemsInternal = (
 	nodes: MenuTree[],
 	parentIcon: string | undefined,
@@ -195,8 +218,31 @@ const buildNavItemsInternal = (
 	if (!Array.isArray(nodes) || nodes.length === 0) {
 		return [];
 	}
+	const isRootLevel = parentIcon === undefined;
+	const sortedNodes = [...nodes].sort((a, b) => {
+		const metaA = parseMenuMetadata(a?.metadata);
+		const metaB = parseMenuMetadata(b?.metadata);
+
+		if (isRootLevel) {
+			const aIsWorkbench = isRootWorkbench(a, metaA);
+			const bIsWorkbench = isRootWorkbench(b, metaB);
+			if (aIsWorkbench !== bIsWorkbench) return aIsWorkbench ? -1 : 1;
+		}
+
+		const orderA = resolveOrderValue(a, metaA);
+		const orderB = resolveOrderValue(b, metaB);
+		if (orderA !== orderB) return orderA - orderB;
+
+		const titleA = getMenuTitle(a, metaA);
+		const titleB = getMenuTitle(b, metaB);
+		if (titleA !== titleB) return titleA.localeCompare(titleB, "zh-Hans-CN");
+
+		const idA = typeof a.id === "string" ? a.id : "";
+		const idB = typeof b.id === "string" ? b.id : "";
+		return idA.localeCompare(idB);
+	});
 	const items: NavItemDataProps[] = [];
-	for (const node of nodes) {
+	for (const node of sortedNodes) {
 		const navItem = createNavItem(node, parentIcon, visited);
 		if (navItem) {
 			items.push(navItem);
