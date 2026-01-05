@@ -135,6 +135,24 @@ http:
         contentTypeNosniff: true
         browserXssFilter: true
         frameDeny: false
+    # Forward-auth to platform: reuse platform login/session for downstream modules (e.g. analytics).
+    # This validates incoming requests (Authorization: Bearer <portal access token>) and injects identity
+    # headers (X-DTS-*) into downstream requests on success.
+    platform-forward-auth:
+      forwardAuth:
+        address: "http://dts-platform:8081/api/forward-auth"
+        trustForwardHeader: true
+        authRequestHeaders:
+          - Authorization
+          - Cookie
+        authResponseHeaders:
+          - X-DTS-User
+          - X-DTS-Display-Name
+          - X-DTS-User-Id
+          - X-DTS-Roles
+          - X-DTS-Permissions
+          - X-DTS-Dept-Code
+          - X-DTS-Personnel-Level
     hetu-allow-anonymous:
       headers:
         customRequestHeaders:

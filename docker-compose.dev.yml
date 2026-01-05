@@ -349,7 +349,7 @@ services:
       - "traefik.http.routers.dts-analytics-api.priority=240"
       - "traefik.http.services.dts-analytics-api.loadbalancer.server.port=3000"
       - "traefik.http.middlewares.dts-strip-analytics-api.stripprefix.prefixes=/analytics"
-      - "traefik.http.routers.dts-analytics-api.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
+      - "traefik.http.routers.dts-analytics-api.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
 
   # Webapp: dts-analytics-webapp (legacy Metabase UI served by a small Node server)
   dts-analytics-webapp:
@@ -360,6 +360,7 @@ services:
     environment:
       PORT: "3001"
       DTS_ANALYTICS_API_BASE: "http://dts-analytics:3000"
+      DTS_PLATFORM_USERSTORE_KEY: "userStore"
     command: ["sh","-lc","node server.mjs"]
     ports:
       - "127.0.0.1:3001:3001"

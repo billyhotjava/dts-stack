@@ -23,10 +23,15 @@ public class AnalyticsSessionService {
 
     private final AnalyticsSessionRepository sessionRepository;
     private final AnalyticsUserRepository userRepository;
+    private final PlatformTrustedUserService platformTrustedUserService;
 
-    public AnalyticsSessionService(AnalyticsSessionRepository sessionRepository, AnalyticsUserRepository userRepository) {
+    public AnalyticsSessionService(
+            AnalyticsSessionRepository sessionRepository,
+            AnalyticsUserRepository userRepository,
+            PlatformTrustedUserService platformTrustedUserService) {
         this.sessionRepository = sessionRepository;
         this.userRepository = userRepository;
+        this.platformTrustedUserService = platformTrustedUserService;
     }
 
     public UUID createSession(Long userId) {
@@ -37,11 +42,15 @@ public class AnalyticsSessionService {
     }
 
     public Optional<AnalyticsUser> resolveUser(HttpServletRequest request) {
-        return resolveSessionId(request)
+        Optional<AnalyticsUser> byMetabaseSession = resolveSessionId(request)
                 .flatMap(sessionId -> sessionRepository.findByIdAndRevokedFalseAndExpiresAtAfter(sessionId, Instant.now()))
                 .map(session -> touchSession(session))
                 .flatMap(session -> userRepository.findById(session.getUserId()))
                 .filter(AnalyticsUser::isActive);
+        if (byMetabaseSession.isPresent()) {
+            return byMetabaseSession;
+        }
+        return platformTrustedUserService.resolveOrProvision(request).filter(AnalyticsUser::isActive);
     }
 
     @Transactional(readOnly = true)

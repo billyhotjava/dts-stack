@@ -45,6 +45,10 @@ application:
 
 dts:
   analytics:
+    platform-auth:
+      enabled: ${DTS_ANALYTICS_PLATFORM_AUTH_ENABLED:true}
+      require-forwarded-headers: ${DTS_ANALYTICS_PLATFORM_AUTH_REQUIRE_FORWARDED_HEADERS:true}
+      email-domain: ${DTS_ANALYTICS_PLATFORM_AUTH_EMAIL_DOMAIN:platform.local}
     oidc:
       enabled: ${DTS_ANALYTICS_OIDC_ENABLED:false}
       issuer-uri: ${DTS_ANALYTICS_OIDC_ISSUER_URI:}

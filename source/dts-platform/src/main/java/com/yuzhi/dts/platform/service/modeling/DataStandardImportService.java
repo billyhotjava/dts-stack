@@ -89,20 +89,23 @@ public class DataStandardImportService {
                 request.setDescription(trimToNull(get(values, index, "description")));
                 request.setSecurityLevel(parseDataSecurityLevel(get(values, index, "security_level")));
 
-                try {
-                    Optional<DataStandard> existing = repository.findByCodeIgnoreCase(request.getCode());
-                    if (existing.isPresent()) {
-                        standardService.update(existing.get().getId(), request, null);
-                        result.setUpdated(result.getUpdated() + 1);
-                    } else {
-                        standardService.create(request, null);
-                        result.setCreated(result.getCreated() + 1);
-                    }
-                } catch (RuntimeException e) {
-                    result.addError("第 " + rowNumber + " 行：" + request.getCode() + " 导入失败：" + safeMessage(e));
-                    result.setSkipped(result.getSkipped() + 1);
-                } finally {
-                    result.setTotalRows(result.getTotalRows() + 1);
+	                try {
+	                    Optional<DataStandard> existing = repository.findByCodeIgnoreCase(request.getCode());
+	                    existing.ifPresentOrElse(
+	                        standard -> {
+	                            standardService.update(standard.getId(), request, null);
+	                            result.setUpdated(result.getUpdated() + 1);
+	                        },
+	                        () -> {
+	                            standardService.create(request, null);
+	                            result.setCreated(result.getCreated() + 1);
+	                        }
+	                    );
+	                } catch (RuntimeException e) {
+	                    result.addError("第 " + rowNumber + " 行：" + request.getCode() + " 导入失败：" + safeMessage(e));
+	                    result.setSkipped(result.getSkipped() + 1);
+	                } finally {
+	                    result.setTotalRows(result.getTotalRows() + 1);
                 }
             }
         } catch (Exception e) {
@@ -225,4 +228,3 @@ public class DataStandardImportService {
         return StringUtils.hasText(message) ? message : e.getClass().getSimpleName();
     }
 }
-

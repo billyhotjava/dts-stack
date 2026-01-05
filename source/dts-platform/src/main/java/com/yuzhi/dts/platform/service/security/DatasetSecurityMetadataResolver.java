@@ -224,24 +224,24 @@ public class DatasetSecurityMetadataResolver {
             return Optional.empty();
         }
         String normalized = columnName.trim();
-        String preferred = resolveText(dataset.getHiveTable());
-        if (preferred != null) {
-            Optional<CatalogTableSchema> tableOpt = tableRepository.findFirstByDatasetAndNameIgnoreCase(dataset, preferred);
-            if (tableOpt.isPresent()) {
-                Optional<ResolvedColumn> col = findColumnInfoInTable(tableOpt.get(), normalized);
-                if (col.isPresent()) return col;
-            }
-        }
+	        String preferred = resolveText(dataset.getHiveTable());
+	        if (preferred != null) {
+	            Optional<CatalogTableSchema> tableOpt = tableRepository.findFirstByDatasetAndNameIgnoreCase(dataset, preferred);
+	            if (tableOpt.isPresent()) {
+	                Optional<ResolvedColumn> col = findColumnInfoInTable(tableOpt.orElseThrow(), normalized);
+	                if (col.isPresent()) return col;
+	            }
+	        }
         String fallback = resolveText(dataset.getName());
-        if (fallback != null && !fallback.equalsIgnoreCase(preferred)) {
-            Optional<CatalogTableSchema> tableOpt = tableRepository.findFirstByDatasetAndNameIgnoreCase(dataset, fallback);
-            if (tableOpt.isPresent()) {
-                Optional<ResolvedColumn> col = findColumnInfoInTable(tableOpt.get(), normalized);
-                if (col.isPresent()) return col;
-            }
-        }
-        List<CatalogTableSchema> tables = tableRepository.findByDataset(dataset);
-        if (!CollectionUtils.isEmpty(tables)) {
+	        if (fallback != null && !fallback.equalsIgnoreCase(preferred)) {
+	            Optional<CatalogTableSchema> tableOpt = tableRepository.findFirstByDatasetAndNameIgnoreCase(dataset, fallback);
+	            if (tableOpt.isPresent()) {
+	                Optional<ResolvedColumn> col = findColumnInfoInTable(tableOpt.orElseThrow(), normalized);
+	                if (col.isPresent()) return col;
+	            }
+	        }
+	        List<CatalogTableSchema> tables = tableRepository.findByDataset(dataset);
+	        if (!CollectionUtils.isEmpty(tables)) {
             for (CatalogTableSchema table : tables) {
                 Optional<ResolvedColumn> col = findColumnInfoInTable(table, normalized);
                 if (col.isPresent()) return col;

@@ -262,7 +262,7 @@ services:
       - "traefik.http.routers.dts-analytics-api.tls=true"
       - "traefik.http.routers.dts-analytics-api.priority=240"
       - "traefik.http.services.dts-analytics-api.loadbalancer.server.port=3000"
-      - "traefik.http.routers.dts-analytics-api.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
+      - "traefik.http.routers.dts-analytics-api.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
 
   dts-analytics-webapp:
     image: ${IMAGE_DTS_ANALYTICS_WEBAPP:?Set IMAGE_DTS_ANALYTICS_WEBAPP in imgversion.conf or .env}
@@ -271,6 +271,7 @@ services:
     environment:
       PORT: "3001"
       DTS_ANALYTICS_API_BASE: "http://dts-analytics:3000"
+      DTS_PLATFORM_USERSTORE_KEY: "userStore"
     ports: []
     networks:
       - dts-core

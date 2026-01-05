@@ -6,6 +6,7 @@ import { URL } from "node:url";
 const PORT = Number.parseInt(process.env.PORT ?? "3001", 10);
 const API_BASE = process.env.DTS_ANALYTICS_API_BASE ?? "http://dts-analytics:3000";
 const DEFAULT_LOCALE = (process.env.DTS_ANALYTICS_DEFAULT_LOCALE ?? "zh").toLowerCase();
+const PLATFORM_USERSTORE_KEY = process.env.DTS_PLATFORM_USERSTORE_KEY ?? "userStore";
 const LEGACY_DIR =
   process.env.DTS_ANALYTICS_WEBAPP_LEGACY_DIR ??
   new URL("./legacy/frontend_client/", import.meta.url).pathname;
@@ -142,6 +143,68 @@ function renderTemplate(template, view) {
   return html;
 }
 
+function platformAuthBridgeScript({ baseHref, userStoreKey }) {
+  const apiPrefix = (baseHref && baseHref !== "/" ? baseHref : "/") + "api/";
+  return `(function(){try{
+var STORAGE_KEY=${JSON.stringify(userStoreKey)};
+var API_PREFIX=${JSON.stringify(apiPrefix)};
+function readStore(){try{var raw=localStorage.getItem(STORAGE_KEY);if(!raw)return null;return JSON.parse(raw);}catch(e){return null;}}
+function writeStore(store){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(store));}catch(e){}}
+function getTokenObj(store){var state=store&&store.state;return state&&state.userToken?state.userToken:null;}
+function getTokens(){var store=readStore();var token=getTokenObj(store)||{};var access=(token.accessToken||token.token||"");var refresh=(token.refreshToken||"");access=String(access||"").trim();refresh=String(refresh||"").trim();return {store:store,token:token,accessToken:access,refreshToken:refresh};}
+function setTokens(next){var current=readStore();if(!current||!current.state){current={state:{},version:0};}if(!current.state.userToken){current.state.userToken={};}
+for(var k in next){if(Object.prototype.hasOwnProperty.call(next,k)){current.state.userToken[k]=next[k];}}
+writeStore(current);}
+function buildUrl(input){try{return new URL(input,window.location.href);}catch(e){return null;}}
+function shouldAttach(url){return !!(url&&url.pathname&&url.pathname.indexOf(API_PREFIX)===0);}
+function hasAuthHeader(headers){if(!headers)return false;try{if(headers.get){return !!headers.get('Authorization');}}catch(e){}
+if(typeof headers==='object'){for(var k in headers){if(String(k).toLowerCase()==='authorization'){return !!headers[k];}}}
+return false;}
+function withAuth(init, token){var headers=init&&init.headers?init.headers:null;var nextInit=init?Object.assign({},init):{};
+var nextHeaders;
+try{nextHeaders=headers&&headers.get?new Headers(headers):new Headers(headers||{});}catch(e){nextHeaders=headers||{};}
+if(!hasAuthHeader(nextHeaders)){
+var raw=String(token||'').trim();
+if(raw){try{if(nextHeaders.set){nextHeaders.set('Authorization','Bearer '+raw);}else{nextHeaders['Authorization']='Bearer '+raw;}}catch(e){}}
+}
+nextInit.headers=nextHeaders;
+return nextInit;}
+function pickToken(payload){if(!payload)return '';var direct=payload.accessToken||payload.access_token||payload.token;var data=payload.data||payload.result||payload.payload||null;
+var nested=(data&& (data.accessToken||data.access_token||data.token))||'';var v=direct||nested||'';return String(v||'').trim();}
+function pickRefresh(payload){if(!payload)return '';var direct=payload.refreshToken||payload.refresh_token;var data=payload.data||payload.result||payload.payload||null;
+var nested=(data&& (data.refreshToken||data.refresh_token))||'';var v=direct||nested||'';return String(v||'').trim();}
+function refreshSession(refreshToken){var rt=String(refreshToken||'').trim();if(!rt)return Promise.resolve(null);
+return fetch('/api/keycloak/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken:rt})})
+.then(function(r){if(!r||!r.ok)return null;return r.json().catch(function(){return null;});})
+.then(function(body){if(!body)return null;var nextAccess=pickToken(body);var nextRefresh=pickRefresh(body);if(!nextAccess)return null;
+setTokens({accessToken:nextAccess,refreshToken:nextRefresh||rt});return {accessToken:nextAccess,refreshToken:nextRefresh||rt};});}
+var origFetch=window.fetch;
+if(typeof origFetch==='function'){
+window.fetch=function(input,init){
+var url=buildUrl(typeof input==='string'?input:(input&&input.url?input.url:''));if(!shouldAttach(url))return origFetch(input,init);
+var t=getTokens();var nextInit=withAuth(init,t.accessToken);var retried=nextInit&&nextInit.__dtsRetry?true:false;
+return origFetch(input,nextInit).then(function(resp){
+if(resp&&resp.status===401&&!retried){return refreshSession(t.refreshToken).then(function(next){if(!next||!next.accessToken)return resp;
+var retryInit=withAuth(init,next.accessToken);retryInit.__dtsRetry=true;return origFetch(input,retryInit);});}
+return resp;});
+};}
+var OrigXHR=window.XMLHttpRequest;
+if(typeof OrigXHR==='function'){
+function PatchedXHR(){var xhr=new OrigXHR();var open=xhr.open;xhr.open=function(method,url,async,user,pw){xhr.__dtsUrl=url;return open.call(xhr,method,url,async,user,pw);};
+var send=xhr.send;xhr.send=function(body){try{var u=buildUrl(xhr.__dtsUrl||'');if(shouldAttach(u)){var t=getTokens();if(t.accessToken){try{xhr.setRequestHeader('Authorization','Bearer '+t.accessToken);}catch(e){}}}}catch(e){}
+return send.call(xhr,body);};return xhr;}
+window.XMLHttpRequest=PatchedXHR;}
+}catch(e){}})();`;
+}
+
+function injectHeadScript(html, scriptText) {
+  const marker = "</head>";
+  const idx = html.toLowerCase().indexOf(marker);
+  const scriptTag = `<script>${scriptText}</script>`;
+  if (idx === -1) return `${html}\n${scriptTag}\n`;
+  return html.slice(0, idx) + scriptTag + html.slice(idx);
+}
+
 async function fetchBootstrap(req, forwardedPrefix) {
   const u = new URL("/api/session/properties", API_BASE);
 
@@ -252,7 +315,8 @@ const server = http.createServer(async (req, res) => {
     };
 
     const template = await readText(templatePath);
-    const html = renderTemplate(template, view);
+    let html = renderTemplate(template, view);
+    html = injectHeadScript(html, platformAuthBridgeScript({ baseHref, userStoreKey: PLATFORM_USERSTORE_KEY }));
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.end(html);
