@@ -27,7 +27,7 @@ class InfoResourceIT {
         mockMvc.perform(get("/api/info").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("dts-analytics"))
-                .andExpect(jsonPath("$.version").value("2.1.0-SNAPSHOT"))
+                .andExpect(jsonPath("$.version").value("0.0.1-SNAPSHOT"))
                 .andExpect(jsonPath("$.environment").value("dev"))
                 .andExpect(jsonPath("$.timestamp").isNotEmpty())
                 .andExpect(header().exists("X-Request-Id"));

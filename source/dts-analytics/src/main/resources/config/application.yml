@@ -40,7 +40,7 @@ server:
 application:
   service:
     name: dts-analytics
-    version: 2.1.0-SNAPSHOT
+    version: 0.0.1-SNAPSHOT
     environment: dev
 
 dts:

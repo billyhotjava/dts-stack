@@ -34,7 +34,7 @@ This module bootstraps a JHipster-style Spring Boot stack (mirroring `source/dts
 
 2. Copy the artifact into the offline build context:
    ```bash
-   cp ./source/dts-analytics/target/dts-analytics-2.1.0-SNAPSHOT.jar ./source/builds/dts-analytics.jar
+   cp ./source/dts-analytics/target/dts-analytics-0.0.1-SNAPSHOT.jar ./source/builds/dts-analytics.jar
    ```
 
 3. Build the runtime image (offline Dockerfile):

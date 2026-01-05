@@ -6,7 +6,7 @@
 
     <groupId>com.yuzhi.dts.analytics</groupId>
     <artifactId>dts-analytics</artifactId>
-    <version>2.1.0-SNAPSHOT</version>
+    <version>0.0.1-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>Dts Analytics</name>
     <description>JHipster-style Spring Boot rewrite of the Clojure-based analytics service</description>
