@@ -29,7 +29,7 @@ function LoginPage() {
 				<img
 					src={TechDataBackground}
 					alt={brandIllustrationAlt}
-					className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.5] dark:grayscale"
+					className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.9] dark:saturate-[1.2]"
 				/>
 			</div>
 

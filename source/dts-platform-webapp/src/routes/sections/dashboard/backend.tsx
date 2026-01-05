@@ -1,12 +1,12 @@
 import type { RouteObject } from "react-router";
 import { Navigate } from "react-router";
+import { getMenus } from "@/store/menuStore";
 import type { MenuMetaInfo, MenuTree } from "@/types/entity";
 import { PermissionType } from "@/types/enum";
-import { convertFlatToTree } from "@/utils/tree";
 import { parseMenuMetadata } from "@/utils/menuTree";
-import { Component } from "./utils";
-import { getMenus } from "@/store/menuStore";
+import { convertFlatToTree } from "@/utils/tree";
 import { DynamicMenuResolver } from "./dynamic-resolver";
+import { Component } from "./utils";
 
 /**
  * get route path from menu path and parent path
@@ -111,29 +111,30 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 
 // Provide dynamic fallback routes for key sections so menu-driven paths resolve before menus are baked into routes.
 const buildDynamicFallbackRoutes = (): RouteObject[] => [
-    { path: "catalog", children: [{ path: "*", element: <DynamicMenuResolver base="/catalog" /> }] },
-    { path: "modeling", children: [{ path: "*", element: <DynamicMenuResolver base="/modeling" /> }] },
-    { path: "governance", children: [{ path: "*", element: <DynamicMenuResolver base="/governance" /> }] },
-    { path: "explore", children: [{ path: "*", element: <DynamicMenuResolver base="/explore" /> }] },
+	{ path: "catalog", children: [{ path: "*", element: <DynamicMenuResolver base="/catalog" /> }] },
+	{ path: "modeling", children: [{ path: "*", element: <DynamicMenuResolver base="/modeling" /> }] },
+	{ path: "governance", children: [{ path: "*", element: <DynamicMenuResolver base="/governance" /> }] },
+	{ path: "explore", children: [{ path: "*", element: <DynamicMenuResolver base="/explore" /> }] },
 ];
 
 export function getBackendDashboardRoutes() {
-    const menus = getMenus();
-    const tree = hasChildren(menus) ? menus : convertFlatToTree(menus);
-    const backendDashboardRoutes = convertToRoute(tree);
-    // Always provide a static dashboard/workbench welcome route first, so it wins over wildcards
-    backendDashboardRoutes.unshift({
-        path: "dashboard",
-        children: [
-            { index: true, element: <Navigate to="workbench" replace /> },
-            { path: "workbench", element: <Navigate to="/workbench" replace /> },
-        ],
-    });
-    // Keep /workbench available even before menus load
-    backendDashboardRoutes.unshift({ path: "workbench", element: Component("/pages/workbench") });
-    // Add dynamic fallbacks for other sections so routes resolve even before menus are loaded
-    backendDashboardRoutes.push(...buildDynamicFallbackRoutes());
-    return backendDashboardRoutes;
+	const menus = getMenus();
+	const tree = hasChildren(menus) ? menus : convertFlatToTree(menus);
+	const backendDashboardRoutes = convertToRoute(tree);
+	// Always provide a static dashboard/workbench welcome route first, so it wins over wildcards
+	backendDashboardRoutes.unshift({
+		path: "dashboard",
+		children: [
+			{ index: true, element: <Navigate to="workbench" replace /> },
+			{ path: "workbench", element: Component("/pages/workbench") },
+		],
+	});
+	// Keep /workbench available even before menus load
+	backendDashboardRoutes.unshift({ path: "workbench", element: Component("/pages/workbench") });
+	// Add dynamic fallbacks for other sections so routes resolve even before menus are loaded
+	backendDashboardRoutes.push(...buildDynamicFallbackRoutes());
+	return backendDashboardRoutes;
 }
 
-const hasChildren = (items: MenuTree[]): boolean => items.some((item) => Array.isArray(item.children) && item.children.length > 0);
+const hasChildren = (items: MenuTree[]): boolean =>
+	items.some((item) => Array.isArray(item.children) && item.children.length > 0);

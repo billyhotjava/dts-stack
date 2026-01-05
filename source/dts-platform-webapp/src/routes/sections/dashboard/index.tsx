@@ -1,17 +1,17 @@
 import { useEffect } from "react";
 import { Navigate, type RouteObject, useLocation } from "react-router";
+import { GLOBAL_CONFIG } from "@/global-config";
 import DashboardLayout from "@/layouts/dashboard";
-import LoginAuthGuard from "@/routes/components/login-auth-guard";
-import WorkbenchPage from "@/pages/workbench";
 import BiScreensPage from "@/pages/dashboard/bi";
-import ReportsPage from "@/pages/visualization/ReportsPage";
+import PersonalProfilePage from "@/pages/settings/profile";
 import AnalyticsPage from "@/pages/visualization/AnalyticsPage";
 import ReportsManagePage from "@/pages/visualization/ReportsManagePage";
-import PersonalProfilePage from "@/pages/settings/profile";
+import ReportsPage from "@/pages/visualization/ReportsPage";
+import WorkbenchPage from "@/pages/workbench";
+import LoginAuthGuard from "@/routes/components/login-auth-guard";
+import { useRouter } from "@/routes/hooks";
 import { DynamicMenuResolver } from "./dynamic-resolver";
 import { STATIC_DASHBOARD_ROUTES } from "./static-routes";
-import { useRouter } from "@/routes/hooks";
-import { GLOBAL_CONFIG } from "@/global-config";
 
 export const dashboardRoutes: RouteObject[] = [
 	{
@@ -27,7 +27,7 @@ export const dashboardRoutes: RouteObject[] = [
 				path: "dashboard",
 				children: [
 					{ index: true, element: <Navigate to="workbench" replace /> },
-					{ path: "workbench", element: <Navigate to="/workbench" replace /> },
+					{ path: "workbench", element: <WorkbenchPage /> },
 					{ path: "bi", element: <BiScreensPage /> },
 				],
 			},
@@ -40,15 +40,15 @@ export const dashboardRoutes: RouteObject[] = [
 					{ path: "reports-manage", element: <ReportsManagePage /> },
 				],
 			},
-				{
-					path: "settings",
-					children: [
-						{ index: true, element: <Navigate to="profile" replace /> },
-						{ path: "profile", element: <PersonalProfilePage /> },
-					],
-				},
-				...STATIC_DASHBOARD_ROUTES,
-				{ path: "*", element: <DynamicMenuResolver /> },
+			{
+				path: "settings",
+				children: [
+					{ index: true, element: <Navigate to="profile" replace /> },
+					{ path: "profile", element: <PersonalProfilePage /> },
+				],
+			},
+			...STATIC_DASHBOARD_ROUTES,
+			{ path: "*", element: <DynamicMenuResolver /> },
 		],
 	},
 ];
@@ -56,7 +56,7 @@ export const dashboardRoutes: RouteObject[] = [
 function FallbackDashboardIndex() {
 	const router = useRouter();
 	const location = useLocation();
-	const fallbackPath = GLOBAL_CONFIG.defaultRoute || "/workbench";
+	const fallbackPath = GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench";
 
 	useEffect(() => {
 		if (fallbackPath && location.pathname !== fallbackPath) {

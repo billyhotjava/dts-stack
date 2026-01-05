@@ -38,19 +38,19 @@
 		font-size: 0.875rem;
 		line-height: 1.57143;
 	}
-	  main[data-slot="slash-layout-main"] :is(p, li, span, label, td, th, input, select, textarea, button) {
-			font-size: inherit;
-		}
-	
-		/* Unify antd table font size */
-		:where(.ant-table-wrapper) :is(td, th) {
-			font-size: 0.875rem !important;
-		}
+	main[data-slot="slash-layout-main"] :is(p, li, span, label, td, th, input, select, textarea, button) {
+		font-size: inherit;
+	}
+
+	/* Unify antd table font size */
+	:where(.ant-table-wrapper) :is(td, th) {
+		font-size: 0.875rem !important;
+	}
 	/* Ensure table section titles match table header font size (align with admin) */
-	  main[data-slot="slash-layout-main"] [data-slot="card"] [data-slot="card-title"] {
-			font-size: 0.875rem !important; /* match antd th (text-sm) */
-      line-height: 1.25rem !important;
-		}
+	main[data-slot="slash-layout-main"] [data-slot="card"] [data-slot="card-title"] {
+		font-size: 0.875rem !important; /* match antd th (text-sm) */
+		line-height: 1.25rem !important;
+	}
 }
 
 /* Utilities overrides to strictly unify content typography */
@@ -138,20 +138,20 @@
 
 /* Shadcn UI Dark Theme */
 [data-theme-mode="dark"] {
-	--background: var(--colors-common-black);
-	--foreground: var(--colors-common-white);
-	--card: var(--colors-common-black);
-	--card-foreground: var(--colors-common-white);
-	--popover: var(--colors-common-black);
-	--popover-foreground: var(--colors-common-white);
+	--background: var(--colors-background-default);
+	--foreground: var(--colors-text-primary);
+	--card: var(--colors-background-paper);
+	--card-foreground: var(--colors-text-primary);
+	--popover: var(--colors-background-paper);
+	--popover-foreground: var(--colors-text-primary);
 	--primary: var(--colors-palette-primary-default);
 	--primary-foreground: var(--colors-palette-primary-darker);
 	--secondary: var(--colors-background-neutral);
-	--secondary-foreground: var(--colors-palette-gray-500);
+	--secondary-foreground: var(--colors-text-secondary);
 	--muted: var(--colors-background-neutral);
 	--muted-foreground: var(--colors-palette-gray-400);
 	--accent: var(--colors-background-neutral);
-	--accent-foreground: var(--colors-palette-gray-500);
+	--accent-foreground: var(--colors-text-secondary);
 	--destructive: var(--colors-palette-error-default);
 	--border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
 	--input: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
@@ -162,13 +162,151 @@
 	--chart-4: oklch(0.627 0.265 303.9);
 	--chart-5: oklch(0.645 0.246 16.439);
 	--sidebar: var(--colors-background-neutral);
-	--sidebar-foreground: var(--colors-common-white);
+	--sidebar-foreground: var(--colors-text-primary);
 	--sidebar-primary: var(--colors-palette-primary-default);
 	--sidebar-primary-foreground: var(--colors-palette-primary-darker);
 	--sidebar-accent: var(--colors-background-neutral);
-	--sidebar-accent-foreground: var(--colors-common-white);
+	--sidebar-accent-foreground: var(--colors-text-primary);
 	--sidebar-border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
 	--sidebar-ring: var(--colors-palette-primary-default);
+}
+
+/* "科技模式"视觉增强（全局） */
+[data-theme-mode="dark"] body {
+	background-color: var(--colors-background-default);
+	background-image:
+		radial-gradient(circle at 10% 20%, rgba(0, 242, 255, 0.06) 0%, transparent 22%),
+		radial-gradient(circle at 90% 80%, rgba(112, 0, 255, 0.06) 0%, transparent 22%),
+		linear-gradient(180deg, rgba(16, 25, 42, 0.35), transparent 42%);
+	background-attachment: fixed;
+}
+
+.tech-scan {
+	position: relative;
+	width: 164px;
+	height: 164px;
+	border-radius: 9999px;
+	overflow: hidden;
+	background: var(--card);
+	border: 1px solid var(--border);
+}
+
+.tech-scan-center {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	z-index: 1;
+}
+
+[data-theme-mode="dark"] header[data-slot="slash-layout-header"] {
+	border-bottom: 1px solid rgba(0, 242, 255, 0.12);
+}
+
+[data-theme-mode="dark"] :where(.ant-card) {
+	background: rgba(16, 25, 42, 0.82);
+	border: 1px solid rgba(0, 242, 255, 0.3);
+	backdrop-filter: blur(10px);
+	box-shadow:
+		0 4px 24px rgba(0, 0, 0, 0.5),
+		0 0 0 1px rgba(0, 242, 255, 0.06);
+}
+
+[data-theme-mode="dark"] :where(.ant-card)::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 2px;
+	background: linear-gradient(90deg, transparent, rgba(0, 242, 255, 0.9), transparent);
+	opacity: 0.8;
+	pointer-events: none;
+}
+
+[data-theme-mode="dark"] :where(.ant-card) :where(.ant-card-head) {
+	border-bottom: 1px solid rgba(0, 242, 255, 0.3);
+}
+
+[data-theme-mode="dark"] :where(.ant-table-wrapper) :where(.ant-table) {
+	background: transparent;
+}
+
+[data-theme-mode="dark"] :where(.ant-table-wrapper) :where(.ant-table-container) {
+	border: 1px solid rgba(0, 242, 255, 0.3);
+	border-radius: 12px;
+	overflow: hidden;
+}
+
+[data-theme-mode="dark"] :where(.ant-table-wrapper) :where(.ant-table-thead > tr > th) {
+	background: rgba(0, 242, 255, 0.08);
+	color: var(--colors-text-primary);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-theme-mode="dark"] :where(.ant-table-wrapper) :where(.ant-table-tbody > tr > td) {
+	background: rgba(16, 25, 42, 0.5);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	padding-top: 12px;
+	padding-bottom: 12px;
+}
+
+[data-theme-mode="dark"] :where(.ant-table-wrapper) :where(.ant-table-tbody > tr:hover > td) {
+	background: rgba(0, 242, 255, 0.05);
+}
+
+[data-theme-mode="dark"] :where(.ant-list) :where(.ant-list-item) {
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+[data-theme-mode="dark"] :where(.ant-tag) {
+	border: 1px solid rgba(0, 242, 255, 0.12);
+}
+
+@keyframes tech-scan {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+[data-theme-mode="dark"] .tech-scan {
+	position: relative;
+	width: 164px;
+	height: 164px;
+	border-radius: 9999px;
+	overflow: hidden;
+	background:
+		radial-gradient(circle at 50% 50%, rgba(0, 242, 255, 0.1), rgba(0, 242, 255, 0.03) 52%, transparent 64%),
+		radial-gradient(circle at 50% 50%, rgba(114, 46, 209, 0.1), transparent 62%);
+	border: 1px solid rgba(0, 242, 255, 0.22);
+	box-shadow: 0 0 24px rgba(0, 242, 255, 0.12);
+}
+
+[data-theme-mode="dark"] .tech-scan::before {
+	content: "";
+	position: absolute;
+	inset: 14px;
+	border-radius: inherit;
+	border: 1px dashed rgba(0, 242, 255, 0.22);
+	opacity: 0.85;
+}
+
+[data-theme-mode="dark"] .tech-scan::after {
+	content: "";
+	position: absolute;
+	inset: -30%;
+	background: conic-gradient(
+		from 180deg,
+		rgba(0, 242, 255, 0) 0deg,
+		rgba(0, 242, 255, 0) 300deg,
+		rgba(0, 242, 255, 0.34) 332deg,
+		rgba(0, 242, 255, 0) 360deg
+	);
+	animation: tech-scan 3.2s linear infinite;
+	mix-blend-mode: screen;
 }
 
 /* slash layout */

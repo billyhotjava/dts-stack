@@ -15,7 +15,21 @@ import {
 	SettingOutlined,
 	ThunderboltOutlined,
 } from "@ant-design/icons";
-import { Badge, Button, Card, Col, Collapse, List, Progress, Row, Space, Statistic, Table, Tag, Typography } from "antd";
+import {
+	Badge,
+	Button,
+	Card,
+	Col,
+	Collapse,
+	List,
+	Progress,
+	Row,
+	Space,
+	Statistic,
+	Table,
+	Tag,
+	Typography,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useMemo } from "react";
@@ -76,6 +90,8 @@ type WorkItem = {
 	target: string;
 };
 
+const WINDOW_DAYS: 7 | 14 | 30 = 14;
+
 const toneColor = (tone: KpiTone | undefined): string => {
 	if (tone === "success") return "#52c41a";
 	if (tone === "warning") return "#faad14";
@@ -103,15 +119,13 @@ const assetStatusTag = (status: HotAsset["status"]) => {
 
 export default function WorkbenchPage() {
 	const router = useRouter();
-	const windowDays: 7 | 14 | 30 = 14;
-
-	const today = dayjs();
+	const today = useMemo(() => dayjs(), []);
 
 	const trend = useMemo<TrendPoint[]>(() => {
 		const points: TrendPoint[] = [];
-		for (let i = windowDays - 1; i >= 0; i -= 1) {
+		for (let i = WINDOW_DAYS - 1; i >= 0; i -= 1) {
 			const d = today.subtract(i, "day");
-			const t = windowDays - 1 - i;
+			const t = WINDOW_DAYS - 1 - i;
 			points.push({
 				date: d.format("MM-DD"),
 				business: 980 + t * 12 + (t % 3) * 28 + (t % 5) * 7,
@@ -120,7 +134,7 @@ export default function WorkbenchPage() {
 			});
 		}
 		return points;
-	}, [today, windowDays]);
+	}, [today]);
 
 	const distribution = useMemo(() => ({ labels: ["ODS", "DWD", "DWS", "ADS"], series: [18, 42, 27, 13] }), []);
 
@@ -248,10 +262,38 @@ export default function WorkbenchPage() {
 
 	const workItems = useMemo<WorkItem[]>(
 		() => [
-			{ key: "a1", kind: "告警", title: "SLA 超时：dws_customer_profile", level: "高", time: "10:12", target: "/foundation/task-scheduling" },
-			{ key: "a2", kind: "告警", title: "数据质量下降：ads_finance_kpi", level: "中", time: "09:20", target: "/governance/rules" },
-			{ key: "t1", kind: "待办", title: "待审核：新增质量规则 2 条", level: "中", time: "昨天", target: "/governance/rules" },
-			{ key: "t2", kind: "待办", title: "待发布：数据集 1 个（密级 INTERNAL）", level: "低", time: "2 天前", target: "/catalog/assets" },
+			{
+				key: "a1",
+				kind: "告警",
+				title: "SLA 超时：dws_customer_profile",
+				level: "高",
+				time: "10:12",
+				target: "/foundation/task-scheduling",
+			},
+			{
+				key: "a2",
+				kind: "告警",
+				title: "数据质量下降：ads_finance_kpi",
+				level: "中",
+				time: "09:20",
+				target: "/governance/rules",
+			},
+			{
+				key: "t1",
+				kind: "待办",
+				title: "待审核：新增质量规则 2 条",
+				level: "中",
+				time: "昨天",
+				target: "/governance/rules",
+			},
+			{
+				key: "t2",
+				kind: "待办",
+				title: "待发布：数据集 1 个（密级 INTERNAL）",
+				level: "低",
+				time: "2 天前",
+				target: "/catalog/assets",
+			},
 		],
 		[],
 	);
@@ -408,10 +450,7 @@ export default function WorkbenchPage() {
 
 	const trendOptions = useChart({
 		xaxis: { categories: trend.map((p) => p.date) },
-		yaxis: [
-			{ title: { text: "业务量" } },
-			{ opposite: true, max: 100, min: 0, title: { text: "DQ Score" } },
-		],
+		yaxis: [{ title: { text: "业务量" } }, { opposite: true, max: 100, min: 0, title: { text: "DQ Score" } }],
 		legend: { show: true },
 		stroke: { curve: "smooth", width: 2.5 },
 		chart: {
@@ -524,9 +563,16 @@ export default function WorkbenchPage() {
 					</Space>
 				}
 				extra={
-					<Button size="small" type="primary" icon={<LineChartOutlined />} onClick={() => router.push("/visualization/reports")}>
-						进入报表中心
-					</Button>
+					<Space wrap size={8}>
+						<Button
+							size="small"
+							type="primary"
+							icon={<LineChartOutlined />}
+							onClick={() => router.push("/visualization/reports")}
+						>
+							进入报表中心
+						</Button>
+					</Space>
 				}
 				bodyStyle={{ paddingTop: 8 }}
 			>
@@ -539,7 +585,12 @@ export default function WorkbenchPage() {
 									<Tag color="blue">报表</Tag>
 								</div>
 								<div className="mt-2">
-									<Chart type="line" height={84} series={[{ name: "trend", data: r.series }] as any} options={sparklineOptions} />
+									<Chart
+										type="line"
+										height={84}
+										series={[{ name: "trend", data: r.series }] as any}
+										options={sparklineOptions}
+									/>
 								</div>
 								<div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
 									<span>访问 {r.views.toLocaleString()}</span>
@@ -577,7 +628,11 @@ export default function WorkbenchPage() {
 										</span>
 									</div>
 									<Statistic value={k.value} suffix={k.suffix} valueStyle={{ fontSize: 20 }} />
-									{k.change ? <div className="text-xs text-muted-foreground">{k.change.label} {k.change.value}%</div> : null}
+									{k.change ? (
+										<div className="text-xs text-muted-foreground">
+											{k.change.label} {k.change.value}%
+										</div>
+									) : null}
 								</Space>
 							</Card>
 						</Col>
@@ -604,31 +659,71 @@ export default function WorkbenchPage() {
 					</Card>
 				</Col>
 				<Col xs={24} lg={8}>
-					<Card
-						title={
-							<Space size={8}>
-								<DatabaseOutlined />
-								<span>结构分布（示例）</span>
-							</Space>
-						}
-						extra={
-							<Button size="small" type="link" onClick={() => router.push("/catalog/assets")}>
-								资产清单
-							</Button>
-						}
-					>
-						<Chart type="donut" height={240} series={distribution.series as any} options={donutOptions} />
-						<div className="mt-3 grid grid-cols-2 gap-2">
-							<Card size="small" bodyStyle={{ padding: 10 }}>
-								<div className="text-xs text-muted-foreground">资产覆盖率</div>
-								<Progress percent={86} size="small" strokeColor={toneColor("success")} />
-							</Card>
-							<Card size="small" bodyStyle={{ padding: 10 }}>
-								<div className="text-xs text-muted-foreground">密级 INTERNAL</div>
-								<Progress percent={62} size="small" strokeColor={toneColor("warning")} />
-							</Card>
-						</div>
-					</Card>
+					<Space direction="vertical" size={12} style={{ width: "100%" }}>
+						<Card
+							title={
+								<Space size={8}>
+									<DatabaseOutlined />
+									<span>结构分布（示例）</span>
+								</Space>
+							}
+							extra={
+								<Button size="small" type="link" onClick={() => router.push("/catalog/assets")}>
+									资产清单
+								</Button>
+							}
+						>
+							<Chart type="donut" height={240} series={distribution.series as any} options={donutOptions} />
+							<div className="mt-3 grid grid-cols-2 gap-2">
+								<Card size="small" bodyStyle={{ padding: 10 }}>
+									<div className="text-xs text-muted-foreground">资产覆盖率</div>
+									<Progress percent={86} size="small" strokeColor={toneColor("success")} />
+								</Card>
+								<Card size="small" bodyStyle={{ padding: 10 }}>
+									<div className="text-xs text-muted-foreground">密级 INTERNAL</div>
+									<Progress percent={62} size="small" strokeColor={toneColor("warning")} />
+								</Card>
+							</div>
+						</Card>
+
+						<Card
+							size="small"
+							title={
+								<Space size={8}>
+									<SafetyCertificateOutlined />
+									<span>实时质量扫描</span>
+								</Space>
+							}
+							extra={
+								<Button size="small" type="link" onClick={() => router.push("/governance/rules")}>
+									质量中心
+								</Button>
+							}
+						>
+							<div className="flex items-center gap-4">
+								<div className="tech-scan">
+									<div className="tech-scan-center">
+										<div className="text-lg font-semibold text-foreground">{trend[trend.length - 1]?.dqScore ?? 0}</div>
+										<div className="text-xs text-muted-foreground">DQ</div>
+									</div>
+								</div>
+								<Space direction="vertical" size={8} className="flex-1">
+									<div className="flex items-center justify-between">
+										<span className="text-xs text-muted-foreground">今日告警</span>
+										<span className="text-sm font-medium">6</span>
+									</div>
+									<div className="flex items-center justify-between">
+										<span className="text-xs text-muted-foreground">延迟任务</span>
+										<span className="text-sm font-medium">3</span>
+									</div>
+									<div className="flex items-center justify-between">
+										<span className="text-xs text-muted-foreground">治理闭环率</span>
+										<span className="text-sm font-medium">82%</span>
+									</div>
+								</Space>
+							</div>
+						</Card>
+					</Space>
 				</Col>
 			</Row>
 
@@ -646,7 +741,12 @@ export default function WorkbenchPage() {
 								<Button size="small" icon={<SettingOutlined />} onClick={() => router.push("/governance/rules")}>
 									规则
 								</Button>
-								<Button size="small" type="primary" icon={<ProfileOutlined />} onClick={() => router.push("/governance/tasks")}>
+								<Button
+									size="small"
+									type="primary"
+									icon={<ProfileOutlined />}
+									onClick={() => router.push("/governance/tasks")}
+								>
 									任务
 								</Button>
 							</Space>
@@ -682,11 +782,7 @@ export default function WorkbenchPage() {
 							size="small"
 							dataSource={workItems}
 							renderItem={(item) => (
-								<List.Item
-									key={item.key}
-									className="cursor-pointer"
-									onClick={() => router.push(item.target)}
-								>
+								<List.Item key={item.key} className="cursor-pointer" onClick={() => router.push(item.target)}>
 									<List.Item.Meta
 										title={
 											<Space size={8}>
@@ -696,7 +792,9 @@ export default function WorkbenchPage() {
 										}
 										description={
 											<Space size={8}>
-												<Tag color={item.level === "高" ? "red" : item.level === "中" ? "gold" : "blue"}>{item.level}</Tag>
+												<Tag color={item.level === "高" ? "red" : item.level === "中" ? "gold" : "blue"}>
+													{item.level}
+												</Tag>
 												<span className="text-xs text-muted-foreground">{item.time}</span>
 											</Space>
 										}
@@ -724,7 +822,12 @@ export default function WorkbenchPage() {
 								<Row gutter={[12, 12]}>
 									{analystKpis.map((k) => (
 										<Col key={k.key} xs={24} sm={12} lg={6}>
-											<Card hoverable onClick={k.onClick} size="small" bodyStyle={{ cursor: k.onClick ? "pointer" : "default" }}>
+											<Card
+												hoverable
+												onClick={k.onClick}
+												size="small"
+												bodyStyle={{ cursor: k.onClick ? "pointer" : "default" }}
+											>
 												<div className="flex items-center justify-between">
 													<span className="text-xs text-muted-foreground">{k.title}</span>
 													<span style={{ color: toneColor(k.tone) }}>{k.prefix}</span>
@@ -765,7 +868,12 @@ export default function WorkbenchPage() {
 								<Row gutter={[12, 12]}>
 									{engineerKpis.map((k) => (
 										<Col key={k.key} xs={24} sm={12} lg={6}>
-											<Card hoverable onClick={k.onClick} size="small" bodyStyle={{ cursor: k.onClick ? "pointer" : "default" }}>
+											<Card
+												hoverable
+												onClick={k.onClick}
+												size="small"
+												bodyStyle={{ cursor: k.onClick ? "pointer" : "default" }}
+											>
 												<div className="flex items-center justify-between">
 													<span className="text-xs text-muted-foreground">{k.title}</span>
 													<span style={{ color: toneColor(k.tone) }}>{k.prefix}</span>
@@ -801,13 +909,19 @@ export default function WorkbenchPage() {
 												<List.Item.Meta
 													title={
 														<Space size={8}>
-															{item.kind === "告警" ? <Badge color="red" text="告警" /> : <Badge color="blue" text="待办" />}
+															{item.kind === "告警" ? (
+																<Badge color="red" text="告警" />
+															) : (
+																<Badge color="blue" text="待办" />
+															)}
 															<span className="text-sm">{item.title}</span>
 														</Space>
 													}
 													description={
 														<Space size={8}>
-															<Tag color={item.level === "高" ? "red" : item.level === "中" ? "gold" : "blue"}>{item.level}</Tag>
+															<Tag color={item.level === "高" ? "red" : item.level === "中" ? "gold" : "blue"}>
+																{item.level}
+															</Tag>
 															<span className="text-xs text-muted-foreground">{item.time}</span>
 														</Space>
 													}

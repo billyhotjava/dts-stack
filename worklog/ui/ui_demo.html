@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>科技感数据工作台 - 暗色模式</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #050a0f;
+            --card-bg: rgba(16, 25, 42, 0.8);
+            --border-color: rgba(0, 242, 255, 0.3);
+            --accent-color: #00f2ff;
+            --secondary-color: #7000ff;
+            --text-main: #e0e6ed;
+            --text-dim: #94a3b8;
+            --success: #00ff95;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 242, 255, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(112, 0, 255, 0.05) 0%, transparent 20%);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        /* 布局 */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: auto 150px 350px auto;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            grid-column: span 4;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 10px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            background: linear-gradient(to right, var(--accent-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(0,242,255,0.5));
+        }
+
+        /* 卡片通用样式 */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+        }
+
+        .card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+        }
+
+        .card-title {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .card-title::before {
+            content: "";
+            width: 4px; height: 14px;
+            background: var(--accent-color);
+            margin-right: 8px;
+            box-shadow: 0 0 8px var(--accent-color);
+        }
+
+        /* KPI 指标 */
+        .kpi-value {
+            font-size: 28px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(0,242,255,0.3);
+        }
+
+        .kpi-trend {
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .trend-up { color: var(--success); }
+
+        /* 图表容器 */
+        .chart-container {
+            grid-column: span 2;
+            height: 300px;
+        }
+
+        .quality-container {
+            grid-column: span 2;
+            height: 300px;
+        }
+
+        /* 表格样式 */
+        .table-container {
+            grid-column: span 4;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px;
+            color: var(--text-dim);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-size: 13px;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background: rgba(0, 242, 255, 0.05);
+        }
+
+        .status-tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            background: rgba(0, 255, 149, 0.1);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        /* 呼吸灯特效 */
+        .dot {
+            height: 8px;
+            width: 8px;
+            background-color: var(--success);
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; transform: scale(1.2); }
+            100% { opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <header>
+        <div class="logo">DATA OPS PRO</div>
+        <div style="font-size: 14px; color: var(--text-dim);">系统运行状态: <span style="color:var(--success)">● 正常</span> | 2023-10-27 14:30:05</div>
+    </header>
+
+    <!-- KPI 卡片 -->
+    <div class="card">
+        <div class="card-title">数据集总量</div>
+        <div class="kpi-value">1,284</div>
+        <div class="kpi-trend trend-up">↑ 12% 同比上月</div>
+    </div>
+    <div class="card">
+        <div class="card-title">活跃报表数</div>
+        <div class="kpi-value">856</div>
+        <div class="kpi-trend trend-up">↑ 5% 同比昨日</div>
+    </div>
+    <div class="card">
+        <div class="card-title">数据质量评分</div>
+        <div class="kpi-value" style="color: var(--accent-color);">98.2</div>
+        <div class="kpi-trend">健康度: 极高</div>
+    </div>
+    <div class="card">
+        <div class="card-title">实时预警</div>
+        <div class="kpi-value" style="color: #ff4d4f;">02</div>
+        <div class="kpi-trend">当前待处理任务</div>
+    </div>
+
+    <!-- 图表区 -->
+    <div class="card chart-container">
+        <div class="card-title">业务报表访问趋势 (近7日)</div>
+        <canvas id="lineChart"></canvas>
+    </div>
+
+    <div class="card quality-container">
+        <div class="card-title">数据源质量监控分布</div>
+        <canvas id="radarChart"></canvas>
+    </div>
+
+    <!-- 表格区 -->
+    <div class="card table-container">
+        <div class="card-title">最近更新的数据资产</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>数据集名称</th>
+                    <th>类型</th>
+                    <th>存储容量</th>
+                    <th>最后更新时间</th>
+                    <th>质量状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>ods_sales_order_detail_di</td>
+                    <td>Hive / Fact</td>
+                    <td>1.2 TB</td>
+                    <td>10分钟前</td>
+                    <td><span class="status-tag"><span class="dot"></span>通过校验</span></td>
+                    <td style="color: var(--accent-color); cursor: pointer;">详情</td>
+                </tr>
+                <tr>
+                    <td>dw_user_behavior_logs_hi</td>
+                    <td>Clickhouse</td>
+                    <td>850 GB</td>
+                    <td>25分钟前</td>
+                    <td><span class="status-tag"><span class="dot"></span>通过校验</span></td>
+                    <td style="color: var(--accent-color); cursor: pointer;">详情</td>
+                </tr>
+                <tr>
+                    <td>app_marketing_roi_report</td>
+                    <td>MySQL</td>
+                    <td>12 MB</td>
+                    <td>1小时前</td>
+                    <td><span class="status-tag"><span class="dot"></span>通过校验</span></td>
+                    <td style="color: var(--accent-color); cursor: pointer;">详情</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // 通用图表配置
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+
+    // 折线图
+    const ctxLine = document.getElementById('lineChart').getContext('2d');
+    new Chart(ctxLine, {
+        type: 'line',
+        data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+                label: '访问量',
+                data: [65, 59, 80, 81, 56, 55, 40],
+                borderColor: '#00f2ff',
+                backgroundColor: 'rgba(0, 242, 255, 0.1)',
+                fill: true,
+                tension: 0.4,
+                borderWidth: 3,
+                pointBackgroundColor: '#00f2ff',
+                boxShadow: '0 0 10px rgba(0,242,255,0.5)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // 雷达图 (数据质量)
+    const ctxRadar = document.getElementById('radarChart').getContext('2d');
+    new Chart(ctxRadar, {
+        type: 'radar',
+        data: {
+            labels: ['准确性', '完整性', '一致性', '及时性', '有效性', '稳定性'],
+            datasets: [{
+                label: '当前质量',
+                data: [95, 88, 92, 90, 96, 85],
+                backgroundColor: 'rgba(112, 0, 255, 0.2)',
+                borderColor: '#7000ff',
+                borderWidth: 2,
+                pointBackgroundColor: '#7000ff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                r: {
+                    angleLines: { color: 'rgba(255,255,255,0.1)' },
+                    grid: { color: 'rgba(255,255,255,0.1)' },
+                    pointLabels: { color: '#94a3b8' },
+                    ticks: { display: false }
+                }
+            }
+        }
+    });
+</script>
+
+</body>
+</html>

@@ -51,3 +51,24 @@ globalStyle(`${chartWrapper} .apexcharts-legend-text`, {
 	lineHeight: "18px",
 	textTransform: "capitalize",
 });
+
+// "科技模式"图表增强：淡化网格线 + Glow 发光
+globalStyle(`:root[data-theme-mode="dark"] ${chartWrapper} .apexcharts-gridline`, {
+	stroke: "rgba(0, 242, 255, 0.14)",
+});
+
+globalStyle(`:root[data-theme-mode="dark"] ${chartWrapper} .apexcharts-xaxis text`, {
+	fill: "rgba(125, 133, 144, 0.95)",
+});
+
+globalStyle(`:root[data-theme-mode="dark"] ${chartWrapper} .apexcharts-yaxis text`, {
+	fill: "rgba(125, 133, 144, 0.95)",
+});
+
+globalStyle(`:root[data-theme-mode="dark"] ${chartWrapper} .apexcharts-series path`, {
+	filter: "drop-shadow(0 0 6px rgba(0, 242, 255, 0.32))",
+});
+
+globalStyle(`:root[data-theme-mode="dark"] ${chartWrapper} .apexcharts-series circle`, {
+	filter: "drop-shadow(0 0 6px rgba(0, 242, 255, 0.22))",
+});

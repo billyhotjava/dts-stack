@@ -1,24 +1,25 @@
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
+import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
+import { formatKoalError, type KoalCertificate, KoalMiddlewareClient } from "@/api/services/koalPkiClient";
+import { createPortalSessionFromPki, getPkiChallenge, type PkiChallenge, pkiLogin } from "@/api/services/pkiService";
 import type { SignInReq } from "@/api/services/userService";
-import { useContextActions } from "@/store/contextStore";
+import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
+import { useContextActions } from "@/store/contextStore";
 import { useSignIn, useUserActions } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { Checkbox } from "@/ui/checkbox";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
 import { Input } from "@/ui/input";
-import { cn } from "@/utils";
-import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
-import { getPkiChallenge, pkiLogin, createPortalSessionFromPki, type PkiChallenge } from "@/api/services/pkiService";
-import { KoalMiddlewareClient, KoalCertificate, formatKoalError } from "@/api/services/koalPkiClient";
-import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
-import { updateLocalTranslations } from "@/utils/translation";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
+import { cn } from "@/utils";
+import { updateLocalTranslations } from "@/utils/translation";
+import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
 const IS_DEV = typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV);
 
@@ -30,7 +31,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	const [pkiCerts, setPkiCerts] = useState<KoalCertificate[]>([]);
 	const [selectedCertId, setSelectedCertId] = useState("");
 	const [pinCode, setPinCode] = useState("");
-	const [pkiClientState, setPkiClientState] = useState<{ client: KoalMiddlewareClient; challenge: PkiChallenge } | null>(null);
+	const [pkiClientState, setPkiClientState] = useState<{
+		client: KoalMiddlewareClient;
+		challenge: PkiChallenge;
+	} | null>(null);
 	const [pkiSubmitting, setPkiSubmitting] = useState(false);
 	const navigate = useNavigate();
 
@@ -38,10 +42,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	const signIn = useSignIn();
 	const { setUserToken, setUserInfo } = useUserActions();
 	const bilingual = useBilingualText();
+	const contextActions = useContextActions();
 
 	const selectedCert = pkiCerts.find((item) => item.id === selectedCertId);
-
-
 
 	// 简单开关：默认隐藏账号/密码，仅保留证书登录按钮（仍保留密码登录后端能力）
 	const hidePasswordForm: boolean = (() => {
@@ -111,12 +114,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			typeof raw.subject === "string"
 				? raw.subject
 				: typeof raw.Subject === "string"
-				? raw.Subject
-				: typeof raw.subjectDN === "string"
-				? raw.subjectDN
-				: typeof raw.SubjectDN === "string"
-				? raw.SubjectDN
-				: undefined;
+					? raw.Subject
+					: typeof raw.subjectDN === "string"
+						? raw.subjectDN
+						: typeof raw.SubjectDN === "string"
+							? raw.SubjectDN
+							: undefined;
 		const cnFromDn = parseDnFor(["CN"], subjectStr || undefined);
 		if (cnFromDn) return cnFromDn;
 		const uidFromDn = parseDnFor(["UID"], subjectStr || undefined);
@@ -166,7 +169,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			const signInResult = await signIn({ ...values, username: trimmedUsername });
 			// 初始化作用域/部门上下文，避免首次请求缺少 X-Active-Dept 导致 403
 			try {
-				useContextActions().initDefaults();
+				contextActions.initDefaults();
 			} catch {}
 			// 登录成功后先尝试加载菜单，再进入工作台，避免偶发 404
 			const usedFallback = signInResult.mode === "fallback";
@@ -176,9 +179,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					await svc.default.getMenuTree().catch(() => undefined);
 				} catch {}
 			}
-			// 统一进入欢迎页（工作台）。注意：Router 已配置 basename=publicPath，
-			// 这里必须传入“路由内路径”，不要再拼 publicPath，否则会出现 404。
-			navigate("/workbench", { replace: true });
+			// 登录后回到平台默认首页（由全局配置/菜单决定）。
+			// 注意：Router 已配置 basename=publicPath，这里必须传入“路由内路径”，不要再拼 publicPath。
+			navigate(GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});
@@ -208,10 +211,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				setSelectedCertId("");
 				setPinCode("");
 				setPkiClientState({ client, challenge });
-				setPkiDialogOpen(true);      // 先把弹窗打开
+				setPkiDialogOpen(true); // 先把弹窗打开
 				toast.error("未找到可用的签名证书，请确认介质已插入", { position: "top-center" });
-				return;                       // 退出后续流程
-
+				return; // 退出后续流程
 			}
 			const signables = certificates.filter((c) => c.canSign);
 			// 去重（部分中间件可能返回重复条目）
@@ -280,15 +282,15 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			return;
 		}
 
-        if (!certificate.canSign) {
-            const missing = certificate.missingFields.join("、") || "关键信息";
-            toast.error(`所选证书缺少必要的信息（${missing}），无法完成签名，请更换证书`, {
-                position: "top-center",
-            });
-            return;
-        }
+		if (!certificate.canSign) {
+			const missing = certificate.missingFields.join("、") || "关键信息";
+			toast.error(`所选证书缺少必要的信息（${missing}），无法完成签名，请更换证书`, {
+				position: "top-center",
+			});
+			return;
+		}
 
-        const { client, challenge } = pkiClientState;
+		const { client, challenge } = pkiClientState;
 		setPkiSubmitting(true);
 		setLoading(true);
 		let loggedOut = false;
@@ -345,7 +347,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			setUserInfo(portalUser);
 
 			try {
-				useContextActions().initDefaults();
+				contextActions.initDefaults();
 			} catch {
 				// ignore
 			}
@@ -362,7 +364,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				// ignore
 			}
 
-			navigate("/workbench", { replace: true });
+			navigate(GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), { closeButton: true });
 
 			await client.logout();
@@ -445,21 +447,21 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 					{/* 记住我 */}
 					{!hidePasswordForm && (
-					<div className="flex flex-row justify-start">
-						<div className="flex items-center space-x-2">
-							<Checkbox
-								id="remember"
-								checked={remember}
-								onCheckedChange={(checked) => setRemember(checked === "indeterminate" ? false : checked)}
-							/>
-							<label
-								htmlFor="remember"
-								className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-							>
-								{bilingual("sys.login.rememberMe")}
-							</label>
+						<div className="flex flex-row justify-start">
+							<div className="flex items-center space-x-2">
+								<Checkbox
+									id="remember"
+									checked={remember}
+									onCheckedChange={(checked) => setRemember(checked === "indeterminate" ? false : checked)}
+								/>
+								<label
+									htmlFor="remember"
+									className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+								>
+									{bilingual("sys.login.rememberMe")}
+								</label>
+							</div>
 						</div>
-					</div>
 					)}
 
 					{/* 登录按钮 */}
@@ -475,82 +477,85 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					</Button>
 				</form>
 			</Form>
-				<Dialog open={pkiDialogOpen} onOpenChange={handlePkiDialogOpenChange}>
-					<DialogContent className="sm:max-w-md">
-						<DialogHeader>
-							<DialogTitle>证书登录</DialogTitle>
-						</DialogHeader>
-						<div className="space-y-4">
-							<div className="space-y-2">
-								<label className="text-sm font-medium text-muted-foreground">选择证书</label>
-								{pkiCerts.length === 0 ? (
-									<p className="text-xs text-muted-foreground">未检测到可用证书</p>
-								) : (
-									<RadioGroup
-										value={selectedCertId}
-											onValueChange={setSelectedCertId}
-											className="space-y-3"
-										>
-											{pkiCerts.map((cert, index) => {
-												const display = buildCertLabel(cert, index);
-												return (
-													<label
-														key={cert.id}
-														htmlFor={`cert-${index}`}
-														className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm leading-6 transition-colors ${
-														selectedCertId === cert.id ? "border-primary bg-primary/5" : "hover:border-primary/50"
-													} ${!cert.canSign ? "opacity-70" : ""}`}
-													>
-														<RadioGroupItem value={cert.id} id={`cert-${index}`} disabled={!cert.canSign} className="mt-1" />
-														<div className="flex-1">
-															<div className="font-medium text-foreground">{display}</div>
-														</div>
-													</label>
-												);
-											})}
-										</RadioGroup>
-								)}
-							</div>
-
-							{/* 用户名提示 */}
-							{selectedCert && (
-								<div className="rounded-md bg-muted/40 p-2 text-sm text-muted-foreground">
-									将以 <span className="text-foreground font-medium">{deriveUsernameFromCert(selectedCert) || selectedCert.subjectCn || selectedCert.sn}</span> 登录
-								</div>
+			<Dialog open={pkiDialogOpen} onOpenChange={handlePkiDialogOpenChange}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>证书登录</DialogTitle>
+					</DialogHeader>
+					<div className="space-y-4">
+						<div className="space-y-2">
+							<div className="text-sm font-medium text-muted-foreground">选择证书</div>
+							{pkiCerts.length === 0 ? (
+								<p className="text-xs text-muted-foreground">未检测到可用证书</p>
+							) : (
+								<RadioGroup value={selectedCertId} onValueChange={setSelectedCertId} className="space-y-3">
+									{pkiCerts.map((cert, index) => {
+										const display = buildCertLabel(cert, index);
+										return (
+											<label
+												key={cert.id}
+												htmlFor={`cert-${index}`}
+												className={`flex cursor-pointer gap-3 rounded-md border p-3 text-sm leading-6 transition-colors ${
+													selectedCertId === cert.id ? "border-primary bg-primary/5" : "hover:border-primary/50"
+												} ${!cert.canSign ? "opacity-70" : ""}`}
+											>
+												<RadioGroupItem
+													value={cert.id}
+													id={`cert-${index}`}
+													disabled={!cert.canSign}
+													className="mt-1"
+												/>
+												<div className="flex-1">
+													<div className="font-medium text-foreground">{display}</div>
+												</div>
+											</label>
+										);
+									})}
+								</RadioGroup>
 							)}
-
-							<div className="space-y-2">
-								<label className="text-sm font-medium text-muted-foreground">输入 PIN 码</label>
-									<Input
-										type="password"
-										value={pinCode}
-										onChange={(event) => setPinCode(event.target.value)}
-										onKeyDown={(event) => {
-											if (event.key !== "Enter") return;
-											if (pkiSubmitting) return;
-											if (!selectedCertId) return;
-											if (!pinCode.trim()) return;
-											event.preventDefault();
-											void handleConfirmPki();
-										}}
-										placeholder="请输入 PIN 码"
-									/>
-								</div>
 						</div>
+
+						{/* 用户名提示 */}
+						{selectedCert && (
+							<div className="rounded-md bg-muted/40 p-2 text-sm text-muted-foreground">
+								将以{" "}
+								<span className="text-foreground font-medium">
+									{deriveUsernameFromCert(selectedCert) || selectedCert.subjectCn || selectedCert.sn}
+								</span>{" "}
+								登录
+							</div>
+						)}
+
+						<div className="space-y-2">
+							<label htmlFor="pki-pin" className="text-sm font-medium text-muted-foreground">
+								输入 PIN 码
+							</label>
+							<Input
+								id="pki-pin"
+								type="password"
+								value={pinCode}
+								onChange={(event) => setPinCode(event.target.value)}
+								onKeyDown={(event) => {
+									if (event.key !== "Enter") return;
+									if (pkiSubmitting) return;
+									if (!selectedCertId) return;
+									if (!pinCode.trim()) return;
+									event.preventDefault();
+									void handleConfirmPki();
+								}}
+								placeholder="请输入 PIN 码"
+							/>
+						</div>
+					</div>
 					<DialogFooter>
 						<Button type="button" variant="outline" onClick={() => void closePkiDialog(true)} disabled={pkiSubmitting}>
 							取消
 						</Button>
-                        <Button
-                            type="button"
-                            onClick={() => void handleConfirmPki()}
-                            disabled={
-                                pkiSubmitting ||
-                                !selectedCertId ||
-                                !pinCode.trim() ||
-                                (selectedCert && !selectedCert.canSign)
-                            }
-                        >
+						<Button
+							type="button"
+							onClick={() => void handleConfirmPki()}
+							disabled={pkiSubmitting || !selectedCertId || !pinCode.trim() || (selectedCert && !selectedCert.canSign)}
+						>
 							{pkiSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
 							开始签名
 						</Button>

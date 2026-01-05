@@ -105,21 +105,21 @@ flowchart TB
 
 ---
 
-## 4. 三套首页方案（同一套组件，不同配置与优先级）
+## 4. 首页方案（可配置模板）
 
-### 4.1 领导视角（决策态势）
+### 4.1 决策驾驶舱（领导版）
 - KPI：业务 KPI 权重最高（订单/产值/交付/成本/达成率）
 - 趋势：业务趋势 + 关键风险（异常数/失败任务）对照
 - 表格：高影响质量问题 Top5 + 关键报表 Top5
 - 待办：仅保留“需领导审批/关注”
 
-### 4.2 数据负责人视角（治理与价值）
+### 4.2 治理总览（数据管理版）
 - KPI：DQ Score、告警数、资产覆盖率、标准落地率
 - 趋势：质量评分趋势 + 告警趋势 + 任务失败趋势
 - 结构：来源分布、分层分布、密级分布
 - 表格：质量问题 Top10（含责任人/工单/影响范围）、待办 Top10
 
-### 4.3 工程师视角（排障与交付）
+### 4.3 运维监控（工程与交付版）
 - KPI：失败任务数、延迟任务数、平均延迟、重试次数、资源水位（可选）
 - 趋势：调度成功率/延迟趋势 + 异常数据量趋势
 - 结构：按“系统来源/任务类型/失败原因”聚合
@@ -140,13 +140,13 @@ import type { ColumnsType } from "antd/es/table";
 import { LineChartOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
-type View = "leader" | "owner" | "engineer";
+type Template = "decision" | "governance" | "ops";
 
 type Issue = { key: string; dataset: string; rule: string; severity: "P0" | "P1" | "P2"; rows: number; owner: string };
 type Hot = { key: string; name: string; kind: string; views: number; updatedAt: string };
 
 export default function App() {
-  const [view, setView] = useState<View>("leader");
+  const [template, setTemplate] = useState<Template>("decision");
   const now = dayjs();
 
   const issues = useMemo<Issue[]>(() => ([
@@ -180,12 +180,12 @@ export default function App() {
         title={<Space size={8}><LineChartOutlined />工作台 Demo</Space>}
         extra={
           <Segmented
-            value={view}
-            onChange={(v) => setView(v as View)}
+            value={template}
+            onChange={(v) => setTemplate(v as Template)}
             options={[
-              { label: "领导", value: "leader" },
-              { label: "负责人", value: "owner" },
-              { label: "工程师", value: "engineer" },
+              { label: "决策驾驶舱", value: "decision" },
+              { label: "治理总览", value: "governance" },
+              { label: "运维监控", value: "ops" },
             ]}
           />
         }
@@ -201,7 +201,7 @@ export default function App() {
             <Card size="small"><Statistic title="数据资产" value={1280} suffix="个" /></Card>
           </Col>
           <Col xs={24} sm={12} lg={6}>
-            <Card size="small"><Statistic title="示例 KPI" value={view === "engineer" ? 3 : 92.4} suffix={view === "engineer" ? "个" : "%"} /></Card>
+            <Card size="small"><Statistic title="示例 KPI" value={template === "ops" ? 3 : 92.4} suffix={template === "ops" ? "个" : "%"} /></Card>
           </Col>
         </Row>
 
@@ -264,4 +264,3 @@ pnpm dev
 
 - 实际页面实现：`src/pages/workbench/index.tsx`
 - 入口菜单：由 dts-admin 门户菜单下发（root `workbench`）
-

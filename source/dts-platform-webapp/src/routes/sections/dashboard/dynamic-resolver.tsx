@@ -1,11 +1,12 @@
 import { useMemo } from "react";
 import { Navigate, useLocation } from "react-router";
 import { LineLoading } from "@/components/loading";
+import { GLOBAL_CONFIG } from "@/global-config";
 import { useMenuStore } from "@/store/menuStore";
 import {
+	findBestMenuMatch,
 	firstAccessibleChildPath,
 	firstAccessibleMenuPath,
-	findBestMenuMatch,
 	isExternalPath,
 	isMenuDeleted,
 	isMenuDisabled,
@@ -15,7 +16,6 @@ import {
 	resolveMenuPath,
 } from "@/utils/menuTree";
 import { Component } from "./utils";
-import { GLOBAL_CONFIG } from "@/global-config";
 
 type Props = { base?: string };
 
@@ -26,11 +26,8 @@ export function DynamicMenuResolver({ base }: Props) {
 	const pathname = normalizeMenuPath(location.pathname || "/");
 	const normalizedBase = base ? normalizeMenuPath(base) : "";
 	const menusLoaded = Array.isArray(menus) && menus.length > 0;
-	const fallbackMenuPath = useMemo(
-		() => firstAccessibleMenuPath(Array.isArray(menus) ? menus : []),
-		[menus],
-	);
-	const defaultRoute = GLOBAL_CONFIG.defaultRoute || "/workbench";
+	const fallbackMenuPath = useMemo(() => firstAccessibleMenuPath(Array.isArray(menus) ? menus : []), [menus]);
+	const defaultRoute = GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench";
 
 	const redirectToFallback = () => {
 		if (fallbackMenuPath && fallbackMenuPath !== pathname) {

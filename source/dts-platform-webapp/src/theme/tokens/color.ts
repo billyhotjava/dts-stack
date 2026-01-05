@@ -12,11 +12,11 @@ const primary2065D1 = {
 export const presetsColors = {
 	[ThemeColorPresets.Default]: primary2065D1,
 	[ThemeColorPresets.Cyan]: {
-		lighter: "#CCF4FE",
-		light: "#68CDF9",
-		default: "#078DEE",
-		dark: "#0351AB",
-		darker: "#012972",
+		lighter: "#CCFDFF",
+		light: "#66F8FF",
+		default: "#00F2FF",
+		dark: "#0094A6",
+		darker: "#005766",
 	},
 	[ThemeColorPresets.Purple]: {
 		lighter: "#EBD6FD",
@@ -127,13 +127,13 @@ export const darkColorTokens = {
 	common: commonColors,
 	action: actionColors,
 	text: {
-		primary: commonColors.white,
-		secondary: paletteColors.gray[500],
-		disabled: paletteColors.gray[600],
+		primary: "#E0E6ED",
+		secondary: "#94A3B8",
+		disabled: "#64748B",
 	},
 	background: {
-		default: commonColors.black,
-		paper: commonColors.black,
-		neutral: "#27272A",
+		default: "#0F172A",
+		paper: "#10192A",
+		neutral: "#0B1220",
 	},
 };

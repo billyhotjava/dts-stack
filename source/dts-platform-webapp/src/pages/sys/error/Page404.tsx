@@ -1,22 +1,24 @@
+import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router";
 import Character from "@/assets/images/characters/character_1.png";
+import { GLOBAL_CONFIG } from "@/global-config";
+import { useUserToken } from "@/store/userStore";
 import { themeVars } from "@/theme/theme.css";
 import ErrorLayout from "./components/ErrorLayout";
-import { useTranslation } from "react-i18next";
-import { useEffect } from "react";
-import { useNavigate } from "react-router";
-import { useUserToken } from "@/store/userStore";
 
 export default function Page404() {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const { accessToken } = useUserToken();
+	const homePath = GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench";
 
 	// If user is authenticated, auto-redirect to the unified home
 	useEffect(() => {
 		if (accessToken) {
-			navigate("/workbench", { replace: true });
+			navigate(homePath, { replace: true });
 		}
-	}, [accessToken, navigate]);
+	}, [accessToken, homePath, navigate]);
 	const svg = (
 		<svg viewBox="0 0 480 360" xmlns="http://www.w3.org/2000/svg" width={400} height={400} className="w-full">
 			<title>404</title>
@@ -76,7 +78,7 @@ export default function Page404() {
 			helmetTitle={t("sys.errorPage.404.helmetTitle")}
 			desc={t("sys.errorPage.404.description")}
 			svg={svg}
-			homePath="/workbench"
+			homePath={homePath}
 		/>
 	);
 }
