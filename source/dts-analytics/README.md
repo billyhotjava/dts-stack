@@ -14,15 +14,10 @@ This module bootstraps a JHipster-style Spring Boot stack (mirroring `source/dts
 ## Offline Docker build (same pattern as dts-admin)
 1. Build the JAR using Maven inside Docker:
    ```bash
-   docker run --rm --security-opt seccomp=unconfined -it \
-     -v "$PWD/source:/workspace" \
-     -v "/root/.m2:/root/.m2" \
-     -w /workspace \
-     maven:3.9.9-eclipse-temurin-21 \
-     mvn -B -e -DskipTests -s /root/.m2/settings.xml -f dts-analytics/pom.xml package
+   bash source/dts-analytics/scripts/build-offline-jar.sh
    ```
 
-   Alternatively (reactor build, same style as `dts-admin`):
+   Alternatively (manual command, reactor build):
    ```bash
    docker run --rm --security-opt seccomp=unconfined -it \
      -v "$PWD/source:/workspace" \
@@ -33,13 +28,11 @@ This module bootstraps a JHipster-style Spring Boot stack (mirroring `source/dts
    ```
 
 2. Copy the artifact into the offline build context:
-   ```bash
-   cp ./source/dts-analytics/target/dts-analytics-0.0.1-SNAPSHOT.jar ./source/builds/dts-analytics.jar
-   ```
+   - 已由 `bash source/dts-analytics/scripts/build-offline-jar.sh` 自动完成
 
 3. Build the runtime image (offline Dockerfile):
    ```bash
-   docker build --no-cache -t dts-analytics:1.0.0 -f source/dts-analytics/Dockerfile.offline source
+   bash source/dts-analytics/scripts/build-offline-image.sh
    ```
 
 ## Migration Guide
