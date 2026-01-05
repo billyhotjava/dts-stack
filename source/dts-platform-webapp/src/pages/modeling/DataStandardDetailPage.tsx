@@ -37,19 +37,6 @@ import {
 } from "@/pages/modeling/data-standards-utils";
 import { useUserInfo } from "@/store/userStore";
 
-const parseStringList = (value: unknown): string[] => {
-    if (Array.isArray(value)) {
-        return value.map((item) => String(item ?? "")).filter((item) => item.trim().length > 0);
-    }
-    if (typeof value === "string") {
-        return value
-            .split(/[,;\s]+/)
-            .map((item) => item.trim())
-            .filter(Boolean);
-    }
-    return [];
-};
-
 const attachmentExtensions = ["docx", "wps", "pdf", "xlsx", "xls", "md", "txt"];
 
 type EditFormState = {

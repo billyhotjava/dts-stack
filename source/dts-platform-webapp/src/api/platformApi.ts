@@ -32,7 +32,7 @@ export const previewDataset = (datasetId: string, rows = 50) =>
 export const getDatasetJob = (jobId: string) => api.get({ url: `/dataset-jobs/${jobId}` });
 export const listDatasetJobs = (datasetId: string) => api.get({ url: `/datasets/${datasetId}/jobs` });
 
-export const listMaskingRules = () => api.get({ url: "/catalog/masking-rules" });
+export const listMaskingRules = () => api.get<any[]>({ url: "/catalog/masking-rules" });
 export const createMaskingRule = (data: any) => api.post({ url: "/catalog/masking-rules", data });
 export const updateMaskingRule = (id: string, data: any) => api.put({ url: `/catalog/masking-rules/${id}`, data });
 export const deleteMaskingRule = (id: string) => api.delete({ url: `/catalog/masking-rules/${id}` });
@@ -85,18 +85,18 @@ export const updateStandardSettings = (data: any) => api.put({ url: "/modeling/s
 export const getStandardHealth = () => api.get({ url: "/modeling/standards/health" });
 
 // Modeling (planning / glossary / templates)
-export const listModelingPlans = (params: any = {}) => api.get({ url: "/modeling/plans", params });
+export const listModelingPlans = (params: any = {}) => api.get<any[]>({ url: "/modeling/plans", params });
 export const getModelingPlan = (id: string) => api.get({ url: `/modeling/plans/${id}` });
 export const createModelingPlan = (data: any) => api.post({ url: "/modeling/plans", data });
 export const updateModelingPlan = (id: string, data: any) => api.put({ url: `/modeling/plans/${id}`, data });
 export const deleteModelingPlan = (id: string) => api.delete({ url: `/modeling/plans/${id}` });
 
-export const listGlossaryTerms = (params: any = {}) => api.get({ url: "/modeling/glossary/terms", params });
+export const listGlossaryTerms = (params: any = {}) => api.get<any[]>({ url: "/modeling/glossary/terms", params });
 export const createGlossaryTerm = (data: any) => api.post({ url: "/modeling/glossary/terms", data });
 export const updateGlossaryTerm = (id: string, data: any) => api.put({ url: `/modeling/glossary/terms/${id}`, data });
 export const deleteGlossaryTerm = (id: string) => api.delete({ url: `/modeling/glossary/terms/${id}` });
 
-export const listModelTemplates = () => api.get({ url: "/modeling/templates" });
+export const listModelTemplates = () => api.get<any[]>({ url: "/modeling/templates" });
 export const createModelTemplate = (data: any) => api.post({ url: "/modeling/templates", data });
 export const updateModelTemplate = (id: string, data: any) => api.put({ url: `/modeling/templates/${id}`, data });
 export const deleteModelTemplate = (id: string) => api.delete({ url: `/modeling/templates/${id}` });
@@ -114,7 +114,7 @@ export const listQualityRuns = (params: any = {}) => api.get({ url: "/governance
 export const getQualityRun = (id: string) => api.get({ url: `/governance/quality/runs/${id}` });
 
 // Quality tasks (巡检计划)
-export const listQualityTasks = () => api.get({ url: "/governance/quality/tasks" });
+export const listQualityTasks = () => api.get<any[]>({ url: "/governance/quality/tasks" });
 export const createQualityTask = (data: any) => api.post({ url: "/governance/quality/tasks", data });
 export const updateQualityTask = (id: string, data: any) => api.put({ url: `/governance/quality/tasks/${id}`, data });
 export const toggleQualityTask = (id: string, enabled: boolean) =>
@@ -128,7 +128,7 @@ export const getComplianceBatch = (id: string) => api.get({ url: `/governance/co
 export const updateComplianceItem = (id: string, data: any) => api.put({ url: `/governance/compliance/items/${id}`, data });
 export const deleteComplianceBatch = (id: string) => api.delete({ url: `/governance/compliance/batches/${id}` });
 
-export const listIssues = () => api.get({ url: "/governance/issues" });
+export const listIssues = () => api.get<any[]>({ url: "/governance/issues" });
 export const createIssue = (data: any) => api.post({ url: "/governance/issues", data });
 export const updateIssue = (id: string, data: any) => api.put({ url: `/governance/issues/${id}`, data });
 export const closeIssue = (id: string, resolution?: string) =>
