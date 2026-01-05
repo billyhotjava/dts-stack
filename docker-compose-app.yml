@@ -238,6 +238,11 @@ services:
     depends_on:
       dts-pg:
         condition: service_healthy
+    # Some Docker/seccomp profiles (notably those blocking clone3) can prevent the JVM from creating threads,
+    # resulting in: "Failed to start thread \"GC Thread#0\" - pthread_create failed (EPERM)".
+    # Running unconfined matches the Maven build container flags used elsewhere in this repo.
+    security_opt:
+      - seccomp=unconfined
     environment:
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_ANALYTICS:-dts_analytics}
