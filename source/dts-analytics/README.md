@@ -26,6 +26,7 @@ This module bootstraps a JHipster-style Spring Boot stack (mirroring `source/dts
      maven:3.9.9-eclipse-temurin-21 \
      mvn -B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl dts-analytics -am package
    ```
+   If you see errors like `package com.yuzhi.dts.analytics.domain does not exist` or missing filters, it means the container did not see the full `source/` tree (wrong `$PWD`, wrong `-v` mount, or building from a different checkout). Use the script above: it performs a preflight check and prints the Java source file count inside the container.
 
 2. Copy the artifact into the offline build context:
    - 已由 `bash source/dts-analytics/scripts/build-offline-jar.sh` 自动完成
