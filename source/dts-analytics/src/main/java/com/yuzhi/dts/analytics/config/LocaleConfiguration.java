@@ -20,8 +20,8 @@ public class LocaleConfiguration {
     @Bean
     public LocaleResolver localeResolver() {
         AcceptHeaderLocaleResolver resolver = new AcceptHeaderLocaleResolver();
-        resolver.setDefaultLocale(Locale.US);
-        resolver.setSupportedLocales(List.of(Locale.US, Locale.FRANCE, Locale.CHINA, Locale.UK));
+        resolver.setDefaultLocale(Locale.SIMPLIFIED_CHINESE);
+        resolver.setSupportedLocales(List.of(Locale.SIMPLIFIED_CHINESE, Locale.ENGLISH));
         return resolver;
     }
 }

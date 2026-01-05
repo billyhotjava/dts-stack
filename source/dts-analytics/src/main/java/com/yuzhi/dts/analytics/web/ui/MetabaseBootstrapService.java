@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.analytics.config.ApplicationProperties;
 import com.yuzhi.dts.analytics.service.SetupStateService;
+import com.yuzhi.dts.analytics.web.support.MetabaseLocale;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -69,6 +70,9 @@ public class MetabaseBootstrapService {
         }
         root.put("startup-time-millis", 0.0);
         root.put("startup-time", OffsetDateTime.now().toString());
+
+        String locale = MetabaseLocale.resolve(request);
+        root.put("site-locale", locale);
 
         ArrayNode availableLocales = mapper.createArrayNode();
         availableLocales.add(mapper.createArrayNode().add("zh").add("Chinese"));

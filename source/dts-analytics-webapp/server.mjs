@@ -52,6 +52,7 @@ function resolveLocale(req) {
   if (fromCookie === "en" || fromCookie === "zh") return fromCookie;
 
   const accept = (header(req, "accept-language") ?? "").toLowerCase();
+  if (accept.includes("zh")) return "zh";
   if (accept.includes("en")) return "en";
 
   return DEFAULT_LOCALE === "en" ? "en" : "zh";
@@ -276,6 +277,30 @@ const server = http.createServer(async (req, res) => {
       const rel =
         assetPathname === "/favicon.ico" ? "/app/assets/img/favicon.ico" : assetPathname;
       const safe = normalize(rel).replace(/^(\.\.(\/|\\|$))+/, "");
+      if (safe.startsWith("/app/locales/")) {
+        const localeFile = safe.slice("/app/locales/".length);
+        if (localeFile === "zh.json") {
+          const abs = join(LEGACY_DIR, safe);
+          await serveFile(res, abs);
+          return;
+        }
+        if (localeFile === "en.json") {
+          const payload = JSON.stringify(defaultEnLocalization());
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+          if (req.method === "HEAD") {
+            res.end();
+          } else {
+            res.end(payload);
+          }
+          return;
+        }
+        res.statusCode = 404;
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.end("Not Found");
+        return;
+      }
+
       const abs = join(LEGACY_DIR, safe);
       await serveFile(res, abs);
       return;

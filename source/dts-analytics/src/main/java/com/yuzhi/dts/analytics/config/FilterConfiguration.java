@@ -1,6 +1,7 @@
 package com.yuzhi.dts.analytics.config;
 
 import com.yuzhi.dts.analytics.web.filter.DtsRequestContextFilter;
+import com.yuzhi.dts.analytics.web.filter.PlatformSessionBridgeFilter;
 import com.yuzhi.dts.analytics.web.filter.RequestIdFilter;
 import com.yuzhi.dts.analytics.web.filter.RequestLoggingFilter;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -47,9 +48,20 @@ public class FilterConfiguration {
             RequestLoggingFilter filter) {
         FilterRegistrationBean<RequestLoggingFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(filter);
-        registration.setOrder(3);
+        registration.setOrder(4);
         registration.addUrlPatterns("/*");
         registration.setName("requestLoggingFilter");
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<PlatformSessionBridgeFilter> platformSessionBridgeFilterRegistration(
+            PlatformSessionBridgeFilter filter) {
+        FilterRegistrationBean<PlatformSessionBridgeFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(filter);
+        registration.setOrder(3);
+        registration.addUrlPatterns("/*");
+        registration.setName("platformSessionBridgeFilter");
         return registration;
     }
 }

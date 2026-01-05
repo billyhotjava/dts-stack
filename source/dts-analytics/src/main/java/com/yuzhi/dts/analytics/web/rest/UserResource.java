@@ -5,6 +5,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.GroupService;
+import com.yuzhi.dts.analytics.web.support.MetabaseLocale;
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.SecureRandom;
 import java.util.LinkedHashMap;
@@ -51,7 +52,7 @@ public class UserResource {
         if (user.isEmpty()) {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
-        return ResponseEntity.ok(toMetabaseUser(user.get(), groupService));
+        return ResponseEntity.ok(toMetabaseUser(user.get(), groupService, MetabaseLocale.resolve(request)));
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -63,7 +64,8 @@ public class UserResource {
         if (!user.get().isSuperuser()) {
             return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("You don't have permissions to do that.");
         }
-        return ResponseEntity.ok(userRepository.findAll().stream().map(u -> toMetabaseUser(u, groupService)).toList());
+        String locale = MetabaseLocale.resolve(request);
+        return ResponseEntity.ok(userRepository.findAll().stream().map(u -> toMetabaseUser(u, groupService, locale)).toList());
     }
 
     @GetMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -76,7 +78,7 @@ public class UserResource {
             return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("You don't have permissions to do that.");
         }
         return userRepository.findById(id)
-                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(toMetabaseUser(u, groupService)))
+                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(toMetabaseUser(u, groupService, MetabaseLocale.resolve(request))))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -128,7 +130,7 @@ public class UserResource {
         created = userRepository.save(created);
         groupService.ensureUserInDefaultGroups(created);
 
-        return ResponseEntity.ok(toMetabaseUser(created, groupService));
+        return ResponseEntity.ok(toMetabaseUser(created, groupService, MetabaseLocale.resolve(request)));
     }
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -164,7 +166,7 @@ public class UserResource {
         }
         target = userRepository.save(target);
         groupService.ensureUserInDefaultGroups(target);
-        return ResponseEntity.ok(toMetabaseUser(target, groupService));
+        return ResponseEntity.ok(toMetabaseUser(target, groupService, MetabaseLocale.resolve(request)));
     }
 
     @DeleteMapping(path = "/{id}")
@@ -255,7 +257,7 @@ public class UserResource {
         return ResponseEntity.noContent().build();
     }
 
-    static Map<String, Object> toMetabaseUser(AnalyticsUser user, GroupService groupService) {
+    static Map<String, Object> toMetabaseUser(AnalyticsUser user, GroupService groupService, String locale) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", user.getId());
         result.put("email", user.getEmail());
@@ -274,7 +276,7 @@ public class UserResource {
         result.put("login_attributes", Map.of());
         result.put("has_invited_second_user", false);
         result.put("has_question_and_dashboard", false);
-        result.put("locale", null);
+        result.put("locale", locale == null || locale.isBlank() ? MetabaseLocale.ZH : locale);
         result.put("date_joined", user.getCreatedAt() == null ? null : user.getCreatedAt().toString());
         result.put("updated_at", user.getUpdatedAt() == null ? null : user.getUpdatedAt().toString());
         result.put("last_login", user.getUpdatedAt() == null ? null : user.getUpdatedAt().toString());

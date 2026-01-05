@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AnalyticsSessionService {
 
     public static final String SESSION_COOKIE_NAME = "metabase.SESSION";
+    private static final String ATTR_RESOLVED_USER = AnalyticsSessionService.class.getName() + ".resolvedUser";
 
     private static final Duration DEFAULT_SESSION_TTL = Duration.ofDays(14);
 
@@ -42,15 +43,30 @@ public class AnalyticsSessionService {
     }
 
     public Optional<AnalyticsUser> resolveUser(HttpServletRequest request) {
+        Object cached = request.getAttribute(ATTR_RESOLVED_USER);
+        if (cached instanceof AnalyticsUser user) {
+            return Optional.of(user);
+        }
+        if (Boolean.FALSE.equals(cached)) {
+            return Optional.empty();
+        }
+
         Optional<AnalyticsUser> byMetabaseSession = resolveSessionId(request)
                 .flatMap(sessionId -> sessionRepository.findByIdAndRevokedFalseAndExpiresAtAfter(sessionId, Instant.now()))
                 .map(session -> touchSession(session))
                 .flatMap(session -> userRepository.findById(session.getUserId()))
                 .filter(AnalyticsUser::isActive);
         if (byMetabaseSession.isPresent()) {
+            request.setAttribute(ATTR_RESOLVED_USER, byMetabaseSession.get());
             return byMetabaseSession;
         }
-        return platformTrustedUserService.resolveOrProvision(request).filter(AnalyticsUser::isActive);
+        Optional<AnalyticsUser> resolved = platformTrustedUserService.resolveOrProvision(request).filter(AnalyticsUser::isActive);
+        if (resolved.isPresent()) {
+            request.setAttribute(ATTR_RESOLVED_USER, resolved.get());
+        } else {
+            request.setAttribute(ATTR_RESOLVED_USER, Boolean.FALSE);
+        }
+        return resolved;
     }
 
     @Transactional(readOnly = true)
