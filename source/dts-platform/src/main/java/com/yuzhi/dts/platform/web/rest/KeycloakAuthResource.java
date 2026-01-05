@@ -54,6 +54,17 @@ public class KeycloakAuthResource {
 
     public record PkiSessionPayload(String username, Map<String, Object> user) {}
 
+    /**
+     * Backwards-compatible alias for older portal clients.
+     *
+     * <p>Platform's canonical login endpoint is {@code /api/keycloak/auth/login}. Some legacy bundles post to
+     * {@code /api/keycloak/auth/platform/login}.
+     */
+    @PostMapping("/platform/login")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> platformLogin(@RequestBody LoginPayload payload) {
+        return login(payload);
+    }
+
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody LoginPayload payload) {
         String username = payload.username() == null ? "" : payload.username().trim();

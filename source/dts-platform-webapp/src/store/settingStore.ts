@@ -27,11 +27,11 @@ type SettingStore = {
 };
 
 const useSettingStore = create<SettingStore>()(
-    persist(
-        (set) => ({
+	persist(
+		(set) => ({
 			settings: {
 				themeColorPresets: ThemeColorPresets.Default,
-				themeMode: ThemeMode.Light,
+				themeMode: ThemeMode.Dark,
 				themeLayout: ThemeLayout.Vertical,
 				themeStretch: false,
 				breadCrumb: true,
@@ -53,23 +53,27 @@ const useSettingStore = create<SettingStore>()(
 					useSettingStore.persist.clearStorage();
 				},
 			},
-        }),
-        {
-            name: StorageEnum.Settings, // name of the item in the storage (must be unique)
-            storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
-            partialize: (state) => ({ [StorageEnum.Settings]: state.settings }),
-            version: 2,
-            migrate: (persistedState: any, version) => {
-                try {
-                    // mark version as used to satisfy noUnusedParameters
-                    void version;
-                    const key = (StorageEnum as any).Settings || "settings";
-                    const settings = (persistedState && (persistedState[key] || persistedState.settings)) || {};
-                    // Coerce fontSize to a valid number and clamp sane range
-                    const raw = settings.fontSize;
-                    let next = typeof raw === "string" ? parseFloat(raw) : raw;
-                    if (!Number.isFinite(next)) {
-                        next = Number(typographyTokens.fontSize.sm);
+		}),
+		{
+			name: StorageEnum.Settings, // name of the item in the storage (must be unique)
+			storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
+			partialize: (state) => ({ [StorageEnum.Settings]: state.settings }),
+			version: 3,
+			migrate: (persistedState: any, version) => {
+				try {
+					// mark version as used to satisfy noUnusedParameters
+					const key = (StorageEnum as any).Settings || "settings";
+					const settings = (persistedState && (persistedState[key] || persistedState.settings)) || {};
+
+					// v3: default portal theme to dark (users can still switch in settings)
+					if (typeof version === "number" && version < 3) {
+						settings.themeMode = ThemeMode.Dark;
+					}
+					// Coerce fontSize to a valid number and clamp sane range
+					const raw = settings.fontSize;
+					let next = typeof raw === "string" ? parseFloat(raw) : raw;
+					if (!Number.isFinite(next)) {
+						next = Number(typographyTokens.fontSize.sm);
                     }
                     // Clamp to [12, 24]
                     if (next < 12) next = 12;

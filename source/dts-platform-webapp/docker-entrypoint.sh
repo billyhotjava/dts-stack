@@ -8,13 +8,22 @@ set -eu
 UPSTREAM="${API_PROXY_TARGET:-http://host.docker.internal:8081}"
 export UPSTREAM
 
+# Admin API proxy (mounted under /admin/api on this webapp, maps to /api on dts-admin)
+# Examples:
+#   -e ADMIN_API_PROXY_TARGET=http://host.docker.internal:8081
+#   -e ADMIN_API_PROXY_TARGET=http://dts-admin:8081
+ADMIN_BASE="${ADMIN_API_PROXY_TARGET:-http://dts-admin:8081}"
+# Normalize trailing slashes and append "/api/" for path rewriting.
+ADMIN_UPSTREAM_API="$(printf '%s' "$ADMIN_BASE" | sed 's:/*$::')/api/"
+export ADMIN_UPSTREAM_API
+
 TEMPLATE="/etc/nginx/http.d/default.conf.template"
 TARGET="/etc/nginx/http.d/default.conf"
 
 if [ -f "$TEMPLATE" ]; then
-  echo "[entrypoint] Rendering Nginx config with UPSTREAM=$UPSTREAM"
+  echo "[entrypoint] Rendering Nginx config with UPSTREAM=$UPSTREAM ADMIN_UPSTREAM_API=$ADMIN_UPSTREAM_API"
   # shellcheck disable=SC2016
-  envsubst '${UPSTREAM}' < "$TEMPLATE" > "$TARGET"
+  envsubst '${UPSTREAM} ${ADMIN_UPSTREAM_API}' < "$TEMPLATE" > "$TARGET"
 fi
 
 # Ensure Koal SDK vendor assets are readable; repair permissions if needed

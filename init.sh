@@ -235,21 +235,50 @@ ensure_pg_triplets(){
   fi
   echo "[init.sh] Ensuring Postgres roles/databases (idempotent)..."
   local i cid
+  local exports=""
+
+  # Inject PG_* triplets explicitly when running ensure scripts.
+  # Avoid relying on `docker exec -e` because some Docker/legacy environments don't support it.
+  quote_sh() {
+    # Single-quote for safe embedding in a shell command: foo'bar -> 'foo'"'"'bar'
+    printf "'%s'" "$(printf '%s' "${1:-}" | sed "s/'/'\\\"'\\\"'/g")"
+  }
 
   cid="$("${compose_run[@]}" ps -q dts-pg 2>/dev/null | head -n 1 || true)"
   if [[ -z "${cid:-}" ]] && command -v docker >/dev/null 2>&1; then
     cid="$(docker ps --filter "name=dts-pg" -q 2>/dev/null | head -n 1 || true)"
   fi
 
+  if [[ -f .env ]]; then
+    while IFS='=' read -r k v; do
+      case "${k}" in
+        PG_DB_*|PG_USER_*|PG_PWD_*)
+          exports+="export ${k}=$(quote_sh "${v}");"
+          ;;
+      esac
+    done < <(grep -E '^(PG_DB_|PG_USER_|PG_PWD_)' .env || true)
+  else
+    while IFS='=' read -r k v; do
+      case "${k}" in
+        PG_DB_*|PG_USER_*|PG_PWD_*)
+          exports+="export ${k}=$(quote_sh "${v}");"
+          ;;
+      esac
+    done < <(env)
+  fi
+
+  local ensured=0
   for i in {1..5}; do
     if [[ -n "${cid:-}" ]] && command -v docker >/dev/null 2>&1; then
-      if docker exec -i "${cid}" bash -lc "bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null; then
+      if docker exec -i "${cid}" bash -lc "${exports} bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null; then
         echo "[init.sh] Postgres roles/databases ensured."
+        ensured=1
         break
       fi
     else
-      if "${compose_run[@]}" exec -T dts-pg bash -lc "bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null; then
+      if "${compose_run[@]}" exec -T dts-pg bash -lc "${exports} bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null; then
         echo "[init.sh] Postgres roles/databases ensured."
+        ensured=1
         break
       fi
     fi
@@ -257,14 +286,25 @@ ensure_pg_triplets(){
     echo "[init.sh] Waiting for dts-pg to accept ensure script... (${i}/5)" >&2
     sleep 2
   done
+  if [[ "${ensured}" != "1" ]]; then
+    echo "[init.sh] WARNING: Failed to run Postgres ensure script; roles/databases may be missing." >&2
+    echo "[init.sh] WARNING: Try: docker exec -it ${cid:-<dts-pg-cid>} bash -lc 'bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh'" >&2
+  fi
 
   # Optional sanity check: verify analytics DB connectivity (helps catch "db not created" and env injection issues)
   if [[ -n "${cid:-}" ]] && command -v docker >/dev/null 2>&1; then
-    if ! docker exec -i "${cid}" bash -lc 'PGPASSWORD="${PG_PWD_ANALYTICS:-}" psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U "${PG_USER_ANALYTICS:-}" -d "${PG_DB_ANALYTICS:-}" -c "SELECT 1" >/dev/null' 2>/dev/null; then
+    if ! docker exec -i "${cid}" bash -lc "${exports} PGPASSWORD=\"\${PG_PWD_ANALYTICS:-}\" psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U \"\${PG_USER_ANALYTICS:-}\" -d \"\${PG_DB_ANALYTICS:-}\" -c \"SELECT 1\" >/dev/null" 2>/dev/null; then
       local u db pwd_len
-      u="$(docker exec -i "${cid}" bash -lc 'printf "%s" "${PG_USER_ANALYTICS:-}"' 2>/dev/null || true)"
-      db="$(docker exec -i "${cid}" bash -lc 'printf "%s" "${PG_DB_ANALYTICS:-}"' 2>/dev/null || true)"
-      pwd_len="$(docker exec -i "${cid}" bash -lc 'printf "%s" "${#PG_PWD_ANALYTICS}"' 2>/dev/null || true)"
+      u="${PG_USER_ANALYTICS:-}"
+      db="${PG_DB_ANALYTICS:-}"
+      pwd_len="${#PG_PWD_ANALYTICS}"
+      if [[ -f .env ]]; then
+        [[ -z "${u}" ]] && u="$(grep '^PG_USER_ANALYTICS=' .env | head -n 1 | cut -d= -f2- || true)"
+        [[ -z "${db}" ]] && db="$(grep '^PG_DB_ANALYTICS=' .env | head -n 1 | cut -d= -f2- || true)"
+        if [[ "${pwd_len}" == "0" ]]; then
+          pwd_len="$(grep '^PG_PWD_ANALYTICS=' .env | head -n 1 | cut -d= -f2- | wc -c | tr -d ' ' || true)"
+        fi
+      fi
       echo "[init.sh] WARNING: Analytics DB connectivity check failed (user='${u}', db='${db}', pwd_len=${pwd_len})." >&2
       echo "[init.sh] WARNING: This usually means PG_DB/PG_USER/PG_PWD_ANALYTICS did not reach the dts-pg container or the DB wasn't created." >&2
       echo "[init.sh] WARNING: You can inspect inside the container with: docker exec -it ${cid} env | egrep 'PG_DB_ANALYTICS|PG_USER_ANALYTICS|PG_PWD_ANALYTICS'" >&2
@@ -965,8 +1005,10 @@ fi
 
 compose_run=("${compose_cli[@]}")
 if [[ -f .env ]]; then
-  # Make variable interpolation deterministic across docker-compose v1 and docker compose v2.
-  compose_run+=(--env-file .env)
+  # Compose v2 supports --env-file; docker-compose v1 does not.
+  if "${compose_cli[@]}" --help 2>/dev/null | grep -q -- '--env-file'; then
+    compose_run+=(--env-file .env)
+  fi
 fi
 if [[ -n "${COMPOSE_FILE}" ]]; then
   compose_run+=(-f "${COMPOSE_FILE}")

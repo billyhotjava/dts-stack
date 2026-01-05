@@ -16,7 +16,7 @@ export type SignInRes = UserToken & {
 };
 
 export enum UserApi {
-	SignIn = "/keycloak/auth/platform/login",
+	SignIn = "/keycloak/auth/login",
 	SignUp = "/auth/signup",
 	Logout = "/keycloak/auth/logout",
 	Refresh = "/keycloak/auth/refresh",

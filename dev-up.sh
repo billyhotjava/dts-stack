@@ -245,6 +245,30 @@ if [[ -n "${pg_cid}" ]]; then
   done
 fi
 
+# Ensure required roles/databases exist (idempotent). Important after a fresh PG volume; otherwise
+# apps may start before their DB users are created and fail with password errors.
+echo "[dev-up] Ensuring Postgres roles/databases (idempotent) ..."
+exports=""
+quote_sh() { printf "'%s'" "$(printf '%s' "${1:-}" | sed "s/'/'\\\"'\\\"'/g")"; }
+while IFS='=' read -r k v; do
+  case "${k}" in
+    PG_DB_*|PG_USER_*|PG_PWD_*)
+      exports+="export ${k}=$(quote_sh "${v}");"
+      ;;
+  esac
+done < <(env)
+
+if [[ -n "${pg_cid}" ]]; then
+  if docker exec -i "${pg_cid}" bash -lc "${exports} bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null 2>&1; then
+    echo "[dev-up] Postgres roles/databases ensured."
+  else
+    "${compose_cmd[@]}" -f docker-compose.yml exec -T dts-pg bash -lc "${exports} bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null || \
+      echo "[dev-up] WARNING: Failed to run ensure script for Postgres (continuing)." >&2
+  fi
+else
+  echo "[dev-up] WARNING: cannot locate dts-pg container id; skip ensure users/databases." >&2
+fi
+
 if [[ "$MODE" == "local" ]]; then
   echo "[dev-up] Ensuring Traefik (dts-proxy) and Keycloak are running ..."
   proxy_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-proxy || true)
