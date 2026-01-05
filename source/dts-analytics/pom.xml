@@ -147,6 +147,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <release>${java.version}</release>
+                    <!-- Avoid stale/partial target state causing "Compiling N source files" missing-symbol failures in offline/docker builds. -->
+                    <useIncrementalCompilation>false</useIncrementalCompilation>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.mapstruct</groupId>

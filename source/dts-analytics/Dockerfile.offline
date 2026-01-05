@@ -1,10 +1,20 @@
+# Offline runtime-only image for dts-analytics
+# - No apt usage
+# - Expects a prebuilt JAR at build context path: source/builds/dts-analytics.jar
+# - Base image pinned by version (choose digest pinning in your pipeline if needed)
+
 ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.9_10-jre-noble
 FROM ${RUNTIME_BASE_IMAGE}
+
 ENV TZ=Asia/Shanghai \
-      LANG=C.UTF-8 \
-      LC_ALL=C.UTF-8 \
-      JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0 -Duser.timezone=Asia/Shanghai" 
-      WORKDIR /app
-      COPY builds/dts-analytics.jar /app/app.jar
-      EXPOSE 3000
-      ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0 -Duser.timezone=Asia/Shanghai"
+
+WORKDIR /app
+# Copy prebuilt jar from repository path: source/builds/dts-analytics.jar
+COPY builds/dts-analytics.jar /app/app.jar
+
+EXPOSE 3000
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
+
