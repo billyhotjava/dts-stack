@@ -25,11 +25,11 @@ function LoginPage() {
 	return (
 		<div className="relative grid min-h-screen min-h-svh lg:grid-cols-2 bg-background">
 			{/* Illustration at left on desktop to distinguish from admin style */}
-			<div className="relative hidden bg-background-paper lg:block">
+			<div className="relative hidden bg-background lg:block">
 				<img
 					src={TechDataBackground}
 					alt={brandIllustrationAlt}
-					className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.9] dark:saturate-[1.2]"
+					className="absolute inset-0 h-full w-full object-cover"
 				/>
 			</div>
 

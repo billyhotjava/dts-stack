@@ -26,11 +26,11 @@
       </feMerge>
     </filter>
     <symbol id="cube" viewBox="-80 -80 160 160">
-      <polygon points="0,-74 64,-37 64,37 0,74 -64,37 -64,-37" fill="#ffffff" opacity="0.08" />
+      <polygon points="0,-74 64,-37 64,37 0,74 -64,37 -64,-37" fill="#ffffff" opacity="0.02" />
     </symbol>
   </defs>
 
-  <rect width="1200" height="1200" fill="url(#bgGradient)" />
+  <rect width="1200" height="1200" fill="none" />
 
   <!-- Diagonal light streaks -->
   <g stroke="#2265D6" stroke-opacity="0.25" stroke-width="2">
@@ -64,40 +64,40 @@
   <!-- Service icons -->
   <g fill="#FFFFFF" fill-opacity="0.85">
     <g transform="translate(360 340) scale(1.15)">
-      <rect x="-52" y="-52" width="104" height="104" rx="16" fill="#ffffff" opacity="0.12" />
+      <rect x="-52" y="-52" width="104" height="104" rx="16" fill="#ffffff" opacity="0" />
       <path d="M-20 -6H20V6H-20zM-32 -28H32V-16H-32zM-32 16H32V28H-32z" />
     </g>
     <g transform="translate(820 320) scale(1.1)">
-      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0.12" />
+      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0" />
       <path d="M0 -28a18 18 0 0 1 18 18c0 10-8 18-18 18s-18-8-18-18a18 18 0 0 1 18-18zm0 52c8 0 16 4 16 10v10H-16v-10c0-6 8-10 16-10z" />
     </g>
     <g transform="translate(420 780) scale(1.2)">
-      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0.12" />
+      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0" />
       <path d="M-24 -16H12V-4H-24zM-24 4H0V16H-24zM18 -16H24V-4H18zM18 4H24V16H18z" />
     </g>
     <g transform="translate(780 780) scale(1.2)">
-      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0.12" />
+      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0" />
       <path d="M-24 -16H24V-4H-24zM-20 4H20V16H-20z" />
       <path d="M-10 -28L-2 -40H-24V-52H16V-40H-4L6 -28H-10z" />
     </g>
     <g transform="translate(600 880) scale(1.25)">
-      <rect x="-56" y="-56" width="112" height="112" rx="18" fill="#ffffff" opacity="0.12" />
+      <rect x="-56" y="-56" width="112" height="112" rx="18" fill="#ffffff" opacity="0" />
       <path d="M-32 12c0-20 28-32 32-32s32 12 32 32v16H-32zM-20 12h40c0-8-20-16-20-16s-20 8-20 16z" />
     </g>
     <g transform="translate(720 220) scale(0.9)">
-      <rect x="-40" y="-40" width="80" height="80" rx="16" fill="#ffffff" opacity="0.12" />
+      <rect x="-40" y="-40" width="80" height="80" rx="16" fill="#ffffff" opacity="0" />
       <path d="M0 -22l12 20h-24zM-8 4h16v18h-16z" />
     </g>
     <g transform="translate(500 220) scale(0.9)">
-      <rect x="-40" y="-40" width="80" height="80" rx="16" fill="#ffffff" opacity="0.12" />
+      <rect x="-40" y="-40" width="80" height="80" rx="16" fill="#ffffff" opacity="0" />
       <path d="M-20 -6H20V6H-20zM-30 -24H30V-12H-30zM-30 12H30V24H-30z" />
     </g>
     <g transform="translate(340 520) scale(1)">
-      <rect x="-44" y="-44" width="88" height="88" rx="18" fill="#ffffff" opacity="0.12" />
+      <rect x="-44" y="-44" width="88" height="88" rx="18" fill="#ffffff" opacity="0" />
       <path d="M-8 -20h16l-4 14h-8zM-16 0h32l-6 18h-20zM-4 20h8l-2 8H-2z" />
     </g>
     <g transform="translate(880 640) scale(1)">
-      <rect x="-44" y="-44" width="88" height="88" rx="18" fill="#ffffff" opacity="0.12" />
+      <rect x="-44" y="-44" width="88" height="88" rx="18" fill="#ffffff" opacity="0" />
       <path d="M-20 -12h40M-24 12h48" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" />
       <path d="M-28 -20l12 -12v24zM28 20l-12 12v-24z" />
     </g>
