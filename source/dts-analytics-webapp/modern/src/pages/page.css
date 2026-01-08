@@ -1,0 +1,56 @@
+.page {
+	max-width: 1080px;
+	margin: 0 auto;
+	padding: 24px 16px;
+}
+
+.pageTitle {
+	margin: 0;
+	font-size: 22px;
+}
+
+.pageSub {
+	margin-top: 6px;
+	color: rgba(0, 0, 0, 0.6);
+}
+
+.card {
+	background: #fff;
+	border: 1px solid rgba(0, 0, 0, 0.08);
+	border-radius: 12px;
+	padding: 16px;
+}
+
+.row {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+.muted {
+	color: rgba(0, 0, 0, 0.6);
+}
+
+.table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.table th,
+.table td {
+	padding: 10px 8px;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+	text-align: left;
+	font-size: 14px;
+}
+
+.tag {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 12px;
+	border: 1px solid rgba(0, 0, 0, 0.12);
+	background: rgba(0, 0, 0, 0.03);
+}
+

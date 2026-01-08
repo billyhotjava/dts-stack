@@ -479,13 +479,33 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
       - "traefik.http.middlewares.dts-strip-analytics-ui.stripprefix.prefixes=/analytics"
-      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`)"
+      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/modern`)"
       - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-ui.tls=true"
       - "traefik.http.routers.dts-analytics-ui.priority=230"
       - "traefik.http.routers.dts-analytics-ui.service=dts-analytics-webapp"
       - "traefik.http.services.dts-analytics-webapp.loadbalancer.server.port=3001"
       - "traefik.http.routers.dts-analytics-ui.middlewares=dts-strip-analytics-ui@docker,security-headers@file"
+
+  dts-analytics-webapp-modern:
+    image: ${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}
+    profiles: ["analytics-modern"]
+    depends_on:
+      - dts-analytics
+    ports: []
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.middlewares.dts-strip-analytics-ui-modern.stripprefix.prefixes=/analytics/modern"
+      - "traefik.http.routers.dts-analytics-ui-modern.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/modern`)"
+      - "traefik.http.routers.dts-analytics-ui-modern.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-ui-modern.tls=true"
+      - "traefik.http.routers.dts-analytics-ui-modern.priority=235"
+      - "traefik.http.routers.dts-analytics-ui-modern.service=dts-analytics-webapp-modern"
+      - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=80"
+      - "traefik.http.routers.dts-analytics-ui-modern.middlewares=dts-strip-analytics-ui-modern@docker,security-headers@file"
 
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}

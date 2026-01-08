@@ -374,7 +374,7 @@ services:
       # Use a dedicated middleware name to avoid conflicts with the API router middleware.
       - "traefik.http.middlewares.dts-strip-analytics-ui.stripprefix.prefixes=/analytics"
       # /analytics/* (except /analytics/api/*) -> webapp, with prefix stripped (adds X-Forwarded-Prefix)
-      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`)"
+      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/modern`)"
       - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-ui.tls=true"
       - "traefik.http.routers.dts-analytics-ui.priority=230"
@@ -388,6 +388,56 @@ services:
         [
           "CMD-SHELL",
           "node -e \"require('http').get('http://127.0.0.1:3001/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # Webapp: dts-analytics-webapp-modern (React19/Vite; gradual replacement of legacy Metabase UI)
+  dts-analytics-webapp-modern:
+    image: node:22-bookworm
+    working_dir: /workspace
+    depends_on:
+      - dts-analytics
+    environment:
+      PNPM_STORE_DIR: /pnpm-store
+      BROWSER: none
+      VITE_OPEN: "false"
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "1000"
+      HOST: 0.0.0.0
+      PORT: "3002"
+    command:
+      [
+        "sh",
+        "-lc",
+        "if [ -f package.json ]; then corepack enable; pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts || pnpm install --store-dir /pnpm-store --no-frozen-lockfile --ignore-scripts; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3002} --strictPort --open=false; else echo no\\ package.json\\ found; tail -f /dev/null; fi",
+      ]
+    ports:
+      - "127.0.0.1:3002:3002"
+    volumes:
+      - ./source/dts-analytics-webapp/modern:/workspace:z
+      - pnpm-store:/pnpm-store
+      - /workspace/node_modules
+    networks:
+      - dts-core
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.middlewares.dts-strip-analytics-ui-modern.stripprefix.prefixes=/analytics/modern"
+      - "traefik.http.routers.dts-analytics-ui-modern.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/modern`)"
+      - "traefik.http.routers.dts-analytics-ui-modern.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-ui-modern.tls=true"
+      - "traefik.http.routers.dts-analytics-ui-modern.priority=235"
+      - "traefik.http.routers.dts-analytics-ui-modern.service=dts-analytics-webapp-modern"
+      - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=3002"
+      - "traefik.http.routers.dts-analytics-ui-modern.middlewares=dts-strip-analytics-ui-modern@docker,security-headers@file"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('http').get('http://127.0.0.1:'+(process.env.PORT||'3002')+'/',r=>process.exit(r.statusCode>=200&&r.statusCode<500?0:1)).on('error',()=>process.exit(1))\"",
         ]
       interval: 10s
       timeout: 5s
