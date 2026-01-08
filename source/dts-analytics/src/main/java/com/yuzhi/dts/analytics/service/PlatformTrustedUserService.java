@@ -125,9 +125,10 @@ public class PlatformTrustedUserService {
     private Optional<PlatformIdentity> resolveIdentityFromForwardedHeaders(HttpServletRequest request) {
         if (properties.requireForwardedHeaders()) {
             // Basic hardening: only trust identity headers when request comes via reverse-proxy.
-            String forwardedHost = header(request, "X-Forwarded-Host");
-            String forwardedProto = header(request, "X-Forwarded-Proto");
-            if (!StringUtils.hasText(forwardedHost) && !StringUtils.hasText(forwardedProto)) {
+            //
+            // NOTE: Spring's ForwardedHeaderFilter may consume/remove X-Forwarded-* from the wrapped request,
+            // so prefer servlet-level signals (scheme/isSecure) in addition to raw headers.
+            if (!looksForwarded(request)) {
                 return Optional.empty();
             }
         }
@@ -144,6 +145,20 @@ public class PlatformTrustedUserService {
         String platformUserId = header(request, "X-DTS-User-Id");
         boolean superuser = isSuperuser(header(request, "X-DTS-Roles"));
         return Optional.of(new PlatformIdentity(username, displayName, platformUserId, superuser));
+    }
+
+    private static boolean looksForwarded(HttpServletRequest request) {
+        if (request == null) {
+            return false;
+        }
+        if (request.isSecure() || "https".equalsIgnoreCase(request.getScheme())) {
+            return true;
+        }
+        // Best-effort fallback for environments where forwarded headers are not consumed.
+        return StringUtils.hasText(header(request, "X-Forwarded-Host"))
+                || StringUtils.hasText(header(request, "X-Forwarded-Proto"))
+                || StringUtils.hasText(header(request, "X-Forwarded-Prefix"))
+                || StringUtils.hasText(header(request, "Forwarded"));
     }
 
     private Optional<PlatformIdentity> resolveIdentityViaPlatformForwardAuth(String authorization, String cookie) {

@@ -4,7 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)"
 WEBAPP_DIR="${ROOT_DIR}/source/dts-analytics-webapp"
 
-MB_VERSION="${MB_VERSION:-0.45.4.3}"
+# Metabase UI baseline (override via env: MB_VERSION=0.58.?.?)
+MB_VERSION="${MB_VERSION:-0.58.0}"
 MB_URL="${MB_URL:-https://downloads.metabase.com/v${MB_VERSION}/metabase.jar}"
 MB_JAR="${MB_JAR:-${WEBAPP_DIR}/metabase.jar}"
 

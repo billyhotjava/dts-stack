@@ -90,7 +90,9 @@ function safeJsonForHtmlText(jsonText) {
 
 function defaultEnLocalization() {
   return {
+    charset: "utf-8",
     headers: {
+      "content-type": "text/plain; charset=utf-8",
       language: "en",
       "plural-forms": "nplurals=2; plural=(n != 1);",
     },
@@ -119,7 +121,9 @@ async function loadLocalization(locale) {
   } catch {
     obj = defaultEnLocalization();
   }
-  if (!obj.headers) obj.headers = {};
+  if (!obj || typeof obj !== "object") obj = defaultEnLocalization();
+  if (!obj.headers || typeof obj.headers !== "object") obj.headers = {};
+  if (!obj.translations || typeof obj.translations !== "object") obj.translations = {};
   // Normalize to the locale codes Metabase expects ("zh" / "en") for switching/moment mapping.
   obj.headers.language = "zh";
   const text = safeJsonForHtmlText(JSON.stringify(obj));
@@ -188,20 +192,41 @@ return origFetch(input,nextInit).then(function(resp){
 if(resp&&resp.status===401&&!retried){return refreshSession(t.refreshToken).then(function(next){if(!next||!next.accessToken)return resp;
 var retryInit=withAuth(init,next.accessToken);retryInit.__dtsRetry=true;return origFetch(input,retryInit);});}
 return resp;});
-};}
+};} 
 var OrigXHR=window.XMLHttpRequest;
-if(typeof OrigXHR==='function'){
-function PatchedXHR(){var xhr=new OrigXHR();var open=xhr.open;xhr.open=function(method,url,async,user,pw){xhr.__dtsUrl=url;return open.call(xhr,method,url,async,user,pw);};
-var send=xhr.send;xhr.send=function(body){try{var u=buildUrl(xhr.__dtsUrl||'');if(shouldAttach(u)){var t=getTokens();if(t.accessToken){try{xhr.setRequestHeader('Authorization','Bearer '+t.accessToken);}catch(e){}}}}catch(e){}
-return send.call(xhr,body);};return xhr;}
-window.XMLHttpRequest=PatchedXHR;}
+if(typeof OrigXHR==='function'&&OrigXHR.prototype&&!OrigXHR.__dtsPatched){
+OrigXHR.__dtsPatched=true;
+var _open=OrigXHR.prototype.open;
+var _send=OrigXHR.prototype.send;
+OrigXHR.prototype.open=function(method,url,async,user,pw){try{this.__dtsUrl=url;}catch(e){} return _open.call(this,method,url,async,user,pw);};
+OrigXHR.prototype.send=function(body){try{var u=buildUrl(this.__dtsUrl||'');if(shouldAttach(u)){var t=getTokens();if(t.accessToken){try{this.setRequestHeader('Authorization','Bearer '+t.accessToken);}catch(e){}}}}catch(e){}
+return _send.call(this,body);};
+}
 }catch(e){}})();`;
 }
 
 function injectHeadScript(html, scriptText) {
-  const marker = "</head>";
-  const idx = html.toLowerCase().indexOf(marker);
   const scriptTag = `<script>${scriptText}</script>`;
+  const lower = html.toLowerCase();
+
+  // Ensure the auth bridge runs BEFORE any legacy Metabase bundles execute,
+  // otherwise early boot XHRs may miss the Authorization header.
+  const runtimeIdx = lower.indexOf('<script src="app/dist/runtime.bundle.js');
+  if (runtimeIdx !== -1) {
+    return html.slice(0, runtimeIdx) + scriptTag + html.slice(runtimeIdx);
+  }
+
+  // Metabase 0.58+ may change the bundle naming; fall back to injecting before the first app script.
+  const firstAppScriptIdx =
+    lower.indexOf('<script src="app/dist/') !== -1
+      ? lower.indexOf('<script src="app/dist/')
+      : lower.indexOf('<script src="app/');
+  if (firstAppScriptIdx !== -1) {
+    return html.slice(0, firstAppScriptIdx) + scriptTag + html.slice(firstAppScriptIdx);
+  }
+
+  const marker = "</head>";
+  const idx = lower.indexOf(marker);
   if (idx === -1) return `${html}\n${scriptTag}\n`;
   return html.slice(0, idx) + scriptTag + html.slice(idx);
 }
@@ -227,7 +252,29 @@ async function fetchBootstrap(req, forwardedPrefix) {
     throw new Error(`bootstrap fetch failed: ${res.status} ${body}`);
   }
 
-  return await res.text();
+  return safeJsonForHtmlText(await res.text());
+}
+
+function defaultBootstrapJSON({ req, forwardedPrefix, locale }) {
+  const forwardedHost = header(req, "x-forwarded-host") || header(req, "host");
+  const forwardedProto = header(req, "x-forwarded-proto") || "http";
+  const prefix = baseHrefFromPrefix(forwardedPrefix);
+  const siteUrl = `${forwardedProto}://${forwardedHost}${prefix}`;
+  const payload = {
+    "site-url": siteUrl,
+    "site-name": "DTS Analytics",
+    "application-name": "DTS Analytics",
+    "anon-tracking-enabled": false,
+    "has-user-setup": true,
+    "setup-token": null,
+    "site-locale": locale === "en" ? "en" : "zh",
+    "available-locales": [
+      ["zh", "Chinese"],
+      ["en", "English"],
+    ],
+    version: { tag: "v0.0.0" },
+  };
+  return safeJsonForHtmlText(JSON.stringify(payload));
 }
 
 async function serveFile(res, absolutePath) {
@@ -321,6 +368,9 @@ const server = http.createServer(async (req, res) => {
     const uri = stripPrefix(pathname, forwardedPrefix);
 
     const locale = resolveLocale(req);
+    if (bootstrapJSON === "{}") {
+      bootstrapJSON = defaultBootstrapJSON({ req, forwardedPrefix, locale });
+    }
     const localizationJSON = await loadLocalization(locale);
 
     const view = {
@@ -344,6 +394,9 @@ const server = http.createServer(async (req, res) => {
     html = injectHeadScript(html, platformAuthBridgeScript({ baseHref, userStoreKey: PLATFORM_USERSTORE_KEY }));
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.end(html);
   } catch (e) {
     res.statusCode = 500;

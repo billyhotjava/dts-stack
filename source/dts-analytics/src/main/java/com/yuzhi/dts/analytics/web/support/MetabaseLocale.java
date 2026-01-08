@@ -5,7 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.Locale;
 
 /**
- * Metabase 0.45.x expects locale keys like {@code zh} / {@code en} and will crash on unknown values
+ * Metabase v0.58.x expects locale keys like {@code zh} / {@code en} and will crash on unknown values
  * when resolving i18n bundles.
  */
 public final class MetabaseLocale {
@@ -51,4 +51,3 @@ public final class MetabaseLocale {
         return "";
     }
 }
-

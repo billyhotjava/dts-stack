@@ -42,6 +42,7 @@ class MetabaseUiIT {
         mockMvc.perform(get("/api/session/properties").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.setup-token").isNotEmpty())
-                .andExpect(jsonPath("$.version.tag").value("v0.45.6"));
+                .andExpect(jsonPath("$.version.tag").isNotEmpty())
+                .andExpect(jsonPath("$.version.tag").value(org.hamcrest.Matchers.startsWith("v")));
     }
 }
