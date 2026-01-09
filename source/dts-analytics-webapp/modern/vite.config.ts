@@ -1,7 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-const publicBase = "/analytics/modern/";
+const publicBase = "/analytics/";
 
 export default defineConfig(() => {
 	const port = Number.parseInt(process.env.PORT ?? "3002", 10);
@@ -10,7 +10,7 @@ export default defineConfig(() => {
 		plugins: [react()],
 		server: {
 			host: true,
-			allowedHosts: true,
+			allowedHosts: ["bi.iae.caep", "localhost", "127.0.0.1"],
 			port,
 			strictPort: true,
 		},

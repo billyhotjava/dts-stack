@@ -2,10 +2,12 @@
 
 目标：用 `source/dts-analytics-webapp/modern`（React19/Vite）逐步替换 `source/dts-analytics-webapp/legacy`（Metabase UI），最终做到不依赖 legacy UI。
 
+功能点清单（对齐/验收基线）：`worklog/2026-01-09_dts-analytics-feature-checklist.md`
+
 ## 现状
 
-- legacy UI：`https://bi.iae.caep/analytics`（Metabase v0.58.x 解压产物 + Node 注入 bootstrap/auth bridge）。
-- modern UI：`https://bi.iae.caep/analytics/modern`（新 React19/Vite 工程，已接入 Traefik）。
+- modern UI（默认）：`https://bi.iae.caep/analytics`（新 React19/Vite 工程，已接入 Traefik）。
+- legacy UI（临时对照）：`https://bi.iae.caep/analytics/legacy`（Metabase v0.58.x 解压产物 + Node 注入 bootstrap/auth bridge；待删除）。
 - 后端：`dts-analytics` 提供 Metabase 风格 API（`/analytics/api/**`）。
 
 ## 迁移原则
@@ -78,4 +80,3 @@
 
 - Metabase UI（legacy）源码包含 `cljs/cljc`（source maps 可见）。为了最终“无 clojure 代码”，modern 不能基于这些源码直接引入。
 - Query Builder 与可视化渲染是迁移的核心工作量：建议先保证“只读可用”，再补齐编辑。
-

@@ -30,9 +30,12 @@ export function AppLayout({ locale }: Props) {
 					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/questions">
 						{t(locale, "nav.questions")}
 					</NavLink>
+					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/search">
+						{t(locale, "nav.search")}
+					</NavLink>
 				</nav>
 				<div className="sidebarFooter">
-					<a className="btn" href="/analytics" target="_blank" rel="noreferrer">
+					<a className="btn" href="/analytics/legacy" target="_blank" rel="noreferrer">
 						{t(locale, "openLegacy")}
 					</a>
 				</div>
@@ -44,4 +47,3 @@ export function AppLayout({ locale }: Props) {
 		</div>
 	);
 }
-

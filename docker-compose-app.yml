@@ -283,14 +283,15 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
-      - "traefik.http.middlewares.dts-strip-analytics-ui.stripprefix.prefixes=/analytics"
-      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/modern`)"
-      - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-ui.tls=true"
-      - "traefik.http.routers.dts-analytics-ui.priority=230"
-      - "traefik.http.routers.dts-analytics-ui.service=dts-analytics-webapp"
+      # Legacy UI is kept temporarily for reference at /analytics/legacy (modern fully replaces /analytics).
+      - "traefik.http.middlewares.dts-strip-analytics-ui-legacy.stripprefix.prefixes=/analytics/legacy"
+      - "traefik.http.routers.dts-analytics-ui-legacy.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/legacy`)"
+      - "traefik.http.routers.dts-analytics-ui-legacy.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-ui-legacy.tls=true"
+      - "traefik.http.routers.dts-analytics-ui-legacy.priority=220"
+      - "traefik.http.routers.dts-analytics-ui-legacy.service=dts-analytics-webapp"
       - "traefik.http.services.dts-analytics-webapp.loadbalancer.server.port=3001"
-      - "traefik.http.routers.dts-analytics-ui.middlewares=dts-strip-analytics-ui@docker,security-headers@file"
+      - "traefik.http.routers.dts-analytics-ui-legacy.middlewares=dts-strip-analytics-ui-legacy@docker,security-headers@file"
 
   dts-analytics-webapp-modern:
     image: ${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}
@@ -301,14 +302,14 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
-      - "traefik.http.middlewares.dts-strip-analytics-ui-modern.stripprefix.prefixes=/analytics/modern"
-      - "traefik.http.routers.dts-analytics-ui-modern.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/modern`)"
-      - "traefik.http.routers.dts-analytics-ui-modern.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-ui-modern.tls=true"
-      - "traefik.http.routers.dts-analytics-ui-modern.priority=235"
-      - "traefik.http.routers.dts-analytics-ui-modern.service=dts-analytics-webapp-modern"
+      - "traefik.http.middlewares.dts-strip-analytics-ui.stripprefix.prefixes=/analytics"
+      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`) && !PathPrefix(`/analytics/legacy`)"
+      - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-ui.tls=true"
+      - "traefik.http.routers.dts-analytics-ui.priority=230"
+      - "traefik.http.routers.dts-analytics-ui.service=dts-analytics-webapp-modern"
       - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=80"
-      - "traefik.http.routers.dts-analytics-ui-modern.middlewares=dts-strip-analytics-ui-modern@docker,security-headers@file"
+      - "traefik.http.routers.dts-analytics-ui.middlewares=dts-strip-analytics-ui@docker,security-headers@file"
 
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}

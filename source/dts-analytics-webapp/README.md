@@ -71,3 +71,7 @@ Metabase v0.58.x 的前端产物中包含明显的 ClojureScript 运行时代码
 - 如果浏览器控制台出现 `Failed to load resource: ... /analytics/api/user/current 401`：
   - 优先确认 Traefik router `dts-analytics-api@docker` 的 middlewares 包含 `platform-forward-auth@file`。
   - 确认 `dts-platform` 的 `/api/forward-auth` 返回 2xx（不返回 401），并能返回 `X-DTS-User` 等头。
+
+说明：
+- modern UI 默认路径是 `/analytics`。
+- legacy UI 临时对照路径是 `/analytics/legacy`（后续会删除）。

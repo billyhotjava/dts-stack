@@ -1,6 +1,7 @@
 import { useParams } from "react-router";
 import { useEffect, useMemo, useState } from "react";
-import { analyticsApi, type CardDetail } from "../api/analyticsApi";
+import { analyticsApi, type CardDetail, type CardQueryResponse } from "../api/analyticsApi";
+import { DataTable } from "../components/DataTable";
 import { normalizeLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -13,7 +14,8 @@ export default function CardDetailPage() {
 	const { id } = useParams();
 	const locale: Locale = useMemo(() => normalizeLocale(navigator.language), []);
 	const [state, setState] = useState<LoadState<CardDetail>>({ state: "loading" });
-	const [queryState, setQueryState] = useState<LoadState<unknown> | null>(null);
+	const [queryState, setQueryState] = useState<LoadState<CardQueryResponse> | null>(null);
+	const [showRaw, setShowRaw] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -69,13 +71,37 @@ export default function CardDetailPage() {
 					</div>
 					<div style={{ height: 16 }} />
 					<div className="card">
-						<div className="muted">{t(locale, "questions.queryResult")}</div>
+						<div className="row" style={{ justifyContent: "space-between" }}>
+							<div className="muted">{t(locale, "questions.queryResult")}</div>
+							<button className="btn" onClick={() => setShowRaw((v) => !v)} type="button">
+								{t(locale, "questions.queryRaw")}
+							</button>
+						</div>
 						{queryState?.state === "loading" && <div style={{ marginTop: 8 }}>{t(locale, "loading")}</div>}
 						{queryState?.state === "error" && <div style={{ marginTop: 8 }}>{t(locale, "error") + ": " + queryState.error}</div>}
 						{queryState?.state === "loaded" && (
-							<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "12px 0 0" }}>
-								{JSON.stringify(queryState.value, null, 2)}
-							</pre>
+							<div style={{ marginTop: 12 }}>
+								{queryState.value?.data?.native_form?.query && (
+									<div style={{ marginBottom: 12 }}>
+										<div className="muted">{t(locale, "questions.querySql")}</div>
+										<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "8px 0 0" }}>
+											{String(queryState.value.data.native_form.query)}
+										</pre>
+									</div>
+								)}
+
+								{Array.isArray(queryState.value?.data?.cols) && Array.isArray(queryState.value?.data?.rows) ? (
+									<DataTable cols={queryState.value.data?.cols ?? []} rows={queryState.value.data?.rows ?? []} maxRows={200} />
+								) : (
+									<div className="muted">No tabular result.</div>
+								)}
+
+								{showRaw && (
+									<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "12px 0 0" }}>
+										{JSON.stringify(queryState.value, null, 2)}
+									</pre>
+								)}
+							</div>
 						)}
 					</div>
 				</>
@@ -83,4 +109,3 @@ export default function CardDetailPage() {
 		</div>
 	);
 }
-

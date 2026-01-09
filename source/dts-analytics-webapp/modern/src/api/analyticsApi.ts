@@ -41,6 +41,19 @@ export type DashboardListItem = {
 export type DashboardDetail = DashboardListItem & {
 	dashcards?: unknown[];
 	parameters?: unknown[];
+	ordered_cards?: DashboardCard[];
+};
+
+export type DashboardCard = {
+	id: number;
+	card_id?: number | null;
+	row?: number;
+	col?: number;
+	size_x?: number;
+	size_y?: number;
+	parameter_mappings?: unknown[];
+	visualization_settings?: unknown;
+	card?: CardListItem | null;
 };
 
 export type CardListItem = {
@@ -59,6 +72,33 @@ export type CardDetail = CardListItem & {
 	dataset_query?: unknown;
 	visualization_settings?: unknown;
 	result_metadata?: unknown;
+};
+
+export type CardQueryResponse = {
+	status?: string;
+	row_count?: number;
+	running_time?: number;
+	error?: unknown;
+	data?: {
+		rows?: unknown[];
+		cols?: Array<Record<string, unknown>>;
+		native_form?: { query?: string };
+		results_timezone?: string;
+		results_metadata?: { columns?: unknown[] };
+	};
+};
+
+export type SearchItem = {
+	model: "dashboard" | "card" | "collection" | string;
+	id: number;
+	name?: string;
+	description?: string | null;
+	archived?: boolean;
+};
+
+export type SearchResponse = {
+	data: SearchItem[];
+	total: number;
 };
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -104,5 +144,7 @@ export const analyticsApi = {
 	listCards: () => fetchJson<CardListItem[]>("/analytics/api/card"),
 	getCard: (id: string | number) => fetchJson<CardDetail>(`/analytics/api/card/${encodeURIComponent(String(id))}`),
 	queryCard: (id: string | number, body?: unknown) =>
-		sendJson<unknown>(`/analytics/api/card/${encodeURIComponent(String(id))}/query`, body ?? {}),
+		sendJson<CardQueryResponse>(`/analytics/api/card/${encodeURIComponent(String(id))}/query`, body ?? {}),
+	search: (q: string) =>
+		fetchJson<SearchResponse>(`/analytics/api/search?q=${encodeURIComponent(String(q ?? ""))}&limit=25&offset=0`),
 };

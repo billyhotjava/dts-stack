@@ -37,28 +37,124 @@
 
 ### 2. 统一口径与建模约束
 
-#### 2.1 主键与编码
-- 维度主键统一使用源系统 `pk_*`（如 `pk_material`、`pk_supplier`、`pk_project`、`pk_stordoc`、`pk_marbasclass`）
-- 业务编码保留 `code` / `*_code`（用于对外展示与对账）
-- 明细事实保留来源单据主键/行主键（如 `pk_order_b`、`pk_arriveorder_b`、`pk_praybill_b`、`pk_stockps_b`、`pk_flow`），确保可追溯
+本节的目标是：把 ODS 中“同一业务对象/同一业务过程”在不同表里的字段差异、时间语义差异、金额数量口径差异统一起来，让后续 DWD→DWS→ADS 的计算链条清晰可追溯，并确保指标口径在跨域（库存/采购/项目/预算）聚合时不会“对不上”。
 
-#### 2.2 时间字段标准化
-- ODS 存在 `char(19)`/`varchar(19)` 的时间字段；DWD 统一产出：
-  - `*_time`：TIMESTAMP（或 STRING 标准格式 `yyyy-MM-dd HH:mm:ss`）
-  - `*_date`：DATE（或 STRING `yyyy-MM-dd`）
-- 分区字段建议统一为 `dt`（`yyyy-MM-dd`），用于日增量/快照
+#### 2.1 ODS→DWD 的边界（为什么要统一）
+- ODS：保持源系统字段语义（字段名/类型可能不一致，如大量 `char(19)` 时间），只做必要去噪与标准化（如时间格式、空值）。
+- DWD：做“字段统一 + 主键外键统一 + 口径字段固化”，让指标可以稳定引用（例如：统一用 `material_id/project_id/supplier_id/warehouse_id`）。
+- DWS：在明确粒度前提下做主题汇总（如日快照、月周转、交付KPI）。
+- ADS：面向看板/报表输出，字段贴合展示，并保持指标口径一致。
 
-#### 2.3 金额/数量选择
-- 金额优先选择“本币无税金额”与“价税合计”两套口径：
-  - 无税金额：`nmny`/`norigmny`
-  - 含税金额：`norigtaxmny`/`ntaxmny`
-- 库存流水 `ic_flow` 只有 `ncostmny`（金额）与 `ninnum`/`noutnum`（入/出数量），DWD 需显式构造 `in_qty/out_qty/net_qty` 与 `in_amt/out_amt/net_amt`（见 3.2）
+#### 2.2 统一的实体主键与外键（结合 ODS 实际字段）
+ODS 的主数据表给了稳定的 `pk_*` 主键；业务单据/流水表在不同模块里对同一对象的字段名不一致（如物料在库存侧为 `cmaterialoid`，采购侧为 `pk_material`）。统一规则如下：
+
+**统一命名规则**
+- 统一输出：`*_id`（主键/外键）、`*_code`（业务编码）、`*_name`（名称）。
+- DWD 维度表主键：使用源系统 `pk_*` 作为 `*_id`；业务编码字段保留 `code` 作为 `*_code`。
+
+**核心对象映射（ODS→DWD）**
+- 物料：`bd_material_v.pk_material` → `material_id`；库存表常见外键：`ic_flow.cmaterialoid`、`ic_openbal_b.cmaterialoid`；采购表常见外键：`po_order_b.pk_material`、`po_praybill_b.pk_material`、`po_purchaseinfi_b.pk_material`。
+- 物料分类：`bd_marbasclass.pk_marbasclass` → `material_class_id`；物料表关联字段：`bd_material_v.pk_marbasclass`。
+- 供应商：`bd_supplier.pk_supplier` → `supplier_id`；库存/入库类常见外键：`ic_flow.cvendorid`、`ic_openbal_b.cvendorid`；采购订单表头：`po_order.pk_supplier`（行表也可能有 `pk_supplier`）。
+- 仓库：`bd_stordoc.pk_stordoc` → `warehouse_id`；库存流水：`ic_flow.cwarehouseid`；期初/单据表体常见：`ic_openbal_b.cbodywarehouseid`、`ic_purchasein_b.cbodywarehouseid`（字段以 ODS 明细为准）。
+- 项目：`bd_project.pk_project` → `project_id`；库存/采购侧常见：`ic_flow.cprojectid`、`po_order.pk_project`/`po_order_b.cprojectid`、`po_praybill_b.cprojectid`、`po_purchaseinfi_b.cprojectid`。
+- 批次：`pk_batchcode` → `batch_id`（在 `ic_openbal_b`、`ic_flow` 等存在），用于效期风险/龄分析。
+
+> 约束：DWD 明细事实必须保留源单据行主键（例如 `pk_order_b`、`pk_praybill_b`、`pk_arriveorder_b`、`pk_stockps_b`、`pk_flow`），否则无法把指标追溯回源系统明细行进行对账与排错。
+
+#### 2.3 业务过程链路与粒度（保证上下游能衔接）
+指标中“准时交付率/采购周期/项目延迟”等都依赖采购全流程链路。结合 ODS 表关系，推荐以“订单行”作为采购过程的核心粒度：
+
+**采购链路（推荐主链路）**
+1) 请购（需求产生）：`po_praybill_b`（行粒度 `pk_praybill_b`，关键日期：`dbilldate` 请购日期、`dreqdate` 需求日期）
+2) 订单（承诺产生）：`po_order_b`（行粒度 `pk_order_b`，关键日期：`dbilldate` 订单日期、`dplanarrvdate` 计划到货日期）
+3) 到货（履约到货）：`po_arriveorder_b`（行粒度 `pk_arriveorder_b`，关键字段包含 `pk_order_b` 可直连订单行；日期在表头 `po_arriveorder.dbilldate`）
+4) 入库（最终落账）：`po_purchaseinfi_b`（行粒度 `pk_stockps_b`，关键字段包含 `pk_order_b`；日期：表头 `po_purchaseinfi.dbilldate` 或表体 `dbizdate`）
+
+**为什么以订单行做主粒度**
+- 采购金额、计划到货、交付判定通常发生在订单行层面；一张订单可拆多行物料，且到货/入库也可能分批发生，只有行粒度才能计算“按时/延迟/周期”的可解释指标。
+
+**库存链路（快照的来源）**
+- 期初：`ic_openbal_b`（余额起点）
+- 流水：`ic_flow`（事件增量，`pk_flow` 粒度，`dbizdate` 为业务日期，`ninnum/noutnum/ncostmny` 为核心度量）
+- 库存日快照：在 DWS 层由 “期初 + 截止日净流水累加”得到（用于库存金额、龄、效期预警、周转等指标）
+
+#### 2.4 时间语义统一（把“哪一天”说清楚）
+ODS 中同类日期字段含义不同，统一时必须明确业务语义，否则会出现“同一指标口径混用”：
+
+**常见日期类型（来自 ODS 字段习惯）**
+- `dbilldate`：单据日期（下单/到货/入库等业务发生日期，常在采购/单据表头/表体出现）
+- `dbizdate`：业务日期/过账日期（库存流水 `ic_flow.dbizdate`、库存相关表体常见）
+- `dreqdate` / `drequiredate`：需求日期（请购与采购入库侧都可能出现）
+- 项目计划/实际日期：`bd_project.plan_*`、`bd_project.actu_*`
+
+**统一输出规则**
+- DWD 中输出 `*_date`（DATE）用于业务计算；保留 `*_time`（TIMESTAMP/STRING）用于追溯与排序。
+- 分区字段 `dt`：
+  - 明细事实（流水/单据）：一般取核心业务日期（库存取 `biz_date=dbizdate`；采购单据取 `order_date/arrive_date/in_date`）
+  - 日快照：`dt` 表示快照日（不等同于源系统某个单据日期）
+
+**与指标的对应关系（示例）**
+- 准时交付：`plan_arrive_date(dplanarrvdate)` vs `arrive_date(po_arriveorder.dbilldate)`（或最终以 `stock_in_date` 判定）
+- 延迟天数：`actual_done_date(coalesce(stock_in_date,arrive_date)) - require_date(dreqdate/drequiredate)`
+- 项目延期：`dt` vs `plan_finish_date`（若 `actu_finish_date` 为空则用 `dt` 作为“截至今日”）
+
+#### 2.5 数量/金额口径统一（把“算什么钱/什么量”说清楚）
+
+**数量**
+- DWD 统一字段：`*_qty`（`DECIMAL(28,8)`）
+- 库存流水：入/出数量分别来自 `ic_flow.ninnum`、`ic_flow.noutnum`（并构造 `net_qty=in_qty-out_qty`）
+- 采购单据：优先使用“主数量”字段（如 `nnum`），必要时同时保留“辅数量/换算率”用于解释
+
+**金额**
+ODS 中同一单据可能同时存在多套金额字段（本币/原币、含税/无税、计划/实际），为避免指标混用，DWD 建议固化两套“可用且可解释”的口径：
+- `amt_excl_tax`：无税金额（常见字段：`nmny`、`norigmny`）
+- `amt_incl_tax`：含税金额/价税合计（常见字段：`norigtaxmny`、`ntaxmny`）
+
+库存模块另有“成本金额”口径：
+- `ic_flow.ncostmny`：库存成本金额（不天然带正负号）
+- 统一做法：DWD 显式产出 `in_amt/out_amt/net_amt`，并保留 `flow_amt_raw` 用于对账（详见 `dwd_inv_fact_stock_flow`）
+
+> 约束：DWS/ADS 中所有金额指标必须明确引用哪一套口径（无税/含税/成本），并在指标文档（`metrics.md`）保持一致。
+
+#### 2.6 状态、关闭与删除（哪些记录参与统计）
+ODS 明细包含大量状态/标志位字段（如采购订单 `forderstatus`、关闭标志 `bfinalclose/barriveclose`，项目 `deletestate/enablestate` 等）。统一原则：
+- DWD 不“武断删除”记录，而是保留关键状态字段并提供统一的 `is_valid`/`is_deleted` 标记（如可从 `deletestate` 推导）。
+- DWS/ADS 统计时明确过滤条件（例如：只统计有效订单行、排除作废/关闭行），并把过滤规则写入指标口径。
+
+#### 2.7 可追溯与对账字段（治理要求）
+每张 DWD/DWS/ADS 表都应满足“能追溯回源”的最低要求：
+- 记录来源：`source_system/source_table/source_pk/source_ts`
+- 记录加工：`etl_time` + 分区字段（`dt/stat_month`）
+- 关键链路保留：采购链路至少保留 `pray_line_id/order_line_id/arrive_line_id/stock_in_line_id` 的可回溯关联（如果存在）
 
 ---
 
 ### 3. DWD（明细层）设计
 
 命名遵循平台规范：`dwd_{domain}_{subject}_{entity}`。以下给出最小可支撑指标体系的一组“维度 + 事实 + 宽表”设计。
+
+#### 3.0 DWD 表清单（英文名/中文名）
+
+| 表名 | 中文名称 | 粒度（建议） | 备注 |
+|---|---|---|---|
+| `dwd_inv_master_material` | 物料主数据维度 | 1行/物料 | 来源：`bd_material_v` |
+| `dwd_inv_master_material_class` | 物料分类维度 | 1行/分类 | 来源：`bd_marbasclass` |
+| `dwd_pur_master_supplier` | 供应商主数据维度 | 1行/供应商 | 来源：`bd_supplier` |
+| `dwd_inv_master_warehouse` | 仓库主数据维度 | 1行/仓库 | 来源：`bd_stordoc` |
+| `dwd_proj_master_project` | 项目主数据维度 | 1行/项目 | 来源：`bd_project` |
+| `dwd_inv_master_material_policy` | 物料策略配置维表 | 1行/物料×仓库×生效期 | 配置/补采（安全库存/关键标记/提前期） |
+| `dwd_inv_fact_stock_opening_balance` | 库存期初余额明细事实 | 1行/期初余额行 | 来源：`ic_openbal_h/b` |
+| `dwd_inv_fact_stock_flow` | 库存流水明细事实 | 1行/流水 | 来源：`ic_flow` |
+| `dwd_inv_fact_inbound_line` | 统一入库明细事实 | 1行/入库单行 | 统一：`ic_purchasein*`/`ic_generalin*`/`po_purchaseinfi*` |
+| `dwd_inv_fact_outbound_line` | 统一出库明细事实 | 1行/出库单行 | 统一：`ic_generalout*`/`ic_material*` |
+| `dwd_pur_fact_pray_line` | 请购单明细事实 | 1行/请购行 | 来源：`po_praybill/po_praybill_b` |
+| `dwd_pur_fact_order_line` | 采购订单明细事实 | 1行/订单行 | 来源：`po_order/po_order_b` |
+| `dwd_pur_fact_arrival_line` | 到货单明细事实 | 1行/到货行 | 来源：`po_arriveorder/po_arriveorder_b` |
+| `dwd_pur_fact_purchase_in_line` | 采购入库明细事实 | 1行/入库行 | 来源：`po_purchaseinfi/po_purchaseinfi_b` |
+| `dwd_pur_fact_contract_line` | 采购合同明细事实 | 1行/合同明细 | 来源：`ct_pu/ct_pu_b` |
+| `dwd_proj_fact_budget_execution` | 项目预算执行快照事实 | 1行/项目/日 | 需补齐预算执行视图元数据 |
+| `dwd_pur_wide_order_lifecycle_line` | 采购全流程宽表（订单行生命周期） | 1行/订单行 | 请购→订单→到货→入库 |
 
 #### 3.1 维度表（DWD DIM）
 
@@ -175,6 +271,24 @@
 
 命名遵循：`dws_{domain}_{topic}_{metric}`。DWS 负责把 DWD 明细加工为指标可直接复用的主题数据集，明确“粒度 + 维度 + 指标”。
 
+#### 4.0 DWS 表清单（英文名/中文名）
+
+| 表名 | 中文名称 | 粒度（建议） | 备注 |
+|---|---|---|---|
+| `dws_inv_stock_snapshot_di` | 库存日快照主题表 | dt×物料×仓库×批次×项目 | 期初+流水累加 |
+| `dws_inv_stock_summary_di` | 库存按分类日汇总主题表 | dt×物料分类 | 用于结构/趋势/健康度 |
+| `dws_inv_turnover_mn` | 库存周转月汇总主题表 | 月×物料分类 | 用于周转率/天数 |
+| `dws_inv_idle_stock_di` | 闲置库存日汇总主题表 | dt×闲置阈值桶 | 3/6/9/12月未领用 |
+| `dws_inv_expiry_risk_di` | 效期风险日汇总主题表 | dt×临期桶 | 临期SKU数/金额 |
+| `dws_pur_delivery_kpi_di` | 采购交付KPI日汇总主题表 | dt×项目×供应商 | 准时率/延迟 |
+| `dws_pur_cycle_by_class_mn` | 采购周期按分类月汇总主题表 | 月×物料分类 | 平均周期 |
+| `dws_pur_urgent_ratio_mn` | 紧急采购占比月汇总主题表 | 月 | 紧急金额占比 |
+| `dws_pur_single_source_ratio_mn` | 单一来源占比月汇总主题表 | 月 | SKU占比/金额占比 |
+| `dws_pur_purchase_trend_mn` | 月度采购趋势主题表 | 月 | 月采购金额 |
+| `dws_proj_budget_exec_di` | 预算执行日快照主题表 | dt×项目 | 执行率/结余 |
+| `dws_proj_budget_exec_mn` | 预算执行月汇总主题表 | 月×项目 | 月末快照/累计 |
+| `dws_proj_progress_di` | 项目进度日快照主题表 | dt×项目 | 完工/延期/延迟天数 |
+
 #### 4.1 库存主题（INV）
 
 1) `dws_inv_stock_snapshot_di`（日快照）
@@ -245,19 +359,62 @@
 
 命名遵循：`ads_{domain}_{app}_{scene}`。ADS 面向看板/大屏/接口输出，字段尽量贴合展示需求并保持指标口径一致。
 
+#### 5.0 ADS 表清单（英文名/中文名）
+
+| 表名 | 中文名称 | 粒度（建议） | 对应指标/图表（metrics.xlsx） |
+|---|---|---|---|
+| `ads_inv_board_summary_di` | 库存看板总览 | dt | 库存资金占用率/周转率/闲置率/紧缺/效期风险/盘点差异等 |
+| `ads_inv_board_structure_di` | 库存资产结构数据集 | dt×分类层级 | 库存资产结构（旭日图） |
+| `ads_inv_board_health_bubble_mn` | 库存健康度诊断数据集 | 月×分类 | 库存健康度诊断（气泡图） |
+| `ads_inv_board_age_dist_di` | 库存龄分布数据集 | dt×分类×年龄桶 | 库存龄分布分析（热力/堆叠） |
+| `ads_inv_board_trend_mn` | 库存关联分析趋势数据集 | 月 | 库存关联分析（折线+柱） |
+| `ads_inv_board_expiry_calendar_di` | 效期风险预警日历数据集 | dt×到期日 | 效期风险预警（日历/时间轴） |
+| `ads_inv_shortage_material_di` | 紧缺物料明细清单 | dt×物料×仓库 | 紧缺物料数量（明细支撑，可选） |
+| `ads_pur_board_summary_mn` | 采购看板总览 | 月 | 准时交付率/平均延迟/紧急占比/单一来源/月度采购 |
+| `ads_pur_board_trend_mn` | 月度采购趋势数据集 | 月 | 月度采购趋势（柱状图） |
+| `ads_pur_cycle_by_class_mn` | 分类采购周期数据集 | 月×分类 | 物料类别的平均采购周期（数字指标） |
+| `ads_pur_delivery_gantt_di` | 采购到货周期监控数据集 | dt×订单行 | 采购到货周期监控（甘特图） |
+| `ads_pur_supplier_risk_bubble_mn` | 供应商风险分析数据集 | 月×供应商 | 供应商风险分析（气泡图，需风险评分） |
+| `ads_pur_project_monitor_di` | 项目采购监控清单 | dt×项目×订单行 | 项目采购监控（列表） |
+| `ads_proj_fin_board_summary_mn` | 项目财务看板总览 | 月 | 预算执行率/合规率/人均经费/结余率等（部分需补采） |
+| `ads_proj_fin_budget_exec_trend_mn` | 预算执行率趋势数据集 | 月 | 预算执行率分析（趋势折线） |
+| `ads_proj_fin_expense_compliance_trend_mn` | 支出合规率趋势数据集 | 月 | 支出合规率（趋势折线，需补采） |
+| `ads_proj_fin_cost_structure_mn` | 成本结构占比数据集 | 月×科目 | 项目成本结构占比（饼图，需补采） |
+| `ads_proj_fin_budget_structure_mn` | 预算结构占比数据集 | 月×科目 | 项目预算结构占比（饼图，需补采） |
+| `ads_proj_fin_budget_dept_share_mn` | 预算部门占比数据集 | 月×部门 | 项目预算部门占比（饼图） |
+| `ads_proj_fin_fund_per_researcher_cmp_mn` | 人均项目经费对比数据集 | 月×分组 | 人均项目经费对比（条形图，需补采） |
+| `ads_proj_fin_budget_exec_cmp_mn` | 预算执行对比数据集 | 月×分组 | 项目预算执行对比（分组柱） |
+| `ads_proj_exec_board_summary_di` | 项目执行看板总览 | dt | 项目及时完成率/总数/在执行/完工/延期等 |
+| `ads_proj_exec_key_projects_di` | 重点项目进展数据集 | dt×项目 | 重点项目进展（列表/甘特图） |
+
 #### 5.1 库存看板（示例）
-- `ads_inv_board_summary_di`：库存资金占用率、库存周转率、闲置率、紧缺SKU数、效期风险指数等（按 `dt`）
-- `ads_inv_board_structure_di`：库存资产结构（`dt, class_path, stock_amt`）
-- `ads_inv_board_age_dist_di`：库存龄分布（`dt, age_bucket, class_id, stock_amt/qty`）
-- `ads_inv_board_expiry_calendar_di`：效期风险预警（`dt, expiry_date, batch_cnt, stock_amt`）
+ `ads_inv_board_summary_di`：库存资金占用率、库存周转率、闲置率、紧缺物料数量、效期风险指数、盘点差异率等（按 `dt`）
+ `ads_inv_board_structure_di`：库存资产结构（旭日图数据集）
+ `ads_inv_board_health_bubble_mn`：库存健康度诊断（气泡图数据集：X均值库存金额 / Y周转天数 / Size=SKU数 / Color=分类）
+ `ads_inv_board_age_dist_di`：库存龄分布分析（热力图/堆叠柱状图数据集）
+ `ads_inv_board_trend_mn`：库存关联分析（折线+柱状：库存金额、周转率等同轴趋势）
+ `ads_inv_board_expiry_calendar_di`：效期风险预警（日历/时间轴数据集）
+ `ads_inv_shortage_material_di`：紧缺物料明细清单（用于预警处置，可选）
 
 #### 5.2 采购看板（示例）
-- `ads_pur_board_summary_mn`：准时交付率、平均延迟天数、紧急采购占比、单一来源占比、月度采购金额
-- `ads_pur_project_monitor_di`：项目采购监控清单（项目×订单行，输出当前环节、已延迟天数、预算节约额等）
+- `ads_pur_board_summary_mn`：准时交付率、项目平均采购延迟天数、紧急采购占比、单一来源采购占比、月度采购金额（按 `stat_month`）
+- `ads_pur_board_trend_mn`：月度采购趋势（柱状图数据集）
+- `ads_pur_cycle_by_class_mn`：物料类别的平均采购周期（数字指标：按分类输出，支持TopN）
+- `ads_pur_delivery_gantt_di`：采购到货周期监控（甘特图数据集：请购/下单/计划到货/实际到货/入库）
+- `ads_pur_supplier_risk_bubble_mn`：供应商风险分析（气泡图数据集：X采购金额/占比、Y风险评分）
+- `ads_pur_project_monitor_di`：项目采购监控清单（列表：项目×订单行，输出当前环节、已延迟天数等）
 
 #### 5.3 项目财务/执行看板（示例）
-- `ads_proj_fin_board_summary_mn`：整体预算执行率、预算调整率、结余率等
-- `ads_proj_exec_board_summary_di`：项目总数、在执行/完工/延期数量、项目及时完成率、重点项目进展清单
+`ads_proj_fin_board_summary_mn`：整体预算执行率、预算调整率、经费结余率、人均项目经费、支出合规率等（按 `stat_month`；部分指标需补采财务/人事数据）
+- `ads_proj_fin_budget_exec_trend_mn`：预算执行率分析（趋势折线图数据集）
+- `ads_proj_fin_expense_compliance_trend_mn`：支出合规率趋势（趋势折线图数据集，需补采）
+- `ads_proj_fin_cost_structure_mn`：项目成本结构占比（饼图数据集，需补采成本明细）
+- `ads_proj_fin_budget_structure_mn`：项目预算结构占比（饼图数据集，需补采预算科目明细）
+- `ads_proj_fin_budget_dept_share_mn`：项目预算部门占比（饼图数据集）
+- `ads_proj_fin_fund_per_researcher_cmp_mn`：人均项目经费对比（分组条形图数据集，需补采人员数）
+- `ads_proj_fin_budget_exec_cmp_mn`：项目预算执行对比（分组柱状图数据集）
+- `ads_proj_exec_board_summary_di`：项目总数、在执行/完工/延期数量、项目及时完成率等（按 `dt`）
+- `ads_proj_exec_key_projects_di`：重点项目进展（列表/甘特图数据集）
 
 ---
 
@@ -269,6 +426,9 @@
 - 人均项目经费：需科研人员总数（HR/组织人员）维表或快照
 - 单位成果经费强度：需核心成果（论文/专利/课题成果）事实表
 - 项目物料供应及时率（“缺货导致实验延迟”）：需缺货事件/延期原因，或定义可审计的替代口径（如采购延迟触发）
+- 供应商风险分析（风险评分）：需质量/交付/独家性等风险因子与评分规则（可先定义 `risk_score` 标准并补采数据）
+- 项目成本结构占比/预算结构占比：需预算/成本按科目分解明细（预算科目、成本科目）
+- 里程碑按时达成率：`metrics.xlsx` 的口径涉及里程碑，但当前ODS未提供里程碑事实/计划
 
 ---
 
@@ -978,9 +1138,12 @@
 | research_fund_amt | DECIMAL(28,8) | 科研经费总额 | `sum(dws_proj_budget_exec_di.approved_budget_amt)` |
 | inventory_fund_occupancy_rate | DECIMAL(28,8) | 资金占用率 | `inventory_amt/research_fund_amt` |
 | turnover_rate_mn | DECIMAL(28,8) | 当月周转率 | 来自 `dws_inv_turnover_mn`（可选） |
+| turnover_days_mn | DECIMAL(28,8) | 当月周转天数 | 来自 `dws_inv_turnover_mn`（可选） |
 | idle_rate_3m | DECIMAL(28,8) | 闲置率(3月) | 来自 `dws_inv_idle_stock_di`（bucket=3m） |
 | expiry_risk_index_3m | DECIMAL(28,8) | 临期风险指数(3月) | 来自 `dws_inv_expiry_risk_di`（bucket=<=3m） |
 | shortage_material_cnt | BIGINT | 紧缺物料数 | 依赖策略表（可选） |
+| project_material_supply_ontime_rate | DECIMAL(28,8) | 项目物料供应及时率 | 当前ODS缺“缺货导致实验延迟”，可用采购延迟替代口径（见 `metrics.md`） |
+| stocktake_diff_rate | DECIMAL(28,8) | 盘点差异率 | 需补采盘点单/盘点结果明细（当前占位） |
 | dt | STRING | 日分区 | 看板日 |
 | etl_time | TIMESTAMP | ETL时间 | ETL生成 |
 
@@ -1037,6 +1200,7 @@
 | avg_delay_days | DECIMAL(28,8) | 平均延迟天数 | 来自 `dws_pur_delivery_kpi_di` 汇总 |
 | urgent_rate | DECIMAL(28,8) | 紧急采购占比 | `dws_pur_urgent_ratio_mn.urgent_rate` |
 | single_source_rate | DECIMAL(28,8) | 单一来源SKU占比 | `dws_pur_single_source_ratio_mn.single_source_rate` |
+| single_source_amt_rate | DECIMAL(28,8) | 单一来源金额占比 | `dws_pur_single_source_ratio_mn.single_source_amt_rate`（如落地） |
 | purchase_amt | DECIMAL(28,8) | 月采购金额 | `dws_pur_purchase_trend_mn.purchase_amt` |
 | stat_month | STRING | 月分区 | `yyyy-MM` |
 | etl_time | TIMESTAMP | ETL时间 | ETL生成 |
@@ -1072,6 +1236,9 @@
 | 字段 | 类型 | 含义 | 来源/计算 |
 |---|---|---|---|
 | overall_budget_exec_rate | DECIMAL(28,8) | 整体预算执行率 | 汇总 `dws_proj_budget_exec_mn` |
+| overall_expense_compliance_rate | DECIMAL(28,8) | 整体支出合规率 | 需补采财务合规明细（占位） |
+| fund_per_researcher | DECIMAL(28,8) | 人均项目经费 | 需补采科研人员数（占位） |
+| fund_intensity_per_outcome | DECIMAL(28,8) | 单位成果经费强度 | 需补采核心成果数量（占位） |
 | budget_adjust_rate | DECIMAL(28,8) | 预算调整率 | 依赖预算明细（可由日快照聚合） |
 | budget_balance_rate | DECIMAL(28,8) | 经费结余率 | 汇总 `balance/approved` |
 | stat_month | STRING | 月分区 | `yyyy-MM` |
@@ -1089,5 +1256,249 @@
 | finished_project_cnt | BIGINT | 完工项目数 | sum(finished) |
 | delayed_project_cnt | BIGINT | 延期项目数 | sum(is_delayed) |
 | project_ontime_finish_rate | DECIMAL(28,8) | 项目及时完成率 | 按口径计算 |
+| milestone_ontime_rate | DECIMAL(28,8) | 里程碑按时达成率 | `metrics.xlsx` 有该口径，但当前ODS缺里程碑明细（占位） |
+| dt | STRING | 日分区 | 看板日 |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.9 `ads_inv_board_health_bubble_mn`（库存健康度诊断：气泡图数据集）
+
+- 粒度：`stat_month, material_class_id`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| material_class_id | STRING | 物料分类ID | 维度关联 |
+| material_class_name | STRING | 物料分类名称 | 维度关联 |
+| x_avg_stock_amt | DECIMAL(28,8) | X轴：平均库存金额 | `avg(每日分类库存金额)` |
+| y_turnover_days | DECIMAL(28,8) | Y轴：周转天数 | `30 / (out_amt/avg_stock_amt)` |
+| bubble_sku_cnt | BIGINT | 气泡大小：SKU数 | `avg(每日SKU数)` 或 月内 distinct |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.10 `ads_inv_board_trend_mn`（库存关联分析：趋势数据集）
+
+- 粒度：`stat_month`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| inventory_amt_end | DECIMAL(28,8) | 月末库存金额 | 月末快照汇总 |
+| avg_stock_amt | DECIMAL(28,8) | 月均库存金额 | `avg(每日库存金额)` |
+| out_amt | DECIMAL(28,8) | 月出库金额 | `sum(dwd_inv_fact_stock_flow.out_amt)` |
+| turnover_rate | DECIMAL(28,8) | 周转率 | `out_amt/avg_stock_amt` |
+| turnover_days | DECIMAL(28,8) | 周转天数 | `30/turnover_rate` |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.11 `ads_inv_shortage_material_di`（紧缺物料明细清单，可选）
+
+- 粒度：`dt, material_id, warehouse_id`
+- 分区：`dt`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| material_id | STRING | 物料ID | 快照/策略 |
+| material_code | STRING | 物料编码 | 维度关联 |
+| material_name | STRING | 物料名称 | 维度关联 |
+| warehouse_id | STRING | 仓库ID | 快照/策略 |
+| warehouse_name | STRING | 仓库名称 | 维度关联 |
+| stock_qty | DECIMAL(28,8) | 当前库存数量 | `dws_inv_stock_snapshot_di.stock_qty` |
+| safety_stock_qty | DECIMAL(28,8) | 安全库存阈值 | `dwd_inv_master_material_policy.safety_stock_qty`（需配置/补采） |
+| gap_qty | DECIMAL(28,8) | 缺口数量 | `safety_stock_qty-stock_qty` |
+| lead_time_days | INT | 采购提前期(天) | 策略表（需配置/补采） |
+| is_critical | INT | 是否关键物料 | 策略表（需配置/补采） |
+| dt | STRING | 日分区 | 快照日 |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.12 `ads_pur_board_trend_mn`（月度采购趋势：柱状图数据集）
+
+- 粒度：`stat_month`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| purchase_amt | DECIMAL(28,8) | 月采购金额 | `dws_pur_purchase_trend_mn.purchase_amt`（口径需统一：订单额/入库额） |
+| order_line_cnt | BIGINT | 订单行数 | `dws_pur_purchase_trend_mn.order_line_cnt` |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.13 `ads_pur_cycle_by_class_mn`（物料类别平均采购周期：数字指标数据集）
+
+- 粒度：`stat_month, material_class_id`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| material_class_id | STRING | 物料分类ID | 维度关联 |
+| material_class_name | STRING | 物料分类名称 | 维度关联 |
+| order_line_cnt | BIGINT | 订单行数 | count |
+| avg_cycle_days | DECIMAL(28,8) | 平均采购周期(天) | 来自 `dws_pur_cycle_by_class_mn.avg_cycle_days` |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.14 `ads_pur_delivery_gantt_di`（采购到货周期监控：甘特图数据集）
+
+- 粒度：`dt, order_line_id`
+- 分区：`dt`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| project_id | STRING | 项目ID | 宽表 |
+| project_name | STRING | 项目名称 | 维度关联 |
+| supplier_id | STRING | 供应商ID | 宽表 |
+| supplier_name | STRING | 供应商名称 | 维度关联 |
+| material_id | STRING | 物料ID | 宽表 |
+| material_name | STRING | 物料名称 | 维度关联 |
+| apply_date | DATE | 采购申请/请购日期 | 宽表 |
+| order_date | DATE | 订单发出日期 | 宽表 |
+| plan_arrive_date | DATE | 计划到货日期 | 宽表 |
+| arrive_date | DATE | 实际到货日期 | 宽表 |
+| stock_in_date | DATE | 实际入库日期 | 宽表 |
+| delay_days | INT | 延误天数 | 宽表派生 |
+| dt | STRING | 日分区 | 看板日 |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.15 `ads_pur_supplier_risk_bubble_mn`（供应商风险分析：气泡图数据集）
+
+> `metrics.xlsx` 需要“风险评分（交付/质量/独家性等综合）”，当前ODS未覆盖风险评分明细，建议补采后计算 `risk_score`。
+
+- 粒度：`stat_month, supplier_id`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| supplier_id | STRING | 供应商ID | 采购汇总 |
+| supplier_name | STRING | 供应商名称 | 维度关联 |
+| purchase_amt | DECIMAL(28,8) | 采购金额 | 汇总订单/入库金额 |
+| purchase_amt_share | DECIMAL(28,8) | 金额占比 | `purchase_amt/sum(purchase_amt)` |
+| risk_score | DECIMAL(28,8) | 风险评分 | 需补采/计算（占位） |
+| bubble_sku_cnt | BIGINT | 气泡大小：SKU数 | `count(distinct material_id)` |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.16 `ads_proj_fin_budget_exec_trend_mn`（预算执行率分析：趋势数据集）
+
+- 粒度：`stat_month`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| budget_exec_rate | DECIMAL(28,8) | 月度预算执行率 | `sum(exec_amt)/sum(approved_budget_amt)` |
+| approved_budget_amt | DECIMAL(28,8) | 批复预算(汇总) | 汇总 |
+| exec_amt | DECIMAL(28,8) | 执行金额(汇总) | 汇总 |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.17 `ads_proj_fin_expense_compliance_trend_mn`（支出合规率：趋势数据集，占位）
+
+> 需补采支出/凭证明细与合规判定结果（例如 `dwd_fin_fact_expense_line.is_compliant`）。
+
+- 粒度：`stat_month`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| expense_compliance_rate | DECIMAL(28,8) | 支出合规率 | `合规笔数/总笔数`（占位） |
+| compliant_cnt | BIGINT | 合规笔数 | 占位 |
+| total_cnt | BIGINT | 总支出笔数 | 占位 |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.18 `ads_proj_fin_cost_structure_mn`（项目成本结构占比：饼图数据集，占位）
+
+> 需补采成本科目明细（设备费/劳务费/材料费等）。
+
+- 粒度：`stat_month, cost_subject`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| cost_subject | STRING | 成本科目 | 需补采 |
+| cost_amt | DECIMAL(28,8) | 成本金额 | 需补采 |
+| cost_share | DECIMAL(28,8) | 占比 | `cost_amt/sum(cost_amt)` |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.19 `ads_proj_fin_budget_structure_mn`（项目预算结构占比：饼图数据集，占位）
+
+> 需补采预算科目明细（预算科目维度 + 预算分解金额）。
+
+- 粒度：`stat_month, budget_subject`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| budget_subject | STRING | 预算科目 | 需补采 |
+| budget_amt | DECIMAL(28,8) | 预算金额 | 需补采 |
+| budget_share | DECIMAL(28,8) | 占比 | `budget_amt/sum(budget_amt)` |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.20 `ads_proj_fin_budget_dept_share_mn`（项目预算部门占比：饼图数据集）
+
+- 粒度：`stat_month, dept_id`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| dept_id | STRING | 部门ID | 项目责任部门（或财务部门） |
+| dept_name | STRING | 部门名称 | 维度关联（需补采部门维度则占位） |
+| budget_amt | DECIMAL(28,8) | 预算金额 | 汇总项目预算 |
+| budget_share | DECIMAL(28,8) | 占比 | `budget_amt/sum(budget_amt)` |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.21 `ads_proj_fin_fund_per_researcher_cmp_mn`（人均项目经费对比：分组条形图，占位）
+
+> 需补采科研人员数（HR headcount）。
+
+- 粒度：`stat_month, group_dim_type, group_dim_id`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| group_dim_type | STRING | 分组维度类型 | `dept/project_type`（示例） |
+| group_dim_id | STRING | 分组维度ID | 部门/项目类型等 |
+| group_dim_name | STRING | 分组维度名称 | 维度关联 |
+| fund_amt | DECIMAL(28,8) | 经费金额 | 汇总预算 |
+| headcount | BIGINT | 人员数 | 需补采 |
+| fund_per_researcher | DECIMAL(28,8) | 人均经费 | `fund_amt/headcount` |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.22 `ads_proj_fin_budget_exec_cmp_mn`（项目预算执行对比：分组柱状图数据集）
+
+- 粒度：`stat_month, group_dim_type, group_dim_id`
+- 分区：`stat_month`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| group_dim_type | STRING | 分组维度类型 | `dept/project_type`（示例） |
+| group_dim_id | STRING | 分组维度ID | 部门/项目类型等 |
+| group_dim_name | STRING | 分组维度名称 | 维度关联 |
+| approved_budget_amt | DECIMAL(28,8) | 批复预算 | 汇总 |
+| exec_amt | DECIMAL(28,8) | 执行金额 | 汇总 |
+| exec_rate | DECIMAL(28,8) | 执行率 | `exec_amt/approved_budget_amt` |
+| stat_month | STRING | 月分区 | `yyyy-MM` |
+| etl_time | TIMESTAMP | ETL时间 | ETL生成 |
+
+##### 7.5.23 `ads_proj_exec_key_projects_di`（重点项目进展：列表/甘特图数据集）
+
+- 粒度：`dt, project_id`
+- 分区：`dt`
+
+| 字段 | 类型 | 含义 | 来源/计算 |
+|---|---|---|---|
+| project_id | STRING | 项目ID | 项目维度 |
+| project_code | STRING | 项目编码 | 项目维度 |
+| project_name | STRING | 项目名称 | 项目维度 |
+| duty_dept_id | STRING | 责任部门ID | 项目维度 |
+| plan_start_date | DATE | 计划开始 | 项目维度 |
+| plan_finish_date | DATE | 计划完成 | 项目维度 |
+| actu_start_date | DATE | 实际开始 | 项目维度 |
+| actu_finish_date | DATE | 实际完成 | 项目维度 |
+| is_finished | INT | 是否完工 | 派生 |
+| is_delayed | INT | 是否延期 | 派生 |
+| delay_days | INT | 延期天数 | 派生 |
 | dt | STRING | 日分区 | 看板日 |
 | etl_time | TIMESTAMP | ETL时间 | ETL生成 |
