@@ -1,16 +1,17 @@
 import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CollectionListItem } from "../api/analyticsApi";
-import { normalizeLocale, t, type Locale } from "../i18n";
+import { ErrorNotice } from "../components/ErrorNotice";
+import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
-	| { state: "error"; error: string };
+	| { state: "error"; error: unknown };
 
 export default function CollectionsPage() {
-	const locale: Locale = useMemo(() => normalizeLocale(navigator.language), []);
+	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const [state, setState] = useState<LoadState<CollectionListItem[]>>({ state: "loading" });
 
 	useEffect(() => {
@@ -23,7 +24,7 @@ export default function CollectionsPage() {
 			})
 			.catch((e) => {
 				if (cancelled) return;
-				setState({ state: "error", error: String(e?.message ?? e) });
+				setState({ state: "error", error: e });
 			});
 		return () => {
 			cancelled = true;
@@ -39,7 +40,7 @@ export default function CollectionsPage() {
 
 			<div className="card">
 				{state.state === "loading" && <div>{t(locale, "loading")}</div>}
-				{state.state === "error" && <div>{t(locale, "error") + ": " + state.error}</div>}
+				{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 				{state.state === "loaded" && (
 					<table className="table">
 						<thead>
@@ -64,4 +65,3 @@ export default function CollectionsPage() {
 		</div>
 	);
 }
-

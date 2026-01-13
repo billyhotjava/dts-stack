@@ -163,6 +163,7 @@ public class PublicResource {
 
         try {
             String sql;
+            List<Object> bindings = List.of();
             Map<String, Object> jsonQuery = new LinkedHashMap<>();
             jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
             jsonQuery.put("middleware", Map.of("js-int-to-string?", true, "ignore-cached-results?", false, "process-viz-settings?", false));
@@ -182,6 +183,7 @@ public class PublicResource {
                 MbqlToSqlService.TranslationResult translated =
                         mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
                 sql = translated.sql();
+                bindings = translated.bindings();
                 jsonQuery.put("type", "query");
                 jsonQuery.put("query", mbql);
             } else {
@@ -189,7 +191,7 @@ public class PublicResource {
             }
 
             DatasetQueryService.DatasetResult result =
-                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults());
+                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
             Map<String, Object> data = new LinkedHashMap<>();
@@ -310,4 +312,3 @@ public class PublicResource {
         }
     }
 }
-

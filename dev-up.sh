@@ -290,16 +290,15 @@ fi
 if [[ "${WITH_ANALYTICS}" == "1" || "${WITH_ANALYTICS_DEV}" == "1" ]]; then
   services+=(dts-analytics)
   if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
-    services+=(dts-analytics-webapp)
-    if [[ "$MODE" == "local" ]]; then
-      services+=(dts-analytics-webapp-modern)
-    fi
+    services+=(dts-analytics-webapp-modern)
   fi
 fi
 
 if [[ "$MODE" == "local" ]]; then
   echo "[dev-up] Starting local-dev services (bind mounts + live reload) ..."
-  "${compose_cmd[@]}" "${compose_files[@]}" up -d "${services[@]}"
+  # Force recreate so changes in docker-compose.dev.yml (command/volumes) reliably take effect,
+  # especially for the mounted target/ directories used to avoid host filesystem permission issues.
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d --force-recreate "${services[@]}"
   if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
     echo "[dev-up] Patching Vite env handling (best-effort) ..."
     "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-admin-webapp sh -lc "sh /patches/patch-vite-env.sh || true" || true

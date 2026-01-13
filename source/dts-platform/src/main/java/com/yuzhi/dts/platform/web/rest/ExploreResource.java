@@ -21,6 +21,7 @@ import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.CatalogMaskingService;
 import com.yuzhi.dts.platform.service.security.DatasetSqlBuilder;
 import com.yuzhi.dts.platform.service.security.DatasetSecurityMetadataResolver;
+import com.yuzhi.dts.platform.service.security.DatasetDataAccessApprovalService;
 import com.yuzhi.dts.platform.service.security.SecurityGuardException;
 import com.yuzhi.dts.platform.service.security.SecuritySqlRewriter;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
@@ -77,6 +78,7 @@ public class ExploreResource {
     private final DatasetSecurityMetadataResolver metadataResolver;
     private final SecuritySqlRewriter securitySqlRewriter;
     private final CatalogMaskingService catalogMaskingService;
+    private final DatasetDataAccessApprovalService dataAccessApprovalService;
 
     public ExploreResource(
         ExploreSavedQueryRepository savedRepo,
@@ -90,7 +92,8 @@ public class ExploreResource {
         DatasetSqlBuilder datasetSqlBuilder,
         DatasetSecurityMetadataResolver metadataResolver,
         SecuritySqlRewriter securitySqlRewriter,
-        CatalogMaskingService catalogMaskingService
+        CatalogMaskingService catalogMaskingService,
+        DatasetDataAccessApprovalService dataAccessApprovalService
     ) {
         this.savedRepo = savedRepo;
         this.executionRepo = executionRepo;
@@ -104,6 +107,7 @@ public class ExploreResource {
         this.metadataResolver = metadataResolver;
         this.securitySqlRewriter = securitySqlRewriter;
         this.catalogMaskingService = catalogMaskingService;
+        this.dataAccessApprovalService = dataAccessApprovalService;
     }
 
     @PostMapping("/query/preview")
@@ -141,6 +145,41 @@ public class ExploreResource {
                     ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT
                     : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY;
                 return ApiResponses.error(code, "Access denied for dataset");
+            }
+            DatasetDataAccessApprovalService.Decision dataDecision = dataAccessApprovalService.checkDataAccess(
+                dataset,
+                DatasetDataAccessApprovalService.DataAction.PREVIEW,
+                activeDept
+            );
+            if (!dataDecision.allowed()) {
+                recordAudit(
+                    "DENY",
+                    "explore.preview",
+                    datasetIdentifier(dataset, body.get("datasetId")),
+                    "预览数据集被拒绝：" + safeLabel(datasetLabel),
+                    datasetLabel,
+                    "FAILED",
+                    Map.of("error", dataDecision.message())
+                );
+                return ApiResponses.error(dataDecision.code(), dataDecision.message());
+            }
+        } else {
+            DatasetDataAccessApprovalService.Decision dataDecision = dataAccessApprovalService.checkDataAccess(
+                null,
+                DatasetDataAccessApprovalService.DataAction.PREVIEW,
+                activeDept
+            );
+            if (!dataDecision.allowed()) {
+                recordAudit(
+                    "DENY",
+                    "explore.preview",
+                    Objects.toString(body.get("datasetId"), "missing"),
+                    "预览数据集被拒绝",
+                    datasetLabel,
+                    "FAILED",
+                    Map.of("error", dataDecision.message())
+                );
+                return ApiResponses.error(dataDecision.code(), dataDecision.message());
             }
         }
         try {
@@ -227,6 +266,41 @@ public class ExploreResource {
                     ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT
                     : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY;
                 return ApiResponses.error(code, "Access denied for dataset");
+            }
+            DatasetDataAccessApprovalService.Decision dataDecision = dataAccessApprovalService.checkDataAccess(
+                dataset,
+                DatasetDataAccessApprovalService.DataAction.QUERY,
+                activeDept
+            );
+            if (!dataDecision.allowed()) {
+                recordAudit(
+                    "DENY",
+                    "explore.execute",
+                    datasetIdentifier(dataset, body.get("datasetId")),
+                    "执行数据查询被拒绝：" + safeLabel(datasetLabel),
+                    datasetLabel,
+                    "FAILED",
+                    Map.of("error", dataDecision.message())
+                );
+                return ApiResponses.error(dataDecision.code(), dataDecision.message());
+            }
+        } else {
+            DatasetDataAccessApprovalService.Decision dataDecision = dataAccessApprovalService.checkDataAccess(
+                null,
+                DatasetDataAccessApprovalService.DataAction.QUERY,
+                activeDept
+            );
+            if (!dataDecision.allowed()) {
+                recordAudit(
+                    "DENY",
+                    "explore.execute",
+                    Objects.toString(body.get("datasetId"), "missing"),
+                    "执行数据查询被拒绝",
+                    datasetLabel,
+                    "FAILED",
+                    Map.of("error", dataDecision.message())
+                );
+                return ApiResponses.error(dataDecision.code(), dataDecision.message());
             }
         }
         try {
@@ -955,6 +1029,43 @@ public class ExploreResource {
                     : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY;
                 return ApiResponses.error(code, "Access denied for dataset");
             }
+
+            // Enforce data-access approval for query
+            DatasetDataAccessApprovalService.Decision dataDecision = dataAccessApprovalService.checkDataAccess(
+                dataset,
+                DatasetDataAccessApprovalService.DataAction.QUERY,
+                activeDept
+            );
+            if (!dataDecision.allowed()) {
+                recordAudit(
+                    "DENY",
+                    "explore.savedQuery.run",
+                    id.toString(),
+                    "执行保存查询被拒绝：" + safeLabel(q.getName()),
+                    q.getName(),
+                    "FAILED",
+                    Map.of("error", dataDecision.message())
+                );
+                return ApiResponses.error(dataDecision.code(), dataDecision.message());
+            }
+        } else {
+            DatasetDataAccessApprovalService.Decision dataDecision = dataAccessApprovalService.checkDataAccess(
+                null,
+                DatasetDataAccessApprovalService.DataAction.QUERY,
+                activeDept
+            );
+            if (!dataDecision.allowed()) {
+                recordAudit(
+                    "DENY",
+                    "explore.savedQuery.run",
+                    id.toString(),
+                    "执行保存查询被拒绝：" + safeLabel(q.getName()),
+                    q.getName(),
+                    "FAILED",
+                    Map.of("error", dataDecision.message())
+                );
+                return ApiResponses.error(dataDecision.code(), dataDecision.message());
+            }
         }
         String datasetLabel = datasetName(dataset, q.getDatasetId());
         try {
@@ -1040,11 +1151,7 @@ public class ExploreResource {
         }
         try {
             UUID datasetId = UUID.fromString(String.valueOf(datasetIdRaw));
-            CatalogDataset dataset = datasetRepo.findById(datasetId).orElse(null);
-            if (dataset == null) {
-                return null;
-            }
-            return accessChecker.canRead(dataset) ? dataset : null;
+            return datasetRepo.findById(datasetId).orElse(null);
         } catch (Exception ignored) {
             return null;
         }

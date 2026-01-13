@@ -21,9 +21,6 @@ services:
       - "traefik.http.middlewares.hetu-strip-dashboards.stripprefixregex.regex=/dashboards"
       - "traefik.http.middlewares.hetu-allow-anonymous.headers.customrequestheaders.tui-allow-anonymous=true"
       - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Port=7778"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Proto=http"
       - "traefik.http.routers.hetu-dashboards.middlewares=hetu-strip-dashboards@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
       - "traefik.http.routers.hetu-dashboard-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboard/hetu`)"
       - "traefik.http.routers.hetu-dashboard-hetu.entrypoints=websecure"
@@ -262,36 +259,26 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
       - "traefik.http.middlewares.dts-strip-analytics-api.stripprefix.prefixes=/analytics"
+      # Public endpoints: /analytics/api/public/* -> dts-analytics /api/public/* (no platform forward-auth)
+      - "traefik.http.routers.dts-analytics-public.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/public`)"
+      - "traefik.http.routers.dts-analytics-public.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-public.tls=true"
+      - "traefik.http.routers.dts-analytics-public.priority=245"
+      - "traefik.http.routers.dts-analytics-public.service=dts-analytics-api"
+      - "traefik.http.routers.dts-analytics-public.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
+      # Embed runtime endpoints: /analytics/api/embed/* (token-gated; no platform forward-auth)
+      - "traefik.http.routers.dts-analytics-embed.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/embed/`)"
+      - "traefik.http.routers.dts-analytics-embed.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-embed.tls=true"
+      - "traefik.http.routers.dts-analytics-embed.priority=244"
+      - "traefik.http.routers.dts-analytics-embed.service=dts-analytics-api"
+      - "traefik.http.routers.dts-analytics-embed.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
       - "traefik.http.routers.dts-analytics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`)"
       - "traefik.http.routers.dts-analytics-api.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-api.tls=true"
       - "traefik.http.routers.dts-analytics-api.priority=240"
       - "traefik.http.services.dts-analytics-api.loadbalancer.server.port=3000"
       - "traefik.http.routers.dts-analytics-api.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
-
-  dts-analytics-webapp:
-    image: ${IMAGE_DTS_ANALYTICS_WEBAPP:?Set IMAGE_DTS_ANALYTICS_WEBAPP in imgversion.conf or .env}
-    depends_on:
-      - dts-analytics
-    environment:
-      PORT: "3001"
-      DTS_ANALYTICS_API_BASE: "http://dts-analytics:3000"
-      DTS_PLATFORM_USERSTORE_KEY: "userStore"
-    ports: []
-    networks:
-      - dts-core
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      # Legacy UI is kept temporarily for reference at /analytics/legacy (modern fully replaces /analytics).
-      - "traefik.http.middlewares.dts-strip-analytics-ui-legacy.stripprefix.prefixes=/analytics/legacy"
-      - "traefik.http.routers.dts-analytics-ui-legacy.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/legacy`)"
-      - "traefik.http.routers.dts-analytics-ui-legacy.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-ui-legacy.tls=true"
-      - "traefik.http.routers.dts-analytics-ui-legacy.priority=220"
-      - "traefik.http.routers.dts-analytics-ui-legacy.service=dts-analytics-webapp"
-      - "traefik.http.services.dts-analytics-webapp.loadbalancer.server.port=3001"
-      - "traefik.http.routers.dts-analytics-ui-legacy.middlewares=dts-strip-analytics-ui-legacy@docker,security-headers@file"
 
   dts-analytics-webapp-modern:
     image: ${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}
@@ -303,7 +290,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
       - "traefik.http.middlewares.dts-strip-analytics-ui.stripprefix.prefixes=/analytics"
-      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`) && !PathPrefix(`/analytics/legacy`)"
+      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`)"
       - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-ui.tls=true"
       - "traefik.http.routers.dts-analytics-ui.priority=230"

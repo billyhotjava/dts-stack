@@ -1,10 +1,14 @@
 package com.yuzhi.dts.admin.repository;
 
 import com.yuzhi.dts.admin.domain.PersonProfile;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -20,4 +24,9 @@ public interface PersonProfileRepository extends JpaRepository<PersonProfile, Lo
     Page<PersonProfile> findByDeptCodeIgnoreCase(String deptCode, Pageable pageable);
 
     boolean existsByDeptCodeIgnoreCase(String deptCode);
+
+    @Query(
+        "select p from PersonProfile p where lower(p.account) in :values or lower(p.personCode) in :values or lower(p.externalId) in :values"
+    )
+    List<PersonProfile> findByAnyIdentifierLowerIn(@Param("values") Collection<String> values);
 }

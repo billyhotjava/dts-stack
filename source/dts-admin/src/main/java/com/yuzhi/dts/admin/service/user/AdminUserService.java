@@ -154,15 +154,27 @@ public class AdminUserService {
         this.useClientRoles = useClientRoles;
     }
 
-@Transactional(propagation = Propagation.REQUIRED)
-    public Page<AdminKeycloakUser> listSnapshots(int page, int size, String keyword) {
+    @Transactional(propagation = Propagation.REQUIRED)
+    public Page<AdminKeycloakUser> listSnapshots(int page, int size, String keyword, Integer mdmStatus) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.max(size, 1);
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "username"));
         Page<AdminKeycloakUser> result;
-        LOG.debug("listSnapshots start page={} size={} keyword='{}'", safePage, safeSize, StringUtils.trimToEmpty(keyword));
-        if (StringUtils.isNotBlank(keyword)) {
+        LOG.debug(
+            "listSnapshots start page={} size={} keyword='{}' mdmStatus={}",
+            safePage,
+            safeSize,
+            StringUtils.trimToEmpty(keyword),
+            mdmStatus
+        );
+        boolean hasKeyword = StringUtils.isNotBlank(keyword);
+        boolean hasStatus = mdmStatus != null;
+        if (hasKeyword && hasStatus) {
+            result = userRepository.findByUsernameContainingIgnoreCaseAndMdmEnabled(keyword.trim(), mdmStatus.intValue(), pageable);
+        } else if (hasKeyword) {
             result = userRepository.findByUsernameContainingIgnoreCase(keyword.trim(), pageable);
+        } else if (hasStatus) {
+            result = userRepository.findByMdmEnabled(mdmStatus.intValue(), pageable);
         } else {
             result = userRepository.findAll(pageable);
         }
@@ -172,8 +184,13 @@ public class AdminUserService {
             if (result.getTotalElements() == 0) {
                 refreshSnapshotsFromProfiles();
             }
-            if (StringUtils.isNotBlank(keyword)) {
+            if (hasKeyword && hasStatus) {
+                result =
+                    userRepository.findByUsernameContainingIgnoreCaseAndMdmEnabled(keyword.trim(), mdmStatus.intValue(), pageable);
+            } else if (hasKeyword) {
                 result = userRepository.findByUsernameContainingIgnoreCase(keyword.trim(), pageable);
+            } else if (hasStatus) {
+                result = userRepository.findByMdmEnabled(mdmStatus.intValue(), pageable);
             } else {
                 result = userRepository.findAll(pageable);
             }
@@ -183,8 +200,13 @@ public class AdminUserService {
             LOG.info("user snapshots count={} (<pageSize={}), refreshing profiles+keycloak", result.getNumberOfElements(), safeSize);
             refreshSnapshotsFromProfiles();
             refreshSnapshotsFromKeycloak();
-            if (StringUtils.isNotBlank(keyword)) {
+            if (hasKeyword && hasStatus) {
+                result =
+                    userRepository.findByUsernameContainingIgnoreCaseAndMdmEnabled(keyword.trim(), mdmStatus.intValue(), pageable);
+            } else if (hasKeyword) {
                 result = userRepository.findByUsernameContainingIgnoreCase(keyword.trim(), pageable);
+            } else if (hasStatus) {
+                result = userRepository.findByMdmEnabled(mdmStatus.intValue(), pageable);
             } else {
                 result = userRepository.findAll(pageable);
             }
@@ -207,33 +229,54 @@ public class AdminUserService {
             return;
         }
         try {
-            List<KeycloakUserDTO> users = keycloakAdminClient.listUsers(0, 500, token);
             int saved = 0;
-            for (KeycloakUserDTO dto : users) {
-                if (dto == null || !StringUtils.isNotBlank(dto.getId()) || !StringUtils.isNotBlank(dto.getUsername())) {
-                    continue;
+            int first = 0;
+            int max = 200;
+            int loops = 0;
+            while (loops++ < 500) {
+                List<KeycloakUserDTO> users = keycloakAdminClient.listUsers(first, max, token);
+                if (users == null || users.isEmpty()) {
+                    break;
                 }
-                AdminKeycloakUser snapshot = userRepository
-                    .findByKeycloakId(dto.getId())
-                    .orElseGet(() -> userRepository.findByUsernameIgnoreCase(dto.getUsername()).orElseGet(AdminKeycloakUser::new));
-                snapshot.setKeycloakId(dto.getId());
-                snapshot.setUsername(dto.getUsername());
-                if (StringUtils.isNotBlank(dto.getFullName())) {
-                    snapshot.setFullName(dto.getFullName());
+                for (KeycloakUserDTO dto : users) {
+                    if (dto == null || !StringUtils.isNotBlank(dto.getId()) || !StringUtils.isNotBlank(dto.getUsername())) {
+                        continue;
+                    }
+                    AdminKeycloakUser snapshot = userRepository
+                        .findByKeycloakId(dto.getId())
+                        .orElseGet(() ->
+                            userRepository.findByUsernameIgnoreCase(dto.getUsername()).orElseGet(AdminKeycloakUser::new)
+                        );
+                    snapshot.setKeycloakId(dto.getId());
+                    snapshot.setUsername(dto.getUsername());
+                    snapshot.setFullName(StringUtils.defaultIfBlank(resolveFullName(dto), snapshot.getFullName()));
+                    snapshot.setEmail(StringUtils.defaultIfBlank(dto.getEmail(), snapshot.getEmail()));
+                    snapshot.setPhone(StringUtils.defaultIfBlank(extractSingle(dto, "phone"), snapshot.getPhone()));
+                    String secLevel = normalizeSecurityLevel(extractSingle(dto, "person_security_level"));
+                    snapshot.setPersonSecurityLevel(StringUtils.defaultIfBlank(secLevel, "GENERAL"));
+                    snapshot.setEnabled(Boolean.TRUE.equals(dto.getEnabled()));
+                    if (dto.getRealmRoles() != null) {
+                        snapshot.setRealmRoles(dto.getRealmRoles());
+                    }
+                    List<String> groupPaths = normalizeGroupPathList(dto.getGroups());
+                    if (groupPaths.isEmpty()) {
+                        groupPaths = resolveGroupPathsFromProfiles(dto.getUsername());
+                    }
+                    if (!groupPaths.isEmpty()) {
+                        snapshot.setGroupPaths(mergeGroupPaths(snapshot.getGroupPaths(), groupPaths));
+                    }
+                    snapshot.setLastSyncAt(Instant.now());
+                    userRepository.save(snapshot);
+                    saved++;
                 }
-                String secLevel = normalizeSecurityLevel(extractSingle(dto, "person_security_level"));
-                snapshot.setPersonSecurityLevel(StringUtils.defaultIfBlank(secLevel, "GENERAL"));
-                snapshot.setEnabled(Boolean.TRUE.equals(dto.getEnabled()));
-                List<String> groupPaths = normalizeGroupPathList(dto.getGroups());
-                if (groupPaths.isEmpty()) {
-                    groupPaths = resolveGroupPathsFromProfiles(dto.getUsername());
+                if (users.size() < max) {
+                    break;
                 }
-                if (!groupPaths.isEmpty()) {
-                    snapshot.setGroupPaths(mergeGroupPaths(snapshot.getGroupPaths(), groupPaths));
+                first += max;
+                if (first > 100_000) {
+                    LOG.warn("refresh snapshots reached cap first={}, stop pagination", first);
+                    break;
                 }
-                snapshot.setLastSyncAt(Instant.now());
-                userRepository.save(snapshot);
-                saved++;
             }
             LOG.info("refreshed {} user snapshots from keycloak", saved);
         } catch (Exception ex) {
@@ -242,61 +285,101 @@ public class AdminUserService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<AdminKeycloakUser> refreshSnapshotFromKeycloakForUser(String username) {
+        if (StringUtils.isBlank(username)) {
+            return Optional.empty();
+        }
+        String accessToken = resolveSnapshotAccessToken();
+        if (StringUtils.isBlank(accessToken)) {
+            return Optional.empty();
+        }
+        try {
+            return keycloakAdminClient
+                .findByUsername(username.trim(), accessToken)
+                .map(remote -> {
+                    refreshUserGroups(remote, accessToken);
+                    return syncSnapshot(remote);
+                });
+        } catch (Exception ex) {
+            LOG.warn("Failed to refresh snapshot for user {}: {}", username, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void refreshSnapshotsFromProfiles() {
         try {
-            var page = personProfileRepository.findAll(PageRequest.of(0, 1000));
-            if (page.isEmpty()) {
-                return;
-            }
+            String token = null;
+            boolean tokenResolved = false;
             int saved = 0;
-            for (var profile : page.getContent()) {
-                String username = firstNonBlank(profile.getAccount(), profile.getPersonCode(), profile.getExternalId());
-                if (!StringUtils.isNotBlank(username)) {
-                    continue;
+            int pageIndex = 0;
+            int pageSize = 500;
+            while (pageIndex < 500) {
+                var page = personProfileRepository.findAll(PageRequest.of(pageIndex, pageSize));
+                if (page.isEmpty()) {
+                    break;
                 }
-                AdminKeycloakUser snapshot = userRepository
-                    .findByUsernameIgnoreCase(username)
-                    .orElseGet(() -> {
-                        AdminKeycloakUser u = new AdminKeycloakUser();
-                        u.setUsername(username);
-                        return u;
-                    });
-                Object kcIdAttr = profile.getAttributes() == null ? null : profile.getAttributes().get("keycloakId");
-                if (StringUtils.isBlank(snapshot.getKeycloakId()) && kcIdAttr != null) {
-                    snapshot.setKeycloakId(String.valueOf(kcIdAttr));
-                }
-                if (StringUtils.isBlank(snapshot.getKeycloakId())) {
-                    String token = resolveManagementToken();
-                    if (StringUtils.isNotBlank(token)) {
-                        try {
-                            keycloakAdminClient.findByUsername(username, token).ifPresent(dto -> snapshot.setKeycloakId(dto.getId()));
-                        } catch (Exception ignored) {
+                for (var profile : page.getContent()) {
+                    String username = firstNonBlank(profile.getAccount(), profile.getPersonCode(), profile.getExternalId());
+                    if (!StringUtils.isNotBlank(username)) {
+                        continue;
+                    }
+                    AdminKeycloakUser snapshot = userRepository
+                        .findByUsernameIgnoreCase(username)
+                        .orElseGet(() -> {
+                            AdminKeycloakUser u = new AdminKeycloakUser();
+                            u.setUsername(username);
+                            return u;
+                        });
+                    Object kcIdAttr = profile.getAttributes() == null ? null : profile.getAttributes().get("keycloakId");
+                    if (StringUtils.isBlank(snapshot.getKeycloakId()) && kcIdAttr != null) {
+                        snapshot.setKeycloakId(String.valueOf(kcIdAttr));
+                    }
+                    if (StringUtils.isBlank(snapshot.getKeycloakId())) {
+                        if (!tokenResolved) {
+                            try {
+                                token = resolveManagementToken();
+                            } catch (Exception ex) {
+                                token = null;
+                            } finally {
+                                tokenResolved = true;
+                            }
+                        }
+                        if (StringUtils.isNotBlank(token)) {
+                            try {
+                                keycloakAdminClient.findByUsername(username, token).ifPresent(dto -> snapshot.setKeycloakId(dto.getId()));
+                            } catch (Exception ignored) {
+                            }
                         }
                     }
+                    if (StringUtils.isNotBlank(profile.getFullName())) {
+                        snapshot.setFullName(profile.getFullName());
+                    }
+                    snapshot.setPersonSecurityLevel(
+                        StringUtils.defaultIfBlank(
+                            normalizeSecurityLevel(
+                                extractSingle(profile.getAttributes(), "person_security_level", "securityLevel", "person_level")
+                            ),
+                            DEFAULT_PERSON_LEVEL
+                        )
+                    );
+                    snapshot.setMdmEnabled(profile.getLifecycleStatus() == PersonLifecycleStatus.INACTIVE ? 0 : 1);
+                    List<String> resolvedPaths = resolveGroupPathsFromProfile(profile);
+                    if (!resolvedPaths.isEmpty()) {
+                        snapshot.setGroupPaths(mergeGroupPaths(snapshot.getGroupPaths(), resolvedPaths));
+                    }
+                    snapshot.setLastSyncAt(Instant.now());
+                    if (StringUtils.isNotBlank(snapshot.getKeycloakId())) {
+                        userRepository.save(snapshot);
+                        saved++;
+                    } else {
+                        LOG.debug("skip snapshot without kcId (username={} dept={})", snapshot.getUsername(), profile.getDeptCode());
+                    }
                 }
-                if (StringUtils.isNotBlank(profile.getFullName())) {
-                    snapshot.setFullName(profile.getFullName());
+                if (!page.hasNext()) {
+                    break;
                 }
-                snapshot.setPersonSecurityLevel(
-                    StringUtils.defaultIfBlank(
-                        normalizeSecurityLevel(
-                            extractSingle(profile.getAttributes(), "person_security_level", "securityLevel", "person_level")
-                        ),
-                        DEFAULT_PERSON_LEVEL
-                    )
-                );
-                snapshot.setMdmEnabled(profile.getLifecycleStatus() == PersonLifecycleStatus.INACTIVE ? 0 : 1);
-                List<String> resolvedPaths = resolveGroupPathsFromProfile(profile);
-                if (!resolvedPaths.isEmpty()) {
-                    snapshot.setGroupPaths(mergeGroupPaths(snapshot.getGroupPaths(), resolvedPaths));
-                }
-                snapshot.setLastSyncAt(Instant.now());
-                if (StringUtils.isNotBlank(snapshot.getKeycloakId())) {
-                    userRepository.save(snapshot);
-                    saved++;
-                } else {
-                    LOG.debug("skip snapshot without kcId (username={} dept={})", snapshot.getUsername(), profile.getDeptCode());
-                }
+                pageIndex++;
             }
             LOG.info("refreshed {} user snapshots from person profiles", saved);
         } catch (Exception ex) {
@@ -375,6 +458,71 @@ public class AdminUserService {
             result.put(username, display);
             if (!result.containsKey(lower)) {
                 result.put(lower, display);
+            }
+        }
+        return result;
+    }
+
+    public record DepartmentInfo(String deptCode, String deptName) {}
+
+    @Transactional(readOnly = true)
+    public Map<String, DepartmentInfo> resolveDepartments(Collection<String> usernames) {
+        LinkedHashMap<String, DepartmentInfo> result = new LinkedHashMap<>();
+        if (usernames == null || usernames.isEmpty()) {
+            return result;
+        }
+        LinkedHashSet<String> normalizedInputs = new LinkedHashSet<>();
+        List<String> orderedInputs = new ArrayList<>();
+        for (String raw : usernames) {
+            if (StringUtils.isBlank(raw)) {
+                continue;
+            }
+            String trimmed = raw.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            orderedInputs.add(trimmed);
+            normalizedInputs.add(trimmed.toLowerCase());
+        }
+        if (normalizedInputs.isEmpty()) {
+            return result;
+        }
+
+        Map<String, DepartmentInfo> resolvedById = new HashMap<>();
+        try {
+            List<PersonProfile> profiles = personProfileRepository.findByAnyIdentifierLowerIn(normalizedInputs);
+            for (PersonProfile profile : profiles) {
+                if (profile == null) {
+                    continue;
+                }
+                DepartmentInfo info = new DepartmentInfo(
+                    StringUtils.trimToNull(profile.getDeptCode()),
+                    StringUtils.trimToNull(profile.getDeptName())
+                );
+                if (info.deptCode() == null && info.deptName() == null) {
+                    continue;
+                }
+                String account = StringUtils.trimToNull(profile.getAccount());
+                if (account != null) {
+                    resolvedById.putIfAbsent(account.toLowerCase(), info);
+                }
+                String personCode = StringUtils.trimToNull(profile.getPersonCode());
+                if (personCode != null) {
+                    resolvedById.putIfAbsent(personCode.toLowerCase(), info);
+                }
+                String externalId = StringUtils.trimToNull(profile.getExternalId());
+                if (externalId != null) {
+                    resolvedById.putIfAbsent(externalId.toLowerCase(), info);
+                }
+            }
+        } catch (Exception ex) {
+            LOG.warn("resolve departments failed: {}", ex.getMessage());
+        }
+
+        for (String input : orderedInputs) {
+            DepartmentInfo info = resolvedById.get(input.toLowerCase());
+            if (info != null) {
+                result.put(input, info);
             }
         }
         return result;
@@ -4353,7 +4501,6 @@ public class AdminUserService {
         if (roleCode == null) return "read";
         String r = roleCode.toUpperCase(java.util.Locale.ROOT);
         if (r.endsWith("_OWNER") || r.endsWith("_LEADER")) return "read,write,export";
-        if (r.endsWith("_DEV") || r.endsWith("_DATA_DEV")) return "read,write";
         return "read"; // VIEWER and others default to read
     }
 

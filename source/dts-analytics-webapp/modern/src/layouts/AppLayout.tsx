@@ -1,13 +1,9 @@
 import { Link, NavLink, Outlet } from "react-router";
-import type { Locale } from "../i18n";
-import { t } from "../i18n";
+import { getEffectiveLocale, setEffectiveLocale, t, toggleLocale } from "../i18n";
 import "./layout.css";
 
-type Props = {
-	locale: Locale;
-};
-
-export function AppLayout({ locale }: Props) {
+export function AppLayout() {
+	const locale = getEffectiveLocale();
 	return (
 		<div className="layout">
 			<aside className="sidebar">
@@ -30,11 +26,24 @@ export function AppLayout({ locale }: Props) {
 					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/questions">
 						{t(locale, "nav.questions")}
 					</NavLink>
+					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/data">
+						{t(locale, "nav.data")}
+					</NavLink>
 					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/search">
 						{t(locale, "nav.search")}
 					</NavLink>
 				</nav>
 				<div className="sidebarFooter">
+					<button
+						className="btn"
+						type="button"
+						onClick={() => {
+							setEffectiveLocale(toggleLocale(locale));
+							window.location.reload();
+						}}
+					>
+						{locale === "en" ? t(locale, "lang.zh") : t(locale, "lang.en")}
+					</button>
 					<a className="btn" href="/analytics/legacy" target="_blank" rel="noreferrer">
 						{t(locale, "openLegacy")}
 					</a>

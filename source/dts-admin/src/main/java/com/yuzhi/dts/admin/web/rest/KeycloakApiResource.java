@@ -180,7 +180,12 @@ public class KeycloakApiResource {
             fromCache = true;
         }
         if (list == null || list.isEmpty()) {
-            Page<com.yuzhi.dts.admin.domain.AdminKeycloakUser> snapshots = adminUserService.listSnapshots(0, Math.max(max, 1), null);
+            Page<com.yuzhi.dts.admin.domain.AdminKeycloakUser> snapshots = adminUserService.listSnapshots(
+                0,
+                Math.max(max, 1),
+                null,
+                null
+            );
             if (snapshots != null && !snapshots.isEmpty()) {
                 List<KeycloakUserDTO> fallback = new ArrayList<>(snapshots.getNumberOfElements());
                 for (com.yuzhi.dts.admin.domain.AdminKeycloakUser snap : snapshots.getContent()) {

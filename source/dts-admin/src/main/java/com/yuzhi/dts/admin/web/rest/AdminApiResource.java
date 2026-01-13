@@ -292,9 +292,10 @@ public class AdminApiResource {
 
     private static final Map<String, String> ROLE_ALIASES = Map.ofEntries(
         Map.entry("DEPT_OWNER", "DEPT_DATA_OWNER"),
-        Map.entry("DEPT_EDITOR", "DEPT_DATA_DEV"),
         Map.entry("INST_OWNER", "INST_DATA_OWNER"),
-        Map.entry("INST_EDITOR", "INST_DATA_DEV")
+        // Historical aliases: we no longer support separate DEV roles; map editors to owners.
+        Map.entry("DEPT_EDITOR", "DEPT_DATA_OWNER"),
+        Map.entry("INST_EDITOR", "INST_DATA_OWNER")
     );
 
     private static final Map<String, String> ROLE_REVERSE_ALIASES;
@@ -319,27 +320,11 @@ public class AdminApiResource {
             )
         ),
         Map.entry(
-            "DEPT_DATA_DEV",
-            new BuiltinRoleSpec(
-                "部门数据开发员",
-                "DEPARTMENT",
-                "覆盖本部门数据开发；可读取密级不超的部门数据并在部门范围内写入；不具备密级或共享策略调整、授权管理能力。"
-            )
-        ),
-        Map.entry(
             "INST_DATA_OWNER",
             new BuiltinRoleSpec(
                 "研究所数据管理员",
                 "INSTITUTE",
                 "面向全所共享区；可读取全所共享区内密级不超的数据，并写入和管理共享策略；负责编辑/查看授权。"
-            )
-        ),
-        Map.entry(
-            "INST_DATA_DEV",
-            new BuiltinRoleSpec(
-                "研究所数据开发员",
-                "INSTITUTE",
-                "在全所共享区开展数据开发；可读取共享区密级不超的数据并写入共享区；无密级或共享策略调整、授权能力。"
             )
         ),
         Map.entry(
@@ -2341,6 +2326,9 @@ public class AdminApiResource {
         m.put("id", e.getId());
         m.put("name", e.getName());
         m.put("parentId", e.getParent() != null ? e.getParent().getId() : null);
+        if (StringUtils.hasText(e.getDeptCode())) {
+            m.put("deptCode", e.getDeptCode());
+        }
         m.put("contact", e.getContact());
         m.put("phone", e.getPhone());
         m.put("description", e.getDescription());

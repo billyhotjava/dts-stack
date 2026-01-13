@@ -183,13 +183,14 @@ export const adminApi = {
 			url: "/admin/orgs/sync",
 		}),
 
-	getAdminUsers: (options?: { page?: number; size?: number; keyword?: string }) =>
+	getAdminUsers: (options?: { page?: number; size?: number; keyword?: string; status?: 0 | 1 }) =>
 		apiClient.get<PagedResult<AdminUser>>({
 			url: "/admin/users",
 			params: {
 				page: options?.page ?? 0,
 				size: options?.size ?? ADMIN_USER_PAGE_SIZE,
 				keyword: options?.keyword,
+				status: options?.status,
 			},
 		}),
 

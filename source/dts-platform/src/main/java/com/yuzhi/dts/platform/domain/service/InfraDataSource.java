@@ -37,6 +37,10 @@ public class InfraDataSource extends AbstractAuditingEntity<UUID> implements Ser
     @Column(name = "description", length = 512)
     private String description;
 
+    // Owning department for department-scoped data source management (null => institute/global)
+    @Column(name = "owner_dept", length = 128)
+    private String ownerDept;
+
     @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "secure_props", columnDefinition = "bytea")
     private byte[] secureProps;
@@ -69,6 +73,8 @@ public class InfraDataSource extends AbstractAuditingEntity<UUID> implements Ser
     public void setProps(String props) { this.props = props; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getOwnerDept() { return ownerDept; }
+    public void setOwnerDept(String ownerDept) { this.ownerDept = ownerDept; }
     public byte[] getSecureProps() { return secureProps; }
     public void setSecureProps(byte[] secureProps) { this.secureProps = secureProps; }
     public byte[] getSecureIv() { return secureIv; }

@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
@@ -37,7 +38,25 @@ public class OrganizationVisibilityService {
             cache = reloadCache(now);
             cacheRef.set(cache);
         }
-        return cache.rootIds().contains(deptCode.trim());
+        return cache.rootKeys().contains(deptCode.trim());
+    }
+
+    /**
+     * Resolve a stable "institute/root" department identifier for default ownership.
+     * <p>
+     * Note: The platform uses org node IDs (as strings) as department identifiers in ABAC checks.
+     */
+    public Optional<String> resolveDefaultRootDept() {
+        Cache cache = cacheRef.get();
+        Instant now = Instant.now();
+        if (cache == null || now.isAfter(cache.expiresAt())) {
+            cache = reloadCache(now);
+            cacheRef.set(cache);
+        }
+        if (StringUtils.hasText(cache.defaultRootDept())) {
+            return Optional.of(cache.defaultRootDept().trim());
+        }
+        return Optional.empty();
     }
 
     public void evict() {
@@ -46,14 +65,22 @@ public class OrganizationVisibilityService {
 
     private Cache reloadCache(Instant now) {
         List<OrgNode> tree = adminDirectoryClient.fetchOrgTree();
-        Set<String> roots = new HashSet<>();
-        collectRoots(tree, roots);
-        return new Cache(roots, now.plus(CACHE_TTL));
+        RootSnapshot snapshot = collectRoots(tree);
+        return new Cache(snapshot.rootKeys(), snapshot.defaultRootDept(), now.plus(CACHE_TTL));
     }
 
-    private void collectRoots(List<OrgNode> nodes, Set<String> sink) {
+    private RootSnapshot collectRoots(List<OrgNode> nodes) {
+        Set<String> sink = new HashSet<>();
+        String defaultDept = null;
+        if (nodes != null && !nodes.isEmpty()) {
+            defaultDept = collectRoots(nodes, sink, null);
+        }
+        return new RootSnapshot(sink, defaultDept);
+    }
+
+    private String collectRoots(List<OrgNode> nodes, Set<String> sink, String currentDefault) {
         if (nodes == null || nodes.isEmpty()) {
-            return;
+            return currentDefault;
         }
         for (OrgNode node : nodes) {
             if (node == null) {
@@ -62,13 +89,30 @@ public class OrganizationVisibilityService {
             boolean flaggedRoot = Boolean.TRUE.equals(node.getIsRoot());
             boolean inferredRoot = node.getParentId() == null;
             if (flaggedRoot || inferredRoot) {
+                String candidate = null;
+                if (StringUtils.hasText(node.getDeptCode())) {
+                    candidate = node.getDeptCode().trim();
+                    sink.add(candidate);
+                }
                 if (node.getId() != null) {
-                    sink.add(node.getId().toString().trim());
+                    String id = node.getId().toString().trim();
+                    if (!id.isEmpty()) {
+                        sink.add(id);
+                        if (candidate == null) {
+                            candidate = id;
+                        }
+                    }
+                }
+                if (candidate != null && currentDefault == null) {
+                    currentDefault = candidate;
                 }
             }
-            collectRoots(node.getChildren(), sink);
+            currentDefault = collectRoots(node.getChildren(), sink, currentDefault);
         }
+        return currentDefault;
     }
 
-    private record Cache(Set<String> rootIds, Instant expiresAt) {}
+    private record RootSnapshot(Set<String> rootKeys, String defaultRootDept) {}
+
+    private record Cache(Set<String> rootKeys, String defaultRootDept, Instant expiresAt) {}
 }

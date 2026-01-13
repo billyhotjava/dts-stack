@@ -486,7 +486,7 @@ generate_env_base(){
   # ---------- Analytics ----------
   # Prefer your self-built image (offline/air-gapped friendly). Default aligns with other DTS app images.
   : "${IMAGE_DTS_ANALYTICS:=dts-analytics:1.0.0}"
-  : "${IMAGE_DTS_ANALYTICS_WEBAPP:=dts-analytics-webapp:1.0.0}"
+  : "${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:=dts-analytics-webapp-modern:1.0.0}"
   : "${ANALYTICS_ENCRYPTION_SECRET:=$(generate_fernet)}"
   # Prefer same-domain mount under platform UI to keep user-facing URLs consistent and avoid extra DNS/ports.
   : "${ANALYTICS_SITE_URL:=https://${HOST_PLATFORM_UI}/analytics}"
@@ -611,8 +611,7 @@ KEYTOOL_IMAGE_STRICT=${KEYTOOL_IMAGE_STRICT}
 
 # ====== Analytics Image ======
 IMAGE_DTS_ANALYTICS=${IMAGE_DTS_ANALYTICS}
-IMAGE_DTS_ANALYTICS_WEBAPP=${IMAGE_DTS_ANALYTICS_WEBAPP}
-IMAGE_DTS_ANALYTICS_DEV=${IMAGE_DTS_ANALYTICS_DEV:-dts-analytics-dev:local}
+IMAGE_DTS_ANALYTICS_WEBAPP_MODERN=${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN}
 
 # ====== Hosts ======
 HOST_SSO=${HOST_SSO}

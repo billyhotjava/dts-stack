@@ -115,6 +115,7 @@ const buildDynamicFallbackRoutes = (): RouteObject[] => [
 	{ path: "modeling", children: [{ path: "*", element: <DynamicMenuResolver base="/modeling" /> }] },
 	{ path: "governance", children: [{ path: "*", element: <DynamicMenuResolver base="/governance" /> }] },
 	{ path: "explore", children: [{ path: "*", element: <DynamicMenuResolver base="/explore" /> }] },
+	{ path: "foundation", children: [{ path: "*", element: <DynamicMenuResolver base="/foundation" /> }] },
 ];
 
 export function getBackendDashboardRoutes() {

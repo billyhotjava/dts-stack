@@ -6,20 +6,27 @@ import com.yuzhi.dts.analytics.domain.AnalyticsCard;
 import com.yuzhi.dts.analytics.domain.AnalyticsBookmark;
 import com.yuzhi.dts.analytics.domain.AnalyticsDashboard;
 import com.yuzhi.dts.analytics.domain.AnalyticsDashboardCard;
+import com.yuzhi.dts.analytics.domain.AnalyticsField;
+import com.yuzhi.dts.analytics.domain.AnalyticsTable;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsBookmarkRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsFieldRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import com.yuzhi.dts.analytics.service.ActivityService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
+import com.yuzhi.dts.analytics.service.FieldValuesService;
 import com.yuzhi.dts.analytics.service.MbqlToSqlService;
+import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -39,6 +46,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 @RestController
 @RequestMapping("/api/dashboard")
@@ -56,6 +65,10 @@ public class DashboardResource {
     private final EntityIdGenerator entityIdGenerator;
     private final PublicLinkService publicLinkService;
     private final RevisionService revisionService;
+    private final AnalyticsFieldRepository fieldRepository;
+    private final AnalyticsTableRepository tableRepository;
+    private final FieldValuesService fieldValuesService;
+    private final NativeQueryTemplateService nativeQueryTemplateService;
     private final ObjectMapper objectMapper;
 
     public DashboardResource(
@@ -70,6 +83,10 @@ public class DashboardResource {
             EntityIdGenerator entityIdGenerator,
             PublicLinkService publicLinkService,
             RevisionService revisionService,
+            AnalyticsFieldRepository fieldRepository,
+            AnalyticsTableRepository tableRepository,
+            FieldValuesService fieldValuesService,
+            NativeQueryTemplateService nativeQueryTemplateService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.dashboardRepository = dashboardRepository;
@@ -82,6 +99,10 @@ public class DashboardResource {
         this.entityIdGenerator = entityIdGenerator;
         this.publicLinkService = publicLinkService;
         this.revisionService = revisionService;
+        this.fieldRepository = fieldRepository;
+        this.tableRepository = tableRepository;
+        this.fieldValuesService = fieldValuesService;
+        this.nativeQueryTemplateService = nativeQueryTemplateService;
         this.objectMapper = objectMapper;
     }
 
@@ -446,7 +467,7 @@ public class DashboardResource {
             @PathVariable("cardId") long cardId,
             @RequestBody(required = false) JsonNode body,
             HttpServletRequest request) {
-        return runDashcardQuery(dashboardId, dashcardId, cardId, request);
+        return runDashcardQuery(dashboardId, dashcardId, cardId, body, request);
     }
 
     @PostMapping(
@@ -459,7 +480,7 @@ public class DashboardResource {
             @PathVariable("cardId") long cardId,
             @RequestBody(required = false) JsonNode body,
             HttpServletRequest request) {
-        return runDashcardQuery(dashboardId, dashcardId, cardId, request);
+        return runDashcardQuery(dashboardId, dashcardId, cardId, body, request);
     }
 
     @PostMapping(
@@ -498,7 +519,12 @@ public class DashboardResource {
         if (auth.isPresent()) {
             return auth.get();
         }
-        return ResponseEntity.ok(List.of());
+        List<Map<String, Object>> fields = fieldRepository.findAllByActiveTrueOrderByTableIdAscPositionAscIdAsc().stream()
+                .filter(f -> !"hidden".equalsIgnoreCase(f.getVisibilityType()))
+                .limit(500)
+                .map(this::toFilterField)
+                .toList();
+        return ResponseEntity.ok(fields);
     }
 
     @GetMapping(path = "/{dashId}/params/{paramId}/values", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -510,7 +536,7 @@ public class DashboardResource {
         if (auth.isPresent()) {
             return auth.get();
         }
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.ok(loadParameterValues(dashId, paramId, null));
     }
 
     @GetMapping(path = "/{dashId}/params/{paramId}/search/{query}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -523,7 +549,114 @@ public class DashboardResource {
         if (auth.isPresent()) {
             return auth.get();
         }
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.ok(loadParameterValues(dashId, paramId, query));
+    }
+
+    private List<String> loadParameterValues(long dashId, String paramId, String search) {
+        AnalyticsDashboard dashboard = dashboardRepository.findById(dashId).orElse(null);
+        if (dashboard == null) {
+            return List.of();
+        }
+
+        Long fieldId = resolveDashboardParamFieldId(dashboard, paramId);
+        if (fieldId == null) {
+            return List.of();
+        }
+
+        AnalyticsField field = fieldRepository.findById(fieldId).orElse(null);
+        if (field == null) {
+            return List.of();
+        }
+        AnalyticsTable table = tableRepository.findById(field.getTableId()).orElse(null);
+        if (table == null) {
+            return List.of();
+        }
+
+        try {
+            return fieldValuesService.distinctValues(
+                    field.getDatabaseId(),
+                    table.getSchemaName(),
+                    table.getName(),
+                    field.getName(),
+                    200,
+                    search);
+        } catch (SQLException e) {
+            return List.of();
+        }
+    }
+
+    private Long resolveDashboardParamFieldId(AnalyticsDashboard dashboard, String paramId) {
+        if (dashboard.getParametersJson() == null || dashboard.getParametersJson().isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(dashboard.getParametersJson());
+            if (node == null || !node.isArray()) {
+                return null;
+            }
+            for (JsonNode param : node) {
+                if (param == null || !param.isObject()) {
+                    continue;
+                }
+                if (!paramId.equals(param.path("id").asText(""))) {
+                    continue;
+                }
+                Long id = extractFieldIdFromParam(param);
+                if (id != null) {
+                    return id;
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Long extractFieldIdFromParam(JsonNode param) {
+        JsonNode dim = param.get("dimension");
+        Long fromDim = extractFieldIdFromDimension(dim);
+        if (fromDim != null) {
+            return fromDim;
+        }
+        JsonNode target = param.get("target");
+        if (target != null && target.isArray() && target.size() >= 2 && "dimension".equalsIgnoreCase(target.get(0).asText(""))) {
+            Long fromTarget = extractFieldIdFromDimension(target.get(1));
+            if (fromTarget != null) {
+                return fromTarget;
+            }
+        }
+        JsonNode vsc = param.get("values_source_config");
+        if (vsc != null && vsc.isObject()) {
+            long fieldId = vsc.path("field_id").asLong(0);
+            if (fieldId > 0) {
+                return fieldId;
+            }
+        }
+        return null;
+    }
+
+    private static Long extractFieldIdFromDimension(JsonNode dim) {
+        if (dim == null || !dim.isArray() || dim.size() < 2) {
+            return null;
+        }
+        if (!"field".equalsIgnoreCase(dim.get(0).asText(""))) {
+            return null;
+        }
+        long fieldId = dim.get(1).asLong(0);
+        return fieldId > 0 ? fieldId : null;
+    }
+
+    private Map<String, Object> toFilterField(AnalyticsField field) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", field.getId());
+        out.put("name", field.getName());
+        out.put("display_name", field.getDisplayName() == null || field.getDisplayName().isBlank() ? field.getName() : field.getDisplayName());
+        out.put("table_id", field.getTableId());
+        out.put("database_id", field.getDatabaseId());
+        out.put("base_type", field.getBaseType());
+        out.put("effective_type", field.getEffectiveType() == null ? field.getBaseType() : field.getEffectiveType());
+        out.put("semantic_type", field.getSemanticType());
+        return out;
     }
 
     @GetMapping(path = "/public", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -583,7 +716,7 @@ public class DashboardResource {
         return ResponseEntity.noContent().build();
     }
 
-    private ResponseEntity<?> runDashcardQuery(long dashboardId, long dashcardId, long cardId, HttpServletRequest request) {
+    private ResponseEntity<?> runDashcardQuery(long dashboardId, long dashcardId, long cardId, JsonNode body, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
             return auth.get();
@@ -615,6 +748,7 @@ public class DashboardResource {
         long startedMillis = System.currentTimeMillis();
         try {
             String sql;
+            List<Object> bindings = List.of();
             Map<String, Object> jsonQuery = new LinkedHashMap<>();
             jsonQuery.put("database", databaseId);
 
@@ -623,13 +757,20 @@ public class DashboardResource {
                 if (sql == null || sql.isBlank()) {
                     return ResponseEntity.status(400).body(Map.of("error", "dataset_query.native.query is required"));
                 }
+                JsonNode parametersNode = body == null ? null : body.get("parameters");
+                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode() && sql.contains("{{")) {
+                    NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
+                    sql = rendered.sql();
+                    bindings = rendered.bindings();
+                }
                 jsonQuery.put("type", "native");
                 jsonQuery.put("native", Map.of("query", sql));
             } else if ("query".equalsIgnoreCase(type)) {
-                JsonNode mbql = datasetQuery.get("query");
+                JsonNode mbql = applyDashcardParametersToMbql(datasetQuery.get("query"), dashcard, body);
                 MbqlToSqlService.TranslationResult translated =
                         mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
                 sql = translated.sql();
+                bindings = translated.bindings();
                 jsonQuery.put("type", "query");
                 jsonQuery.put("query", mbql);
             } else {
@@ -637,7 +778,7 @@ public class DashboardResource {
             }
 
             DatasetQueryService.DatasetResult result =
-                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults());
+                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
             Map<String, Object> data = new LinkedHashMap<>();
@@ -675,6 +816,116 @@ public class DashboardResource {
             response.put("via", List.of());
             return ResponseEntity.accepted().body(response);
         }
+    }
+
+    private JsonNode applyDashcardParametersToMbql(JsonNode mbql, AnalyticsDashboardCard dashcard, JsonNode body) {
+        if (mbql == null || !mbql.isObject()) {
+            return mbql;
+        }
+        if (dashcard.getParameterMappingsJson() == null || dashcard.getParameterMappingsJson().isBlank()) {
+            return mbql;
+        }
+        if (body == null || !body.isObject()) {
+            return mbql;
+        }
+
+        JsonNode parametersNode = body.get("parameters");
+        if (parametersNode == null || !parametersNode.isArray() || parametersNode.isEmpty()) {
+            return mbql;
+        }
+
+        JsonNode mappingsNode;
+        try {
+            mappingsNode = objectMapper.readTree(dashcard.getParameterMappingsJson());
+        } catch (Exception e) {
+            return mbql;
+        }
+        if (mappingsNode == null || !mappingsNode.isArray() || mappingsNode.isEmpty()) {
+            return mbql;
+        }
+
+        Map<String, JsonNode> providedValues = new LinkedHashMap<>();
+        for (JsonNode p : parametersNode) {
+            if (p == null || !p.isObject()) {
+                continue;
+            }
+            String id = p.path("id").asText("");
+            if (id.isBlank()) {
+                continue;
+            }
+            JsonNode value = p.get("value");
+            if (value == null || value.isMissingNode()) {
+                continue;
+            }
+            providedValues.put(id, value);
+        }
+        if (providedValues.isEmpty()) {
+            return mbql;
+        }
+
+        List<JsonNode> injectedFilters = new ArrayList<>();
+        for (JsonNode mapping : mappingsNode) {
+            if (mapping == null || !mapping.isObject()) {
+                continue;
+            }
+            String paramId = mapping.path("parameter_id").asText("");
+            if (paramId.isBlank()) {
+                continue;
+            }
+            JsonNode value = providedValues.get(paramId);
+            if (value == null || value.isNull()) {
+                continue;
+            }
+
+            JsonNode target = mapping.get("target");
+            Long fieldId = null;
+            if (target != null && target.isArray() && target.size() >= 2 && "dimension".equalsIgnoreCase(target.get(0).asText(""))) {
+                fieldId = extractFieldIdFromDimension(target.get(1));
+            }
+            if (fieldId == null || fieldId <= 0) {
+                continue;
+            }
+
+            ArrayNode fieldRef = objectMapper.createArrayNode().add("field").add(fieldId).addNull();
+            injectedFilters.add(buildEqualityOrInFilter(fieldRef, value));
+        }
+
+        if (injectedFilters.isEmpty()) {
+            return mbql;
+        }
+
+        ObjectNode merged = mbql.deepCopy();
+        JsonNode existing = merged.get("filter");
+        if (existing == null || existing.isNull() || existing.isMissingNode()) {
+            if (injectedFilters.size() == 1) {
+                merged.set("filter", injectedFilters.get(0));
+            } else {
+                ArrayNode and = objectMapper.createArrayNode().add("and");
+                injectedFilters.forEach(and::add);
+                merged.set("filter", and);
+            }
+            return merged;
+        }
+
+        ArrayNode and = objectMapper.createArrayNode().add("and");
+        and.add(existing);
+        injectedFilters.forEach(and::add);
+        merged.set("filter", and);
+        return merged;
+    }
+
+    private JsonNode buildEqualityOrInFilter(ArrayNode fieldRef, JsonNode value) {
+        if (value == null || value.isNull()) {
+            return objectMapper.createArrayNode().add("is-null").add(fieldRef);
+        }
+        if (value.isArray()) {
+            ArrayNode values = objectMapper.createArrayNode();
+            for (JsonNode v : value) {
+                values.add(v);
+            }
+            return objectMapper.createArrayNode().add("in").add(fieldRef).add(values);
+        }
+        return objectMapper.createArrayNode().add("=").add(fieldRef).add(value);
     }
 
     private Map<String, Object> toDashboardListItem(AnalyticsDashboard dashboard, boolean favorite) {

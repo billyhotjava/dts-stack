@@ -13,6 +13,7 @@ import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
 import com.yuzhi.dts.analytics.service.MbqlToSqlService;
+import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
@@ -49,6 +50,7 @@ public class CardResource {
     private final ActivityService activityService;
     private final DatasetQueryService datasetQueryService;
     private final MbqlToSqlService mbqlToSqlService;
+    private final NativeQueryTemplateService nativeQueryTemplateService;
     private final EntityIdGenerator entityIdGenerator;
     private final PublicLinkService publicLinkService;
     private final RevisionService revisionService;
@@ -62,6 +64,7 @@ public class CardResource {
             ActivityService activityService,
             DatasetQueryService datasetQueryService,
             MbqlToSqlService mbqlToSqlService,
+            NativeQueryTemplateService nativeQueryTemplateService,
             EntityIdGenerator entityIdGenerator,
             PublicLinkService publicLinkService,
             RevisionService revisionService,
@@ -73,6 +76,7 @@ public class CardResource {
         this.activityService = activityService;
         this.datasetQueryService = datasetQueryService;
         this.mbqlToSqlService = mbqlToSqlService;
+        this.nativeQueryTemplateService = nativeQueryTemplateService;
         this.entityIdGenerator = entityIdGenerator;
         this.publicLinkService = publicLinkService;
         this.revisionService = revisionService;
@@ -251,6 +255,7 @@ public class CardResource {
 
         try {
             String sql;
+            List<Object> bindings = List.of();
             Map<String, Object> jsonQuery = new LinkedHashMap<>();
             jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
             jsonQuery.put("middleware", Map.of("js-int-to-string?", true, "ignore-cached-results?", false, "process-viz-settings?", false));
@@ -263,6 +268,12 @@ public class CardResource {
                 if (sql == null || sql.isBlank()) {
                     return ResponseEntity.status(400).body(Map.of("error", "dataset_query.native.query is required"));
                 }
+                JsonNode parametersNode = body == null ? null : body.get("parameters");
+                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode() && sql.contains("{{")) {
+                    NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
+                    sql = rendered.sql();
+                    bindings = rendered.bindings();
+                }
                 jsonQuery.put("type", "native");
                 jsonQuery.put("native", Map.of("query", sql));
             } else if ("query".equalsIgnoreCase(type)) {
@@ -270,6 +281,7 @@ public class CardResource {
                 MbqlToSqlService.TranslationResult translated =
                         mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
                 sql = translated.sql();
+                bindings = translated.bindings();
                 jsonQuery.put("type", "query");
                 jsonQuery.put("query", mbql);
             } else {
@@ -277,7 +289,7 @@ public class CardResource {
             }
 
             DatasetQueryService.DatasetResult result =
-                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults());
+                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
             Map<String, Object> data = new LinkedHashMap<>();
@@ -476,12 +488,15 @@ public class CardResource {
                 MbqlToSqlService.TranslationResult translated =
                         mbqlToSqlService.translateSelect(databaseId, query.get("query"), DatasetQueryService.DatasetConstraints.defaults());
                 sql = translated.sql();
+                DatasetQueryService.DatasetResult result = datasetQueryService.runNative(
+                        databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), translated.bindings());
+                return result.resultsMetadataColumns();
             } else {
                 return List.of();
             }
 
             DatasetQueryService.DatasetResult result =
-                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults());
+                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), List.of());
             return result.resultsMetadataColumns();
         } catch (Exception e) {
             return List.of();

@@ -246,19 +246,22 @@ axiosInstance.interceptors.response.use(
 		const errMsg = (problemDetail ? String(problemDetail) : "") || fieldMsg || message || t("sys.api.errorMessage");
 		// Friendly hints for security codes
 		let hint = "";
-		switch (String(errCode || "")) {
+			switch (String(errCode || "")) {
 			case "dts-sec-0001":
 				hint = "动作权限不足，请联系管理员申请更高权限";
 				break;
 			case "dts-sec-0002":
 				hint = "作用域/部门不匹配，请在右上角切换上下文后重试";
 				break;
-			case "dts-sec-0003":
-				hint = "权限不足，当前密级不可访问";
-				break;
-			case "dts-sec-0007":
-				hint = "资源不存在或不可见";
-				break;
+				case "dts-sec-0003":
+					hint = "权限不足，当前密级不可访问";
+					break;
+				case "dts-sec-0004":
+					hint = "需要审批授权后才能访问数据内容";
+					break;
+				case "dts-sec-0007":
+					hint = "资源不存在或不可见";
+					break;
 			case "dts-sec-0005":
 			case "dts-sec-0006":
 				hint = "缺少或非法上下文，请设置作用域/部门后重试";

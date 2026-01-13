@@ -1,18 +1,19 @@
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CardDetail, type CardQueryResponse } from "../api/analyticsApi";
 import { DataTable } from "../components/DataTable";
-import { normalizeLocale, t, type Locale } from "../i18n";
+import { ErrorNotice } from "../components/ErrorNotice";
+import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
-	| { state: "error"; error: string };
+	| { state: "error"; error: unknown };
 
 export default function CardDetailPage() {
 	const { id } = useParams();
-	const locale: Locale = useMemo(() => normalizeLocale(navigator.language), []);
+	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const [state, setState] = useState<LoadState<CardDetail>>({ state: "loading" });
 	const [queryState, setQueryState] = useState<LoadState<CardQueryResponse> | null>(null);
 	const [showRaw, setShowRaw] = useState(false);
@@ -28,7 +29,7 @@ export default function CardDetailPage() {
 			})
 			.catch((e) => {
 				if (cancelled) return;
-				setState({ state: "error", error: String(e?.message ?? e) });
+				setState({ state: "error", error: e });
 			});
 		return () => {
 			cancelled = true;
@@ -47,7 +48,7 @@ export default function CardDetailPage() {
 			})
 			.catch((e) => {
 				if (cancelled) return;
-				setQueryState({ state: "error", error: String(e?.message ?? e) });
+				setQueryState({ state: "error", error: e });
 			});
 		return () => {
 			cancelled = true;
@@ -57,10 +58,15 @@ export default function CardDetailPage() {
 	return (
 		<div className="page">
 			{state.state === "loading" && <div>{t(locale, "loading")}</div>}
-			{state.state === "error" && <div>{t(locale, "error") + ": " + state.error}</div>}
+			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 			{state.state === "loaded" && (
 				<>
-					<h1 className="pageTitle">{state.value.name ?? "-"}</h1>
+					<div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+						<h1 className="pageTitle">{state.value.name ?? "-"}</h1>
+						<Link className="btn" to={`/questions/${encodeURIComponent(String(state.value.id))}/edit`}>
+							{t(locale, "questions.edit")}
+						</Link>
+					</div>
 					<div className="pageSub">{state.value.description ?? ""}</div>
 					<div style={{ height: 16 }} />
 					<div className="card">
@@ -78,7 +84,11 @@ export default function CardDetailPage() {
 							</button>
 						</div>
 						{queryState?.state === "loading" && <div style={{ marginTop: 8 }}>{t(locale, "loading")}</div>}
-						{queryState?.state === "error" && <div style={{ marginTop: 8 }}>{t(locale, "error") + ": " + queryState.error}</div>}
+						{queryState?.state === "error" && (
+							<div style={{ marginTop: 8 }}>
+								<ErrorNotice locale={locale} error={queryState.error} />
+							</div>
+						)}
 						{queryState?.state === "loaded" && (
 							<div style={{ marginTop: 12 }}>
 								{queryState.value?.data?.native_form?.query && (

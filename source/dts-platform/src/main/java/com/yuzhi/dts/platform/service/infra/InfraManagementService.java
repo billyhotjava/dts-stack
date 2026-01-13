@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.repository.service.InfraConnectionTestLogRepositor
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataStorageRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
 import com.yuzhi.dts.platform.service.infra.dto.HiveConnectionPersistRequest;
@@ -33,6 +34,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -77,12 +82,25 @@ public class InfraManagementService {
         this.postgresConnectionService = postgresConnectionService;
     }
 
-    public List<InfraDataSourceDto> listDataSources() {
+    public List<InfraDataSourceDto> listDataSources(String activeDeptHeader) {
         try {
-            boolean canViewAll = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DATA_MAINTAINER_ROLES);
-            List<InfraDataSource> sources = canViewAll
+            boolean isMaintainer = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DATA_MAINTAINER_ROLES);
+            boolean canViewAll = isInstituteMaintainer();
+            List<InfraDataSource> sources = (canViewAll || isMaintainer)
                 ? dataSourceRepository.findAll()
                 : dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
+
+            // Dept maintainers: only see global sources + their own department sources
+            if (!canViewAll && isMaintainer) {
+                String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
+                sources = sources
+                    .stream()
+                    .filter(ds -> {
+                        String owner = normalizeDept(ds.getOwnerDept());
+                        return owner.isEmpty() || (!dept.isEmpty() && owner.equalsIgnoreCase(dept));
+                    })
+                    .toList();
+            }
             return sources.stream().map(this::toDto).collect(Collectors.toList());
         } catch (RuntimeException ex) {
             // If Liquibase hasn’t created infra tables yet, return empty to keep UI usable
@@ -92,10 +110,12 @@ public class InfraManagementService {
     }
 
     @Transactional
-    public InfraDataSourceDto createDataSource(DataSourceRequest request, String username) {
+    public InfraDataSourceDto createDataSource(DataSourceRequest request, String username, String activeDeptHeader) {
         ensureNotInceptorManaged(request.type());
         InfraDataSource entity = new InfraDataSource();
         applyDataSource(entity, request, username);
+        ensureNotSystemManaged(entity.getType(), activeDeptHeader);
+        applyOwnerDept(entity, activeDeptHeader);
         return toDto(dataSourceRepository.save(entity));
     }
 
@@ -159,17 +179,23 @@ public class InfraManagementService {
     }
 
     @Transactional
-    public InfraDataSourceDto updateDataSource(UUID id, DataSourceRequest request, String username) {
+    public InfraDataSourceDto updateDataSource(UUID id, DataSourceRequest request, String username, String activeDeptHeader) {
         InfraDataSource entity = dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureNotInceptorManaged(request.type());
         ensureNotInceptorManaged(entity.getType());
+        ensureNotSystemManaged(entity.getType(), activeDeptHeader);
+        ensureDeptScopeWritable(entity, activeDeptHeader);
         applyDataSource(entity, request, username);
+        applyOwnerDept(entity, activeDeptHeader);
         return toDto(dataSourceRepository.save(entity));
     }
 
     @Transactional
-    public void deleteDataSource(UUID id) {
-        dataSourceRepository.deleteById(id);
+    public void deleteDataSource(UUID id, String activeDeptHeader) {
+        InfraDataSource entity = dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureNotSystemManaged(entity.getType(), activeDeptHeader);
+        ensureDeptScopeWritable(entity, activeDeptHeader);
+        dataSourceRepository.delete(entity);
     }
 
     public List<InfraDataStorageDto> listDataStorages() {
@@ -254,6 +280,7 @@ public class InfraManagementService {
         entity.setType(TYPE_INCEPTOR);
         entity.setJdbcUrl(request.getJdbcUrl());
         entity.setUsername(request.getLoginPrincipal());
+        entity.setOwnerDept(null); // institute/global
         entity.setLastModifiedBy(username);
         entity.setCreatedBy(entity.getCreatedBy() == null ? username : entity.getCreatedBy());
         entity.setLastVerifiedAt(Instant.now());
@@ -280,6 +307,94 @@ public class InfraManagementService {
                 "Inceptor 数据源由专用流程管理，请使用 Hive 测试与发布功能"
             );
         }
+    }
+
+    private void ensureNotSystemManaged(String type, String activeDeptHeader) {
+        if (!StringUtils.hasText(type)) {
+            return;
+        }
+        if (TYPE_POSTGRES.equalsIgnoreCase(type) && !isInstituteMaintainer()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限维护系统数据源");
+        }
+        if (!isInstituteMaintainer()) {
+            String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
+            if (dept.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少部门上下文，请先选择部门范围");
+            }
+        }
+    }
+
+    private void applyOwnerDept(InfraDataSource entity, String activeDeptHeader) {
+        if (entity == null) return;
+        if (isInstituteMaintainer()) {
+            // Do not override existing department binding on updates.
+            // For new records, allow optionally binding to current department context.
+            if (entity.getId() == null && !StringUtils.hasText(entity.getOwnerDept())) {
+                String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
+                entity.setOwnerDept(dept.isEmpty() ? null : dept);
+            }
+            return;
+        }
+        String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
+        if (dept.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少部门上下文，请先选择部门范围");
+        }
+        entity.setOwnerDept(dept);
+    }
+
+    private void ensureDeptScopeWritable(InfraDataSource entity, String activeDeptHeader) {
+        if (entity == null) return;
+        if (isInstituteMaintainer()) return;
+
+        String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
+        if (dept.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少部门上下文，请先选择部门范围");
+        }
+        String owner = normalizeDept(entity.getOwnerDept());
+        if (owner.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限维护所级数据源");
+        }
+        if (!owner.equalsIgnoreCase(dept)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限维护其他部门的数据源");
+        }
+    }
+
+    private boolean isInstituteMaintainer() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
+    }
+
+    private String normalizeDept(String dept) {
+        if (!StringUtils.hasText(dept)) {
+            return "";
+        }
+        return DepartmentUtils.normalize(dept);
+    }
+
+    private String resolveActiveDept(String activeDeptHeader) {
+        String candidate = StringUtils.hasText(activeDeptHeader) ? activeDeptHeader.trim() : null;
+        if (StringUtils.hasText(candidate)) {
+            return candidate;
+        }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        try {
+            if (authentication instanceof JwtAuthenticationToken token) {
+                Object v = token.getToken().getClaims().get("dept_code");
+                if (v != null && StringUtils.hasText(String.valueOf(v))) return String.valueOf(v).trim();
+                v = token.getToken().getClaims().get("deptCode");
+                if (v != null && StringUtils.hasText(String.valueOf(v))) return String.valueOf(v).trim();
+                v = token.getToken().getClaims().get("department");
+                if (v != null && StringUtils.hasText(String.valueOf(v))) return String.valueOf(v).trim();
+            }
+            if (authentication != null && authentication.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
+                Object v = principal.getAttribute("dept_code");
+                if (v != null && StringUtils.hasText(String.valueOf(v))) return String.valueOf(v).trim();
+                v = principal.getAttribute("deptCode");
+                if (v != null && StringUtils.hasText(String.valueOf(v))) return String.valueOf(v).trim();
+                v = principal.getAttribute("department");
+                if (v != null && StringUtils.hasText(String.valueOf(v))) return String.valueOf(v).trim();
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private Map<String, Object> buildInceptorProps(HiveConnectionPersistRequest request) {
@@ -356,6 +471,7 @@ public class InfraManagementService {
             entity.getJdbcUrl(),
             entity.getUsername(),
             entity.getDescription(),
+            entity.getOwnerDept(),
             props,
             entity.getCreatedDate(),
             entity.getLastModifiedDate(),

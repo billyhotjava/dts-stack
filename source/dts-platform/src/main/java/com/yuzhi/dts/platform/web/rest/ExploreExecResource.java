@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogMaskingRule;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import com.yuzhi.dts.platform.service.security.DatasetDataAccessApprovalService;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -37,6 +38,7 @@ public class ExploreExecResource {
     private final AuditService audit;
     private final CatalogDatasetRepository datasetRepo;
     private final AccessChecker accessChecker;
+    private final DatasetDataAccessApprovalService dataAccessApprovalService;
     private final QueryExecutionRepository executionRepository;
     private final ResultSetRepository resultSetRepository;
     private final CatalogMaskingRuleRepository maskingRepository;
@@ -46,6 +48,7 @@ public class ExploreExecResource {
         AuditService audit,
         CatalogDatasetRepository datasetRepo,
         AccessChecker accessChecker,
+        DatasetDataAccessApprovalService dataAccessApprovalService,
         QueryExecutionRepository executionRepository,
         ResultSetRepository resultSetRepository,
         CatalogMaskingRuleRepository maskingRepository
@@ -54,6 +57,7 @@ public class ExploreExecResource {
         this.audit = audit;
         this.datasetRepo = datasetRepo;
         this.accessChecker = accessChecker;
+        this.dataAccessApprovalService = dataAccessApprovalService;
         this.executionRepository = executionRepository;
         this.resultSetRepository = resultSetRepository;
         this.maskingRepository = maskingRepository;
@@ -75,6 +79,25 @@ public class ExploreExecResource {
             if (!datasetWithinScope(ds, resolveActiveDeptContext(activeDept))) {
                 audit.audit("DENY", "explore.execute", Objects.toString(req.datasetId));
                 return ApiResponses.error("Access denied for dataset");
+            }
+            DatasetDataAccessApprovalService.Decision decision = dataAccessApprovalService.checkDataAccess(
+                ds,
+                DatasetDataAccessApprovalService.DataAction.QUERY,
+                activeDept
+            );
+            if (!decision.allowed()) {
+                audit.audit("DENY", "explore.execute", Objects.toString(req.datasetId));
+                return ApiResponses.error(decision.code(), decision.message());
+            }
+        } else {
+            DatasetDataAccessApprovalService.Decision decision = dataAccessApprovalService.checkDataAccess(
+                null,
+                DatasetDataAccessApprovalService.DataAction.QUERY,
+                activeDept
+            );
+            if (!decision.allowed()) {
+                audit.audit("DENY", "explore.execute", "missing-dataset");
+                return ApiResponses.error(decision.code(), decision.message());
             }
         }
 

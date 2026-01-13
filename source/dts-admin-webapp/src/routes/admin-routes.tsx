@@ -11,7 +11,6 @@ import UserDetailView from "@/admin/views/user-detail";
 import MyChangesView from "@/admin/views/my-changes";
 import RoleManagementView from "@/admin/views/role-management";
 import RoleDetailView from "@/admin/views/role-detail";
-import AdminDataSourcesView from "@/admin/views/system/data-sources";
 import { getMenusByRole } from "@/admin/config/menus";
 import { useAdminSession } from "@/admin/lib/session-context";
 
@@ -34,6 +33,7 @@ export const adminRoutes: RouteObject[] = [
 		),
 		children: [
 			{ index: true, element: <AdminIndexRedirect /> },
+			{ path: "system", element: <Navigate to="/admin/users" replace /> },
 			{ path: "my-changes", element: <MyChangesView /> },
 			{ path: "users", element: <UserManagementView /> },
 			{ path: "users/:id", element: <UserDetailView /> },
@@ -42,8 +42,6 @@ export const adminRoutes: RouteObject[] = [
 			{ path: "roles/:roleId/edit", element: <RoleDetailView /> },
 			{ path: "portal-menus", element: <PortalMenusView /> },
 			{ path: "orgs", element: <OrgManagementView /> },
-			{ path: "system", element: <Navigate to="/admin/system/data-sources" replace /> },
-			{ path: "system/data-sources", element: <AdminDataSourcesView /> },
 			{ path: "approval", element: <ApprovalCenterView /> },
 			{ path: "audit", element: <AuditCenterView /> },
 			{ path: "ops", element: <OpsConfigView /> },

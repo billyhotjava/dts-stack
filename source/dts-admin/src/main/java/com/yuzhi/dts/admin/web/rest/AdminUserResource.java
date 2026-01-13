@@ -50,11 +50,48 @@ public class AdminUserResource {
     public ResponseEntity<ApiResponse<PagedResultVM<AdminUserVM>>> listUsers(
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
-        @RequestParam(required = false) String keyword
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) Integer status
     ) {
         int pageSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, 200);
-        Page<AdminKeycloakUser> result = adminUserService.listSnapshots(page, pageSize, keyword);
-        List<AdminUserVM> content = result.getContent().stream().map(this::toVm).collect(java.util.stream.Collectors.toList());
+        Integer mdmStatus = null;
+        if (status != null) {
+            if (status.intValue() == 0 || status.intValue() == 1) {
+                mdmStatus = status.intValue();
+            } else {
+                return ResponseEntity.badRequest().body(ApiResponse.error("status 仅支持 0（不可用）或 1（可用）"));
+            }
+        }
+        Page<AdminKeycloakUser> result = adminUserService.listSnapshots(page, pageSize, keyword, mdmStatus);
+        List<AdminKeycloakUser> snapshots = result.getContent();
+        Map<String, AdminUserService.DepartmentInfo> deptMap = adminUserService.resolveDepartments(
+            snapshots.stream().map(AdminKeycloakUser::getUsername).filter(StringUtils::isNotBlank).toList()
+        );
+        List<AdminUserVM> content = new ArrayList<>(snapshots.size());
+        for (AdminKeycloakUser snapshot : snapshots) {
+            AdminKeycloakUser current = snapshot;
+            if (
+                current != null &&
+                StringUtils.isNotBlank(current.getUsername()) &&
+                (current.getRealmRoles() == null || current.getRealmRoles().isEmpty())
+            ) {
+                AdminKeycloakUser refreshed = adminUserService
+                    .refreshSnapshotFromKeycloakForUser(current.getUsername())
+                    .orElse(null);
+                if (refreshed != null) {
+                    current = refreshed;
+                }
+            }
+            AdminUserVM vm = toVm(current);
+            if (current != null && StringUtils.isNotBlank(current.getUsername())) {
+                AdminUserService.DepartmentInfo dept = deptMap.get(current.getUsername());
+                if (dept != null) {
+                    vm.setDeptCode(dept.deptCode());
+                    vm.setDeptName(dept.deptName());
+                }
+            }
+            content.add(vm);
+        }
         PagedResultVM<AdminUserVM> body = new PagedResultVM<>(content, result.getTotalElements(), result.getNumber(), result.getSize());
         return ResponseEntity.ok(ApiResponse.ok(body));
     }

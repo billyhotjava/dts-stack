@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { analyticsApi, type SearchItem } from "../api/analyticsApi";
-import { normalizeLocale, t, type Locale } from "../i18n";
+import { ErrorNotice } from "../components/ErrorNotice";
+import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
 type LoadState<T> =
 	| { state: "idle" }
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
-	| { state: "error"; error: string };
+	| { state: "error"; error: unknown };
 
 function resultHref(item: SearchItem): string {
 	if (item.model === "dashboard") return `/dashboards/${item.id}`;
@@ -18,7 +19,7 @@ function resultHref(item: SearchItem): string {
 }
 
 export default function SearchPage() {
-	const locale: Locale = useMemo(() => normalizeLocale(navigator.language), []);
+	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const location = useLocation();
 	const navigate = useNavigate();
 	const q = new URLSearchParams(location.search).get("q") ?? "";
@@ -46,7 +47,7 @@ export default function SearchPage() {
 			})
 			.catch((e) => {
 				if (cancelled) return;
-				setState({ state: "error", error: String(e?.message ?? e) });
+				setState({ state: "error", error: e });
 			});
 
 		return () => {
@@ -91,7 +92,7 @@ export default function SearchPage() {
 			<div className="card">
 				{state.state === "idle" && <div className="muted">-</div>}
 				{state.state === "loading" && <div>{t(locale, "loading")}</div>}
-				{state.state === "error" && <div>{t(locale, "error") + ": " + state.error}</div>}
+				{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 				{state.state === "loaded" && (
 					<>
 						<div className="row">

@@ -762,7 +762,7 @@ public class PortalMenuService {
     }
 
     /**
-     * Apply default menu visibilities for six data roles from config/data/role-menu-defaults.json.
+     * Apply default menu visibilities from config/data/role-menu-defaults.json.
      * Idempotent: only adds missing visibilities.
      */
     private void applyDefaultRoleBindings() {
@@ -819,11 +819,6 @@ public class PortalMenuService {
             for (Long id : menuIds) {
                 PortalMenu m = byId.get(id);
                 if (m == null) continue;
-                String sectionKey = extractSectionKey(m);
-                if (sectionKey != null && FOUNDATION_SECTIONS.contains(sectionKey.trim().toLowerCase(Locale.ROOT))) {
-                    // Foundation menus stay OP_ADMIN-only; skip binding additional roles
-                    continue;
-                }
                 List<PortalMenuVisibility> existing = m.getVisibilities() == null ? new ArrayList<>() : new ArrayList<>(m.getVisibilities());
                 Set<String> existingRoles = existing.stream().map(PortalMenuVisibility::getRoleCode).filter(Objects::nonNull).collect(Collectors.toSet());
                 boolean dirty = false;
@@ -1109,7 +1104,6 @@ public class PortalMenuService {
             section = extractSectionKey(menu);
         } catch (Exception ignore) {}
         // By default, only grant OP_ADMIN; end-users see menus only when their roles are explicitly bound.
-        // Foundation section remains OP_ADMIN-only by policy.
         PortalMenuVisibility op = new PortalMenuVisibility();
         op.setMenu(menu);
         op.setRoleCode(AuthoritiesConstants.OP_ADMIN);
@@ -1297,13 +1291,19 @@ public class PortalMenuService {
 
         if (hasWrite || hasExport) {
             sections.addAll(WRITE_SECTIONS);
-            if ("INSTITUTE".equalsIgnoreCase(scope)) {
+            if ("INSTITUTE".equalsIgnoreCase(scope) || "INST".equalsIgnoreCase(scope)) {
+                sections.addAll(FOUNDATION_SECTIONS);
+            } else if (isOwnerRole(normalizedRole)) {
+                // Department maintainers can manage foundation resources within their department context (e.g. data sources)
                 sections.addAll(FOUNDATION_SECTIONS);
             }
             if (isOwnerRole(normalizedRole)) {
                 sections.addAll(IAM_SECTIONS);
             }
-        } else if ("INSTITUTE".equalsIgnoreCase(scope)) {
+        } else if ("INSTITUTE".equalsIgnoreCase(scope) || "INST".equalsIgnoreCase(scope)) {
+            sections.addAll(FOUNDATION_SECTIONS);
+        } else if (isOwnerRole(normalizedRole)) {
+            // Even without explicit WRITE operations, dept owners/leaders still need foundation access
             sections.addAll(FOUNDATION_SECTIONS);
         }
         sections.removeIf(this::isDisabledSectionKey);

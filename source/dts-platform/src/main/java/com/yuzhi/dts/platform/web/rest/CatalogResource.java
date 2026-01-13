@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import jakarta.validation.Valid;
 import java.lang.reflect.Array;
 import java.util.*;
@@ -49,6 +50,7 @@ public class CatalogResource {
     private final CatalogDatasetGrantRepository grantRepo;
     private final InfraDataSourceRepository infraDataSourceRepository;
     private final CatalogFeatureProperties catalogFeatures;
+    private final OrganizationVisibilityService organizationVisibilityService;
 
     public CatalogResource(
         CatalogDomainRepository domainRepo,
@@ -65,7 +67,8 @@ public class CatalogResource {
         CatalogDatasetSecurityMappingRepository datasetSecurityMappingRepo,
         CatalogDatasetGrantRepository grantRepo,
         InfraDataSourceRepository infraDataSourceRepository,
-        CatalogFeatureProperties catalogFeatures
+        CatalogFeatureProperties catalogFeatures,
+        OrganizationVisibilityService organizationVisibilityService
     ) {
         this.domainRepo = domainRepo;
         this.datasetRepo = datasetRepo;
@@ -82,6 +85,7 @@ public class CatalogResource {
         this.grantRepo = grantRepo;
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.catalogFeatures = catalogFeatures;
+        this.organizationVisibilityService = organizationVisibilityService;
     }
 
     @GetMapping("/config")
@@ -271,10 +275,6 @@ public class CatalogResource {
             .filter(ds -> owner == null || (ds.getOwner() != null && ds.getOwner().toLowerCase().contains(owner.toLowerCase())))
             .filter(ds -> tag == null || (ds.getTags() != null && ds.getTags().toLowerCase().contains(tag.toLowerCase())))
             .filter(ds -> !enabledOnly || (ds.getEnabled() == null || ds.getEnabled().booleanValue()))
-            // RBAC/level gate
-            .filter(accessChecker::canRead)
-            // Department gate using active context (headers injected by frontend)
-            .filter(ds -> accessChecker.departmentAllowed(ds, effDept))
             .toList();
         long totalElements = filtered.size();
         int offset = Math.max(0, page) * Math.max(1, size);
@@ -335,7 +335,9 @@ public class CatalogResource {
     ) {
         CatalogDataset dataset = datasetRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问"));
         String effDept = activeDept != null ? activeDept : claim("dept_code");
-        if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, effDept)) {
+        // Metadata visibility: allow all authenticated users to view dataset metadata.
+        // Data-content access (query/preview) is enforced at execution endpoints.
+        if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue() && !SecurityUtils.isOpAdminAccount()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
         }
         Map<String, Object> ds = toDatasetDto(dataset, true);
@@ -776,9 +778,13 @@ public class CatalogResource {
     private void applyOwnerDepartmentPolicy(CatalogDataset dataset, String previousOwnerDept, boolean enforceNoChangeForNonOp) {
         String trimmedPrevious = Optional.ofNullable(previousOwnerDept).map(String::trim).filter(s -> !s.isEmpty()).orElse(null);
         String requested = Optional.ofNullable(dataset.getOwnerDept()).map(String::trim).filter(s -> !s.isEmpty()).orElse(null);
+        String rootDept = organizationVisibilityService.resolveDefaultRootDept().orElse(null);
+        if (!StringUtils.hasText(rootDept)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "所属部门不能为空（未获取到所级部门，请先同步组织树）");
+        }
 
         if (SecurityUtils.isOpAdminAccount()) {
-            dataset.setOwnerDept(requested);
+            dataset.setOwnerDept(requested != null ? requested : rootDept);
             return;
         }
 
@@ -786,7 +792,7 @@ public class CatalogResource {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅运维管理员可以调整数据资产归属部门");
         }
 
-        dataset.setOwnerDept(trimmedPrevious);
+        dataset.setOwnerDept(trimmedPrevious != null ? trimmedPrevious : rootDept);
     }
 
     @DeleteMapping("/datasets/{id}")
@@ -1535,6 +1541,12 @@ public class CatalogResource {
         map.put("username", grant.getGranteeUsername());
         map.put("displayName", grant.getGranteeName());
         map.put("deptCode", grant.getGranteeDept());
+        map.put("grantType", grant.getGrantType());
+        map.put("canQuery", grant.getCanQuery());
+        map.put("canPreview", grant.getCanPreview());
+        map.put("validFrom", grant.getValidFrom());
+        map.put("validTo", grant.getValidTo());
+        map.put("sourceRequestId", grant.getSourceRequestId());
         map.put("createdBy", grant.getCreatedBy());
         map.put("createdDate", grant.getCreatedDate());
         return map;

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd"
+>
+    <changeSet id="20260113-02-infra-data-source-owner-dept" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="infra_data_source"/>
+                <not>
+                    <columnExists tableName="infra_data_source" columnName="owner_dept"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Infra: bind data sources to owning department for dept-scoped management</comment>
+        <addColumn tableName="infra_data_source">
+            <column name="owner_dept" type="varchar(128)"/>
+        </addColumn>
+        <createIndex indexName="idx_infra_data_source_owner_dept" tableName="infra_data_source">
+            <column name="owner_dept"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+

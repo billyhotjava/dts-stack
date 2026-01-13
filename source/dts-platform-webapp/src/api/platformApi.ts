@@ -32,6 +32,29 @@ export const previewDataset = (datasetId: string, rows = 50) =>
 export const getDatasetJob = (jobId: string) => api.get({ url: `/dataset-jobs/${jobId}` });
 export const listDatasetJobs = (datasetId: string) => api.get({ url: `/datasets/${datasetId}/jobs` });
 
+// Dataset data-access approval (query/preview)
+export type DatasetAccessRequestCreatePayload = {
+	datasetId: string;
+	canQuery?: boolean;
+	canPreview?: boolean;
+	validFrom?: string;
+	validTo?: string;
+	reason?: string;
+};
+
+export const createDatasetAccessRequest = (data: DatasetAccessRequestCreatePayload) =>
+	api.post({ url: "/catalog/access/requests", data });
+
+export const listMyDatasetAccessRequests = () => api.get({ url: "/catalog/access/requests/mine" });
+
+export const listPendingDatasetAccessTasks = () => api.get({ url: "/catalog/access/tasks/pending" });
+
+export const approveDatasetAccessTask = (taskId: string, notes?: string) =>
+	api.post({ url: `/catalog/access/tasks/${taskId}/approve`, data: notes ? { notes } : {} });
+
+export const rejectDatasetAccessTask = (taskId: string, notes?: string) =>
+	api.post({ url: `/catalog/access/tasks/${taskId}/reject`, data: notes ? { notes } : {} });
+
 export const listMaskingRules = () => api.get<any[]>({ url: "/catalog/masking-rules" });
 export const createMaskingRule = (data: any) => api.post({ url: "/catalog/masking-rules", data });
 export const updateMaskingRule = (id: string, data: any) => api.put({ url: `/catalog/masking-rules/${id}`, data });

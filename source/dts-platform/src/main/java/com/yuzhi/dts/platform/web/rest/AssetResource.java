@@ -17,6 +17,7 @@ import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.CatalogMaskingService;
 import com.yuzhi.dts.platform.service.security.DatasetSqlBuilder;
 import com.yuzhi.dts.platform.service.security.SecurityGuardException;
+import com.yuzhi.dts.platform.service.security.DatasetDataAccessApprovalService;
 import com.yuzhi.dts.platform.service.security.SecuritySqlRewriter;
 import jakarta.validation.Valid;
 import java.lang.reflect.Array;
@@ -48,6 +49,7 @@ public class AssetResource {
     private final DatasetSecurityMetadataResolver metadataResolver;
     private final SecuritySqlRewriter securitySqlRewriter;
     private final CatalogMaskingService catalogMaskingService;
+    private final DatasetDataAccessApprovalService dataAccessApprovalService;
 
     public AssetResource(
         CatalogDatasetRepository datasetRepo,
@@ -60,7 +62,8 @@ public class AssetResource {
         DatasetSqlBuilder datasetSqlBuilder,
         DatasetSecurityMetadataResolver metadataResolver,
         SecuritySqlRewriter securitySqlRewriter,
-        CatalogMaskingService catalogMaskingService
+        CatalogMaskingService catalogMaskingService,
+        DatasetDataAccessApprovalService dataAccessApprovalService
     ) {
         this.datasetRepo = datasetRepo;
         this.rowFilterRepo = rowFilterRepo;
@@ -73,6 +76,7 @@ public class AssetResource {
         this.metadataResolver = metadataResolver;
         this.securitySqlRewriter = securitySqlRewriter;
         this.catalogMaskingService = catalogMaskingService;
+        this.dataAccessApprovalService = dataAccessApprovalService;
     }
 
     /**
@@ -164,6 +168,19 @@ public class AssetResource {
                 ? com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RBAC_DENY
                 : com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT;
             return ApiResponses.error(code, "Access denied for dataset");
+        }
+
+        DatasetDataAccessApprovalService.Decision dataDecision = dataAccessApprovalService.checkDataAccess(
+            dataset,
+            DatasetDataAccessApprovalService.DataAction.PREVIEW,
+            effDept
+        );
+        if (!dataDecision.allowed()) {
+            Map<String, Object> auditDetail = datasetAuditPayload(dataset);
+            auditDetail.put("reason", dataDecision.message());
+            auditDetail.put("requestedRows", rows);
+            audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.FAIL, id.toString(), auditDetail);
+            return ApiResponses.error(dataDecision.code(), dataDecision.message());
         }
 
         int safeRows = Math.max(1, Math.min(rows, 500));

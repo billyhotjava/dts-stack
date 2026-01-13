@@ -20,9 +20,6 @@ services:
       - "traefik.http.middlewares.hetu-strip-dashboards.stripprefixregex.regex=/dashboards"
       - "traefik.http.middlewares.hetu-allow-anonymous.headers.customrequestheaders.tui-allow-anonymous=true"
       - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Port=7778"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Proto=http"
       - "traefik.http.routers.hetu-dashboards.middlewares=hetu-strip-dashboards@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
       - "traefik.http.routers.hetu-dashboard-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboard/hetu`)"
       - "traefik.http.routers.hetu-dashboard-hetu.entrypoints=websecure"
@@ -152,14 +149,28 @@ services:
       - bash
       - -lc
       - |
+        set -e
+        wipe_target_dir() {
+          local dir="$1"
+          if [[ -z "$$dir" || "$$dir" == "/" ]]; then
+            echo "[dev] invalid target dir: '$$dir'" >&2
+            exit 1
+          fi
+          mkdir -p "$$dir"
+          # The target directory is a mounted volume in dev; avoid deleting the mountpoint itself
+          # (maven-clean-plugin may fail with "Device or resource busy").
+          rm -rf "$$dir"/* "$$dir"/.[!.]* "$$dir"/..?* 2>/dev/null || true
+        }
         # Patch application-dev.yml to read datasource from env placeholders (admin)
         sh /patches/patch-app-dev-yml.sh admin || true
         # Also patch shared module (dts-common) if present
         sh /patches/patch-app-dev-yml.sh common || true
         # Pre-install shared module so local repo has dts-common
-        mvn -q -f /workspace-src/dts-common/pom.xml -Pdev -DskipTests -Dmodernizer.skip=true install || true
+        wipe_target_dir /workspace-src/dts-common/target
+        mvn -q -f /workspace-src/dts-common/pom.xml -Pdev -DskipTests -Dmodernizer.skip=true install
         # Build current module and run with devtools; restarts on classpath changes
-        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true package || true
+        wipe_target_dir /workspace-src/dts-admin/target
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true package
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true spring-boot:run \
           -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12" \
           -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
@@ -168,6 +179,8 @@ services:
       - "5005:5005"
     volumes:
       - ./source:/workspace-src:z
+      - dts-admin-target:/workspace-src/dts-admin/target
+      - dts-common-target:/workspace-src/dts-common/target
       - ./data:/workspace-src/dts-admin/data:z
       - ./config:/workspace-src/dts-admin/config:ro,z
       - ./logs/dts-admin:/workspace/logs/dts-admin:z
@@ -255,12 +268,24 @@ services:
       - bash
       - -lc
       - |
+        set -e
+        wipe_target_dir() {
+          local dir="$1"
+          if [[ -z "$$dir" || "$$dir" == "/" ]]; then
+            echo "[dev] invalid target dir: '$$dir'" >&2
+            exit 1
+          fi
+          mkdir -p "$$dir"
+          rm -rf "$$dir"/* "$$dir"/.[!.]* "$$dir"/..?* 2>/dev/null || true
+        }
         # Patch application-dev.yml to read datasource from env placeholders (platform)
         sh /patches/patch-app-dev-yml.sh platform || true
         # Also patch shared module (dts-common) if present
         sh /patches/patch-app-dev-yml.sh common || true
-        mvn -q -f /workspace-src/dts-common/pom.xml -Pdev -DskipTests -Dmodernizer.skip=true install || true
-        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true package || true
+        wipe_target_dir /workspace-src/dts-common/target
+        mvn -q -f /workspace-src/dts-common/pom.xml -Pdev -DskipTests -Dmodernizer.skip=true install
+        wipe_target_dir /workspace-src/dts-platform/target
+        mvn -q -Pdev -DskipTests -Dmodernizer.skip=true package
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true spring-boot:run \
           -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006 -Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12" \
           -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
@@ -269,6 +294,8 @@ services:
       - "5006:5006"
     volumes:
       - ./source:/workspace-src:z
+      - dts-platform-target:/workspace-src/dts-platform/target
+      - dts-common-target:/workspace-src/dts-common/target
       - maven-cache:/root/.m2
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
@@ -320,6 +347,7 @@ services:
       - bash
       - -lc
       - |
+        set -e
         mvn -q -DskipTests package
         mvn -q -DskipTests spring-boot:run \
           -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007" \
@@ -329,6 +357,7 @@ services:
       - "5007:5007"
     volumes:
       - ./source:/workspace-src:z
+      - dts-analytics-target:/workspace-src/dts-analytics/target
       - maven-cache:/root/.m2
       - ./logs/dts-analytics:/workspace/logs/dts-analytics:z
     healthcheck:
@@ -342,6 +371,20 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
+      # Public endpoints: /analytics/api/public/* -> dts-analytics /api/public/* (no platform forward-auth)
+      - "traefik.http.routers.dts-analytics-public.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/public`)"
+      - "traefik.http.routers.dts-analytics-public.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-public.tls=true"
+      - "traefik.http.routers.dts-analytics-public.priority=245"
+      - "traefik.http.routers.dts-analytics-public.service=dts-analytics-api"
+      - "traefik.http.routers.dts-analytics-public.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
+      # Embed runtime endpoints: /analytics/api/embed/* (token-gated; no platform forward-auth)
+      - "traefik.http.routers.dts-analytics-embed.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/embed/`)"
+      - "traefik.http.routers.dts-analytics-embed.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-embed.tls=true"
+      - "traefik.http.routers.dts-analytics-embed.priority=244"
+      - "traefik.http.routers.dts-analytics-embed.service=dts-analytics-api"
+      - "traefik.http.routers.dts-analytics-embed.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
       # /analytics/api/* -> dts-analytics /api/*
       - "traefik.http.routers.dts-analytics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`)"
       - "traefik.http.routers.dts-analytics-api.entrypoints=websecure"
@@ -351,47 +394,6 @@ services:
       - "traefik.http.middlewares.dts-strip-analytics-api.stripprefix.prefixes=/analytics"
       - "traefik.http.routers.dts-analytics-api.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
 
-  # Webapp: dts-analytics-webapp (legacy Metabase UI served by a small Node server)
-  dts-analytics-webapp:
-    image: node:22-bookworm-slim
-    working_dir: /workspace
-    depends_on:
-      - dts-analytics
-    environment:
-      PORT: "3001"
-      DTS_ANALYTICS_API_BASE: "http://dts-analytics:3000"
-      DTS_PLATFORM_USERSTORE_KEY: "userStore"
-    command: ["sh","-lc","node server.mjs"]
-    ports:
-      - "127.0.0.1:3001:3001"
-    volumes:
-      - ./source/dts-analytics-webapp:/workspace:z
-    networks:
-      - dts-core
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      # Legacy UI is kept temporarily for reference at /analytics/legacy (modern fully replaces /analytics).
-      - "traefik.http.middlewares.dts-strip-analytics-ui-legacy.stripprefix.prefixes=/analytics/legacy"
-      - "traefik.http.routers.dts-analytics-ui-legacy.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/legacy`)"
-      - "traefik.http.routers.dts-analytics-ui-legacy.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-ui-legacy.tls=true"
-      - "traefik.http.routers.dts-analytics-ui-legacy.priority=220"
-      - "traefik.http.routers.dts-analytics-ui-legacy.service=dts-analytics-webapp"
-      - "traefik.http.services.dts-analytics-webapp.loadbalancer.server.port=3001"
-      - "traefik.http.routers.dts-analytics-ui-legacy.middlewares=dts-strip-analytics-ui-legacy@docker,security-headers@file"
-    healthcheck:
-      # node:*-slim images typically don't ship with curl/wget; use Node itself for health probing.
-      test:
-        [
-          "CMD-SHELL",
-          "node -e \"require('http').get('http://127.0.0.1:3001/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\"",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
-
   # Webapp: dts-analytics-webapp-modern (React19/Vite; modern UI; replaces legacy)
   dts-analytics-webapp-modern:
     image: node:22-bookworm
@@ -400,6 +402,13 @@ services:
       - dts-analytics
     environment:
       PNPM_STORE_DIR: /pnpm-store
+      # Avoid inheriting broken host proxy envs inside container.
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      NO_PROXY: "localhost,127.0.0.1,::1,dts-analytics,dts-pg,dts-platform,dts-admin,dts-proxy"
+      no_proxy: "localhost,127.0.0.1,::1,dts-analytics,dts-pg,dts-platform,dts-admin,dts-proxy"
       BROWSER: none
       VITE_OPEN: "false"
       CHOKIDAR_USEPOLLING: "true"
@@ -410,7 +419,7 @@ services:
       [
         "sh",
         "-lc",
-        "if [ -f package.json ]; then corepack enable; pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts || pnpm install --store-dir /pnpm-store --no-frozen-lockfile --ignore-scripts; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3002} --strictPort --open=false; else echo no\\ package.json\\ found; tail -f /dev/null; fi",
+        "if [ -f package.json ]; then corepack enable; pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts --offline || pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts || pnpm install --store-dir /pnpm-store --no-frozen-lockfile --ignore-scripts; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3002} --strictPort --open=false; else echo no\\ package.json\\ found; tail -f /dev/null; fi",
       ]
     ports:
       - "127.0.0.1:3002:3002"
@@ -423,14 +432,14 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
-      - "traefik.http.middlewares.dts-strip-analytics-ui.stripprefix.prefixes=/analytics"
-      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`) && !PathPrefix(`/analytics/legacy`)"
+      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`)"
       - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-ui.tls=true"
       - "traefik.http.routers.dts-analytics-ui.priority=230"
       - "traefik.http.routers.dts-analytics-ui.service=dts-analytics-webapp-modern"
       - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=3002"
-      - "traefik.http.routers.dts-analytics-ui.middlewares=dts-strip-analytics-ui@docker,security-headers@file"
+      # Dev server (Vite) already serves under base=/analytics/, so do NOT strip the prefix here.
+      - "traefik.http.routers.dts-analytics-ui.middlewares=security-headers@file"
     healthcheck:
       test:
         [
@@ -555,5 +564,9 @@ services:
 
 volumes:
   pnpm-store:
+  dts-admin-target:
+  dts-platform-target:
+  dts-common-target:
+  dts-analytics-target:
 
 ## Note: top-level networks may also be defined in docker-compose.yml

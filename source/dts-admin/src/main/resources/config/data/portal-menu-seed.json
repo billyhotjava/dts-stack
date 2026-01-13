@@ -260,6 +260,22 @@
       ]
     },
     {
+      "key": "foundation",
+      "path": "foundation",
+      "icon": "solar:settings-bold-duotone",
+      "titleKey": "sys.nav.portal.foundation",
+      "title": "基础管理",
+      "children": [
+        {
+          "key": "dataSources",
+          "path": "data-sources",
+          "icon": "solar:database-bold-duotone",
+          "titleKey": "sys.nav.portal.foundationDataSources",
+          "title": "数据源配置"
+        }
+      ]
+    },
+    {
       "key": "security",
       "path": "security",
       "icon": "solar:shield-bold-duotone",

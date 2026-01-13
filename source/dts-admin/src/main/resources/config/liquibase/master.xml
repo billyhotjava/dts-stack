@@ -69,6 +69,7 @@
     <include file="config/liquibase/changelog/20251018-07_add_dataset_grant_audit_rule.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251024_01_admin_sessions_table.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260112-01_audit_dataset_preview_template.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260113-01_remove_portal_data_dev_roles.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260115-01_audit_resource_dictionary_user_api_alias.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260127-01_portal_menu_disable_audit.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260127-02_audit_operation_mapping_change_request_types.xml" relativeToChangelogFile="false"/>

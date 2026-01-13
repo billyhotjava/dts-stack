@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.MbqlToSqlService;
+import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
@@ -28,12 +29,17 @@ public class DatasetResource {
     private final AnalyticsSessionService sessionService;
     private final DatasetQueryService datasetQueryService;
     private final MbqlToSqlService mbqlToSqlService;
+    private final NativeQueryTemplateService nativeQueryTemplateService;
 
     public DatasetResource(
-            AnalyticsSessionService sessionService, DatasetQueryService datasetQueryService, MbqlToSqlService mbqlToSqlService) {
+            AnalyticsSessionService sessionService,
+            DatasetQueryService datasetQueryService,
+            MbqlToSqlService mbqlToSqlService,
+            NativeQueryTemplateService nativeQueryTemplateService) {
         this.sessionService = sessionService;
         this.datasetQueryService = datasetQueryService;
         this.mbqlToSqlService = mbqlToSqlService;
+        this.nativeQueryTemplateService = nativeQueryTemplateService;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -67,6 +73,7 @@ public class DatasetResource {
 
         try {
             String sql;
+            List<Object> bindings = List.of();
             Map<String, Object> jsonQuery = new LinkedHashMap<>();
             jsonQuery.put("database", databaseId);
             jsonQuery.put(
@@ -81,12 +88,19 @@ public class DatasetResource {
                 if (sql == null || sql.isBlank()) {
                     return ResponseEntity.badRequest().body(Map.of("errors", Map.of("query", "native.query is required")));
                 }
+                JsonNode parametersNode = body.get("parameters");
+                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode() && sql.contains("{{")) {
+                    NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
+                    sql = rendered.sql();
+                    bindings = rendered.bindings();
+                }
                 jsonQuery.put("type", "native");
                 jsonQuery.put("native", Map.of("query", sql));
             } else if ("query".equalsIgnoreCase(type)) {
                 JsonNode mbql = body.get("query");
                 MbqlToSqlService.TranslationResult translated = mbqlToSqlService.translateSelect(databaseId, mbql, constraints);
                 sql = translated.sql();
+                bindings = translated.bindings();
                 jsonQuery.put("type", "query");
                 jsonQuery.put("query", mbql);
             } else {
@@ -94,7 +108,7 @@ public class DatasetResource {
                         .body(Map.of("errors", Map.of("type", "Only native and query (MBQL) dataset types are supported")));
             }
 
-            DatasetQueryService.DatasetResult result = datasetQueryService.runNative(databaseId, sql, constraints);
+            DatasetQueryService.DatasetResult result = datasetQueryService.runNative(databaseId, sql, constraints, bindings);
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
             Map<String, Object> data = new LinkedHashMap<>();

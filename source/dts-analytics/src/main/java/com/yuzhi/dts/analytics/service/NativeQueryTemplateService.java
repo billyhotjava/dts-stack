@@ -1,0 +1,179 @@
+package com.yuzhi.dts.analytics.service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.springframework.stereotype.Service;
+
+@Service
+public class NativeQueryTemplateService {
+
+    private static final Pattern OPTIONAL_BLOCK = Pattern.compile("\\[\\[([\\s\\S]*?)\\]\\]");
+    private static final Pattern TEMPLATE_TAG = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_\\-]+)\\s*\\}\\}");
+
+    public RenderedQuery render(String sqlTemplate, JsonNode parametersNode) {
+        if (sqlTemplate == null || sqlTemplate.isBlank()) {
+            return new RenderedQuery("", List.of());
+        }
+        Map<String, Object> values = parseParameters(parametersNode);
+        String withoutOptionalBlocks = applyOptionalBlocks(sqlTemplate, values);
+        return applyTemplateTags(withoutOptionalBlocks, values);
+    }
+
+    private static String applyOptionalBlocks(String template, Map<String, Object> values) {
+        Matcher m = OPTIONAL_BLOCK.matcher(template);
+        StringBuffer out = new StringBuffer();
+        while (m.find()) {
+            String block = m.group(1);
+            Set<String> required = extractTags(block);
+            boolean include = required.isEmpty() || required.stream().allMatch(name -> hasValue(values.get(name)));
+            m.appendReplacement(out, Matcher.quoteReplacement(include ? block : ""));
+        }
+        m.appendTail(out);
+        return out.toString();
+    }
+
+    private static RenderedQuery applyTemplateTags(String template, Map<String, Object> values) {
+        Matcher m = TEMPLATE_TAG.matcher(template);
+        StringBuffer out = new StringBuffer();
+        List<Object> bindings = new ArrayList<>();
+
+        while (m.find()) {
+            String name = m.group(1);
+            Object value = values.get(name);
+            if (!hasValue(value)) {
+                throw new IllegalArgumentException("Missing required parameter: " + name);
+            }
+
+            if (value instanceof List<?> list) {
+                if (list.isEmpty()) {
+                    throw new IllegalArgumentException("Missing required parameter: " + name);
+                }
+                String placeholders = String.join(", ", java.util.Collections.nCopies(list.size(), "?"));
+                bindings.addAll(list);
+                m.appendReplacement(out, Matcher.quoteReplacement(placeholders));
+            } else {
+                bindings.add(value);
+                m.appendReplacement(out, "?");
+            }
+        }
+        m.appendTail(out);
+        return new RenderedQuery(out.toString(), bindings);
+    }
+
+    private static Set<String> extractTags(String text) {
+        Set<String> tags = new HashSet<>();
+        Matcher m = TEMPLATE_TAG.matcher(text);
+        while (m.find()) {
+            tags.add(m.group(1));
+        }
+        return tags;
+    }
+
+    private static boolean hasValue(Object value) {
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof String s) {
+            return !s.isBlank();
+        }
+        if (value instanceof List<?> list) {
+            return !list.isEmpty();
+        }
+        return true;
+    }
+
+    private static Map<String, Object> parseParameters(JsonNode node) {
+        Map<String, Object> out = new HashMap<>();
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return out;
+        }
+        if (node.isArray()) {
+            for (JsonNode param : node) {
+                String name = resolveParamName(param);
+                if (name == null) {
+                    continue;
+                }
+                Object value = resolveParamValue(param.get("value"));
+                out.put(name, value);
+            }
+            return out;
+        }
+        if (node.isObject()) {
+            node.fields().forEachRemaining(e -> out.put(e.getKey(), resolveParamValue(e.getValue())));
+            return out;
+        }
+        return out;
+    }
+
+    private static String resolveParamName(JsonNode param) {
+        if (param == null || !param.isObject()) {
+            return null;
+        }
+        JsonNode target = param.get("target");
+        if (target != null && target.isArray() && target.size() >= 2) {
+            String kind = target.get(0).asText("");
+            JsonNode spec = target.get(1);
+            if ("variable".equalsIgnoreCase(kind) && spec != null && spec.isArray() && spec.size() >= 2) {
+                if ("template-tag".equalsIgnoreCase(spec.get(0).asText(""))) {
+                    return trimToNull(spec.get(1).asText(null));
+                }
+            }
+        }
+
+        String name = trimToNull(param.path("name").asText(null));
+        if (name != null) {
+            return name;
+        }
+        return trimToNull(param.path("slug").asText(null));
+    }
+
+    private static Object resolveParamValue(JsonNode valueNode) {
+        if (valueNode == null || valueNode.isNull() || valueNode.isMissingNode()) {
+            return null;
+        }
+        if (valueNode.isTextual()) {
+            return valueNode.asText();
+        }
+        if (valueNode.isNumber()) {
+            return valueNode.numberValue();
+        }
+        if (valueNode.isBoolean()) {
+            return valueNode.asBoolean();
+        }
+        if (valueNode.isArray()) {
+            List<Object> out = new ArrayList<>();
+            for (JsonNode item : valueNode) {
+                Object v = resolveParamValue(item);
+                if (v != null) {
+                    out.add(v);
+                }
+            }
+            return out;
+        }
+        if (valueNode.isObject()) {
+            if (valueNode.has("value")) {
+                return resolveParamValue(valueNode.get("value"));
+            }
+            return valueNode.toString();
+        }
+        return valueNode.asText();
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isBlank() ? null : trimmed;
+    }
+
+    public record RenderedQuery(String sql, List<Object> bindings) {}
+}
+

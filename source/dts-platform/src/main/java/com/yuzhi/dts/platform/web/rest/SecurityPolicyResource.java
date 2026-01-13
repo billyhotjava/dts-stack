@@ -398,6 +398,12 @@ public class SecurityPolicyResource {
         dto.put("granteeUsername", grant.getGranteeUsername());
         dto.put("granteeName", grant.getGranteeName());
         dto.put("granteeDept", grant.getGranteeDept());
+        dto.put("grantType", grant.getGrantType());
+        dto.put("canQuery", grant.getCanQuery());
+        dto.put("canPreview", grant.getCanPreview());
+        dto.put("validFrom", grant.getValidFrom());
+        dto.put("validTo", grant.getValidTo());
+        dto.put("sourceRequestId", grant.getSourceRequestId());
         dto.put("createdBy", grant.getCreatedBy());
         dto.put("createdDate", grant.getCreatedDate());
         return dto;

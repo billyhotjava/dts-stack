@@ -35,6 +35,10 @@ public class DatasetQueryService {
     }
 
     public DatasetResult runNative(long databaseId, String sql, DatasetConstraints constraints) throws SQLException {
+        return runNative(databaseId, sql, constraints, List.of());
+    }
+
+    public DatasetResult runNative(long databaseId, String sql, DatasetConstraints constraints, List<Object> bindings) throws SQLException {
         HikariDataSource dataSource = dataSourceRegistry.get(databaseId);
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -43,6 +47,12 @@ public class DatasetQueryService {
             }
             if (constraints.maxResults() > 0) {
                 statement.setMaxRows(constraints.maxResults());
+            }
+
+            if (bindings != null && !bindings.isEmpty()) {
+                for (int i = 0; i < bindings.size(); i++) {
+                    statement.setObject(i + 1, bindings.get(i));
+                }
             }
 
             boolean hasResultSet = statement.execute();
@@ -299,4 +309,3 @@ public class DatasetQueryService {
         }
     }
 }
-

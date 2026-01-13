@@ -25,6 +25,7 @@ import { normalizeClassification, type ClassificationLevel } from "@/utils/class
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useActiveDept } from "@/store/contextStore";
 import { SqlWorkbenchExperimental } from "@/components/sql/SqlWorkbenchExperimental";
+import { DatasetAccessRequestDialog } from "@/components/security/DatasetAccessRequestDialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/ui/tooltip";
@@ -55,15 +56,17 @@ type DatasetField = {
 };
 
 type Dataset = {
-    id: string;
-    name: string;
-    source: string;
-    database: string;
-    schema: string;
-    classification: Classification;
-    rowCount: number;
-    description?: string;
-    fields: DatasetField[];
+	id: string;
+	name: string;
+	source: string;
+	database: string;
+	schema: string;
+	classification: Classification;
+	rowCount: number;
+	description?: string;
+	fields: DatasetField[];
+	warehouseLayer?: string;
+	ownerDept?: string;
 };
 
 function toUiDataset(apiItem: any): Dataset {
@@ -78,6 +81,13 @@ function toUiDataset(apiItem: any): Dataset {
 		rowCount: 0,
 		description: undefined,
 		fields: [],
+		warehouseLayer: typeof apiItem.warehouseLayer === "string" ? apiItem.warehouseLayer : apiItem.warehouse_layer,
+		ownerDept:
+			typeof apiItem.ownerDept === "string"
+				? apiItem.ownerDept
+				: typeof apiItem.owner_dept === "string"
+					? apiItem.owner_dept
+					: undefined,
 	};
 }
 
@@ -870,6 +880,9 @@ const [saveTtlDays, setSaveTtlDays] = useState<string>("7");
 	const location = useLocation();
 	const navigate = useNavigate();
 	const [runStatus, setRunStatus] = useState<{ type: "success" | "error"; message: string; sql?: string; detail?: string } | null>(null);
+	const [accessDialogOpen, setAccessDialogOpen] = useState(false);
+	const [accessDialogDataset, setAccessDialogDataset] = useState<Dataset | null>(null);
+	const [accessDialogDefaultActions, setAccessDialogDefaultActions] = useState<Array<"query" | "preview">>(["query"]);
 
 	useEffect(() => {
 		if (!selectedDatasetId && defaultDataset) {
@@ -964,6 +977,18 @@ const [saveTtlDays, setSaveTtlDays] = useState<string>("7");
 				}
 			} catch (e) {
 				console.error(e);
+				const errCode = (e as any)?.response?.data?.code;
+				if (errCode === "dts-sec-0004") {
+					setRunStatus({
+						type: "error",
+						message: "需要审批授权后才能查询数据内容",
+						sql,
+					});
+					setAccessDialogDataset(dataset);
+					setAccessDialogDefaultActions(["query"]);
+					setAccessDialogOpen(true);
+					return;
+				}
 				const errorInfo = extractErrorInfo(e);
 				setRunStatus({
 					type: "error",
@@ -1002,7 +1027,7 @@ useEffect(() => {
 		}
 	const datasetFromId = payload.datasetId ? datasets.find((d) => d.id === payload.datasetId) : null;
 	const fallbackDataset: Dataset | null =
-		!datasetFromId && payload.datasetId
+			!datasetFromId && payload.datasetId
 			? {
 				id: payload.datasetId,
 				name: payload.name || payload.datasetId,
@@ -1013,6 +1038,8 @@ useEffect(() => {
 				rowCount: 0,
 				description: undefined,
 				fields: [],
+				warehouseLayer: undefined,
+				ownerDept: undefined,
 			}
 			: null;
 	const targetDataset = datasetFromId ?? fallbackDataset ?? selectedDataset ?? null;
@@ -1901,6 +1928,28 @@ useEffect(() => {
 						</div>
 					</DrawerContent>
 				</Drawer>
+				<DatasetAccessRequestDialog
+					open={accessDialogOpen}
+					onOpenChange={setAccessDialogOpen}
+					dataset={
+						accessDialogDataset
+							? {
+								id: accessDialogDataset.id,
+								name: accessDialogDataset.name,
+								classification: accessDialogDataset.classification,
+								warehouseLayer: accessDialogDataset.warehouseLayer,
+								ownerDept: accessDialogDataset.ownerDept,
+							}
+							: {
+								id: selectedDataset?.id ?? "",
+								name: selectedDataset?.name,
+								classification: selectedDataset?.classification,
+								warehouseLayer: selectedDataset?.warehouseLayer,
+								ownerDept: selectedDataset?.ownerDept,
+							}
+					}
+					defaultActions={accessDialogDefaultActions}
+				/>
 			</div>
 		</TooltipProvider>
 	);

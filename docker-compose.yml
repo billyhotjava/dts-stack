@@ -72,9 +72,6 @@ services:
       - "traefik.http.middlewares.hetu-strip-dashboards.stripprefixregex.regex=/dashboards"
       # Hetu upstream on the Docker host; some installs are strict on Host and return 404 if Host is unexpected.
       - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Port=7778"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.X-Forwarded-Proto=http"
       # Allow anonymous bootstrap calls (Hetu checks this flag on some endpoints like /system/version).
       - "traefik.http.middlewares.hetu-allow-anonymous.headers.customrequestheaders.tui-allow-anonymous=true"
       - "traefik.http.routers.hetu-dashboards.middlewares=hetu-strip-dashboards@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"

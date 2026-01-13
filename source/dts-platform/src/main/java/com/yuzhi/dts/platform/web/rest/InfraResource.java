@@ -39,6 +39,8 @@ public class InfraResource {
 
     private static final String INFRA_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
+    private static final String INSTITUTE_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INSTITUTE_PRIVILEGED_ROLES)";
 
     private final InfraTaskScheduleRepository schedRepo;
     private final AuditService audit;
@@ -68,8 +70,8 @@ public class InfraResource {
 
     // Data sources
     @GetMapping("/data-sources")
-    public ApiResponse<List<InfraDataSourceDto>> listDataSources() {
-        var list = managementService.listDataSources();
+    public ApiResponse<List<InfraDataSourceDto>> listDataSources(@RequestHeader(value = "X-Active-Dept", required = false) String activeDept) {
+        var list = managementService.listDataSources(activeDept);
         audit.recordAuxiliary("READ", "infra.dataSource", "infra.dataSource", "list", "SUCCESS", null);
         return ApiResponses.ok(list);
     }
@@ -86,15 +88,18 @@ public class InfraResource {
 
     @PostMapping("/data-sources")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ApiResponse<InfraDataSourceDto> createDataSource(@Valid @RequestBody DataSourceRequest request) {
+    public ApiResponse<InfraDataSourceDto> createDataSource(
+        @Valid @RequestBody DataSourceRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         var user = SecurityUtils.getCurrentUserLogin().orElse("system");
-        var saved = managementService.createDataSource(request, user);
+        var saved = managementService.createDataSource(request, user, activeDept);
         audit.audit("CREATE", "infra.dataSource", String.valueOf(saved.id()));
         return ApiResponses.ok(saved);
     }
 
     @PostMapping("/data-sources/inceptor/publish")
-    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(INSTITUTE_MAINTAINER_EXPRESSION)
     public ApiResponse<InfraDataSourceDto> publishInceptorDataSource(@Valid @RequestBody HiveConnectionPersistRequest request) {
         var user = SecurityUtils.getCurrentUserLogin().orElse("system");
         var saved = managementService.publishInceptorDataSource(request, user);
@@ -113,17 +118,24 @@ public class InfraResource {
 
     @PutMapping("/data-sources/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ApiResponse<InfraDataSourceDto> updateDataSource(@PathVariable UUID id, @Valid @RequestBody DataSourceRequest request) {
+    public ApiResponse<InfraDataSourceDto> updateDataSource(
+        @PathVariable UUID id,
+        @Valid @RequestBody DataSourceRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         var user = SecurityUtils.getCurrentUserLogin().orElse("system");
-        var saved = managementService.updateDataSource(id, request, user);
+        var saved = managementService.updateDataSource(id, request, user, activeDept);
         audit.audit("UPDATE", "infra.dataSource", String.valueOf(id));
         return ApiResponses.ok(saved);
     }
 
     @DeleteMapping("/data-sources/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ApiResponse<Boolean> deleteDataSource(@PathVariable UUID id) {
-        managementService.deleteDataSource(id);
+    public ApiResponse<Boolean> deleteDataSource(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        managementService.deleteDataSource(id, activeDept);
         audit.audit("DELETE", "infra.dataSource", String.valueOf(id));
         return ApiResponses.ok(Boolean.TRUE);
     }
@@ -190,6 +202,7 @@ public class InfraResource {
     }
 
     @PostMapping("/data-sources/inceptor/refresh")
+    @PreAuthorize(INSTITUTE_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> refreshInceptorDataSource() {
         inceptorRegistry.refresh();
         // Run catalog synchronization asynchronously to avoid blocking request threads if Hive hangs

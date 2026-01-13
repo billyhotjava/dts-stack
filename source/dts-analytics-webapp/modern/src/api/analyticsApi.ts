@@ -88,6 +88,8 @@ export type CardQueryResponse = {
 	};
 };
 
+export type DashboardQueryResponse = CardQueryResponse;
+
 export type SearchItem = {
 	model: "dashboard" | "card" | "collection" | string;
 	id: number;
@@ -101,34 +103,101 @@ export type SearchResponse = {
 	total: number;
 };
 
+export type DatabaseListItem = {
+	id: number;
+	name?: string;
+	engine?: string;
+};
+
+export type DatabaseListResponse = {
+	data: DatabaseListItem[];
+	total: number;
+};
+
+export type DatabaseMetadataResponse = Record<string, unknown>;
+
+import { getPlatformTokens, refreshPlatformAccessToken } from "./platformSession";
+
+export class HttpError extends Error {
+	status: number;
+	bodyText: string;
+	constructor(status: number, message: string, bodyText: string) {
+		super(message);
+		this.status = status;
+		this.bodyText = bodyText;
+	}
+}
+
+export class AuthError extends HttpError {}
+
+async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): Promise<Response> {
+	const tokens = getPlatformTokens();
+	const headers = new Headers(init.headers ?? {});
+	if (!headers.has("accept")) headers.set("accept", "application/json");
+	if (tokens.accessToken && !headers.has("authorization")) {
+		headers.set("authorization", `Bearer ${tokens.accessToken}`);
+	}
+
+	const response = await fetch(url, { ...init, credentials: "include", headers });
+	if (response.status !== 401 || !allowRefresh) {
+		return response;
+	}
+
+	if (!tokens.refreshToken) {
+		return response;
+	}
+
+	const refreshed = await refreshPlatformAccessToken(tokens.refreshToken);
+	if (!refreshed?.accessToken) {
+		return response;
+	}
+
+	const retryHeaders = new Headers(init.headers ?? {});
+	if (!retryHeaders.has("accept")) retryHeaders.set("accept", "application/json");
+	retryHeaders.set("authorization", `Bearer ${refreshed.accessToken}`);
+	return await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
+}
+
+async function readErrorText(response: Response): Promise<string> {
+	return await response.text().catch(() => "");
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
-	const response = await fetch(url, {
-		method: "GET",
-		credentials: "include",
-		headers: {
-			accept: "application/json",
-		},
-	});
+	const response = await apiFetch(url, { method: "GET" }, true);
 	if (!response.ok) {
-		const text = await response.text().catch(() => "");
-		throw new Error(`HTTP ${response.status} ${response.statusText}: ${text}`);
+		const text = await readErrorText(response);
+		const msg = `HTTP ${response.status} ${response.statusText}: ${text}`;
+		if (response.status === 401 || response.status === 403) {
+			throw new AuthError(response.status, msg, text);
+		}
+		throw new HttpError(response.status, msg, text);
 	}
 	return (await response.json()) as T;
 }
 
 async function sendJson<T>(url: string, body: unknown): Promise<T> {
-	const response = await fetch(url, {
-		method: "POST",
-		credentials: "include",
+	return await requestJson<T>(url, "POST", body);
+}
+
+async function requestJson<T>(url: string, method: "POST" | "PUT" | "DELETE", body?: unknown): Promise<T> {
+	const init: RequestInit = {
+		method,
 		headers: {
 			accept: "application/json",
 			"content-type": "application/json",
 		},
-		body: JSON.stringify(body ?? {}),
-	});
+	};
+	if (method !== "DELETE") {
+		init.body = JSON.stringify(body ?? {});
+	}
+	const response = await apiFetch(url, init, true);
 	if (!response.ok) {
-		const text = await response.text().catch(() => "");
-		throw new Error(`HTTP ${response.status} ${response.statusText}: ${text}`);
+		const text = await readErrorText(response);
+		const msg = `HTTP ${response.status} ${response.statusText}: ${text}`;
+		if (response.status === 401 || response.status === 403) {
+			throw new AuthError(response.status, msg, text);
+		}
+		throw new HttpError(response.status, msg, text);
 	}
 	return (await response.json()) as T;
 }
@@ -136,15 +205,37 @@ async function sendJson<T>(url: string, body: unknown): Promise<T> {
 export const analyticsApi = {
 	getCurrentUser: () => fetchJson<CurrentUser>("/analytics/api/user/current"),
 	getHealth: () => fetchJson<{ status?: string }>("/analytics/api/health"),
+	listDatabases: () => fetchJson<DatabaseListResponse>("/analytics/api/database"),
+	getDatabaseMetadata: (dbId: string | number) =>
+		fetchJson<DatabaseMetadataResponse>(`/analytics/api/database/${encodeURIComponent(String(dbId))}/metadata`),
 	listCollections: () => fetchJson<CollectionListItem[]>("/analytics/api/collection"),
 	getCollectionItems: (id: string | number) =>
 		fetchJson<CollectionItem[]>(`/analytics/api/collection/${encodeURIComponent(String(id))}/items`),
 	listDashboards: () => fetchJson<DashboardListItem[]>("/analytics/api/dashboard"),
 	getDashboard: (id: string | number) => fetchJson<DashboardDetail>(`/analytics/api/dashboard/${encodeURIComponent(String(id))}`),
+	createDashboard: (body: unknown) => sendJson<DashboardDetail>("/analytics/api/dashboard", body),
+	saveDashboard: (body: unknown) => sendJson<DashboardDetail>("/analytics/api/dashboard/save", body),
+	listDashboardParamValues: (dashId: string | number, paramId: string) =>
+		fetchJson<string[]>(
+			`/analytics/api/dashboard/${encodeURIComponent(String(dashId))}/params/${encodeURIComponent(String(paramId))}/values`,
+		),
+	searchDashboardParamValues: (dashId: string | number, paramId: string, query: string) =>
+		fetchJson<string[]>(
+			`/analytics/api/dashboard/${encodeURIComponent(String(dashId))}/params/${encodeURIComponent(String(paramId))}/search/${encodeURIComponent(String(query))}`,
+		),
 	listCards: () => fetchJson<CardListItem[]>("/analytics/api/card"),
 	getCard: (id: string | number) => fetchJson<CardDetail>(`/analytics/api/card/${encodeURIComponent(String(id))}`),
+	createCard: (body: unknown) => sendJson<CardDetail>("/analytics/api/card", body),
+	updateCard: (id: string | number, body: unknown) =>
+		requestJson<CardDetail>(`/analytics/api/card/${encodeURIComponent(String(id))}`, "PUT", body),
 	queryCard: (id: string | number, body?: unknown) =>
 		sendJson<CardQueryResponse>(`/analytics/api/card/${encodeURIComponent(String(id))}/query`, body ?? {}),
+	runDatasetQuery: (body: unknown) => sendJson<CardQueryResponse>("/analytics/api/dataset", body),
+	queryDashcard: (dashboardId: string | number, dashcardId: string | number, cardId: string | number, body?: unknown) =>
+		sendJson<DashboardQueryResponse>(
+			`/analytics/api/dashboard/${encodeURIComponent(String(dashboardId))}/dashcard/${encodeURIComponent(String(dashcardId))}/card/${encodeURIComponent(String(cardId))}/query`,
+			body ?? {},
+		),
 	search: (q: string) =>
 		fetchJson<SearchResponse>(`/analytics/api/search?q=${encodeURIComponent(String(q ?? ""))}&limit=25&offset=0`),
 };

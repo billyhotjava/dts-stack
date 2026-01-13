@@ -8,6 +8,7 @@ export interface InfraDataSource {
 	jdbcUrl: string;
 	username?: string;
 	description?: string;
+	ownerDept?: string;
 	props: Record<string, any>;
 	createdAt?: string;
 	lastVerifiedAt?: string;

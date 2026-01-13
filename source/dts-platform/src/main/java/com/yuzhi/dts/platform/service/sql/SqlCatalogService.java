@@ -291,11 +291,15 @@ public class SqlCatalogService {
     }
 
     private boolean filterByAccess(CatalogDataset dataset) {
-        boolean allowed = accessChecker.canRead(dataset);
-        if (!allowed) {
-            LOG.info("Dataset {} ({}) skipped due to access denial", dataset.getId(), dataset.getName());
+        // Metadata visibility: keep catalog tree inclusive; enforce data-content access at execution endpoints.
+        // Still hide disabled datasets for non-admin users to avoid confusion.
+        if (dataset == null) {
+            return false;
         }
-        return allowed;
+        if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue() && !SecurityUtils.isOpAdminAccount()) {
+            return false;
+        }
+        return true;
     }
 
     private Map<UUID, List<CatalogTableSchema>> indexTables(List<CatalogTableSchema> tables) {

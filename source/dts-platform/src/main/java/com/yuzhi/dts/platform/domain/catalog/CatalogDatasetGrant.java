@@ -11,6 +11,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -38,6 +39,24 @@ public class CatalogDatasetGrant extends AbstractAuditingEntity<UUID> implements
 
     @Column(name = "grantee_dept", length = 64)
     private String granteeDept;
+
+    @Column(name = "grant_type", length = 32)
+    private String grantType = "SHARE"; // SHARE | DATA_ACCESS
+
+    @Column(name = "can_query", nullable = false)
+    private Boolean canQuery = Boolean.FALSE;
+
+    @Column(name = "can_preview", nullable = false)
+    private Boolean canPreview = Boolean.FALSE;
+
+    @Column(name = "valid_from")
+    private Instant validFrom;
+
+    @Column(name = "valid_to")
+    private Instant validTo;
+
+    @Column(name = "source_request_id", columnDefinition = "uuid")
+    private UUID sourceRequestId;
 
     @Override
     public UUID getId() {
@@ -86,5 +105,53 @@ public class CatalogDatasetGrant extends AbstractAuditingEntity<UUID> implements
 
     public void setGranteeDept(String granteeDept) {
         this.granteeDept = granteeDept;
+    }
+
+    public String getGrantType() {
+        return grantType;
+    }
+
+    public void setGrantType(String grantType) {
+        this.grantType = grantType;
+    }
+
+    public Boolean getCanQuery() {
+        return canQuery;
+    }
+
+    public void setCanQuery(Boolean canQuery) {
+        this.canQuery = canQuery;
+    }
+
+    public Boolean getCanPreview() {
+        return canPreview;
+    }
+
+    public void setCanPreview(Boolean canPreview) {
+        this.canPreview = canPreview;
+    }
+
+    public Instant getValidFrom() {
+        return validFrom;
+    }
+
+    public void setValidFrom(Instant validFrom) {
+        this.validFrom = validFrom;
+    }
+
+    public Instant getValidTo() {
+        return validTo;
+    }
+
+    public void setValidTo(Instant validTo) {
+        this.validTo = validTo;
+    }
+
+    public UUID getSourceRequestId() {
+        return sourceRequestId;
+    }
+
+    public void setSourceRequestId(UUID sourceRequestId) {
+        this.sourceRequestId = sourceRequestId;
     }
 }

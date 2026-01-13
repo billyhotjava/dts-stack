@@ -12,6 +12,8 @@ public class AdminUserVM {
     private String fullName;
     private String email;
     private String phone;
+    private String deptCode;
+    private String deptName;
     private String personSecurityLevel;
     private List<String> realmRoles = new ArrayList<>();
     private List<String> groupPaths = new ArrayList<>();
@@ -65,6 +67,22 @@ public class AdminUserVM {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public String getDeptCode() {
+        return deptCode;
+    }
+
+    public void setDeptCode(String deptCode) {
+        this.deptCode = deptCode;
+    }
+
+    public String getDeptName() {
+        return deptName;
+    }
+
+    public void setDeptName(String deptName) {
+        this.deptName = deptName;
     }
 
     public String getPersonSecurityLevel() {

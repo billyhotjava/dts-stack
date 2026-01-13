@@ -50,23 +50,9 @@ public class PlatformDirectoryResource {
             List.of("read", "write", "export")
         ),
         new BuiltinRole(
-            "ROLE_DEPT_DATA_DEV",
-            "部门数据开发员",
-            "覆盖本部门数据开发；可读取密级不超的部门数据并在部门范围内写入；不具备密级或共享策略调整、授权管理能力；导出受策略限制。",
-            "DEPARTMENT",
-            List.of("read", "write", "export")
-        ),
-        new BuiltinRole(
             "ROLE_INST_DATA_OWNER",
             "研究所数据管理员",
             "面向全所共享区；可读取全所共享区内密级不超的数据，并写入和管理共享策略；负责编辑/查看授权；导出高敏数据需审批。",
-            "INSTITUTE",
-            List.of("read", "write", "export")
-        ),
-        new BuiltinRole(
-            "ROLE_INST_DATA_DEV",
-            "研究所数据开发员",
-            "在全所共享区开展数据开发；可读取共享区密级不超的数据并写入共享区；无密级或共享策略调整、授权能力；导出受策略限制。",
             "INSTITUTE",
             List.of("read", "write", "export")
         ),
@@ -231,7 +217,7 @@ public class PlatformDirectoryResource {
 
     private List<KeycloakUserDTO> fallbackFromSnapshots(String query) {
         try {
-            var page = adminUserService.listSnapshots(0, 200, query);
+            var page = adminUserService.listSnapshots(0, 200, query, null);
             if (page == null || page.isEmpty()) {
                 return List.of();
             }

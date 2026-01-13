@@ -14,6 +14,7 @@ http:
       service: hetu
       middlewares:
         - hetu-strip-dashboards
+        - hetu-upstream-host
         - hetu-allow-anonymous
         - security-headers
       priority: 199
@@ -26,6 +27,7 @@ http:
       service: hetu
       middlewares:
         - hetu-strip-dashboard-hetu
+        - hetu-upstream-host
         - hetu-allow-anonymous
         - security-headers
       priority: 209
@@ -37,6 +39,7 @@ http:
         - websecure
       service: hetu
       middlewares:
+        - hetu-upstream-host
         - hetu-allow-anonymous
         - security-headers
       priority: 189
@@ -48,6 +51,7 @@ http:
         - websecure
       service: hetu
       middlewares:
+        - hetu-upstream-host
         - hetu-allow-anonymous
         - security-headers
       priority: 184
@@ -59,6 +63,7 @@ http:
         - websecure
       service: hetu
       middlewares:
+        - hetu-upstream-host
         - hetu-allow-anonymous
         - security-headers
       priority: 219
@@ -70,6 +75,7 @@ http:
         - websecure
       service: hetu
       middlewares:
+        - hetu-upstream-host
         - hetu-allow-anonymous
         - security-headers
       priority: 185
@@ -81,6 +87,7 @@ http:
         - websecure
       service: hetu
       middlewares:
+        - hetu-upstream-host
         - hetu-allow-anonymous
         - security-headers
       priority: 184
@@ -92,6 +99,7 @@ http:
         - websecure
       service: hetu
       middlewares:
+        - hetu-upstream-host
         - hetu-allow-anonymous
         - security-headers
       priority: 194
@@ -103,6 +111,7 @@ http:
         - websecure
       service: hetu
       middlewares:
+        - hetu-upstream-host
         - hetu-allow-anonymous
         - security-headers
       priority: 204
@@ -157,6 +166,15 @@ http:
       headers:
         customRequestHeaders:
           tui-allow-anonymous: "true"
+    # File-provider equivalent of the docker-label `hetu-upstream-host@docker`.
+    # Used by fallback routers so Hetu can run behind a different external Host.
+    #
+    # Note: this keeps X-Forwarded-* headers untouched so Hetu can generate URLs
+    # using the unified external domain (bi.*). Traefik sets X-Forwarded-* automatically.
+    hetu-upstream-host:
+      headers:
+        customRequestHeaders:
+          Host: "hetu.upstream:7778"
     hetu-strip-dashboards:
       stripPrefixRegex:
         regex:

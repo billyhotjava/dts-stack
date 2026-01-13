@@ -28,7 +28,7 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 
 		colorBgLayout: colorTokens.background.default,
 		colorBgContainer: colorTokens.background.paper,
-		colorBgElevated: colorTokens.background.default,
+		colorBgElevated: colorTokens.background.paper,
 
 		wireframe: false,
 		fontFamily: fontFamily,
@@ -40,6 +40,8 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 		borderRadiusLG: removePx(baseThemeTokens.borderRadius.lg),
 	};
 
+	const siderBg = mode === ThemeMode.Dark ? colorTokens.background.neutral : colorTokens.background.default;
+
 	const components: ThemeConfig["components"] = {
 		Breadcrumb: {
 			separatorMargin: removePx(baseThemeTokens.spacing[1]),
@@ -49,10 +51,10 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 			itemColor: colorTokens.text.secondary,
 			motionDurationMid: "0.125s",
 			motionDurationSlow: "0.125s",
-			darkItemBg: darkColorTokens.background.default,
+			darkItemBg: siderBg,
 		},
 		Layout: {
-			siderBg: darkColorTokens.background.default,
+			siderBg: siderBg,
 		},
 	};
 

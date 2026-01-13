@@ -10,25 +10,19 @@ export interface AdminMenuItem {
 
 const sysadminMenus: AdminMenuItem[] = [
 	{ key: "mine", label: "我的申请", path: "/admin/my-changes", icon: "local:ic-blank" },
-	{ key: "users", label: "用户管理", path: "/admin/users", icon: "local:ic-users" },
-	{ key: "roles", label: "角色管理", path: "/admin/roles", icon: "local:ic-roles" },
-	{ key: "portal-menus", label: "菜单管理", path: "/admin/portal-menus", icon: "local:ic-menu" },
-	{ key: "orgs", label: "组织机构管理", path: "/admin/orgs", icon: "local:ic-orgs" },
 	{
 		key: "system",
 		label: "系统管理",
-		path: "/admin/system/data-sources",
-		icon: "local:ic-setting",
+		path: "/admin/system",
+		icon: "solar:settings-bold-duotone",
 		children: [
-			{
-				key: "system-data-sources",
-				label: "数据源配置",
-				path: "/admin/system/data-sources",
-				icon: "local:ic-analysis",
-			},
+			{ key: "users", label: "用户管理", path: "/admin/users", icon: "local:ic-users" },
+			{ key: "roles", label: "角色管理", path: "/admin/roles", icon: "local:ic-roles" },
+			{ key: "portal-menus", label: "菜单管理", path: "/admin/portal-menus", icon: "local:ic-menu" },
+			{ key: "orgs", label: "组织机构管理", path: "/admin/orgs", icon: "local:ic-orgs" },
+			{ key: "ops", label: "运维配置", path: "/admin/ops", icon: "solar:settings-bold-duotone" },
 		],
 	},
-	{ key: "ops", label: "运维配置", path: "/admin/ops", icon: "solar:settings-bold-duotone" },
 ];
 
 const authadminMenus: AdminMenuItem[] = [

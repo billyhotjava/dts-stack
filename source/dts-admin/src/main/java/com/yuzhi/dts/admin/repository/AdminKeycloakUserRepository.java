@@ -18,6 +18,10 @@ public interface AdminKeycloakUserRepository extends JpaRepository<AdminKeycloak
 
     Page<AdminKeycloakUser> findByUsernameContainingIgnoreCase(String username, Pageable pageable);
 
+    Page<AdminKeycloakUser> findByMdmEnabled(int mdmEnabled, Pageable pageable);
+
+    Page<AdminKeycloakUser> findByUsernameContainingIgnoreCaseAndMdmEnabled(String username, int mdmEnabled, Pageable pageable);
+
     @Query("select u from AdminKeycloakUser u where lower(u.username) in :usernames")
     List<AdminKeycloakUser> findByUsernameInIgnoreCase(@Param("usernames") Collection<String> usernames);
 }

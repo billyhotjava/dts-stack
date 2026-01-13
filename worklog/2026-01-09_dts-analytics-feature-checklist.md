@@ -1,11 +1,35 @@
-# 2026-01-09 — dts-analytics（modern 替代 legacy）功能点清单
+# 2026-01-09 — dts-analytics（modern 替代 legacy）功能点清单（对齐 Metabase v0.58.x）
 
-目标：以 `source/dts-analytics-webapp/modern`（React 19/Vite，Chrome98 target）**全面替代** `source/dts-analytics-webapp/legacy`（Metabase UI 静态产物），完成后删除 legacy（代码/路由/运维配置）。
+目标：以 `source/dts-analytics-webapp/modern`（React 19/Vite，Chrome98 target）**全面替代** `source/dts-analytics-webapp/legacy`（Metabase UI 静态产物，当前基准 Metabase `v0.58.x`），完成后删除 legacy（代码/路由/运维配置）。
 
 约束与约定：
 - 只支持两种语言：中文（默认）+ 英文。
 - embedded：用户只在 `dts-platform` 登录一次；analytics 不提供二次登录 UI，不走 metabase bootstrap 向导。
 - 前端仅通过 `dts-analytics` 的 `/analytics/api/**` 交互（松耦合），不依赖 metabase.jar 或 cljs 源码。
+
+## 0) Metabase v0.58.x “对齐口径”（验收基线）
+
+说明：这里的“对齐”指**用户可见能力 + 关键交互闭环**对齐，不强行要求 UI/内部实现与 Metabase 一致，但 API 行为与结果需满足 v0.58.x UI/业务预期（或 modern 自研 UI 的一致预期）。
+
+### 0.1 核心对象（Core entities）
+- [ ] Collections（集合/目录）
+- [ ] Questions / Cards（问题/卡片）
+- [ ] Dashboards（仪表盘）
+- [ ] Databases / Tables / Fields（数据源/表/字段）
+- [ ] Models（数据模型：metrics/segments 等）
+- [ ] Permissions（权限）
+- [ ] Users & Groups（用户/组）
+- [ ] Sharing / Public / Embedding（分享/公开/嵌入）
+- [ ] Alerts / Pulses（告警/订阅）
+- [ ] Activity / Recents / Bookmarks（动态/最近/收藏）
+
+### 0.2 关键交互（必须跑通的用户路径）
+- [ ] 进入 analytics → 自动识别 platform 登录态 → 进入首页
+- [ ] 浏览集合 → 打开卡片 → 执行查询 → 查看结果/图表
+- [ ] 浏览仪表盘 → 支持布局渲染 → 卡片查询结果展示
+- [ ] 仪表盘参数（filters）→ 下拉取值/搜索 → 注入到卡片查询 → 刷新结果
+- [x] 新建/编辑卡片（当前仅 SQL）→ 保存到集合 → 回到列表可见
+- [x] 新建/编辑仪表盘（基础编辑）→ 添加/移除卡片 → 保存 → 回到列表可见
 
 ## 1) 功能盘点方法（如何确保不漏）
 
@@ -17,8 +41,8 @@
 
 ### P0-Auth：平台一体化（embedded）
 - [x] `dts-analytics-webapp/modern` 访问 `/analytics` 不出现二次登录 UI（依赖 `platform-forward-auth@file` 正常工作）。
-- [ ] 401/403 统一处理：提示“回到 platform 重新登录/刷新 token”，并提供跳转链接。
-- [ ] API 访问统一封装（cookie + X-Request-Id 透传/展示）。
+- [x] 401/403 统一处理：提示“回到 platform 重新登录/刷新 token”，并提供跳转链接。
+- [x] API 访问统一封装（cookie + Authorization Bearer + 401 自动 refresh 一次）。
 - [x] `/analytics/api/user/current`：现代端基于该接口判断“已登录/未登录”。
 
 相关后端：
@@ -28,8 +52,8 @@
 ### P0-Nav：基础框架与路由
 - [x] `/analytics` 默认进入 modern（legacy 临时对照路径：`/analytics/legacy`）。
 - [x] App Layout：侧边栏导航（Collections/Dashboards/Questions/Search）。
-- [ ] 404/错误页（最少 404 + 未登录提示页）。
-- [ ] 语言切换（zh/en）与默认 zh（不引入第三语言资源）。
+- [x] 404/错误页（最少 404 + 未登录提示页）。
+- [x] 语言切换（zh/en）与默认 zh（不引入第三语言资源）。
 
 ### P0-Collections：集合浏览
 - [x] Collection 列表（含 root 概念）。
@@ -80,14 +104,25 @@
 - [ ] 数字/日期格式化（基于 results_metadata.columns.fingerprint / base_type）。
 
 ### P1-Dashboard：只读渲染完善
-- [ ] dashcard 布局（row/col/size_x/size_y）→ 简化响应式网格渲染。
-- [ ] 参数面板（dashboard.parameters）与 parameter_mappings 注入 query 请求（按后端 query API 支持逐步补齐）。
+- [x] dashcard 布局（row/col/size_x/size_y）→ 简化响应式网格渲染。
+- [x] 参数面板（dashboard.parameters）与 parameter_mappings 注入 query 请求（按后端 query API 支持逐步补齐）。
+  - [x] `GET /api/dashboard/params/valid-filter-fields`
+  - [x] `GET /api/dashboard/{dashId}/params/{paramId}/values`
+  - [x] `GET /api/dashboard/{dashId}/params/{paramId}/search/{query}`
+  - [ ] dashcard query body.parameters → 后端套用到 MBQL/native SQL → 返回过滤后的数据
+    - [x] MBQL（dimension target）已支持：按 `parameter_mappings[].target=["dimension",["field",fieldId,...]]` 将 `body.parameters[].value` 注入为 `query.filter`（`=` / `in`）
+    - [ ] native SQL `{{tag}}/[[...]]` 参数：已支持（`NativeQueryTemplateService`），需要在 modern UI 做完整参数 UI
+  - [x] MBQL query.filter → SQL（含 bindings）执行链路已打通：`DatasetResource` / `CardResource` / `DashboardResource` / `PublicResource` / `EmbedResource`
+
+### P1-Dev：快速冒烟（建议）
+- [ ] MBQL filter 冒烟：创建一个 `type=query` 的 card（query.filter 含 `=` / `in` / `not-null`）→ `POST /api/card/{id}/query` 应返回 filtered rows。
+- [ ] 注意：当前环境如果无法访问 Maven Central，执行 `mvn test` 可能因为缺少 `surefire-junit-platform` 依赖而失败；建议使用现有 offline 镜像/内网 Maven 仓库。
 
 ### P1-Write：编辑能力（分阶段）
 - [ ] 新建/编辑 Collection（名称/描述/归档/移动）。
-- [ ] 新建/编辑 Dashboard（名称/描述/归档/复制）。
-- [ ] Dashboard 编辑（添加/移动/删除 dashcard）。
-- [ ] Card 保存（修改 name/collection/display/dataset_query）。
+- [x] 新建/编辑 Dashboard（名称/描述）。
+- [x] Dashboard 编辑（添加/删除 dashcard；移动/布局调整待补齐）。
+- [x] Card 保存（修改 name/collection/display/dataset_query；当前仅 SQL/native）。
 
 相关后端（现有实现）：
 - `POST/PUT/DELETE /api/collection...`（`CollectionResource`）
@@ -132,3 +167,28 @@
 - 访问 `/analytics` 不再依赖 `source/dts-analytics-webapp/legacy`；
 - Traefik/compose 中不再暴露 legacy router/service；
 - 删除 `source/dts-analytics-webapp/legacy`、`source/dts-analytics-webapp/server.mjs`（如不再需要）及相关脚本/运维配置。
+
+## 6) P3（对齐 v0.58.x：高级能力补齐清单）
+
+说明：P3 属于“完整对齐 Metabase”阶段，按优先级推进；这里先列出缺口以免遗漏。
+
+### P3-Query Builder / SQL Editor（问题创建能力）
+- [ ] Query Builder（MBQL）完整编辑体验（表/字段选择、聚合、分组、过滤、排序、limit）。
+- [ ] SQL Editor：
+  - [ ] `{{param}}` / `[[optional]]` 参数输入 UI 与后端渲染一致。
+  - [ ] 参数类型（文本/数字/日期/时间/下拉/字段过滤）与默认值。
+  - [ ] 运行/保存/另存为/加入 dashboard。
+- [ ] 可视化配置面板（图表类型 + 选项）并保存到 `visualization_settings`。
+
+### P3-Admin（设置/用户/权限）
+- [ ] 站点设置（站点名/默认语言/主题/Email/Slack/SSO 等）：边界与 platform 对齐。
+- [ ] 用户/组管理（只读→管理）；与 platform 账号体系的映射策略。
+- [ ] 权限图（DB/Table/Collection 级别）：最少可用配置 + 审计。
+
+### P3-Sharing（嵌入/公开）
+- [ ] Card/Dashboard public link：创建/撤销/访问。
+- [ ] Embedding（signed）策略：与平台安全头兼容（X-Frame-Options/CSP）。
+
+### P3-Alerts/Pulses（订阅告警）
+- [ ] pulse：订阅列表/创建/发送测试/发送历史。
+- [ ] alert：基于卡片结果阈值触发（至少结构与 UI 可对接）。

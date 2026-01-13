@@ -30,6 +30,7 @@ import { useUserInfo } from "@/store/userStore";
 import { cn } from "@/utils";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { normalizeColumnKey } from "@/utils/columnName";
+import { DatasetAccessRequestDialog } from "@/components/security/DatasetAccessRequestDialog";
 
 const parseStringList = (value: unknown): string[] => {
 	if (Array.isArray(value)) {
@@ -205,6 +206,7 @@ export default function DatasetDetailPage() {
 	const [sampleData, setSampleData] = useState<{ headers: string[]; rows: any[] } | null>(null);
 	const [sampleLoading, setSampleLoading] = useState(false);
 	const [sampleInitialized, setSampleInitialized] = useState(false);
+	const [accessDialogOpen, setAccessDialogOpen] = useState(false);
 	const [deptOptions, setDeptOptions] = useState<DeptDto[]>([]);
 	const [deptLoading, setDeptLoading] = useState(false);
 	const [userOptions, setUserOptions] = useState<UserDirectoryEntry[]>([]);
@@ -372,6 +374,11 @@ export default function DatasetDetailPage() {
 				}
 			} catch (error) {
 				console.error(error);
+				const errCode = (error as any)?.response?.data?.code;
+				if (errCode === "dts-sec-0004") {
+					setAccessDialogOpen(true);
+					return;
+				}
 				if (!silent) {
 					toast.error("采样失败");
 				}
@@ -1315,6 +1322,18 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+			<DatasetAccessRequestDialog
+				open={accessDialogOpen}
+				onOpenChange={setAccessDialogOpen}
+				dataset={{
+					id: id,
+					name: dataset?.name,
+					classification: (dataset as any)?.classification,
+					warehouseLayer: (dataset as any)?.warehouseLayer ?? (dataset as any)?.warehouse_layer,
+					ownerDept: (dataset as any)?.ownerDept ?? (dataset as any)?.owner_dept,
+				}}
+				defaultActions={["preview"]}
+			/>
 		</div>
 	);
 }

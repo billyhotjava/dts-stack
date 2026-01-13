@@ -11,6 +11,7 @@ public record InfraDataSourceDto(
     String jdbcUrl,
     String username,
     String description,
+    String ownerDept,
     Map<String, Object> props,
     Instant createdAt,
     Instant lastUpdatedAt,

@@ -115,6 +115,8 @@ public class AdminDirectoryClient {
     public static class OrgNode {
         private Long id;
         private String name;
+        @JsonProperty("deptCode")
+        private String deptCode;
         private Long parentId;
         private List<OrgNode> children;
         @JsonProperty("isRoot")
@@ -124,6 +126,8 @@ public class AdminDirectoryClient {
         public void setId(Long id) { this.id = id; }
         public String getName() { return name; }
         public void setName(String name) { this.name = name; }
+        public String getDeptCode() { return deptCode; }
+        public void setDeptCode(String deptCode) { this.deptCode = deptCode; }
         public Long getParentId() { return parentId; }
         public void setParentId(Long parentId) { this.parentId = parentId; }
         public List<OrgNode> getChildren() { return children; }

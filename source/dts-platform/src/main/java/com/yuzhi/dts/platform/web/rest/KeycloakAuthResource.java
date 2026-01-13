@@ -915,39 +915,41 @@ public class KeycloakAuthResource {
                 }
                 // Data roles (client roles on dts-system). Map to canonical ROLE_* for audience filtering in Admin.
                 case "DEPT_DATA_VIEWER", "DEPT_VIEWER", "DEPARTMENT_VIEWER" -> {
-                    mapped.add("ROLE_DEPT_DATA_VIEWER");
+                    mapped.add(AuthoritiesConstants.EMPLOYEE);
                     yield true;
                 }
                 case "DEPT_DATA_DEV", "DEPT_EDITOR", "DEPARTMENT_EDITOR" -> {
-                    mapped.add("ROLE_DEPT_DATA_DEV");
+                    // legacy alias (data-dev removed) -> treat as data-owner
+                    mapped.add(AuthoritiesConstants.DEPT_DATA_OWNER);
                     yield true;
                 }
                 case "DEPT_DATA_OWNER", "DEPT_OWNER", "DEPARTMENT_OWNER" -> {
-                    mapped.add("ROLE_DEPT_DATA_OWNER");
+                    mapped.add(AuthoritiesConstants.DEPT_DATA_OWNER);
                     yield true;
                 }
                 case "DEPT_LEADER", "DEPARTMENT_LEADER" -> {
-                    mapped.add("ROLE_DEPT_LEADER");
+                    mapped.add(AuthoritiesConstants.DEPT_LEADER);
                     yield true;
                 }
                 case "INST_DATA_VIEWER", "INST_VIEWER", "INSTITUTE_VIEWER", "INSTITUTION_VIEWER" -> {
-                    mapped.add("ROLE_INST_DATA_VIEWER");
+                    mapped.add(AuthoritiesConstants.EMPLOYEE);
                     yield true;
                 }
                 case "INST_DATA_DEV", "INST_EDITOR", "INSTITUTE_EDITOR", "INSTITUTION_EDITOR" -> {
-                    mapped.add("ROLE_INST_DATA_DEV");
+                    // legacy alias (data-dev removed) -> treat as data-owner
+                    mapped.add(AuthoritiesConstants.INST_DATA_OWNER);
                     yield true;
                 }
                 case "INST_DATA_OWNER", "INST_OWNER", "INSTITUTE_OWNER", "INSTITUTION_OWNER" -> {
-                    mapped.add("ROLE_INST_DATA_OWNER");
+                    mapped.add(AuthoritiesConstants.INST_DATA_OWNER);
                     yield true;
                 }
                 case "INST_LEADER", "INSTITUTE_LEADER", "INSTITUTION_LEADER" -> {
-                    mapped.add("ROLE_INST_LEADER");
+                    mapped.add(AuthoritiesConstants.INST_LEADER);
                     yield true;
                 }
                 case "EMPLOYEE", "USER_EMPLOYEE" -> {
-                    mapped.add("ROLE_EMPLOYEE");
+                    mapped.add(AuthoritiesConstants.EMPLOYEE);
                     yield true;
                 }
                 case "SYS_ADMIN", "SYSADMIN", "AUTH_ADMIN", "AUTHADMIN", "SECURITY_AUDITOR", "SECURITYAUDITOR", "AUDIT_ADMIN", "AUDITADMIN", "AUDITOR_ADMIN" -> {

@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CurrentUser } from "../api/analyticsApi";
-import { normalizeLocale, t, type Locale } from "../i18n";
+import { ErrorNotice } from "../components/ErrorNotice";
+import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
-	| { state: "error"; error: string };
+	| { state: "error"; error: unknown };
 
 export default function HomePage() {
-	const locale: Locale = useMemo(() => normalizeLocale(navigator.language), []);
+	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const [user, setUser] = useState<LoadState<CurrentUser>>({ state: "loading" });
 	const [health, setHealth] = useState<LoadState<string>>({ state: "loading" });
 
@@ -23,7 +24,7 @@ export default function HomePage() {
 			})
 			.catch((e) => {
 				if (cancelled) return;
-				setUser({ state: "error", error: String(e?.message ?? e) });
+				setUser({ state: "error", error: e });
 			});
 
 		analyticsApi
@@ -34,7 +35,7 @@ export default function HomePage() {
 			})
 			.catch((e) => {
 				if (cancelled) return;
-				setHealth({ state: "error", error: String(e?.message ?? e) });
+				setHealth({ state: "error", error: e });
 			});
 
 		return () => {
@@ -44,14 +45,14 @@ export default function HomePage() {
 
 	const userLabel = (() => {
 		if (user.state === "loading") return t(locale, "loading");
-		if (user.state === "error") return `${t(locale, "error")}: ${user.error}`;
+		if (user.state === "error") return t(locale, "error");
 		const value = user.value;
 		return value.common_name || [value.first_name, value.last_name].filter(Boolean).join(" ") || value.email || "-";
 	})();
 
 	const healthLabel = (() => {
 		if (health.state === "loading") return t(locale, "loading");
-		if (health.state === "error") return `${t(locale, "error")}: ${health.error}`;
+		if (health.state === "error") return t(locale, "error");
 		return health.value;
 	})();
 
@@ -61,6 +62,9 @@ export default function HomePage() {
 			<div className="pageSub">{t(locale, "subtitle")}</div>
 
 			<div style={{ height: 16 }} />
+
+			{user.state === "error" && <ErrorNotice locale={locale} error={user.error} />}
+			{health.state === "error" && <ErrorNotice locale={locale} error={health.error} />}
 
 			<div className="card">
 				<div className="row">
@@ -82,4 +86,3 @@ export default function HomePage() {
 		</div>
 	);
 }
-
